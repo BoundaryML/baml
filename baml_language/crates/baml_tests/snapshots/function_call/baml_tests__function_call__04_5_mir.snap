@@ -1,18 +1,18 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn array_length() -> Int {
+fn array_length() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: List(Int) // array
-    let _2: Int
-    let _3: Int
-    let _4: Int
-    let _5: Void
-    let _6: Unknown
-    let _7: List(Int)
+    let _0: int // return
+    let _1: int[] // array
+    let _2: 1
+    let _3: 2
+    let _4: 3
+    let _5: void
+    let _6: (int[]) -> int
+    let _7: int[]
 
     bb0: {
         _2 = const 1_i64;
@@ -38,15 +38,15 @@ fn array_length() -> Int {
 
 }
 
-fn Greeting(self: Class(FullyQualifiedName { namespace: Local, name: "Baz" })) -> String {
+fn Greeting(self: Baz) -> string {
     // Locals:
-    let _0: String // return
-    let _1: Class(FullyQualifiedName { namespace: Local, name: "Baz" }) // self // param
-    let _2: String
-    let _3: String
-    let _4: String
-    let _5: Class(FullyQualifiedName { namespace: Local, name: "Baz" })
-    let _6: String
+    let _0: string // return
+    let _1: Baz // self // param
+    let _2: string
+    let _3: "Hello, "
+    let _4: string
+    let _5: Baz
+    let _6: "!"
 
     bb0: {
         _3 = const "Hello, ";
@@ -64,11 +64,11 @@ fn Greeting(self: Class(FullyQualifiedName { namespace: Local, name: "Baz" })) -
 
 }
 
-fn param_in_if_statement(b: Bool) -> Int {
+fn param_in_if_statement(b: bool) -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Bool // b // param
-    let _2: Bool
+    let _0: int // return
+    let _1: bool // b // param
+    let _2: bool
 
     bb0: {
         _2 = copy _1;
@@ -95,12 +95,12 @@ fn param_in_if_statement(b: Bool) -> Int {
 
 }
 
-fn Bar() -> Int {
+fn Bar() -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // x
-    let _2: Function { params: [Int], ret: Int }
-    let _3: Int
+    let _0: int // return
+    let _1: int // x
+    let _2: (int) -> int
+    let _3: 1
 
     bb0: {
         _2 = const fn Foo;
@@ -119,12 +119,12 @@ fn Bar() -> Int {
 
 }
 
-fn Foo(x: Int) -> Int {
+fn Foo(x: int) -> int {
     // Locals:
-    let _0: Int // return
-    let _1: Int // x // param
-    let _2: Int
-    let _3: Int
+    let _0: int // return
+    let _1: int // x // param
+    let _2: int
+    let _3: 1
 
     bb0: {
         _2 = copy _1;
@@ -139,14 +139,14 @@ fn Foo(x: Int) -> Int {
 
 }
 
-fn GreetBaz(n: String) -> String {
+fn GreetBaz(n: string) -> string {
     // Locals:
-    let _0: String // return
-    let _1: String // n // param
-    let _2: Class(FullyQualifiedName { namespace: Local, name: "Baz" }) // baz
-    let _3: String
-    let _4: Class(FullyQualifiedName { namespace: Local, name: "Baz" })
-    let _5: Function { params: [Class(FullyQualifiedName { namespace: Local, name: "Baz" })], ret: String }
+    let _0: string // return
+    let _1: string // n // param
+    let _2: Baz // baz
+    let _3: string
+    let _4: Baz
+    let _5: (Baz) -> string
 
     bb0: {
         _3 = copy _1;

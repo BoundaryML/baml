@@ -66,14 +66,16 @@ pub fn initialize_engine(
         db.add_or_update_file(&file_path, &content);
     }
 
-    // Compile to bytecode
+    // Compile bytecode
     let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
         .map_err(|e| render_lowering_error(&db, &e))?;
 
-    // Extract schema information (classes, enums, functions) from the database
-    let (classes, enums, functions) = extract_schema(&db)?;
+    // Get VIR schema and map to bex_program types
+    let project = db.get_project().ok_or(BridgeError::ProjectNotInitialized)?;
+    let schema = baml_compiler_vir::project_schema(&db, project);
+    let (classes, enums, functions) = crate::schema_map::map_schema(&schema);
 
-    // Create BexProgram with schema and bytecode
+    // Assemble complete BexProgram
     let mut program = BexProgram::new(bytecode);
     program.classes = classes;
     program.enums = enums;
@@ -87,187 +89,6 @@ pub fn initialize_engine(
     *guard = Some(Arc::new(engine));
 
     Ok(())
-}
-
-/// Extract schema information (classes, enums, functions) from the database.
-#[allow(clippy::type_complexity)]
-fn extract_schema(
-    db: &ProjectDatabase,
-) -> Result<
-    (
-        HashMap<String, bex_program::ClassDef>,
-        HashMap<String, bex_program::EnumDef>,
-        HashMap<String, bex_program::FunctionDef>,
-    ),
-    BridgeError,
-> {
-    use baml_compiler_hir::{ItemId, file_item_tree, file_items, function_signature};
-    use baml_compiler_tir::TypeResolutionContext;
-
-    let mut classes = HashMap::new();
-    let mut enums = HashMap::new();
-    let mut functions = HashMap::new();
-
-    let project = db.get_project().ok_or(BridgeError::ProjectNotInitialized)?;
-    let resolution_ctx = TypeResolutionContext::new(db, project);
-
-    for file in db.get_source_files() {
-        let item_tree = file_item_tree(db, file);
-        let items_struct = file_items(db, file);
-
-        for item in items_struct.items(db) {
-            match item {
-                ItemId::Function(func_loc) => {
-                    let signature = function_signature(db, *func_loc);
-
-                    // Lower return type from TypeRef to TIR Ty
-                    let (tir_return_type, _) = resolution_ctx
-                        .lower_type_ref(&signature.return_type, baml_base::Span::default());
-
-                    // Convert TIR Ty to Program Ty
-                    let return_type = convert_tir_ty_to_program_ty(&tir_return_type);
-
-                    // Build params
-                    let params: Vec<bex_program::ParamDef> = signature
-                        .params
-                        .iter()
-                        .map(|p| {
-                            let (tir_ty, _) = resolution_ctx
-                                .lower_type_ref(&p.type_ref, baml_base::Span::default());
-                            bex_program::ParamDef {
-                                name: p.name.to_string(),
-                                param_type: convert_tir_ty_to_program_ty(&tir_ty),
-                            }
-                        })
-                        .collect();
-
-                    let func_def = bex_program::FunctionDef {
-                        name: signature.name.to_string(),
-                        params,
-                        return_type,
-                        body: bex_program::FunctionBody::Expr {
-                            bytecode_index: 0, // Not needed for type checking
-                        },
-                    };
-
-                    functions.insert(signature.name.to_string(), func_def);
-                }
-                ItemId::Class(class_loc) => {
-                    let class = &item_tree[class_loc.id(db)];
-                    let class_name = class.name.to_string();
-
-                    let fields: Vec<bex_program::FieldDef> = class
-                        .fields
-                        .iter()
-                        .map(|field| {
-                            let (tir_ty, _) = resolution_ctx
-                                .lower_type_ref(&field.type_ref, baml_base::Span::default());
-                            bex_program::FieldDef {
-                                name: field.name.to_string(),
-                                field_type: convert_tir_ty_to_program_ty(&tir_ty),
-                                description: None,
-                                alias: None,
-                            }
-                        })
-                        .collect();
-
-                    let class_def = bex_program::ClassDef {
-                        name: class_name.clone(),
-                        fields,
-                        description: None,
-                    };
-
-                    classes.insert(class_name, class_def);
-                }
-                ItemId::Enum(enum_loc) => {
-                    let enum_def = &item_tree[enum_loc.id(db)];
-                    let enum_name = enum_def.name.to_string();
-
-                    let variants: Vec<bex_program::EnumVariantDef> = enum_def
-                        .variants
-                        .iter()
-                        .map(|variant| bex_program::EnumVariantDef {
-                            name: variant.name.to_string(),
-                            description: None,
-                            alias: None,
-                        })
-                        .collect();
-
-                    let enum_def = bex_program::EnumDef {
-                        name: enum_name.clone(),
-                        variants,
-                        description: None,
-                    };
-
-                    enums.insert(enum_name, enum_def);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    Ok((classes, enums, functions))
-}
-
-/// Convert a TIR `Ty` to a Program `Ty`.
-fn convert_tir_ty_to_program_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program::Ty {
-    use baml_compiler_tir::Ty as TirTy;
-    use bex_program::Ty as ProgTy;
-
-    match tir_ty {
-        TirTy::Int => ProgTy::Int,
-        TirTy::Float => ProgTy::Float,
-        TirTy::String => ProgTy::String,
-        TirTy::Bool => ProgTy::Bool,
-        TirTy::Null => ProgTy::Null,
-
-        TirTy::Media(kind) => {
-            let prog_kind = match kind {
-                baml_base::MediaKind::Image => bex_program::MediaKind::Image,
-                baml_base::MediaKind::Audio => bex_program::MediaKind::Audio,
-                baml_base::MediaKind::Video => bex_program::MediaKind::Video,
-                baml_base::MediaKind::Pdf => bex_program::MediaKind::Pdf,
-                baml_base::MediaKind::Generic => bex_program::MediaKind::Image,
-            };
-            ProgTy::Media(prog_kind)
-        }
-
-        TirTy::Literal(val) => {
-            let prog_val = match val {
-                baml_compiler_tir::LiteralValue::Int(i) => bex_program::LiteralValue::Int(*i),
-                baml_compiler_tir::LiteralValue::Float(s) => {
-                    bex_program::LiteralValue::Float(s.clone())
-                }
-                baml_compiler_tir::LiteralValue::String(s) => {
-                    bex_program::LiteralValue::String(s.clone())
-                }
-                baml_compiler_tir::LiteralValue::Bool(b) => bex_program::LiteralValue::Bool(*b),
-            };
-            ProgTy::Literal(prog_val)
-        }
-
-        TirTy::Class(fqn) => ProgTy::Class(fqn.to_string()),
-        TirTy::Enum(fqn) => ProgTy::Enum(fqn.to_string()),
-        TirTy::TypeAlias(fqn) => ProgTy::Class(fqn.to_string()),
-
-        TirTy::Optional(inner) => ProgTy::Optional(Box::new(convert_tir_ty_to_program_ty(inner))),
-        TirTy::List(inner) => ProgTy::List(Box::new(convert_tir_ty_to_program_ty(inner))),
-        TirTy::Map { key, value } => ProgTy::Map {
-            key: Box::new(convert_tir_ty_to_program_ty(key)),
-            value: Box::new(convert_tir_ty_to_program_ty(value)),
-        },
-        TirTy::Union(types) => {
-            ProgTy::Union(types.iter().map(convert_tir_ty_to_program_ty).collect())
-        }
-
-        TirTy::Function { params, ret } => {
-            let _ = (params, ret);
-            ProgTy::Null
-        }
-
-        TirTy::Unknown | TirTy::Error | TirTy::Void => ProgTy::Null,
-        TirTy::WatchAccessor(inner) => convert_tir_ty_to_program_ty(inner),
-    }
 }
 
 /// Render a LoweringError with source context for better debugging.

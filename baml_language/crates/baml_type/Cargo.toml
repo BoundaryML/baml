@@ -1,0 +1,10 @@
+[package]
+name = "baml_type"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_compiler_tir = { workspace = true }
+smol_str = { workspace = true }

@@ -10,7 +10,7 @@ use baml_compiler_mir::{
     AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
     Place, Rvalue, StatementKind, Terminator, UnaryOp,
 };
-use baml_compiler_tir::Ty;
+use baml_type::Ty;
 use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, GlobalIndex,
     Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
@@ -693,8 +693,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_operand_pull(operand, mir);
                 // Emit instanceof check using CmpOp::InstanceOf
                 // The type should be a class name - look up the class object
-                if let Ty::Class(fqn) | Ty::TypeAlias(fqn) = ty {
-                    let class_name_str = fqn.name.as_str();
+                if let Ty::Class(tn) | Ty::TypeAlias(tn) = ty {
+                    let class_name_str = tn.display_name.as_str();
                     if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
                         // Load the Class object for the type check
                         let class_const = self

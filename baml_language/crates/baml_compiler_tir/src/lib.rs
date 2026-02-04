@@ -42,6 +42,8 @@ pub mod pretty;
 mod resolve;
 mod types;
 
+// Re-export HIR types that are part of TIR's public API (used in Ty variants).
+pub use baml_compiler_hir::{FullyQualifiedName, Namespace};
 pub use builtins::{
     Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
     method_return_type, parse_builtin_path, substitute,
@@ -49,7 +51,7 @@ pub use builtins::{
 pub use cycles::{validate_class_cycles, validate_type_alias_cycles};
 pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
 pub use lower::lower_type_ref;
-pub use normalize::find_invalid_map_keys;
+pub use normalize::{find_invalid_map_keys, find_recursive_aliases};
 pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
 pub use resolve::{ResolutionMap, ResolvedMethod, ResolvedValue, resolve_method};
 use text_size::TextRange;
@@ -79,6 +81,13 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
             Ty::Optional(Box::new(substitute_with_fallback(inner, bindings)))
         }
         TypePattern::Builtin(path) => Ty::Class(builtins::parse_builtin_path(path)),
+        TypePattern::Function { params, ret } => Ty::Function {
+            params: params
+                .iter()
+                .map(|p| substitute_with_fallback(p, bindings))
+                .collect(),
+            ret: Box::new(substitute_with_fallback(ret, bindings)),
+        },
     }
 }
 
@@ -1315,10 +1324,13 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             param_types.push(builtins::substitute(pattern, &bindings));
                         }
                         let return_type = builtins::substitute(&def.returns, &bindings);
-                        Ty::Function {
+                        let callee_ty = Ty::Function {
                             params: param_types,
                             ret: Box::new(return_type),
-                        }
+                        };
+                        // Store the callee type so downstream passes (VIR, MIR) can find it
+                        ctx.set_expr_type(*callee, callee_ty.clone());
+                        callee_ty
                     } else {
                         // Fall back to normal field access inference (which may find a class field)
                         infer_expr(ctx, *callee, body)
@@ -1402,6 +1414,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             params: param_types,
                             ret: Box::new(return_type),
                         };
+                        // Store the callee type so downstream passes (VIR, MIR) can find it
+                        ctx.set_expr_type(*callee, callee_ty.clone());
                         (callee_ty, arg_types_with_spans)
                     } else {
                         // Method call via Path: `receiver.method(args)`

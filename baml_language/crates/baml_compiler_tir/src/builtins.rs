@@ -148,7 +148,8 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
         TypePattern::Var(name) => bindings
             .get(name)
             .cloned()
-            .unwrap_or_else(|| panic!("unbound type variable: {name}")),
+            // Fall back to Unknown for unbound type variables (e.g., "Any")
+            .unwrap_or(Ty::Unknown),
 
         TypePattern::Int => Ty::Int,
         TypePattern::Float => Ty::Float,
@@ -165,6 +166,10 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
         TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
         TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute(inner, bindings))),
         TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path)),
+        TypePattern::Function { params, ret } => Ty::Function {
+            params: params.iter().map(|p| substitute(p, bindings)).collect(),
+            ret: Box::new(substitute(ret, bindings)),
+        },
     }
 }
 
@@ -188,6 +193,10 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
         TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
         TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute_unknown(inner))),
         TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path)),
+        TypePattern::Function { params, ret } => Ty::Function {
+            params: params.iter().map(substitute_unknown).collect(),
+            ret: Box::new(substitute_unknown(ret)),
+        },
     }
 }
 

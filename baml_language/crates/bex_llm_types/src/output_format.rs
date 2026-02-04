@@ -171,19 +171,19 @@ impl OutputFormatContent {
                 Ok(Some(rendered.join(splitter)))
             }
 
-            Ty::Enum(name) => {
-                if let Some(enm) = self.find_enum(name) {
+            Ty::Enum(tn) => {
+                if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
                     Ok(Some(self.render_enum(enm, options)))
                 } else {
-                    Ok(Some(name.clone()))
+                    Ok(Some(tn.display_name.to_string()))
                 }
             }
 
-            Ty::Class(name) => {
-                if let Some(cls) = self.find_class(name) {
+            Ty::Class(tn) => {
+                if let Some(cls) = self.find_class(tn.display_name.as_str()) {
                     Ok(Some(self.render_class(cls, options)?))
                 } else {
-                    Ok(Some(name.clone()))
+                    Ok(Some(tn.display_name.to_string()))
                 }
             }
 
@@ -194,6 +194,14 @@ impl OutputFormatContent {
             // - Int: 42 (plain number)
             // - Bool: true/false
             Ty::Literal(lit) => Ok(Some(render_literal(lit))),
+
+            // Compiler-only variants should never reach runtime
+            Ty::TypeAlias(_) | Ty::Function { .. } | Ty::Void | Ty::WatchAccessor(_) => {
+                unreachable!(
+                    "compiler-only variant {:?} should not reach output_format",
+                    ty
+                )
+            }
         }
     }
 
@@ -414,7 +422,9 @@ mod tests {
             ],
         };
 
-        let content = OutputFormatContent::new(Ty::Class("Person".to_string())).with_class(cls);
+        let content =
+            OutputFormatContent::new(Ty::Class(bex_program::TypeName::local("Person".into())))
+                .with_class(cls);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -442,7 +452,9 @@ mod tests {
             ],
         };
 
-        let content = OutputFormatContent::new(Ty::Class("Point".to_string())).with_class(cls);
+        let content =
+            OutputFormatContent::new(Ty::Class(bex_program::TypeName::local("Point".into())))
+                .with_class(cls);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -469,7 +481,9 @@ mod tests {
             ],
         };
 
-        let content = OutputFormatContent::new(Ty::Enum("Color".to_string())).with_enum(enm);
+        let content =
+            OutputFormatContent::new(Ty::Enum(bex_program::TypeName::local("Color".into())))
+                .with_enum(enm);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(

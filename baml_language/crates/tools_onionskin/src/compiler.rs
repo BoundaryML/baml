@@ -824,6 +824,7 @@ impl CompilerRunner {
         let type_aliases_map = type_aliases(&self.db, self.project_root)
             .aliases(&self.db)
             .clone();
+        let _recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
@@ -934,6 +935,7 @@ impl CompilerRunner {
         let type_aliases_map = type_aliases(&self.db, self.project_root)
             .aliases(&self.db)
             .clone();
+        let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
         let enum_variants_map = enum_variants(&self.db, self.project_root);
         let enum_variants_data = enum_variants_map.enums(&self.db).clone();
 
@@ -991,7 +993,13 @@ impl CompilerRunner {
                     writeln!(output, "{}", header).ok();
                     output_annotated.push((header, status));
 
-                    match lower_from_hir(&body, &inference_result, &resolution_ctx) {
+                    match lower_from_hir(
+                        &body,
+                        &inference_result,
+                        &resolution_ctx,
+                        &type_aliases_map,
+                        &recursive_aliases,
+                    ) {
                         Ok(typed_ir) => {
                             // Pretty print the TypedIR
                             let ir_output = pretty_print(&typed_ir);
@@ -1034,6 +1042,10 @@ impl CompilerRunner {
         let class_field_types_map = class_field_types(&self.db, self.project_root)
             .classes(&self.db)
             .clone();
+        let type_aliases_map = type_aliases(&self.db, self.project_root)
+            .aliases(&self.db)
+            .clone();
+        let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
 
         // Build classes map (class name -> field name -> field index) for MIR lowering
         // Also build class type tags for TypeTag switch optimization
@@ -1116,6 +1128,8 @@ impl CompilerRunner {
                         &body,
                         &inference_result,
                         &resolution_ctx,
+                        &type_aliases_map,
+                        &recursive_aliases,
                     ) {
                         Ok(vir) => {
                             let mir = baml_compiler_mir::lower(
@@ -1126,6 +1140,8 @@ impl CompilerRunner {
                                 &enums,
                                 &class_type_tags,
                                 &resolution_ctx,
+                                &type_aliases_map,
+                                &recursive_aliases,
                             );
                             baml_compiler_mir::pretty::display_function(&mir)
                         }

@@ -412,7 +412,7 @@ fn normalize_impl(
 // ═══════════════════════════════════════════════════════════════════════════
 
 /// Find all recursive type aliases via DFS.
-fn find_recursive_aliases(aliases: &HashMap<Name, Ty>) -> HashSet<Name> {
+pub fn find_recursive_aliases(aliases: &HashMap<Name, Ty>) -> HashSet<Name> {
     let mut recursive = HashSet::new();
     for name in aliases.keys() {
         let mut visited = HashSet::new();

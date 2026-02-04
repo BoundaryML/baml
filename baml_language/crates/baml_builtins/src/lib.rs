@@ -34,6 +34,12 @@ pub enum TypePattern {
     /// Builtin type - matches exactly by path.
     /// E.g., `Builtin("baml.fs.File")` matches only `Ty::Builtin("baml.fs.File")`.
     Builtin(&'static str),
+    /// Function type - a callable with parameters and return type.
+    /// E.g., `Function { params: vec![], ret: Builtin("...") }` for `fn() -> T`.
+    Function {
+        params: Vec<TypePattern>,
+        ret: Box<TypePattern>,
+    },
 }
 
 /// A field in a builtin type definition.
@@ -309,9 +315,9 @@ macro_rules! with_builtins {
                     ) -> PrimitiveClient;
 
                     /// Get the client resolve function for an LLM function.
-                    /// Returns a function reference that, when called, returns a PrimitiveClient.
+                    /// Returns a function that, when called, returns a PrimitiveClient.
                     #[sys_op]
-                    fn get_client_function(function_name: String) -> FunctionRef;
+                    fn get_client_function(function_name: String) -> fn() -> PrimitiveClient;
                 }
             }
 

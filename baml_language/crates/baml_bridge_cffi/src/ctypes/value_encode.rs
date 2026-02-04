@@ -90,7 +90,7 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
                     is_optional: metadata.is_optional,
                     is_single_pattern: metadata.is_single_pattern,
                     self_type: Some(ty_to_field_type(&metadata.union_type)),
-                    value_option_name: format!("{:?}", metadata.selected_option),
+                    value_option_name: format!("{}", metadata.selected_option),
                     value: Some(Box::new(inner)),
                 },
             )))
@@ -140,16 +140,16 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
             key_type: Some(Box::new(ty_to_field_type(key))),
             value_type: Some(Box::new(ty_to_field_type(value))),
         }))),
-        Ty::Class(name) => Some(FieldType::ClassType(
+        Ty::Class(tn) => Some(FieldType::ClassType(
             crate::baml::cffi::CffiFieldTypeClass {
                 name: Some(CffiTypeName {
                     namespace: CffiTypeNamespace::Types as i32,
-                    name: name.clone(),
+                    name: tn.display_name.to_string(),
                 }),
             },
         )),
-        Ty::Enum(name) => Some(FieldType::EnumType(crate::baml::cffi::CffiFieldTypeEnum {
-            name: name.clone(),
+        Ty::Enum(tn) => Some(FieldType::EnumType(crate::baml::cffi::CffiFieldTypeEnum {
+            name: tn.display_name.to_string(),
         })),
         Ty::Union(_) => {
             // For union types, use the UnionVariantType
@@ -163,6 +163,10 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
         Ty::Media(_) | Ty::Literal(_) => {
             // Fallback for unsupported types
             Some(FieldType::AnyType(CffiFieldTypeAny {}))
+        }
+        // Compiler-only variants should never reach FFI
+        Ty::TypeAlias(_) | Ty::Function { .. } | Ty::Void | Ty::WatchAccessor(_) => {
+            unreachable!("compiler-only variant should not reach FFI")
         }
     };
 

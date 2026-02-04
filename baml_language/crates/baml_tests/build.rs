@@ -498,6 +498,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
             // Build initial typing context with all function types
             let globals = typing_context(&db, root).functions(&db).clone();
             let class_field_types_map = class_field_types(&db, root).classes(&db).clone();
+            let type_aliases_map = type_aliases(&db, root).aliases(&db).clone();
+            let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
 
             let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&db, root);
 
@@ -549,9 +551,9 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         let inference = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_field_types_map.clone()), None, None, *func_id);
 
                         // Lower HIR → VIR → MIR
-                        let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx) {
+                        let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx, &type_aliases_map, &recursive_aliases) {
                             Ok(vir) => {
-                                let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &enums, &class_type_tags, &resolution_ctx);
+                                let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &enums, &class_type_tags, &resolution_ctx, &type_aliases_map, &recursive_aliases);
                                 baml_compiler_mir::pretty::display_function(&mir)
                             }
                             Err(baml_compiler_vir::LoweringError::LlmFunction) => {

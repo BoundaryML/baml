@@ -82,6 +82,11 @@ fn parse_ty(s: &str) -> Ty {
         return Ty::Literal(baml_base::Literal::Int(v));
     }
 
+    // - Float literals: 3.14, -2.5
+    if s.parse::<f64>().is_ok() {
+        return Ty::Literal(baml_base::Literal::Float(s.to_string()));
+    }
+
     // - String literals: 'hello', 'draft'
     if let Some(string_val) = s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
         return Ty::Literal(baml_base::Literal::String(string_val.to_string()));

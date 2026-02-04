@@ -1212,8 +1212,8 @@ fn sort_dependencies_table(table: &mut Table, config: &Config) {
         .collect();
 
     // Sort each group
-    internal.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
-    external.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    internal.sort_by_key(|a| a.0.to_lowercase());
+    external.sort_by_key(|a| a.0.to_lowercase());
 
     let has_internal = !internal.is_empty();
     let has_external = !external.is_empty();

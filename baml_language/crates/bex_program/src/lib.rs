@@ -9,56 +9,14 @@
 
 use std::collections::HashMap;
 
-pub use bex_vm_types::Program;
-
+pub use baml_base::{Literal as LiteralValue, MediaKind};
 // ============================================================================
 // Type System
 // ============================================================================
-
-/// The type representation used throughout the compiled program.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Ty {
-    // Primitives
-    Int,
-    Float,
-    String,
-    Bool,
-    Null,
-
-    // Media types
-    Media(MediaKind),
-
-    // Literal types
-    Literal(LiteralValue),
-
-    // Named types (references into BexProgram.classes/enums)
-    Class(String),
-    Enum(String),
-
-    // Container types
-    Optional(Box<Ty>),
-    List(Box<Ty>),
-    Map { key: Box<Ty>, value: Box<Ty> },
-    Union(Vec<Ty>),
-}
-
-/// Media type variants.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum MediaKind {
-    Image,
-    Audio,
-    Video,
-    Pdf,
-}
-
-/// Literal value types for literal types.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum LiteralValue {
-    String(String),
-    Int(i64),
-    Float(String),
-    Bool(bool),
-}
+/// The unified type representation from `baml_type`.
+pub use baml_type::Ty;
+pub use baml_type::TypeName;
+pub use bex_vm_types::Program;
 
 // ============================================================================
 // Type Definitions
@@ -95,6 +53,8 @@ pub struct EnumVariantDef {
     pub name: String,
     pub description: Option<String>,
     pub alias: Option<String>,
+    /// @skip — whether this variant should be excluded from serialization
+    pub skip: bool,
 }
 
 // ============================================================================
@@ -126,10 +86,7 @@ pub enum FunctionBody {
         client: String,
     },
     /// Imperative expression function - compiled to bytecode.
-    Expr {
-        /// Index into the bytecode program's function table.
-        bytecode_index: usize,
-    },
+    Expr,
 }
 
 // ============================================================================
@@ -209,5 +166,31 @@ impl BexProgram {
             retry_policies: HashMap::new(),
             bytecode,
         }
+    }
+
+    /// Validate that no compiler-only type variants appear in runtime-facing types.
+    /// Returns Ok(()) if all types are valid for runtime, or Err with a description.
+    pub fn validate(&self) -> Result<(), String> {
+        for (class_name, class_def) in &self.classes {
+            for field in &class_def.fields {
+                field
+                    .field_type
+                    .validate_runtime()
+                    .map_err(|e| format!("Class '{class_name}' field '{}': {e}", field.name))?;
+            }
+        }
+        for (fn_name, fn_def) in &self.functions {
+            fn_def
+                .return_type
+                .validate_runtime()
+                .map_err(|e| format!("Function '{fn_name}' return type: {e}"))?;
+            for param in &fn_def.params {
+                param
+                    .param_type
+                    .validate_runtime()
+                    .map_err(|e| format!("Function '{fn_name}' param '{}': {e}", param.name))?;
+            }
+        }
+        Ok(())
     }
 }

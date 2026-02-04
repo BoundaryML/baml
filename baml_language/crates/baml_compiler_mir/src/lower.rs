@@ -17,11 +17,12 @@
 use std::collections::HashMap;
 
 use baml_base::{Name, Span};
-use baml_compiler_hir::{FullyQualifiedName, FunctionSignature};
-use baml_compiler_tir::{Ty, TypeResolutionContext};
+use baml_compiler_hir::FunctionSignature;
+use baml_compiler_tir::TypeResolutionContext;
 use baml_compiler_vir::{
     AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp,
 };
+use baml_type::{Ty, TypeName};
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
@@ -52,6 +53,7 @@ enum SwitchKind {
 /// Lower a function from VIR to MIR.
 ///
 /// This is the main entry point for VIR → MIR lowering.
+#[allow(clippy::too_many_arguments)]
 pub fn lower<'ctx>(
     signature: &FunctionSignature,
     typed_body: &ExprBody,
@@ -60,6 +62,8 @@ pub fn lower<'ctx>(
     enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     class_type_tags: &'ctx HashMap<String, i64>,
     resolution_ctx: &'ctx TypeResolutionContext,
+    type_aliases: &'ctx HashMap<Name, baml_compiler_tir::Ty>,
+    recursive_aliases: &'ctx std::collections::HashSet<Name>,
 ) -> MirFunction {
     let mut ctx = LoweringContext::new(
         db,
@@ -68,6 +72,8 @@ pub fn lower<'ctx>(
         enum_variants,
         class_type_tags,
         resolution_ctx,
+        type_aliases,
+        recursive_aliases,
     );
     ctx.lower_function(signature, typed_body);
     ctx.finish()
@@ -90,6 +96,10 @@ struct LoweringContext<'a, 'ctx> {
     class_type_tags: &'ctx HashMap<String, i64>,
     /// Type resolution context for lowering type refs.
     resolution_ctx: &'ctx TypeResolutionContext,
+    /// Type alias mappings (alias name -> resolved type).
+    type_aliases: &'ctx HashMap<Name, baml_compiler_tir::Ty>,
+    /// Set of recursive type aliases.
+    recursive_aliases: &'ctx std::collections::HashSet<Name>,
     /// Stack of watched locals for tracking scope exit.
     watched_locals_stack: Vec<Local>,
     /// Viz context for control flow visualization.
@@ -142,6 +152,7 @@ struct LoopContext {
 }
 
 impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         db: &'a dyn crate::Db,
         arity: usize,
@@ -149,6 +160,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
         class_type_tags: &'ctx HashMap<String, i64>,
         resolution_ctx: &'ctx TypeResolutionContext,
+        type_aliases: &'ctx HashMap<Name, baml_compiler_tir::Ty>,
+        recursive_aliases: &'ctx std::collections::HashSet<Name>,
     ) -> Self {
         Self {
             db,
@@ -159,6 +172,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             enum_variants,
             class_type_tags,
             resolution_ctx,
+            type_aliases,
+            recursive_aliases,
             watched_locals_stack: Vec::new(),
             viz_context: VizContext {
                 function_name: String::new(),
@@ -172,6 +187,14 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
     fn finish(self) -> MirFunction {
         self.builder.build()
+    }
+
+    /// Convert a TIR type to `baml_type::Ty` for MIR locals.
+    /// Uses the shared conversion from `baml_type` which handles FQN→TypeName conversion,
+    /// alias expansion, and literal preservation.
+    fn convert_tir_ty(&self, tir_ty: &baml_compiler_tir::Ty) -> Ty {
+        baml_type::convert_tir_ty(tir_ty, self.type_aliases, self.recursive_aliases)
+            .unwrap_or(Ty::Null)
     }
 
     // ========================================================================
@@ -288,17 +311,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
         // _0: return place
         // Use signature return type, not body root type (which may be Never for diverging bodies)
-        let (ret_ty, _) = self
+        let (ret_ty_tir, _) = self
             .resolution_ctx
             .lower_type_ref(&signature.return_type, Span::default());
+        let ret_ty = self.convert_tir_ty(&ret_ty_tir);
         let ret = self.builder.declare_local(None, ret_ty, None, false);
         assert_eq!(ret, Local(0));
 
         // _1..=_n: parameters
         for param in &signature.params {
-            let (param_ty, _) = self
+            let (param_ty_tir, _) = self
                 .resolution_ctx
                 .lower_type_ref(&param.type_ref, Span::default());
+            let param_ty = self.convert_tir_ty(&param_ty_tir);
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None, false);
@@ -429,7 +454,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 };
 
                 // Lower the value with the actual variable name
-                let local_ty = Self::lower_typed_ir_ty(var_ty);
+                let local_ty = var_ty.clone();
                 let local =
                     self.builder
                         .declare_local(Some(name.clone()), local_ty, None, *is_watched);
@@ -459,7 +484,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
             Expr::Seq { first, second } => {
                 // Lower first for effect (result discarded)
-                let first_ty = Self::lower_typed_ir_ty(body.ty(*first));
+                let first_ty = body.ty(*first).clone();
                 let temp = self.builder.temp(first_ty);
                 self.lower_expr(*first, Place::local(temp), body);
 
@@ -554,7 +579,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 let target_place = self.lower_lvalue(*target, body);
 
                 // Load current value
-                let current_ty = Self::lower_typed_ir_ty(body.ty(*target));
+                let current_ty = body.ty(*target).clone();
                 let current_local = self.builder.temp(current_ty.clone());
                 self.builder.assign(
                     Place::local(current_local),
@@ -697,7 +722,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     let spread_locals: Vec<(Local, usize)> = spreads
                         .iter()
                         .map(|spread| {
-                            let spread_ty = Self::lower_typed_ir_ty(body.ty(spread.expr));
+                            let spread_ty = body.ty(spread.expr).clone();
                             let spread_local = self.builder.temp(spread_ty);
                             self.lower_expr(spread.expr, Place::local(spread_local), body);
                             (spread_local, spread.position)
@@ -788,14 +813,40 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // vs an actual field access (result type is the field's type)
                 if matches!(result_ty, baml_compiler_vir::Ty::Function { .. }) {
                     // Method reference - emit as a function constant
-                    // The method name is just the field name (methods are desugared to top-level functions)
+                    // For builtin types, use the qualified path:
+                    // - Class with module path: "baml.llm.PrimitiveClient" + "render_prompt"
+                    //                        -> "baml.llm.PrimitiveClient.render_prompt"
+                    // - Primitive types: List -> "baml.Array", String -> "baml.String", Map -> "baml.Map"
+                    let base_ty = body.ty(*base);
+                    let method_name = match base_ty {
+                        Ty::Class(type_name) if !type_name.module_path.is_empty() => {
+                            // Builtin class type - use fully qualified path
+                            Name::new(format!("{}.{}", type_name.display_name, field))
+                        }
+                        Ty::List(_) => {
+                            // Array methods: baml.Array.length, baml.Array.push, etc.
+                            Name::new(format!("baml.Array.{field}"))
+                        }
+                        Ty::String => {
+                            // String methods: baml.String.length, baml.String.toLowerCase, etc.
+                            Name::new(format!("baml.String.{field}"))
+                        }
+                        Ty::Map { .. } => {
+                            // Map methods: baml.Map.keys, baml.Map.values, etc.
+                            Name::new(format!("baml.Map.{field}"))
+                        }
+                        _ => {
+                            // User-defined class or other - just use field name
+                            field.clone()
+                        }
+                    };
                     self.builder.assign(
                         dest,
-                        Rvalue::Use(Operand::Constant(Constant::Function(field.clone()))),
+                        Rvalue::Use(Operand::Constant(Constant::Function(method_name))),
                     );
                 } else {
                     // Actual field access
-                    let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
+                    let base_ty = body.ty(*base).clone();
                     let base_local = self.builder.temp(base_ty.clone());
                     self.lower_expr(*base, Place::local(base_local), body);
 
@@ -814,7 +865,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
             Expr::Index { base, index } => {
                 let typed_ir_base_ty = body.ty(*base);
-                let base_ty = Self::lower_typed_ir_ty(typed_ir_base_ty);
+                let base_ty = typed_ir_base_ty.clone();
                 let base_local = self.builder.temp(base_ty.clone());
                 self.lower_expr(*base, Place::local(base_local), body);
 
@@ -844,7 +895,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 is_exhaustive,
             } => {
                 // Lower scrutinee - optimize for simple variable references
-                let scrutinee_ty = Self::lower_typed_ir_ty(body.ty(*scrutinee));
+                let scrutinee_ty = body.ty(*scrutinee).clone();
                 let scrutinee_local = if let Expr::Var(name) = body.expr(*scrutinee) {
                     // If scrutinee is a simple variable reference, reuse it directly
                     if let Some(&local) = self.locals.get(name) {
@@ -1037,7 +1088,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 }
                 Pattern::TypedBinding { name: _, ty } => {
                     // TypedBinding - lookup type tag for primitive or class types
-                    let type_tag = self.type_tag_for_vir_ty(ty)?;
+                    let type_tag = self.type_tag_for_ty(ty)?;
                     match &detected_kind {
                         None => detected_kind = Some(SwitchKind::TypeTag),
                         Some(SwitchKind::TypeTag) => {}
@@ -1087,7 +1138,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                                 switch_arms.push((variant_idx, i));
                             }
                             Pattern::TypedBinding { name: _, ty } => {
-                                let type_tag = self.type_tag_for_vir_ty(ty)?;
+                                let type_tag = self.type_tag_for_ty(ty)?;
                                 match &detected_kind {
                                     None => detected_kind = Some(SwitchKind::TypeTag),
                                     Some(SwitchKind::TypeTag) => {}
@@ -1136,7 +1187,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         Some(index as i64)
     }
 
-    /// Get the type tag for a VIR type (primitive or class).
+    /// Get the type tag for a type (primitive or class).
     ///
     /// Returns the type tag for primitives (using `baml_typetags` constants)
     /// or for classes (using the pre-computed `class_type_tags` map).
@@ -1152,17 +1203,21 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// which is safe but may miss optimization opportunities. Full `TypeAlias`
     /// resolution would require resolving through potentially recursive aliases,
     /// which is not yet implemented.
-    fn type_tag_for_vir_ty(&self, ty: &baml_compiler_vir::Ty) -> Option<i64> {
-        use baml_compiler_vir::Ty;
+    fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
         match ty {
             Ty::Int => Some(baml_typetags::INT),
             Ty::String => Some(baml_typetags::STRING),
             Ty::Bool => Some(baml_typetags::BOOL),
             Ty::Null => Some(baml_typetags::NULL),
             Ty::Float => Some(baml_typetags::FLOAT),
-            Ty::Class(fqn) => self.class_type_tags.get(fqn.name.as_str()).copied(),
+            Ty::Class(tn) => self.class_type_tags.get(tn.name.as_str()).copied(),
             // TypeAliases: look up by alias name. See doc comment for limitations.
-            Ty::TypeAlias(fqn) => self.class_type_tags.get(fqn.name.as_str()).copied(),
+            Ty::TypeAlias(tn) => self.class_type_tags.get(tn.name.as_str()).copied(),
+            // Literal types map to the same tag as their base type
+            Ty::Literal(baml_base::Literal::Int(_)) => Some(baml_typetags::INT),
+            Ty::Literal(baml_base::Literal::Float(_)) => Some(baml_typetags::FLOAT),
+            Ty::Literal(baml_base::Literal::String(_)) => Some(baml_typetags::STRING),
+            Ty::Literal(baml_base::Literal::Bool(_)) => Some(baml_typetags::BOOL),
             _ => None, // Not a type with a known tag
         }
     }
@@ -1274,7 +1329,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 }
                 Pattern::TypedBinding { name, ty } => {
                     // Typed binding - bind the variable with its specific type
-                    let pattern_ty = Self::lower_typed_ir_ty(ty);
+                    let pattern_ty = ty.clone();
                     let local =
                         self.builder
                             .declare_local(Some(name.clone()), pattern_ty, None, false);
@@ -1328,7 +1383,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             Pattern::TypedBinding { name, ty } => {
                 // TypedBinding checks if scrutinee is an instance of the given type
                 // Convert VIR type to TIR type for IsType check
-                let pattern_ty = Self::lower_typed_ir_ty(ty);
+                let pattern_ty = ty.clone();
 
                 // Emit instanceof check
                 let check_local = self.builder.temp(Ty::Bool);
@@ -1455,7 +1510,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 dest,
                 Rvalue::IsType {
                     operand: lhs_operand,
-                    ty: Ty::TypeAlias(FullyQualifiedName::local(type_name)),
+                    ty: Ty::TypeAlias(TypeName::local(type_name)),
                 },
             );
             return;
@@ -1756,43 +1811,46 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             }
         }
 
+        // Note: Builtin method resolution is now handled in VIR lowering.
+        // The lookup_method call that was here expected TIR types, but VIR now uses
+        // baml_type::Ty. If VIR didn't resolve a builtin method, we fall through
+        // to regular call handling below.
+
         // Check if this is a method call (callee is FieldAccess)
+        // For method calls like `obj.method()`, we need to pass `obj` as the first argument (self)
         if let Expr::FieldAccess { base, field } = callee_expr {
             let base_ty = body.ty(*base);
-            let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
 
-            if let Some((def, _)) =
-                baml_compiler_tir::builtins::lookup_method(&thir_base_ty, field.as_str())
-            {
-                // Found a builtin method - pass receiver as first argument
-                let mut all_args = vec![self.lower_to_operand(*base, body)];
-                all_args.extend(self.lower_args(args, body));
+            // Get the type name for method path construction
+            // Works for both builtin class types and primitive types with methods
+            let type_name = match &base_ty {
+                Ty::Class(tn) if !tn.module_path.is_empty() => Some(tn.display_name.to_string()),
+                Ty::List(_) => Some("baml.Array".to_string()),
+                Ty::String => Some("baml.String".to_string()),
+                Ty::Map { .. } => Some("baml.Map".to_string()),
+                Ty::Class(_) => Self::class_name_from_ty(base_ty),
+                _ => None,
+            };
 
-                let callee = Operand::Constant(Constant::Function(Name::new(def.path)));
-                if def.is_sys_op {
-                    self.emit_sys_op_call(callee, all_args, dest);
-                } else {
-                    self.emit_call(callee, all_args, dest);
-                }
-                return;
-            }
-        }
-
-        // Check if this is a user-defined method call (callee is FieldAccess on class type)
-        // For method calls like `obj.method()`, we need to pass `obj` as the first argument (self)
-        if let Expr::FieldAccess { base, field: _ } = callee_expr {
-            let base_ty = body.ty(*base);
-            let thir_base_ty = Self::lower_typed_ir_ty(base_ty);
-
-            // Check if base is a class type (has a class name)
-            if Self::class_name_from_ty(&thir_base_ty).is_some() {
+            if let Some(type_name) = type_name {
                 // This is a method call - pass receiver as first argument
                 // Must lower receiver before callee to preserve evaluation order
                 let mut all_args = vec![self.lower_to_operand(*base, body)];
                 all_args.extend(self.lower_args(args, body));
                 let callee_operand = self.lower_to_operand(callee, body);
 
-                self.emit_call(callee_operand, all_args, dest);
+                // Check if this method is a SysOp builtin (e.g., baml.llm.PrimitiveClient.render_prompt)
+                // Build the full path using the type name (not variable name) + method name
+                let method_path = format!("{type_name}.{field}");
+                let is_sys_op = baml_compiler_tir::builtins::lookup_builtin_by_path(&method_path)
+                    .map(|def| def.is_sys_op)
+                    .unwrap_or(false);
+
+                if is_sys_op {
+                    self.emit_sys_op_call(callee_operand, all_args, dest);
+                } else {
+                    self.emit_call(callee_operand, all_args, dest);
+                }
                 return;
             }
         }
@@ -1884,14 +1942,14 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
             Expr::FieldAccess { base, field } => {
                 let base_place = self.lower_lvalue(*base, body);
-                let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
+                let base_ty = body.ty(*base).clone();
                 let field_idx = self.field_index_for_type_and_name(&base_ty, field);
                 Place::field(base_place, field_idx)
             }
 
             Expr::Index { base, index } => {
                 let base_place = self.lower_lvalue(*base, body);
-                let base_ty = Self::lower_typed_ir_ty(body.ty(*base));
+                let base_ty = body.ty(*base).clone();
                 let index_local = self.builder.temp(Ty::Int);
                 self.lower_expr(*index, Place::local(index_local), body);
 
@@ -1910,7 +1968,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // evaluate the call and store the result in a temp, then use that as base.
                 // This works because objects have reference semantics in the VM.
                 let call_ty = body.ty(expr_id);
-                let mir_ty = Self::lower_typed_ir_ty(call_ty);
+                let mir_ty = call_ty.clone();
                 let temp = self.builder.temp(mir_ty);
                 self.lower_call(*callee, args, Place::local(temp), body, call_ty);
                 Place::local(temp)
@@ -1958,9 +2016,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// For user classes, returns just the name (e.g., "`MyClass`").
     fn class_name_from_ty(ty: &Ty) -> Option<String> {
         match ty {
-            Ty::TypeAlias(fqn) | Ty::Class(fqn) => {
-                // Use display() to get full path for builtins, local name for user classes
-                Some(fqn.display())
+            Ty::TypeAlias(tn) | Ty::Class(tn) => {
+                // Use display_name which is pre-computed with the full path for builtins
+                Some(tn.display_name.to_string())
             }
             _ => None,
         }
@@ -1973,7 +2031,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// 2. Lowering the expression into that temporary
     /// 3. Creating an operand that copies from the temporary
     fn lower_to_operand(&mut self, expr: ExprId, body: &ExprBody) -> Operand {
-        let ty = Self::lower_typed_ir_ty(body.ty(expr));
+        let ty = body.ty(expr).clone();
         let local = self.builder.temp(ty);
         self.lower_expr(expr, Place::local(local), body);
         Operand::copy_local(local)
@@ -2001,8 +2059,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// 2. Await: Wait for the future and retrieve the result
     fn emit_sys_op_call(&mut self, callee: Operand, args: Vec<Operand>, dest: Place) {
         // Create a temp to hold the future handle
-        // Future handles are opaque to the VM - we use Unknown type
-        let future_local = self.builder.temp(Ty::Unknown);
+        // Future handles are opaque to the VM - we use Null type
+        let future_local = self.builder.temp(Ty::Null);
         let future_place = Place::local(future_local);
 
         // Create blocks for the dispatch and await
@@ -2020,44 +2078,5 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
         // Continue execution after await completes
         self.builder.set_current_block(continue_block);
-    }
-
-    /// Convert a VIR type to a TIR type for MIR locals.
-    fn lower_typed_ir_ty(ty: &baml_compiler_vir::Ty) -> Ty {
-        match ty {
-            baml_compiler_vir::Ty::Int => Ty::Int,
-            baml_compiler_vir::Ty::Float => Ty::Float,
-            baml_compiler_vir::Ty::String => Ty::String,
-            baml_compiler_vir::Ty::Bool => Ty::Bool,
-            baml_compiler_vir::Ty::Null => Ty::Null,
-            baml_compiler_vir::Ty::Media(kind) => Ty::Media(*kind),
-            baml_compiler_vir::Ty::Class(fqn) => Ty::Class(fqn.clone()),
-            baml_compiler_vir::Ty::Enum(fqn) => Ty::Enum(fqn.clone()),
-            baml_compiler_vir::Ty::TypeAlias(fqn) => Ty::TypeAlias(fqn.clone()),
-            baml_compiler_vir::Ty::Optional(inner) => {
-                Ty::Optional(Box::new(Self::lower_typed_ir_ty(inner)))
-            }
-            baml_compiler_vir::Ty::List(inner) => {
-                Ty::List(Box::new(Self::lower_typed_ir_ty(inner)))
-            }
-            baml_compiler_vir::Ty::Map { key, value } => Ty::Map {
-                key: Box::new(Self::lower_typed_ir_ty(key)),
-                value: Box::new(Self::lower_typed_ir_ty(value)),
-            },
-            baml_compiler_vir::Ty::Union(types) => {
-                Ty::Union(types.iter().map(Self::lower_typed_ir_ty).collect())
-            }
-            baml_compiler_vir::Ty::Function { params, ret } => Ty::Function {
-                params: params.iter().map(Self::lower_typed_ir_ty).collect(),
-                ret: Box::new(Self::lower_typed_ir_ty(ret)),
-            },
-            baml_compiler_vir::Ty::Unknown => Ty::Unknown,
-            baml_compiler_vir::Ty::Error => Ty::Error,
-            baml_compiler_vir::Ty::Unit => Ty::Void,
-            baml_compiler_vir::Ty::Never => Ty::Void, // Never is used for diverging expressions
-            baml_compiler_vir::Ty::WatchAccessor(inner) => {
-                Ty::WatchAccessor(Box::new(Self::lower_typed_ir_ty(inner)))
-            }
-        }
     }
 }

@@ -328,6 +328,13 @@ impl BexEngine {
             .collect();
         let globals = GlobalPool::from_vec(globals_vec);
 
+        // Validate that no compiler-only type variants leaked into the runtime program
+        snapshot
+            .validate()
+            .map_err(|e| EngineError::SchemaInconsistency {
+                message: format!("Type validation failed: {e}"),
+            })?;
+
         Ok(Self {
             snapshot,
             heap,

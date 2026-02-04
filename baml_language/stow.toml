@@ -54,7 +54,7 @@ test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler"]
-allowed_crates = ["baml_db", "baml_project", "baml_bridge_cffi"]
+allowed_crates = ["baml_db", "baml_project", "baml_bridge_cffi", "baml_type"]
 reason = "Use baml_db or baml_project to access compiler interfaces."
 
 [[namespaces.dependency_rules]]

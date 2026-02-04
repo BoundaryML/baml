@@ -272,6 +272,8 @@ fn call_function_stream_from_c_inner(
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
     // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
     let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
+    let client_registry_clone = client_registry.clone();
+    let env_vars_clone = env_vars.clone();
     let mut stream = match runtime.stream_function(
         func_name,
         &kwargs,
@@ -298,9 +300,9 @@ fn call_function_stream_from_c_inner(
                 Some(|| on_tick(id)),
                 Some(|r| on_event(id, r, runtime)),
                 &ctx,
-                None,
-                None,
-                HashMap::new(),
+                type_builder.as_ref(),
+                client_registry_clone.as_ref(),
+                env_vars_clone,
             )
             .await;
 

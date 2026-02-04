@@ -711,10 +711,19 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Float(_), Ty::Float) => true,
         (BexExternalValue::Bool(_), Ty::Bool) => true,
         (BexExternalValue::String(_), Ty::String) => true,
+        // Literal types match their corresponding runtime values
+        (BexExternalValue::Int(_), Ty::Literal(baml_base::Literal::Int(_))) => true,
+        (BexExternalValue::Float(_), Ty::Literal(baml_base::Literal::Float(_))) => true,
+        (BexExternalValue::String(_), Ty::Literal(baml_base::Literal::String(_))) => true,
+        (BexExternalValue::Bool(_), Ty::Literal(baml_base::Literal::Bool(_))) => true,
         (BexExternalValue::Array { .. }, Ty::List(_)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
-        (BexExternalValue::Instance { class_name, .. }, Ty::Class(name)) => class_name == name,
-        (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(name)) => enum_name == name,
+        (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn)) => {
+            class_name.as_str() == tn.display_name.as_str()
+        }
+        (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(tn)) => {
+            enum_name.as_str() == tn.display_name.as_str()
+        }
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         // Handle nested unions/optionals in the type
         (value, Ty::Union(members)) => members.iter().any(|m| value_matches_type(value, m)),
@@ -740,19 +749,27 @@ fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
 fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'a Ty> {
     match value {
         Value::Null => members.iter().find(|m| matches!(m, Ty::Null)),
-        Value::Int(_) => members.iter().find(|m| matches!(m, Ty::Int)),
-        Value::Float(_) => members.iter().find(|m| matches!(m, Ty::Float)),
-        Value::Bool(_) => members.iter().find(|m| matches!(m, Ty::Bool)),
+        Value::Int(_) => members
+            .iter()
+            .find(|m| matches!(m, Ty::Int | Ty::Literal(baml_base::Literal::Int(_)))),
+        Value::Float(_) => members
+            .iter()
+            .find(|m| matches!(m, Ty::Float | Ty::Literal(baml_base::Literal::Float(_)))),
+        Value::Bool(_) => members
+            .iter()
+            .find(|m| matches!(m, Ty::Bool | Ty::Literal(baml_base::Literal::Bool(_)))),
         Value::Object(ptr) => {
             let obj = unsafe { ptr.get() };
             match obj {
-                Object::String(_) => members.iter().find(|m| matches!(m, Ty::String)),
+                Object::String(_) => members
+                    .iter()
+                    .find(|m| matches!(m, Ty::String | Ty::Literal(baml_base::Literal::String(_)))),
                 Object::Instance(inst) => {
                     let class_obj = unsafe { inst.class.get() };
                     if let Object::Class(class) = class_obj {
                         members
                             .iter()
-                            .find(|m| matches!(m, Ty::Class(name) if name == &class.name))
+                            .find(|m| matches!(m, Ty::Class(tn) if tn.display_name.as_str() == class.name.as_str()))
                     } else {
                         None
                     }
@@ -762,7 +779,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     if let Object::Enum(enm) = enum_obj {
                         members
                             .iter()
-                            .find(|m| matches!(m, Ty::Enum(name) if name == &enm.name))
+                            .find(|m| matches!(m, Ty::Enum(tn) if tn.display_name.as_str() == enm.name.as_str()))
                     } else {
                         None
                     }

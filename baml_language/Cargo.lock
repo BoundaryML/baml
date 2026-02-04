@@ -402,9 +402,9 @@ version = "0.218.1"
 dependencies = [
  "baml_base",
  "baml_compiler_emit",
- "baml_compiler_hir",
- "baml_compiler_tir",
+ "baml_compiler_vir",
  "baml_project",
+ "baml_type",
  "baml_workspace",
  "bex_engine",
  "bex_external_types",
@@ -506,6 +506,7 @@ dependencies = [
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_tests",
+ "baml_type",
  "baml_workspace",
  "bex_vm_types",
  "insta",
@@ -547,6 +548,7 @@ dependencies = [
  "baml_compiler_hir",
  "baml_compiler_tir",
  "baml_compiler_vir",
+ "baml_type",
  "baml_typetags",
  "baml_workspace",
  "la-arena",
@@ -601,6 +603,8 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_tir",
+ "baml_type",
+ "baml_workspace",
  "insta",
  "la-arena",
  "pretty_assertions",
@@ -742,6 +746,7 @@ dependencies = [
  "baml_compiler_hir",
  "baml_compiler_mir",
  "baml_compiler_tir",
+ "baml_compiler_vir",
  "baml_db",
  "baml_workspace",
  "lsp-types",
@@ -760,8 +765,10 @@ dependencies = [
  "baml_compiler_hir",
  "baml_compiler_mir",
  "baml_compiler_tir",
+ "baml_compiler_vir",
  "baml_db",
  "baml_project",
+ "baml_type",
  "baml_typetags",
  "baml_workspace",
  "bex_program",
@@ -777,6 +784,15 @@ dependencies = [
  "syn 2.0.114",
  "tempfile",
  "walkdir",
+]
+
+[[package]]
+name = "baml_type"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler_tir",
+ "smol_str",
 ]
 
 [[package]]
@@ -825,6 +841,7 @@ name = "bex_engine"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "baml_base",
  "baml_tests",
  "bex_external_types",
  "bex_heap",
@@ -850,6 +867,7 @@ name = "bex_external_types"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_type",
  "bex_program",
  "bex_vm_types",
  "indexmap 2.13.0",
@@ -898,6 +916,8 @@ dependencies = [
 name = "bex_program"
 version = "0.0.0"
 dependencies = [
+ "baml_base",
+ "baml_type",
  "bex_vm_types",
 ]
 

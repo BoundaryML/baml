@@ -1,31 +1,31 @@
 ---
-source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn OpenRouterMistralSmall3_1_24b.resolve() -> Unknown {
+fn OpenRouterMistralSmall3_1_24b.resolve() -> null {
     // Locals:
-    let _0: Unknown // return
-    let _1: Unknown
-    let _2: Unknown
-    let _3: Unknown
-    let _4: Unknown
-    let _5: Unknown
-    let _6: Unknown
-    let _7: Unknown
-    let _8: Unknown
-    let _9: Unknown
-    let _10: Unknown
-    let _11: Unknown
-    let _12: Unknown
-    let _13: Unknown
-    let _14: Unknown
-    let _15: Unknown
-    let _16: Unknown
-    let _17: Unknown
-    let _18: Unknown
-    let _19: Unknown
-    let _20: Unknown
+    let _0: null // return
+    let _1: null
+    let _2: null
+    let _3: null
+    let _4: null
+    let _5: null
+    let _6: null
+    let _7: null
+    let _8: null
+    let _9: null
+    let _10: null
+    let _11: null
+    let _12: null
+    let _13: null
+    let _14: null
+    let _15: null
+    let _16: null
+    let _17: null
+    let _18: null
+    let _19: null
+    let _20: null
 
     bb0: {
         _1 = const fn baml.llm.build_primitive_client;

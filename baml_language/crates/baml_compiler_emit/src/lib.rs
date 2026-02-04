@@ -108,6 +108,12 @@ pub fn compile_files(
 
     let resolution_ctx = TypeResolutionContext::new(db, project);
 
+    // Get type aliases for VIR lowering
+    let type_aliases = baml_compiler_tir::type_aliases(db, project)
+        .aliases(db)
+        .clone();
+    let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases);
+
     // Build typing context (maps function names to their types)
     let typing_context = build_typing_context(db, files, &resolution_ctx);
 
@@ -400,9 +406,14 @@ pub fn compile_files(
 
                         // Lower HIR → VIR → MIR
                         // Returns early if there are Missing nodes (errors in source)
-                        let vir =
-                            baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx)
-                                .map_err(|e| e.in_function(signature.name.to_string()))?;
+                        let vir = baml_compiler_vir::lower_from_hir(
+                            &body,
+                            &inference,
+                            &resolution_ctx,
+                            &type_aliases,
+                            &recursive_aliases,
+                        )
+                        .map_err(|e| e.in_function(signature.name.to_string()))?;
                         let mir = baml_compiler_mir::lower(
                             &signature,
                             &vir,
@@ -411,6 +422,8 @@ pub fn compile_files(
                             &enum_variants,
                             &class_type_tags,
                             &resolution_ctx,
+                            &type_aliases,
+                            &recursive_aliases,
                         );
 
                         // Compile MIR to bytecode

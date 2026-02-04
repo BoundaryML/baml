@@ -221,6 +221,7 @@ impl fmt::Display for Ty {
             }
             Ty::Literal(lit) => match lit {
                 baml_base::Literal::Int(v) => write!(f, "int({v})"),
+                baml_base::Literal::Float(s) => write!(f, "float({s})"),
                 baml_base::Literal::String(v) => write!(f, "string({v:?})"),
                 baml_base::Literal::Bool(v) => write!(f, "bool({v})"),
             },

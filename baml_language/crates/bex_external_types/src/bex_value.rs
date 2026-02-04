@@ -33,6 +33,7 @@ use crate::{BexExternalValue, Handle};
 /// }
 /// ```
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum BexValue {
     /// Handle to any heap-allocated object (string, array, map, instance, variant, etc.).
     /// Resolve via `BexEngine::to_snapshot()` to get owned data.

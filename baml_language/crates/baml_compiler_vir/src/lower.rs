@@ -130,10 +130,18 @@ pub fn lower_from_hir(
     body: &FunctionBody,
     inference: &InferenceResult,
     resolution_ctx: &TypeResolutionContext,
+    type_aliases: &std::collections::HashMap<baml_base::Name, baml_compiler_tir::Ty>,
+    recursive_aliases: &std::collections::HashSet<baml_base::Name>,
 ) -> Result<ExprBody, LoweringError> {
     match body {
         FunctionBody::Expr(hir_body, source_map) => {
-            let ctx = LoweringContext::new(inference, resolution_ctx, source_map);
+            let ctx = LoweringContext::new(
+                inference,
+                resolution_ctx,
+                source_map,
+                type_aliases,
+                recursive_aliases,
+            );
             ctx.lower_expr_body(hir_body)
         }
         FunctionBody::Llm(_) => {
@@ -176,11 +184,11 @@ impl ExprBodyBuilder {
     }
 
     fn alloc_unit(&mut self) -> ExprId {
-        self.alloc(Expr::Unit, Ty::Unit)
+        self.alloc(Expr::Unit, Ty::Void)
     }
 
     fn ty(&self, id: ExprId) -> &Ty {
-        self.expr_types.get(&id).unwrap_or(&Ty::Unknown)
+        self.expr_types.get(&id).unwrap_or(&Ty::Null)
     }
 
     fn finish(self, root: ExprId) -> ExprBody {
@@ -209,6 +217,8 @@ struct LoweringContext<'a> {
     resolution_ctx: &'a TypeResolutionContext,
     source_map: &'a HirSourceMap,
     builder: ExprBodyBuilder,
+    type_aliases: &'a std::collections::HashMap<baml_base::Name, baml_compiler_tir::Ty>,
+    recursive_aliases: &'a std::collections::HashSet<baml_base::Name>,
 }
 
 impl<'a> LoweringContext<'a> {
@@ -216,12 +226,16 @@ impl<'a> LoweringContext<'a> {
         inference: &'a InferenceResult,
         resolution_ctx: &'a TypeResolutionContext,
         source_map: &'a HirSourceMap,
+        type_aliases: &'a std::collections::HashMap<baml_base::Name, baml_compiler_tir::Ty>,
+        recursive_aliases: &'a std::collections::HashSet<baml_base::Name>,
     ) -> Self {
         Self {
             inference,
             resolution_ctx,
             source_map,
             builder: ExprBodyBuilder::new(),
+            type_aliases,
+            recursive_aliases,
         }
     }
 
@@ -243,12 +257,8 @@ impl<'a> LoweringContext<'a> {
         let hir_expr = &hir_body.exprs[hir_id];
 
         // Get type from TIR inference
-        let ty = self
-            .inference
-            .expr_types
-            .get(&hir_id)
-            .map(Self::lower_ty)
-            .unwrap_or(Ty::Unknown);
+        let tir_ty = self.inference.expr_types.get(&hir_id);
+        let ty = tir_ty.map(|ty| self.lower_ty(ty)).unwrap_or(Ty::Null);
 
         match hir_expr {
             HirExpr::Missing => {
@@ -270,7 +280,7 @@ impl<'a> LoweringContext<'a> {
                     // Start with the variable (first segment)
                     let first_ty = segment_types
                         .first()
-                        .map(Self::lower_ty)
+                        .map(|ty| self.lower_ty(ty))
                         .unwrap_or_else(|| {
                             panic!("BUG: path_segment_types is empty for path {segments:?}")
                         });
@@ -281,7 +291,7 @@ impl<'a> LoweringContext<'a> {
                         // Type after this field access is segment_types[i+1]
                         let result_ty = segment_types
                             .get(i + 1)
-                            .map(Self::lower_ty)
+                            .map(|ty| self.lower_ty(ty))
                             .unwrap_or_else(|| {
                                 panic!(
                                     "BUG: path_segment_types missing type at index {} for path {:?}",
@@ -575,7 +585,7 @@ impl<'a> LoweringContext<'a> {
         if self.is_dangling_let(expr_id) {
             let unit = self.builder.alloc_unit();
             self.fill_let_body(expr_id, unit);
-            self.builder.expr_types.insert(expr_id, Ty::Unit);
+            self.builder.expr_types.insert(expr_id, Ty::Void);
         }
     }
 
@@ -620,10 +630,10 @@ impl<'a> LoweringContext<'a> {
                     self.inference
                         .expr_types
                         .get(init)
-                        .map(Self::lower_ty)
-                        .unwrap_or(Ty::Unknown)
+                        .map(|ty| self.lower_ty(ty))
+                        .unwrap_or(Ty::Null)
                 } else {
-                    Ty::Unknown
+                    Ty::Null
                 };
 
                 // Lower the initializer (or unit if missing)
@@ -644,7 +654,7 @@ impl<'a> LoweringContext<'a> {
                         body: dangling_body,
                         is_watched: *is_watched,
                     },
-                    Ty::Unknown, // Will be updated when body is filled
+                    Ty::Null, // Will be updated when body is filled
                 ))
             }
 
@@ -672,7 +682,7 @@ impl<'a> LoweringContext<'a> {
                         condition: cond,
                         body: final_body,
                     },
-                    Ty::Unit,
+                    Ty::Void,
                 ))
             }
 
@@ -681,12 +691,12 @@ impl<'a> LoweringContext<'a> {
                     Some(e) => Some(self.lower_expr(*e, hir_body)?),
                     None => None,
                 };
-                Ok(self.builder.alloc(Expr::Return(ret_expr), Ty::Never))
+                Ok(self.builder.alloc(Expr::Return(ret_expr), Ty::Void))
             }
 
-            HirStmt::Break => Ok(self.builder.alloc(Expr::Break, Ty::Never)),
+            HirStmt::Break => Ok(self.builder.alloc(Expr::Break, Ty::Void)),
 
-            HirStmt::Continue => Ok(self.builder.alloc(Expr::Continue, Ty::Never)),
+            HirStmt::Continue => Ok(self.builder.alloc(Expr::Continue, Ty::Void)),
 
             HirStmt::Assign { target, value } => {
                 let target_id = self.lower_expr(*target, hir_body)?;
@@ -696,7 +706,7 @@ impl<'a> LoweringContext<'a> {
                         target: target_id,
                         value: value_id,
                     },
-                    Ty::Unit,
+                    Ty::Void,
                 ))
             }
 
@@ -709,7 +719,7 @@ impl<'a> LoweringContext<'a> {
                         op: AssignOp::from(*op),
                         value: value_id,
                     },
-                    Ty::Unit,
+                    Ty::Void,
                 ))
             }
 
@@ -719,7 +729,7 @@ impl<'a> LoweringContext<'a> {
                     Expr::Assert {
                         condition: condition_id,
                     },
-                    Ty::Unit,
+                    Ty::Void,
                 ))
             }
 
@@ -728,59 +738,21 @@ impl<'a> LoweringContext<'a> {
                     name: name.clone(),
                     level: *level,
                 },
-                Ty::Unit,
+                Ty::Void,
             )),
         }
     }
 
-    /// Lower a TIR type to VIR type, resolving all IDs.
-    fn lower_ty(thir_ty: &baml_compiler_tir::Ty) -> Ty {
-        match thir_ty {
-            baml_compiler_tir::Ty::Int => Ty::Int,
-            baml_compiler_tir::Ty::Float => Ty::Float,
-            baml_compiler_tir::Ty::String => Ty::String,
-            baml_compiler_tir::Ty::Bool => Ty::Bool,
-            baml_compiler_tir::Ty::Null => Ty::Null,
-            baml_compiler_tir::Ty::Media(kind) => Ty::Media(*kind),
-            baml_compiler_tir::Ty::TypeAlias(fqn) => Ty::TypeAlias(fqn.clone()),
-
-            baml_compiler_tir::Ty::Class(fqn) => Ty::Class(fqn.clone()),
-
-            baml_compiler_tir::Ty::Enum(fqn) => Ty::Enum(fqn.clone()),
-
-            baml_compiler_tir::Ty::Optional(inner) => Ty::Optional(Box::new(Self::lower_ty(inner))),
-
-            baml_compiler_tir::Ty::List(inner) => Ty::List(Box::new(Self::lower_ty(inner))),
-
-            baml_compiler_tir::Ty::Map { key, value } => Ty::Map {
-                key: Box::new(Self::lower_ty(key)),
-                value: Box::new(Self::lower_ty(value)),
-            },
-
-            baml_compiler_tir::Ty::Union(types) => {
-                Ty::Union(types.iter().map(Self::lower_ty).collect())
-            }
-
-            baml_compiler_tir::Ty::Function { params, ret } => Ty::Function {
-                params: params.iter().map(Self::lower_ty).collect(),
-                ret: Box::new(Self::lower_ty(ret)),
-            },
-
-            baml_compiler_tir::Ty::Unknown => Ty::Unknown,
-            baml_compiler_tir::Ty::Error => Ty::Error,
-            baml_compiler_tir::Ty::Void => Ty::Unit,
-            // Map literal types to their underlying primitive types
-            baml_compiler_tir::Ty::Literal(lit) => match lit {
-                baml_compiler_tir::LiteralValue::Int(_) => Ty::Int,
-                baml_compiler_tir::LiteralValue::Float(_) => Ty::Float,
-                baml_compiler_tir::LiteralValue::String(_) => Ty::String,
-                baml_compiler_tir::LiteralValue::Bool(_) => Ty::Bool,
-            },
-            // WatchAccessor is a special type that wraps another type
-            baml_compiler_tir::Ty::WatchAccessor(inner) => {
-                Ty::WatchAccessor(Box::new(Self::lower_ty(inner)))
-            }
-        }
+    /// Lower a TIR type to the unified `baml_type::Ty`.
+    ///
+    /// Uses the shared conversion from `baml_type::convert_tir_ty` which handles:
+    /// - FQN → `TypeName` conversion
+    /// - Non-recursive type alias expansion
+    /// - Literal type preservation (no erasure)
+    /// - TIR Unknown/Error → Null (error recovery types don't propagate)
+    fn lower_ty(&self, thir_ty: &baml_compiler_tir::Ty) -> Ty {
+        baml_type::convert_tir_ty(thir_ty, self.type_aliases, self.recursive_aliases)
+            .unwrap_or(Ty::Null)
     }
 
     /// Lower an HIR `TypeRef` to VIR type.
@@ -788,7 +760,7 @@ impl<'a> LoweringContext<'a> {
         let (thir_ty, _) = self
             .resolution_ctx
             .lower_type_ref(type_ref, Span::default());
-        Self::lower_ty(&thir_ty)
+        self.lower_ty(&thir_ty)
     }
 
     /// Lower an HIR pattern to VIR pattern.

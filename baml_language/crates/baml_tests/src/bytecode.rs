@@ -74,6 +74,9 @@ impl baml_compiler_hir::Db for TestDatabase {}
 impl baml_compiler_tir::Db for TestDatabase {}
 
 #[salsa::db]
+impl baml_compiler_vir::Db for TestDatabase {}
+
+#[salsa::db]
 impl baml_compiler_mir::Db for TestDatabase {}
 
 impl Default for TestDatabase {
@@ -123,13 +126,11 @@ pub fn compile_source(source: &str) -> VmProgram {
 
 /// Compile BAML source code into a `BexProgram` with schema populated.
 ///
-/// This function extracts function return types from the TIR so that
-/// `BexProgram.functions` is properly populated for engine tests.
+/// This function uses VIR schema to populate the BexProgram schema types
+/// for engine tests.
 pub fn compile_source_with_schema(source: &str) -> BexProgram {
     use std::collections::HashMap;
 
-    use baml_compiler_hir::{ItemId, file_item_tree, function_signature};
-    use baml_compiler_tir::TypeResolutionContext;
     use baml_workspace::Db as _;
 
     let mut db = TestDatabase::new();
@@ -140,130 +141,100 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
     let bytecode = baml_compiler_emit::compile_files(&db, &[file])
         .expect("compile_files should succeed for valid test source");
 
-    // Build typing context to lower TypeRefs to Tys
+    // Get VIR schema
     let project = db.project();
-    let resolution_ctx = TypeResolutionContext::new(&db, project);
+    let schema = baml_compiler_vir::project_schema(&db, project);
 
-    // Get item tree for accessing class/enum definitions
-    let item_tree = file_item_tree(&db, file);
-
-    let mut functions = HashMap::new();
-    let mut classes = HashMap::new();
-    let mut enums = HashMap::new();
-
-    let items_struct = baml_compiler_hir::file_items(&db, file);
-    for item in items_struct.items(&db) {
-        match item {
-            ItemId::Function(func_loc) => {
-                let signature = function_signature(&db, *func_loc);
-
-                // Lower return type from TypeRef to TIR Ty
-                let (tir_return_type, _) = resolution_ctx
-                    .lower_type_ref(&signature.return_type, baml_base::Span::default());
-
-                // Convert TIR Ty to Snapshot Ty
-                let return_type = convert_tir_ty_to_snapshot_ty(&tir_return_type);
-
-                // Build params
-                let params: Vec<bex_program::ParamDef> = signature
-                    .params
-                    .iter()
-                    .map(|p| {
-                        let (tir_ty, _) =
-                            resolution_ctx.lower_type_ref(&p.type_ref, baml_base::Span::default());
-                        bex_program::ParamDef {
-                            name: p.name.to_string(),
-                            param_type: convert_tir_ty_to_snapshot_ty(&tir_ty),
-                        }
-                    })
-                    .collect();
-
-                // Check if this is an LLM function by inspecting its HIR body
-                let hir_body = baml_compiler_hir::function_body(&db, *func_loc);
-                let body = match hir_body.as_ref() {
-                    baml_compiler_hir::FunctionBody::Llm(llm_body) => {
-                        // Extract prompt template and client name from LLM body
-                        let prompt_template = llm_body
-                            .prompt
-                            .as_ref()
-                            .map(|p| p.text.clone())
-                            .unwrap_or_default();
-                        let client = llm_body
-                            .client
-                            .as_ref()
-                            .map(|n| n.to_string())
-                            .unwrap_or_default();
-                        bex_program::FunctionBody::Llm {
-                            prompt_template,
-                            client,
-                        }
-                    }
-                    _ => bex_program::FunctionBody::Expr {
-                        bytecode_index: 0, // Not needed for type checking
-                    },
-                };
-
-                let func_def = bex_program::FunctionDef {
-                    name: signature.name.to_string(),
-                    params,
-                    return_type,
-                    body,
-                };
-
-                functions.insert(signature.name.to_string(), func_def);
-            }
-            ItemId::Class(class_loc) => {
-                let class = &item_tree[class_loc.id(&db)];
-                let class_name = class.name.to_string();
-
-                let fields: Vec<bex_program::FieldDef> = class
-                    .fields
-                    .iter()
-                    .map(|field| {
-                        let (tir_ty, _) = resolution_ctx
-                            .lower_type_ref(&field.type_ref, baml_base::Span::default());
-                        bex_program::FieldDef {
-                            name: field.name.to_string(),
-                            field_type: convert_tir_ty_to_snapshot_ty(&tir_ty),
-                            description: None,
-                            alias: None,
-                        }
-                    })
-                    .collect();
-
-                let class_def = bex_program::ClassDef {
-                    name: class_name.clone(),
+    // Map VIR schema to bex_program types (inline mapping since we can't depend on bridge)
+    let classes = schema
+        .classes
+        .iter()
+        .map(|c| {
+            let fields = c
+                .fields
+                .iter()
+                .filter(|f| !f.skip) // Filter out @skip fields
+                .map(|f| bex_program::FieldDef {
+                    name: f.name.to_string(),
+                    field_type: f.ty.clone(),
+                    description: f.description.clone(),
+                    alias: f.alias.clone(),
+                })
+                .collect();
+            (
+                c.name.to_string(),
+                bex_program::ClassDef {
+                    name: c.name.to_string(),
                     fields,
-                    description: None,
-                };
+                    description: c.description.clone(),
+                },
+            )
+        })
+        .collect();
 
-                classes.insert(class_name, class_def);
-            }
-            ItemId::Enum(enum_loc) => {
-                let enum_def = &item_tree[enum_loc.id(&db)];
-                let enum_name = enum_def.name.to_string();
-
-                let variants: Vec<bex_program::EnumVariantDef> = enum_def
-                    .variants
-                    .iter()
-                    .map(|variant| bex_program::EnumVariantDef {
-                        name: variant.name.to_string(),
-                        description: None,
-                        alias: None,
-                    })
-                    .collect();
-
-                let enum_def = bex_program::EnumDef {
-                    name: enum_name.clone(),
+    let enums = schema
+        .enums
+        .iter()
+        .map(|e| {
+            let variants = e
+                .variants
+                .iter()
+                .map(|v| bex_program::EnumVariantDef {
+                    name: v.name.to_string(),
+                    description: v.description.clone(),
+                    alias: v.alias.clone(),
+                    skip: v.skip,
+                })
+                .collect();
+            (
+                e.name.to_string(),
+                bex_program::EnumDef {
+                    name: e.name.to_string(),
                     variants,
-                    description: None,
-                };
+                    description: e.description.clone(),
+                },
+            )
+        })
+        .collect();
 
-                enums.insert(enum_name, enum_def);
-            }
-            _ => {}
-        }
-    }
+    let functions = schema
+        .functions
+        .iter()
+        .map(|f| {
+            let params = f
+                .params
+                .iter()
+                .map(|p| bex_program::ParamDef {
+                    name: p.name.to_string(),
+                    param_type: p.ty.clone(),
+                })
+                .collect();
+
+            let body = match &f.body_kind {
+                baml_compiler_vir::VirFunctionBodyKind::Llm {
+                    prompt_template,
+                    client,
+                } => bex_program::FunctionBody::Llm {
+                    prompt_template: prompt_template.clone(),
+                    client: client.clone(),
+                },
+                baml_compiler_vir::VirFunctionBodyKind::Expr
+                | baml_compiler_vir::VirFunctionBodyKind::Missing => {
+                    bex_program::FunctionBody::Expr
+                }
+            };
+
+            (
+                f.name.to_string(),
+                bex_program::FunctionDef {
+                    name: f.name.to_string(),
+                    params,
+                    return_type: f.return_type.clone(),
+                    body,
+                },
+            )
+        })
+        .collect();
 
     BexProgram {
         classes,
@@ -272,70 +243,6 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
         clients: HashMap::new(),
         retry_policies: HashMap::new(),
         bytecode,
-    }
-}
-
-/// Convert a TIR `Ty` to a Snapshot `Ty`.
-///
-/// The main difference is that TIR uses `FullyQualifiedName` for classes/enums,
-/// while Snapshot uses plain `String`.
-fn convert_tir_ty_to_snapshot_ty(tir_ty: &baml_compiler_tir::Ty) -> bex_program::Ty {
-    use baml_compiler_tir::Ty as TirTy;
-    use bex_program::Ty as SnapTy;
-
-    match tir_ty {
-        TirTy::Int => SnapTy::Int,
-        TirTy::Float => SnapTy::Float,
-        TirTy::String => SnapTy::String,
-        TirTy::Bool => SnapTy::Bool,
-        TirTy::Null => SnapTy::Null,
-
-        TirTy::Media(kind) => {
-            let snap_kind = match kind {
-                baml_base::MediaKind::Image => bex_program::MediaKind::Image,
-                baml_base::MediaKind::Audio => bex_program::MediaKind::Audio,
-                baml_base::MediaKind::Video => bex_program::MediaKind::Video,
-                baml_base::MediaKind::Pdf => bex_program::MediaKind::Pdf,
-                baml_base::MediaKind::Generic => bex_program::MediaKind::Image,
-            };
-            SnapTy::Media(snap_kind)
-        }
-
-        TirTy::Literal(val) => {
-            let snap_val = match val {
-                baml_compiler_tir::LiteralValue::Int(i) => bex_program::LiteralValue::Int(*i),
-                baml_compiler_tir::LiteralValue::Float(s) => {
-                    bex_program::LiteralValue::Float(s.clone())
-                }
-                baml_compiler_tir::LiteralValue::String(s) => {
-                    bex_program::LiteralValue::String(s.clone())
-                }
-                baml_compiler_tir::LiteralValue::Bool(b) => bex_program::LiteralValue::Bool(*b),
-            };
-            SnapTy::Literal(snap_val)
-        }
-
-        TirTy::Class(fqn) => SnapTy::Class(fqn.to_string()),
-        TirTy::Enum(fqn) => SnapTy::Enum(fqn.to_string()),
-        TirTy::TypeAlias(fqn) => SnapTy::Class(fqn.to_string()),
-
-        TirTy::Optional(inner) => SnapTy::Optional(Box::new(convert_tir_ty_to_snapshot_ty(inner))),
-        TirTy::List(inner) => SnapTy::List(Box::new(convert_tir_ty_to_snapshot_ty(inner))),
-        TirTy::Map { key, value } => SnapTy::Map {
-            key: Box::new(convert_tir_ty_to_snapshot_ty(key)),
-            value: Box::new(convert_tir_ty_to_snapshot_ty(value)),
-        },
-        TirTy::Union(types) => {
-            SnapTy::Union(types.iter().map(convert_tir_ty_to_snapshot_ty).collect())
-        }
-
-        TirTy::Function { params, ret } => {
-            let _ = (params, ret);
-            SnapTy::Null
-        }
-
-        TirTy::Unknown | TirTy::Error | TirTy::Void => SnapTy::Null,
-        TirTy::WatchAccessor(inner) => convert_tir_ty_to_snapshot_ty(inner),
     }
 }
 

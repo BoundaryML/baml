@@ -52,12 +52,28 @@
 mod expr;
 mod lower;
 mod pretty;
+mod schema;
+mod schema_lower;
 mod ty;
 
 pub use expr::*;
 pub use lower::{LoweringError, lower_from_hir};
 pub use pretty::pretty_print;
+pub use schema::*;
 pub use ty::*;
+
+/// Query the project schema — classes, enums, and functions with resolved types.
+///
+/// This is a Salsa tracked query that reads HIR items, TIR resolved types,
+/// and HIR attributes to produce a complete VIR schema.
+#[salsa::tracked]
+pub fn project_schema(db: &dyn Db, project: baml_workspace::Project) -> VirSchema {
+    let type_aliases = baml_compiler_tir::type_aliases(db, project)
+        .aliases(db)
+        .clone();
+    let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases);
+    schema_lower::lower_schema(db, project, &type_aliases, &recursive_aliases)
+}
 
 /// Database trait for VIR queries. Extends `baml_compiler_tir::Db`.
 #[salsa::db]

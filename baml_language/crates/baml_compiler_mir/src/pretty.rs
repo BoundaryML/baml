@@ -57,14 +57,14 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
     write!(f, ")")?;
     if !func.locals.is_empty() {
         let ret = &func.locals[0];
-        write!(f, " -> {:?}", ret.ty)?;
+        write!(f, " -> {}", ret.ty)?;
     }
     writeln!(f, " {{")?;
 
     // Local declarations
     writeln!(f, "    // Locals:")?;
     for (i, local) in func.locals.iter().enumerate() {
-        write!(f, "    let _{i}: {:?}", local.ty)?;
+        write!(f, "    let _{i}: {}", local.ty)?;
         if let Some(name) = &local.name {
             write!(f, " // {name}")?;
         }
@@ -89,9 +89,9 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
 
 fn write_local_decl_inline(f: &mut impl Write, id: Local, decl: &LocalDecl) -> fmt::Result {
     if let Some(name) = &decl.name {
-        write!(f, "{name}: {:?}", decl.ty)
+        write!(f, "{name}: {}", decl.ty)
     } else {
-        write!(f, "{id}: {:?}", decl.ty)
+        write!(f, "{id}: {}", decl.ty)
     }
 }
 

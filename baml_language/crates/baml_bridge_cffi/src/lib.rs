@@ -8,6 +8,7 @@ mod engine;
 mod error;
 mod ffi;
 mod panic;
+mod schema_map;
 
 pub use error::BridgeError;
 // Re-export FFI functions
