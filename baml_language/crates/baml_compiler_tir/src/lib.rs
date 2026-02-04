@@ -1682,17 +1682,11 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 let first_ty = infer_expr(ctx, elements[0], body);
                 let elem_ty = generalize(&first_ty);
 
-                // Check all elements have compatible types
+                // Infer all element types (for expression type info) but don't emit errors.
+                // Errors are reported in check_expr when we have the expected type context.
+                // This avoids duplicate errors during bidirectional type checking.
                 for &elem in &elements[1..] {
-                    let other_ty = infer_expr(ctx, elem, body);
-                    if !ctx.is_subtype_of(&other_ty, &elem_ty) {
-                        ctx.push_error(TypeError::TypeMismatch {
-                            expected: elem_ty.clone(),
-                            found: other_ty,
-                            location: location.clone(),
-                            info_location: None,
-                        });
-                    }
+                    infer_expr(ctx, elem, body);
                 }
                 Ty::List(Box::new(elem_ty))
             }
@@ -2005,16 +1999,9 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     Ty::List(expected_elem.clone())
                 } else {
                     // Check all elements against the expected element type
+                    // check_expr already emits type mismatch errors, no need for redundant check
                     for &elem in elements {
-                        let elem_ty = check_expr(ctx, elem, body, expected_elem);
-                        if !ctx.is_subtype_of(&elem_ty, expected_elem) {
-                            ctx.push_error(TypeError::TypeMismatch {
-                                expected: (**expected_elem).clone(),
-                                found: generalize_for_error(expected_elem, &elem_ty),
-                                location: location.clone(),
-                                info_location: None,
-                            });
-                        }
+                        check_expr(ctx, elem, body, expected_elem);
                     }
                     expected.clone()
                 }
@@ -2130,25 +2117,10 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     }
                 } else {
                     // Check all entries against the expected key/value types
+                    // check_expr already emits type mismatch errors, no need for redundant check
                     for &(key_expr, value_expr) in entries {
-                        let key_ty = check_expr(ctx, key_expr, body, expected_key);
-                        if !ctx.is_subtype_of(&key_ty, expected_key) {
-                            ctx.push_error(TypeError::TypeMismatch {
-                                expected: (**expected_key).clone(),
-                                found: generalize_for_error(expected_key, &key_ty),
-                                location: location.clone(),
-                                info_location: None,
-                            });
-                        }
-                        let value_ty = check_expr(ctx, value_expr, body, expected_value);
-                        if !ctx.is_subtype_of(&value_ty, expected_value) {
-                            ctx.push_error(TypeError::TypeMismatch {
-                                expected: (**expected_value).clone(),
-                                found: generalize_for_error(expected_value, &value_ty),
-                                location: location.clone(),
-                                info_location: None,
-                            });
-                        }
+                        check_expr(ctx, key_expr, body, expected_key);
+                        check_expr(ctx, value_expr, body, expected_value);
                     }
                     expected.clone()
                 }
