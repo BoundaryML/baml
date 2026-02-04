@@ -366,12 +366,16 @@ impl CandidateApplier {
                             // Replace existing @description
                             if let Some(desc_start) = line_rest.find("@description") {
                                 let abs_desc_start = field_end + desc_start;
-                                if let Some(desc_end) = find_attribute_end(&result[abs_desc_start..]) {
+                                if let Some(desc_end) =
+                                    find_attribute_end(&result[abs_desc_start..])
+                                {
                                     let escaped = escape_baml_string(description);
                                     let before = &result[..abs_desc_start];
                                     let after = &result[abs_desc_start + desc_end..];
-                                    result =
-                                        format!("{}@description(#\"{}\"#){}", before, escaped, after);
+                                    result = format!(
+                                        "{}@description(#\"{}\"#){}",
+                                        before, escaped, after
+                                    );
                                 }
                             }
                         } else {
