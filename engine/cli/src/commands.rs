@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use baml_runtime::{cli::RuntimeCliDefaults, BamlRuntime};
 use clap::{CommandFactory, Parser, Subcommand};
@@ -227,9 +229,31 @@ impl RuntimeCli {
                 let (baml_testing_runtime, env_vars) =
                     args.create_cli_testing_runtime(feature_flags.clone())?;
 
+                // Set up a cancellation signal using the ctrlc crate, which works
+                // reliably in both Python (PyO3) and Node.js (NAPI) contexts.
+                // tokio::signal::ctrl_c() is broken in NAPI because tokio's signal
+                // handler replaces Node's default SIGINT handler but can't properly
+                // process the signal, leaving the process unkillable.
+                let cancel_notify = Arc::new(tokio::sync::Notify::new());
+                let cancel_clone = cancel_notify.clone();
+                let cancel_token = if ctrlc::set_handler(move || {
+                    cancel_clone.notify_waiters();
+                })
+                .is_ok()
+                {
+                    Some(cancel_notify)
+                } else {
+                    None
+                };
+
                 let res = t.block_on(async {
-                    args.run(feature_flags.clone(), baml_testing_runtime, env_vars)
-                        .await
+                    args.run(
+                        feature_flags.clone(),
+                        baml_testing_runtime,
+                        env_vars,
+                        cancel_token,
+                    )
+                    .await
                 })?;
 
                 match res {

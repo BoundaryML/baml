@@ -22,6 +22,10 @@ impl RenderTestExecutionStatus for JUnitXMLRenderer {
         // JUnit XML renderer does not render progress updates.
     }
 
+    fn print_message(&self, _msg: &str) {
+        // JUnit XML renderer does not print messages.
+    }
+
     fn render_final(
         &self,
         test_status_map: &TestExecutionStatusMap,

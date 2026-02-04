@@ -145,6 +145,7 @@ impl TestArgs {
         feature_flags: internal_baml_core::feature_flags::FeatureFlags,
         runtime: Arc<BamlRuntime>,
         env_vars: HashMap<String, String>,
+        cancel_notify: Option<Arc<tokio::sync::Notify>>,
     ) -> Result<TestRunResult> {
         let test_execution_args = TestFilter::from(
             self.include.iter().map(|s| s.as_str()),
@@ -171,6 +172,7 @@ impl TestArgs {
                     output_format,
                     if *junit { Some(junit_path) } else { None },
                     &env_vars,
+                    cancel_notify,
                 )
                 .await
             {

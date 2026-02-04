@@ -503,4 +503,8 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
         self.summary_bar.finish_and_clear();
         self.print_final_results(test_status_map, selected_tests);
     }
+
+    fn print_message(&self, msg: &str) {
+        let _ = self.multi_progress.println(msg);
+    }
 }
