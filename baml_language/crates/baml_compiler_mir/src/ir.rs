@@ -16,8 +16,8 @@ use text_size::TextRange;
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
 pub struct MirFunction {
-    /// Function name for debugging.
-    pub name: String,
+    /// Function name (qualified for methods, e.g., "ClassName.methodName").
+    pub name: Name,
     /// Parameter count.
     pub arity: usize,
     /// All basic blocks in the function.

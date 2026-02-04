@@ -165,7 +165,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     ) -> Self {
         Self {
             db,
-            builder: MirBuilder::new("", arity),
+            builder: MirBuilder::new(Name::new(""), arity),
             locals: HashMap::new(),
             loop_context: None,
             class_fields,
@@ -306,7 +306,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
     /// Lower a complete function.
     fn lower_function(&mut self, signature: &FunctionSignature, body: &ExprBody) {
-        self.builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
+        self.builder = MirBuilder::new(signature.name.clone(), signature.params.len());
         self.viz_context.function_name = signature.name.to_string();
 
         // _0: return place

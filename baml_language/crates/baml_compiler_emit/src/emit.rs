@@ -220,7 +220,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // 5. Build the Function
         Function {
-            name: mir.name.clone(),
+            name: mir.name.to_string(),
             arity: mir.arity,
             bytecode: self.bytecode,
             kind: FunctionKind::Bytecode,
