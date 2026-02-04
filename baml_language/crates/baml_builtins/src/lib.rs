@@ -46,6 +46,12 @@ pub enum TypePattern {
     PromptAst,
     /// Opaque resolved LLM client.
     PrimitiveClient,
+    /// Builtin unknown type - accepts any value during type checking.
+    /// Used for builtins that need to accept heterogeneous values
+    /// (e.g., `build_primitive_client`'s options map).
+    /// Maps to `Ty::BuiltinUnknown` in TIR.
+    /// In builtin definitions, use the `Unknown` type annotation.
+    BuiltinUnknown,
 }
 
 /// A field in a builtin type definition.
@@ -288,7 +294,7 @@ macro_rules! with_builtins {
                         /// Render a Jinja template with the given arguments.
                         /// Returns a structured PromptAst that can be sent to an LLM.
                         #[sys_op]
-                        fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Any>) -> PromptAst;
+                        fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Unknown>) -> PromptAst;
 
                         /// Specialize a prompt for this client's provider.
                         /// Applies provider-specific transformations (message merging, system prompt
@@ -319,7 +325,7 @@ macro_rules! with_builtins {
                         provider: String,
                         default_role: String,
                         allowed_roles: Array<String>,
-                        options: Map<String, Any>
+                        options: Map<String, Unknown>
                     ) -> PrimitiveClient;
 
                     /// Get the client resolve function for an LLM function.
@@ -504,6 +510,17 @@ mod tests {
         assert!(
             get_jinja.unwrap().is_sys_op,
             "get_jinja_template should be sys_op"
+        );
+
+        // build_primitive_client is also a sys_op in the llm module
+        let build_client = find_builtin_by_path("baml.llm.build_primitive_client");
+        assert!(
+            build_client.is_some(),
+            "build_primitive_client should be found"
+        );
+        assert!(
+            build_client.unwrap().is_sys_op,
+            "build_primitive_client should be sys_op"
         );
 
         // Other builtins in the same parent module are also visible

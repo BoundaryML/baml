@@ -813,23 +813,23 @@ function foo() -> int {
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Type `as` has no field `length`
-//    ╭─[ parens.baml:1:1 ]
-//    │
-//  1 │ function foo() -> int {
-//    │ │ 
-//    │ ╰─ Type `as` has no field `length`
-//    │ 
-//    │ Note: Error code: E0007
-// ───╯
+//     ╭─[ parens.baml:57:4 ]
+//     │
+//  57 │    for (let a in as {}
+//     │    ─────────┬─────────  
+//     │             ╰─────────── Type `as` has no field `length`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯
 // Error: Type `as` is not indexable
-//    ╭─[ parens.baml:1:1 ]
-//    │
-//  1 │ function foo() -> int {
-//    │ │ 
-//    │ ╰─ Type `as` is not indexable
-//    │ 
-//    │ Note: Error code: E0008
-// ───╯
+//     ╭─[ parens.baml:57:4 ]
+//     │
+//  57 │    for (let a in as {}
+//     │    ─────────┬─────────  
+//     │             ╰─────────── Type `as` is not indexable
+//     │ 
+//     │ Note: Error code: E0008
+// ────╯
 // Error: Unknown variable `a`
 //     ╭─[ parens.baml:59:12 ]
 //     │
@@ -849,14 +849,14 @@ function foo() -> int {
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Unknown variable `as`
-//    ╭─[ parens.baml:1:1 ]
-//    │
-//  1 │ function foo() -> int {
-//    │ │ 
-//    │ ╰─ Unknown variable `as`
-//    │ 
-//    │ Note: Error code: E0003
-// ───╯
+//     ╭─[ parens.baml:61:18 ]
+//     │
+//  61 │    for (let a in as) {}
+//     │                  ─┬  
+//     │                   ╰── Unknown variable `as`
+//     │ 
+//     │ Note: Error code: E0003
+// ────╯
 // Error: Missing return expression. Function expects `int` but body has no final expression.
 //     ╭─[ parens.baml:1:22 ]
 //     │

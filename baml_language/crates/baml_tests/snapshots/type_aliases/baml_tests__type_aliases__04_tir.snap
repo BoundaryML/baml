@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
@@ -12,6 +12,6 @@ expression: output
   Function Baz:
     Return: Literal(String("hello"))
   Function EchoJSON:
-    Return: TypeAlias(FullyQualifiedName { namespace: Local, name: "NotJSON" })
+    Return: TypeAlias(QualifiedName { namespace: Local, name: "NotJSON" })
   Function MakeJSON:
     Return: Error

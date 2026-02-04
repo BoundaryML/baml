@@ -72,11 +72,11 @@ impl<'a> TypeLoweringContextResolved<'a> {
     }
 
     fn resolve_name(&self, name: &Name) -> Option<Ty> {
-        use baml_compiler_hir::FullyQualifiedName;
+        use baml_compiler_hir::QualifiedName;
         if self.class_names.contains(name) {
-            Some(Ty::Class(FullyQualifiedName::local(name.clone())))
+            Some(Ty::Class(QualifiedName::local(name.clone())))
         } else if self.enum_names.contains(name) {
-            Some(Ty::Enum(FullyQualifiedName::local(name.clone())))
+            Some(Ty::Enum(QualifiedName::local(name.clone())))
         } else {
             None
         }
@@ -156,6 +156,9 @@ fn lower_type_ref_resolved_with_ctx(
         // Error/Unknown
         TypeRef::Error => Ty::Error,
         TypeRef::Unknown => Ty::Unknown,
+
+        // BuiltinUnknown - the `unknown` type keyword for builtin functions
+        TypeRef::BuiltinUnknown => Ty::BuiltinUnknown,
     }
 }
 
@@ -180,11 +183,11 @@ fn lower_path_type_resolved_with_ctx(
                 "pdf" => Ty::Media(baml_base::MediaKind::Pdf),
                 // User-defined type - resolve to Class/Enum or validate
                 _ => {
-                    use baml_compiler_hir::FullyQualifiedName;
+                    use baml_compiler_hir::QualifiedName;
 
                     // Skip validation for complex type expressions
                     if !is_simple_type_name(name.as_str()) {
-                        return Ty::TypeAlias(FullyQualifiedName::local(name.clone()));
+                        return Ty::TypeAlias(QualifiedName::local(name.clone()));
                     }
 
                     // Try to resolve to Class/Enum
@@ -194,7 +197,7 @@ fn lower_path_type_resolved_with_ctx(
 
                     // Check if it's a type alias
                     if ctx.is_type_alias_name(name) {
-                        Ty::TypeAlias(FullyQualifiedName::local(name.clone()))
+                        Ty::TypeAlias(QualifiedName::local(name.clone()))
                     } else {
                         ctx.unknown_type_error(name)
                     }
@@ -202,7 +205,7 @@ fn lower_path_type_resolved_with_ctx(
             }
         }
         _ => {
-            use baml_compiler_hir::FullyQualifiedName;
+            use baml_compiler_hir::QualifiedName;
 
             let full_path = path
                 .segments
@@ -212,7 +215,7 @@ fn lower_path_type_resolved_with_ctx(
                 .join(".");
             let name = Name::new(&full_path);
             if !is_simple_type_name(&full_path) || ctx.is_type_alias_name(&name) {
-                Ty::TypeAlias(FullyQualifiedName::local(name))
+                Ty::TypeAlias(QualifiedName::local(name))
             } else {
                 ctx.unknown_type_error(&name)
             }

@@ -95,8 +95,13 @@ pub enum TypeRef {
     /// Error sentinel.
     Error,
 
-    /// Unknown/inferred.
+    /// Unknown/inferred (internal use for error recovery).
     Unknown,
+
+    /// The `unknown` type keyword - accepts any value.
+    /// Used in builtin functions like `render_prompt(args: map<string, unknown>)`.
+    /// Maps to `Ty::BuiltinUnknown` in TIR.
+    BuiltinUnknown,
 }
 
 impl TypeRef {
@@ -384,6 +389,7 @@ impl TypeRef {
             "string" => TypeRef::String,
             "bool" => TypeRef::Bool,
             "null" => TypeRef::Null,
+            "unknown" => TypeRef::BuiltinUnknown,
             "image" => TypeRef::Media(baml_base::MediaKind::Image),
             "audio" => TypeRef::Media(baml_base::MediaKind::Audio),
             "video" => TypeRef::Media(baml_base::MediaKind::Video),

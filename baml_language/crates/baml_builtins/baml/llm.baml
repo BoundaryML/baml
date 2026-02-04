@@ -16,9 +16,7 @@
 /// @param function_name The name of the LLM function to render
 /// @param args The arguments to pass to the template
 /// @return The rendered and specialized prompt AST
-// Note: args should be map<string, any> but BAML doesn't have 'any' type yet.
-// Using map<string, string> as a placeholder - the actual type is determined at runtime.
-function render_prompt(function_name: string, args: map<string, string>) -> PromptAst {
+function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst {
     let jinja_string = baml.llm.get_jinja_template(function_name);
 
     let resolve_client_fn = baml.llm.get_client_function(function_name);
@@ -36,7 +34,7 @@ function render_prompt(function_name: string, args: map<string, string>) -> Prom
 /// @param function_name The name of the LLM function
 /// @param args The arguments to pass to the template
 /// @return The HTTP request ready to be sent
-function build_request(function_name: string, args: map<string, string>) -> Request {
+function build_request(function_name: string, args: map<string, unknown>) -> Request {
     let jinja_string = baml.llm.get_jinja_template(function_name);
 
     let resolve_client_fn = baml.llm.get_client_function(function_name);
@@ -64,10 +62,8 @@ function build_request(function_name: string, args: map<string, string>) -> Requ
 /// @param function_name The name of the LLM function to call
 /// @param args The arguments to pass to the template
 /// @return The parsed response value
-// Note: args should be map<string, any> but BAML doesn't have 'any' type yet.
-// Using map<string, string> as a placeholder - the actual type is determined at runtime.
-// Return type is also placeholder - should be the function's actual return type.
-function call_llm_function(function_name: string, args: map<string, string>) -> string {
+// Note: Return type is a placeholder - should be the function's actual return type.
+function call_llm_function(function_name: string, args: map<string, unknown>) -> string {
     let jinja_string = baml.llm.get_jinja_template(function_name);
 
     let resolve_client_fn = baml.llm.get_client_function(function_name);

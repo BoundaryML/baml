@@ -7,7 +7,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use baml_db::{
     FileId, Span,
-    baml_compiler_hir::{Expr, ExprBody, ExprId, FullyQualifiedName, FunctionLoc},
+    baml_compiler_hir::{Expr, ExprBody, ExprId, FunctionLoc, QualifiedName},
     baml_compiler_tir::{DefinitionSite, ResolvedValue},
 };
 use baml_project::ProjectDatabase;
@@ -112,7 +112,7 @@ pub fn goto_definition(
 
     // If no expression found at position, fall through to the type name lookup fallback
     let Some(expr_id) = expr_id else {
-        let fqn = FullyQualifiedName::local(word.into());
+        let fqn = QualifiedName::local(word.into());
         return lookup_symbol_definition(db, &fqn);
     };
 
@@ -131,7 +131,7 @@ pub fn goto_definition(
             // Look up the class to get its location
             let project = db.get_project()?;
             let symbol_table = baml_db::baml_compiler_hir::symbol_table(db, project);
-            let class_fqn = FullyQualifiedName::local(class_name.clone());
+            let class_fqn = QualifiedName::local(class_name.clone());
             if let Some(baml_db::baml_compiler_hir::Definition::Class(class_loc)) =
                 symbol_table.lookup_type(db, &class_fqn)
             {
@@ -216,7 +216,7 @@ pub fn goto_definition(
     // Fallback: try looking up the word as a type name
     // This handles cases like type annotations in match patterns (e.g., `f: Failure`)
     // where the cursor is on a type name that isn't part of an expression
-    let fqn = FullyQualifiedName::local(word.into());
+    let fqn = QualifiedName::local(word.into());
     lookup_symbol_definition(db, &fqn)
 }
 
@@ -261,9 +261,18 @@ fn find_function_at_position(
                     }
                     baml_db::baml_compiler_syntax::ast::Item::Class(class_node) => {
                         // Check methods in classes
+                        // Method func_name is qualified as "ClassName.methodName"
+                        // AST method name is just "methodName"
+                        let class_name = class_node
+                            .name()
+                            .map(|n| n.text().to_string())
+                            .unwrap_or_else(|| "UnnamedClass".to_string());
                         for method in class_node.methods() {
                             if let Some(name) = method.name() {
-                                if name.text() == func_name {
+                                // Compare against qualified name (ClassName.methodName)
+                                let qualified_method_name =
+                                    QualifiedName::local_method_from_str(&class_name, name.text());
+                                if qualified_method_name.as_str() == func_name.as_str() {
                                     let range = method.syntax().text_range();
                                     if range.contains(position) {
                                         return Some(*func_loc);
@@ -389,8 +398,8 @@ fn resolution_to_navigation_target(
             }
 
             // Field not found - it might be a method (desugared to a top-level function)
-            // Try looking up the field name as a function
-            let method_fqn = FullyQualifiedName::local(field.clone());
+            // Methods are registered with qualified names: "ClassName.methodName"
+            let method_fqn = QualifiedName::local_method(&class_fqn.name, field);
             if let Some(target) = lookup_symbol_definition(db, &method_fqn) {
                 return Some(target);
             }
@@ -398,7 +407,7 @@ fn resolution_to_navigation_target(
             // Fallback to class definition if neither field nor method found
             lookup_symbol_definition(db, class_fqn)
         }
-        ResolvedValue::BuiltinFunction { path: _ } => {
+        ResolvedValue::BuiltinFunction(_) => {
             // Builtins don't have source definitions
             None
         }
@@ -407,10 +416,7 @@ fn resolution_to_navigation_target(
 }
 
 /// Look up a symbol's definition in the symbol table.
-fn lookup_symbol_definition(
-    db: &ProjectDatabase,
-    fqn: &FullyQualifiedName,
-) -> Option<NavigationTarget> {
+fn lookup_symbol_definition(db: &ProjectDatabase, fqn: &QualifiedName) -> Option<NavigationTarget> {
     // Get the symbol table
     let project = db.get_project()?;
     let symbol_table = baml_db::baml_compiler_hir::symbol_table(db, project);

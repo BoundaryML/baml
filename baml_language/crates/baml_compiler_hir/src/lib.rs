@@ -271,6 +271,98 @@ pub fn function_signature_source_map<'db>(
     source_map
 }
 
+/// The prefix used for builtin BAML files.
+///
+/// Files with paths starting with this prefix are treated as builtins
+/// and their functions are namespaced accordingly.
+pub const BUILTIN_PATH_PREFIX: &str = "<builtin>/";
+
+/// Derive the namespace for a file based on its path.
+///
+/// Builtin files (paths starting with `<builtin>/`) get namespaced:
+/// - `<builtin>/baml/llm.baml` → `Some(["baml", "llm"])`
+/// - `<builtin>/baml/http.baml` → `Some(["baml", "http"])`
+///
+/// Regular user files return `None` (they're in the local namespace).
+///
+/// # Examples
+///
+/// ```ignore
+/// // Builtin file
+/// let ns = file_namespace(db, builtin_llm_file);
+/// assert_eq!(ns, Some(vec![Name::new("baml"), Name::new("llm")]));
+///
+/// // User file
+/// let ns = file_namespace(db, user_file);
+/// assert_eq!(ns, None);
+/// ```
+pub fn file_namespace(db: &dyn Db, file: SourceFile) -> Option<Vec<Name>> {
+    let path = file.path(db);
+    let path_str = path.to_string_lossy();
+
+    if !path_str.starts_with(BUILTIN_PATH_PREFIX) {
+        return None;
+    }
+
+    // Extract path after prefix: "<builtin>/baml/llm.baml" -> "baml/llm.baml"
+    let after_prefix = &path_str[BUILTIN_PATH_PREFIX.len()..];
+
+    // Remove .baml extension and split by /
+    let without_ext = after_prefix.strip_suffix(".baml").unwrap_or(after_prefix);
+    let segments: Vec<Name> = without_ext.split('/').map(Name::new).collect();
+
+    if segments.is_empty() {
+        None
+    } else {
+        Some(segments)
+    }
+}
+
+/// Returns the qualified name of a function.
+///
+/// Combines the file's namespace with the function's local name to produce
+/// a fully qualified name that can be used for resolution and lookup.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Function `render_prompt` in `<builtin>/baml/llm.baml`
+/// // -> QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "render_prompt" }
+/// // -> displays as "baml.llm.render_prompt"
+///
+/// // Function `my_func` in regular user file
+/// // -> QualifiedName { namespace: Local, name: "my_func" }
+/// // -> displays as "my_func"
+/// ```
+#[salsa::tracked]
+pub fn function_qualified_name<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> QualifiedName {
+    let file = function.file(db);
+    let signature = function_signature(db, function);
+
+    match file_namespace(db, file) {
+        None => {
+            // Regular user file - local namespace
+            QualifiedName::local(signature.name.clone())
+        }
+        Some(namespace_segments) => {
+            // Builtin file - use BamlStd namespace
+            // namespace_segments is like ["baml", "llm"]
+            // We want BamlStd { path: ["llm"] } for "baml.llm.render_prompt"
+            if namespace_segments
+                .first()
+                .is_some_and(|s| s.as_str() == "baml")
+            {
+                // Strip the "baml" prefix - it's implicit in BamlStd
+                let path = namespace_segments[1..].to_vec();
+                QualifiedName::baml_std(path, signature.name.clone())
+            } else {
+                // Non-baml namespace (future use)
+                QualifiedName::user_module(namespace_segments, signature.name.clone())
+            }
+        }
+    }
+}
+
 /// Internal helper that computes both signature and source map together.
 ///
 /// Both `function_signature` and `function_signature_source_map` delegate to this,
@@ -325,7 +417,10 @@ fn function_signature_with_source_map<'db>(
                 let method_name = method.name()?;
                 let class_name = class_node.name();
                 let class_name_text = class_name.as_ref()?.text();
-                if method_name.text() == func_name {
+                // func_name is qualified (ClassName.methodName), so compare against that
+                let qualified_method_name =
+                    QualifiedName::local_method_from_str(class_name_text, method_name.text());
+                if qualified_method_name.as_str() == func_name.as_str() {
                     Some(lower_method_signature(&method, &func_name, class_name_text))
                 } else {
                     None
@@ -706,16 +801,33 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
     let tree = syntax_tree(db, file);
     let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
 
-    let function_def = source_file
-        .items()
-        .flat_map(|item| match item {
-            baml_compiler_syntax::ast::Item::Function(func_node) => vec![func_node],
-            baml_compiler_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
-            _ => vec![],
-        })
-        .find(|function_def| {
-            function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
-        });
+    let function_def = source_file.items().find_map(|item| match item {
+        baml_compiler_syntax::ast::Item::Function(func_node) => {
+            // Top-level functions: compare directly
+            if func_node.name().as_ref().map(SyntaxToken::text) == Some(&func_name) {
+                Some(func_node)
+            } else {
+                None
+            }
+        }
+        baml_compiler_syntax::ast::Item::Class(class_node) => {
+            // Methods: func_name is qualified (ClassName.methodName), so build qualified name
+            class_node.methods().find(|method| {
+                if let (Some(method_name), Some(class_name_token)) =
+                    (method.name(), class_node.name())
+                {
+                    let qualified_method_name = QualifiedName::local_method_from_str(
+                        class_name_token.text(),
+                        method_name.text(),
+                    );
+                    qualified_method_name.as_str() == func_name.as_str()
+                } else {
+                    false
+                }
+            })
+        }
+        _ => None,
+    });
 
     // Lower the function with file_id for span tracking.
     let file_id = file.file_id(db);
@@ -1155,8 +1267,8 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
 }
 
 /// Extract desugared method functions from a class.
-/// Methods like `class Baz { function Greeting(self) }` become top-level functions `Greeting(self: Baz)`.
-/// The method name is NOT namespaced - this keeps HIR lowering simple and type-free.
+/// Methods like `class Baz { function Greeting(self) }` become top-level functions `Baz.Greeting(self: Baz)`.
+/// The method name is qualified with the class name to ensure uniqueness and match TIR resolution.
 fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
     use baml_compiler_syntax::ast::ClassDef;
 
@@ -1164,13 +1276,21 @@ fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
         return Vec::new();
     };
 
+    let class_name = class
+        .name()
+        .map(|t| t.text().to_string())
+        .unwrap_or_else(|| "UnnamedClass".to_string());
+
     let mut functions = Vec::new();
     for method_node in class.methods() {
         if let Some(method_name) = method_node.name() {
-            // Use just the method name (not qualified with class name)
-            // This keeps HIR lowering simple - no type resolution needed
+            // Use qualified name: ClassName.methodName
+            // This ensures methods are uniquely identified and matches how they're
+            // resolved in TIR (via QualifiedName::local_method)
+            let qualified_name =
+                QualifiedName::local_method_from_str(&class_name, method_name.text());
             functions.push(Function {
-                name: method_name.text().into(),
+                name: qualified_name,
                 compiler_generated: None,
             });
         }
@@ -1461,6 +1581,23 @@ pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidation
 /// Tests are validated separately: only tests with the same name AND
 /// targeting the same function are considered duplicates.
 fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
+    fn item_name_key(db: &dyn Db, file: SourceFile, name: &Name) -> Name {
+        match file_namespace(db, file) {
+            None => name.clone(),
+            Some(namespace_segments) => {
+                if namespace_segments
+                    .first()
+                    .is_some_and(|s| s.as_str() == "baml")
+                {
+                    let path = namespace_segments[1..].to_vec();
+                    QualifiedName::baml_std(path, name.clone()).display_name()
+                } else {
+                    QualifiedName::user_module(namespace_segments, name.clone()).display_name()
+                }
+            }
+        }
+    }
+
     let items = project_items(db, root);
     let mut seen: FxHashMap<Name, ItemInfo> = FxHashMap::default();
     // For tests: key is (test_name, function_name)
@@ -1474,60 +1611,43 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let func = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &func.name);
                 let span =
                     get_item_name_span(db, file, "function", func.name.as_str(), local_id.index())
                         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    func.name.clone(),
-                    "function",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "function", span, path);
             }
             ItemId::Class(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let class = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &class.name);
                 let span =
                     get_item_name_span(db, file, "class", class.name.as_str(), local_id.index())
                         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    class.name.clone(),
-                    "class",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "class", span, path);
             }
             ItemId::Enum(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let enum_def = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &enum_def.name);
                 let span =
                     get_item_name_span(db, file, "enum", enum_def.name.as_str(), local_id.index())
                         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    enum_def.name.clone(),
-                    "enum",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "enum", span, path);
             }
             ItemId::TypeAlias(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let alias = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &alias.name);
                 let span = get_item_name_span(
                     db,
                     file,
@@ -1537,38 +1657,26 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 )
                 .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    alias.name.clone(),
-                    "type alias",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "type alias", span, path);
             }
             ItemId::Client(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let client = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &client.name);
                 let span =
                     get_item_name_span(db, file, "client", client.name.as_str(), local_id.index())
                         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    client.name.clone(),
-                    "client",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "client", span, path);
             }
             ItemId::Generator(loc) => {
                 let file = loc.file(db);
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let generator = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &generator.name);
                 let span = get_item_name_span(
                     db,
                     file,
@@ -1578,14 +1686,7 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 )
                 .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
                 let path = file.path(db).display().to_string();
-                check_duplicate(
-                    &mut seen,
-                    &mut errors,
-                    generator.name.clone(),
-                    "generator",
-                    span,
-                    path,
-                );
+                check_duplicate(&mut seen, &mut errors, name_key, "generator", span, path);
             }
             ItemId::Test(loc) => {
                 // Tests are validated separately: only same name + same function is a duplicate
@@ -2081,11 +2182,20 @@ pub fn get_item_name_span(
                 }
             }
             // Also search for functions (methods) inside class definitions
+            // Methods have qualified names like "ClassName.methodName"
             "function" if node.kind() == SyntaxKind::CLASS_DEF => {
                 if let Some(class) = ClassDef::cast(node) {
+                    let class_name = class.name().map(|n| n.text().to_string());
                     for method in class.methods() {
                         if let Some(name_token) = method.name() {
-                            if name_token.text() == name {
+                            // Build qualified name and compare
+                            let qualified_name = match &class_name {
+                                Some(cn) => {
+                                    QualifiedName::local_method_from_str(cn, name_token.text())
+                                }
+                                None => Name::new(name_token.text()),
+                            };
+                            if qualified_name.as_str() == name {
                                 if matches_found == occurrence {
                                     return Some(Span::new(file_id, name_token.text_range()));
                                 }

@@ -187,12 +187,14 @@ type CompileResult = (Vec<(String, CompiledFunction)>, HashMap<String, usize>);
 ///
 /// Uses the production `compile_files` function to ensure tests match real behavior.
 fn compile_source(source: &str) -> CompileResult {
+    use baml_workspace::Db as _;
+
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
 
-    // Use the production compile_files function
-    let program = baml_compiler_emit::compile_files(&db, &[file])
+    // Use the production compile_files function with all project files (user + builtin)
+    let program = baml_compiler_emit::compile_files(&db, db.project().files(&db))
         .expect("compile_files should succeed for valid test source");
 
     // Extract functions from the program

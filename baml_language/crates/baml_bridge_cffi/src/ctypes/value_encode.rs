@@ -169,7 +169,11 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
             unreachable!("runtime-only variant should not reach FFI type encoding")
         }
         // Compiler-only variants should never reach FFI
-        Ty::TypeAlias(_) | Ty::Function { .. } | Ty::Void | Ty::WatchAccessor(_) => {
+        Ty::TypeAlias(_)
+        | Ty::Function { .. }
+        | Ty::Void
+        | Ty::WatchAccessor(_)
+        | Ty::BuiltinUnknown => {
             unreachable!("compiler-only variant should not reach FFI")
         }
     };

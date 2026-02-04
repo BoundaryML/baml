@@ -104,9 +104,23 @@ impl TestDatabase {
         SourceFile::new(self, text.into(), path.into(), file_id)
     }
 
-    /// Set the project with the given files.
-    pub fn set_project(&mut self, files: Vec<SourceFile>) {
-        let project = baml_workspace::Project::new(self, PathBuf::new(), files);
+    /// Load builtin BAML source files (like llm.baml) into the database.
+    fn load_builtin_files(&mut self) -> Vec<SourceFile> {
+        baml_builtins::baml_sources()
+            .map(|src| self.add_file(src.path, src.source))
+            .collect()
+    }
+
+    /// Set the project with the given files, including builtin BAML files.
+    ///
+    /// Builtin files are added after user files to match the order used in
+    /// production (user files first, builtins appended).
+    pub fn set_project(&mut self, user_files: Vec<SourceFile>) {
+        // User files first, then builtin files (matches production order)
+        let builtin_files = self.load_builtin_files();
+        let mut all_files = user_files;
+        all_files.extend(builtin_files);
+        let project = baml_workspace::Project::new(self, PathBuf::new(), all_files);
         self.project = Some(project);
     }
 }
@@ -117,10 +131,13 @@ impl TestDatabase {
 
 /// Compile BAML source code into a VM program.
 pub fn compile_source(source: &str) -> VmProgram {
+    use baml_workspace::Db as _;
+
     let mut db = TestDatabase::new();
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
-    baml_compiler_emit::compile_files(&db, &[file])
+    // Pass all project files (user + builtin) to compile_files
+    baml_compiler_emit::compile_files(&db, db.project().files(&db))
         .expect("compile_files should succeed for valid test source")
 }
 
@@ -137,8 +154,8 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
     let file = db.add_file("test.baml", source);
     db.set_project(vec![file]);
 
-    // Compile to bytecode
-    let bytecode = baml_compiler_emit::compile_files(&db, &[file])
+    // Compile to bytecode - pass all project files (user + builtin)
+    let bytecode = baml_compiler_emit::compile_files(&db, db.project().files(&db))
         .expect("compile_files should succeed for valid test source");
 
     // Get VIR schema

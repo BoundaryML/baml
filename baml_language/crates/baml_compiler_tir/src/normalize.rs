@@ -67,6 +67,8 @@ enum StructuralTy {
     Resource,
     PromptAst,
     PrimitiveClient,
+    /// Internal-only type for builtins - any type is assignable to it.
+    BuiltinUnknown,
     WatchAccessor(Box<StructuralTy>),
 }
 
@@ -88,12 +90,21 @@ impl StructuralTy {
             return true;
         }
 
-        // Error recovery
+        // Error recovery: Unknown/Error are compatible with anything to prevent cascading errors
         if matches!(self, StructuralTy::Unknown | StructuralTy::Error)
             || matches!(other, StructuralTy::Unknown | StructuralTy::Error)
         {
             return true;
         }
+
+        // BuiltinUnknown: any type can be passed where BuiltinUnknown is expected,
+        // but BuiltinUnknown cannot be used where a specific type is required.
+        // T <: BuiltinUnknown  (any type assignable TO BuiltinUnknown)
+        if matches!(other, StructuralTy::BuiltinUnknown) {
+            return true;
+        }
+        // BuiltinUnknown </: T  (BuiltinUnknown not assignable to other types)
+        // This is handled implicitly by not having a rule that returns true
 
         assumptions.insert(pair.clone());
 
@@ -276,6 +287,7 @@ fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
             StructuralTy::Resource => false,
             StructuralTy::PromptAst => false,
             StructuralTy::PrimitiveClient => false,
+            StructuralTy::BuiltinUnknown => false,
             StructuralTy::WatchAccessor(_) => false,
         }
     }
@@ -353,6 +365,7 @@ fn normalize_impl(
         Ty::Resource => StructuralTy::Resource,
         Ty::PromptAst => StructuralTy::PromptAst,
         Ty::PrimitiveClient => StructuralTy::PrimitiveClient,
+        Ty::BuiltinUnknown => StructuralTy::BuiltinUnknown,
         Ty::Literal(lit) => StructuralTy::Literal(lit.clone()),
         Ty::Class(fqn) => StructuralTy::Class(fqn.name.clone()),
         Ty::Enum(fqn) => StructuralTy::Enum(fqn.name.clone()),
@@ -484,13 +497,13 @@ fn ty_has_cycle(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler_hir::FullyQualifiedName;
+    use baml_compiler_hir::QualifiedName;
 
     use super::*;
 
     /// Helper to create a type alias type
     fn type_alias(name: &str) -> Ty {
-        Ty::TypeAlias(FullyQualifiedName::local(Name::new(name)))
+        Ty::TypeAlias(QualifiedName::local(Name::new(name)))
     }
 
     #[test]

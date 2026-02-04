@@ -451,6 +451,7 @@ fn type_to_pattern(
                 "ResourceHandle" => quote!(TypePattern::Resource),
                 "PromptAst" => quote!(TypePattern::PromptAst),
                 "PrimitiveClient" => quote!(TypePattern::PrimitiveClient),
+                "Unknown" => quote!(TypePattern::BuiltinUnknown),
                 "Option" => {
                     if let PathArguments::AngleBracketed(args) = &segment.arguments {
                         if let Some(GenericArgument::Type(inner)) = args.args.first() {

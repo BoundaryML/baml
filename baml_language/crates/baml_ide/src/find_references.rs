@@ -117,7 +117,7 @@ fn find_definition_at_position(
     position: TextSize,
     word: &str,
 ) -> Option<ResolvedValue> {
-    use baml_db::baml_compiler_hir::FullyQualifiedName;
+    use baml_db::baml_compiler_hir::QualifiedName;
     use rowan::ast::AstNode;
 
     // Get the syntax tree
@@ -135,7 +135,7 @@ fn find_definition_at_position(
             baml_db::baml_compiler_syntax::ast::Item::Class(class_node) => {
                 if let Some(name_token) = class_node.name() {
                     if name_token.text_range().contains(position) && name_token.text() == word {
-                        return Some(ResolvedValue::Class(FullyQualifiedName::local(
+                        return Some(ResolvedValue::Class(QualifiedName::local(
                             baml_db::Name::new(word),
                         )));
                     }
@@ -144,7 +144,7 @@ fn find_definition_at_position(
             baml_db::baml_compiler_syntax::ast::Item::Enum(enum_node) => {
                 if let Some(name_token) = enum_node.name() {
                     if name_token.text_range().contains(position) && name_token.text() == word {
-                        return Some(ResolvedValue::Enum(FullyQualifiedName::local(
+                        return Some(ResolvedValue::Enum(QualifiedName::local(
                             baml_db::Name::new(word),
                         )));
                     }
@@ -153,7 +153,7 @@ fn find_definition_at_position(
             baml_db::baml_compiler_syntax::ast::Item::Function(func_node) => {
                 if let Some(name_token) = func_node.name() {
                     if name_token.text_range().contains(position) && name_token.text() == word {
-                        return Some(ResolvedValue::Function(FullyQualifiedName::local(
+                        return Some(ResolvedValue::Function(QualifiedName::local(
                             baml_db::Name::new(word),
                         )));
                     }
@@ -397,10 +397,7 @@ fn is_same_resolution(a: &ResolvedValue, b: &ResolvedValue) -> bool {
             },
         ) => c1 == c2 && f1 == f2,
 
-        (
-            ResolvedValue::BuiltinFunction { path: p1 },
-            ResolvedValue::BuiltinFunction { path: p2 },
-        ) => p1 == p2,
+        (ResolvedValue::BuiltinFunction(p1), ResolvedValue::BuiltinFunction(p2)) => p1 == p2,
 
         _ => false,
     }

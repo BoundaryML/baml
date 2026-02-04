@@ -3,15 +3,11 @@
 //! This module provides resolution for value paths (variables, functions, enum variants)
 //! and method calls. Type resolution is handled separately during type lowering.
 //!
-//! # Transient Resolution Types
+//! # Resolution Types
 //!
-//! The types in this module (`ResolvedValue`, `ResolvedMethod`) are **transient** -
-//! they are used during type inference to determine what a path refers to and what
-//! type it has, but they are NOT stored in the final typed IR. After resolution,
-//! we extract the type information and discard the resolution result.
-//!
-//! If we need resolution information for IDE features (go-to-definition, find-references)
-//! in the future, we could store these in `InferenceResult` keyed by expression ID.
+//! The types in this module (`ResolvedValue`, `ResolvedMethod`) capture what a name
+//! resolves to. They are stored in `InferenceResult` and carried through to VIR and MIR
+//! so that later phases don't need to re-derive resolution from types.
 //!
 //! # Value Resolution
 //!
@@ -30,8 +26,7 @@
 //! Method resolution is type-directed - it requires knowing the receiver's type.
 //! This happens after inferring the receiver type during expression type inference.
 
-use baml_base::Name;
-use baml_compiler_hir::FullyQualifiedName;
+use baml_base::{Name, QualifiedName};
 
 /// Result of resolving a value path.
 ///
@@ -55,23 +50,23 @@ pub enum ResolvedValue {
     /// User-defined function.
     ///
     /// Functions are project-level and have a fully-qualified name.
-    Function(FullyQualifiedName),
+    Function(QualifiedName),
 
     /// User-defined class.
-    Class(FullyQualifiedName),
+    Class(QualifiedName),
 
     /// User-defined enum.
-    Enum(FullyQualifiedName),
+    Enum(QualifiedName),
 
     /// Type alias.
-    TypeAlias(FullyQualifiedName),
+    TypeAlias(QualifiedName),
 
     /// Enum variant (e.g., `Status.Active`).
     ///
     /// The enum and variant are both identified by their names.
     EnumVariant {
         /// The FQN of the enum type.
-        enum_fqn: FullyQualifiedName,
+        enum_fqn: QualifiedName,
         /// The variant name within the enum.
         variant: Name,
     },
@@ -79,7 +74,7 @@ pub enum ResolvedValue {
     /// Class field access.
     Field {
         /// The class's FQN.
-        class_fqn: FullyQualifiedName,
+        class_fqn: QualifiedName,
         /// The field name.
         field: Name,
     },
@@ -87,11 +82,7 @@ pub enum ResolvedValue {
     /// Builtin free function (e.g., `env.get`, `baml.deep_copy`).
     ///
     /// These are functions provided by the runtime, not user-defined.
-    /// Path is normalized (e.g., "`baaml.deep_copy`" becomes "`baml.deep_copy`").
-    BuiltinFunction {
-        /// The normalized builtin path (e.g., "env.get", "`baml.deep_copy`").
-        path: String,
-    },
+    BuiltinFunction(QualifiedName),
 
     /// Module item path (e.g., `baml.HttpMethod.Get`).
     ///
@@ -137,7 +128,7 @@ impl ResolvedValue {
     }
 
     /// Get the function FQN if this is a function.
-    pub fn as_function(&self) -> Option<&FullyQualifiedName> {
+    pub fn as_function(&self) -> Option<&QualifiedName> {
         match self {
             ResolvedValue::Function(fqn) => Some(fqn),
             _ => None,
@@ -145,7 +136,7 @@ impl ResolvedValue {
     }
 
     /// Get the enum variant info if this is an enum variant.
-    pub fn as_enum_variant(&self) -> Option<(&FullyQualifiedName, &Name)> {
+    pub fn as_enum_variant(&self) -> Option<(&QualifiedName, &Name)> {
         match self {
             ResolvedValue::EnumVariant { enum_fqn, variant } => Some((enum_fqn, variant)),
             _ => None,
@@ -158,23 +149,18 @@ impl ResolvedValue {
 /// Method resolution is type-directed: we need to know the receiver's type
 /// before we can determine what `.method()` refers to.
 ///
-/// **This is a transient type** - used during type inference to determine
-/// what method is being called, then discarded. The method's return type
-/// is extracted and used, but the `ResolvedMethod` itself is not stored.
+/// This type is stored in `InferenceResult` and carried through to VIR and MIR.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedMethod {
     /// Builtin method (e.g., `.length()`, `.push()`).
     ///
     /// These are methods provided by the runtime for built-in types.
-    Builtin {
-        /// The builtin's path (e.g., "baml.Array.length").
-        path: String,
-    },
+    Builtin(QualifiedName),
 
     /// User-defined method (future: when we have impl blocks).
     UserDefined {
         /// The FQN of the impl block (future).
-        impl_fqn: FullyQualifiedName,
+        impl_fqn: QualifiedName,
         /// The method name.
         method_name: Name,
     },
@@ -189,10 +175,10 @@ impl ResolvedMethod {
         matches!(self, ResolvedMethod::Unknown)
     }
 
-    /// Get the builtin path if this is a builtin method.
-    pub fn as_builtin(&self) -> Option<&str> {
+    /// Get the qualified name if this is a builtin method.
+    pub fn as_builtin(&self) -> Option<&QualifiedName> {
         match self {
-            ResolvedMethod::Builtin { path } => Some(path),
+            ResolvedMethod::Builtin(qn) => Some(qn),
             _ => None,
         }
     }
@@ -212,8 +198,7 @@ pub type ResolutionMap = HashMap<ExprId, ResolvedValue>;
 /// This is the main entry point for method resolution. Given a receiver type
 /// and a method name, it determines what method is being called.
 ///
-/// **This is a transient operation** - the result is used during type inference
-/// to determine the method's type signature, then discarded.
+/// The result is stored in `InferenceResult` and carried through to VIR and MIR.
 ///
 /// # Resolution Order
 /// 1. Builtin methods (e.g., `.length()` on arrays, `.trim()` on strings)
@@ -227,9 +212,7 @@ pub type ResolutionMap = HashMap<ExprId, ResolvedValue>;
 pub fn resolve_method(receiver_ty: &Ty, method_name: &str) -> ResolvedMethod {
     // Try builtin methods first
     if let Some((def, _bindings)) = builtins::lookup_method(receiver_ty, method_name) {
-        return ResolvedMethod::Builtin {
-            path: def.path.to_string(),
-        };
+        return ResolvedMethod::Builtin(QualifiedName::from_builtin_path(def.path));
     }
 
     // Future: check user-defined methods from impl blocks

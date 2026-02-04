@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! ```ignore
-//! let mut builder = MirBuilder::new("my_function", 1);
+//! let mut builder = MirBuilder::new(Name::new("my_function"), 1);
 //!
 //! // Declare return place and parameter
 //! let ret = builder.declare_local(Some("_return".into()), Ty::Int, None);
@@ -37,7 +37,7 @@ use crate::{
 
 /// Builder for constructing MIR functions.
 pub struct MirBuilder {
-    name: String,
+    name: Name,
     arity: usize,
     blocks: Vec<BasicBlock>,
     locals: Vec<LocalDecl>,
@@ -48,9 +48,9 @@ pub struct MirBuilder {
 
 impl MirBuilder {
     /// Create a new MIR builder for a function.
-    pub fn new(name: impl Into<String>, arity: usize) -> Self {
+    pub fn new(name: Name, arity: usize) -> Self {
         Self {
-            name: name.into(),
+            name,
             arity,
             blocks: Vec::new(),
             locals: Vec::new(),

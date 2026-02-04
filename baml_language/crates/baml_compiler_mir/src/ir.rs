@@ -5,7 +5,7 @@
 
 use std::fmt;
 
-use baml_base::Name;
+use baml_base::{Name, QualifiedName};
 use baml_type::Ty;
 use text_size::TextRange;
 
@@ -16,8 +16,8 @@ use text_size::TextRange;
 /// A function represented as a control flow graph.
 #[derive(Debug, Clone)]
 pub struct MirFunction {
-    /// Function name for debugging.
-    pub name: String,
+    /// Function name (qualified for methods, e.g., "ClassName.methodName").
+    pub name: Name,
     /// Parameter count.
     pub arity: usize,
     /// All basic blocks in the function.
@@ -499,11 +499,16 @@ pub enum Constant {
     String(String),
     Bool(bool),
     Null,
-    /// A function reference.
-    Function(Name),
+    /// A function reference with its fully-qualified name.
+    ///
+    /// The `QualifiedName` is carried from TIR resolution through VIR.
+    /// It is converted to a runtime string only in the emit phase.
+    Function(QualifiedName),
     /// An enum variant value.
     EnumVariant {
-        enum_name: Name,
+        /// The qualified name of the enum type.
+        enum_qn: QualifiedName,
+        /// The variant name within the enum.
         variant: Name,
     },
     /// Placeholder for type info when needed.

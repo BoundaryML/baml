@@ -1,7 +1,7 @@
 //! Unified type system for BAML.
 //!
 //! `baml_type::Ty` is the canonical type representation used from VIR through runtime.
-//! TIR keeps its own `Ty` with `FullyQualifiedName` and `TypeAlias` — this crate
+//! TIR keeps its own `Ty` with `QualifiedName` and `TypeAlias` — this crate
 //! provides the single conversion point from TIR types.
 
 use std::{
@@ -17,7 +17,7 @@ pub use convert::{convert_tir_ty, fqn_to_type_name, sanitize_for_runtime};
 
 /// A lightweight name type for class/enum/type-alias references.
 ///
-/// Replaces both `FullyQualifiedName` (VIR+) and plain `String` (bex_program).
+/// Replaces both `QualifiedName` (VIR+) and plain `String` (bex_program).
 /// `display_name` is pre-computed from the source FQN and does NOT participate
 /// in equality/hashing — it's a cache for display purposes.
 #[derive(Debug, Clone)]
@@ -112,6 +112,19 @@ pub enum Ty {
     Void,
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     WatchAccessor(Box<Ty>),
+    /// Internal-only type for builtin functions that accept any argument.
+    ///
+    /// Similar to TypeScript's `unknown` - any value can be passed where
+    /// `BuiltinUnknown` is expected, but `BuiltinUnknown` cannot be used
+    /// where a specific type is required.
+    ///
+    /// Used in llm.baml for functions like:
+    /// ```baml
+    /// function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst
+    /// ```
+    ///
+    /// This is a compiler-only variant that should never reach runtime.
+    BuiltinUnknown,
 }
 
 // NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
@@ -148,6 +161,11 @@ impl Ty {
     pub fn is_subtype_of(&self, other: &Ty) -> bool {
         // Same types are subtypes
         if self == other {
+            return true;
+        }
+
+        // Any type is a subtype of BuiltinUnknown (it accepts everything)
+        if matches!(other, Ty::BuiltinUnknown) {
             return true;
         }
 
@@ -192,7 +210,11 @@ impl Ty {
     pub fn is_compiler_only(&self) -> bool {
         matches!(
             self,
-            Ty::TypeAlias(_) | Ty::Function { .. } | Ty::Void | Ty::WatchAccessor(_)
+            Ty::TypeAlias(_)
+                | Ty::Function { .. }
+                | Ty::Void
+                | Ty::WatchAccessor(_)
+                | Ty::BuiltinUnknown
         )
     }
 
@@ -205,6 +227,8 @@ impl Ty {
                 tn.display_name
             )),
             Ty::Void => Err("Void type should not reach runtime".to_string()),
+            Ty::WatchAccessor(inner) => inner.validate_runtime(),
+            Ty::BuiltinUnknown => Ok(()),
             // Recurse into containers
             Ty::Optional(inner) => inner.validate_runtime(),
             Ty::List(inner) => inner.validate_runtime(),
@@ -225,7 +249,6 @@ impl Ty {
                 }
                 ret.validate_runtime()
             }
-            Ty::WatchAccessor(inner) => inner.validate_runtime(),
             Ty::Int
             | Ty::Float
             | Ty::String
@@ -280,6 +303,7 @@ impl fmt::Display for Ty {
             }
             Ty::Void => write!(f, "void"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
+            Ty::BuiltinUnknown => write!(f, "unknown"),
         }
     }
 }

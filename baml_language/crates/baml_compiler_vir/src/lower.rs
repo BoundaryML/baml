@@ -161,6 +161,7 @@ struct ExprBodyBuilder {
     patterns: Arena<Pattern>,
     expr_types: FxHashMap<ExprId, Ty>,
     enum_variant_exprs: FxHashMap<ExprId, (baml_base::Name, baml_base::Name)>,
+    resolutions: FxHashMap<ExprId, baml_compiler_tir::ResolvedValue>,
 }
 
 impl ExprBodyBuilder {
@@ -170,6 +171,7 @@ impl ExprBodyBuilder {
             patterns: Arena::new(),
             expr_types: FxHashMap::default(),
             enum_variant_exprs: FxHashMap::default(),
+            resolutions: FxHashMap::default(),
         }
     }
 
@@ -197,6 +199,7 @@ impl ExprBodyBuilder {
             patterns: self.patterns,
             expr_types: self.expr_types,
             enum_variant_exprs: self.enum_variant_exprs,
+            resolutions: self.resolutions,
             root,
         }
     }
@@ -208,6 +211,11 @@ impl ExprBodyBuilder {
         variant: baml_base::Name,
     ) {
         self.enum_variant_exprs.insert(id, (enum_name, variant));
+    }
+
+    /// Record the resolution for a VIR expression.
+    fn record_resolution(&mut self, id: ExprId, resolution: baml_compiler_tir::ResolvedValue) {
+        self.resolutions.insert(id, resolution);
     }
 }
 
@@ -270,12 +278,20 @@ impl<'a> LoweringContext<'a> {
 
             HirExpr::Path(segments) => {
                 if segments.len() == 1 {
-                    Ok(self.builder.alloc(Expr::Var(segments[0].clone()), ty))
+                    let expr_id = self.builder.alloc(Expr::Var(segments[0].clone()), ty);
+                    // Copy resolution info if available (for local variables, functions, etc.)
+                    if let Some(resolution) = self.inference.expr_resolutions.get(&hir_id) {
+                        self.builder.record_resolution(expr_id, resolution.clone());
+                    }
+                    Ok(expr_id)
                 } else if let Some(segment_types) = self.inference.path_segment_types.get(&hir_id) {
                     // Local variable with field accesses (e.g., obj.field.subfield)
                     // Convert to nested FieldAccess for proper type tracking.
                     // segment_types[0] = type of first segment (variable)
                     // segment_types[i] = type after i-th field access
+
+                    // Get the corresponding resolutions (computed in TIR)
+                    let segment_resolutions = self.inference.path_segment_resolutions.get(&hir_id);
 
                     // Start with the variable (first segment)
                     let first_ty = segment_types
@@ -285,6 +301,14 @@ impl<'a> LoweringContext<'a> {
                             panic!("BUG: path_segment_types is empty for path {segments:?}")
                         });
                     let mut current = self.builder.alloc(Expr::Var(segments[0].clone()), first_ty);
+
+                    // Record resolution for the first segment (from TIR)
+                    if let Some(resolutions) = segment_resolutions {
+                        if let Some(first_resolution) = resolutions.first() {
+                            self.builder
+                                .record_resolution(current, first_resolution.clone());
+                        }
+                    }
 
                     // Build nested FieldAccess for remaining segments
                     for (i, field) in segments[1..].iter().enumerate() {
@@ -298,25 +322,40 @@ impl<'a> LoweringContext<'a> {
                                     i + 1, segments
                                 )
                             });
-                        current = self.builder.alloc(
+                        let expr_id = self.builder.alloc(
                             Expr::FieldAccess {
                                 base: current,
                                 field: field.clone(),
                             },
                             result_ty,
                         );
+
+                        // Record resolution for this segment (from TIR)
+                        // Resolution index is i+1 (since first segment is at index 0)
+                        if let Some(resolutions) = segment_resolutions {
+                            if let Some(resolution) = resolutions.get(i + 1) {
+                                self.builder.record_resolution(expr_id, resolution.clone());
+                            }
+                        }
+
+                        current = expr_id;
                     }
 
                     Ok(current)
                 } else {
                     // Non-local path (e.g., builtin function like baml.Array.length, enum variant)
-                    // Keep as Expr::Path - will be resolved during MIR lowering.
+                    // Keep as Expr::Path - resolution info is carried for MIR lowering.
                     //
                     // TODO: The type here may be incorrect for generic builtins like baml.Array.length
                     // which should have type `fn(Array<T>) -> int` but generics are currently hacked
                     // and not properly implemented. When real generics are added, this will need
                     // proper type instantiation.
                     let expr_id = self.builder.alloc(Expr::Path(segments.clone()), ty);
+
+                    // Copy resolution info (for builtins, functions, enum variants, etc.)
+                    if let Some(resolution) = self.inference.expr_resolutions.get(&hir_id) {
+                        self.builder.record_resolution(expr_id, resolution.clone());
+                    }
 
                     // Check if this path is an enum variant and record it for MIR lowering
                     if let Some((enum_name, variant)) =
@@ -395,13 +434,18 @@ impl<'a> LoweringContext<'a> {
 
             HirExpr::FieldAccess { base, field } => {
                 let base_id = self.lower_expr(*base, hir_body)?;
-                Ok(self.builder.alloc(
+                let expr_id = self.builder.alloc(
                     Expr::FieldAccess {
                         base: base_id,
                         field: field.clone(),
                     },
                     ty,
-                ))
+                );
+                // Copy resolution info (for method references like arr.length)
+                if let Some(resolution) = self.inference.expr_resolutions.get(&hir_id) {
+                    self.builder.record_resolution(expr_id, resolution.clone());
+                }
+                Ok(expr_id)
             }
 
             HirExpr::Index { base, index } => {
