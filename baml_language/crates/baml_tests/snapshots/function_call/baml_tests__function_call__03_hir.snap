@@ -31,7 +31,7 @@ function GreetBaz(n: string) -> string {
 }
 
 function Baz.Greeting(self: Baz) -> string {
-    // missing body
+      "Hello, " + self.name + "!"
 }
 
 class Baz {

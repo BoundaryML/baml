@@ -4,15 +4,19 @@ expression: output
 ---
 === HIR ITEMS ===
 function Broken.MixedLiteralAndTyped(x: int) -> string {
-    // missing body
+      match (x) {
+          42 | n: int => "mixed",
+      }
 }
 
 function Broken.Invalid() -> <unknown> {
-    // missing body
 }
 
 function Broken.BadUnionPattern(x: int | bool) -> string {
-    // missing body
+      match (x) {
+          a: int | b => <missing>,
+          bool => "bad",
+      }
 }
 
 class Broken {

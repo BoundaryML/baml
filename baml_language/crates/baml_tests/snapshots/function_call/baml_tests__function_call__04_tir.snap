@@ -14,4 +14,4 @@ expression: output
   Function GreetBaz:
     Return: String
   Function Baz.Greeting:
-    Return: Unknown
+    Return: String

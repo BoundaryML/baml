@@ -800,16 +800,31 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
     let tree = syntax_tree(db, file);
     let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
 
-    let function_def = source_file
-        .items()
-        .flat_map(|item| match item {
-            baml_compiler_syntax::ast::Item::Function(func_node) => vec![func_node],
-            baml_compiler_syntax::ast::Item::Class(class_node) => class_node.methods().collect(),
-            _ => vec![],
-        })
-        .find(|function_def| {
-            function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
-        });
+    let function_def = source_file.items().find_map(|item| match item {
+        baml_compiler_syntax::ast::Item::Function(func_node) => {
+            // Top-level functions: compare directly
+            if func_node.name().as_ref().map(SyntaxToken::text) == Some(&func_name) {
+                Some(func_node)
+            } else {
+                None
+            }
+        }
+        baml_compiler_syntax::ast::Item::Class(class_node) => {
+            // Methods: func_name is qualified (ClassName.methodName), so build qualified name
+            class_node.methods().find(|method| {
+                if let (Some(method_name), Some(class_name_token)) =
+                    (method.name(), class_node.name())
+                {
+                    let qualified_method_name =
+                        format!("{}.{}", class_name_token.text(), method_name.text());
+                    qualified_method_name == func_name.as_str()
+                } else {
+                    false
+                }
+            })
+        }
+        _ => None,
+    });
 
     // Lower the function with file_id for span tracking.
     let file_id = file.file_id(db);

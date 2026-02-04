@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 9
-Objects: 60
+Objects: 62
 Globals: 55
 
 Function Bar (arity: 0, kind: Bytecode):
@@ -14,7 +14,13 @@ Function Bar (arity: 0, kind: Bytecode):
      3   RETURN           
 
 Function Baz.Greeting (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_CONST 0   ("Hello, ")
+     1   LOAD_VAR 1     (self)
+     2   LOAD_FIELD 0   
+     3   BIN_OP +       
+     4   LOAD_CONST 1   ("!")
+     5   BIN_OP +       
+     6   RETURN         
 
 Function Foo (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1     (x)
