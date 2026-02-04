@@ -53,7 +53,7 @@ export PATH="$HOME/.cargo/bin:/usr/local/go/bin:$PATH"
 
 # Ensure a default Rust toolchain is configured
 # (rustup shims may exist without a default toolchain set)
-rustup default stable
+rustup default 1.92.0
 
 # Install Go tools
 echo "Installing Go tools..."
