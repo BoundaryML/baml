@@ -7,10 +7,10 @@ Functions: 11
 Objects: 69
 Globals: 57
 
-Function Ambiguous (arity: 1, kind: SysOp(RenderPrompt)):
+Function Ambiguous (arity: 1, kind: Bytecode):
   (no bytecode)
 
-Function AnotherLLM (arity: 1, kind: SysOp(RenderPrompt)):
+Function AnotherLLM (arity: 1, kind: Bytecode):
   (no bytecode)
 
 Function ChainedProcess (arity: 1, kind: SysOp(RenderPrompt)):

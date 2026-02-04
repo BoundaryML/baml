@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -42,403 +42,403 @@ class Level3 {
 }
 
 function Process22(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process54(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process95(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process60(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process68(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process14(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process79(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process84(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process33(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process12(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process74(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process99(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process64(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process52(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process7(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process80(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process58(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process97(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process36(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process63(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process19(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process83(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process18(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process26(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process43(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process46(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process62(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process87(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process44(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process47(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process35(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process38(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process41(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process28(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process65(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process6(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process32(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process92(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process55(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process66(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process56(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process67(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process3(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process75(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process48(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process49(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process61(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process96(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process34(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process59(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process89(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process45(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process86(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process16(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process39(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process82(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process2(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process27(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process53(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process23(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process9(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process72(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process77(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process40(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process30(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process8(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process11(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process37(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process4(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process91(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process31(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process50(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process20(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process98(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process85(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process78(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process1(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process90(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process17(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process81(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process71(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process15(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process42(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process51(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process5(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process13(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process29(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process93(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process70(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process76(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process10(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process21(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process100(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process94(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process25(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process69(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process24(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process88(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process73(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 function Process57(input: string) -> string {
-  client GPT4
+    // missing body
 }
 
 class User260 {

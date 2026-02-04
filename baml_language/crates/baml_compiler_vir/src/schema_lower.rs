@@ -174,16 +174,8 @@ fn lower_function(
     // Determine body kind from HIR
     let body_kind = match body {
         FunctionBody::Llm(llm_body) => VirFunctionBodyKind::Llm {
-            prompt_template: llm_body
-                .prompt
-                .as_ref()
-                .map(|p| p.text.clone())
-                .unwrap_or_default(),
-            client: llm_body
-                .client
-                .as_ref()
-                .map(std::string::ToString::to_string)
-                .unwrap_or_default(),
+            prompt_template: llm_body.prompt.text.clone(),
+            client: llm_body.client.to_string(),
         },
         FunctionBody::Expr(_, _) => VirFunctionBodyKind::Expr,
         FunctionBody::Missing => VirFunctionBodyKind::Missing,

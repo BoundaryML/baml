@@ -152,12 +152,7 @@ impl<'a> TreeRenderer<'a> {
     }
 
     fn render_llm_body(&mut self, llm_body: &LlmBody) {
-        let client = llm_body
-            .client
-            .as_ref()
-            .map(std::string::ToString::to_string)
-            .unwrap_or_else(|| "none".to_string());
-        writeln!(self.output, "└─ LLM Body (client: {client})").ok();
+        writeln!(self.output, "└─ LLM Body (client: {})", llm_body.client).ok();
     }
 
     fn render_expr(

@@ -388,17 +388,8 @@ pub fn compile_files(
                         );
 
                         // Extract prompt template and client from LLM body
-                        let prompt_template = llm_body
-                            .prompt
-                            .as_ref()
-                            .expect("prompt guaranteed by parser")
-                            .text
-                            .clone();
-                        let client = llm_body
-                            .client
-                            .as_ref()
-                            .expect("client guaranteed by parser")
-                            .to_string();
+                        let prompt_template = llm_body.prompt.text.clone();
+                        let client = llm_body.client.to_string();
 
                         Function {
                             name: signature.name.to_string(),

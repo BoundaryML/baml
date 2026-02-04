@@ -120,17 +120,13 @@ fn format_hir_file(
                 match body.as_ref() {
                     baml_db::baml_compiler_hir::FunctionBody::Llm(llm) => {
                         // Show LLM function body as inline config
-                        if let Some(ref client) = llm.client {
-                            writeln!(result, "  client {}", client).unwrap();
+                        writeln!(result, "  client {}", llm.client).unwrap();
+                        // Show prompt as template string
+                        writeln!(result, "  prompt #\"").unwrap();
+                        for line in llm.prompt.text.lines() {
+                            writeln!(result, "    {}", line).unwrap();
                         }
-                        if let Some(ref prompt) = llm.prompt {
-                            // Show prompt as template string
-                            writeln!(result, "  prompt #\"").unwrap();
-                            for line in prompt.text.lines() {
-                                writeln!(result, "    {}", line).unwrap();
-                            }
-                            writeln!(result, "  \"#").unwrap();
-                        }
+                        writeln!(result, "  \"#").unwrap();
                     }
                     baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, _source_map) => {
                         // Print as code for readability

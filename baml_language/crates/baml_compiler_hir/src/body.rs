@@ -106,10 +106,10 @@ pub enum FunctionBody {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlmBody {
     /// The client to use (e.g., "GPT4")
-    pub client: Option<Name>,
+    pub client: Name,
 
     /// The prompt template
-    pub prompt: Option<PromptTemplate>,
+    pub prompt: PromptTemplate,
 }
 
 /// A prompt template with interpolations.
@@ -476,7 +476,7 @@ impl FunctionBody {
 
         // Check which body type we have
         if let Some(llm_body) = func_node.llm_body() {
-            Arc::new(FunctionBody::Llm(Self::lower_llm_body(&llm_body)))
+            Arc::new(Self::lower_llm_body(&llm_body))
         } else if let Some(expr_body) = func_node.expr_body() {
             let (body, source_map) = Self::lower_expr_body(&expr_body, file_id, &param_names);
             Arc::new(FunctionBody::Expr(body, source_map))
@@ -485,7 +485,7 @@ impl FunctionBody {
         }
     }
 
-    fn lower_llm_body(llm_body: &baml_compiler_syntax::ast::LlmFunctionBody) -> LlmBody {
+    fn lower_llm_body(llm_body: &baml_compiler_syntax::ast::LlmFunctionBody) -> FunctionBody {
         // Extract client name using AST accessor
         let client = llm_body
             .client_field()
@@ -498,7 +498,13 @@ impl FunctionBody {
             .and_then(|pf| pf.raw_string())
             .map(|raw_str| Self::parse_prompt(&raw_str.full_text()));
 
-        LlmBody { client, prompt }
+        if let (Some(client), Some(prompt)) = (client, prompt) {
+            FunctionBody::Llm(LlmBody { client, prompt })
+        } else {
+            // TODO: Better would be to error here, with a new FunctionBody::Invalid
+            // that has errors in it.
+            FunctionBody::Missing
+        }
     }
 
     fn parse_prompt(prompt_text: &str) -> PromptTemplate {

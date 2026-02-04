@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
+source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -79,304 +79,304 @@ fn DeepExpression() -> int {
 }
 
 fn Process22:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process54:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process95:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process60:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process68:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process14:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process79:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process84:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process33:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process12:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process74:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process99:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process64:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process52:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process7:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process80:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process58:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process97:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process36:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process63:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process19:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process83:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process18:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process26:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process43:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process46:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process62:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process87:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process44:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process47:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process35:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process38:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process41:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process28:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process65:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process6:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process32:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process92:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process55:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process66:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process56:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process67:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process3:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process75:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process48:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process49:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process61:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process96:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process34:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process59:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process89:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process45:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process86:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process16:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process39:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process82:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process2:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process27:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process53:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process23:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process9:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process72:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process77:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process40:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process30:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process8:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process11:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process37:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process4:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process91:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process31:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process50:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process20:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process98:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process85:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process78:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process1:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process90:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process17:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process81:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process71:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process15:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process42:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process51:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process5:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process13:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process29:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process93:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process70:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process76:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process10:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process21:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process100:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process94:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process25:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process69:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process24:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process88:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process73:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn Process57:
-  (LLM function - no MIR)
+  (no MIR due to errors: function body is missing)
 
 fn BodyTorture() -> int {
     // Locals:
