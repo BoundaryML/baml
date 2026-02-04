@@ -391,13 +391,14 @@ pub fn compile_files(
                         let prompt_template = llm_body
                             .prompt
                             .as_ref()
-                            .map(|p| p.text.clone())
-                            .unwrap_or_default();
+                            .expect("prompt guaranteed by parser")
+                            .text
+                            .clone();
                         let client = llm_body
                             .client
                             .as_ref()
-                            .map(std::string::ToString::to_string)
-                            .unwrap_or_default();
+                            .expect("client guaranteed by parser")
+                            .to_string();
 
                         Function {
                             name: signature.name.to_string(),

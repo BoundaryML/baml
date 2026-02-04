@@ -166,7 +166,7 @@ pub fn sanitize_for_runtime(ty: Ty) -> Result<Ty, String> {
                 .collect::<Result<Vec<_>, _>>()?,
             ret: Box::new(sanitize_for_runtime(*ret)?),
         }),
-        // WatchAccessor → unwrap inner
+        // WatchAccessor → recursively sanitize inner type, preserving wrapper
         Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(sanitize_for_runtime(*inner)?))),
         // Recursive TypeAlias → error
         Ty::TypeAlias(ref tn) => Err(format!(
