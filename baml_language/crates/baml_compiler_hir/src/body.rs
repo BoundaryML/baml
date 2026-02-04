@@ -120,27 +120,20 @@ pub struct PromptTemplate {
 
     /// Parsed interpolation expressions
     pub interpolations: Vec<Interpolation>,
-
-    /// Start offset of the template text in the source file.
-    /// Used to convert Jinja error spans (which are relative to the template)
-    /// into file-level spans for diagnostics.
-    pub file_offset: u32,
 }
 
 impl PromptTemplate {
+    #[allow(clippy::cast_possible_truncation)]
     /// Parse a prompt template from a raw string literal.
+    ///
+    /// Note: This does not store file offsets. To get the template's file offset
+    /// for diagnostic rendering, use `get_file_offset()` or look it up from the CST.
     pub fn from_raw_string(raw_string: &baml_compiler_syntax::ast::RawStringLiteral) -> Self {
-        use baml_compiler_syntax::ast::*;
+        use baml_compiler_syntax::ast::{JinjaExpression, JinjaStatement, PromptText};
 
         let mut text = String::new();
         let mut interpolations = Vec::new();
         let mut current_offset = 0u32;
-
-        // Get the file offset where the template text starts (after the #" delimiter)
-        // The raw string syntax is: #"..."# where the content starts after #"
-        let raw_string_start = raw_string.syntax().text_range().start();
-        // Skip the #" prefix (2 characters)
-        let file_offset = u32::from(raw_string_start) + 2;
 
         // Iterate through the children of the raw string in order
         for child in raw_string.syntax().children() {
@@ -161,7 +154,7 @@ impl PromptTemplate {
 
                         // Store the expression text for later validation by minijinja
                         interpolations.push(Interpolation {
-                            expr_text: inner.to_string(),
+                            expr_text: inner.clone(),
                             offset: current_offset,
                             length: full_text.len() as u32,
                         });
@@ -193,8 +186,18 @@ impl PromptTemplate {
         PromptTemplate {
             text,
             interpolations,
-            file_offset,
         }
+    }
+
+    /// Get the file offset where the template text starts from a raw string literal.
+    ///
+    /// This is used at diagnostic rendering time to convert relative Jinja error
+    /// offsets to absolute file positions.
+    pub fn get_file_offset(raw_string: &baml_compiler_syntax::ast::RawStringLiteral) -> u32 {
+        // The raw string syntax is: #"..."# where the content starts after #"
+        let raw_string_start = raw_string.syntax().text_range().start();
+        // Skip the #" prefix (2 characters)
+        u32::from(raw_string_start) + 2
     }
 }
 
@@ -567,10 +570,11 @@ impl FunctionBody {
 
     fn lower_llm_body(llm_body: &baml_compiler_syntax::ast::LlmFunctionBody) -> FunctionBody {
         // Extract client name using AST accessor
+        // Use value() to handle both identifier (`client Foo`) and string (`client "openai/gpt-4o"`) forms
         let client = llm_body
             .client_field()
-            .and_then(|cf| cf.name())
-            .map(|name_token| Name::new(name_token.text()));
+            .and_then(|cf| cf.value())
+            .map(|name| Name::new(&name));
 
         // Extract prompt using AST accessor
         let prompt = llm_body

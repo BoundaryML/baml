@@ -9,11 +9,39 @@
 
 use std::{collections::HashMap, hash::Hash};
 
-use baml_base::{Name, Span};
+use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::ErrorContext;
 use rowan::TextRange;
 
 use crate::{ExprId, MatchArmId, MatchArmSpans, PatId, StmtId, TypeId};
+
+// ============================================================================
+// Span Resolution Context
+// ============================================================================
+
+/// Context for resolving `ErrorLocation` to `Span`.
+///
+/// Bundles all the information needed to resolve any location type, avoiding
+/// the need for multiple `to_span` method variants.
+pub struct SpanResolutionContext<'a> {
+    /// Source map for expression function bodies (maps `ExprId`, `StmtId`, etc. to spans).
+    /// Empty for LLM functions and template strings.
+    pub expr_fn_source_map: &'a HirSourceMap,
+
+    /// Maps type item names (classes, enums, type aliases) to their definition spans.
+    pub type_spans: &'a HashMap<Name, Span>,
+
+    /// Maps (`class_name`, `field_index`) to the field's type annotation span.
+    pub field_type_spans: &'a HashMap<(Name, usize), Span>,
+
+    /// File ID for constructing spans (needed for `JinjaTemplate` errors).
+    pub jinja_file_id: FileId,
+
+    /// For `JinjaTemplate` errors: the file offset where the template text starts.
+    /// This is looked up from the CST at diagnostic rendering time.
+    /// None for expression functions (which don't have Jinja templates).
+    pub template_file_offset: Option<u32>,
+}
 
 // ============================================================================
 // Error Location for TIR
@@ -38,6 +66,29 @@ pub enum ErrorLocation {
     /// Used for validation errors about type definitions (e.g., cycle detection).
     /// The Name is resolved to a span during diagnostic rendering.
     TypeItem(Name),
+    /// Error at a class field's type annotation.
+    ///
+    /// Used for unknown type errors in class field declarations.
+    /// Contains (`class_name`, `field_index`) for position-independent lookup.
+    ClassFieldType {
+        class_name: Name,
+        field_index: usize,
+    },
+    /// Error at a type alias's definition.
+    ///
+    /// Used for unknown type errors in type alias declarations.
+    TypeAliasType { alias_name: Name },
+    /// Error within a Jinja template (LLM function prompt or template string).
+    ///
+    /// Contains offsets relative to the start of the template text, not absolute file positions.
+    /// This allows the error to be cached independently of the template's position in the file.
+    /// At diagnostic rendering time, the template's actual file offset is looked up from the CST.
+    JinjaTemplate {
+        /// Offset from template start where the error begins
+        start_offset: u32,
+        /// Offset from template start where the error ends
+        end_offset: u32,
+    },
     /// Fallback to a direct span (for errors from signatures or other non-body contexts).
     /// This should be minimized over time as we add more ID-based tracking.
     Span(Span),
@@ -46,32 +97,63 @@ pub enum ErrorLocation {
 impl ErrorLocation {
     /// Resolve this location to a `Span`.
     ///
-    /// For function body locations (Expr, `MatchArm`), uses the `HirSourceMap`.
-    /// For type-level locations (`TypeItem`), looks up the name in the type spans map.
-    ///
-    /// # Parameters
-    /// - `source_map`: Maps expression/statement IDs to spans within a function body
-    /// - `type_spans`: Maps type item names to spans (from `project_type_item_spans` query)
+    /// Uses the `SpanResolutionContext` to resolve any location type:
+    /// - Expression locations (Expr, `MatchArm`) use the `expr_fn_source_map`
+    /// - Type-level locations (`TypeItem`, `ClassFieldType`, `TypeAliasType`) use the `type_spans`
+    /// - Jinja template locations use the `template_file_offset`
     ///
     /// # Example
     ///
     /// ```ignore
-    /// let type_spans = project_type_item_spans(db, project);
-    /// let span = loc.to_span(hir_source_map, &type_spans);
+    /// let ctx = SpanResolutionContext {
+    ///     expr_fn_source_map: &hir_source_map,
+    ///     type_spans: &type_spans,
+    ///     field_type_spans: &field_type_spans,
+    ///     file_id,
+    ///     template_file_offset: llm_function_file_offset(db, func_loc),
+    /// };
+    /// let span = loc.to_span(&ctx);
     /// ```
-    pub fn to_span(
-        &self,
-        source_map: &HirSourceMap,
-        type_spans: &std::collections::HashMap<Name, Span>,
-    ) -> Span {
+    pub fn to_span(&self, ctx: &SpanResolutionContext<'_>) -> Span {
         match self {
-            ErrorLocation::Expr(id) => source_map.expr_span(*id).unwrap_or_default(),
-            ErrorLocation::MatchArm(id) => source_map
+            ErrorLocation::Expr(id) => ctx.expr_fn_source_map.expr_span(*id).unwrap_or_default(),
+            ErrorLocation::MatchArm(id) => ctx
+                .expr_fn_source_map
                 .match_arm_spans(*id)
                 .map(|s| s.arm_span)
                 .unwrap_or_default(),
-            ErrorLocation::TypeItem(name) => {
-                type_spans.get(name).copied().unwrap_or_else(Span::default)
+            ErrorLocation::TypeItem(name) => ctx
+                .type_spans
+                .get(name)
+                .copied()
+                .unwrap_or_else(Span::default),
+            ErrorLocation::ClassFieldType {
+                class_name,
+                field_index,
+            } => {
+                // Look up the field's type span, falling back to the class span
+                ctx.field_type_spans
+                    .get(&(class_name.clone(), *field_index))
+                    .copied()
+                    .or_else(|| ctx.type_spans.get(class_name).copied())
+                    .unwrap_or_else(Span::default)
+            }
+            ErrorLocation::TypeAliasType { alias_name } => ctx
+                .type_spans
+                .get(alias_name)
+                .copied()
+                .unwrap_or_else(Span::default),
+            ErrorLocation::JinjaTemplate {
+                start_offset,
+                end_offset,
+            } => {
+                if let Some(base_offset) = ctx.template_file_offset {
+                    let start = base_offset + start_offset;
+                    let end = base_offset + end_offset;
+                    Span::new(ctx.jinja_file_id, TextRange::new(start.into(), end.into()))
+                } else {
+                    Span::default()
+                }
             }
             ErrorLocation::Span(span) => *span,
         }
@@ -231,8 +313,11 @@ pub struct SignatureSourceMap {
     /// Span of the return type annotation
     return_type_span: Option<TextRange>,
 
-    /// Spans of parameters, indexed by position
+    /// Spans of parameters (entire param including name), indexed by position
     param_spans: Vec<Option<TextRange>>,
+
+    /// Spans of parameter types only (not including name), indexed by position
+    param_type_spans: Vec<Option<TextRange>>,
 }
 
 impl SignatureSourceMap {
@@ -251,13 +336,23 @@ impl SignatureSourceMap {
         self.return_type_span
     }
 
-    /// Add a parameter span.
+    /// Add a parameter span (entire parameter including name).
     pub fn push_param_span(&mut self, span: Option<TextRange>) {
         self.param_spans.push(span);
     }
 
-    /// Get a parameter span by index.
+    /// Add a parameter type span (just the type, not including name).
+    pub fn push_param_type_span(&mut self, span: Option<TextRange>) {
+        self.param_type_spans.push(span);
+    }
+
+    /// Get a parameter span by index (entire parameter including name).
     pub fn param_span(&self, index: usize) -> Option<TextRange> {
         self.param_spans.get(index).copied().flatten()
+    }
+
+    /// Get a parameter type span by index (just the type).
+    pub fn param_type_span(&self, index: usize) -> Option<TextRange> {
+        self.param_type_spans.get(index).copied().flatten()
     }
 }

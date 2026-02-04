@@ -1,7 +1,7 @@
 ---
-source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
+source: target/debug/build/baml_tests-ed829a05161ef9bb/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn TypeBuilderFn:
-  (no MIR due to errors: function body is missing)
+  (LLM function - no MIR)

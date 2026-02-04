@@ -1,5 +1,6 @@
 ---
 source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
+assertion_line: 17096
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -32,33 +33,3 @@ expression: output
     │ 
     │ Note: Error code: E0002
 ────╯
-
-  [type] Error: Unknown type `unknown_param_type`
-   ╭─[ unknown_type_error.baml:1:1 ]
-   │
- 1 │ // Test case: unknown type in return position should report error
-   │ │ 
-   │ ╰─ Unknown type `unknown_param_type`
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: Unknown type `blah`
-   ╭─[ unknown_type_error.baml:1:1 ]
-   │
- 1 │ // Test case: unknown type in return position should report error
-   │ │ 
-   │ ╰─ Unknown type `blah`
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: Unknown type `unknown_optional`
-   ╭─[ unknown_type_error.baml:1:1 ]
-   │
- 1 │ // Test case: unknown type in return position should report error
-   │ │ 
-   │ ╰─ Unknown type `unknown_optional`
-   │ 
-   │ Note: Error code: E0002
-───╯

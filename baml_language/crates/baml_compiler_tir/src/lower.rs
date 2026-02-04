@@ -9,17 +9,21 @@
 
 use std::collections::HashSet;
 
-use baml_base::{Name, Span};
+use baml_base::Name;
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{ErrorLocation, TypeRef};
 
 use crate::{LiteralValue, TirTypeError, Ty};
 
-/// Lower a `TypeRef` to a Ty with validation AND resolution of class/enum types.
+/// Lower a `TypeRef` to a `Ty`, validating and resolving type names.
 ///
 /// This combines validation (checking types exist) with resolution (converting
 /// Named types to Class/Enum). This is the preferred function for type checking
 /// contexts where you need fully resolved types.
+///
+/// The `location` parameter can be either:
+/// - A `Span` for direct span-based error reporting
+/// - An `ErrorLocation` for position-independent error locations (used by cached queries)
 ///
 /// Returns the lowered type and any errors encountered.
 pub fn lower_type_ref(
@@ -27,9 +31,14 @@ pub fn lower_type_ref(
     type_alias_names: &HashSet<Name>,
     class_names: &HashSet<Name>,
     enum_names: &HashSet<Name>,
-    span: Span,
+    location: impl Into<ErrorLocation>,
 ) -> (Ty, Vec<TirTypeError>) {
-    let mut ctx = TypeLoweringContextResolved::new(type_alias_names, class_names, enum_names, span);
+    let mut ctx = TypeLoweringContextResolved::new(
+        type_alias_names,
+        class_names,
+        enum_names,
+        location.into(),
+    );
     let ty = lower_type_ref_resolved_with_ctx(&mut ctx, type_ref);
     (ty, ctx.errors)
 }
@@ -39,7 +48,7 @@ struct TypeLoweringContextResolved<'a> {
     type_alias_names: &'a HashSet<Name>,
     class_names: &'a HashSet<Name>,
     enum_names: &'a HashSet<Name>,
-    span: Span,
+    location: ErrorLocation,
     errors: Vec<TirTypeError>,
 }
 
@@ -48,13 +57,13 @@ impl<'a> TypeLoweringContextResolved<'a> {
         type_alias_names: &'a HashSet<Name>,
         class_names: &'a HashSet<Name>,
         enum_names: &'a HashSet<Name>,
-        span: Span,
+        location: ErrorLocation,
     ) -> Self {
         Self {
             type_alias_names,
             class_names,
             enum_names,
-            span,
+            location,
             errors: Vec::new(),
         }
     }
@@ -66,7 +75,7 @@ impl<'a> TypeLoweringContextResolved<'a> {
     fn unknown_type_error(&mut self, name: &Name) -> Ty {
         self.errors.push(TypeError::UnknownType {
             name: name.to_string(),
-            location: ErrorLocation::Span(self.span),
+            location: self.location.clone(),
         });
         Ty::Error
     }

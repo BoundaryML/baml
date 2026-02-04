@@ -12,13 +12,14 @@
 mod expr;
 mod stmt;
 
-use indexmap::IndexMap;
 use std::collections::HashMap;
 
-use crate::Ty;
-
 pub use expr::infer_expression_type;
+use indexmap::IndexMap;
+use minijinja::{machinery::WhitespaceConfig, syntax::SyntaxConfig};
 pub use stmt::validate_statement;
+
+use crate::Ty;
 
 // ============================================================================
 // Type System for Jinja
@@ -35,9 +36,9 @@ pub enum LiteralValue {
 impl std::fmt::Display for LiteralValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LiteralValue::String(s) => write!(f, "\"{}\"", s),
-            LiteralValue::Int(i) => write!(f, "{}", i),
-            LiteralValue::Bool(b) => write!(f, "{}", b),
+            LiteralValue::String(s) => write!(f, "\"{s}\""),
+            LiteralValue::Int(i) => write!(f, "{i}"),
+            LiteralValue::Bool(b) => write!(f, "{b}"),
         }
     }
 }
@@ -94,8 +95,8 @@ impl JinjaType {
 
         match (self, other) {
             // Undefined and None are only subtypes of themselves
-            (JinjaType::Undefined, _) | (JinjaType::None, _) => false,
-            (_, JinjaType::Undefined) | (_, JinjaType::None) => false,
+            (JinjaType::Undefined | JinjaType::None, _) => false,
+            (_, JinjaType::Undefined | JinjaType::None) => false,
 
             // Numeric types
             (JinjaType::Int, JinjaType::Number) => true,
@@ -126,25 +127,25 @@ impl JinjaType {
             JinjaType::Number => "number".to_string(),
             JinjaType::String => "string".to_string(),
             JinjaType::Bool => "bool".to_string(),
-            JinjaType::Literal(val) => format!("literal[{}]", val),
+            JinjaType::Literal(val) => format!("literal[{val}]"),
             JinjaType::List(elem) => format!("list[{}]", elem.name()),
             JinjaType::Map(k, v) => format!("map[{}, {}]", k.name(), v.name()),
             JinjaType::Tuple(items) => {
-                let names: Vec<_> = items.iter().map(|t| t.name()).collect();
+                let names: Vec<_> = items.iter().map(JinjaType::name).collect();
                 format!("({})", names.join(", "))
             }
             JinjaType::Union(items) => {
-                let names: Vec<_> = items.iter().map(|t| t.name()).collect();
+                let names: Vec<_> = items.iter().map(JinjaType::name).collect();
                 names.join(" | ")
             }
             JinjaType::ClassRef(name) => name.clone(),
             JinjaType::EnumRef(name) => name.clone(),
             JinjaType::EnumValueRef(name) => name.clone(),
-            JinjaType::FunctionRef(name) => format!("function {}", name),
+            JinjaType::FunctionRef(name) => format!("function {name}"),
             JinjaType::Alias { name, resolved } => {
                 format!("type alias {} (resolves to {})", name, resolved.name())
             }
-            JinjaType::RecursiveTypeAlias(name) => format!("recursive type alias {}", name),
+            JinjaType::RecursiveTypeAlias(name) => format!("recursive type alias {name}"),
             JinjaType::Image => "image".to_string(),
             JinjaType::Audio => "audio".to_string(),
         }
@@ -225,11 +226,17 @@ pub struct JinjaTypeEnv {
     /// Enum definitions (name -> values)
     enums: HashMap<String, Vec<String>>,
 
-    /// Function signatures (name -> (return_type, parameters))
+    /// Function signatures (name -> (`return_type`, parameters))
     functions: HashMap<String, (JinjaType, Vec<(String, JinjaType)>)>,
 
     /// Scope stack for tracking variables in nested contexts
     scopes: Vec<HashMap<String, JinjaType>>,
+}
+
+impl Default for JinjaTypeEnv {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl JinjaTypeEnv {
@@ -372,9 +379,9 @@ impl TypeError {
     pub fn unresolved_variable(
         name: &str,
         span: minijinja::machinery::Span,
-        available: Vec<String>,
+        available: &[String],
     ) -> Self {
-        let suggestions = find_close_matches(name, &available, 3);
+        let suggestions = find_close_matches(name, available, 3);
         let message = if suggestions.is_empty() {
             format!("Variable `{name}` does not exist.")
         } else if suggestions.len() == 1 {
@@ -409,7 +416,7 @@ impl TypeError {
             name,
             &valid_filters
                 .iter()
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
                 .collect::<Vec<_>>(),
             5,
         );
@@ -562,7 +569,7 @@ impl TypeError {
         let names: Vec<_> = valid_args.into_iter().collect();
         let suggestions = find_close_matches(
             name,
-            &names.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            &names.iter().map(|s| (*s).clone()).collect::<Vec<_>>(),
             3,
         );
 
@@ -649,8 +656,8 @@ pub fn validate_template(
     let ast = minijinja::machinery::parse(
         template_text,
         "prompt",
-        Default::default(),
-        Default::default(),
+        SyntaxConfig,
+        WhitespaceConfig::default(),
     )?;
 
     // Walk the statement tree and collect type errors

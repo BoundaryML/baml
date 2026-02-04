@@ -1,10 +1,13 @@
 ---
-source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
+source: target/debug/build/baml_tests-ed829a05161ef9bb/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
 function TypeBuilderFn(from_text: string) -> Resume {
-    // missing body
+  client  "openai/gpt-4o-mini
+  prompt #"
+    Hello
+  "#
 }
 
 class Resume {

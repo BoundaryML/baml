@@ -9,8 +9,9 @@
 //!
 //! Ported from `engine/baml-lib/jinja/src/evaluate_type/stmt.rs`.
 
-use super::{JinjaType, JinjaTypeEnv, LiteralValue, TypeError, infer_expression_type};
 use minijinja::machinery::ast;
+
+use super::{JinjaType, JinjaTypeEnv, LiteralValue, TypeError, infer_expression_type};
 
 /// Validate a Jinja statement and track variable types through control flow.
 ///
@@ -376,9 +377,8 @@ fn predicate_implications(
                     };
 
                     // Extract variable name
-                    let var = match &get_attr.expr {
-                        ast::Expr::Var(v) => v,
-                        _ => return vec![],
+                    let ast::Expr::Var(var) = &get_attr.expr else {
+                        return vec![];
                     };
 
                     // Perform attribute-based narrowing
@@ -426,13 +426,12 @@ fn narrow_attr_access_on_union_var(
                 // Check if this class has the attribute
                 if let Some(attr_type) = env.get_class_property(class_name, get_attr.name) {
                     // Check if the attribute matches the literal value
-                    match (&attr_type, const_expr.value.as_str()) {
-                        (JinjaType::Literal(LiteralValue::String(lit)), Some(val)) => {
-                            if lit == val {
-                                matched_types.push(union_item.clone());
-                            }
+                    if let (JinjaType::Literal(LiteralValue::String(lit)), Some(val)) =
+                        (&attr_type, const_expr.value.as_str())
+                    {
+                        if lit == val {
+                            matched_types.push(union_item.clone());
                         }
-                        _ => {}
                     }
                 } else {
                     all_have_attr = false;

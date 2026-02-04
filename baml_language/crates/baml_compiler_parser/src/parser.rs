@@ -1215,10 +1215,9 @@ impl<'a> Parser<'a> {
                         p.bump(); // }
                         p.bump(); // }
                         break;
-                    } else {
-                        p.bump_raw();
-                        p.bump_raw();
                     }
+                    p.bump_raw();
+                    p.bump_raw();
                 } else {
                     p.bump_raw();
                 }
@@ -1243,9 +1242,8 @@ impl<'a> Parser<'a> {
                     p.bump(); // %
                     p.bump(); // }
                     break;
-                } else {
-                    p.bump_raw();
                 }
+                p.bump_raw();
             }
         });
     }
@@ -1262,9 +1260,8 @@ impl<'a> Parser<'a> {
                     p.bump(); // #
                     p.bump(); // }
                     break;
-                } else {
-                    p.bump_raw();
                 }
+                p.bump_raw();
             }
         });
     }

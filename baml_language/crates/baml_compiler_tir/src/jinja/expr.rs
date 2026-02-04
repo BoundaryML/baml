@@ -10,8 +10,9 @@
 //!
 //! Ported from `engine/baml-lib/jinja/src/evaluate_type/expr.rs`.
 
-use super::{JinjaType, JinjaTypeEnv, TypeError};
 use minijinja::machinery::ast;
+
+use super::{JinjaType, JinjaTypeEnv, TypeError};
 
 /// Entry point for expression type inference.
 ///
@@ -50,7 +51,7 @@ fn visit_expr(expr: &ast::Expr, errors: &mut Vec<TypeError>, env: &JinjaTypeEnv)
                 errors.push(TypeError::unresolved_variable(
                     var.id,
                     var.span(),
-                    env.variable_names(),
+                    &env.variable_names(),
                 ));
                 JinjaType::Unknown
             }
@@ -260,14 +261,13 @@ fn handle_enum_binary_op(
             if is_comparison_op(&bin_expr.op) {
                 if left == right {
                     return Some(JinjaType::Bool);
-                } else {
-                    errors.push(TypeError::enum_string_comparison_deprecated(
-                        expr,
-                        left,
-                        expr.span(),
-                    ));
-                    return Some(JinjaType::Bool);
                 }
+                errors.push(TypeError::enum_string_comparison_deprecated(
+                    expr,
+                    left,
+                    expr.span(),
+                ));
+                return Some(JinjaType::Bool);
             }
         }
     }
@@ -574,17 +574,14 @@ fn typecheck_attr_access_on_union(
     env: &JinjaTypeEnv,
 ) -> JinjaType {
     // Extract union items
-    let union_items = match union_type {
-        JinjaType::Union(items) => items,
-        _ => {
-            errors.push(TypeError::invalid_type(
-                &attr_expr.expr,
-                union_type,
-                "class",
-                attr_expr.span(),
-            ));
-            return JinjaType::Unknown;
-        }
+    let JinjaType::Union(union_items) = union_type else {
+        errors.push(TypeError::invalid_type(
+            &attr_expr.expr,
+            union_type,
+            "class",
+            attr_expr.span(),
+        ));
+        return JinjaType::Unknown;
     };
 
     // Attribute must be present on all items with the same type
@@ -840,9 +837,7 @@ where
         result = Some(match result {
             None => ty,
             Some(prev) => {
-                if ty == prev {
-                    prev
-                } else if ty.is_subtype_of(&prev) {
+                if ty == prev || ty.is_subtype_of(&prev) {
                     prev
                 } else if prev.is_subtype_of(&ty) {
                     ty

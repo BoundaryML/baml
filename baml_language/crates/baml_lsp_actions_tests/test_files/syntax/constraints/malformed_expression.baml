@@ -43,4 +43,21 @@ function FunctionName2(arg:string) -> "foo" {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Warning: Failed to parse Jinja template: syntax error: unexpected identifier, expected end of variable block (in prompt:3)
+//     ╭─[ constraints_malformed_expression.baml:17:11 ]
+//     │
+//  17 │   prompt #"
+//     │           ┬  
+//     │           ╰── Failed to parse Jinja template: syntax error: unexpected identifier, expected end of variable block (in prompt:3)
+//     │ 
+//     │ Note: Error code: E0070
+// ────╯
+// Warning: Failed to parse Jinja template: syntax error: unexpected `)` (in prompt:3)
+//    ╭─[ constraints_malformed_expression.baml:8:11 ]
+//    │
+//  8 │   prompt #"
+//    │           ┬  
+//    │           ╰── Failed to parse Jinja template: syntax error: unexpected `)` (in prompt:3)
+//    │ 
+//    │ Note: Error code: E0070
+// ───╯

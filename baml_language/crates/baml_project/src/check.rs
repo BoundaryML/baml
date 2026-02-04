@@ -16,12 +16,11 @@ use std::{collections::HashMap, path::PathBuf};
 
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
-    self, FunctionBody, HirSourceMap, ItemId, file_items, file_lowering, function_body,
-    function_signature, function_signature_source_map, project_type_item_spans,
+    self, FunctionBody, HirSourceMap, ItemId, SpanResolutionContext, file_items, file_lowering,
+    function_body, function_signature, function_signature_source_map, llm_function_file_offset,
+    project_class_field_type_spans, project_type_item_spans, template_string_file_offset,
 };
-use baml_compiler_tir::{
-    self, class_field_types, enum_variants, type_aliases, typing_context, validate_type_references,
-};
+use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
 use baml_workspace::Project;
 
@@ -60,6 +59,7 @@ pub fn collect_diagnostics(
 
     // Get cached type item spans for error location resolution
     let type_spans = project_type_item_spans(db, project);
+    let field_type_spans = project_class_field_type_spans(db, project);
 
     // 1. Collect parse errors
     for source_file in source_files {
@@ -86,17 +86,46 @@ pub fn collect_diagnostics(
         diagnostics.push(error.to_diagnostic());
     }
 
-    // 3.5. Collect TIR validation errors (cycle detection)
+    // 3.5. Collect TIR validation errors (cycle detection + unknown types)
     // This requires resolved types, so it happens after HIR validation but uses TIR data
-    let class_fields = class_field_types(db, project).classes(db).clone();
-    let type_aliases_map = type_aliases(db, project).aliases(db).clone();
+    let class_fields_result = class_field_types(db, project);
+    let class_fields = class_fields_result.classes(db).clone();
+    let type_aliases_result = type_aliases(db, project);
+    let type_aliases_map = type_aliases_result.aliases(db).clone();
 
+    // Create a context for type-level errors (no expression source map, no template offset)
+    let type_level_ctx = SpanResolutionContext {
+        expr_fn_source_map: &HirSourceMap::default(),
+        type_spans: &type_spans,
+        field_type_spans: &field_type_spans,
+        jinja_file_id: FileId::default(),
+        template_file_offset: None,
+    };
+
+    // Collect unknown type errors from class field types
+    for error in class_fields_result.errors(db) {
+        diagnostics.push(
+            error.to_diagnostic(std::string::ToString::to_string, |loc| {
+                loc.to_span(&type_level_ctx)
+            }),
+        );
+    }
+
+    // Collect unknown type errors from type aliases
+    for error in type_aliases_result.errors(db) {
+        diagnostics.push(
+            error.to_diagnostic(std::string::ToString::to_string, |loc| {
+                loc.to_span(&type_level_ctx)
+            }),
+        );
+    }
+
+    // Collect cycle detection errors
     let alias_cycle_errors = baml_compiler_tir::validate_type_alias_cycles(&type_aliases_map);
     for error in &alias_cycle_errors {
         diagnostics.push(
             error.to_diagnostic(std::string::ToString::to_string, |loc| {
-                // Cycle errors are type-level only, use empty source map
-                loc.to_span(&HirSourceMap::default(), &type_spans)
+                loc.to_span(&type_level_ctx)
             }),
         );
     }
@@ -106,19 +135,7 @@ pub fn collect_diagnostics(
     for error in &class_cycle_errors {
         diagnostics.push(
             error.to_diagnostic(std::string::ToString::to_string, |loc| {
-                // Cycle errors are type-level only, use empty source map
-                loc.to_span(&HirSourceMap::default(), &type_spans)
-            }),
-        );
-    }
-
-    // 3.6. Collect type reference validation errors (unknown types)
-    let type_validation_errors = validate_type_references(db, project);
-    for error in type_validation_errors.errors(db) {
-        diagnostics.push(
-            error.to_diagnostic(std::string::ToString::to_string, |loc| {
-                // Type reference errors use direct spans (ErrorLocation::Span)
-                loc.to_span(&HirSourceMap::default(), &type_spans)
+                loc.to_span(&type_level_ctx)
             }),
         );
     }
@@ -136,12 +153,24 @@ pub fn collect_diagnostics(
             // Validate template string bodies
             if let ItemId::TemplateString(ts_loc) = item {
                 let ts_errors = baml_compiler_tir::validate_template_string_body(db, *ts_loc);
+
+                // Look up the template file offset from the CST for Jinja error resolution
+                let template_file_offset = template_string_file_offset(db, *ts_loc);
+                let file_id = ts_loc.file(db).file_id(db);
+
                 // Template strings don't have expression IDs, use empty source map
-                let empty_source_map = HirSourceMap::default();
+                let ctx = SpanResolutionContext {
+                    expr_fn_source_map: &HirSourceMap::default(),
+                    type_spans: &type_spans,
+                    field_type_spans: &field_type_spans,
+                    jinja_file_id: file_id,
+                    template_file_offset,
+                };
+
                 for type_error in &ts_errors {
-                    diagnostics.push(type_error.to_diagnostic(ToString::to_string, |loc| {
-                        loc.to_span(&empty_source_map, &type_spans)
-                    }));
+                    diagnostics.push(
+                        type_error.to_diagnostic(ToString::to_string, |loc| loc.to_span(&ctx)),
+                    );
                 }
             }
 
@@ -173,16 +202,33 @@ pub fn collect_diagnostics(
 
                 // Convert TIR type errors (with ErrorLocation) to span-based diagnostics
                 // Both LLM and Expr bodies have source maps (LLM has an empty one)
-                let hir_source_map = match &*body {
-                    FunctionBody::Llm(_) => &HirSourceMap::default(),
+                let file_id = func_loc.file(db).file_id(db);
+
+                // For LLM functions, look up the prompt's file offset for Jinja error resolution
+                let template_file_offset = match &*body {
+                    FunctionBody::Llm(_) => llm_function_file_offset(db, *func_loc),
+                    _ => None,
+                };
+
+                // Create context based on body type
+                let empty_source_map = HirSourceMap::default();
+                let expr_fn_source_map = match &*body {
                     FunctionBody::Expr(_, source_map) => source_map,
-                    FunctionBody::Missing => &HirSourceMap::default(),
+                    _ => &empty_source_map,
+                };
+
+                let ctx = SpanResolutionContext {
+                    expr_fn_source_map,
+                    type_spans: &type_spans,
+                    field_type_spans: &field_type_spans,
+                    jinja_file_id: file_id,
+                    template_file_offset,
                 };
 
                 for type_error in &inference_result.errors {
-                    diagnostics.push(type_error.to_diagnostic(ToString::to_string, |loc| {
-                        loc.to_span(hir_source_map, &type_spans)
-                    }));
+                    diagnostics.push(
+                        type_error.to_diagnostic(ToString::to_string, |loc| loc.to_span(&ctx)),
+                    );
                 }
             }
         }

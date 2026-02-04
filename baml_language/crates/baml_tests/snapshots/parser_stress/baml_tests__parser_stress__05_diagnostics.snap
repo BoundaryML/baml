@@ -1,5 +1,6 @@
 ---
 source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
+assertion_line: 11991
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -7834,21 +7835,21 @@ expression: output
 ─────╯
 
   [type] Error: Unknown type `crate`
-    ╭─[ rust.baml:30:28 ]
-    │
- 30 │             type Language = crate::BamlLanguage;
-    │                            ───┬──  
-    │                               ╰──── Unknown type `crate`
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: Unknown type `crate`
-     ╭─[ rust.baml:203:20 ]
+     ╭─[ rust.baml:203:10 ]
      │
  203 │     type Language = crate::BamlLanguage;
-     │                    ───┬──  
-     │                       ╰──── Unknown type `crate`
+     │          ────┬───  
+     │              ╰───── Unknown type `crate`
+     │ 
+     │ Note: Error code: E0002
+─────╯
+
+  [type] Error: Unknown type `crate`
+     ╭─[ rust.baml:203:10 ]
+     │
+ 203 │     type Language = crate::BamlLanguage;
+     │          ────┬───  
+     │              ╰───── Unknown type `crate`
      │ 
      │ Note: Error code: E0002
 ─────╯

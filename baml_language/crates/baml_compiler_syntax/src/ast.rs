@@ -68,6 +68,7 @@ ast_node!(ConfigItem, CONFIG_ITEM);
 ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
+ast_node!(StringLiteral, STRING_LITERAL);
 
 // Jinja template components (inside raw strings)
 ast_node!(JinjaExpression, TEMPLATE_INTERPOLATION);
@@ -733,14 +734,33 @@ impl LlmFunctionBody {
 }
 
 impl ClientField {
-    /// Get the client name token.
+    /// Get the client name token if it's a simple identifier.
     ///
     /// For `client GPT4`, returns the `GPT4` token.
+    /// For `client "openai/gpt-4o"`, returns None (use `name_or_string()` instead).
     pub fn name(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the client value as a string, whether it's an identifier or a string literal.
+    ///
+    /// For `client GPT4`, returns "GPT4".
+    /// For `client "openai/gpt-4o"`, returns "openai/gpt-4o".
+    pub fn value(&self) -> Option<String> {
+        // First try to get it as a simple identifier (WORD token)
+        if let Some(token) = self.name() {
+            return Some(token.text().to_string());
+        }
+
+        // Otherwise, try to get it as a string literal
+        if let Some(string_node) = self.syntax.children().find_map(StringLiteral::cast) {
+            return Some(string_node.value());
+        }
+
+        None
     }
 }
 
@@ -750,6 +770,19 @@ impl PromptField {
     /// For `prompt #"Hello {{ name }}"#`, returns the `#"Hello {{ name }}"#` node.
     pub fn raw_string(&self) -> Option<RawStringLiteral> {
         self.syntax.children().find_map(RawStringLiteral::cast)
+    }
+}
+
+impl StringLiteral {
+    /// Get the value of the string literal, without the surrounding quotes.
+    ///
+    /// For `"hello world"`, returns `hello world`.
+    pub fn value(&self) -> String {
+        let text = self.syntax.text().to_string();
+        // String literals are of the form: "..." (tokens: Quote, words/spaces, Quote)
+        // Strip leading and trailing quote characters
+        let trimmed = text.trim_matches('"');
+        trimmed.to_string()
     }
 }
 

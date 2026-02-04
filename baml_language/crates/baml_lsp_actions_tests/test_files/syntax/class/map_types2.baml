@@ -96,11 +96,11 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //     │ Note: Error code: E0039
 // ────╯
 // Error: Invalid type MapDummy for map key. Only strings, string literals and enums are valid map keys.
-//     ╭─[ class_map_types2.baml:31:49 ]
+//     ╭─[ class_map_types2.baml:31:53 ]
 //     │
 //  31 │ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> map<string, int> {
-//     │                                                 ─────────────┬────────────  
-//     │                                                              ╰────────────── Invalid type MapDummy for map key. Only strings, string literals and enums are valid map keys.
+//     │                                                     ───────────┬──────────  
+//     │                                                                ╰──────────── Invalid type MapDummy for map key. Only strings, string literals and enums are valid map keys.
 //     │ 
 //     │ Note: Error code: E0067
 // ────╯

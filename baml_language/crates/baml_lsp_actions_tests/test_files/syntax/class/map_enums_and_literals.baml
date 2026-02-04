@@ -47,20 +47,20 @@ function InOutLiteralStringUnionMapKey(
 //     │ Note: Error code: E0067
 // ────╯
 // Error: Invalid type MapKey for map key. Only strings, string literals and enums are valid map keys.
-//     ╭─[ class_map_enums_and_literals.baml:13:23 ]
+//     ╭─[ class_map_enums_and_literals.baml:13:26 ]
 //     │
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                       ───────────┬───────────  
-//     │                                  ╰───────────── Invalid type MapKey for map key. Only strings, string literals and enums are valid map keys.
+//     │                          ──────────┬─────────  
+//     │                                    ╰─────────── Invalid type MapKey for map key. Only strings, string literals and enums are valid map keys.
 //     │ 
 //     │ Note: Error code: E0067
 // ────╯
 // Error: Invalid type MapKey for map key. Only strings, string literals and enums are valid map keys.
-//     ╭─[ class_map_enums_and_literals.baml:13:47 ]
+//     ╭─[ class_map_enums_and_literals.baml:13:51 ]
 //     │
 //  13 │ function InOutEnumKey(i1: map<MapKey, string>, i2: map<MapKey, string>) -> map<MapKey, string> {
-//     │                                               ────────────┬───────────  
-//     │                                                           ╰───────────── Invalid type MapKey for map key. Only strings, string literals and enums are valid map keys.
+//     │                                                   ──────────┬─────────  
+//     │                                                             ╰─────────── Invalid type MapKey for map key. Only strings, string literals and enums are valid map keys.
 //     │ 
 //     │ Note: Error code: E0067
 // ────╯

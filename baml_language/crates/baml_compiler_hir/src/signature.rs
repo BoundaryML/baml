@@ -51,13 +51,15 @@ impl FunctionSignature {
         if let Some(param_list) = func_node.param_list() {
             for param_node in param_list.params() {
                 if let Some(name_token) = param_node.name() {
-                    let type_ref = param_node
-                        .ty()
-                        .map(|t| TypeRef::from_ast(&t))
+                    let type_node = param_node.ty();
+                    let type_ref = type_node
+                        .as_ref()
+                        .map(TypeRef::from_ast)
                         .unwrap_or(TypeRef::Unknown);
 
-                    // Store the span in the source map
+                    // Store the spans in the source map
                     source_map.push_param_span(Some(param_node.syntax().text_range()));
+                    source_map.push_param_type_span(type_node.map(|t| t.syntax().text_range()));
 
                     params.push(Param {
                         name: Name::new(name_token.text()),
@@ -121,13 +123,15 @@ impl TemplateStringSignature {
         if let Some(param_list) = ts_node.param_list() {
             for param_node in param_list.params() {
                 if let Some(name_token) = param_node.name() {
-                    let type_ref = param_node
-                        .ty()
-                        .map(|t| TypeRef::from_ast(&t))
+                    let type_node = param_node.ty();
+                    let type_ref = type_node
+                        .as_ref()
+                        .map(TypeRef::from_ast)
                         .unwrap_or(TypeRef::Unknown);
 
-                    // Store the span in the source map
+                    // Store the spans in the source map
                     source_map.push_param_span(Some(param_node.syntax().text_range()));
+                    source_map.push_param_type_span(type_node.map(|t| t.syntax().text_range()));
 
                     params.push(Param {
                         name: Name::new(name_token.text()),

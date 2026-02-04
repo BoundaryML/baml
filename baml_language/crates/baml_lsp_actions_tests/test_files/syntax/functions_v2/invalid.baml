@@ -58,12 +58,3 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: Unknown type `bar`
-//    ╭─[ functions_v2_invalid.baml:1:1 ]
-//    │
-//  1 │ function Foo() -> {
-//    │ │ 
-//    │ ╰─ Unknown type `bar`
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯

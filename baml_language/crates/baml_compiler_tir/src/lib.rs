@@ -169,19 +169,32 @@ pub struct TypingContextMap<'db> {
 }
 
 /// Tracked struct holding class field types (class name -> field name -> field type).
+///
+/// Also includes any type errors found during lowering (e.g., unknown types).
+/// Following rust-analyzer's pattern of returning `(Data, Diagnostics)` from queries.
 #[salsa::tracked]
 pub struct ClassFieldTypesMap<'db> {
     #[tracked]
     #[returns(ref)]
     pub classes: HashMap<Name, HashMap<Name, Ty>>,
+
+    #[tracked]
+    #[returns(ref)]
+    pub errors: Vec<TirTypeError>,
 }
 
 /// Tracked struct holding type aliases (alias name -> resolved type).
+///
+/// Also includes any type errors found during lowering (e.g., unknown types).
 #[salsa::tracked]
 pub struct TypeAliasesMap<'db> {
     #[tracked]
     #[returns(ref)]
     pub aliases: HashMap<Name, Ty>,
+
+    #[tracked]
+    #[returns(ref)]
+    pub errors: Vec<TirTypeError>,
 }
 
 /// Tracked struct holding class names.
@@ -206,17 +219,6 @@ pub struct TypeAliasNamesSet<'db> {
     #[tracked]
     #[returns(ref)]
     pub names: HashSet<Name>,
-}
-
-/// Tracked struct holding type validation errors.
-///
-/// These are errors from validating type references (unknown types, etc.).
-/// Kept separate from type data queries for caching efficiency.
-#[salsa::tracked]
-pub struct TypeValidationErrors<'db> {
-    #[tracked]
-    #[returns(ref)]
-    pub errors: Vec<TirTypeError>,
 }
 
 // ============================================================================
@@ -321,31 +323,48 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
 
 /// Query: Get class field types for a project.
 ///
-/// Maps class names to their field types.
+/// Maps class names to their field types. Also collects type errors
+/// (e.g., unknown types) with position-independent locations for caching.
+///
+/// Following rust-analyzer's pattern: queries return both data and diagnostics,
+/// making errors cacheable alongside the data they're derived from.
+/// Error locations use position-independent IDs (class name + field index)
+/// which are resolved to spans at diagnostic rendering time.
 #[salsa::tracked]
 pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_> {
-    let hir_fields = baml_compiler_hir::project_class_fields(db, project);
+    let items = baml_compiler_hir::project_items(db, project);
     let resolution_ctx = TypeResolutionContext::new(db, project);
-    let span = Span::default(); // TODO: get proper span from fields
+    let mut classes: HashMap<Name, HashMap<Name, Ty>> = HashMap::new();
+    let mut errors: Vec<TirTypeError> = Vec::new();
 
-    let mut classes: HashMap<Name, HashMap<Name, Ty>> = hir_fields
-        .classes(db)
-        .iter()
-        .map(|(class_name, fields)| {
-            let lowered_fields = fields
-                .iter()
-                .map(|(field_name, type_ref)| {
-                    (
-                        field_name.clone(),
-                        resolution_ctx.lower_type_ref(type_ref, span).0,
-                    )
-                })
-                .collect();
-            (class_name.clone(), lowered_fields)
-        })
-        .collect();
+    // Process user-defined classes
+    for item in items.items(db) {
+        if let baml_compiler_hir::ItemId::Class(class_loc) = item {
+            let item_tree = baml_compiler_hir::file_item_tree(db, class_loc.file(db));
+            let class_data = &item_tree[class_loc.id(db)];
+            let class_name = class_data.name.clone();
 
-    // Add builtin class public fields
+            let mut lowered_fields: HashMap<Name, Ty> = HashMap::new();
+
+            // Lower each field's type with position-independent error location
+            for (field_index, field_data) in class_data.fields.iter().enumerate() {
+                // Use position-independent error location for cacheability
+                let error_location = ErrorLocation::ClassFieldType {
+                    class_name: class_name.clone(),
+                    field_index,
+                };
+
+                let (ty, field_errors) =
+                    resolution_ctx.lower_type_ref(&field_data.type_ref, error_location);
+                errors.extend(field_errors);
+                lowered_fields.insert(field_data.name.clone(), ty);
+            }
+
+            classes.insert(class_name, lowered_fields);
+        }
+    }
+
+    // Add builtin class public fields (no errors possible here)
     for builtin in baml_builtins::builtin_types() {
         let public_fields: HashMap<Name, Ty> = builtin
             .fields
@@ -356,31 +375,38 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
         classes.insert(Name::new(builtin.path), public_fields);
     }
 
-    ClassFieldTypesMap::new(db, classes)
+    ClassFieldTypesMap::new(db, classes, errors)
 }
 
 /// Query: Get type alias definitions for a project.
 ///
-/// Maps type alias names to their resolved types.
+/// Maps type alias names to their resolved types. Also collects type errors
+/// (e.g., unknown types) with position-independent locations for caching.
 #[salsa::tracked]
 pub fn type_aliases(db: &dyn Db, project: Project) -> TypeAliasesMap<'_> {
     let items = baml_compiler_hir::project_items(db, project);
     let resolution_ctx = TypeResolutionContext::new(db, project);
-    let span = Span::default(); // TODO: get proper span from alias
     let mut aliases = HashMap::new();
+    let mut errors: Vec<TirTypeError> = Vec::new();
 
     for item in items.items(db) {
         if let baml_compiler_hir::ItemId::TypeAlias(alias_loc) = item {
-            let file = alias_loc.file(db);
-            let item_tree = baml_compiler_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler_hir::file_item_tree(db, alias_loc.file(db));
             let alias_data = &item_tree[alias_loc.id(db)];
 
-            let lowered_ty = resolution_ctx.lower_type_ref(&alias_data.type_ref, span).0;
+            // Use position-independent error location for cacheability
+            let error_location = ErrorLocation::TypeAliasType {
+                alias_name: alias_data.name.clone(),
+            };
+
+            let (lowered_ty, alias_errors) =
+                resolution_ctx.lower_type_ref(&alias_data.type_ref, error_location);
+            errors.extend(alias_errors);
             aliases.insert(alias_data.name.clone(), lowered_ty);
         }
     }
 
-    TypeAliasesMap::new(db, aliases)
+    TypeAliasesMap::new(db, aliases, errors)
 }
 
 /// Query: Get class names for a project.
@@ -443,204 +469,6 @@ pub fn type_alias_names(db: &dyn Db, project: Project) -> TypeAliasNamesSet<'_> 
     TypeAliasNamesSet::new(db, names)
 }
 
-/// Query: Validate all type references in a project.
-///
-/// This checks that all types referenced in class fields, type aliases,
-/// function signatures, and template string parameters actually exist.
-/// Returns a list of type errors with proper source spans.
-///
-/// This is a separate query from the type-lowering queries (`class_field_types`,
-/// `type_aliases`) to keep validation separate from data extraction. The data
-/// queries discard errors for caching efficiency, while this query collects them.
-#[salsa::tracked]
-pub fn validate_type_references(db: &dyn Db, project: Project) -> TypeValidationErrors<'_> {
-    use baml_compiler_parser::syntax_tree;
-    use baml_compiler_syntax::ast::{Item, Parameter, SourceFile};
-    use rowan::ast::AstNode;
-
-    let items = baml_compiler_hir::project_items(db, project);
-    let resolution_ctx = TypeResolutionContext::new(db, project);
-    let mut errors = Vec::new();
-
-    for item in items.items(db) {
-        match item {
-            // Validate class field types
-            baml_compiler_hir::ItemId::Class(class_loc) => {
-                let file = class_loc.file(db);
-                let file_id = file.file_id(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let class_data = &item_tree[class_loc.id(db)];
-                let class_name = class_data.name.as_str();
-                let occurrence = class_loc.id(db).index();
-
-                // Get the CST to find type expression spans
-                let tree = syntax_tree(db, file);
-                let source_file = SourceFile::cast(tree).unwrap();
-
-                // Find the matching class definition in the CST
-                let class_def = source_file
-                    .items()
-                    .filter_map(|item| match item {
-                        Item::Class(c) => Some(c),
-                        _ => None,
-                    })
-                    .filter(|c| c.name().map(|n| n.text() == class_name).unwrap_or(false))
-                    .nth(occurrence as usize);
-
-                if let Some(class_def) = class_def {
-                    // Validate each field's type
-                    for (field_data, field_cst) in class_data.fields.iter().zip(class_def.fields())
-                    {
-                        if let Some(type_expr) = field_cst.ty() {
-                            let span = Span::new(file_id, type_expr.syntax().text_range());
-                            let (_, field_errors) =
-                                resolution_ctx.lower_type_ref(&field_data.type_ref, span);
-                            errors.extend(field_errors);
-                        }
-                    }
-                }
-            }
-
-            // Validate type alias right-hand side types
-            baml_compiler_hir::ItemId::TypeAlias(alias_loc) => {
-                let file = alias_loc.file(db);
-                let file_id = file.file_id(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let alias_data = &item_tree[alias_loc.id(db)];
-                let alias_name = alias_data.name.as_str();
-                let occurrence = alias_loc.id(db).index();
-
-                // Get the CST to find type expression spans
-                let tree = syntax_tree(db, file);
-                let source_file = SourceFile::cast(tree).unwrap();
-
-                // Find the matching type alias definition in the CST
-                let alias_def = source_file
-                    .items()
-                    .filter_map(|item| match item {
-                        Item::TypeAlias(a) => Some(a),
-                        _ => None,
-                    })
-                    .filter(|a| a.name().map(|n| n.text() == alias_name).unwrap_or(false))
-                    .nth(occurrence as usize);
-
-                if let Some(alias_def) = alias_def {
-                    if let Some(type_expr) = alias_def.ty() {
-                        let span = Span::new(file_id, type_expr.syntax().text_range());
-                        let (_, alias_errors) =
-                            resolution_ctx.lower_type_ref(&alias_data.type_ref, span);
-                        errors.extend(alias_errors);
-                    }
-                }
-            }
-
-            // Validate function parameter and return types
-            baml_compiler_hir::ItemId::Function(func_loc) => {
-                let file = func_loc.file(db);
-                let file_id = file.file_id(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let func_data = &item_tree[func_loc.id(db)];
-
-                // Skip compiler-generated functions (like client.resolve)
-                if func_data.compiler_generated.is_some() {
-                    continue;
-                }
-
-                let func_name = func_data.name.as_str();
-                let occurrence = func_loc.id(db).index();
-
-                // Get signature from HIR
-                let signature = baml_compiler_hir::function_signature(db, *func_loc);
-
-                // Get the CST to find type expression spans
-                let tree = syntax_tree(db, file);
-                let source_file = SourceFile::cast(tree).unwrap();
-
-                // Find the matching function definition in the CST
-                let func_def = source_file
-                    .items()
-                    .filter_map(|item| match item {
-                        Item::Function(f) => Some(f),
-                        _ => None,
-                    })
-                    .filter(|f| f.name().map(|n| n.text() == func_name).unwrap_or(false))
-                    .nth(occurrence as usize);
-
-                if let Some(func_def) = func_def {
-                    // Validate parameter types
-                    let cst_params: Vec<Parameter> = func_def
-                        .param_list()
-                        .map(|pl| pl.params().collect())
-                        .unwrap_or_default();
-                    for (param_data, param_cst) in signature.params.iter().zip(cst_params.iter()) {
-                        if let Some(type_expr) = param_cst.ty() {
-                            let span = Span::new(file_id, type_expr.syntax().text_range());
-                            let (_, param_errors) =
-                                resolution_ctx.lower_type_ref(&param_data.type_ref, span);
-                            errors.extend(param_errors);
-                        }
-                    }
-
-                    // Validate return type
-                    if let Some(return_type_expr) = func_def.return_type() {
-                        let span = Span::new(file_id, return_type_expr.syntax().text_range());
-                        let (_, return_errors) =
-                            resolution_ctx.lower_type_ref(&signature.return_type, span);
-                        errors.extend(return_errors);
-                    }
-                }
-            }
-
-            // Validate template string parameter types
-            baml_compiler_hir::ItemId::TemplateString(ts_loc) => {
-                let file = ts_loc.file(db);
-                let file_id = file.file_id(db);
-                let item_tree = baml_compiler_hir::file_item_tree(db, file);
-                let ts_data = &item_tree[ts_loc.id(db)];
-                let ts_name = ts_data.name.as_str();
-                let occurrence = ts_loc.id(db).index();
-
-                // Get signature from HIR
-                let signature = baml_compiler_hir::template_string_signature(db, *ts_loc);
-
-                // Get the CST to find type expression spans
-                let tree = syntax_tree(db, file);
-                let source_file = SourceFile::cast(tree).unwrap();
-
-                // Find the matching template string definition in the CST
-                let ts_def = source_file
-                    .items()
-                    .filter_map(|item| match item {
-                        Item::TemplateString(t) => Some(t),
-                        _ => None,
-                    })
-                    .filter(|t| t.name().map(|n| n.text() == ts_name).unwrap_or(false))
-                    .nth(occurrence as usize);
-
-                if let Some(ts_def) = ts_def {
-                    // Validate parameter types
-                    let cst_params: Vec<Parameter> = ts_def
-                        .param_list()
-                        .map(|pl| pl.params().collect())
-                        .unwrap_or_default();
-                    for (param_data, param_cst) in signature.params.iter().zip(cst_params.iter()) {
-                        if let Some(type_expr) = param_cst.ty() {
-                            let span = Span::new(file_id, type_expr.syntax().text_range());
-                            let (_, param_errors) =
-                                resolution_ctx.lower_type_ref(&param_data.type_ref, span);
-                            errors.extend(param_errors);
-                        }
-                    }
-                }
-            }
-
-            _ => {}
-        }
-    }
-
-    TypeValidationErrors::new(db, errors)
-}
-
 /// Context for type resolution across a project.
 ///
 /// This bundles together all the sets needed for resolved type lowering.
@@ -662,17 +490,21 @@ impl TypeResolutionContext {
     }
 
     /// Lower a type reference with full resolution.
+    ///
+    /// The `location` parameter can be either:
+    /// - A `Span` for direct span-based error reporting
+    /// - An `ErrorLocation` for position-independent error locations (used by cached queries)
     pub fn lower_type_ref(
         &self,
         type_ref: &baml_compiler_hir::TypeRef,
-        span: Span,
+        location: impl Into<ErrorLocation>,
     ) -> (Ty, Vec<TirTypeError>) {
         lower_type_ref(
             type_ref,
             &self.type_alias_names,
             &self.class_names,
             &self.enum_names,
-            span,
+            location,
         )
     }
 }
@@ -1122,7 +954,7 @@ pub fn infer_function_body<'db>(
         }
         FunctionBody::Llm(llm_body) => {
             // Validate Jinja templates in the prompt
-            validate_llm_prompt(&mut ctx, &llm_body.prompt, &param_types, file_id);
+            validate_llm_prompt(&mut ctx, &llm_body.prompt, &param_types);
 
             // LLM functions return their declared return type
             (
@@ -1196,8 +1028,8 @@ pub fn infer_function_body<'db>(
 /// Add built-in BAML types to a Jinja type environment.
 ///
 /// This adds the special variables `_` and `ctx` along with their class definitions:
-/// - `_` (baml::BuiltIn): has `chat` and `role` function properties
-/// - `ctx` (baml::Context): has `output_format`, `client`, and `tags` properties
+/// - `_` (`baml::BuiltIn)`: has `chat` and `role` function properties
+/// - `ctx` (`baml::Context)`: has `output_format`, `client`, and `tags` properties
 /// - `baml::Client`: has `name` and `provider` string properties
 /// - `jinja::loop`: has standard Jinja loop variables (index, first, last, etc.)
 fn add_builtin_jinja_types(jinja_env: &mut jinja::JinjaTypeEnv) {
@@ -1274,7 +1106,6 @@ fn validate_llm_prompt(
     ctx: &mut TypeContext<'_>,
     prompt: &PromptTemplate,
     param_types: &HashMap<Name, Ty>,
-    file_id: FileId,
 ) {
     use jinja::{JinjaType, JinjaTypeEnv};
 
@@ -1303,7 +1134,10 @@ fn validate_llm_prompt(
     for (enum_name, variants) in &ctx.enum_variants {
         jinja_env.add_enum(
             enum_name.to_string(),
-            variants.iter().map(|v| v.to_string()).collect(),
+            variants
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
         );
     }
 
@@ -1317,7 +1151,7 @@ fn validate_llm_prompt(
             let jinja_params: Vec<(String, JinjaType)> = params
                 .iter()
                 .enumerate()
-                .map(|(i, ty)| (format!("arg{}", i), JinjaType::from(ty)))
+                .map(|(i, ty)| (format!("arg{i}"), JinjaType::from(ty)))
                 .collect();
             let jinja_ret = JinjaType::from(ret.as_ref());
 
@@ -1335,36 +1169,29 @@ fn validate_llm_prompt(
     // Validate the entire prompt template
     match jinja::validate_template(&prompt.text, &mut jinja_env) {
         Ok(errors) => {
-            // Convert Jinja errors to TIR errors
+            // Convert Jinja errors to TIR errors with position-independent locations.
+            // The jinja span is relative to the prompt text start.
+            // We store relative offsets here; they'll be converted to absolute spans
+            // at diagnostic rendering time by looking up the prompt's file offset from CST.
             for error in errors {
                 let jinja_span = error.span();
-                // Convert minijinja span to baml span
-                // The jinja span is relative to the prompt text, so we add the file_offset
-                // to get the absolute position in the source file
-                let start_offset = prompt.file_offset + jinja_span.start_offset as u32;
-                let end_offset = prompt.file_offset + jinja_span.end_offset as u32;
-
-                let baml_span = Span::new(
-                    file_id,
-                    TextRange::new(start_offset.into(), end_offset.into()),
-                );
-
                 ctx.push_error(TypeError::JinjaError {
                     message: error.message().to_string(),
-                    location: ErrorLocation::Span(baml_span),
+                    location: ErrorLocation::JinjaTemplate {
+                        start_offset: jinja_span.start_offset,
+                        end_offset: jinja_span.end_offset,
+                    },
                 });
             }
         }
         Err(parse_error) => {
-            // Jinja parse error - report as a single error
-            // Use the start of the prompt as the error location
-            let baml_span = Span::new(
-                file_id,
-                TextRange::new(prompt.file_offset.into(), (prompt.file_offset + 1).into()),
-            );
+            // Jinja parse error - report as a single error at the template start
             ctx.push_error(TypeError::JinjaError {
-                message: format!("Failed to parse Jinja template: {}", parse_error),
-                location: ErrorLocation::Span(baml_span),
+                message: format!("Failed to parse Jinja template: {parse_error}"),
+                location: ErrorLocation::JinjaTemplate {
+                    start_offset: 0,
+                    end_offset: 1,
+                },
             });
         }
     }
@@ -1427,12 +1254,17 @@ pub fn function_type_inference<'db>(
 ///
 /// Template strings don't need full type inference like functions - they just need
 /// their Jinja templates validated against available variables (parameters, globals, etc.)
+///
+/// This also validates that parameter types exist (e.g., no unknown types).
 pub fn validate_template_string_body(
     db: &dyn Db,
     ts_loc: baml_compiler_hir::TemplateStringLoc<'_>,
 ) -> Vec<TirTypeError> {
     use baml_compiler_hir::{template_string_body, template_string_signature};
+    use baml_compiler_parser::syntax_tree;
+    use baml_compiler_syntax::ast::{Item, Parameter, SourceFile};
     use jinja::{JinjaType, JinjaTypeEnv};
+    use rowan::ast::AstNode;
 
     let signature = template_string_signature(db, ts_loc);
     let body = template_string_body(db, ts_loc);
@@ -1457,11 +1289,44 @@ pub fn validate_template_string_body(
     // Build a Jinja type environment
     let mut jinja_env = JinjaTypeEnv::new();
 
-    // Add template string parameters
-    for param in &signature.params {
-        let resolution_ctx = TypeResolutionContext::new(db, project);
-        let span = Span::default();
-        let ty = resolution_ctx.lower_type_ref(&param.type_ref, span).0;
+    // Collect parameter type errors with proper spans
+    let mut type_errors: Vec<TirTypeError> = Vec::new();
+    let resolution_ctx = TypeResolutionContext::new(db, project);
+
+    // Get CST to find parameter type spans
+    let item_tree = baml_compiler_hir::file_item_tree(db, file);
+    let ts_data = &item_tree[ts_loc.id(db)];
+    let ts_name = ts_data.name.as_str();
+    let occurrence = ts_loc.id(db).index();
+
+    let tree = syntax_tree(db, file);
+    let source_file = SourceFile::cast(tree).unwrap();
+
+    let ts_def = source_file
+        .items()
+        .filter_map(|item| match item {
+            Item::TemplateString(t) => Some(t),
+            _ => None,
+        })
+        .filter(|t| t.name().map(|n| n.text() == ts_name).unwrap_or(false))
+        .nth(occurrence as usize);
+
+    let cst_params: Vec<Parameter> = ts_def
+        .and_then(|ts| ts.param_list())
+        .map(|pl| pl.params().collect())
+        .unwrap_or_default();
+
+    // Add template string parameters with proper span-based error collection
+    for (idx, param) in signature.params.iter().enumerate() {
+        let span = cst_params
+            .get(idx)
+            .and_then(baml_compiler_syntax::Parameter::ty)
+            .map(|te| Span::new(file_id, te.syntax().text_range()))
+            .unwrap_or_default();
+
+        let (ty, param_errors) = resolution_ctx.lower_type_ref(&param.type_ref, span);
+        type_errors.extend(param_errors);
+
         let jinja_ty = JinjaType::from(&ty);
         jinja_env.add_variable(param.name.to_string(), jinja_ty);
     }
@@ -1482,7 +1347,10 @@ pub fn validate_template_string_body(
     for (enum_name, variants) in enum_variants {
         jinja_env.add_enum(
             enum_name.to_string(),
-            variants.iter().map(|v| v.to_string()).collect(),
+            variants
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
         );
     }
 
@@ -1492,7 +1360,7 @@ pub fn validate_template_string_body(
             let jinja_params: Vec<(String, JinjaType)> = params
                 .iter()
                 .enumerate()
-                .map(|(i, ty)| (format!("arg{}", i), JinjaType::from(ty)))
+                .map(|(i, ty)| (format!("arg{i}"), JinjaType::from(ty)))
                 .collect();
             let jinja_ret = JinjaType::from(ret.as_ref());
 
@@ -1504,39 +1372,32 @@ pub fn validate_template_string_body(
         }
     }
 
-    // Validate the template
-    let mut errors: Vec<TirTypeError> = Vec::new();
+    // Validate the template with position-independent error locations
     match jinja::validate_template(&body.text, &mut jinja_env) {
         Ok(jinja_errors) => {
             for error in jinja_errors {
                 let jinja_span = error.span();
-                let start_offset = body.file_offset + jinja_span.start_offset as u32;
-                let end_offset = body.file_offset + jinja_span.end_offset as u32;
-
-                let baml_span = Span::new(
-                    file_id,
-                    TextRange::new(start_offset.into(), end_offset.into()),
-                );
-
-                errors.push(TypeError::JinjaError {
+                type_errors.push(TypeError::JinjaError {
                     message: error.message().to_string(),
-                    location: ErrorLocation::Span(baml_span),
+                    location: ErrorLocation::JinjaTemplate {
+                        start_offset: jinja_span.start_offset,
+                        end_offset: jinja_span.end_offset,
+                    },
                 });
             }
         }
         Err(parse_error) => {
-            let baml_span = Span::new(
-                file_id,
-                TextRange::new(body.file_offset.into(), (body.file_offset + 1).into()),
-            );
-            errors.push(TypeError::JinjaError {
-                message: format!("Failed to parse Jinja template: {}", parse_error),
-                location: ErrorLocation::Span(baml_span),
+            type_errors.push(TypeError::JinjaError {
+                message: format!("Failed to parse Jinja template: {parse_error}"),
+                location: ErrorLocation::JinjaTemplate {
+                    start_offset: 0,
+                    end_offset: 1,
+                },
             });
         }
     }
 
-    errors
+    type_errors
 }
 
 /// Infer types for a function given its signature and body.
@@ -1578,22 +1439,27 @@ pub fn infer_function<'db>(
     let enum_name_set = enum_names(db, project).names(db).clone();
 
     let file_id = function_loc.file(db).file_id(db);
-    // Use a placeholder span for now - ideally we'd have spans on TypeRef
-    let placeholder_span = Span::new(file_id, TextRange::empty(0.into()));
 
     let mut type_errors: Vec<TirTypeError> = Vec::new();
 
     // Convert parameter TypeRefs to Tys with validation and resolution
+    // Use type spans from the source map when available for accurate error locations
     let param_types: HashMap<Name, Ty> = signature
         .params
         .iter()
-        .map(|param| {
+        .enumerate()
+        .map(|(idx, param)| {
+            // Get the type span from SignatureSourceMap if available (just the type, not the whole param)
+            let span = sig_source_map
+                .and_then(|sm| sm.param_type_span(idx))
+                .map(|range| Span::new(file_id, range))
+                .unwrap_or_default();
             let (ty, errors) = lower_type_ref(
                 &param.type_ref,
                 &type_alias_name_set,
                 &class_name_set,
                 &enum_name_set,
-                placeholder_span,
+                span,
             );
             type_errors.extend(errors);
             (param.name.clone(), ty)
@@ -1601,28 +1467,28 @@ pub fn infer_function<'db>(
         .collect();
 
     // Convert return type with validation and resolution
+    // Use span from the source map when available
+    let return_type_span = sig_source_map
+        .and_then(SignatureSourceMap::return_type_span)
+        .map(|range| Span::new(file_id, range))
+        .unwrap_or_default();
     let (expected_return, errors) = lower_type_ref(
         &signature.return_type,
         &type_alias_name_set,
         &class_name_set,
         &enum_name_set,
-        placeholder_span,
+        return_type_span,
     );
     type_errors.extend(errors);
 
-    // Convert return type TextRange to Span for diagnostics (if source map provided)
-    let return_type_span = sig_source_map
-        .and_then(SignatureSourceMap::return_type_span)
-        .map(|range| Span::new(file_id, range));
-
     // Validate map key types in function signature
-    // Check return type for invalid map keys
-    if let Some(span) = return_type_span {
+    // Check return type for invalid map keys (only if we have a valid span)
+    if return_type_span != Span::default() {
         let invalid_return_keys = normalize::find_invalid_map_keys(&expected_return, &type_aliases);
         for invalid_key in invalid_return_keys {
             type_errors.push(TypeError::InvalidMapKeyType {
                 ty: invalid_key,
-                location: ErrorLocation::Span(span),
+                location: ErrorLocation::Span(return_type_span),
             });
         }
     }
@@ -1631,7 +1497,7 @@ pub fn infer_function<'db>(
     if let Some(source_map) = sig_source_map {
         for (idx, param) in signature.params.iter().enumerate() {
             if let Some(param_ty) = param_types.get(&param.name) {
-                if let Some(range) = source_map.param_span(idx) {
+                if let Some(range) = source_map.param_type_span(idx) {
                     let span = Span::new(file_id, range);
                     let invalid_param_keys =
                         normalize::find_invalid_map_keys(param_ty, &type_aliases);
@@ -1647,12 +1513,18 @@ pub fn infer_function<'db>(
     }
 
     // Delegate to the body inference function
+    // Convert return_type_span to Option (None if default/empty)
+    let return_type_span_opt = if return_type_span == Span::default() {
+        None
+    } else {
+        Some(return_type_span)
+    };
     let mut result = infer_function_body(
         db,
         body,
         param_types,
         &expected_return,
-        return_type_span,
+        return_type_span_opt,
         globals,
         class_fields,
         Some(type_aliases),
