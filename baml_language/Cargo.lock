@@ -534,6 +534,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_fmt"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler_diagnostics",
+ "baml_compiler_lexer",
+ "baml_compiler_parser",
+ "baml_compiler_syntax",
+ "baml_project",
+ "rowan 0.16.1",
+ "salsa",
+]
+
+[[package]]
 name = "baml_lsp_actions"
 version = "0.0.0"
 dependencies = [
