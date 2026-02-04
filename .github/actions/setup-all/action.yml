@@ -1,99 +1,99 @@
-name: 'Setup All Development Environment'
-description: 'Complete development environment setup using modular actions'
+name: "Setup All Development Environment"
+description: "Complete development environment setup using modular actions"
 
 inputs:
   # Node.js inputs
   setup-node:
-    description: 'Setup Node.js and pnpm'
+    description: "Setup Node.js and pnpm"
     required: false
-    default: 'true'
+    default: "true"
   node-version:
-    description: 'Node.js version to install'
+    description: "Node.js version to install"
     required: false
-    default: '20'
+    default: "20"
   pnpm-version:
-    description: 'pnpm version to install'
+    description: "pnpm version to install"
     required: false
-    default: '9.12.0'
+    default: "9.12.0"
   install-node-dependencies:
-    description: 'Install Node.js dependencies'
+    description: "Install Node.js dependencies"
     required: false
-    default: 'true'
+    default: "true"
   enable-turbo-cache:
-    description: 'Enable Turbo build cache using GitHub Actions cache'
+    description: "Enable Turbo build cache using GitHub Actions cache"
     required: false
-    default: 'true'
+    default: "true"
 
   # Rust inputs
   setup-rust:
-    description: 'Setup Rust toolchain'
+    description: "Setup Rust toolchain"
     required: false
-    default: 'true'
+    default: "true"
   rust-toolchain:
-    description: 'Rust toolchain version'
+    description: "Rust toolchain version"
     required: false
-    default: 'stable'
+    default: "stable"
   rust-enable-wasm:
-    description: 'Enable WASM support for Rust'
+    description: "Enable WASM support for Rust"
     required: false
-    default: 'true'
+    default: "true"
   rust-targets:
-    description: 'Additional Rust targets (space-separated)'
+    description: "Additional Rust targets (space-separated)"
     required: false
-    default: ''
+    default: ""
   rust-workspace:
-    description: 'Rust workspace path for caching'
+    description: "Rust workspace path for caching"
     required: false
-    default: 'engine'
+    default: "engine"
   rust-wasm-pack-version:
-    description: 'wasm-pack version to install (only used when enable-wasm is true)'
+    description: "wasm-pack version to install (only used when enable-wasm is true)"
     required: false
-    default: '0.13.1'
+    default: "0.14.0"
   rust-enable-cross:
-    description: 'Enable cross-rs for cross-compilation'
+    description: "Enable cross-rs for cross-compilation"
     required: false
-    default: 'true'
+    default: "true"
 
   # Python inputs
   setup-python:
-    description: 'Setup Python'
+    description: "Setup Python"
     required: false
-    default: 'true'
+    default: "true"
   python-version:
-    description: 'Python version to install'
+    description: "Python version to install"
     required: false
-    default: '3.13'
+    default: "3.13"
   python-use-uv:
-    description: 'Use uv package manager for Python'
+    description: "Use uv package manager for Python"
     required: false
-    default: 'true'
+    default: "true"
 
   # Go inputs
   setup-go:
-    description: 'Setup Go'
+    description: "Setup Go"
     required: false
-    default: 'true'
+    default: "true"
   go-version:
-    description: 'Go version to install'
+    description: "Go version to install"
     required: false
-    default: '1.24'
+    default: "1.24"
   go-install-goimports:
-    description: 'Install goimports'
+    description: "Install goimports"
     required: false
-    default: 'true'
+    default: "true"
 
   # Tools inputs
   setup-tools:
-    description: 'Setup development tools'
+    description: "Setup development tools"
     required: false
-    default: 'true'
+    default: "true"
   tools-install-mise:
-    description: 'Install mise version manager'
+    description: "Install mise version manager"
     required: false
-    default: 'true'
+    default: "true"
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Setup development tools
       if: inputs.setup-tools == 'true'

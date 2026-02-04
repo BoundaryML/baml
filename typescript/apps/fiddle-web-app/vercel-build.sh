@@ -73,7 +73,7 @@ echo "pnpm version: $(pnpm --version)"
 
 # Install required Rust tools
 echo "Installing Rust tools..."
-cargo install wasm-pack --version 0.13.1 || true
+cargo install wasm-pack --version 0.14.0 || true
 cargo install cross || true
 
 # Add wasm target
