@@ -916,6 +916,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                                 Rvalue::Use(Operand::Constant(Constant::Function(fqn.clone()))),
                             );
                         }
+                        ResolvedValue::TypeMethod {
+                            receiver_type,
+                            method_name,
+                        } => {
+                            let qn = QualifiedName::builtin_method(
+                                receiver_type.clone(),
+                                method_name.clone(),
+                            );
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::Function(qn))),
+                            );
+                        }
                         _ => {
                             panic!(
                                 "Unexpected resolution for method reference {field}: {resolution:?}"

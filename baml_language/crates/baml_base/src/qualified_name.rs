@@ -266,15 +266,14 @@ impl QualifiedName {
         let path = &segments[..segments.len() - 1];
 
         if path[0].as_str() == "baml" {
+            // baml.* paths are builtins with the "baml" prefix stripped
             Self::builtin(path[1..].to_vec(), name)
+        } else if is_non_baml_builtin_path(path) {
+            // Non-baml builtins like "env.get" keep their prefix in the path
+            Self::builtin(path.to_vec(), name)
         } else {
-            // Treat as user module or non-baml builtin
-            Self {
-                namespace: Namespace::Builtin {
-                    path: path.to_vec(),
-                },
-                name,
-            }
+            // User module path
+            Self::user_module(path.to_vec(), name)
         }
     }
 
