@@ -1,8 +1,8 @@
 [toolchain]
 # If you set this > 1.81 you may run into this webassembly issue:
 # https://github.com/rustwasm/rust-webpack-template/issues/191
-# If you really want > 1.81 you can try using wasm-bindgen-cli 2.92.2 instead
-# Previously pinned to 1.81.0 but reverted to use stable with wasm-bindgen-cli 2.92.2
+# If you really want > 1.81 you can try using wasm-bindgen-cli 0.2.105 instead
+# Previously pinned to 1.81.0 but reverted to use stable with wasm-bindgen-cli 0.2.105
 channel = "stable"
 components = []
 targets = [ "wasm32-unknown-unknown" ]
