@@ -13,7 +13,7 @@ inputs:
   wasm-pack-version:
     description: "wasm-pack version to install (only used when enable-wasm is true)"
     required: false
-    default: "0.13.1"
+    default: "0.14.0"
   enable-cross:
     description: "Enable cross-rs for cross-compilation"
     required: false
