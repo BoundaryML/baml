@@ -1,0 +1,98 @@
+---
+title: Zed
+slug: guide/installation-editors/zed
+---
+
+The BAML extension for [Zed](https://zed.dev) provides syntax highlighting and language server support for editing BAML files.
+
+## Installation
+
+1. Open Zed
+2. Open the Extensions panel: **Zed** → **Extensions** (or press `Cmd+Shift+X` on macOS)
+3. Search for "**baml**"
+4. Click **Install**
+
+The extension will automatically download and configure the BAML language server.
+
+## Features
+
+| Feature | Supported |
+|---------|-----------|
+| Syntax highlighting for BAML files | ✅ |
+| Language Server Protocol (LSP) integration | ✅ |
+| Jump to definition | ✅ |
+| Error diagnostics | ✅ |
+| LLM playground (via browser) | ✅ |
+
+## Opening the BAML Playground
+
+The BAML Playground runs as a local server and can be accessed via your browser:
+
+1. Open the Command Palette with `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Linux)
+2. Search for "**open language server logs**" and select **dev: open language server logs**
+3. In the LSP Logs panel, search for "**Starting Playground server on**"
+4. Copy the URL shown (e.g., `127.0.0.1:3704`)
+5. Open that URL in your browser to access the playground
+
+<Tip>
+The playground server starts automatically when the BAML language server initializes. If you don't see the message, try restarting the language server.
+</Tip>
+
+<Note>
+**Why can't I just click "Open Playground" like in VS Code?**
+
+In VS Code, Cursor, and JetBrains, you'll see an "Open Playground" button above each BAML function. Unfortunately, Zed doesn't yet support the LSP features needed to make this work:
+
+- [Code Lens](https://github.com/zed-industries/zed/issues/11565) — the inline buttons above functions
+- [workspace/executeCommand](https://github.com/zed-industries/zed/issues/13756) — executing editor commands from LSP
+
+Once Zed adds these features, the playground will be accessible with a single click. Until then, the LSP logs workaround above is the way to go. You can follow the linked GitHub issues to track progress.
+</Note>
+
+## How It Works
+
+The Zed extension includes:
+
+- **Tree-sitter grammar**: Provides accurate syntax highlighting based on the [BAML tree-sitter grammar](https://github.com/BoundaryML/tree-sitter-baml)
+- **Language Server**: Connects to the BAML Language Server for features like jump-to-definition, diagnostics, and more
+
+## Setting Environment Variables
+
+You can set environment variables (like API keys) in the BAML Playground via your browser. Click on the **Settings** button in the playground to configure them.
+
+Alternatively, you can set environment variables in your shell or through a `.env` file in your project root. The BAML language server will pick up variables from your environment.
+
+<Info>
+Environment variables set in the playground are stored locally and persist between sessions.
+</Info>
+
+## Troubleshooting
+
+### Extension not appearing
+
+Make sure you're running a recent version of Zed. The BAML extension requires Zed's extension system.
+
+### Language Server not starting
+
+If the language server fails to start:
+
+1. Check the Zed logs for errors
+2. Make sure you have an internet connection (the extension downloads the language server on first use)
+3. Try reinstalling the extension
+
+### Syntax highlighting not working
+
+Ensure your files have the `.baml` extension. The extension only activates for files with this extension.
+
+## Source Code
+
+The Zed extension is developed as part of the BAML monorepo:
+
+- Extension source: [github.com/BoundaryML/baml](https://github.com/BoundaryML/baml/tree/canary/engine/zed)
+- Tree-sitter grammar: [github.com/BoundaryML/tree-sitter-baml](https://github.com/BoundaryML/tree-sitter-baml)
+
+## Feedback
+
+If you encounter any issues or have feature requests, please:
+- Open an issue on [GitHub](https://github.com/BoundaryML/baml)
+- Join our [Discord](https://discord.gg/BTNBeXGuaS) for support

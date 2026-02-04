@@ -1,0 +1,84 @@
+---
+title: JetBrains IDEs
+slug: guide/installation-editors/jetbrains
+---
+
+The BAML plugin for JetBrains IDEs provides full support for editing and testing BAML files in IntelliJ IDEA, PyCharm, WebStorm, and other JetBrains IDEs.
+
+## Installation
+
+1. Open your JetBrains IDE (IntelliJ IDEA, PyCharm, WebStorm, etc.)
+2. Go to **Settings/Preferences** → **Plugins**
+3. Click on the **Marketplace** tab
+4. Search for "**BAML**" or "**BAML Playground**"
+5. Click **Install** and restart your IDE
+
+Alternatively, you can install directly from the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/27455-baml-playground).
+
+## Features
+
+| Feature | Supported |
+|---------|-----------|
+| Syntax highlighting for BAML files | ✅ |
+| Language Server Protocol (LSP) integration | ✅ |
+| Jump to definition | ✅ |
+| LLM playground for testing BAML functions | ✅ |
+| Auto-download of BAML CLI | ✅ |
+
+## Opening the BAML Playground
+
+Once you open a `.baml` file, you can access the BAML Playground in several ways:
+
+1. **Tool Window**: Look for the "BAML Playground (beta)" tool window in the sidebar
+2. **Action**: Use **Find Action** (`Cmd+Shift+A` on macOS or `Ctrl+Shift+A` on Windows/Linux) and search for "Open BAML Playground"
+3. **Context Menu**: Right-click in a BAML file and select "Open BAML Playground"
+
+## Setting Environment Variables
+
+The playground allows you to set environment variables (like API keys) that persist between sessions. Click on the **Settings** button in the playground to configure them.
+
+<Info>
+Environment variables are stored locally in your IDE's storage. They are not sent across the network or saved to disk outside of the IDE.
+</Info>
+
+## Supported JetBrains IDEs
+
+The BAML plugin works with all JetBrains IDEs that support plugins, including:
+
+- IntelliJ IDEA (Community and Ultimate)
+- PyCharm (Community and Professional)
+- WebStorm
+- GoLand
+- PhpStorm
+- RubyMine
+- Rider
+- CLion
+- DataGrip
+
+## Troubleshooting
+
+### Plugin not finding BAML files
+
+Make sure your BAML files have the `.baml` extension and are located in a `baml_src` directory in your project.
+
+### Language Server not starting
+
+The plugin automatically downloads the BAML CLI/Language Server on first use. If you encounter issues:
+
+1. Check your internet connection
+2. Look for errors in **Help** → **Show Log in Explorer/Finder**
+3. Try restarting your IDE
+
+### Playground not loading
+
+The playground uses JCEF (Java Chromium Embedded Framework). If it fails to load:
+
+1. Make sure you're using a recent version of your JetBrains IDE
+2. Check that JCEF is enabled in your IDE settings
+3. Try invalidating caches: **File** → **Invalidate Caches / Restart**
+
+## Feedback
+
+If you encounter any issues or have feature requests, please:
+- Open an issue on [GitHub](https://github.com/BoundaryML/baml)
+- Join our [Discord](https://discord.gg/BTNBeXGuaS) for support
