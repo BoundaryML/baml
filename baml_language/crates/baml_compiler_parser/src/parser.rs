@@ -3937,13 +3937,19 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
     }
 
     while parser.current < parser.tokens.len() {
-        let token = &parser.tokens[parser.current];
-        let kind = token_kind_to_syntax_kind(token.kind);
-        parser.events.push(Event::Token {
-            kind,
-            text: token.text.clone(),
-        });
-        parser.current += 1;
+        if parser.at_line_comment_start() {
+            parser.consume_line_comment();
+        } else if parser.at_block_comment_start() {
+            parser.consume_block_comment();
+        } else {
+            let token = &parser.tokens[parser.current];
+            let kind = token_kind_to_syntax_kind(token.kind);
+            parser.events.push(Event::Token {
+                kind,
+                text: token.text.clone(),
+            });
+            parser.current += 1;
+        }
     }
 
     parser.finish_node();
