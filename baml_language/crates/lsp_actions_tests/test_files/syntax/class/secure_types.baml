@@ -32,8 +32,8 @@ class ComplexTypes {
 //    ╭─[ class_secure_types.baml:4:65 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                                                 ┬
+//    │                                                                 ┬  
 //    │                                                                 ╰── Path identifiers (e.g., 'a.b') are not supported in type expressions
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯

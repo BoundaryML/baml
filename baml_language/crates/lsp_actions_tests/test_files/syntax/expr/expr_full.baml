@@ -75,53 +75,53 @@ test TestMakePoem() {
 //     ╭─[ expr_expr_full.baml:44:18 ]
 //     │
 //  44 │ test TestPipeline() {
-//     │                  ─┬
+//     │                  ─┬  
 //     │                   ╰── remove parentheses from test name: `test TestPipeline`
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: remove parentheses from test name: `test TestPyramid`
 //     ╭─[ expr_expr_full.baml:49:17 ]
 //     │
 //  49 │ test TestPyramid() {
-//     │                 ─┬
+//     │                 ─┬  
 //     │                  ╰── remove parentheses from test name: `test TestPyramid`
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: remove parentheses from test name: `test OuterPyramid`
 //     ╭─[ expr_expr_full.baml:54:18 ]
 //     │
 //  54 │ test OuterPyramid() {
-//     │                  ─┬
+//     │                  ─┬  
 //     │                   ╰── remove parentheses from test name: `test OuterPyramid`
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: remove parentheses from test name: `test TestMakePoem`
 //     ╭─[ expr_expr_full.baml:67:18 ]
 //     │
 //  67 │ test TestMakePoem() {
-//     │                  ─┬
+//     │                  ─┬  
 //     │                   ╰── remove parentheses from test name: `test TestMakePoem`
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Unknown variable `poem`
 //     ╭─[ expr_expr_full.baml:41:16 ]
 //     │
 //  41 │   CombinePoems(poem, another)
-//     │                ──┬─
+//     │                ──┬─  
 //     │                  ╰─── Unknown variable `poem`
-//     │
+//     │ 
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Unknown variable `another`
 //     ╭─[ expr_expr_full.baml:41:22 ]
 //     │
 //  41 │   CombinePoems(poem, another)
-//     │                      ───┬───
+//     │                      ───┬───  
 //     │                         ╰───── Unknown variable `another`
-//     │
+//     │ 
 //     │ Note: Error code: E0003
 // ────╯

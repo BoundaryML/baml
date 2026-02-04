@@ -121,35 +121,35 @@ function Foo6(arg: int) -> float {
 //    ╭─[ functions_v2_invalid2.baml:3:1 ]
 //    │
 //  3 │ }
-//    │ ┬
+//    │ ┬  
 //    │ ╰── Expected LLM function missing 'prompt' field, found '}'
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected LLM function missing 'client' field, found '}'
 //    ╭─[ functions_v2_invalid2.baml:7:1 ]
 //    │
 //  7 │ }
-//    │ ┬
+//    │ ┬  
 //    │ ╰── Expected LLM function missing 'client' field, found '}'
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected prompt string, found '}'
 //     ╭─[ functions_v2_invalid2.baml:18:1 ]
 //     │
 //  18 │ }
-//     │ ┬
+//     │ ┬  
 //     │ ╰── Expected prompt string, found '}'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected prompt string, found '}'
 //     ╭─[ functions_v2_invalid2.baml:30:1 ]
 //     │
 //  30 │ }
-//     │ ┬
+//     │ ┬  
 //     │ ╰── Expected prompt string, found '}'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯

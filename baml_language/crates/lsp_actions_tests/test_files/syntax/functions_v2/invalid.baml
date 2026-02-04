@@ -35,26 +35,26 @@ function FooBar(arg) -> bar {
 //    ╭─[ functions_v2_invalid.baml:1:19 ]
 //    │
 //  1 │ function Foo() -> {
-//    │                   ┬
+//    │                   ┬  
 //    │                   ╰── Expected type, found '{'
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Expected type annotation, found ')'
 //    ╭─[ functions_v2_invalid.baml:6:20 ]
 //    │
 //  6 │ function FooBar(arg) -> bar {
-//    │                    ┬
+//    │                    ┬  
 //    │                    ╰── Expected type annotation, found ')'
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Unknown type `bar`
 //    ╭─[ functions_v2_invalid.baml:1:1 ]
 //    │
 //  1 │ function Foo() -> {
-//    │ │
+//    │ │ 
 //    │ ╰─ Unknown type `bar`
-//    │
+//    │ 
 //    │ Note: Error code: E0002
 // ───╯

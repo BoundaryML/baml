@@ -18,18 +18,18 @@ class Test {
 //     ╭─[ type_position.baml:11:5 ]
 //     │
 //  11 │     field :
-//     │     ──┬──
+//     │     ──┬──  
 //     │       ╰──── field 'field' is missing a type annotation
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected Unexpected token in class body, found ':'
 //     ╭─[ type_position.baml:11:11 ]
 //     │
 //  11 │     field :
-//     │           ┬
+//     │           ┬  
 //     │           ╰── Expected Unexpected token in class body, found ':'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 //

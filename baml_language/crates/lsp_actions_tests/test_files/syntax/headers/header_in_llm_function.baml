@@ -29,8 +29,8 @@ function FetchDatax(user_id: string) -> Hi {
 //     ╭─[ headers_header_in_llm_function.baml:13:5 ]
 //     │
 //  13 │     //# collect source material
-//     │     ─────────────┬─────────────
+//     │     ─────────────┬─────────────  
 //     │                  ╰─────────────── Header comments (//#) are not allowed inside LLM functions
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯

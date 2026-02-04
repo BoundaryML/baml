@@ -21,8 +21,8 @@ function BasicIf() -> string {
 //     ╭─[ headers_basic_if.baml:14:5 ]
 //     │
 //  14 │     z
-//     │     ┬
+//     │     ┬  
 //     │     ╰── Expected `string`, found `int`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯

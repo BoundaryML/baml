@@ -49,44 +49,44 @@ function ClassAssignments() -> int {
 //     ╭─[ invalid_assignment_classes.baml:25:7 ]
 //     │
 //  25 │     p2 = Animal { species: "Bird", legs: 2 };
-//     │          ─────────────────┬─────────────────
+//     │          ─────────────────┬─────────────────  
 //     │                           ╰─────────────────── Expected `Person`, found `Animal`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Animal`, found `Person`
 //     ╭─[ invalid_assignment_classes.baml:29:7 ]
 //     │
 //  29 │     a2 = Person { name: "Dave", age: 40 };
-//     │          ────────────────┬───────────────
+//     │          ────────────────┬───────────────  
 //     │                          ╰───────────────── Expected `Animal`, found `Person`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Person`, found `string`
 //     ╭─[ invalid_assignment_classes.baml:33:6 ]
 //     │
 //  33 │     p3 = "not a person";
-//     │         ───────┬───────
+//     │         ───────┬───────  
 //     │                ╰───────── Expected `Person`, found `string`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Person`, found `int`
 //     ╭─[ invalid_assignment_classes.baml:37:7 ]
 //     │
 //  37 │     p4 = 42;
-//     │          ─┬
+//     │          ─┬  
 //     │           ╰── Expected `Person`, found `int`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `int`, found `Person`
 //     ╭─[ invalid_assignment_classes.baml:41:6 ]
 //     │
 //  41 │     n = Person { name: "Grace", age: 32 };
-//     │         ────────────────┬────────────────
+//     │         ────────────────┬────────────────  
 //     │                         ╰────────────────── Expected `int`, found `Person`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯

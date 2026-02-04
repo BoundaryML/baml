@@ -106,176 +106,176 @@ test IncompleteSyntax {
 //     ╭─[ misc_dynamic_types_parser_errors.baml:40:13 ]
 //     │
 //  40 │     dynamic Bar {
-//     │             ─┬─
+//     │             ─┬─  
 //     │              ╰─── Expected Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute., found identifier
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:40:13 ]
 //     │
 //  40 │     dynamic Bar {
-//     │             ─┬─
+//     │             ─┬─  
 //     │              ╰─── Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected class, enum, dynamic class, dynamic enum, or type alias, found '{'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:40:17 ]
 //     │
 //  40 │     dynamic Bar {
-//     │                 ┬
+//     │                 ┬  
 //     │                 ╰── Expected class, enum, dynamic class, dynamic enum, or type alias, found '{'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:41:7 ]
 //     │
 //  41 │       bar int
-//     │       ─┬─
+//     │       ─┬─  
 //     │        ╰─── Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:41:11 ]
 //     │
 //  41 │       bar int
-//     │           ─┬─
+//     │           ─┬─  
 //     │            ╰─── Expected class, enum, dynamic class, dynamic enum, or type alias, found identifier
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:44:3 ]
 //     │
 //  44 │   args {
-//     │   ──┬─
+//     │   ──┬─  
 //     │     ╰─── Expected top-level declaration, found identifier
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '{'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:44:8 ]
 //     │
 //  44 │   args {
-//     │        ┬
+//     │        ┬  
 //     │        ╰── Expected top-level declaration, found '{'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:45:5 ]
 //     │
 //  45 │     from_text "Test"
-//     │     ────┬────
+//     │     ────┬────  
 //     │         ╰────── Expected top-level declaration, found identifier
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:45:15 ]
 //     │
 //  45 │     from_text "Test"
-//     │               ┬
+//     │               ┬  
 //     │               ╰── Expected top-level declaration, found '"'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:45:16 ]
 //     │
 //  45 │     from_text "Test"
-//     │                ──┬─
+//     │                ──┬─  
 //     │                  ╰─── Expected top-level declaration, found identifier
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '"'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:45:20 ]
 //     │
 //  45 │     from_text "Test"
-//     │                    ┬
+//     │                    ┬  
 //     │                    ╰── Expected top-level declaration, found '"'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:46:3 ]
 //     │
 //  46 │   }
-//     │   ┬
+//     │   ┬  
 //     │   ╰── Expected top-level declaration, found '}'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected top-level declaration, found '}'
 //     ╭─[ misc_dynamic_types_parser_errors.baml:47:1 ]
 //     │
 //  47 │ }
-//     │ ┬
+//     │ ┬  
 //     │ ╰── Expected top-level declaration, found '}'
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected type alias name, found dynamic
 //     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
-//     │     ───┬───
+//     │     ───┬───  
 //     │        ╰───── Expected type alias name, found dynamic
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected '=', found dynamic
 //     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
-//     │     ───┬───
+//     │     ───┬───  
 //     │        ╰───── Expected '=', found dynamic
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Expected type, found dynamic
 //     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
-//     │     ───┬───
+//     │     ───┬───  
 //     │        ╰───── Expected type, found dynamic
-//     │
+//     │ 
 //     │ Note: Error code: E0010
 // ────╯
 // Error: Only tests may have a type_builder block.
 //    ╭─[ misc_dynamic_types_parser_errors.baml:4:3 ]
 //    │
 //  4 │   type_builder {
-//    │   ──────┬─────
+//    │   ──────┬─────  
 //    │         ╰─────── type_builder not allowed in function
-//    │
+//    │ 
 //    │ Note: Error code: E0040
 // ───╯
 // Error: Definition of multiple `type_builder` blocks in the same parent block
 //     ╭─[ misc_dynamic_types_parser_errors.baml:24:3 ]
 //     │
 //  24 │   type_builder {
-//     │   ──────┬─────
+//     │   ──────┬─────  
 //     │         ╰─────── duplicate type_builder block
 //     │
 //     ├─[ misc_dynamic_types_parser_errors.baml:24:3 ]
 //     │
 //  16 │   type_builder {
-//     │   ──────┬─────
+//     │   ──────┬─────  
 //     │         ╰─────── first type_builder block here
-//     │
+//     │ 
 //     │ Note: Error code: E0041
 // ────╯
 // Error: Missing `args` property
 //     ╭─[ misc_dynamic_types_parser_errors.baml:37:6 ]
 //     │
 //  37 │ test IncompleteDynamicDef {
-//     │      ──────────┬─────────
+//     │      ──────────┬─────────  
 //     │                ╰─────────── Missing `args` property
-//     │
+//     │ 
 //     │ Note: Error code: E0035
 // ────╯

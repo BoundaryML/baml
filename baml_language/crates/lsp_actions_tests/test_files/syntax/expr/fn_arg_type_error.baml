@@ -16,8 +16,8 @@ function TestLiteralMismatch() -> int {
 //    ╭─[ expr_fn_arg_type_error.baml:9:18 ]
 //    │
 //  9 │   let y = Takes4(3);
-//    │                  ┬
+//    │                  ┬  
 //    │                  ╰── Expected `4`, found `3`
-//    │
+//    │ 
 //    │ Note: Error code: E0001
 // ───╯

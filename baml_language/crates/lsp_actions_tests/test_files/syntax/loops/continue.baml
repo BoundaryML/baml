@@ -48,10 +48,10 @@ function ContinueNested() -> int {
 //     ╭─[ loops_continue.baml:30:33 ]
 //     │
 //  30 │ ╭─▶ function ContinueNested() -> int {
-//     ┆ ┆
+//     ┆ ┆   
 //  36 │ ├─▶ }
-//     │ │
+//     │ │       
 //     │ ╰─────── Missing return expression. Function expects `int` but body has no final expression.
-//     │
+//     │     
 //     │     Note: Error code: E0029
 // ────╯

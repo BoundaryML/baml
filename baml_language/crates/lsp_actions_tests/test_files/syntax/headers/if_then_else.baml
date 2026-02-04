@@ -53,8 +53,8 @@ function ComplexHeaderTest(x: int) -> int {
 //     ╭─[ headers_if_then_else.baml:17:5 ]
 //     │
 //  17 │     y
-//     │     ┬
+//     │     ┬  
 //     │     ╰── Unknown variable `y`
-//     │
+//     │ 
 //     │ Note: Error code: E0003
 // ────╯

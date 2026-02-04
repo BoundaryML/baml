@@ -45,26 +45,26 @@ function GetTodoMissingTypeArg() -> Todo {
 //     │
 //  15 │ ╭─▶ function GetTodoMissingTypeArg() -> Todo {
 //  16 │ ├─▶   baml.fetch_as(baml.HttpRequest {
-//     │ │
+//     │ │                                        
 //     │ ╰──────────────────────────────────────── Unknown variable `baml`
-//     │
+//     │     
 //     │     Note: Error code: E0003
 // ────╯
 // Error: Unknown variable `baml`
 //     ╭─[ expr_builtin.baml:17:12 ]
 //     │
 //  17 │     method: baml.HttpMethod.Get,
-//     │            ──────────┬─────────
+//     │            ──────────┬─────────  
 //     │                      ╰─────────── Unknown variable `baml`
-//     │
+//     │ 
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Unknown variable `baml`
 //     ╭─[ expr_builtin.baml:10:12 ]
 //     │
 //  10 │     method: baml.HttpMethod.Get,
-//     │            ──────────┬─────────
+//     │            ──────────┬─────────  
 //     │                      ╰─────────── Unknown variable `baml`
-//     │
+//     │ 
 //     │ Note: Error code: E0003
 // ────╯

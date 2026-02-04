@@ -17,8 +17,8 @@ class InterfaceThree {
 //    ╭─[ class_incomplete_class.baml:3:3 ]
 //    │
 //  3 │   foo
-//    │   ─┬─
+//    │   ─┬─  
 //    │    ╰─── field 'foo' is missing a type annotation
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯

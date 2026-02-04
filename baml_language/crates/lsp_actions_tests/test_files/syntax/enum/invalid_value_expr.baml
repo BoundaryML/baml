@@ -16,8 +16,8 @@ enum Test {
 //    ╭─[ enum_invalid_value_expr.baml:2:7 ]
 //    │
 //  2 │     A int | string
-//    │       ──────┬─────
+//    │       ──────┬─────  
 //    │             ╰─────── Enum variants cannot have type annotations
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯

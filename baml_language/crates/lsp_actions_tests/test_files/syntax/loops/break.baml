@@ -50,8 +50,8 @@ function Nested() -> int {
 //    ╭─[ loops_break.baml:6:14 ]
 //    │
 //  6 │     res.push("hi");
-//    │              ──┬─
+//    │              ──┬─  
 //    │                ╰─── Expected `int`, found `string`
-//    │
+//    │ 
 //    │ Note: Error code: E0001
 // ───╯

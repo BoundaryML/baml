@@ -49,44 +49,44 @@ function ClassArrayAssignments() -> int {
 //     ╭─[ invalid_assignment_class_arrays.baml:25:6 ]
 //     │
 //  25 │     p1 = [Animal { species: "Bird", legs: 2 }];
-//     │         ───────────────────┬──────────────────
+//     │         ───────────────────┬──────────────────  
 //     │                            ╰──────────────────── Expected `Person[]`, found `Animal[]`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Animal[]`, found `Person[]`
 //     ╭─[ invalid_assignment_class_arrays.baml:29:6 ]
 //     │
 //  29 │     a1 = [Person { name: "D", age: 4 }];
-//     │         ───────────────┬───────────────
+//     │         ───────────────┬───────────────  
 //     │                        ╰───────────────── Expected `Animal[]`, found `Person[]`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Person[]`, found `Person`
 //     ╭─[ invalid_assignment_class_arrays.baml:33:7 ]
 //     │
 //  33 │     p2 = Person { name: "F", age: 6 };
-//     │          ──────────────┬─────────────
+//     │          ──────────────┬─────────────  
 //     │                        ╰─────────────── Expected `Person[]`, found `Person`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Person`, found `Person[]`
 //     ╭─[ invalid_assignment_class_arrays.baml:37:6 ]
 //     │
 //  37 │     p3 = [Person { name: "H", age: 8 }];
-//     │         ───────────────┬───────────────
+//     │         ───────────────┬───────────────  
 //     │                        ╰───────────────── Expected `Person`, found `Person[]`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `int[]`, found `Person[]`
 //     ╭─[ invalid_assignment_class_arrays.baml:41:8 ]
 //     │
 //  41 │     nums = [Person { name: "I", age: 9 }];
-//     │           ───────────────┬───────────────
+//     │           ───────────────┬───────────────  
 //     │                          ╰───────────────── Expected `int[]`, found `Person[]`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯

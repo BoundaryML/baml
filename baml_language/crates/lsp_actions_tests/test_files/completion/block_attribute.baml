@@ -10,8 +10,8 @@ class Person {
 //    ╭─[ block_attribute.baml:4:1 ]
 //    │
 //  4 │ }
-//    │ ┬
+//    │ ┬  
 //    │ ╰── Expected attribute name, found '}'
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯

@@ -19,8 +19,8 @@ client<llm> MyClient {
 //    ╭─[ client_remap_role_invalid_type.baml:5:16 ]
 //    │
 //  5 │     remap_roles "not_a_map"
-//    │                ──────┬─────
+//    │                ──────┬─────  
 //    │                      ╰─────── remap_roles must be a map. Got: string
-//    │
+//    │ 
 //    │ Note: Error code: E0044
 // ───╯

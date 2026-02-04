@@ -70,8 +70,8 @@ function ForLoopWithHeaders() -> int {
 //     ╭─[ headers_complex_headers_test.baml:43:5 ]
 //     │
 //  43 │     final_result
-//     │     ──────┬─────
+//     │     ──────┬─────  
 //     │           ╰─────── Expected `string`, found `int`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯

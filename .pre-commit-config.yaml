@@ -23,7 +23,7 @@ repos:
         fail_fast: true
         files: ^baml_language/
         # Exclude: snapshots, IDE test files, and special test files (class.rs, enum.rs)
-        exclude: (baml_tests/projects/|baml_ide_tests/test_files/|\.snap$|class\.rs$|enum\.rs$)
+        exclude: (baml_tests/projects/|lsp_actions_tests/test_files/|\.snap$|class\.rs$|enum\.rs$)
 
       - id: check-merge-conflict
         fail_fast: true

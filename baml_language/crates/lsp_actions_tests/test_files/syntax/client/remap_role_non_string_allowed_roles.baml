@@ -22,8 +22,8 @@ client<llm> MyClient {
 //    ╭─[ client_remap_role_non_string_allowed_roles.baml:5:27 ]
 //    │
 //  5 │     allowed_roles ["user", 123, "assistant"]
-//    │                           ──┬─
+//    │                           ──┬─  
 //    │                             ╰─── allowed_roles values must be quoted strings
-//    │
+//    │ 
 //    │ Note: Error code: E0044
 // ───╯

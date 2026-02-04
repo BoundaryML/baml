@@ -44,9 +44,9 @@ function BadFunction2(i: string) -> bool {
 //    │
 //  2 │ ╭─▶   watch let x = 10;
 //  3 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
-//    │ │
+//    │ │                                                                  
 //    │ ╰────────────────────────────────────────────────────────────────── Expected `int`, found `int.$watch`
-//    │
+//    │     
 //    │     Note: Error code: E0001
 // ───╯
 // Error: Expected `int`, found `int.$watch`
@@ -54,9 +54,9 @@ function BadFunction2(i: string) -> bool {
 //    │
 //  3 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
 //  4 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
-//    │ │
+//    │ │                                                                  
 //    │ ╰────────────────────────────────────────────────────────────────── Expected `int`, found `int.$watch`
-//    │
+//    │     
 //    │     Note: Error code: E0001
 // ───╯
 // Error: Expected `int`, found `int.$watch`
@@ -64,8 +64,8 @@ function BadFunction2(i: string) -> bool {
 //    │
 //  4 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
 //  5 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
-//    │ │
+//    │ │                                                                  
 //    │ ╰────────────────────────────────────────────────────────────────── Expected `int`, found `int.$watch`
-//    │
+//    │     
 //    │     Note: Error code: E0001
 // ───╯

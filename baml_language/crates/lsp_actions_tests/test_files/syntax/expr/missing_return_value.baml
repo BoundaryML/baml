@@ -17,8 +17,8 @@ function NoRet(x: int) {
 //    ╭─[ expr_missing_return_value.baml:1:24 ]
 //    │
 //  1 │ function NoRet(x: int) {
-//    │                        ┬
+//    │                        ┬  
 //    │                        ╰── Expected return type (->), found '{'
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯

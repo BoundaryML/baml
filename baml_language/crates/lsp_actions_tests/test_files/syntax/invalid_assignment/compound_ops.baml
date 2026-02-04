@@ -39,44 +39,44 @@ function CompoundAssignments() -> int {
 //     ╭─[ invalid_assignment_compound_ops.baml:15:6 ]
 //     │
 //  15 │     c += "five";
-//     │         ───┬───
+//     │         ───┬───  
 //     │            ╰───── Expected `int`, found `string`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `string`, found `int`
 //     ╭─[ invalid_assignment_compound_ops.baml:19:7 ]
 //     │
 //  19 │     d += 100;
-//     │          ─┬─
+//     │          ─┬─  
 //     │           ╰─── Expected `string`, found `int`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `int`, found `bool`
 //     ╭─[ invalid_assignment_compound_ops.baml:23:7 ]
 //     │
 //  23 │     e += true;
-//     │          ──┬─
+//     │          ──┬─  
 //     │            ╰─── Expected `int`, found `bool`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `bool`, found `int`
 //     ╭─[ invalid_assignment_compound_ops.baml:27:7 ]
 //     │
 //  27 │     f += 1;
-//     │          ┬
+//     │          ┬  
 //     │          ╰── Expected `bool`, found `int`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `float`, found `string`
 //     ╭─[ invalid_assignment_compound_ops.baml:31:6 ]
 //     │
 //  31 │     g += "add";
-//     │         ───┬──
+//     │         ───┬──  
 //     │            ╰──── Expected `float`, found `string`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯

@@ -18,14 +18,14 @@ enum Test {
 //    ╭─[ enum_duplicate_value.baml:4:5 ]
 //    │
 //  4 │     ONE
-//    │     ─┬─
+//    │     ─┬─  
 //    │      ╰─── duplicate definition
 //    │
 //    ├─[ enum_duplicate_value.baml:4:5 ]
 //    │
 //  2 │     ONE
-//    │     ─┬─
+//    │     ─┬─  
 //    │      ╰─── first definition here
-//    │
+//    │ 
 //    │ Note: Error code: E0013
 // ───╯

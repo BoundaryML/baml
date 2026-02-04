@@ -71,53 +71,53 @@ function NominalTypingAssignments() -> int {
 //     ╭─[ invalid_assignment_nominal_typing.baml:43:7 ]
 //     │
 //  43 │     p2 = Human { name: "F", age: 6 };
-//     │          ─────────────┬─────────────
+//     │          ─────────────┬─────────────  
 //     │                       ╰─────────────── Expected `Person`, found `Human`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Human`, found `Person`
 //     ╭─[ invalid_assignment_nominal_typing.baml:47:7 ]
 //     │
 //  47 │     h2 = Person { name: "H", age: 8 };
-//     │          ──────────────┬─────────────
+//     │          ──────────────┬─────────────  
 //     │                        ╰─────────────── Expected `Human`, found `Person`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Animal`, found `Creature`
 //     ╭─[ invalid_assignment_nominal_typing.baml:51:7 ]
 //     │
 //  51 │     a2 = Creature { species: "Lizard", legs: 4 };
-//     │          ───────────────────┬───────────────────
+//     │          ───────────────────┬───────────────────  
 //     │                             ╰───────────────────── Expected `Animal`, found `Creature`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Creature`, found `Animal`
 //     ╭─[ invalid_assignment_nominal_typing.baml:55:7 ]
 //     │
 //  55 │     c2 = Animal { species: "Spider", legs: 8 };
-//     │          ──────────────────┬──────────────────
+//     │          ──────────────────┬──────────────────  
 //     │                            ╰──────────────────── Expected `Creature`, found `Animal`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Person[]`, found `Human[]`
 //     ╭─[ invalid_assignment_nominal_typing.baml:59:10 ]
 //     │
 //  59 │     people = [Human { name: "J", age: 10 }];
-//     │             ───────────────┬───────────────
+//     │             ───────────────┬───────────────  
 //     │                            ╰───────────────── Expected `Person[]`, found `Human[]`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Human[]`, found `Person[]`
 //     ╭─[ invalid_assignment_nominal_typing.baml:63:10 ]
 //     │
 //  63 │     humans = [Person { name: "L", age: 12 }];
-//     │             ────────────────┬───────────────
+//     │             ────────────────┬───────────────  
 //     │                             ╰───────────────── Expected `Human[]`, found `Person[]`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯

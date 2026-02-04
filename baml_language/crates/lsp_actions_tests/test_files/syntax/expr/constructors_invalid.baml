@@ -75,26 +75,26 @@ function Foo() -> Bar {
 //     ╭─[ expr_constructors_invalid.baml:11:21 ]
 //     │
 //  11 │     query_params: { a 10 },
-//     │                     ┬
+//     │                     ┬  
 //     │                     ╰── Unknown variable `a`
-//     │
+//     │ 
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Unknown variable `Authorization`
 //     ╭─[ expr_constructors_invalid.baml:15:16 ]
 //     │
 //  15 │     headers: { Authorization "Bearer mytoken" },
-//     │                ──────┬──────
+//     │                ──────┬──────  
 //     │                      ╰──────── Unknown variable `Authorization`
-//     │
+//     │ 
 //     │ Note: Error code: E0003
 // ────╯
 // Error: Unknown variable `foo`
 //     ╭─[ expr_constructors_invalid.baml:16:21 ]
 //     │
 //  16 │     query_params: { foo "bar" },
-//     │                     ─┬─
+//     │                     ─┬─  
 //     │                      ╰─── Unknown variable `foo`
-//     │
+//     │ 
 //     │ Note: Error code: E0003
 // ────╯

@@ -64,30 +64,30 @@ function SumUnknownType(xs: int, b: string) -> int {
 //     ╭─[ loops_for.baml:16:12 ]
 //     │
 //  16 │        result = x;
-//     │                 ┬
+//     │                 ┬  
 //     │                 ╰── Expected `int`, found `string`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Type `int` has no field `length`
 //     ╭─[ loops_for.baml:28:2 ]
 //     │
 //  28 │ ╭─▶     for (let x in xs) {
-//     ┆ ┆
+//     ┆ ┆   
 //  35 │ ├─▶     }
-//     │ │
+//     │ │           
 //     │ ╰─────────── Type `int` has no field `length`
-//     │
+//     │     
 //     │     Note: Error code: E0007
 // ────╯
 // Error: Type `int` is not indexable
 //     ╭─[ loops_for.baml:28:2 ]
 //     │
 //  28 │ ╭─▶     for (let x in xs) {
-//     ┆ ┆
+//     ┆ ┆   
 //  35 │ ├─▶     }
-//     │ │
+//     │ │           
 //     │ ╰─────────── Type `int` is not indexable
-//     │
+//     │     
 //     │     Note: Error code: E0008
 // ────╯

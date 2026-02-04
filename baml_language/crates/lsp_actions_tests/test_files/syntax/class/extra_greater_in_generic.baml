@@ -14,8 +14,8 @@ class TestClass {
 //    ╭─[ class_extra_greater_in_generic.baml:6:28 ]
 //    │
 //  6 │   bad_field map<string, int>>
-//    │                            ─┬
+//    │                            ─┬  
 //    │                             ╰── Unmatched '>' in type expression (found 1 extra)
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯

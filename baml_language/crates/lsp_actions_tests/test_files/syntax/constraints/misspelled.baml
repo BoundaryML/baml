@@ -24,8 +24,8 @@ class Foo {
 //    ╭─[ constraints_misspelled.baml:3:12 ]
 //    │
 //  3 │   age int @check("this < 10", still_baby)
-//    │            ──┬──
+//    │            ──┬──  
 //    │              ╰──── missing Jinja expression {{ }}
-//    │
+//    │ 
 //    │ Note: Error code: E0032
 // ───╯

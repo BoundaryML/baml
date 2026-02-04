@@ -23,8 +23,8 @@ client<llm> MyClient {
 //    ╭─[ client_remap_role_invalid_role.baml:8:7 ]
 //    │
 //  8 │       system "instructions"
-//    │       ───┬──
+//    │       ───┬──  
 //    │          ╰──── unknown role "system" in remap_roles. Allowed roles: "user", "assistant"
-//    │
+//    │ 
 //    │ Note: Error code: E0044
 // ───╯

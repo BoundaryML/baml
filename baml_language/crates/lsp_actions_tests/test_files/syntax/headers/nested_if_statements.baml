@@ -64,8 +64,8 @@ function NestedIfStatements() -> string {
 //     ╭─[ headers_nested_if_statements.baml:58:5 ]
 //     │
 //  58 │     e
-//     │     ┬
+//     │     ┬  
 //     │     ╰── Expected `string`, found `int`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯

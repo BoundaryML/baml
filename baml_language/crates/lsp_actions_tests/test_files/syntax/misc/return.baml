@@ -50,8 +50,8 @@ function BadValueReturn(x: int) -> string {
 //     ╭─[ misc_return.baml:36:11 ]
 //     │
 //  36 │    return 1;
-//     │           ┬
+//     │           ┬  
 //     │           ╰── Expected `string`, found `int`
-//     │
+//     │ 
 //     │ Note: Error code: E0001
 // ────╯

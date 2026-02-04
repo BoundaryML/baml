@@ -17,8 +17,8 @@ function FooBar(arg: int) {
 //    ╭─[ functions_v2_invalid_no_return.baml:1:27 ]
 //    │
 //  1 │ function FooBar(arg: int) {
-//    │                           ┬
+//    │                           ┬  
 //    │                           ╰── Expected return type (->), found '{'
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯

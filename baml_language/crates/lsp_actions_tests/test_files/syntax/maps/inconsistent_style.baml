@@ -25,17 +25,17 @@ function InconsistentStyleUse() -> int{
 //    ╭─[ maps_inconsistent_style.baml:9:19 ]
 //    │
 //  9 │         some_ident: "yes"
-//    │                   ┬
+//    │                   ┬  
 //    │                   ╰── Expected expression, found ':'
-//    │
+//    │ 
 //    │ Note: Error code: E0010
 // ───╯
 // Error: Unknown variable `name`
 //    ╭─[ maps_inconsistent_style.baml:8:9 ]
 //    │
 //  8 │         name "Hello"
-//    │         ──┬─
+//    │         ──┬─  
 //    │           ╰─── Unknown variable `name`
-//    │
+//    │ 
 //    │ Note: Error code: E0003
 // ───╯

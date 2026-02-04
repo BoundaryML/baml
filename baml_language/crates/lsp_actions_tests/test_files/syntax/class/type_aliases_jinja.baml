@@ -68,8 +68,8 @@ function InvalidAlias(i: I) -> string {
 //     ╭─[ class_type_aliases_jinja.baml:26:6 ]
 //     │
 //  26 │ type I = J
-//     │      ┬
+//     │      ┬  
 //     │      ╰── These aliases form a dependency cycle: I -> J -> I
-//     │
+//     │ 
 //     │ Note: Error code: E0068
 // ────╯
