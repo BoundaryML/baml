@@ -29,7 +29,7 @@ inputs:
   prefix-key:
     description: "Cache key prefix for Rust cache"
     required: false
-    default: ""
+    default: "key-1"
   cache-on-failure:
     description: "Cache even if the workflow fails"
     required: false
@@ -77,7 +77,7 @@ runs:
 
     - name: Setup Rust toolchain
       # if: steps.check-rust.outputs.rust-installed != 'true'
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ inputs.toolchain }}
         targets: ${{ inputs.targets }}
