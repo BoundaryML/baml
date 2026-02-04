@@ -50,6 +50,7 @@ pub trait TestExecutor {
         output_format: &crate::cli::testing::OutputFormat,
         junit_path: Option<&String>,
         env_vars: &HashMap<String, String>,
+        cancel_notify: Option<Arc<tokio::sync::Notify>>,
     ) -> TestRunStatus;
 }
 
@@ -87,6 +88,9 @@ pub(super) trait RenderTestExecutionStatus {
         test_status_map: &TestExecutionStatusMap,
         selected_tests: &BTreeMap<(String, String), String>,
     );
+
+    /// Print a message that is visible even while progress bars are active.
+    fn print_message(&self, msg: &str);
 }
 
 struct AggregateRenderer {
@@ -128,6 +132,12 @@ impl RenderTestExecutionStatus for AggregateRenderer {
     ) {
         for renderer in self.renderers.iter() {
             renderer.render_final(test_status_map, selected_tests);
+        }
+    }
+
+    fn print_message(&self, msg: &str) {
+        for renderer in self.renderers.iter() {
+            renderer.print_message(msg);
         }
     }
 }
@@ -207,6 +217,7 @@ impl TestExecutor for BamlRuntime {
         output_format: &crate::cli::testing::OutputFormat,
         junit_path: Option<&String>,
         env_vars: &HashMap<String, String>,
+        cancel_notify: Option<Arc<tokio::sync::Notify>>,
     ) -> TestRunStatus {
         let renderer = AggregateRenderer::new(output_format, junit_path);
         let selected_tests: BTreeMap<(String, String), (String, FunctionType)> = {
@@ -394,10 +405,22 @@ impl TestExecutor for BamlRuntime {
         };
 
         let ctrl_c_future = async {
-            tokio::signal::ctrl_c()
-                .await
-                .expect("Failed to listen for Ctrl+C");
-            println!("\nCtrl+C received. Cancelling remaining tests...");
+            match &cancel_notify {
+                Some(notify) => {
+                    // Use the ctrlc-crate-based notification passed from the CLI
+                    // layer. This works reliably in both Python (PyO3) and Node.js
+                    // (NAPI) contexts, unlike tokio::signal::ctrl_c() which is
+                    // broken under NAPI.
+                    notify.notified().await;
+                }
+                None => {
+                    // Fall back to tokio's built-in signal handling.
+                    tokio::signal::ctrl_c()
+                        .await
+                        .expect("Failed to listen for Ctrl+C");
+                }
+            }
+            renderer.print_message("\nCtrl+C received. Cancelling remaining tests...");
             Ok::<(), anyhow::Error>(())
         };
 
@@ -428,5 +451,93 @@ impl TestExecutor for BamlRuntime {
             }
             Err(_) => TestRunStatus::Cancelled,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn cancel_notify_returns_cancelled() {
+        // 1. TCP listener that accepts connections but never responds (simulates hanging LLM API)
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            loop {
+                if let Ok((sock, _)) = listener.accept().await {
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_secs(3600)).await;
+                        drop(sock);
+                    });
+                }
+            }
+        });
+
+        // 2. Create BamlRuntime with a test case targeting our hanging server
+        let baml_content = format!(
+            r##"
+            client<llm> HangingClient {{
+              provider baml-openai-chat
+              options {{
+                model test
+                api_key "fake"
+                base_url "http://127.0.0.1:{port}"
+              }}
+            }}
+
+            function HangingFunc(input: string) -> string {{
+              client HangingClient
+              prompt #"{{{{ input }}}}"#
+            }}
+
+            test HangingTest {{
+              functions [HangingFunc]
+              args {{
+                input "hello"
+              }}
+            }}
+            "##
+        );
+
+        let mut files = HashMap::new();
+        files.insert("main.baml".to_string(), baml_content);
+
+        let runtime = Arc::new(
+            crate::BamlRuntime::from_file_content(
+                "baml_src",
+                &files,
+                HashMap::<String, String>::new(),
+                internal_baml_core::FeatureFlags::new(),
+            )
+            .unwrap(),
+        );
+
+        // 3. Set up cancel_notify that fires after 200ms.
+        // Use notify_one so the signal is not lost if cli_run_tests isn't waiting yet.
+        let notify = Arc::new(tokio::sync::Notify::new());
+        let notify_clone = notify.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            notify_clone.notify_one();
+        });
+
+        // 4. Run tests with cancel token
+        let filter = TestFilter::from(std::iter::empty::<&str>(), std::iter::empty::<&str>());
+        let result = runtime
+            .cli_run_tests(
+                &filter,
+                1,
+                &crate::cli::testing::OutputFormat::Pretty,
+                None,
+                &HashMap::new(),
+                Some(notify),
+            )
+            .await;
+
+        // 5. Assert cancellation
+        assert!(matches!(result, TestRunStatus::Cancelled));
     }
 }
