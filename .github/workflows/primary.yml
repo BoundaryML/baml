@@ -299,7 +299,7 @@ jobs:
         with:
           enable-wasm: false
           enable-cross: false
-          cache-on-failure: true
+          cache-on-failure: false
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
