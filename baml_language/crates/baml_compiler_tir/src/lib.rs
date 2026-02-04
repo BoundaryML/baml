@@ -628,7 +628,7 @@ impl<'db> TypeContext<'db> {
 
     /// Check if a variable is defined in a local scope (not the global scope).
     ///
-    /// The global scope is scopes[0]. Local scopes are any scopes pushed after that
+    /// The global scope is `scopes[0]`. Local scopes are any scopes pushed after that
     /// (function parameters, let bindings, match arm patterns, etc.).
     ///
     /// Returns true if the variable is found in a local scope, false if it's only
