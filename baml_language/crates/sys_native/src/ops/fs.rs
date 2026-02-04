@@ -60,9 +60,9 @@ impl FileRef {
                     }
 
                     let idx = class
-                        .field_names
+                        .fields
                         .iter()
-                        .position(|n| n == "_handle")
+                        .position(|f| f.name == "_handle")
                         .ok_or_else(|| OpError::Other("missing _handle field".into()))?;
 
                     match inst.fields.get(idx) {

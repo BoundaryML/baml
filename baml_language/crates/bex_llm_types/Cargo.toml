@@ -7,7 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-bex_program = { workspace = true }
+baml_base = { workspace = true }
+baml_type = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
 

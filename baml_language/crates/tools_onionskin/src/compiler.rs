@@ -2449,10 +2449,10 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                     let class_obj = vm.get_object(inst.class);
                     if let Object::Class(class) = class_obj {
                         let fields: Vec<String> = class
-                            .field_names
+                            .fields
                             .iter()
                             .zip(inst.fields.iter())
-                            .map(|(name, val)| format!("{}: {}", name, format_vm_value(val, vm)))
+                            .map(|(f, val)| format!("{}: {}", f.name, format_vm_value(val, vm)))
                             .collect();
                         format!("{}{{ {} }}", class.name, fields.join(", "))
                     } else {
@@ -2462,8 +2462,8 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Variant(var) => {
                     let enum_obj = vm.get_object(var.enm);
                     if let Object::Enum(enm) = enum_obj {
-                        if let Some(name) = enm.variant_names.get(var.index) {
-                            format!("{}::{}", enm.name, name)
+                        if let Some(v) = enm.variants.get(var.index) {
+                            format!("{}::{}", enm.name, v.name)
                         } else {
                             format!("{}::variant_{}", enm.name, var.index)
                         }

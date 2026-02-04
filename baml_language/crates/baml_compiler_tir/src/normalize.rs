@@ -64,6 +64,9 @@ enum StructuralTy {
     Unknown,
     Error,
     Void,
+    Resource,
+    PromptAst,
+    PrimitiveClient,
     WatchAccessor(Box<StructuralTy>),
 }
 
@@ -270,6 +273,9 @@ fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
             StructuralTy::TyVar(_) => false,
             StructuralTy::Unknown => false,
             StructuralTy::Void => false,
+            StructuralTy::Resource => false,
+            StructuralTy::PromptAst => false,
+            StructuralTy::PrimitiveClient => false,
             StructuralTy::WatchAccessor(_) => false,
         }
     }
@@ -344,6 +350,9 @@ fn normalize_impl(
         Ty::Unknown => StructuralTy::Unknown,
         Ty::Error => StructuralTy::Error,
         Ty::Void => StructuralTy::Void,
+        Ty::Resource => StructuralTy::Resource,
+        Ty::PromptAst => StructuralTy::PromptAst,
+        Ty::PrimitiveClient => StructuralTy::PrimitiveClient,
         Ty::Literal(lit) => StructuralTy::Literal(lit.clone()),
         Ty::Class(fqn) => StructuralTy::Class(fqn.name.clone()),
         Ty::Enum(fqn) => StructuralTy::Enum(fqn.name.clone()),

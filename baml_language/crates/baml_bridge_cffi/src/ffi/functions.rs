@@ -83,26 +83,26 @@ fn call_function_inner(
     // TODO: Support collectors when bex_engine adds support
     // TODO: Support type_builder when bex_engine adds support
 
-    // Look up function definition to get parameter order
-    let func_def = engine.program().functions.get(&func_name).ok_or_else(|| {
-        BridgeError::FunctionNotFound {
-            name: func_name.clone(),
-        }
-    })?;
+    // Look up function parameters to get parameter order
+    let params =
+        engine
+            .function_params(&func_name)
+            .ok_or_else(|| BridgeError::FunctionNotFound {
+                name: func_name.clone(),
+            })?;
 
     // Reorder kwargs to match function parameter declaration order.
     // This ensures arguments are passed correctly even if the client sends
     // them in a different order than the function expects.
-    let bex_args: Vec<bex_external_types::BexValue> = func_def
-        .params
+    let bex_args: Vec<bex_external_types::BexValue> = params
         .iter()
-        .map(|param| {
+        .map(|(param_name, _param_type)| {
             kwargs
-                .get(&param.name)
+                .get(*param_name)
                 .cloned()
                 .ok_or_else(|| BridgeError::MissingArgument {
                     function: func_name.clone(),
-                    parameter: param.name.clone(),
+                    parameter: (*param_name).to_string(),
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;

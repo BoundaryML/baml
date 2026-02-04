@@ -139,7 +139,7 @@ pub fn display_instruction(
                 break 'field String::from("(ERROR: class not found)");
             };
 
-            format!("({})", class.field_names[*index])
+            format!("({})", class.fields[*index].name)
         }
         Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr + offset)

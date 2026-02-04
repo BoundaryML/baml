@@ -228,6 +228,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             span: baml_base::Span::fake(),
             block_notifications: self.block_notifications,
             viz_nodes,
+            return_type: None,
+            param_names: Vec::new(),
+            param_types: Vec::new(),
+            body_meta: None,
         }
     }
 

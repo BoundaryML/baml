@@ -87,6 +87,13 @@ pub enum Ty {
     Error,
     Void,
 
+    /// Opaque resource handle (file, socket, HTTP response body).
+    Resource,
+    /// Opaque structured prompt tree for LLM calls.
+    PromptAst,
+    /// Opaque resolved LLM client.
+    PrimitiveClient,
+
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     /// Contains the inner type being watched for method resolution.
     WatchAccessor(Box<Ty>),
@@ -221,6 +228,9 @@ impl fmt::Display for Ty {
             Ty::Unknown => write!(f, "unknown"),
             Ty::Error => write!(f, "error"),
             Ty::Void => write!(f, "void"),
+            Ty::Resource => write!(f, "resource"),
+            Ty::PromptAst => write!(f, "prompt_ast"),
+            Ty::PrimitiveClient => write!(f, "primitive_client"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
         }
     }

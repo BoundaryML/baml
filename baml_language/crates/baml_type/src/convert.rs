@@ -135,6 +135,9 @@ pub fn convert_tir_ty(
         baml_compiler_tir::Ty::Unknown => Ok(Ty::Null),
         baml_compiler_tir::Ty::Error => Ok(Ty::Null),
         baml_compiler_tir::Ty::Void => Ok(Ty::Void),
+        baml_compiler_tir::Ty::Resource => Ok(Ty::Resource),
+        baml_compiler_tir::Ty::PromptAst => Ok(Ty::PromptAst),
+        baml_compiler_tir::Ty::PrimitiveClient => Ok(Ty::PrimitiveClient),
 
         baml_compiler_tir::Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(
             convert_tir_ty(inner, aliases, recursive_aliases)?,

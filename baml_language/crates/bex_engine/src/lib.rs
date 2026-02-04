@@ -64,11 +64,10 @@ use std::{
     },
 };
 
-pub use bex_external_types::{BexExternalValue, BexValue, EpochGuard, Ty, UnionMetadata};
+pub use bex_external_types::{BexExternalValue, BexValue, EpochGuard, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
-use bex_program::BexProgram;
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{GlobalPool, HeapPtr, Object, Value};
 // Re-export sys_types types for convenience
@@ -194,7 +193,7 @@ pub enum EngineError {
 /// ```ignore
 /// use std::sync::Arc;
 ///
-/// let engine = Arc::new(BexEngine::new(snapshot, env_vars)?);
+/// let engine = Arc::new(BexEngine::new(bytecode, env_vars, sys_ops)?);
 ///
 /// // Concurrent calls are safe - each gets its own VM and TLAB
 /// let (result1, result2) = tokio::join!(
@@ -229,8 +228,6 @@ pub enum EngineError {
 ///         └── Tlab ─── exclusive allocation region from shared heap
 /// ```
 pub struct BexEngine {
-    /// The original snapshot (for metadata access)
-    snapshot: BexProgram,
     /// The unified heap (shared across all VM instances)
     heap: Arc<BexHeap>,
     /// Global variables pool
@@ -271,16 +268,16 @@ impl BexEngine {
     ///
     /// # Arguments
     ///
-    /// * `snapshot` - The compiled BAML program
+    /// * `bytecode_program` - The compiled BAML program bytecode
     /// * `env_vars` - Environment variables accessible to the program
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
     pub fn new(
-        snapshot: BexProgram,
+        bytecode_program: bex_vm_types::Program,
         env_vars: HashMap<String, String>,
         sys_ops: sys_types::SysOps,
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::convert_program(snapshot.bytecode.clone())?;
+        let bytecode = bex_vm::convert_program(bytecode_program)?;
 
         // Extract compile-time objects for the heap
         let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
@@ -328,15 +325,7 @@ impl BexEngine {
             .collect();
         let globals = GlobalPool::from_vec(globals_vec);
 
-        // Validate that no compiler-only type variants leaked into the runtime program
-        snapshot
-            .validate()
-            .map_err(|e| EngineError::SchemaInconsistency {
-                message: format!("Type validation failed: {e}"),
-            })?;
-
         Ok(Self {
-            snapshot,
             heap,
             globals,
             resolved_function_names,
@@ -351,11 +340,6 @@ impl BexEngine {
             gc_complete: Notify::new(),
             gc_in_progress: AtomicBool::new(false),
         })
-    }
-
-    /// Get a reference to the program snapshot.
-    pub fn program(&self) -> &BexProgram {
-        &self.snapshot
     }
 
     /// Get a reference to the shared heap.
@@ -528,15 +512,8 @@ impl BexEngine {
 
         // Look up the function to verify it exists and get its return type
         let function_index = self.lookup_function(function_name)?;
-        // Get return type from schema, or use Null for builtin functions
-        // that only exist in bytecode (like baml.llm.render_prompt).
-        // Using Null as a placeholder since it won't trigger union wrapping.
-        let return_type = self
-            .snapshot
-            .functions
-            .get(function_name)
-            .map(|f| f.return_type.clone())
-            .unwrap_or(Ty::Null);
+        // Get return type from function object on heap
+        let return_type = self.function_return_type(function_name).unwrap_or(Ty::Null);
 
         // Register with current epoch
         let my_epoch = self.current_epoch.load(Ordering::Acquire);
@@ -589,6 +566,34 @@ impl BexEngine {
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })
+    }
+
+    /// Get the return type for a function by dereferencing its heap object.
+    fn function_return_type(&self, name: &str) -> Option<Ty> {
+        let (ptr, _kind) = self.resolved_function_names.get(name)?;
+        // SAFETY: ptr is from resolved_function_names, a compile-time object
+        let obj = unsafe { ptr.get() };
+        match obj {
+            Object::Function(func) => func.return_type.clone(),
+            _ => None,
+        }
+    }
+
+    /// Get parameter names and types for a function by dereferencing its heap object.
+    pub fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
+        let (ptr, _kind) = self.resolved_function_names.get(name)?;
+        // SAFETY: ptr is from resolved_function_names, a compile-time object
+        let obj = unsafe { ptr.get() };
+        match obj {
+            Object::Function(func) => Some(
+                func.param_names
+                    .iter()
+                    .zip(func.param_types.iter())
+                    .map(|(name, ty)| (name.as_str(), ty))
+                    .collect(),
+            ),
+            _ => None,
+        }
     }
 
     /// Collect roots from a yielded VM.
@@ -785,14 +790,15 @@ impl BexEngine {
             SysOp::SpecializePrompt => SysOpResult::Ready(
                 sys_llm::execute_specialize_prompt(args).map(BexExternalValue::PromptAst),
             ),
-            SysOp::LlmGetJinjaTemplate => {
-                SysOpResult::Ready(llm::execute_get_jinja_template(&self.snapshot, args))
-            }
+            SysOp::LlmGetJinjaTemplate => SysOpResult::Ready(llm::execute_get_jinja_template(
+                &self.resolved_function_names,
+                args,
+            )),
             SysOp::LlmBuildPrimitiveClient => {
                 SysOpResult::Ready(sys_llm::execute_build_primitive_client(args))
             }
             SysOp::LlmGetClientFunction => SysOpResult::Ready(llm::execute_get_client_function(
-                &self.snapshot,
+                &self.resolved_function_names,
                 &self.function_global_indices,
                 args,
             )),
@@ -820,8 +826,8 @@ mod concurrent_tests {
 
         // This test is a placeholder demonstrating the concurrent execution pattern.
         // In a real implementation, you would:
-        // 1. Create a test BexProgram with a simple function
-        // 2. Create a BexEngine from the snapshot
+        // 1. Compile a test BAML program to bytecode
+        // 2. Create a BexEngine from the bytecode
         // 3. Wrap it in Arc and spawn concurrent calls
         // 4. Verify all calls complete successfully
         //

@@ -1839,8 +1839,8 @@ impl BexVm {
                     };
 
                     // Allocate the fields.
-                    let mut fields = Vec::with_capacity(class.field_names.len());
-                    fields.resize(class.field_names.len(), Value::Null);
+                    let mut fields = Vec::with_capacity(class.fields.len());
+                    fields.resize(class.fields.len(), Value::Null);
 
                     // Allocate an instance of the class.
                     let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
@@ -1872,7 +1872,7 @@ impl BexVm {
                             }
                             .into());
                         };
-                        enm.variant_names.len()
+                        enm.variants.len()
                     };
 
                     let variant = self.stack.ensure_pop()?;

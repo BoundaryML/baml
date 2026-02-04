@@ -1,4 +1,5 @@
-use bex_program::{LiteralValue, Ty};
+use baml_base::Literal as LiteralValue;
+use baml_type::Ty;
 use indexmap::IndexMap;
 use thiserror::Error;
 
@@ -194,6 +195,13 @@ impl OutputFormatContent {
             // - Int: 42 (plain number)
             // - Bool: true/false
             Ty::Literal(lit) => Ok(Some(render_literal(lit))),
+
+            // Runtime-only variants that shouldn't appear in LLM prompts
+            Ty::Resource => Err(RenderError::UnsupportedType("resource".to_string())),
+            Ty::PromptAst => Err(RenderError::UnsupportedType("prompt_ast".to_string())),
+            Ty::PrimitiveClient => {
+                Err(RenderError::UnsupportedType("primitive_client".to_string()))
+            }
 
             // Compiler-only variants should never reach runtime
             Ty::TypeAlias(_) | Ty::Function { .. } | Ty::Void | Ty::WatchAccessor(_) => {
@@ -423,7 +431,7 @@ mod tests {
         };
 
         let content =
-            OutputFormatContent::new(Ty::Class(bex_program::TypeName::local("Person".into())))
+            OutputFormatContent::new(Ty::Class(baml_type::TypeName::local("Person".into())))
                 .with_class(cls);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -453,7 +461,7 @@ mod tests {
         };
 
         let content =
-            OutputFormatContent::new(Ty::Class(bex_program::TypeName::local("Point".into())))
+            OutputFormatContent::new(Ty::Class(baml_type::TypeName::local("Point".into())))
                 .with_class(cls);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
@@ -482,7 +490,7 @@ mod tests {
         };
 
         let content =
-            OutputFormatContent::new(Ty::Enum(bex_program::TypeName::local("Color".into())))
+            OutputFormatContent::new(Ty::Enum(baml_type::TypeName::local("Color".into())))
                 .with_enum(enm);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();

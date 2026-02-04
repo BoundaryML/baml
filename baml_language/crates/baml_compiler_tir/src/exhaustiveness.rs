@@ -364,10 +364,13 @@ impl<'a> ExhaustivenessChecker<'a> {
                 LiteralValue::Bool(v) => vec![ValueSet::Literal(Literal::Bool(*v))],
             },
 
-            // Infinite types: int, float, string, classes, etc.
+            // Infinite types: int, float, string, resource, classes, etc.
             Ty::Int => vec![ValueSet::OfType(Name::new("int"))],
             Ty::Float => vec![ValueSet::OfType(Name::new("float"))],
             Ty::String => vec![ValueSet::OfType(Name::new("string"))],
+            Ty::Resource => vec![ValueSet::OfType(Name::new("resource"))],
+            Ty::PromptAst => vec![ValueSet::OfType(Name::new("prompt_ast"))],
+            Ty::PrimitiveClient => vec![ValueSet::OfType(Name::new("primitive_client"))],
             Ty::Media(kind) => vec![ValueSet::OfType(Name::new(kind.to_string()))],
 
             // User-defined class and enum types (resolved by FQN).

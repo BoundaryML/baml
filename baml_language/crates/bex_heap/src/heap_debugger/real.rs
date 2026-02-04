@@ -312,10 +312,10 @@ impl BexHeap {
                     panic!("instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}");
                 };
                 assert!(
-                    instance.fields.len() == class.field_names.len(),
+                    instance.fields.len() == class.fields.len(),
                     "instance field count mismatch: obj_idx={idx:?} fields_len={} class_fields_len={}",
                     instance.fields.len(),
-                    class.field_names.len()
+                    class.fields.len()
                 );
                 for value in &instance.fields {
                     self.debug_assert_valid_value(value);
@@ -329,10 +329,10 @@ impl BexHeap {
                     panic!("variant.enm not Enum: obj_idx={idx:?} enm_idx={enm_idx:?}");
                 };
                 assert!(
-                    variant.index < enm.variant_names.len(),
+                    variant.index < enm.variants.len(),
                     "variant index out of bounds: obj_idx={idx:?} variant_index={} enum_len={}",
                     variant.index,
-                    enm.variant_names.len()
+                    enm.variants.len()
                 );
             }
             Object::Future(fut) => match fut {

@@ -21,6 +21,7 @@ workspace = true
 baml_base = { workspace = true }
 baml_builtins = { workspace = true }
 baml_builtins_macros = { workspace = true }
+baml_type = { workspace = true }
 baml_typetags = { workspace = true }
 sys_resource_types = { workspace = true }
 colored = { workspace = true }

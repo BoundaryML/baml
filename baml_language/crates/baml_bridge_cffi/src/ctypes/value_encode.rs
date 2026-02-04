@@ -164,6 +164,10 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
             // Fallback for unsupported types
             Some(FieldType::AnyType(CffiFieldTypeAny {}))
         }
+        // Runtime-only variants shouldn't appear in user-defined types
+        Ty::Resource | Ty::PromptAst | Ty::PrimitiveClient => {
+            unreachable!("runtime-only variant should not reach FFI type encoding")
+        }
         // Compiler-only variants should never reach FFI
         Ty::TypeAlias(_) | Ty::Function { .. } | Ty::Void | Ty::WatchAccessor(_) => {
             unreachable!("compiler-only variant should not reach FFI")

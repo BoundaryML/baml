@@ -40,6 +40,12 @@ pub enum TypePattern {
         params: Vec<TypePattern>,
         ret: Box<TypePattern>,
     },
+    /// Opaque resource handle (file, socket, HTTP response body).
+    Resource,
+    /// Opaque structured prompt tree for LLM calls.
+    PromptAst,
+    /// Opaque resolved LLM client.
+    PrimitiveClient,
 }
 
 /// A field in a builtin type definition.
@@ -47,9 +53,10 @@ pub enum TypePattern {
 pub struct BuiltinField {
     /// Field name (e.g., "_handle", "`status_code`").
     pub name: &'static str,
-    /// Field type pattern. None for private fields (not exposed to type checker).
+    /// Field type pattern. All fields have a type now (including private ones).
     pub ty: Option<TypePattern>,
     /// Whether this field is private (not visible to BAML code).
+    /// Private fields are not added to the type checking map but still have types.
     pub is_private: bool,
     /// Field index in the runtime instance layout.
     pub index: usize,
@@ -567,16 +574,14 @@ mod tests {
             "Response should have at least 4 fields"
         );
 
-        // Check _handle is private
+        // Check _handle is private and has Resource type
         let handle_field = response.fields.iter().find(|f| f.name == "_handle");
         assert!(handle_field.is_some(), "_handle field should exist");
+        let handle_field = handle_field.unwrap();
+        assert!(handle_field.is_private, "_handle should be private");
         assert!(
-            handle_field.unwrap().is_private,
-            "_handle should be private"
-        );
-        assert!(
-            handle_field.unwrap().ty.is_none(),
-            "private field should have no public type"
+            matches!(handle_field.ty, Some(TypePattern::Resource)),
+            "private _handle field should have Resource type"
         );
 
         // Check status_code is public

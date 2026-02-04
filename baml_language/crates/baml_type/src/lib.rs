@@ -90,6 +90,14 @@ pub enum Ty {
     },
     Union(Vec<Ty>),
 
+    // --- Runtime-only: present at runtime, not in user-facing type syntax ---
+    /// Opaque resource handle (file, socket, HTTP response body).
+    Resource,
+    /// Opaque structured prompt tree for LLM calls.
+    PromptAst,
+    /// Opaque resolved LLM client.
+    PrimitiveClient,
+
     // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
     /// Only recursive aliases survive lower_ty; non-recursive are expanded.
     TypeAlias(TypeName),
@@ -221,7 +229,10 @@ impl Ty {
             | Ty::Media(_)
             | Ty::Literal(_)
             | Ty::Class(_)
-            | Ty::Enum(_) => Ok(()),
+            | Ty::Enum(_)
+            | Ty::Resource
+            | Ty::PromptAst
+            | Ty::PrimitiveClient => Ok(()),
         }
     }
 }
@@ -243,6 +254,9 @@ impl fmt::Display for Ty {
             },
             Ty::Class(tn) => write!(f, "{tn}"),
             Ty::Enum(tn) => write!(f, "{tn}"),
+            Ty::Resource => write!(f, "resource"),
+            Ty::PromptAst => write!(f, "prompt_ast"),
+            Ty::PrimitiveClient => write!(f, "primitive_client"),
             Ty::TypeAlias(tn) => write!(f, "{tn}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),

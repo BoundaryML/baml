@@ -10,7 +10,7 @@ use std::{collections::HashMap, io::Write};
 
 use baml_tests::bytecode::compile_source_with_schema;
 use bex_engine::{BexEngine, BexExternalValue, BexValue};
-use bex_program::BexProgram;
+use bex_vm_types::Program;
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
 use tempfile::TempDir;
@@ -41,9 +41,9 @@ impl Default for EngineProgram {
     }
 }
 
-/// Compile BAML source code into a snapshot with schema populated.
-pub(crate) fn compile_for_engine(source: &str) -> BexProgram {
-    compile_source_with_schema(source)
+/// Compile BAML source code into bytecode with embedded metadata.
+pub(crate) fn compile_for_engine(source: &str) -> Program {
+    compile_source_with_schema(source).bytecode
 }
 
 /// Set up the virtual filesystem for a test.

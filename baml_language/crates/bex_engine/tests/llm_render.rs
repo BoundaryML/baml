@@ -5,140 +5,7 @@
 //! 2. `get_client_function` returns the correct client chain
 //! 3. `render_prompt` correctly renders templates with arguments
 
-use std::collections::HashMap;
-
-use bex_engine::BexEngine;
-use bex_program::{BexProgram, ClientDef, FunctionBody, FunctionDef, ParamDef, Ty};
-use bex_vm_types::Program;
-use sys_native::SysOpsExt;
-
-/// Create a minimal `BexProgram` with an LLM function and client for testing.
-fn create_llm_test_program() -> BexProgram {
-    let mut functions = HashMap::new();
-    let mut clients = HashMap::new();
-
-    // Create a simple LLM function
-    functions.insert(
-        "Classify".to_string(),
-        FunctionDef {
-            name: "Classify".to_string(),
-            params: vec![ParamDef {
-                name: "text".to_string(),
-                param_type: Ty::String,
-            }],
-            return_type: Ty::String,
-            body: FunctionBody::Llm {
-                prompt_template: "Classify the following text: {{ text }}".to_string(),
-                client: "TestClient".to_string(),
-            },
-        },
-    );
-
-    // Create another LLM function with more complex template
-    functions.insert(
-        "Summarize".to_string(),
-        FunctionDef {
-            name: "Summarize".to_string(),
-            params: vec![
-                ParamDef {
-                    name: "text".to_string(),
-                    param_type: Ty::String,
-                },
-                ParamDef {
-                    name: "max_words".to_string(),
-                    param_type: Ty::Int,
-                },
-            ],
-            return_type: Ty::String,
-            body: FunctionBody::Llm {
-                prompt_template: "Summarize in {{ max_words }} words or less:\n\n{{ text }}"
-                    .to_string(),
-                client: "TestClient".to_string(),
-            },
-        },
-    );
-
-    // Create a client definition
-    clients.insert(
-        "TestClient".to_string(),
-        ClientDef {
-            name: "TestClient".to_string(),
-            provider: "openai".to_string(),
-            options: HashMap::from([
-                ("model".to_string(), "gpt-4".to_string()),
-                ("temperature".to_string(), "0.7".to_string()),
-            ]),
-            retry_policy: None,
-        },
-    );
-
-    BexProgram {
-        classes: HashMap::new(),
-        enums: HashMap::new(),
-        functions,
-        clients,
-        retry_policies: HashMap::new(),
-        bytecode: Program::new(),
-    }
-}
-
-#[tokio::test]
-async fn test_get_jinja_template() {
-    let program = create_llm_test_program();
-    let engine = BexEngine::new(program, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
-
-    // Use the internal method via a test helper
-    // Since execute_get_jinja_template is private, we test through the SysOp dispatch
-    // For now, we verify the program structure is correct
-    let func = &engine.program().functions["Classify"];
-    match &func.body {
-        FunctionBody::Llm {
-            prompt_template, ..
-        } => {
-            assert_eq!(prompt_template, "Classify the following text: {{ text }}");
-        }
-        FunctionBody::Expr => panic!("Expected LLM function body"),
-    }
-}
-
-#[tokio::test]
-async fn test_get_client_function() {
-    let program = create_llm_test_program();
-    let engine = BexEngine::new(program, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
-
-    // Verify client is in the program
-    let client = &engine.program().clients["TestClient"];
-    assert_eq!(client.name, "TestClient");
-    assert_eq!(client.provider, "openai");
-    assert_eq!(client.options.get("model"), Some(&"gpt-4".to_string()));
-}
-
-#[tokio::test]
-async fn test_llm_function_structure() {
-    let program = create_llm_test_program();
-    let engine = BexEngine::new(program, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
-
-    // Verify Summarize function structure
-    let func = &engine.program().functions["Summarize"];
-    assert_eq!(func.params.len(), 2);
-    assert_eq!(func.params[0].name, "text");
-    assert_eq!(func.params[1].name, "max_words");
-
-    match &func.body {
-        FunctionBody::Llm {
-            prompt_template,
-            client,
-        } => {
-            assert!(prompt_template.contains("{{ max_words }}"));
-            assert!(prompt_template.contains("{{ text }}"));
-            assert_eq!(client, "TestClient");
-        }
-        FunctionBody::Expr => panic!("Expected LLM function body"),
-    }
-}
+use bex_engine::Ty;
 
 #[tokio::test]
 async fn test_render_prompt_directly() {
@@ -329,7 +196,7 @@ mod common;
 async fn test_render_prompt_e2e() {
     use std::collections::HashMap;
 
-    use bex_engine::BexExternalValue;
+    use bex_engine::{BexEngine, BexExternalValue};
     use sys_native::SysOpsExt;
 
     let source = r##"
@@ -383,7 +250,7 @@ function test_render() -> int {
 async fn test_render_prompt_returns_prompt_ast() {
     use std::collections::HashMap;
 
-    use bex_engine::BexExternalValue;
+    use bex_engine::{BexEngine, BexExternalValue};
     use sys_native::SysOpsExt;
 
     let source = r##"

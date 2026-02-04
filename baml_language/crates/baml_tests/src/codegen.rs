@@ -202,7 +202,7 @@ fn compile_source(source: &str) -> CompileResult {
             functions.push((
                 name.clone(),
                 CompiledFunction {
-                    function: func.clone(),
+                    function: *func.clone(),
                     // All objects are in the program's object pool
                     objects: program.objects.clone(),
                 },

@@ -446,6 +446,9 @@ fn type_to_pattern(
                 "f64" => quote!(TypePattern::Float),
                 "bool" => quote!(TypePattern::Bool),
                 "Media" => quote!(TypePattern::Media),
+                "ResourceHandle" => quote!(TypePattern::Resource),
+                "PromptAst" => quote!(TypePattern::PromptAst),
+                "PrimitiveClient" => quote!(TypePattern::PrimitiveClient),
                 "Option" => {
                     if let PathArguments::AngleBracketed(args) = &segment.arguments {
                         if let Some(GenericArgument::Type(inner)) = args.args.first() {
@@ -711,15 +714,11 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
 
         for member in &s.members {
             if let StructMember::Field(field) = member {
-                let ty = if field.is_private {
-                    None // Private fields don't expose their type publicly
-                } else {
-                    Some(type_to_pattern(
-                        &field.ty,
-                        &struct_generics,
-                        ctx.builtin_types,
-                    ))
-                };
+                let ty = Some(type_to_pattern(
+                    &field.ty,
+                    &struct_generics,
+                    ctx.builtin_types,
+                ));
 
                 fields.push(BuiltinFieldDef {
                     name: field.name.to_string(),

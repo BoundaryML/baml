@@ -192,48 +192,28 @@ impl BexEngine {
             }
 
             Object::Instance(instance) => {
-                // Get class name from the Class object
+                // Get class name and fields from the Class object
                 let class_obj = unsafe { instance.class.get() };
-                let (class_name, field_names) = match class_obj {
-                    Object::Class(class) => (class.name.clone(), &class.field_names),
-                    _ => panic!("Instance.class should point to a Class object"),
+                let Object::Class(class) = class_obj else {
+                    panic!("Instance.class should point to a Class object")
                 };
 
-                // Look up field types from the schema
-                let class_def = self.snapshot.classes.get(&class_name).ok_or_else(|| {
-                    EngineError::SchemaInconsistency {
-                        message: format!("Class '{class_name}' not found in schema"),
-                    }
-                })?;
-
-                // Build field type lookup map once (O(n) instead of O(n^2))
-                let field_types: std::collections::HashMap<&str, &Ty> = class_def
-                    .fields
-                    .iter()
-                    .map(|f| (f.name.as_str(), &f.field_type))
-                    .collect();
-
-                // Convert fields with their declared types
+                // Read field types directly from the Class object on the heap
                 let fields: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
-                    field_names
+                    class
+                        .fields
                         .iter()
                         .zip(instance.fields.iter())
-                        .map(|(name, value)| {
-                            // Look up the field's declared type from the pre-built map (O(1))
-                            let field_type = field_types.get(name.as_str()).ok_or_else(|| {
-                                EngineError::SchemaInconsistency {
-                                    message: format!(
-                                        "Field '{name}' not found in class '{class_name}'"
-                                    ),
-                                }
-                            })?;
-
-                            Ok((name.clone(), self.vm_value_to_external(value, field_type)?))
+                        .map(|(class_field, value)| {
+                            Ok((
+                                class_field.name.clone(),
+                                self.vm_value_to_external(value, &class_field.field_type)?,
+                            ))
                         })
                         .collect();
 
                 Ok(BexExternalValue::Instance {
-                    class_name,
+                    class_name: class.name.clone(),
                     fields: fields?,
                 })
             }
@@ -244,9 +224,9 @@ impl BexEngine {
                 let (enum_name, variant_name) = match enum_obj {
                     Object::Enum(enm) => {
                         let variant_name = enm
-                            .variant_names
+                            .variants
                             .get(variant.index)
-                            .cloned()
+                            .map(|v| v.name.clone())
                             .unwrap_or_else(|| format!("variant_{}", variant.index));
                         (enm.name.clone(), variant_name)
                     }
@@ -469,17 +449,17 @@ impl BexEngine {
                     });
 
                 // SAFETY: class_ptr points to a compile-time Class object
-                let field_names = match unsafe { class_ptr.get() } {
-                    Object::Class(class) => &class.field_names,
+                let class_fields = match unsafe { class_ptr.get() } {
+                    Object::Class(class) => &class.fields,
                     _ => panic!("class_ptr must point to Class"),
                 };
 
                 // Build field values in the order defined by the class
-                let mut values = Vec::with_capacity(field_names.len());
-                for name in field_names {
-                    let ext = fields
-                        .get(name)
-                        .unwrap_or_else(|| panic!("missing field '{name}' in Instance"));
+                let mut values = Vec::with_capacity(class_fields.len());
+                for class_field in class_fields {
+                    let ext = fields.get(&class_field.name).unwrap_or_else(|| {
+                        panic!("missing field '{}' in Instance", class_field.name)
+                    });
                     values.push(self.external_to_vm_value(vm, ext.clone()));
                 }
                 vm.alloc_instance(*class_ptr, values)
@@ -868,15 +848,17 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                     };
 
                     // Get field names from class and convert fields
-                    let field_names = match class_obj {
-                        Object::Class(class) => &class.field_names,
+                    let class_fields = match class_obj {
+                        Object::Class(class) => &class.fields,
                         _ => panic!("Instance class pointer doesn't point to a Class"),
                     };
 
-                    let fields: indexmap::IndexMap<String, BexExternalValue> = field_names
+                    let fields: indexmap::IndexMap<String, BexExternalValue> = class_fields
                         .iter()
                         .zip(instance.fields.iter())
-                        .map(|(name, value)| (name.clone(), vm_arg_to_external(vm, value)))
+                        .map(|(class_field, value)| {
+                            (class_field.name.clone(), vm_arg_to_external(vm, value))
+                        })
                         .collect();
 
                     BexExternalValue::Instance { class_name, fields }

@@ -71,9 +71,9 @@ impl ResponseRef {
 
                     // Find _handle field
                     let idx = class
-                        .field_names
+                        .fields
                         .iter()
-                        .position(|n| n == "_handle")
+                        .position(|f| f.name == "_handle")
                         .ok_or_else(|| OpError::Other("missing _handle field".into()))?;
 
                     // Extract resource handle from _handle field
@@ -163,9 +163,9 @@ impl RequestRef {
                     // Extract fields by name
                     let field_idx = |name: &str| -> Result<usize, OpError> {
                         class
-                            .field_names
+                            .fields
                             .iter()
-                            .position(|n| n == name)
+                            .position(|f| f.name == name)
                             .ok_or_else(|| OpError::Other(format!("missing field '{name}'")))
                     };
 

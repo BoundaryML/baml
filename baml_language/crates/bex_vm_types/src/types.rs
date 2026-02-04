@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use baml_type::Ty;
 use indexmap::IndexMap;
 use sys_resource_types::ResourceHandle;
 
@@ -198,6 +199,15 @@ unsafe impl Send for FunctionKind {}
 #[allow(unsafe_code)]
 unsafe impl Sync for FunctionKind {}
 
+/// LLM-specific metadata for a function.
+#[derive(Clone, Debug)]
+pub enum FunctionMeta {
+    Llm {
+        prompt_template: String,
+        client: String,
+    },
+}
+
 /// Represents any Baml function.
 #[derive(Clone, Debug)]
 pub struct Function {
@@ -233,6 +243,18 @@ pub struct Function {
     ///
     /// Stores metadata about control flow structure (branches, loops, scopes).
     pub viz_nodes: Vec<crate::bytecode::VizNodeMeta>,
+
+    /// Return type of the function. `None` for builtins.
+    pub return_type: Option<Ty>,
+
+    /// Parameter names in declaration order.
+    pub param_names: Vec<String>,
+
+    /// Parameter types in declaration order.
+    pub param_types: Vec<Ty>,
+
+    /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
+    pub body_meta: Option<FunctionMeta>,
 }
 
 impl std::fmt::Display for Function {
@@ -241,14 +263,29 @@ impl std::fmt::Display for Function {
     }
 }
 
+/// A field within a runtime class, carrying type and schema metadata.
+#[derive(Clone, Debug)]
+pub struct ClassField {
+    pub name: String,
+    pub field_type: Ty,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+}
+
 /// Runtime class representation.
 #[derive(Clone, Debug)]
 pub struct Class {
     /// Class name.
     pub name: String,
 
-    /// Class field names. Debug info, VM doesn't need this.
-    pub field_names: Vec<String>,
+    /// Class fields with type and schema metadata.
+    pub fields: Vec<ClassField>,
+
+    /// Class-level description for LLM prompt schema rendering.
+    pub description: Option<String>,
+
+    /// Class-level serialization alias.
+    pub alias: Option<String>,
 
     /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
     /// Assigned during codegen as `CLASS_BASE + class_index`.
@@ -277,14 +314,29 @@ impl std::fmt::Display for Instance {
     }
 }
 
-/// Runtime class representation.
+/// A variant within a runtime enum, carrying schema metadata.
+#[derive(Clone, Debug)]
+pub struct EnumVariant {
+    pub name: String,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+    pub skip: bool,
+}
+
+/// Runtime enum representation.
 #[derive(Clone, Debug)]
 pub struct Enum {
     /// Enum name.
     pub name: String,
 
-    /// Enum variant names. Debug info, VM doesn't need this.
-    pub variant_names: Vec<String>,
+    /// Enum variants with schema metadata.
+    pub variants: Vec<EnumVariant>,
+
+    /// Enum-level description.
+    pub description: Option<String>,
+
+    /// Enum-level serialization alias.
+    pub alias: Option<String>,
 }
 
 impl std::fmt::Display for Enum {
@@ -400,7 +452,7 @@ impl ConstValue {
 #[derive(Clone, Debug)]
 pub enum Object {
     /// Function object.
-    Function(Function),
+    Function(Box<Function>),
 
     /// Class object.
     Class(Class),

@@ -22,8 +22,8 @@
 //! }
 //! ```
 
-// Re-export Ty from baml_type for convenience
-pub use baml_type::Ty;
+// Re-export Ty and TypeName from baml_type for convenience
+pub use baml_type::{Ty, TypeName};
 use indexmap::IndexMap;
 use sys_resource_types::ResourceHandle;
 

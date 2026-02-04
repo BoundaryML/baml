@@ -141,10 +141,10 @@ async fn union_of_classes_returns_success() -> anyhow::Result<()> {
             }),
             metadata: UnionMetadata::new(
                 Ty::Union(vec![
-                    Ty::Class(bex_program::TypeName::local("Success".into())),
-                    Ty::Class(bex_program::TypeName::local("Failure".into())),
+                    Ty::Class(bex_engine::TypeName::local("Success".into())),
+                    Ty::Class(bex_engine::TypeName::local("Failure".into())),
                 ]),
-                Ty::Class(bex_program::TypeName::local("Success".into())),
+                Ty::Class(bex_engine::TypeName::local("Success".into())),
             ),
         }),
     })
@@ -179,10 +179,10 @@ async fn union_of_classes_returns_failure() -> anyhow::Result<()> {
             }),
             metadata: UnionMetadata::new(
                 Ty::Union(vec![
-                    Ty::Class(bex_program::TypeName::local("Success".into())),
-                    Ty::Class(bex_program::TypeName::local("Failure".into())),
+                    Ty::Class(bex_engine::TypeName::local("Success".into())),
+                    Ty::Class(bex_engine::TypeName::local("Failure".into())),
                 ]),
-                Ty::Class(bex_program::TypeName::local("Failure".into())),
+                Ty::Class(bex_engine::TypeName::local("Failure".into())),
             ),
         }),
     })
@@ -276,10 +276,10 @@ async fn optional_class() -> anyhow::Result<()> {
                 },
             }),
             metadata: UnionMetadata::new(
-                Ty::Optional(Box::new(Ty::Class(bex_program::TypeName::local(
+                Ty::Optional(Box::new(Ty::Class(bex_engine::TypeName::local(
                     "Data".into(),
                 )))),
-                Ty::Class(bex_program::TypeName::local("Data".into())),
+                Ty::Class(bex_engine::TypeName::local("Data".into())),
             ),
         }),
     })
@@ -304,7 +304,7 @@ async fn optional_class_returns_null() -> anyhow::Result<()> {
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Null),
             metadata: UnionMetadata::new(
-                Ty::Optional(Box::new(Ty::Class(bex_program::TypeName::local(
+                Ty::Optional(Box::new(Ty::Class(bex_engine::TypeName::local(
                     "Data".into(),
                 )))),
                 Ty::Null,

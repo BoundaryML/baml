@@ -9,7 +9,6 @@ use std::{
 use baml_compiler_emit::LoweringError;
 use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
-use bex_program::BexProgram;
 use once_cell::sync::OnceCell;
 use sys_native::SysOpsExt;
 use sys_types::SysOps;
@@ -70,19 +69,8 @@ pub fn initialize_engine(
     let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
         .map_err(|e| render_lowering_error(&db, &e))?;
 
-    // Get VIR schema and map to bex_program types
-    let project = db.get_project().ok_or(BridgeError::ProjectNotInitialized)?;
-    let schema = baml_compiler_vir::project_schema(&db, project);
-    let (classes, enums, functions) = crate::schema_map::map_schema(&schema);
-
-    // Assemble complete BexProgram
-    let mut program = BexProgram::new(bytecode);
-    program.classes = classes;
-    program.enums = enums;
-    program.functions = functions;
-
-    // Create engine with native sys ops
-    let engine = BexEngine::new(program, env_vars, SysOps::native())?;
+    // Create engine directly from bytecode (type metadata is on VM objects)
+    let engine = BexEngine::new(bytecode, env_vars, SysOps::native())?;
 
     // Store in global (replacing any existing engine)
     let mut guard = ENGINE.write().map_err(|_| BridgeError::LockPoisoned)?;

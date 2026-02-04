@@ -115,6 +115,11 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         // Use full display path (e.g., "baml.fs.File") for comparison
         (TypePattern::Builtin(pattern_path), Ty::Class(fqn)) => *pattern_path == fqn.display(),
 
+        // Opaque runtime types match their corresponding patterns
+        (TypePattern::Resource, Ty::Resource) => true,
+        (TypePattern::PromptAst, Ty::PromptAst) => true,
+        (TypePattern::PrimitiveClient, Ty::PrimitiveClient) => true,
+
         // Unknown in Ty matches any pattern (for error recovery)
         (_, Ty::Unknown) => true,
 
@@ -170,6 +175,9 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
             params: params.iter().map(|p| substitute(p, bindings)).collect(),
             ret: Box::new(substitute(ret, bindings)),
         },
+        TypePattern::Resource => Ty::Resource,
+        TypePattern::PromptAst => Ty::PromptAst,
+        TypePattern::PrimitiveClient => Ty::PrimitiveClient,
     }
 }
 
@@ -197,6 +205,9 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
             params: params.iter().map(substitute_unknown).collect(),
             ret: Box::new(substitute_unknown(ret)),
         },
+        TypePattern::Resource => Ty::Resource,
+        TypePattern::PromptAst => Ty::PromptAst,
+        TypePattern::PrimitiveClient => Ty::PrimitiveClient,
     }
 }
 

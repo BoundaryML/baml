@@ -442,10 +442,14 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         span: baml_base::Span::fake(),
         block_notifications: Vec::new(),
         viz_nodes: Vec::new(),
+        return_type: None,
+        param_names: Vec::new(),
+        param_types: Vec::new(),
+        body_meta: None,
     };
 
     let mut program = VmProgram::new();
-    let fn_idx = program.add_object(bex_vm_types::Object::Function(function));
+    let fn_idx = program.add_object(bex_vm_types::Object::Function(Box::new(function)));
     program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_idx)));
     program
         .function_indices

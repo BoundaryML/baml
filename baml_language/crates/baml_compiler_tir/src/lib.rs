@@ -88,6 +88,9 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
                 .collect(),
             ret: Box::new(substitute_with_fallback(ret, bindings)),
         },
+        TypePattern::Resource => Ty::Resource,
+        TypePattern::PromptAst => Ty::PromptAst,
+        TypePattern::PrimitiveClient => Ty::PrimitiveClient,
     }
 }
 

@@ -117,7 +117,7 @@ impl Object {
 
                 for (i, value) in instance.fields.iter().enumerate() {
                     let value = Value::from_vm_value(value, vm)?;
-                    fields.insert(vm_class.field_names[i].clone(), value);
+                    fields.insert(vm_class.fields[i].name.clone(), value);
                 }
 
                 Ok(Object::Instance(Instance {
@@ -133,7 +133,7 @@ impl Object {
 
                 Ok(Object::Variant(Variant {
                     enm: vm_enum.name.clone(),
-                    variant: vm_enum.variant_names[variant.index].clone(),
+                    variant: vm_enum.variants[variant.index].name.clone(),
                 }))
             }
 

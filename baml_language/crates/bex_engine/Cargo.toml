@@ -10,7 +10,6 @@ license.workspace = true
 baml_base = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
-bex_program = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_llm = { workspace = true }

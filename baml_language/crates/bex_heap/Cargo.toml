@@ -14,6 +14,7 @@ indexmap = { workspace = true }
 sharded-slab = { workspace = true }
 
 [dev-dependencies]
+baml_type = { workspace = true }
 
 [features]
 default = [  ]
