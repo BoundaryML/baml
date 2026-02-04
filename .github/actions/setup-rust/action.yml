@@ -100,9 +100,6 @@ runs:
         workspaces: ${{ inputs.workspace }}
         prefix-key: ${{ inputs.prefix-key }}
         cache-on-failure: ${{ inputs.cache-on-failure }}
-    - name: Self update rustup
-      run: rustup self update
-      shell: bash
 
     - name: Add wasm32 target
       if: inputs.enable-wasm == 'true'
