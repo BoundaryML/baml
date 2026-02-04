@@ -724,6 +724,22 @@ impl LoweringContext {
         Span::new(self.file_id, range)
     }
 
+    /// Get the text range of a syntax node, skipping any leading trivia (whitespace, newlines, comments).
+    /// This is useful for synthetic expressions that should point to the actual code, not preceding whitespace.
+    fn text_range_skip_trivia(node: &baml_compiler_syntax::SyntaxNode) -> TextRange {
+        // Find the first non-trivia token
+        let mut first_significant_start = node.text_range().start();
+        for element in node.descendants_with_tokens() {
+            if let Some(token) = element.as_token() {
+                if !token.kind().is_trivia() {
+                    first_significant_start = token.text_range().start();
+                    break;
+                }
+            }
+        }
+        TextRange::new(first_significant_start, node.text_range().end())
+    }
+
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
         let id = self.exprs.alloc(expr);
         self.source_map.insert_expr(id, self.span_from_range(range));
@@ -2862,6 +2878,10 @@ impl LoweringContext {
     /// }
     /// ```
     fn desugar_for_in(&mut self, for_expr: &baml_compiler_syntax::ast::ForExpr) -> StmtId {
+        // Get the for expression's range for synthetic expressions, skipping leading trivia
+        // This ensures errors point to the actual `for` keyword, not preceding comments
+        let for_range = Self::text_range_skip_trivia(for_expr.syntax());
+
         // Generate unique names for synthetic variables FIRST
         // This ensures outer loops claim _iter, _len, _i before inner loops
         let arr_name = self.gensym("iter");
@@ -2872,7 +2892,7 @@ impl LoweringContext {
         let user_body = for_expr
             .body()
             .map(|block| self.lower_block_expr(&block))
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, for_range));
 
         // 1. let _arr_N = <iterator>
         // First try to get iterator as a child node (for complex expressions like arrays, calls, etc.)
@@ -2891,10 +2911,11 @@ impl LoweringContext {
                             if token.kind() == SyntaxKind::KW_IN {
                                 seen_in = true;
                             } else if seen_in && token.kind() == SyntaxKind::WORD {
-                                // Found the iterator identifier
-                                return Some(
-                                    self.exprs.alloc(Expr::Path(vec![Name::new(token.text())])),
-                                );
+                                // Found the iterator identifier - use token's range
+                                return Some(self.alloc_expr(
+                                    Expr::Path(vec![Name::new(token.text())]),
+                                    token.text_range(),
+                                ));
                             }
                         }
                         baml_compiler_syntax::NodeOrToken::Node(_) => {}
@@ -2902,7 +2923,7 @@ impl LoweringContext {
                 }
                 None
             })
-            .unwrap_or_else(|| self.exprs.alloc(Expr::Missing));
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, for_range));
 
         let arr_pat = self.patterns.alloc(Pattern::Binding(arr_name.clone()));
         let arr_let = self.stmts.alloc(Stmt::Let {
@@ -2915,15 +2936,22 @@ impl LoweringContext {
         // 2. let _len_N = _arr_N.length()
         // This is a method call: FieldAccess followed by Call with no arguments.
         // The typechecker will resolve `length` as a method on arrays.
-        let arr_ref = self.exprs.alloc(Expr::Path(vec![arr_name.clone()]));
-        let length_method = self.exprs.alloc(Expr::FieldAccess {
-            base: arr_ref,
-            field: Name::new("length"),
-        });
-        let length_call = self.exprs.alloc(Expr::Call {
-            callee: length_method,
-            args: vec![],
-        });
+        // Use for_range for synthetic expressions so errors point to the for statement.
+        let arr_ref = self.alloc_expr(Expr::Path(vec![arr_name.clone()]), for_range);
+        let length_method = self.alloc_expr(
+            Expr::FieldAccess {
+                base: arr_ref,
+                field: Name::new("length"),
+            },
+            for_range,
+        );
+        let length_call = self.alloc_expr(
+            Expr::Call {
+                callee: length_method,
+                args: vec![],
+            },
+            for_range,
+        );
         let len_pat = self.patterns.alloc(Pattern::Binding(len_name.clone()));
         let len_let = self.stmts.alloc(Stmt::Let {
             pattern: len_pat,
@@ -2933,7 +2961,7 @@ impl LoweringContext {
         });
 
         // 3. let _i_N = 0
-        let zero = self.exprs.alloc(Expr::Literal(Literal::Int(0)));
+        let zero = self.alloc_expr(Expr::Literal(Literal::Int(0)), for_range);
         let idx_pat = self.patterns.alloc(Pattern::Binding(idx_name.clone()));
         let idx_let = self.stmts.alloc(Stmt::Let {
             pattern: idx_pat,
@@ -2943,13 +2971,16 @@ impl LoweringContext {
         });
 
         // 4. Condition: _i_N < _len_N
-        let idx_ref = self.exprs.alloc(Expr::Path(vec![idx_name.clone()]));
-        let len_ref = self.exprs.alloc(Expr::Path(vec![len_name]));
-        let condition = self.exprs.alloc(Expr::Binary {
-            op: BinaryOp::Lt,
-            lhs: idx_ref,
-            rhs: len_ref,
-        });
+        let idx_ref = self.alloc_expr(Expr::Path(vec![idx_name.clone()]), for_range);
+        let len_ref = self.alloc_expr(Expr::Path(vec![len_name]), for_range);
+        let condition = self.alloc_expr(
+            Expr::Binary {
+                op: BinaryOp::Lt,
+                lhs: idx_ref,
+                rhs: len_ref,
+            },
+            for_range,
+        );
 
         // 5. Loop body: let x = _arr_N[_i_N]
         let user_pattern = for_expr
@@ -2967,12 +2998,15 @@ impl LoweringContext {
             })
             .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_"))));
 
-        let arr_ref2 = self.exprs.alloc(Expr::Path(vec![arr_name]));
-        let idx_ref2 = self.exprs.alloc(Expr::Path(vec![idx_name.clone()]));
-        let element_access = self.exprs.alloc(Expr::Index {
-            base: arr_ref2,
-            index: idx_ref2,
-        });
+        let arr_ref2 = self.alloc_expr(Expr::Path(vec![arr_name]), for_range);
+        let idx_ref2 = self.alloc_expr(Expr::Path(vec![idx_name.clone()]), for_range);
+        let element_access = self.alloc_expr(
+            Expr::Index {
+                base: arr_ref2,
+                index: idx_ref2,
+            },
+            for_range,
+        );
         let elem_let = self.stmts.alloc(Stmt::Let {
             pattern: user_pattern,
             type_annotation: None,
@@ -2981,8 +3015,8 @@ impl LoweringContext {
         });
 
         // 6. Increment: _i_N += 1
-        let idx_target = self.exprs.alloc(Expr::Path(vec![idx_name]));
-        let one = self.exprs.alloc(Expr::Literal(Literal::Int(1)));
+        let idx_target = self.alloc_expr(Expr::Path(vec![idx_name]), for_range);
+        let one = self.alloc_expr(Expr::Literal(Literal::Int(1)), for_range);
         let idx_assign = self.stmts.alloc(Stmt::AssignOp {
             target: idx_target,
             op: AssignOp::Add,
@@ -2999,16 +3033,22 @@ impl LoweringContext {
             if let Some(tail) = tail_expr {
                 body_stmts.push(self.stmts.alloc(Stmt::Expr(*tail)));
             }
-            self.exprs.alloc(Expr::Block {
-                stmts: body_stmts,
-                tail_expr: None,
-            })
+            self.alloc_expr(
+                Expr::Block {
+                    stmts: body_stmts,
+                    tail_expr: None,
+                },
+                for_range,
+            )
         } else {
             let body_stmt = self.stmts.alloc(Stmt::Expr(user_body));
-            self.exprs.alloc(Expr::Block {
-                stmts: vec![elem_let, idx_assign, body_stmt],
-                tail_expr: None,
-            })
+            self.alloc_expr(
+                Expr::Block {
+                    stmts: vec![elem_let, idx_assign, body_stmt],
+                    tail_expr: None,
+                },
+                for_range,
+            )
         };
 
         // 8. While statement with ForLoop origin
@@ -3021,10 +3061,13 @@ impl LoweringContext {
         });
 
         // 9. Wrap in outer block
-        let outer_block = self.exprs.alloc(Expr::Block {
-            stmts: vec![arr_let, len_let, idx_let, while_stmt],
-            tail_expr: None,
-        });
+        let outer_block = self.alloc_expr(
+            Expr::Block {
+                stmts: vec![arr_let, len_let, idx_let, while_stmt],
+                tail_expr: None,
+            },
+            for_range,
+        );
 
         self.stmts.alloc(Stmt::Expr(outer_block))
     }
