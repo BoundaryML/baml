@@ -48,16 +48,9 @@ use std::collections::HashMap;
 
 use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{
-    self, ItemId, function_body, function_signature, function_signature_source_map,
+    self, ItemId, function_body, function_qualified_name, function_signature,
+    function_signature_source_map,
 };
-
-/// The path used for the builtin llm.baml file.
-/// Functions from this file are namespaced as `baml.llm.*`.
-/// The path format `<builtin>/baml/llm.baml` is parsed by HIR's `file_namespace`
-/// to derive the namespace `baml.llm`.
-///
-/// Note: This path matches the one defined in `baml_builtins::baml_sources::ALL`.
-pub const BUILTIN_LLM_PATH: &str = "<builtin>/baml/llm.baml";
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
@@ -318,7 +311,6 @@ pub fn compile_files(
 
     // Compile each user function using MIR
     for file in files {
-        let is_builtin_llm = file.path(db).to_string_lossy() == BUILTIN_LLM_PATH;
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
@@ -326,12 +318,10 @@ pub fn compile_files(
                 let sig_source_map = function_signature_source_map(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
-                // Namespace builtin functions with baml.llm. prefix
-                let func_name = if is_builtin_llm {
-                    format!("baml.llm.{}", signature.name)
-                } else {
-                    signature.name.to_string()
-                };
+                // Get the qualified name - for builtin files this includes the namespace
+                // e.g., "baml.llm.render_prompt" for functions in <builtin>/baml/llm.baml
+                let qualified_name = function_qualified_name(db, *func_loc);
+                let func_name = qualified_name.display();
 
                 // Handle different function body types
                 let mut compiled_fn = match &*body {
