@@ -22,11 +22,21 @@ The extension will automatically download and configure the BAML language server
 | Language Server Protocol (LSP) integration | ✅ |
 | Jump to definition | ✅ |
 | Error diagnostics | ✅ |
-| LLM playground | ❌ |
+| LLM playground (via browser) | ✅ |
 
-<Note>
-The BAML Playground is not currently available in the Zed extension. For playground functionality, we recommend using [VS Code](/guide/installation-editors/vs-code-extension) or a [JetBrains IDE](/guide/installation-editors/jetbrains).
-</Note>
+## Opening the BAML Playground
+
+The BAML Playground runs as a local server and can be accessed via your browser:
+
+1. Open the Command Palette with `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Linux)
+2. Search for "**open language server logs**" and select **dev: open language server logs**
+3. In the LSP Logs panel, search for "**Starting Playground server on**"
+4. Copy the URL shown (e.g., `127.0.0.1:3704`)
+5. Open that URL in your browser to access the playground
+
+<Tip>
+The playground server starts automatically when the BAML language server initializes. If you don't see the message, try restarting the language server.
+</Tip>
 
 ## How It Works
 
@@ -37,7 +47,13 @@ The Zed extension includes:
 
 ## Setting Environment Variables
 
-Since Zed doesn't have a built-in playground, you'll need to set environment variables in your shell or through a `.env` file in your project root. The BAML language server will pick up variables from your environment.
+You can set environment variables (like API keys) in the BAML Playground via your browser. Click on the **Settings** button in the playground to configure them.
+
+Alternatively, you can set environment variables in your shell or through a `.env` file in your project root. The BAML language server will pick up variables from your environment.
+
+<Info>
+Environment variables set in the playground are stored locally and persist between sessions.
+</Info>
 
 ## Troubleshooting
 
