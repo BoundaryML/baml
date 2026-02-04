@@ -139,7 +139,7 @@ impl QualifiedName {
     /// This is the single source of truth for method name formatting.
     ///
     /// Use this when working with CST tokens (which provide `&str`).
-    /// For `Name` inputs, prefer [`local_method`] which returns a full [`QualifiedName`].
+    /// For `Name` inputs, prefer [`Self::local_method`] which returns a full [`QualifiedName`].
     pub fn local_method_from_str(class_name: &str, method_name: &str) -> Name {
         Name::new(format!("{class_name}.{method_name}"))
     }
