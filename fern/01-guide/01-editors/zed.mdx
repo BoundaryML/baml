@@ -1,0 +1,71 @@
+---
+title: Zed
+slug: guide/installation-editors/zed
+---
+
+The BAML extension for [Zed](https://zed.dev) provides syntax highlighting and language server support for editing BAML files.
+
+## Installation
+
+1. Open Zed
+2. Open the Extensions panel: **Zed** → **Extensions** (or press `Cmd+Shift+X` on macOS)
+3. Search for "**baml**"
+4. Click **Install**
+
+The extension will automatically download and configure the BAML language server.
+
+## Features
+
+| Feature | Supported |
+|---------|-----------|
+| Syntax highlighting for BAML files | ✅ |
+| Language Server Protocol (LSP) integration | ✅ |
+| Jump to definition | ✅ |
+| Error diagnostics | ✅ |
+| LLM playground | ❌ |
+
+<Note>
+The BAML Playground is not currently available in the Zed extension. For playground functionality, we recommend using [VS Code](/guide/installation-editors/vscode) or a [JetBrains IDE](/guide/installation-editors/jetbrains).
+</Note>
+
+## How It Works
+
+The Zed extension includes:
+
+- **Tree-sitter grammar**: Provides accurate syntax highlighting based on the [BAML tree-sitter grammar](https://github.com/BoundaryML/tree-sitter-baml)
+- **Language Server**: Connects to the BAML Language Server for features like jump-to-definition, diagnostics, and more
+
+## Setting Environment Variables
+
+Since Zed doesn't have a built-in playground, you'll need to set environment variables in your shell or through a `.env` file in your project root. The BAML language server will pick up variables from your environment.
+
+## Troubleshooting
+
+### Extension not appearing
+
+Make sure you're running a recent version of Zed. The BAML extension requires Zed's extension system.
+
+### Language Server not starting
+
+If the language server fails to start:
+
+1. Check the Zed logs for errors
+2. Make sure you have an internet connection (the extension downloads the language server on first use)
+3. Try reinstalling the extension
+
+### Syntax highlighting not working
+
+Ensure your files have the `.baml` extension. The extension only activates for files with this extension.
+
+## Source Code
+
+The Zed extension is developed as part of the BAML monorepo:
+
+- Extension source: [github.com/BoundaryML/baml](https://github.com/BoundaryML/baml/tree/canary/engine/zed)
+- Tree-sitter grammar: [github.com/BoundaryML/tree-sitter-baml](https://github.com/BoundaryML/tree-sitter-baml)
+
+## Feedback
+
+If you encounter any issues or have feature requests, please:
+- Open an issue on [GitHub](https://github.com/BoundaryML/baml)
+- Join our [Discord](https://discord.gg/BTNBeXGuaS) for support

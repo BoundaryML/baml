@@ -308,11 +308,17 @@ navigation:
           - page: Cursor Extension
             icon: fa-brands fa-microsoft
             path: 01-guide/01-editors/cursor.mdx
+          - page: JetBrains IDEs
+            icon: fa-solid fa-code
+            path: 01-guide/01-editors/jetbrains.mdx
+          - page: Zed
+            icon: fa-solid fa-bolt
+            path: 01-guide/01-editors/zed.mdx
           - page: Claude Code
             icon: fa-solid fa-terminal
             path: 01-guide/01-editors/claude-code.mdx
           - page: Others
-            icon: fa-brands fa-microsoft
+            icon: fa-solid fa-ellipsis
             path: 01-guide/01-editors/others.mdx
       - section: "Installation: Language"
         contents:
