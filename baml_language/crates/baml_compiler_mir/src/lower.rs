@@ -419,7 +419,10 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     ResolvedValue::Unknown => {
                         panic!("Unresolved variable reached MIR: {name}")
                     }
-                    _ => {
+                    // Explicit arms for remaining variants - these shouldn't appear for Var expressions
+                    ResolvedValue::Field { .. }
+                    | ResolvedValue::ModuleItem { .. }
+                    | ResolvedValue::TypeMethod { .. } => {
                         panic!("Unexpected resolution for Var({name}): {resolution:?}")
                     }
                 }

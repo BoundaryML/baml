@@ -9,6 +9,18 @@
 
 use crate::Name;
 
+/// Non-baml-prefixed builtin module names.
+///
+/// These are builtins that don't use the `baml.*` prefix convention.
+/// For example, `env.get` instead of `baml.env.get`.
+const NON_BAML_BUILTIN_PREFIXES: &[&str] = &["env"];
+
+/// Check if a path starts with a non-baml builtin prefix.
+fn is_non_baml_builtin_path(path: &[Name]) -> bool {
+    path.first()
+        .is_some_and(|first| NON_BAML_BUILTIN_PREFIXES.contains(&first.as_str()))
+}
+
 /// A qualified name that unambiguously identifies an item.
 ///
 /// Combines a namespace (where the item lives) with a name (what the item
@@ -144,8 +156,7 @@ impl QualifiedName {
             Namespace::Local => vec![],
             Namespace::Builtin { path } => {
                 // Check if this is a non-baml-prefixed builtin (e.g., "env.get")
-                let is_non_baml_builtin = path.first().is_some_and(|first| first.as_str() == "env");
-                if is_non_baml_builtin {
+                if is_non_baml_builtin_path(path) {
                     path.clone()
                 } else {
                     let mut p = vec![Name::new("baml")];
@@ -296,9 +307,7 @@ impl QualifiedName {
             Namespace::Builtin { path } => {
                 // Check if the path starts with a non-baml module (e.g., "env")
                 // These are stored with the module name in the path, so we don't add "baml."
-                let is_non_baml_builtin = path.first().is_some_and(|first| first.as_str() == "env");
-
-                if is_non_baml_builtin {
+                if is_non_baml_builtin_path(path) {
                     // e.g., path: ["env"], name: "get" -> "env.get"
                     let mut parts: Vec<&str> = path.iter().map(smol_str::SmolStr::as_str).collect();
                     parts.push(self.name.as_str());

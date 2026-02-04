@@ -701,21 +701,23 @@ impl LoweringContext {
         Span::new(self.file_id, node.text_range())
     }
 
-    /// Create a span from a syntax node, but skip any leading trivia (whitespace, newlines, comments).
-    /// This is useful for error spans that should point to the actual code, not preceding whitespace.
-    fn span_from_node_skip_trivia(&self, node: &baml_compiler_syntax::SyntaxNode) -> Span {
-        // Find the first non-trivia token
-        let mut first_significant_start = node.text_range().start();
+    /// Find the start position of the first non-trivia token in a syntax node.
+    /// Falls back to the node's start position if no non-trivia token is found.
+    fn first_significant_start(node: &baml_compiler_syntax::SyntaxNode) -> TextSize {
         for element in node.descendants_with_tokens() {
             if let Some(token) = element.as_token() {
                 if !token.kind().is_trivia() {
-                    first_significant_start = token.text_range().start();
-                    break;
+                    return token.text_range().start();
                 }
             }
         }
+        node.text_range().start()
+    }
 
-        let range = TextRange::new(first_significant_start, node.text_range().end());
+    /// Create a span from a syntax node, but skip any leading trivia (whitespace, newlines, comments).
+    /// This is useful for error spans that should point to the actual code, not preceding whitespace.
+    fn span_from_node_skip_trivia(&self, node: &baml_compiler_syntax::SyntaxNode) -> Span {
+        let range = TextRange::new(Self::first_significant_start(node), node.text_range().end());
         Span::new(self.file_id, range)
     }
 
@@ -727,17 +729,7 @@ impl LoweringContext {
     /// Get the text range of a syntax node, skipping any leading trivia (whitespace, newlines, comments).
     /// This is useful for synthetic expressions that should point to the actual code, not preceding whitespace.
     fn text_range_skip_trivia(node: &baml_compiler_syntax::SyntaxNode) -> TextRange {
-        // Find the first non-trivia token
-        let mut first_significant_start = node.text_range().start();
-        for element in node.descendants_with_tokens() {
-            if let Some(token) = element.as_token() {
-                if !token.kind().is_trivia() {
-                    first_significant_start = token.text_range().start();
-                    break;
-                }
-            }
-        }
-        TextRange::new(first_significant_start, node.text_range().end())
+        TextRange::new(Self::first_significant_start(node), node.text_range().end())
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
@@ -1584,15 +1576,17 @@ impl LoweringContext {
                             let text = token.text().to_string();
 
                             // First, check if we're completing an enum variant
-                            if let Some(PatternElement::EnumStart(enum_name, _start)) =
+                            if let Some(PatternElement::EnumStart(enum_name, start)) =
                                 current_element.take()
                             {
                                 // Complete the enum variant: EnumName.Variant
                                 let variant = Name::new(&text);
-                                elements.push(
-                                    self.patterns
-                                        .alloc(Pattern::EnumVariant { enum_name, variant }),
-                                );
+                                // Compute span from enum name start to variant end
+                                let range = TextRange::new(start, token.text_range().end());
+                                elements.push(self.alloc_pattern(
+                                    Pattern::EnumVariant { enum_name, variant },
+                                    range,
+                                ));
                                 continue;
                             }
 
