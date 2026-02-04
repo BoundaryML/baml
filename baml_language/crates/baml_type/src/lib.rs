@@ -204,9 +204,7 @@ impl Ty {
                 "TypeAlias '{}' should be expanded before reaching runtime",
                 tn.display_name
             )),
-            Ty::Function { .. } => Err("Function type should not reach runtime".to_string()),
             Ty::Void => Err("Void type should not reach runtime".to_string()),
-            Ty::WatchAccessor(_) => Err("WatchAccessor type should not reach runtime".to_string()),
             // Recurse into containers
             Ty::Optional(inner) => inner.validate_runtime(),
             Ty::List(inner) => inner.validate_runtime(),
@@ -221,6 +219,13 @@ impl Ty {
                 Ok(())
             }
             // All other variants are fine at runtime
+            Ty::Function { params, ret } => {
+                for p in params {
+                    p.validate_runtime()?;
+                }
+                ret.validate_runtime()
+            }
+            Ty::WatchAccessor(inner) => inner.validate_runtime(),
             Ty::Int
             | Ty::Float
             | Ty::String
@@ -381,14 +386,6 @@ mod tests {
     #[test]
     fn test_validate_runtime_rejects_compiler_types() {
         assert!(Ty::Void.validate_runtime().is_err());
-        assert!(
-            Ty::Function {
-                params: vec![],
-                ret: Box::new(Ty::Int)
-            }
-            .validate_runtime()
-            .is_err()
-        );
         assert!(
             Ty::TypeAlias(TypeName::local(Name::new("MyAlias")))
                 .validate_runtime()
