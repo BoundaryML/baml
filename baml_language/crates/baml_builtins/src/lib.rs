@@ -44,7 +44,7 @@ pub enum TypePattern {
     /// Used for builtins that need to accept heterogeneous values
     /// (e.g., `build_primitive_client`'s options map).
     /// Maps to `Ty::BuiltinUnknown` in TIR.
-    /// In builtin definitions, use the `Any` type annotation.
+    /// In builtin definitions, use the `Unknown` type annotation.
     BuiltinUnknown,
 }
 
