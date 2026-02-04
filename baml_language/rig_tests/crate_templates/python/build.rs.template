@@ -92,6 +92,9 @@ set -e
 
 cd "$(dirname "$0")"
 
+# Use a per-crate uv cache to avoid race conditions when tests run in parallel.
+export UV_CACHE_DIR="$(pwd)/.uv-cache"
+
 # Check if uv is available
 if ! command -v uv &> /dev/null; then
     echo "Error: uv is not installed"
@@ -132,6 +135,9 @@ echo "==> All checks passed!"
 $ErrorActionPreference = "Stop"
 
 Set-Location $PSScriptRoot
+
+# Use a per-crate uv cache to avoid race conditions when tests run in parallel.
+$env:UV_CACHE_DIR = Join-Path $PSScriptRoot ".uv-cache"
 
 # Check if uv is available
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
