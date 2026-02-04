@@ -33,19 +33,19 @@ async fn test_render_prompt_directly() {
         options: IndexMap::new(),
     };
 
-    let ctx = bex_jinja_runtime::RenderContext {
-        client: bex_jinja_runtime::RenderContextClient {
+    let ctx = llm_jinja::RenderContext {
+        client: llm_jinja::RenderContextClient {
             name: client.name.clone(),
             provider: client.provider.clone(),
             default_role: client.default_role.clone(),
             allowed_roles: client.allowed_roles,
         },
-        output_format: bex_llm_types::OutputFormatContent::new(Ty::String),
+        output_format: llm_types::OutputFormatContent::new(Ty::String),
         tags: IndexMap::new(),
         enums: std::collections::HashMap::new(),
     };
 
-    let result = bex_jinja_runtime::render_prompt(template, &args, &ctx).unwrap();
+    let result = llm_jinja::render_prompt(template, &args, &ctx).unwrap();
 
     match result {
         bex_vm_types::PromptAst::String(s) => {
@@ -84,19 +84,19 @@ You are a helpful assistant.
         options: IndexMap::new(),
     };
 
-    let ctx = bex_jinja_runtime::RenderContext {
-        client: bex_jinja_runtime::RenderContextClient {
+    let ctx = llm_jinja::RenderContext {
+        client: llm_jinja::RenderContextClient {
             name: client.name.clone(),
             provider: client.provider.clone(),
             default_role: client.default_role.clone(),
             allowed_roles: client.allowed_roles,
         },
-        output_format: bex_llm_types::OutputFormatContent::new(Ty::String),
+        output_format: llm_types::OutputFormatContent::new(Ty::String),
         tags: IndexMap::new(),
         enums: std::collections::HashMap::new(),
     };
 
-    let result = bex_jinja_runtime::render_prompt(template, &args, &ctx).unwrap();
+    let result = llm_jinja::render_prompt(template, &args, &ctx).unwrap();
 
     // Result should be a Vec of messages
     match result {
@@ -137,8 +137,8 @@ You are a helpful assistant.
 
 #[tokio::test]
 async fn test_render_prompt_with_enums() {
-    use bex_jinja_runtime::{RenderEnum, RenderEnumVariant};
     use indexmap::IndexMap;
+    use llm_jinja::{RenderEnum, RenderEnumVariant};
 
     let template = "Category: {{ ctx.enums.Category.SPORTS }}";
     let args = IndexMap::new();
@@ -162,19 +162,19 @@ async fn test_render_prompt_with_enums() {
         },
     );
 
-    let ctx = bex_jinja_runtime::RenderContext {
-        client: bex_jinja_runtime::RenderContextClient {
+    let ctx = llm_jinja::RenderContext {
+        client: llm_jinja::RenderContextClient {
             name: "test".to_string(),
             provider: "openai".to_string(),
             default_role: "user".to_string(),
             allowed_roles: vec!["user".to_string()],
         },
-        output_format: bex_llm_types::OutputFormatContent::new(Ty::String),
+        output_format: llm_types::OutputFormatContent::new(Ty::String),
         tags: IndexMap::new(),
         enums,
     };
 
-    let result = bex_jinja_runtime::render_prompt(template, &args, &ctx).unwrap();
+    let result = llm_jinja::render_prompt(template, &args, &ctx).unwrap();
 
     match result {
         bex_vm_types::PromptAst::String(s) => {

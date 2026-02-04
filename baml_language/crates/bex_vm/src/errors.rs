@@ -84,7 +84,7 @@ impl From<InternalError> for VmError {
 #[derive(Debug, Clone)]
 pub struct ErrorLocation {
     pub function_name: String,
-    pub function_span: baml_base::Span,
+    pub function_span: baml_type::Span,
     pub error_line: usize,
 }
 

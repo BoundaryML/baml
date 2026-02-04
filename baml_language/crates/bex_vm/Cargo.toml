@@ -18,9 +18,9 @@ doctest = false
 workspace = true
 
 [dependencies]
-baml_base = { workspace = true }
 baml_builtins = { workspace = true }
 baml_builtins_macros = { workspace = true }
+baml_type = { workspace = true }
 bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_resource_types = { workspace = true }

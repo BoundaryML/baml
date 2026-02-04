@@ -4,7 +4,7 @@
 //! - `get_jinja_template` - Look up the template for a function
 //! - `get_client_function` - Get the client resolve function for a function
 //!
-//! Other LLM operations are in the `sys_llm` crate.
+//! Other LLM operations are in the `llm_ops` crate.
 
 use bex_external_types::{BexExternalValue, BexValue};
 use bex_vm_types::{FunctionMeta, HeapPtr, Object};

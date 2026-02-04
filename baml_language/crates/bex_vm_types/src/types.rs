@@ -16,7 +16,7 @@ use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
 /// These are used by the `TypeTag` instruction to extract a type identifier
 /// from any value for jump table dispatch on union types.
 pub mod type_tags {
-    pub use baml_typetags::*;
+    pub use baml_type::typetag::*;
 }
 
 /// Compiled program ready for execution.

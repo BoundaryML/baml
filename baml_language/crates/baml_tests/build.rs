@@ -524,7 +524,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                             field_indices.insert(field.name.to_string(), idx);
                         }
                         // Compute type tag for this class (CLASS_BASE + counter)
-                        let type_tag = baml_typetags::CLASS_BASE + class_type_tag_counter;
+                        let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
                         class_type_tag_counter += 1;
                         class_type_tags.insert(class_name.clone(), type_tag);
                         classes.insert(class_name, field_indices);

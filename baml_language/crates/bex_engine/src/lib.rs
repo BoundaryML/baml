@@ -785,25 +785,25 @@ impl BexEngine {
             SysOp::ResponseText => (self.sys_ops.http_response_text)(heap, args),
             SysOp::ResponseOk => (self.sys_ops.http_response_ok)(heap, args),
             SysOp::RenderPrompt => SysOpResult::Ready(
-                sys_llm::execute_render_prompt(args).map(BexExternalValue::PromptAst),
+                llm_ops::execute_render_prompt(args).map(BexExternalValue::PromptAst),
             ),
             SysOp::SpecializePrompt => SysOpResult::Ready(
-                sys_llm::execute_specialize_prompt(args).map(BexExternalValue::PromptAst),
+                llm_ops::execute_specialize_prompt(args).map(BexExternalValue::PromptAst),
             ),
             SysOp::LlmGetJinjaTemplate => SysOpResult::Ready(llm::execute_get_jinja_template(
                 &self.resolved_function_names,
                 args,
             )),
             SysOp::LlmBuildPrimitiveClient => {
-                SysOpResult::Ready(sys_llm::execute_build_primitive_client(args))
+                SysOpResult::Ready(llm_ops::execute_build_primitive_client(args))
             }
             SysOp::LlmGetClientFunction => SysOpResult::Ready(llm::execute_get_client_function(
                 &self.resolved_function_names,
                 &self.function_global_indices,
                 args,
             )),
-            SysOp::LlmBuildRequest => SysOpResult::Ready(sys_llm::execute_build_request(args)),
-            SysOp::LlmParseResponse => SysOpResult::Ready(sys_llm::execute_parse_response(args)),
+            SysOp::LlmBuildRequest => SysOpResult::Ready(llm_ops::execute_build_request(args)),
+            SysOp::LlmParseResponse => SysOpResult::Ready(llm_ops::execute_parse_response(args)),
             SysOp::HttpSend => (self.sys_ops.http_send)(heap, args),
         }
     }

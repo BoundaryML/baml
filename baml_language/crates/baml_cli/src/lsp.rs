@@ -1,6 +1,6 @@
 use anyhow::Result;
-use baml_lsp::run_server;
 use clap::Args;
+use lsp_server::run_server;
 
 #[derive(Args, Debug)]
 pub struct LanguageServerArgs {}

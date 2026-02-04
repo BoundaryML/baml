@@ -397,33 +397,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_bridge_cffi"
-version = "0.218.1"
-dependencies = [
- "baml_base",
- "baml_compiler_emit",
- "baml_project",
- "baml_type",
- "baml_workspace",
- "bex_engine",
- "bex_external_types",
- "cbindgen",
- "futures",
- "indexmap 2.13.0",
- "libc",
- "once_cell",
- "prost 0.14.3",
- "prost-build",
- "protoc-bin-vendored",
- "serde",
- "serde_json",
- "sys_native",
- "sys_types",
- "thiserror 2.0.18",
- "tokio",
-]
-
-[[package]]
 name = "baml_builtins"
 version = "0.0.0"
 dependencies = [
@@ -444,12 +417,12 @@ name = "baml_cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "baml_lsp",
  "cfg-if 1.0.4",
  "clap",
  "clap-cargo",
  "colored",
  "ctrlc",
+ "lsp_server",
 ]
 
 [[package]]
@@ -547,7 +520,6 @@ dependencies = [
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_type",
- "baml_typetags",
  "baml_workspace",
  "la-arena",
  "log",
@@ -632,87 +604,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_ide"
-version = "0.0.0"
-dependencies = [
- "baml_db",
- "baml_project",
- "rowan 0.16.1",
- "smol_str",
- "text-size",
- "tracing",
-]
-
-[[package]]
-name = "baml_ide_tests"
-version = "0.0.0"
-dependencies = [
- "baml_compiler_diagnostics",
- "baml_db",
- "baml_ide",
- "baml_project",
- "prettyplease",
- "proc-macro2",
- "quote",
- "syn 2.0.114",
- "text-size",
- "walkdir",
-]
-
-[[package]]
-name = "baml_lsp"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "axum 0.8.8",
- "baml_db",
- "baml_ide",
- "baml_lsp_types",
- "baml_project",
- "colored",
- "console-subscriber",
- "crossbeam",
- "filetime",
- "futures",
- "ignore",
- "indexmap 2.13.0",
- "insta",
- "is-macro",
- "itertools 0.14.0",
- "jod-thread",
- "libc",
- "log",
- "lsp-server",
- "lsp-types",
- "memchr",
- "mime_guess",
- "parking_lot",
- "path-absolutize",
- "pathdiff",
- "regex",
- "reqwest",
- "rustc-hash 2.1.1",
- "schemars",
- "semver",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "shellexpand",
- "similar",
- "simple-logging",
- "text-size",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tower-http 0.6.8",
- "tracing",
- "tracing-log",
- "tracing-subscriber",
- "url",
- "webbrowser",
-]
-
-[[package]]
 name = "baml_lsp_types"
 version = "0.0.0"
 dependencies = [
@@ -770,7 +661,6 @@ dependencies = [
  "baml_db",
  "baml_project",
  "baml_type",
- "baml_typetags",
  "baml_workspace",
  "bex_program",
  "bex_vm",
@@ -795,10 +685,6 @@ dependencies = [
  "baml_compiler_tir",
  "smol_str",
 ]
-
-[[package]]
-name = "baml_typetags"
-version = "0.1.0"
 
 [[package]]
 name = "baml_workspace"
@@ -842,16 +728,16 @@ name = "bex_engine"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "baml_base",
  "baml_tests",
+ "baml_type",
  "bex_external_types",
  "bex_heap",
- "bex_jinja_runtime",
- "bex_llm_types",
  "bex_vm",
  "bex_vm_types",
  "indexmap 2.13.0",
- "sys_llm",
+ "llm_jinja",
+ "llm_ops",
+ "llm_types",
  "sys_native",
  "sys_resource_types",
  "sys_types",
@@ -866,7 +752,6 @@ dependencies = [
 name = "bex_external_types"
 version = "0.0.0"
 dependencies = [
- "baml_base",
  "baml_type",
  "bex_program",
  "bex_vm_types",
@@ -888,33 +773,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bex_jinja_runtime"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "bex_external_types",
- "bex_llm_types",
- "bex_program",
- "bex_vm_types",
- "indexmap 2.13.0",
- "minijinja",
- "regex",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "bex_llm_types"
-version = "0.0.0"
-dependencies = [
- "baml_base",
- "baml_type",
- "indexmap 2.13.0",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "bex_program"
 version = "0.0.0"
 dependencies = [
@@ -928,11 +786,11 @@ name = "bex_vm"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "baml_base",
  "baml_builtins",
  "baml_builtins_macros",
  "baml_compiler_emit",
  "baml_tests",
+ "baml_type",
  "bex_heap",
  "bex_vm_types",
  "codspeed-divan-compat",
@@ -955,7 +813,6 @@ dependencies = [
  "baml_compiler_emit",
  "baml_tests",
  "baml_type",
- "baml_typetags",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.13.0",
@@ -1010,6 +867,33 @@ name = "boxcar"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
+
+[[package]]
+name = "bridge_cffi"
+version = "0.218.1"
+dependencies = [
+ "baml_base",
+ "baml_compiler_emit",
+ "baml_project",
+ "baml_type",
+ "baml_workspace",
+ "bex_engine",
+ "bex_external_types",
+ "cbindgen",
+ "futures",
+ "indexmap 2.13.0",
+ "libc",
+ "once_cell",
+ "prost 0.14.3",
+ "prost-build",
+ "protoc-bin-vendored",
+ "serde",
+ "serde_json",
+ "sys_native",
+ "sys_types",
+ "thiserror 2.0.18",
+ "tokio",
+]
 
 [[package]]
 name = "bstr"
@@ -2766,6 +2650,50 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 
 [[package]]
+name = "llm_jinja"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bex_external_types",
+ "bex_program",
+ "bex_vm_types",
+ "indexmap 2.13.0",
+ "llm_types",
+ "minijinja",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "llm_ops"
+version = "0.0.0"
+dependencies = [
+ "bex_external_types",
+ "bex_program",
+ "bex_vm_types",
+ "indexmap 2.13.0",
+ "llm_jinja",
+ "llm_types",
+ "serde",
+ "serde_json",
+ "strum",
+ "sys_types",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "llm_types"
+version = "0.0.0"
+dependencies = [
+ "baml_base",
+ "baml_type",
+ "indexmap 2.13.0",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2876,6 +2804,87 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "url",
+]
+
+[[package]]
+name = "lsp_actions"
+version = "0.0.0"
+dependencies = [
+ "baml_db",
+ "baml_project",
+ "rowan 0.16.1",
+ "smol_str",
+ "text-size",
+ "tracing",
+]
+
+[[package]]
+name = "lsp_actions_tests"
+version = "0.0.0"
+dependencies = [
+ "baml_compiler_diagnostics",
+ "baml_db",
+ "baml_project",
+ "lsp_actions",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+ "text-size",
+ "walkdir",
+]
+
+[[package]]
+name = "lsp_server"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.8",
+ "baml_db",
+ "baml_lsp_types",
+ "baml_project",
+ "colored",
+ "console-subscriber",
+ "crossbeam",
+ "filetime",
+ "futures",
+ "ignore",
+ "indexmap 2.13.0",
+ "insta",
+ "is-macro",
+ "itertools 0.14.0",
+ "jod-thread",
+ "libc",
+ "log",
+ "lsp-server",
+ "lsp-types",
+ "lsp_actions",
+ "memchr",
+ "mime_guess",
+ "parking_lot",
+ "path-absolutize",
+ "pathdiff",
+ "regex",
+ "reqwest",
+ "rustc-hash 2.1.1",
+ "schemars",
+ "semver",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "shellexpand",
+ "similar",
+ "simple-logging",
+ "text-size",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tower-http 0.6.8",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
+ "url",
+ "webbrowser",
 ]
 
 [[package]]
@@ -4586,23 +4595,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sys_llm"
-version = "0.0.0"
-dependencies = [
- "bex_external_types",
- "bex_jinja_runtime",
- "bex_llm_types",
- "bex_program",
- "bex_vm_types",
- "indexmap 2.13.0",
- "serde",
- "serde_json",
- "strum",
- "sys_types",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "sys_native"
 version = "0.0.0"
 dependencies = [
@@ -4626,8 +4618,8 @@ version = "0.0.0"
 dependencies = [
  "bex_external_types",
  "bex_heap",
- "bex_jinja_runtime",
  "bex_vm_types",
+ "llm_jinja",
  "sys_resource_types",
  "thiserror 2.0.18",
  "tokio",
@@ -5053,7 +5045,7 @@ dependencies = [
  "baml_compiler_vir",
  "baml_db",
  "baml_project",
- "baml_typetags",
+ "baml_type",
  "baml_workspace",
  "bex_vm",
  "bex_vm_types",

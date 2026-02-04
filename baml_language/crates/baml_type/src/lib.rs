@@ -9,10 +9,12 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use baml_base::{Literal, MediaKind, Name};
+// Re-export core baml_base types so downstream crates can depend on baml_type
+// instead of baml_base directly.
+pub use baml_base::{Literal, MediaKind, Name, Span};
 
 mod convert;
-
+pub mod typetag;
 pub use convert::{convert_tir_ty, fqn_to_type_name, sanitize_for_runtime};
 
 /// A lightweight name type for class/enum/type-alias references.

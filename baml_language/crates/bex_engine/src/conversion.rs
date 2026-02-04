@@ -4,6 +4,7 @@
 //! between the VM representation (`Value`, `Object`) and the external
 //! representation (`BexValue`, `BexExternalValue`).
 
+use baml_type::Literal;
 use bex_external_types::{BexExternalValue, BexValue, EpochGuard, Ty, UnionMetadata};
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, Value};
@@ -273,7 +274,7 @@ impl BexEngine {
             Object::PromptAst(ast) => {
                 // Convert VM PromptAst to external PromptAst
                 Ok(BexExternalValue::PromptAst(
-                    sys_llm::vm_prompt_ast_to_external(ast),
+                    llm_ops::vm_prompt_ast_to_external(ast),
                 ))
             }
             Object::PrimitiveClient(_) => Err(EngineError::CannotConvert {
@@ -626,7 +627,7 @@ impl BexEngine {
                     }
                     // PromptAst needs to be copied out for specialize_prompt
                     Object::PromptAst(ast) => BexValue::External(BexExternalValue::PromptAst(
-                        sys_llm::vm_prompt_ast_to_external(ast),
+                        llm_ops::vm_prompt_ast_to_external(ast),
                     )),
                     other => {
                         panic!("Cannot convert object type to BexValue for sys op: {other:?}")
@@ -706,10 +707,10 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Bool(_), Ty::Bool) => true,
         (BexExternalValue::String(_), Ty::String) => true,
         // Literal types match their corresponding runtime values
-        (BexExternalValue::Int(_), Ty::Literal(baml_base::Literal::Int(_))) => true,
-        (BexExternalValue::Float(_), Ty::Literal(baml_base::Literal::Float(_))) => true,
-        (BexExternalValue::String(_), Ty::Literal(baml_base::Literal::String(_))) => true,
-        (BexExternalValue::Bool(_), Ty::Literal(baml_base::Literal::Bool(_))) => true,
+        (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_))) => true,
+        (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_))) => true,
+        (BexExternalValue::String(_), Ty::Literal(Literal::String(_))) => true,
+        (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_))) => true,
         (BexExternalValue::Array { .. }, Ty::List(_)) => true,
         (BexExternalValue::Map { .. }, Ty::Map { .. }) => true,
         (BexExternalValue::Instance { class_name, .. }, Ty::Class(tn)) => {
@@ -745,19 +746,19 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
         Value::Null => members.iter().find(|m| matches!(m, Ty::Null)),
         Value::Int(_) => members
             .iter()
-            .find(|m| matches!(m, Ty::Int | Ty::Literal(baml_base::Literal::Int(_)))),
+            .find(|m| matches!(m, Ty::Int | Ty::Literal(Literal::Int(_)))),
         Value::Float(_) => members
             .iter()
-            .find(|m| matches!(m, Ty::Float | Ty::Literal(baml_base::Literal::Float(_)))),
+            .find(|m| matches!(m, Ty::Float | Ty::Literal(Literal::Float(_)))),
         Value::Bool(_) => members
             .iter()
-            .find(|m| matches!(m, Ty::Bool | Ty::Literal(baml_base::Literal::Bool(_)))),
+            .find(|m| matches!(m, Ty::Bool | Ty::Literal(Literal::Bool(_)))),
         Value::Object(ptr) => {
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::String(_) => members
                     .iter()
-                    .find(|m| matches!(m, Ty::String | Ty::Literal(baml_base::Literal::String(_)))),
+                    .find(|m| matches!(m, Ty::String | Ty::Literal(Literal::String(_)))),
                 Object::Instance(inst) => {
                     let class_obj = unsafe { inst.class.get() };
                     if let Object::Class(class) = class_obj {

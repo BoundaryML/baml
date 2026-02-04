@@ -530,7 +530,7 @@ impl BexVm {
     pub fn as_media(
         &self,
         value: &Value,
-        media_kind: baml_base::MediaKind,
+        media_kind: baml_type::MediaKind,
     ) -> Result<&bex_vm_types::types::MediaValue, InternalError> {
         let index = self.as_object_ptr(value, ObjectType::Media(media_kind))?;
         let obj = self.get_object(index);
@@ -548,7 +548,7 @@ impl BexVm {
     pub fn as_media_mut(
         &mut self,
         value: &Value,
-        media_kind: baml_base::MediaKind,
+        media_kind: baml_type::MediaKind,
     ) -> Result<&mut bex_vm_types::types::MediaValue, InternalError> {
         let index = self.as_object_ptr(value, ObjectType::Media(media_kind))?;
         // Check type first to avoid borrow issues

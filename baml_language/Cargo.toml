@@ -35,27 +35,26 @@ baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_compiler_vir = { path = "crates/baml_compiler_vir" }
 bex_program = { path = "crates/bex_program" }
 bex_engine = { path = "crates/bex_engine" }
-sys_llm = { path = "crates/sys_llm" }
+llm_ops = { path = "crates/llm_ops" }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native" }
 baml_db = { path = "crates/baml_db" }
-baml_ide = { path = "crates/baml_ide" }
-baml_lsp = { path = "crates/baml_lsp" }
+lsp_actions = { path = "crates/lsp_actions" }
+lsp_server = { path = "crates/lsp_server" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }
 baml_tests = { path = "crates/baml_tests" }
-baml_typetags = { path = "crates/baml_typetags" }
 tools_onionskin = { path = "crates/tools_onionskin" }
 bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
-baml_bridge_cffi = { path = "crates/baml_bridge_cffi" }
-bex_llm_types = { path = "crates/bex_llm_types" }
-bex_jinja_runtime = { path = "crates/bex_jinja_runtime" }
+bridge_cffi = { path = "crates/bridge_cffi" }
+llm_types = { path = "crates/llm_types" }
+llm_jinja = { path = "crates/llm_jinja" }
 sys_resource_types = { path = "crates/sys_resource_types" }
 
-# External dependencies for bex_jinja_runtime
+# External dependencies for llm_jinja
 minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "main", default-features = false, features = [
   "macros",
   "builtins",

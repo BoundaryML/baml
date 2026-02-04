@@ -11,7 +11,7 @@
 
 use std::{collections::HashMap, fmt::Write};
 
-use baml_base::MediaKind;
+use baml_type::MediaKind;
 use bex_vm_types::{
     HeapPtr,
     types::{Future, Instance, MediaContent, MediaValue, Object, Type, Value},

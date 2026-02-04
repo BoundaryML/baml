@@ -9,14 +9,14 @@ use std::{future::Future, pin::Pin, sync::Arc};
 // Re-export BexExternalValue and BexValue for ops
 pub use bex_external_types::{BexExternalValue, BexValue};
 pub use bex_heap::BexHeap;
+// Re-export SysOp for convenience
+pub use bex_vm_types::SysOp;
 // ============================================================================
 // Operation Errors
 // ============================================================================
 
 // Re-export RenderPromptError for convenience
-pub use bex_jinja_runtime::RenderPromptError;
-// Re-export SysOp for convenience
-pub use bex_vm_types::SysOp;
+pub use llm_jinja::RenderPromptError;
 // Re-export resource types
 pub use sys_resource_types::{ResourceHandle, ResourceType};
 

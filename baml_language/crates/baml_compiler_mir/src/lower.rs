@@ -1280,7 +1280,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
     /// Get the type tag for a type (primitive or class).
     ///
-    /// Returns the type tag for primitives (using `baml_typetags` constants)
+    /// Returns the type tag for primitives (using `baml_type::typetag` constants)
     /// or for classes (using the pre-computed `class_type_tags` map).
     ///
     /// # `TypeAlias` handling
@@ -1296,19 +1296,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// which is not yet implemented.
     fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
         match ty {
-            Ty::Int => Some(baml_typetags::INT),
-            Ty::String => Some(baml_typetags::STRING),
-            Ty::Bool => Some(baml_typetags::BOOL),
-            Ty::Null => Some(baml_typetags::NULL),
-            Ty::Float => Some(baml_typetags::FLOAT),
+            Ty::Int => Some(baml_type::typetag::INT),
+            Ty::String => Some(baml_type::typetag::STRING),
+            Ty::Bool => Some(baml_type::typetag::BOOL),
+            Ty::Null => Some(baml_type::typetag::NULL),
+            Ty::Float => Some(baml_type::typetag::FLOAT),
             Ty::Class(tn) => self.class_type_tags.get(tn.name.as_str()).copied(),
             // TypeAliases: look up by alias name. See doc comment for limitations.
             Ty::TypeAlias(tn) => self.class_type_tags.get(tn.name.as_str()).copied(),
             // Literal types map to the same tag as their base type
-            Ty::Literal(baml_base::Literal::Int(_)) => Some(baml_typetags::INT),
-            Ty::Literal(baml_base::Literal::Float(_)) => Some(baml_typetags::FLOAT),
-            Ty::Literal(baml_base::Literal::String(_)) => Some(baml_typetags::STRING),
-            Ty::Literal(baml_base::Literal::Bool(_)) => Some(baml_typetags::BOOL),
+            Ty::Literal(baml_base::Literal::Int(_)) => Some(baml_type::typetag::INT),
+            Ty::Literal(baml_base::Literal::Float(_)) => Some(baml_type::typetag::FLOAT),
+            Ty::Literal(baml_base::Literal::String(_)) => Some(baml_type::typetag::STRING),
+            Ty::Literal(baml_base::Literal::Bool(_)) => Some(baml_type::typetag::BOOL),
             _ => None, // Not a type with a known tag
         }
     }

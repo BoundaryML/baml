@@ -1,9 +1,0 @@
-[package]
-name = "baml_typetags"
-version = "0.1.0"
-edition = "2021"
-description = "Type tag constants for BAML runtime type identification"
-license = "MIT"
-
-[dependencies]
-# No dependencies - this is a leaf crate containing only constants

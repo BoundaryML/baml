@@ -154,7 +154,7 @@ pub enum BexExternalValue {
 
     Media {
         handle: crate::Handle,
-        kind: baml_base::MediaKind,
+        kind: baml_type::MediaKind,
     },
 
     /// Resource handle (file, socket, etc.) for sys operations.
@@ -228,11 +228,11 @@ impl BexExternalValue {
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
             BexExternalValue::Media { kind, .. } => match kind {
-                baml_base::MediaKind::Image => "image",
-                baml_base::MediaKind::Audio => "audio",
-                baml_base::MediaKind::Video => "video",
-                baml_base::MediaKind::Pdf => "pdf",
-                baml_base::MediaKind::Generic => "media",
+                baml_type::MediaKind::Image => "image",
+                baml_type::MediaKind::Audio => "audio",
+                baml_type::MediaKind::Video => "video",
+                baml_type::MediaKind::Pdf => "pdf",
+                baml_type::MediaKind::Generic => "media",
             },
             BexExternalValue::Resource(handle) => match handle.kind() {
                 sys_resource_types::ResourceType::File => "file",
