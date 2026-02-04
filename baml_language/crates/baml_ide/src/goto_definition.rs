@@ -271,8 +271,8 @@ fn find_function_at_position(
                             if let Some(name) = method.name() {
                                 // Compare against qualified name (ClassName.methodName)
                                 let qualified_method_name =
-                                    format!("{}.{}", class_name, name.text());
-                                if qualified_method_name == func_name.as_str() {
+                                    QualifiedName::local_method_from_str(&class_name, name.text());
+                                if qualified_method_name.as_str() == func_name.as_str() {
                                     let range = method.syntax().text_range();
                                     if range.contains(position) {
                                         return Some(*func_loc);

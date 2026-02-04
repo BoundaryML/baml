@@ -129,8 +129,19 @@ impl QualifiedName {
     pub fn local_method(class_name: &Name, method_name: &Name) -> Self {
         Self {
             namespace: Namespace::Local,
-            name: Name::new(format!("{class_name}.{method_name}")),
+            name: Self::local_method_from_str(class_name.as_str(), method_name.as_str()),
         }
+    }
+
+    /// Format a local method name from string parts.
+    ///
+    /// Returns the `Name` in `ClassName.methodName` format.
+    /// This is the single source of truth for method name formatting.
+    ///
+    /// Use this when working with CST tokens (which provide `&str`).
+    /// For `Name` inputs, prefer [`local_method`] which returns a full [`QualifiedName`].
+    pub fn local_method_from_str(class_name: &str, method_name: &str) -> Name {
+        Name::new(format!("{class_name}.{method_name}"))
     }
 
     /// Get the display name (cached for repeated use).

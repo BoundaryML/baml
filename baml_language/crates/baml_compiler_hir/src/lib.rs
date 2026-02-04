@@ -418,8 +418,9 @@ fn function_signature_with_source_map<'db>(
                 let class_name = class_node.name();
                 let class_name_text = class_name.as_ref()?.text();
                 // func_name is qualified (ClassName.methodName), so compare against that
-                let qualified_method_name = format!("{}.{}", class_name_text, method_name.text());
-                if qualified_method_name == func_name.as_str() {
+                let qualified_method_name =
+                    QualifiedName::local_method_from_str(class_name_text, method_name.text());
+                if qualified_method_name.as_str() == func_name.as_str() {
                     Some(lower_method_signature(&method, &func_name, class_name_text))
                 } else {
                     None
@@ -815,9 +816,11 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
                 if let (Some(method_name), Some(class_name_token)) =
                     (method.name(), class_node.name())
                 {
-                    let qualified_method_name =
-                        format!("{}.{}", class_name_token.text(), method_name.text());
-                    qualified_method_name == func_name.as_str()
+                    let qualified_method_name = QualifiedName::local_method_from_str(
+                        class_name_token.text(),
+                        method_name.text(),
+                    );
+                    qualified_method_name.as_str() == func_name.as_str()
                 } else {
                     false
                 }
@@ -1284,9 +1287,10 @@ fn lower_class_methods(node: &SyntaxNode) -> Vec<Function> {
             // Use qualified name: ClassName.methodName
             // This ensures methods are uniquely identified and matches how they're
             // resolved in TIR (via QualifiedName::local_method)
-            let qualified_name = format!("{}.{}", class_name, method_name.text());
+            let qualified_name =
+                QualifiedName::local_method_from_str(&class_name, method_name.text());
             functions.push(Function {
-                name: Name::new(qualified_name),
+                name: qualified_name,
                 compiler_generated: None,
             });
         }
