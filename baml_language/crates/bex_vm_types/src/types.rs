@@ -244,8 +244,8 @@ pub struct Function {
     /// Stores metadata about control flow structure (branches, loops, scopes).
     pub viz_nodes: Vec<crate::bytecode::VizNodeMeta>,
 
-    /// Return type of the function. `None` for builtins.
-    pub return_type: Option<Ty>,
+    /// Return type of the function.
+    pub return_type: Ty,
 
     /// Parameter names in declaration order.
     pub param_names: Vec<String>,

@@ -317,6 +317,11 @@ pub fn compile_files(
             FunctionKind::NativeUnresolved
         };
 
+        let tir_ty = baml_compiler_tir::builtins::substitute_unknown(&builtin.returns);
+        let return_type = baml_type::convert_tir_ty(&tir_ty, &type_aliases, &recursive_aliases)
+            .and_then(baml_type::sanitize_for_runtime)
+            .unwrap_or(baml_type::Ty::Null);
+
         let builtin_fn = Function {
             name: builtin.path.to_string(),
             arity: builtin.arity(),
@@ -326,7 +331,7 @@ pub fn compile_files(
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
             viz_nodes: Vec::new(),
-            return_type: None,
+            return_type,
             param_names: Vec::new(),
             param_types: Vec::new(),
             body_meta: None,
@@ -339,6 +344,14 @@ pub fn compile_files(
     for (path, arity) in HIDDEN_LLM_BUILTINS {
         let sys_op =
             sys_op_for_builtin_path(path).expect("hidden LLM builtin must have SysOp mapping");
+        let return_type = baml_builtins::find_builtin_by_path(path)
+            .map(|sig| {
+                let tir_ty = baml_compiler_tir::builtins::substitute_unknown(&sig.returns);
+                baml_type::convert_tir_ty(&tir_ty, &type_aliases, &recursive_aliases)
+                    .and_then(baml_type::sanitize_for_runtime)
+                    .unwrap_or(baml_type::Ty::Null)
+            })
+            .unwrap_or(baml_type::Ty::Null);
         let builtin_fn = Function {
             name: (*path).to_string(),
             arity: *arity,
@@ -348,7 +361,7 @@ pub fn compile_files(
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
             viz_nodes: Vec::new(),
-            return_type: None,
+            return_type,
             param_names: Vec::new(),
             param_types: Vec::new(),
             body_meta: None,
@@ -371,6 +384,15 @@ pub fn compile_files(
                 let qualified_name = function_qualified_name(db, *func_loc);
                 let func_name = qualified_name.display();
 
+                // Compute metadata once for all body types
+                let (meta_param_names, meta_param_types, meta_return_type) =
+                    compute_function_metadata(
+                        &signature,
+                        &resolution_ctx,
+                        &type_aliases,
+                        &recursive_aliases,
+                    );
+
                 // Handle different function body types
                 let mut compiled_fn = match &*body {
                     baml_compiler_hir::FunctionBody::Llm(llm_body) => {
@@ -379,13 +401,6 @@ pub fn compile_files(
                         // `baml.llm.render_prompt` orchestrator.
                         let params: Vec<baml_base::Name> =
                             signature.params.iter().map(|p| p.name.clone()).collect();
-
-                        let (param_names, param_types, return_type) = compute_function_metadata(
-                            &signature,
-                            &resolution_ctx,
-                            &type_aliases,
-                            &recursive_aliases,
-                        );
 
                         // Extract prompt template and client from LLM body
                         let prompt_template = llm_body.prompt.text.clone();
@@ -405,9 +420,9 @@ pub fn compile_files(
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
                             viz_nodes: Vec::new(),
-                            return_type: Some(return_type),
-                            param_names,
-                            param_types,
+                            return_type: baml_type::Ty::Null,
+                            param_names: Vec::new(),
+                            param_types: Vec::new(),
                             body_meta: Some(bex_vm_types::FunctionMeta::Llm {
                                 prompt_template,
                                 client,
@@ -418,6 +433,7 @@ pub fn compile_files(
                         // Missing body - placeholder function
                         let params: Vec<baml_base::Name> =
                             signature.params.iter().map(|p| p.name.clone()).collect();
+
                         Function {
                             name: signature.name.to_string(),
                             arity: params.len(),
@@ -432,7 +448,7 @@ pub fn compile_files(
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
                             viz_nodes: Vec::new(),
-                            return_type: None,
+                            return_type: baml_type::Ty::Null,
                             param_names: Vec::new(),
                             param_types: Vec::new(),
                             body_meta: None,
@@ -491,26 +507,17 @@ pub fn compile_files(
                     }
                 };
 
-                // Populate return type and param metadata for expression functions
-                if compiled_fn.return_type.is_none() {
-                    let (param_names, param_types, return_type) = compute_function_metadata(
-                        &signature,
-                        &resolution_ctx,
-                        &type_aliases,
-                        &recursive_aliases,
-                    );
-                    compiled_fn.return_type = Some(return_type);
-                    compiled_fn.param_names = param_names;
-                    compiled_fn.param_types = param_types;
-                }
+                // Always set metadata (overwrite placeholder for Expr, redundant for Llm/Missing)
+                compiled_fn.return_type = meta_return_type;
+                compiled_fn.param_names = meta_param_names;
+                compiled_fn.param_types = meta_param_types;
 
                 // Validate types at emit time (safety net)
-                if let Some(ref rt) = compiled_fn.return_type {
-                    debug_assert!(
-                        rt.validate_runtime().is_ok(),
-                        "Compiler-only type leaked to runtime return type: {rt}"
-                    );
-                }
+                debug_assert!(
+                    compiled_fn.return_type.validate_runtime().is_ok(),
+                    "Compiler-only type leaked to runtime return type: {}",
+                    compiled_fn.return_type
+                );
                 for pt in &compiled_fn.param_types {
                     debug_assert!(
                         pt.validate_runtime().is_ok(),

@@ -459,7 +459,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         span: baml_base::Span::fake(),
         block_notifications: Vec::new(),
         viz_nodes: Vec::new(),
-        return_type: None,
+        return_type: baml_type::Ty::Null,
         param_names: Vec::new(),
         param_types: Vec::new(),
         body_meta: None,

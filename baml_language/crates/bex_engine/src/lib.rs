@@ -574,7 +574,7 @@ impl BexEngine {
         // SAFETY: ptr is from resolved_function_names, a compile-time object
         let obj = unsafe { ptr.get() };
         match obj {
-            Object::Function(func) => func.return_type.clone(),
+            Object::Function(func) => Some(func.return_type.clone()),
             _ => None,
         }
     }
