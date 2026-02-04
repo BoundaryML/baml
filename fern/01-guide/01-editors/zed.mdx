@@ -38,6 +38,17 @@ The BAML Playground runs as a local server and can be accessed via your browser:
 The playground server starts automatically when the BAML language server initializes. If you don't see the message, try restarting the language server.
 </Tip>
 
+<Note>
+**Why can't I just click "Open Playground" like in VS Code?**
+
+In VS Code, Cursor, and JetBrains, you'll see an "Open Playground" button above each BAML function. Unfortunately, Zed doesn't yet support the LSP features needed to make this work:
+
+- [Code Lens](https://github.com/zed-industries/zed/issues/11565) — the inline buttons above functions
+- [workspace/executeCommand](https://github.com/zed-industries/zed/issues/13756) — executing editor commands from LSP
+
+Once Zed adds these features, the playground will be accessible with a single click. Until then, the LSP logs workaround above is the way to go. You can follow the linked GitHub issues to track progress.
+</Note>
+
 ## How It Works
 
 The Zed extension includes:
