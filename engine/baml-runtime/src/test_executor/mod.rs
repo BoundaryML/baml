@@ -456,8 +456,9 @@ impl TestExecutor for BamlRuntime {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::time::Duration;
+
+    use super::*;
 
     #[tokio::test]
     async fn cancel_notify_returns_cancelled() {
@@ -523,10 +524,7 @@ mod tests {
         });
 
         // 4. Run tests with cancel token
-        let filter = TestFilter::from(
-            std::iter::empty::<&str>(),
-            std::iter::empty::<&str>(),
-        );
+        let filter = TestFilter::from(std::iter::empty::<&str>(), std::iter::empty::<&str>());
         let result = runtime
             .cli_run_tests(
                 &filter,
