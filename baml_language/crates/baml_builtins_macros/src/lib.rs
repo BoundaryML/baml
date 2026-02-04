@@ -41,9 +41,11 @@ struct BuiltinTypeDef {
 struct BuiltinFieldDef {
     /// Field name (e.g., "_handle", "`status_code`")
     name: String,
-    /// Type pattern (None for private fields)
+    /// Type pattern. All fields have a type (including private ones).
+    /// Privacy is handled separately by the `is_private` field.
     ty: Option<TokenStream2>,
-    /// Whether this field is private
+    /// Whether this field is private (not visible to BAML code).
+    /// Private fields still have types but are excluded from type-checking maps.
     is_private: bool,
     /// Field index in the struct
     index: usize,
@@ -1037,10 +1039,8 @@ pub fn define_builtins(input: TokenStream) -> TokenStream {
                 .iter()
                 .map(|f| {
                     let name = &f.name;
-                    let ty = match &f.ty {
-                        Some(t) => quote!(Some(#t)),
-                        None => quote!(None),
-                    };
+                    let ty = &f.ty.as_ref().expect("all fields have types");
+                    let ty = quote!(#ty);
                     let is_private = f.is_private;
                     let index = f.index;
 
@@ -1413,6 +1413,10 @@ fn rust_type_for_input(type_name: &str, is_generic: bool, is_mut: bool) -> Token
 }
 
 /// Map BAML type names to Rust output types.
+///
+/// Note: `ResourceHandle` is only used as a private field type, never as a function
+/// parameter or return type, so it falls through to the `Value` fallback in both
+/// `rust_type_for_input` and `rust_type_for_output`. This is intentional.
 fn rust_type_for_output(type_name: &str, is_generic: bool) -> TokenStream2 {
     if is_generic {
         return quote!(Value);

@@ -53,8 +53,9 @@ pub enum TypePattern {
 pub struct BuiltinField {
     /// Field name (e.g., "_handle", "`status_code`").
     pub name: &'static str,
-    /// Field type pattern. All fields have a type now (including private ones).
-    pub ty: Option<TypePattern>,
+    /// Field type pattern. All fields have a type (including private ones).
+    /// Privacy is handled separately by the `is_private` field.
+    pub ty: TypePattern,
     /// Whether this field is private (not visible to BAML code).
     /// Private fields are not added to the type checking map but still have types.
     pub is_private: bool,
@@ -580,7 +581,7 @@ mod tests {
         let handle_field = handle_field.unwrap();
         assert!(handle_field.is_private, "_handle should be private");
         assert!(
-            matches!(handle_field.ty, Some(TypePattern::Resource)),
+            matches!(handle_field.ty, TypePattern::Resource),
             "private _handle field should have Resource type"
         );
 
@@ -589,13 +590,13 @@ mod tests {
         assert!(status_field.is_some(), "status_code field should exist");
         let status_field = status_field.unwrap();
         assert!(!status_field.is_private, "status_code should be public");
-        assert!(matches!(status_field.ty, Some(TypePattern::Int)));
+        assert!(matches!(status_field.ty, TypePattern::Int));
 
         // Check headers field type is Map<String, String>
         let headers_field = find_field("baml.http.Response", "headers");
         assert!(headers_field.is_some(), "headers field should exist");
         let headers_field = headers_field.unwrap();
-        assert!(matches!(headers_field.ty, Some(TypePattern::Map { .. })));
+        assert!(matches!(headers_field.ty, TypePattern::Map { .. }));
     }
 }
 

@@ -365,6 +365,20 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_runtime_accepts_opaque_types() {
+        assert!(Ty::Resource.validate_runtime().is_ok());
+        assert!(Ty::PromptAst.validate_runtime().is_ok());
+        assert!(Ty::PrimitiveClient.validate_runtime().is_ok());
+    }
+
+    #[test]
+    fn test_display_opaque_types() {
+        assert_eq!(Ty::Resource.to_string(), "resource");
+        assert_eq!(Ty::PromptAst.to_string(), "prompt_ast");
+        assert_eq!(Ty::PrimitiveClient.to_string(), "primitive_client");
+    }
+
+    #[test]
     fn test_validate_runtime_rejects_compiler_types() {
         assert!(Ty::Void.validate_runtime().is_err());
         assert!(

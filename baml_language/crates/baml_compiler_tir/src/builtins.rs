@@ -401,4 +401,40 @@ mod tests {
         let arr_ty = Ty::List(Box::new(Ty::Int));
         assert!(lookup_method(&arr_ty, "nonexistent").is_none());
     }
+
+    #[test]
+    fn test_match_opaque_types() {
+        assert!(match_pattern(&TypePattern::Resource, &Ty::Resource).is_some());
+        assert!(match_pattern(&TypePattern::PromptAst, &Ty::PromptAst).is_some());
+        assert!(match_pattern(&TypePattern::PrimitiveClient, &Ty::PrimitiveClient).is_some());
+
+        // Opaque types should not match each other
+        assert!(match_pattern(&TypePattern::Resource, &Ty::PromptAst).is_none());
+        assert!(match_pattern(&TypePattern::PromptAst, &Ty::PrimitiveClient).is_none());
+        assert!(match_pattern(&TypePattern::PrimitiveClient, &Ty::Resource).is_none());
+    }
+
+    #[test]
+    fn test_substitute_opaque_types() {
+        let bindings = HashMap::new();
+        assert_eq!(substitute(&TypePattern::Resource, &bindings), Ty::Resource);
+        assert_eq!(
+            substitute(&TypePattern::PromptAst, &bindings),
+            Ty::PromptAst
+        );
+        assert_eq!(
+            substitute(&TypePattern::PrimitiveClient, &bindings),
+            Ty::PrimitiveClient
+        );
+    }
+
+    #[test]
+    fn test_substitute_unknown_opaque_types() {
+        assert_eq!(substitute_unknown(&TypePattern::Resource), Ty::Resource);
+        assert_eq!(substitute_unknown(&TypePattern::PromptAst), Ty::PromptAst);
+        assert_eq!(
+            substitute_unknown(&TypePattern::PrimitiveClient),
+            Ty::PrimitiveClient
+        );
+    }
 }

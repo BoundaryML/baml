@@ -311,12 +311,7 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
             .fields
             .iter()
             .filter(|f| !f.is_private)
-            .map(|f| {
-                (
-                    Name::new(f.name),
-                    builtins::substitute_unknown(f.ty.as_ref().unwrap()),
-                )
-            })
+            .map(|f| (Name::new(f.name), builtins::substitute_unknown(&f.ty)))
             .collect();
         classes.insert(Name::new(builtin.path), public_fields);
     }

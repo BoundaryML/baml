@@ -198,6 +198,15 @@ impl BexEngine {
                     panic!("Instance.class should point to a Class object")
                 };
 
+                debug_assert_eq!(
+                    class.fields.len(),
+                    instance.fields.len(),
+                    "Class '{}' has {} fields but instance has {} fields",
+                    class.name,
+                    class.fields.len(),
+                    instance.fields.len(),
+                );
+
                 // Read field types directly from the Class object on the heap
                 let fields: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
                     class

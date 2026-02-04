@@ -176,13 +176,9 @@ pub fn compile_files(
             field_indices.insert(field.name.to_string(), idx);
 
             // Determine the Ty for this field
-            let field_ty = if let Some(ref ty_pattern) = field.ty {
-                let tir_ty = baml_compiler_tir::builtins::substitute_unknown(ty_pattern);
-                baml_type::convert_tir_ty(&tir_ty, &type_aliases, &recursive_aliases)
-                    .unwrap_or(baml_type::Ty::Null)
-            } else {
-                baml_type::Ty::Null // fallback for truly typeless fields (shouldn't happen now)
-            };
+            let tir_ty = baml_compiler_tir::builtins::substitute_unknown(&field.ty);
+            let field_ty = baml_type::convert_tir_ty(&tir_ty, &type_aliases, &recursive_aliases)
+                .unwrap_or(baml_type::Ty::Null);
 
             fields.push(ClassField {
                 name: field.name.to_string(),
@@ -193,12 +189,10 @@ pub fn compile_files(
 
             // Only add public fields to field_types (for type checking)
             if !field.is_private {
-                if let Some(ref ty_pattern) = field.ty {
-                    field_types.insert(
-                        Name::new(field.name),
-                        baml_compiler_tir::builtins::substitute_unknown(ty_pattern),
-                    );
-                }
+                field_types.insert(
+                    Name::new(field.name),
+                    baml_compiler_tir::builtins::substitute_unknown(&field.ty),
+                );
             }
         }
 
