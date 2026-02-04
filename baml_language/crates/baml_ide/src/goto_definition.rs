@@ -266,7 +266,7 @@ fn find_function_at_position(
                         let class_name = class_node
                             .name()
                             .map(|n| n.text().to_string())
-                            .unwrap_or_default();
+                            .unwrap_or_else(|| "UnnamedClass".to_string());
                         for method in class_node.methods() {
                             if let Some(name) = method.name() {
                                 // Compare against qualified name (ClassName.methodName)
