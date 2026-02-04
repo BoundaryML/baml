@@ -1,8 +1,28 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
+  [type] Error: Unknown type `name`
+   ╭─[ type_aliases_json.baml:4:8 ]
+   │
+ 4 │   inner name
+   │        ──┬──  
+   │          ╰──── Unknown type `name`
+   │ 
+   │ Note: Error code: E0002
+───╯
+
+  [type] Error: Unknown type `json`
+   ╭─[ type_aliases_json.baml:1:12 ]
+   │
+ 1 │ type JSON = int | float | string | bool | JSON[] | map<string,json>
+   │            ────────────────────────────┬───────────────────────────  
+   │                                        ╰───────────────────────────── Unknown type `json`
+   │ 
+   │ Note: Error code: E0002
+───╯
+
   [type] Error: Expected `foo`, found `bool`
     ╭─[ type_aliases.baml:11:3 ]
     │

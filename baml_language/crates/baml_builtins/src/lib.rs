@@ -410,6 +410,73 @@ pub fn find_builtin_by_path(path: &str) -> Option<&'static BuiltinSignature> {
     builtins().iter().find(|def| def.path == normalized)
 }
 
+// ============================================================================
+// Prelude - commonly used types available without qualification
+// ============================================================================
+
+/// A prelude entry mapping a short name to its fully qualified path.
+#[derive(Debug, Clone, Copy)]
+pub struct PreludeEntry {
+    /// The short name (e.g., "Request")
+    pub short_name: &'static str,
+    /// The fully qualified path (e.g., "baml.http.Request")
+    pub qualified_path: &'static str,
+}
+
+/// The prelude - types that are automatically available without qualification.
+///
+/// These are commonly-used builtin types that can be referenced by their
+/// short names in BAML code. For example, `Request` resolves to `baml.http.Request`.
+///
+/// User-defined types with the same name will shadow prelude entries.
+static PRELUDE: &[PreludeEntry] = &[
+    // HTTP types
+    PreludeEntry {
+        short_name: "Request",
+        qualified_path: "baml.http.Request",
+    },
+    PreludeEntry {
+        short_name: "Response",
+        qualified_path: "baml.http.Response",
+    },
+    // LLM types
+    PreludeEntry {
+        short_name: "PromptAst",
+        qualified_path: "baml.llm.PromptAst",
+    },
+    PreludeEntry {
+        short_name: "PrimitiveClient",
+        qualified_path: "baml.llm.PrimitiveClient",
+    },
+    // File system types
+    PreludeEntry {
+        short_name: "File",
+        qualified_path: "baml.fs.File",
+    },
+    // Network types
+    PreludeEntry {
+        short_name: "Socket",
+        qualified_path: "baml.net.Socket",
+    },
+];
+
+/// Get the prelude entries.
+///
+/// Returns all type names that are automatically available without qualification.
+pub fn prelude() -> &'static [PreludeEntry] {
+    PRELUDE
+}
+
+/// Look up a short name in the prelude.
+///
+/// Returns the fully qualified path if the name is in the prelude.
+pub fn lookup_prelude(short_name: &str) -> Option<&'static str> {
+    PRELUDE
+        .iter()
+        .find(|entry| entry.short_name == short_name)
+        .map(|entry| entry.qualified_path)
+}
+
 /// Normalize the `baml` prefix, allowing any number of a's.
 ///
 /// This is an easter egg: `baml`, `baaml`, `baaaml`, etc. all resolve
@@ -628,6 +695,46 @@ mod tests {
         assert!(headers_field.is_some(), "headers field should exist");
         let headers_field = headers_field.unwrap();
         assert!(matches!(headers_field.ty, TypePattern::Map { .. }));
+    }
+
+    #[test]
+    fn test_prelude() {
+        // Test that prelude entries exist
+        assert!(!prelude().is_empty(), "Prelude should not be empty");
+
+        // Test lookup_prelude
+        assert_eq!(
+            lookup_prelude("Request"),
+            Some("baml.http.Request"),
+            "Request should resolve to baml.http.Request"
+        );
+        assert_eq!(
+            lookup_prelude("Response"),
+            Some("baml.http.Response"),
+            "Response should resolve to baml.http.Response"
+        );
+        assert_eq!(
+            lookup_prelude("PromptAst"),
+            Some("baml.llm.PromptAst"),
+            "PromptAst should resolve to baml.llm.PromptAst"
+        );
+        assert_eq!(
+            lookup_prelude("PrimitiveClient"),
+            Some("baml.llm.PrimitiveClient"),
+            "PrimitiveClient should resolve to baml.llm.PrimitiveClient"
+        );
+
+        // Test that unknown names return None
+        assert_eq!(
+            lookup_prelude("UnknownType"),
+            None,
+            "Unknown types should return None"
+        );
+        assert_eq!(
+            lookup_prelude("string"),
+            None,
+            "Primitives should not be in prelude"
+        );
     }
 }
 

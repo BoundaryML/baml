@@ -280,6 +280,15 @@ test IncompleteSyntax {
 //     │ Note: Error code: E0035
 // ────╯
 // Error: Unknown type `Resume`
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:45 ]
+//    │
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    │                                             ───┬───  
+//    │                                                ╰───── Unknown type `Resume`
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯
+// Error: Unknown type `Resume`
 //    ╭─[ misc_dynamic_types_parser_errors.baml:1:1 ]
 //    │
 //  1 │ function TypeBuilderFn(from_text: string) -> Resume {

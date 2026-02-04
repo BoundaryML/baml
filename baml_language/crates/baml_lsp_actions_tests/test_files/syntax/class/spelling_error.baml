@@ -21,4 +21,21 @@ class InterfaceOne {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Unknown type `strin`
+//    ╭─[ class_spelling_error.baml:2:12 ]
+//    │
+//  2 │   interface strin
+//    │            ───┬──  
+//    │               ╰──── Unknown type `strin`
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯
+// Error: Unknown type `InterfaceT`
+//    ╭─[ class_spelling_error.baml:6:7 ]
+//    │
+//  6 │   uses InterfaceT
+//    │       ─────┬─────  
+//    │            ╰─────── Unknown type `InterfaceT`
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯

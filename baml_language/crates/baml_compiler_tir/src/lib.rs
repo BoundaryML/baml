@@ -208,6 +208,17 @@ pub struct TypeAliasNamesSet<'db> {
     pub names: HashSet<Name>,
 }
 
+/// Tracked struct holding type validation errors.
+///
+/// These are errors from validating type references (unknown types, etc.).
+/// Kept separate from type data queries for caching efficiency.
+#[salsa::tracked]
+pub struct TypeValidationErrors<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub errors: Vec<TirTypeError>,
+}
+
 // ============================================================================
 // TIR Queries
 // ============================================================================
@@ -430,6 +441,204 @@ pub fn type_alias_names(db: &dyn Db, project: Project) -> TypeAliasNamesSet<'_> 
     }
 
     TypeAliasNamesSet::new(db, names)
+}
+
+/// Query: Validate all type references in a project.
+///
+/// This checks that all types referenced in class fields, type aliases,
+/// function signatures, and template string parameters actually exist.
+/// Returns a list of type errors with proper source spans.
+///
+/// This is a separate query from the type-lowering queries (`class_field_types`,
+/// `type_aliases`) to keep validation separate from data extraction. The data
+/// queries discard errors for caching efficiency, while this query collects them.
+#[salsa::tracked]
+pub fn validate_type_references(db: &dyn Db, project: Project) -> TypeValidationErrors<'_> {
+    use baml_compiler_parser::syntax_tree;
+    use baml_compiler_syntax::ast::{Item, Parameter, SourceFile};
+    use rowan::ast::AstNode;
+
+    let items = baml_compiler_hir::project_items(db, project);
+    let resolution_ctx = TypeResolutionContext::new(db, project);
+    let mut errors = Vec::new();
+
+    for item in items.items(db) {
+        match item {
+            // Validate class field types
+            baml_compiler_hir::ItemId::Class(class_loc) => {
+                let file = class_loc.file(db);
+                let file_id = file.file_id(db);
+                let item_tree = baml_compiler_hir::file_item_tree(db, file);
+                let class_data = &item_tree[class_loc.id(db)];
+                let class_name = class_data.name.as_str();
+                let occurrence = class_loc.id(db).index();
+
+                // Get the CST to find type expression spans
+                let tree = syntax_tree(db, file);
+                let source_file = SourceFile::cast(tree).unwrap();
+
+                // Find the matching class definition in the CST
+                let class_def = source_file
+                    .items()
+                    .filter_map(|item| match item {
+                        Item::Class(c) => Some(c),
+                        _ => None,
+                    })
+                    .filter(|c| c.name().map(|n| n.text() == class_name).unwrap_or(false))
+                    .nth(occurrence as usize);
+
+                if let Some(class_def) = class_def {
+                    // Validate each field's type
+                    for (field_data, field_cst) in class_data.fields.iter().zip(class_def.fields())
+                    {
+                        if let Some(type_expr) = field_cst.ty() {
+                            let span = Span::new(file_id, type_expr.syntax().text_range());
+                            let (_, field_errors) =
+                                resolution_ctx.lower_type_ref(&field_data.type_ref, span);
+                            errors.extend(field_errors);
+                        }
+                    }
+                }
+            }
+
+            // Validate type alias right-hand side types
+            baml_compiler_hir::ItemId::TypeAlias(alias_loc) => {
+                let file = alias_loc.file(db);
+                let file_id = file.file_id(db);
+                let item_tree = baml_compiler_hir::file_item_tree(db, file);
+                let alias_data = &item_tree[alias_loc.id(db)];
+                let alias_name = alias_data.name.as_str();
+                let occurrence = alias_loc.id(db).index();
+
+                // Get the CST to find type expression spans
+                let tree = syntax_tree(db, file);
+                let source_file = SourceFile::cast(tree).unwrap();
+
+                // Find the matching type alias definition in the CST
+                let alias_def = source_file
+                    .items()
+                    .filter_map(|item| match item {
+                        Item::TypeAlias(a) => Some(a),
+                        _ => None,
+                    })
+                    .filter(|a| a.name().map(|n| n.text() == alias_name).unwrap_or(false))
+                    .nth(occurrence as usize);
+
+                if let Some(alias_def) = alias_def {
+                    if let Some(type_expr) = alias_def.ty() {
+                        let span = Span::new(file_id, type_expr.syntax().text_range());
+                        let (_, alias_errors) =
+                            resolution_ctx.lower_type_ref(&alias_data.type_ref, span);
+                        errors.extend(alias_errors);
+                    }
+                }
+            }
+
+            // Validate function parameter and return types
+            baml_compiler_hir::ItemId::Function(func_loc) => {
+                let file = func_loc.file(db);
+                let file_id = file.file_id(db);
+                let item_tree = baml_compiler_hir::file_item_tree(db, file);
+                let func_data = &item_tree[func_loc.id(db)];
+
+                // Skip compiler-generated functions (like client.resolve)
+                if func_data.compiler_generated.is_some() {
+                    continue;
+                }
+
+                let func_name = func_data.name.as_str();
+                let occurrence = func_loc.id(db).index();
+
+                // Get signature from HIR
+                let signature = baml_compiler_hir::function_signature(db, *func_loc);
+
+                // Get the CST to find type expression spans
+                let tree = syntax_tree(db, file);
+                let source_file = SourceFile::cast(tree).unwrap();
+
+                // Find the matching function definition in the CST
+                let func_def = source_file
+                    .items()
+                    .filter_map(|item| match item {
+                        Item::Function(f) => Some(f),
+                        _ => None,
+                    })
+                    .filter(|f| f.name().map(|n| n.text() == func_name).unwrap_or(false))
+                    .nth(occurrence as usize);
+
+                if let Some(func_def) = func_def {
+                    // Validate parameter types
+                    let cst_params: Vec<Parameter> = func_def
+                        .param_list()
+                        .map(|pl| pl.params().collect())
+                        .unwrap_or_default();
+                    for (param_data, param_cst) in signature.params.iter().zip(cst_params.iter()) {
+                        if let Some(type_expr) = param_cst.ty() {
+                            let span = Span::new(file_id, type_expr.syntax().text_range());
+                            let (_, param_errors) =
+                                resolution_ctx.lower_type_ref(&param_data.type_ref, span);
+                            errors.extend(param_errors);
+                        }
+                    }
+
+                    // Validate return type
+                    if let Some(return_type_expr) = func_def.return_type() {
+                        let span = Span::new(file_id, return_type_expr.syntax().text_range());
+                        let (_, return_errors) =
+                            resolution_ctx.lower_type_ref(&signature.return_type, span);
+                        errors.extend(return_errors);
+                    }
+                }
+            }
+
+            // Validate template string parameter types
+            baml_compiler_hir::ItemId::TemplateString(ts_loc) => {
+                let file = ts_loc.file(db);
+                let file_id = file.file_id(db);
+                let item_tree = baml_compiler_hir::file_item_tree(db, file);
+                let ts_data = &item_tree[ts_loc.id(db)];
+                let ts_name = ts_data.name.as_str();
+                let occurrence = ts_loc.id(db).index();
+
+                // Get signature from HIR
+                let signature = baml_compiler_hir::template_string_signature(db, *ts_loc);
+
+                // Get the CST to find type expression spans
+                let tree = syntax_tree(db, file);
+                let source_file = SourceFile::cast(tree).unwrap();
+
+                // Find the matching template string definition in the CST
+                let ts_def = source_file
+                    .items()
+                    .filter_map(|item| match item {
+                        Item::TemplateString(t) => Some(t),
+                        _ => None,
+                    })
+                    .filter(|t| t.name().map(|n| n.text() == ts_name).unwrap_or(false))
+                    .nth(occurrence as usize);
+
+                if let Some(ts_def) = ts_def {
+                    // Validate parameter types
+                    let cst_params: Vec<Parameter> = ts_def
+                        .param_list()
+                        .map(|pl| pl.params().collect())
+                        .unwrap_or_default();
+                    for (param_data, param_cst) in signature.params.iter().zip(cst_params.iter()) {
+                        if let Some(type_expr) = param_cst.ty() {
+                            let span = Span::new(file_id, type_expr.syntax().text_range());
+                            let (_, param_errors) =
+                                resolution_ctx.lower_type_ref(&param_data.type_ref, span);
+                            errors.extend(param_errors);
+                        }
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    }
+
+    TypeValidationErrors::new(db, errors)
 }
 
 /// Context for type resolution across a project.

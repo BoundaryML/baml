@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -7831,6 +7831,26 @@ expression: output
      │                      ╰───── `Language` first defined in rust.baml
      │ 
      │ Note: Error code: E0011
+─────╯
+
+  [type] Error: Unknown type `crate`
+    ╭─[ rust.baml:30:28 ]
+    │
+ 30 │             type Language = crate::BamlLanguage;
+    │                            ───┬──  
+    │                               ╰──── Unknown type `crate`
+    │ 
+    │ Note: Error code: E0002
+────╯
+
+  [type] Error: Unknown type `crate`
+     ╭─[ rust.baml:203:20 ]
+     │
+ 203 │     type Language = crate::BamlLanguage;
+     │                    ───┬──  
+     │                       ╰──── Unknown type `crate`
+     │ 
+     │ Note: Error code: E0002
 ─────╯
 
   [hir] Error: Condition in `while` statement must be wrapped in parentheses.

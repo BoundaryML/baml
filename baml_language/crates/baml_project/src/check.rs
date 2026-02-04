@@ -19,7 +19,9 @@ use baml_compiler_hir::{
     self, FunctionBody, HirSourceMap, ItemId, file_items, file_lowering, function_body,
     function_signature, function_signature_source_map, project_type_item_spans,
 };
-use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
+use baml_compiler_tir::{
+    self, class_field_types, enum_variants, type_aliases, typing_context, validate_type_references,
+};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
 use baml_workspace::Project;
 
@@ -105,6 +107,17 @@ pub fn collect_diagnostics(
         diagnostics.push(
             error.to_diagnostic(std::string::ToString::to_string, |loc| {
                 // Cycle errors are type-level only, use empty source map
+                loc.to_span(&HirSourceMap::default(), &type_spans)
+            }),
+        );
+    }
+
+    // 3.6. Collect type reference validation errors (unknown types)
+    let type_validation_errors = validate_type_references(db, project);
+    for error in type_validation_errors.errors(db) {
+        diagnostics.push(
+            error.to_diagnostic(std::string::ToString::to_string, |loc| {
+                // Type reference errors use direct spans (ErrorLocation::Span)
                 loc.to_span(&HirSourceMap::default(), &type_spans)
             }),
         );

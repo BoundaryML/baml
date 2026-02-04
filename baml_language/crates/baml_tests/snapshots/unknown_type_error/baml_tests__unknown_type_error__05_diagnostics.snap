@@ -1,8 +1,38 @@
 ---
-source: target/debug/build/baml_tests-bee4cf1d73080329/out/generated_tests.rs
+source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
+  [type] Error: Unknown type `unknown_param_type`
+   ╭─[ unknown_type_error.baml:8:16 ]
+   │
+ 8 │ function Bar(x: unknown_param_type) -> int {
+   │                ─────────┬─────────  
+   │                         ╰─────────── Unknown type `unknown_param_type`
+   │ 
+   │ Note: Error code: E0002
+───╯
+
+  [type] Error: Unknown type `blah`
+   ╭─[ unknown_type_error.baml:3:18 ]
+   │
+ 3 │ function Foo() -> blah {
+   │                  ──┬──  
+   │                    ╰──── Unknown type `blah`
+   │ 
+   │ Note: Error code: E0002
+───╯
+
+  [type] Error: Unknown type `unknown_optional`
+    ╭─[ unknown_type_error.baml:13:18 ]
+    │
+ 13 │ function Baz() -> unknown_optional? {
+    │                  ─────────┬────────  
+    │                           ╰────────── Unknown type `unknown_optional`
+    │ 
+    │ Note: Error code: E0002
+────╯
+
   [type] Error: Unknown type `unknown_param_type`
    ╭─[ unknown_type_error.baml:1:1 ]
    │

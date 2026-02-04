@@ -73,13 +73,21 @@ impl<'a> TypeLoweringContextResolved<'a> {
 
     fn resolve_name(&self, name: &Name) -> Option<Ty> {
         use baml_compiler_hir::QualifiedName;
+
+        // First check user-defined types (they shadow prelude)
         if self.class_names.contains(name) {
-            Some(Ty::Class(QualifiedName::local(name.clone())))
-        } else if self.enum_names.contains(name) {
-            Some(Ty::Enum(QualifiedName::local(name.clone())))
-        } else {
-            None
+            return Some(Ty::Class(QualifiedName::local(name.clone())));
         }
+        if self.enum_names.contains(name) {
+            return Some(Ty::Enum(QualifiedName::local(name.clone())));
+        }
+
+        // Check prelude for builtin types
+        if let Some(qualified_path) = baml_builtins::lookup_prelude(name.as_str()) {
+            return Some(Ty::Class(QualifiedName::from_builtin_path(qualified_path)));
+        }
+
+        None
     }
 }
 
@@ -181,6 +189,9 @@ fn lower_path_type_resolved_with_ctx(
                 "audio" => Ty::Media(baml_base::MediaKind::Audio),
                 "video" => Ty::Media(baml_base::MediaKind::Video),
                 "pdf" => Ty::Media(baml_base::MediaKind::Pdf),
+                // map with wrong arity - the arity error is already reported by HIR,
+                // so we don't report an unknown type error here
+                "map" => Ty::Error,
                 // User-defined type - resolve to Class/Enum or validate
                 _ => {
                     use baml_compiler_hir::QualifiedName;

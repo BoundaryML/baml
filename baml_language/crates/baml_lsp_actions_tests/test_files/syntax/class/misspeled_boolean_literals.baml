@@ -18,4 +18,21 @@ class TestLiterals {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Unknown type `True`
+//    ╭─[ class_misspeled_boolean_literals.baml:3:4 ]
+//    │
+//  3 │   b "boolean" | True | False
+//    │    ────────────┬────────────  
+//    │                ╰────────────── Unknown type `True`
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯
+// Error: Unknown type `False`
+//    ╭─[ class_misspeled_boolean_literals.baml:3:4 ]
+//    │
+//  3 │   b "boolean" | True | False
+//    │    ────────────┬────────────  
+//    │                ╰────────────── Unknown type `False`
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
@@ -594,3 +594,23 @@ expression: output
 ───╯
 
   [hir] Error: Missing `provider` field in client. e.g. `provider openai`
+
+  [type] Error: Unknown type `said`
+   ╭─[ nested_quotes.baml:4:38 ]
+   │
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                                      ──┬──  
+   │                                        ╰──── Unknown type `said`
+   │ 
+   │ Note: Error code: E0002
+───╯
+
+  [type] Error: Unknown type `here`
+   ╭─[ nested_quotes.baml:5:53 ]
+   │
+ 5 │   escaped_in_escaped string @alias("The \"quote\" is here")
+   │                                                     ──┬──  
+   │                                                       ╰──── Unknown type `here`
+   │ 
+   │ Note: Error code: E0002
+───╯
