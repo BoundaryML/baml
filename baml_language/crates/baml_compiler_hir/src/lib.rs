@@ -2209,10 +2209,12 @@ pub fn get_item_name_span(
                         if let Some(name_token) = method.name() {
                             // Build qualified name and compare
                             let qualified_name = match &class_name {
-                                Some(cn) => format!("{}.{}", cn, name_token.text()),
-                                None => name_token.text().to_string(),
+                                Some(cn) => {
+                                    QualifiedName::local_method_from_str(cn, name_token.text())
+                                }
+                                None => Name::new(name_token.text()),
                             };
-                            if qualified_name == name {
+                            if qualified_name.as_str() == name {
                                 if matches_found == occurrence {
                                     return Some(Span::new(file_id, name_token.text_range()));
                                 }
