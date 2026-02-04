@@ -1,15 +1,6 @@
 ---
-source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [type] Error: Expected 0 arguments, found 1
-    ╭─[ function_call.baml:11:29 ]
-    │
- 11 │ ╭─▶   let baz = Baz { name: n };
- 12 │ ├─▶   baz.Greeting()
-    │ │                      
-    │ ╰────────────────────── Expected 0 arguments, found 1
-    │     
-    │     Note: Error code: E0005
-────╯
+No errors found.

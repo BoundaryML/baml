@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -13,7 +13,7 @@ Function Bar (arity: 0, kind: Bytecode):
      2   CALL 1           
      3   RETURN           
 
-Function Baz.Greeting (arity: 0, kind: Bytecode):
+Function Baz.Greeting (arity: 1, kind: Bytecode):
   (no bytecode)
 
 Function Foo (arity: 1, kind: Bytecode):

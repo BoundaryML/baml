@@ -1319,7 +1319,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 // Apply field accesses for remaining segments
                 for field in &segments[1..] {
                     // Infer the field type first to distinguish methods from fields
-                    let field_ty = infer_field_access(ctx, &ty, field, location.clone());
+                    let field_ty = infer_field_access(ctx, &ty, field, location.clone(), None);
 
                     // Build resolution for this segment based on base type and field type
                     let segment_resolution =
@@ -1473,19 +1473,20 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             .map(|arg| infer_expr(ctx, *arg, body))
                             .collect();
 
-                        // Build parameter patterns
-                        let mut param_patterns: Vec<&baml_builtins::TypePattern> = Vec::new();
-                        if let Some(ref receiver_pattern) = def.receiver {
-                            param_patterns.push(receiver_pattern);
-                        }
-                        for (_, pattern) in &def.params {
-                            param_patterns.push(pattern);
-                        }
+                        // Build explicit parameter patterns (not including receiver)
+                        // The receiver is handled separately - it's the base of the method call,
+                        // not part of the explicit arguments in `args`
+                        let explicit_param_patterns: Vec<&baml_builtins::TypePattern> = def
+                            .params
+                            .iter()
+                            .map(|(_, pattern)| pattern)
+                            .collect();
 
                         // Try to match each argument against its parameter pattern to extract bindings
                         let mut bindings = builtins::Bindings::new();
-                        for (arg_ty, param_pattern) in
-                            inferred_arg_types.iter().zip(param_patterns.iter())
+                        for (arg_ty, param_pattern) in inferred_arg_types
+                            .iter()
+                            .zip(explicit_param_patterns.iter())
                         {
                             if let Some(new_bindings) =
                                 builtins::match_pattern(param_pattern, arg_ty)
@@ -1498,7 +1499,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         }
 
                         // Phase 2: Compute expected parameter types using bindings
-                        let param_types: Vec<Ty> = param_patterns
+                        // Only include explicit params, not receiver
+                        let param_types: Vec<Ty> = explicit_param_patterns
                             .iter()
                             .map(|p| {
                                 if bindings.is_empty() {
@@ -1561,7 +1563,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             let first = &receiver_segments[0];
                             let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
                             for field in &receiver_segments[1..] {
-                                ty = infer_field_access(ctx, &ty, field, location.clone());
+                                ty = infer_field_access(ctx, &ty, field, location.clone(), None);
                             }
                             ty
                         };
@@ -1662,7 +1664,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             }
 
             let base_ty = infer_expr(ctx, *base, body);
-            infer_field_access(ctx, &base_ty, field, location)
+            infer_field_access(ctx, &base_ty, field, location, Some(expr_id))
         }
 
         Expr::Index { base, index } => {
@@ -2577,11 +2579,16 @@ fn infer_unary_op(
 ///
 /// For class types, this handles both field access and method access.
 /// For primitive types (arrays, strings, maps), this handles builtin methods.
+///
+/// The `expr_id` parameter is optional - when provided (for standalone FieldAccess expressions),
+/// the resolution is stored for MIR to use. For field accesses within multi-segment paths,
+/// pass None since the resolution is handled at the path level.
 fn infer_field_access(
     ctx: &mut TypeContext<'_>,
     base: &Ty,
     field: &Name,
     location: ErrorLocation,
+    expr_id: Option<ExprId>,
 ) -> Ty {
     // Special case: $watch accessor on any type
     // The actual watched check happens at MIR lowering time
@@ -2629,8 +2636,15 @@ fn infer_field_access(
         Ty::Class(fqn) => {
             // First try to find a method using qualified name (ClassName.methodName)
             let qualified_method_name = Name::new(format!("{}.{}", fqn.name, field));
-            if let Some(method_ty) = ctx.lookup(&qualified_method_name) {
-                return method_ty.clone();
+            if let Some(method_ty) = ctx.lookup(&qualified_method_name).cloned() {
+                // Store resolution for method reference so MIR can look it up
+                if let Some(expr_id) = expr_id {
+                    ctx.set_expr_resolution(
+                        expr_id,
+                        ResolvedValue::Function(FullyQualifiedName::local(qualified_method_name)),
+                    );
+                }
+                return method_ty;
             }
             // Check the context's class_fields for this class name
             ctx.lookup_class_field(&fqn.name, field).cloned()

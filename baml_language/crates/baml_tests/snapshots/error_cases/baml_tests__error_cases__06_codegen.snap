@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -7,13 +7,13 @@ Functions: 6
 Objects: 57
 Globals: 52
 
-Function Broken.BadUnionPattern (arity: 0, kind: Bytecode):
+Function Broken.BadUnionPattern (arity: 1, kind: Bytecode):
   (no bytecode)
 
 Function Broken.Invalid (arity: 0, kind: Bytecode):
   (no bytecode)
 
-Function Broken.MixedLiteralAndTyped (arity: 0, kind: Bytecode):
+Function Broken.MixedLiteralAndTyped (arity: 1, kind: Bytecode):
   (no bytecode)
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):

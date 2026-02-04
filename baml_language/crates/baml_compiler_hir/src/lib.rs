@@ -417,7 +417,9 @@ fn function_signature_with_source_map<'db>(
                 let method_name = method.name()?;
                 let class_name = class_node.name();
                 let class_name_text = class_name.as_ref()?.text();
-                if method_name.text() == func_name {
+                // func_name is qualified (ClassName.methodName), so compare against that
+                let qualified_method_name = format!("{}.{}", class_name_text, method_name.text());
+                if qualified_method_name == func_name.as_str() {
                     Some(lower_method_signature(&method, &func_name, class_name_text))
                 } else {
                     None

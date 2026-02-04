@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -11,7 +11,7 @@ fn array_length() -> int {
     let _3: 2
     let _4: 3
     let _5: void
-    let _6: (int[]) -> int
+    let _6: () -> int
     let _7: int[]
 
     bb0: {
@@ -120,7 +120,7 @@ fn GreetBaz(n: string) -> string {
     let _2: Baz // baz
     let _3: string
     let _4: Baz
-    let _5: () -> null
+    let _5: (Baz) -> string
 
     bb0: {
         _3 = copy _1;
