@@ -11,6 +11,7 @@ import { RenderPrompt } from './render-prompt';
 import { EnhancedErrorRenderer } from './test-panel/components/EnhancedErrorRenderer';
 import { runtimeInstanceAtom } from '../../../../sdk/atoms/core.atoms';
 import type { PromptInfo } from '../../../../sdk/interface';
+import { AlertCircle } from 'lucide-react';
 
 export const renderedPromptAtom = atom<PromptInfo | undefined>(undefined);
 
@@ -104,31 +105,41 @@ export const PromptPreviewContent = () => {
   }
 
 
-  if (error) {
+  const hasDiagnosticErrors = diagnostics.some((d) => d.type === 'error');
 
-    return (
-      <EnhancedErrorRenderer
-        errorMessage={error instanceof Error ? error.message : 'Unknown Error'}
-      />
-    );
-  }
-
-  if (diagnostics.length > 0 && diagnostics.some((d) => d.type === 'error')) {
+  // Diagnostic errors: show stale prompt with banner if available
+  if (hasDiagnosticErrors) {
+    if (lastKnownPreview) {
+      const errorCount = diagnostics.filter((d) => d.type === 'error').length;
+      return (
+        <div className="relative">
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10">
+            <div className="flex items-center gap-2 rounded border bg-vscode-notifications-background border-vscode-notifications-border px-3 py-1.5 shadow-md text-xs text-foreground">
+              <AlertCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+              <span>
+                Project has {errorCount} error{errorCount !== 1 ? 's' : ''} — showing last valid preview
+              </span>
+            </div>
+          </div>
+          <RenderPrompt prompt={lastKnownPreview} testCase={selectedTc ?? undefined} />
+        </div>
+      );
+    }
+    // No stale preview (first load with errors) — show full error
     const errorMessages = diagnostics
       .filter((d) => d.type === 'error')
       .map((d) => `- ${d.message}`)
       .join('\n');
-
-    const fullErrorMessage = `${diagnostics.filter((d) => d.type === 'error').length} error(s):\n${errorMessages}`;
-
     return (
-      <div className="relative">
-        {/* todo: maybe keep rendering the last known prompt? And make this a more condensed error banner in absolute position? */}
-        <div className="p-3">
-          <EnhancedErrorRenderer errorMessage={fullErrorMessage} />
-        </div>
+      <div className="p-3">
+        <EnhancedErrorRenderer errorMessage={`${diagnostics.filter((d) => d.type === 'error').length} error(s):\n${errorMessages}`} />
       </div>
     );
+  }
+
+  // Non-diagnostic SWR errors (runtime rendering errors unrelated to compilation)
+  if (error) {
+    return <EnhancedErrorRenderer errorMessage={error instanceof Error ? error.message : 'Unknown Error'} />;
   }
 
   return <RenderPrompt prompt={preview} testCase={selectedTc ?? undefined} />;

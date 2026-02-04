@@ -361,33 +361,38 @@ impl CandidateApplier {
                     let has_alias = line_rest.contains("@alias");
 
                     // If we have descriptions/aliases to add or replace
-                    if field.description.is_some() && has_desc {
-                        // Replace existing @description
-                        if let Some(desc_start) = line_rest.find("@description") {
-                            let abs_desc_start = field_end + desc_start;
-                            if let Some(desc_end) = find_attribute_end(&result[abs_desc_start..]) {
-                                let escaped =
-                                    escape_baml_string(field.description.as_ref().unwrap());
-                                let before = &result[..abs_desc_start];
-                                let after = &result[abs_desc_start + desc_end..];
-                                result =
-                                    format!("{}@description(#\"{}\"#){}", before, escaped, after);
+                    if let Some(ref description) = field.description {
+                        if has_desc {
+                            // Replace existing @description
+                            if let Some(desc_start) = line_rest.find("@description") {
+                                let abs_desc_start = field_end + desc_start;
+                                if let Some(desc_end) =
+                                    find_attribute_end(&result[abs_desc_start..])
+                                {
+                                    let escaped = escape_baml_string(description);
+                                    let before = &result[..abs_desc_start];
+                                    let after = &result[abs_desc_start + desc_end..];
+                                    result = format!(
+                                        "{}@description(#\"{}\"#){}",
+                                        before, escaped, after
+                                    );
+                                }
                             }
+                        } else {
+                            // Add new @description
+                            let escaped = escape_baml_string(description);
+                            let insert_pos = field_end + newline_pos;
+                            result = format!(
+                                "{} @description(#\"{}\"#){}",
+                                &result[..insert_pos],
+                                escaped,
+                                &result[insert_pos..]
+                            );
                         }
-                    } else if field.description.is_some() && !has_desc {
-                        // Add new @description
-                        let escaped = escape_baml_string(field.description.as_ref().unwrap());
-                        let insert_pos = field_end + newline_pos;
-                        result = format!(
-                            "{} @description(#\"{}\"#){}",
-                            &result[..insert_pos],
-                            escaped,
-                            &result[insert_pos..]
-                        );
                     }
 
                     // Re-find positions after potential modification
-                    if field.alias.is_some() {
+                    if let Some(ref alias) = field.alias {
                         // Re-find the field position after description changes
                         if let Some(class_start) = result.find(&format!("class {}", class_name)) {
                             let after_class = &result[class_start..];
@@ -407,9 +412,7 @@ impl CandidateApplier {
                                             if let Some(alias_end) =
                                                 find_attribute_end(&result[abs_alias_start..])
                                             {
-                                                let escaped = escape_baml_string(
-                                                    field.alias.as_ref().unwrap(),
-                                                );
+                                                let escaped = escape_baml_string(alias);
                                                 let before = &result[..abs_alias_start];
                                                 let after = &result[abs_alias_start + alias_end..];
                                                 result = format!(
@@ -420,8 +423,7 @@ impl CandidateApplier {
                                         }
                                     } else {
                                         // Add new @alias
-                                        let escaped =
-                                            escape_baml_string(field.alias.as_ref().unwrap());
+                                        let escaped = escape_baml_string(alias);
                                         let insert_pos = field_end + newline_pos;
                                         result = format!(
                                             "{} @alias(#\"{}\"#){}",

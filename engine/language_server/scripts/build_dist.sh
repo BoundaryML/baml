@@ -22,7 +22,7 @@ pnpm install
 # Check if wasm-bindgen is installed, install if not
 if ! command -v wasm-bindgen &> /dev/null; then
     printf '%s\n' " -> Installing wasm-bindgen-cli..."
-    cargo install -f wasm-bindgen-cli@0.2.92
+    cargo install -f wasm-bindgen-cli@0.2.105
 fi
 
 # Build playground dependencies

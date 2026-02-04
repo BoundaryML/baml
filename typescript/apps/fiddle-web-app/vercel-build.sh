@@ -51,6 +51,10 @@ fi
 # Ensure paths are set
 export PATH="$HOME/.cargo/bin:/usr/local/go/bin:$PATH"
 
+# Ensure a default Rust toolchain is configured
+# (rustup shims may exist without a default toolchain set)
+rustup default stable
+
 # Install Go tools
 echo "Installing Go tools..."
 # Install protoc-gen-go for protocol buffer generation
@@ -69,7 +73,7 @@ echo "pnpm version: $(pnpm --version)"
 
 # Install required Rust tools
 echo "Installing Rust tools..."
-cargo install wasm-pack --version 0.13.1 || true
+cargo install wasm-pack --version 0.14.0 || true
 cargo install cross || true
 
 # Add wasm target

@@ -2,7 +2,7 @@
 // RUST_LOG=info wasm-pack test --node --test test_log_collector
 // and make sure to set rust-analyzer target in vscode settings to:   "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
 
-// Install wasm bindgen cli: cargo install wasm-bindgen-cli --version 0.2.101
+// Install wasm bindgen cli: cargo install wasm-bindgen-cli --version 0.2.105
 // Browser test command is:
 // RUST_BACKTRACE=1 RUST_LOG=info wasm-pack test --chrome --headless --test test_log_collector -- --nocapture
 #[cfg(target_arch = "wasm32")]

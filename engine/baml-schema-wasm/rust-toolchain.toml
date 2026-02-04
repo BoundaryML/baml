@@ -1,8 +1,10 @@
 [toolchain]
 # If you set this > 1.81 you may run into this webassembly issue:
 # https://github.com/rustwasm/rust-webpack-template/issues/191
-# If you really want > 1.81 you can try using wasm-bindgen-cli 2.92.2 instead
-# channel = "1.81.0" # Update: reverting this to 2.92 and not pinning the rustc version since the update to 2.100 broke the build
+# If you really want > 1.81 you can try using wasm-bindgen-cli 0.2.105 instead
+# Previously pinned to 1.81.0 but reverted to use stable with wasm-bindgen-cli 0.2.105
+# Using same version as root rust-toolchain.toml to avoid rustup component conflicts in CI
+channel = "1.93.0"
 components = []
 targets = [ "wasm32-unknown-unknown" ]
 profile = "minimal"

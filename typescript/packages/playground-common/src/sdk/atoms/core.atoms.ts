@@ -654,11 +654,31 @@ export const diagnosticsAtom = atom((get) => {
 });
 
 /**
- * All functions extracted from BAML runtime - derived from runtime
+ * Cache of last-valid (error-free) functions list.
+ * Populated in sdk.ts when runtime compiles without errors.
+ */
+export const lastValidFunctionsAtom = atom<FunctionWithCallGraph[]>([]);
+
+/**
+ * All functions extracted from BAML runtime - derived from runtime.
+ * Falls back to lastValidFunctionsAtom when empty due to compilation errors,
+ * so downstream atoms (selectionAtom, sidebar) keep working during error state.
  */
 export const functionsAtom = atom((get): FunctionWithCallGraph[] => {
   const runtime = get(runtimeInstanceAtom);
-  return runtime?.getFunctions() ?? [];
+  const currentFunctions = runtime?.getFunctions() ?? [];
+
+  if (currentFunctions.length > 0) {
+    return currentFunctions;
+  }
+
+  // If empty because of errors, preserve last-valid functions
+  const hasErrors = get(diagnosticsAtom).some((d) => d.type === 'error');
+  if (hasErrors) {
+    return get(lastValidFunctionsAtom);
+  }
+
+  return currentFunctions; // genuinely empty (no files)
 });
 
 /**

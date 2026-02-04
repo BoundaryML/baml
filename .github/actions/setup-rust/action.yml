@@ -5,7 +5,7 @@ inputs:
   toolchain:
     description: "Rust toolchain version"
     required: false
-    default: "1.92.0"
+    default: "1.93.0"
   enable-wasm:
     description: "Enable WASM support (adds wasm32-unknown-unknown target and wasm-pack)"
     required: false
@@ -13,7 +13,7 @@ inputs:
   wasm-pack-version:
     description: "wasm-pack version to install (only used when enable-wasm is true)"
     required: false
-    default: "0.13.1"
+    default: "0.14.0"
   enable-cross:
     description: "Enable cross-rs for cross-compilation"
     required: false
@@ -29,7 +29,7 @@ inputs:
   prefix-key:
     description: "Cache key prefix for Rust cache"
     required: false
-    default: ""
+    default: "key-1"
   cache-on-failure:
     description: "Cache even if the workflow fails"
     required: false
