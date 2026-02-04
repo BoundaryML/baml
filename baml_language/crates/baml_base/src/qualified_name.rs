@@ -255,6 +255,9 @@ impl QualifiedName {
         } else if module_path[0].as_str() == "baml" {
             // Path starts with "baml" - it's a builtin or baml_std item
             Self::builtin(module_path[1..].to_vec(), item_name)
+        } else if is_non_baml_builtin_path(module_path) {
+            // Non-baml builtin prefixes like "env"
+            Self::builtin(module_path.to_vec(), item_name)
         } else {
             // User module path
             Self::user_module(module_path.to_vec(), item_name)
@@ -609,6 +612,14 @@ mod tests {
         assert!(qn.is_builtin());
         assert_eq!(qn.name.as_str(), "get");
         // env.get is a non-baml-prefixed builtin, so it displays without baml. prefix
+        assert_eq!(qn.display(), "env.get");
+    }
+
+    #[test]
+    fn test_from_module_path_env() {
+        // Non-baml builtin prefixes should be recognized as builtins
+        let qn = QualifiedName::from_module_path(&[Name::new("env")], Name::new("get"));
+        assert!(qn.is_builtin());
         assert_eq!(qn.display(), "env.get");
     }
 
