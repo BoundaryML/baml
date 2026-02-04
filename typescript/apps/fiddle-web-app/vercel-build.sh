@@ -51,6 +51,10 @@ fi
 # Ensure paths are set
 export PATH="$HOME/.cargo/bin:/usr/local/go/bin:$PATH"
 
+# Ensure a default Rust toolchain is configured
+# (rustup shims may exist without a default toolchain set)
+rustup default stable
+
 # Install Go tools
 echo "Installing Go tools..."
 # Install protoc-gen-go for protocol buffer generation
