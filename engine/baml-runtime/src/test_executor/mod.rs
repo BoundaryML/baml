@@ -515,12 +515,13 @@ mod tests {
             .unwrap(),
         );
 
-        // 3. Set up cancel_notify that fires after 200ms
+        // 3. Set up cancel_notify that fires after 200ms.
+        // Use notify_one so the signal is not lost if cli_run_tests isn't waiting yet.
         let notify = Arc::new(tokio::sync::Notify::new());
         let notify_clone = notify.clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(200)).await;
-            notify_clone.notify_waiters();
+            notify_clone.notify_one();
         });
 
         // 4. Run tests with cancel token
