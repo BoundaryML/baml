@@ -38,32 +38,6 @@ fn array_length() -> int {
 
 }
 
-fn Greeting(self: Baz) -> string {
-    // Locals:
-    let _0: string // return
-    let _1: Baz // self // param
-    let _2: string
-    let _3: "Hello, "
-    let _4: string
-    let _5: Baz
-    let _6: "!"
-
-    bb0: {
-        _3 = const "Hello, ";
-        _5 = copy _1;
-        _4 = copy _5.0;
-        _2 = copy _3 + copy _4;
-        _6 = const "!";
-        _0 = copy _2 + copy _6;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-
-}
-
 fn param_in_if_statement(b: bool) -> int {
     // Locals:
     let _0: int // return
@@ -152,7 +126,7 @@ fn GreetBaz(n: string) -> string {
         _3 = copy _1;
         _2 = Baz { copy _3 };
         _4 = copy _2;
-        _5 = const fn Greeting;
+        _5 = const fn Baz.Greeting;
         _0 = call copy _5(copy _4) -> [bb2];
     }
 
@@ -162,6 +136,32 @@ fn GreetBaz(n: string) -> string {
 
     bb2: {
         goto -> bb1;
+    }
+
+}
+
+fn Baz.Greeting(self: Baz) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: Baz // self // param
+    let _2: string
+    let _3: "Hello, "
+    let _4: string
+    let _5: Baz
+    let _6: "!"
+
+    bb0: {
+        _3 = const "Hello, ";
+        _5 = copy _1;
+        _4 = copy _5.0;
+        _2 = copy _3 + copy _4;
+        _6 = const "!";
+        _0 = copy _2 + copy _6;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
     }
 
 }

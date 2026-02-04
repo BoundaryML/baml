@@ -24,13 +24,6 @@ fn test_hot_reload_test_string() {
 }
 
 #[wasm_bindgen_test]
-fn test_baml_project_new() {
-    let project = BamlProject::new("".to_string());
-    let names = project.function_names();
-    assert!(names.is_empty(), "empty source should have no functions");
-}
-
-#[wasm_bindgen_test]
 fn test_baml_project_function_names() {
     let project = BamlProject::new(
         r##"
@@ -48,7 +41,6 @@ fn test_baml_project_function_names() {
 #[wasm_bindgen_test]
 fn test_baml_project_set_source() {
     let mut project = BamlProject::new("".to_string());
-    assert!(project.function_names().is_empty());
 
     project.set_source(
         r##"

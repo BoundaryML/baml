@@ -3,25 +3,7 @@ source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn BadUnionPattern:
-  (no MIR due to errors: missing expression at file 0:0..0)
-
-fn Invalid() -> null {
-    // Locals:
-    let _0: null // return
-
-    bb0: {
-        _0 = const null;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-
-}
-
-fn MixedLiteralAndTyped(x: int) -> string {
+fn Broken.MixedLiteralAndTyped(x: int) -> string {
     // Locals:
     let _0: string // return
     let _1: int // x // param
@@ -62,3 +44,21 @@ fn MixedLiteralAndTyped(x: int) -> string {
     }
 
 }
+
+fn Broken.Invalid() -> null {
+    // Locals:
+    let _0: null // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn Broken.BadUnionPattern:
+  (no MIR due to errors: missing expression at file 4294967295:0..0)

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-45411f112e4e4282/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -8,10 +8,19 @@ Objects: 62
 Globals: 55
 
 Function Bar (arity: 0, kind: Bytecode):
-     0   LOAD_GLOBAL 50   (<fn Foo>)
+     0   LOAD_GLOBAL 52   (<fn Foo>)
      1   LOAD_CONST 0     (1)
      2   CALL 1           
      3   RETURN           
+
+Function Baz.Greeting (arity: 1, kind: Bytecode):
+     0   LOAD_CONST 0   ("Hello, ")
+     1   LOAD_VAR 1     (self)
+     2   LOAD_FIELD 0   
+     3   BIN_OP +       
+     4   LOAD_CONST 1   ("!")
+     5   BIN_OP +       
+     6   RETURN         
 
 Function Foo (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1     (x)
@@ -20,22 +29,13 @@ Function Foo (arity: 1, kind: Bytecode):
      3   RETURN         
 
 Function GreetBaz (arity: 1, kind: Bytecode):
-     0   LOAD_GLOBAL 47     (<fn Greeting>)
+     0   LOAD_GLOBAL 54     (<fn Baz.Greeting>)
      1   ALLOC_INSTANCE 4   (<class Baz>)
      2   COPY 0             
      3   LOAD_VAR 1         (n)
      4   STORE_FIELD 0      
      5   CALL 1             
      6   RETURN             
-
-Function Greeting (arity: 1, kind: Bytecode):
-     0   LOAD_CONST 0   ("Hello, ")
-     1   LOAD_VAR 1     (self)
-     2   LOAD_FIELD 0   
-     3   BIN_OP +       
-     4   LOAD_CONST 1   ("!")
-     5   BIN_OP +       
-     6   RETURN         
 
 Function array_length (arity: 0, kind: Bytecode):
      0   LOAD_GLOBAL 0   (<fn baml.Array.length>)

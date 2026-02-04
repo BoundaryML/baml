@@ -220,7 +220,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // 5. Build the Function
         Function {
-            name: mir.name.clone(),
+            name: mir.name.to_string(),
             arity: mir.arity,
             bytecode: self.bytecode,
             kind: FunctionKind::Bytecode,
@@ -741,8 +741,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let idx = self.add_constant(ConstValue::Null);
                 self.emit(Instruction::LoadConst(idx));
             }
-            Constant::Function(name) => {
-                let name_str = name.to_string();
+            Constant::Function(qn) => {
+                // Convert QualifiedName to runtime string for function lookup
+                let name_str = qn.to_runtime_string();
                 let global_idx = self
                     .globals
                     .get(&name_str)
@@ -753,9 +754,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let idx = self.add_constant(ConstValue::Null);
                 self.emit(Instruction::LoadConst(idx));
             }
-            Constant::EnumVariant { enum_name, variant } => {
+            Constant::EnumVariant { enum_qn, variant } => {
                 // Look up the enum object index
-                let enum_name_str = enum_name.to_string();
+                // Convert QualifiedName to runtime string for lookup
+                let enum_name_str = enum_qn.to_runtime_string();
                 let enum_obj_idx = *self
                     .enum_object_indices
                     .get(&enum_name_str)

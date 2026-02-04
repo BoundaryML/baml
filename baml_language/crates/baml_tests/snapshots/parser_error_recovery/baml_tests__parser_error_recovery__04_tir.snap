@@ -1,12 +1,12 @@
 ---
-source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function Foo:
     Return: Void
   Function GPT4.resolve:
-    Return: Unknown
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
   Function Incomplete:
     Return: Unknown
   Function NextFunction:

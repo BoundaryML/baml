@@ -48,13 +48,21 @@ pub struct SourceCache {
     file_paths: HashMap<FileId, PathBuf>,
 }
 
+/// Sentinel file ID used for fake/default spans.
+const SENTINEL_FILE_ID: u32 = u32::MAX;
+
 impl SourceCache {
     /// Create a new source cache from source text and file paths.
     pub fn new(sources: HashMap<FileId, String>, file_paths: HashMap<FileId, PathBuf>) -> Self {
-        let ariadne_sources = sources
+        let mut ariadne_sources: HashMap<FileId, Source<String>> = sources
             .into_iter()
             .map(|(id, text)| (id, Source::from(text)))
             .collect();
+
+        // Add a dummy source for the sentinel file ID to avoid errors when
+        // diagnostics have fake/default spans (e.g., for errors without location)
+        ariadne_sources.insert(FileId::new(SENTINEL_FILE_ID), Source::from(String::new()));
+
         Self {
             sources: ariadne_sources,
             file_paths,
@@ -212,8 +220,9 @@ fn render_ariadne(
             .annotations
             .first()
             .map(|a| a.span)
+            // Use sentinel for fake spans (matches Span::fake())
             .unwrap_or(Span {
-                file_id: FileId::new(0),
+                file_id: FileId::new(SENTINEL_FILE_ID),
                 range: text_size::TextRange::new(0.into(), 0.into()),
             })
     });

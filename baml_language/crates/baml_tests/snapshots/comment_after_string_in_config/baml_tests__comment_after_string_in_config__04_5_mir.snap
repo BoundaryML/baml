@@ -1,30 +1,30 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn OpenRouterMistralSmall3_1_24b.resolve() -> null {
     // Locals:
     let _0: null // return
-    let _1: null
-    let _2: null
-    let _3: null
-    let _4: null
-    let _5: null
-    let _6: null
-    let _7: null
-    let _8: null
-    let _9: null
-    let _10: null
-    let _11: null
-    let _12: null
-    let _13: null
-    let _14: null
-    let _15: null
-    let _16: null
-    let _17: null
-    let _18: null
-    let _19: null
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
+    let _2: "OpenRouterMistralSmall3_1_24b"
+    let _3: "unknown"
+    let _4: "user"
+    let _5: string[]
+    let _6: "user"
+    let _7: "assistant"
+    let _8: "system"
+    let _9: map<string, unknown>
+    let _10: "base_url"
+    let _11: "https://openrouter.ai/api/v1"
+    let _12: "api_key"
+    let _13: "OPENROUTER_API_KEY"
+    let _14: "model"
+    let _15: "mistralai/mistral-small-3.1-24b-instruct"
+    let _16: "temperature"
+    let _17: 0.1
+    let _18: "headers"
+    let _19: map<null, null>
     let _20: null
 
     bb0: {

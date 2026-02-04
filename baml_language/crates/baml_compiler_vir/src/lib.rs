@@ -56,6 +56,8 @@ mod schema;
 mod schema_lower;
 mod ty;
 
+// Re-export resolution types from TIR for MIR's use
+pub use baml_compiler_tir::{ResolvedMethod, ResolvedValue};
 pub use expr::*;
 pub use lower::{LoweringError, lower_from_hir};
 pub use pretty::pretty_print;

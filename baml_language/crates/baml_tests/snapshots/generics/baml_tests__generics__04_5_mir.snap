@@ -1,7 +1,7 @@
 ---
-source: target/debug/build/baml_tests-606b1b092e324f15/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn GetTodo:
-  (no MIR due to errors: missing expression at file 0:106..130)
+  (no MIR due to errors: missing expression at file 1:106..130)

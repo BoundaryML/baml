@@ -16,11 +16,11 @@
 
 use std::collections::HashMap;
 
-use baml_base::{Name, Span};
+use baml_base::{Name, QualifiedName, Span};
 use baml_compiler_hir::FunctionSignature;
 use baml_compiler_tir::TypeResolutionContext;
 use baml_compiler_vir::{
-    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp,
+    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, ResolvedValue, UnaryOp,
 };
 use baml_type::{Ty, TypeName};
 
@@ -165,7 +165,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     ) -> Self {
         Self {
             db,
-            builder: MirBuilder::new("", arity),
+            builder: MirBuilder::new(Name::new(""), arity),
             locals: HashMap::new(),
             loop_context: None,
             class_fields,
@@ -306,7 +306,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
     /// Lower a complete function.
     fn lower_function(&mut self, signature: &FunctionSignature, body: &ExprBody) {
-        self.builder = MirBuilder::new(signature.name.to_string(), signature.params.len());
+        self.builder = MirBuilder::new(signature.name.clone(), signature.params.len());
         self.viz_context.function_name = signature.name.to_string();
 
         // _0: return place
@@ -372,63 +372,149 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
             // ========== Variables & Paths ==========
             Expr::Var(name) => {
-                if let Some(&local) = self.locals.get(name) {
-                    self.builder
-                        .assign(dest, Rvalue::Use(Operand::copy_local(local)));
-                } else {
-                    // Function reference
-                    self.builder.assign(
-                        dest,
-                        Rvalue::Use(Operand::Constant(Constant::Function(name.clone()))),
-                    );
+                // Get resolution from VIR (computed in TIR).
+                // TIR must resolve all variables - no fallbacks needed.
+                let resolution = body
+                    .resolution(expr_id)
+                    .unwrap_or_else(|| panic!("Missing resolution for variable: {name}"));
+
+                match resolution {
+                    ResolvedValue::Local { name, .. } => {
+                        let local = self.locals.get(name).unwrap_or_else(|| {
+                            panic!("Resolved local {name} not found in MIR scope")
+                        });
+                        self.builder
+                            .assign(dest, Rvalue::Use(Operand::copy_local(*local)));
+                    }
+                    ResolvedValue::Function(fqn) => {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::Function(fqn.clone()))),
+                        );
+                    }
+                    ResolvedValue::BuiltinFunction(qn) => {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::Function(qn.clone()))),
+                        );
+                    }
+                    ResolvedValue::EnumVariant { enum_fqn, variant } => {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::EnumVariant {
+                                enum_qn: enum_fqn.clone(),
+                                variant: variant.clone(),
+                            })),
+                        );
+                    }
+                    ResolvedValue::Class(fqn)
+                    | ResolvedValue::Enum(fqn)
+                    | ResolvedValue::TypeAlias(fqn) => {
+                        // Type used as value (constructor)
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::Function(fqn.clone()))),
+                        );
+                    }
+                    ResolvedValue::Unknown => {
+                        panic!("Unresolved variable reached MIR: {name}")
+                    }
+                    // Explicit arms for remaining variants - these shouldn't appear for Var expressions
+                    ResolvedValue::Field { .. }
+                    | ResolvedValue::ModuleItem { .. }
+                    | ResolvedValue::TypeMethod { .. } => {
+                        panic!("Unexpected resolution for Var({name}): {resolution:?}")
+                    }
                 }
             }
 
             Expr::Path(segments) => {
-                // Note: Multi-segment paths that are local variable field accesses should have
-                // been converted to nested FieldAccess during HIR → TypedIR lowering.
-                // TODO: Multi-segment paths that reach here are non-local paths like builtin functions
-                // (e.g., baml.Array.length) which need special handling.
-                //
-                // TODO: This is a workaround for the lack of proper module/namespace support.
-                // When we have proper modules, builtin paths should be resolved earlier in the
-                // pipeline and represented differently (not as Expr::Path).
-                if segments.len() == 1 {
-                    // Simple variable reference
-                    let name = &segments[0];
-                    if let Some(&local) = self.locals.get(name) {
+                // Get resolution from VIR (computed in TIR).
+                // TIR must resolve all paths - no fallbacks needed.
+                let resolution = body.resolution(expr_id).unwrap_or_else(|| {
+                    panic!(
+                        "Missing resolution for path expression: {:?}",
+                        segments
+                            .iter()
+                            .map(smol_str::SmolStr::as_str)
+                            .collect::<Vec<_>>()
+                            .join(".")
+                    )
+                });
+
+                match resolution {
+                    ResolvedValue::Local { name, .. } => {
+                        let local = self.locals.get(name).unwrap_or_else(|| {
+                            panic!("Resolved local {name} not found in MIR scope")
+                        });
                         self.builder
-                            .assign(dest, Rvalue::Use(Operand::copy_local(local)));
-                    } else {
-                        // Assume it's a function reference
+                            .assign(dest, Rvalue::Use(Operand::copy_local(*local)));
+                    }
+                    ResolvedValue::Function(fqn) => {
                         self.builder.assign(
                             dest,
-                            Rvalue::Use(Operand::Constant(Constant::Function(name.clone()))),
+                            Rvalue::Use(Operand::Constant(Constant::Function(fqn.clone()))),
                         );
                     }
-                } else if let Some((enum_name, variant)) = body.enum_variant_exprs.get(&expr_id) {
-                    // Enum variant value (e.g., Status.Active)
-                    self.builder.assign(
-                        dest,
-                        Rvalue::Use(Operand::Constant(Constant::EnumVariant {
-                            enum_name: enum_name.clone(),
-                            variant: variant.clone(),
-                        })),
-                    );
-                } else {
-                    // Multi-segment path that's not a field access chain (e.g., baml.Array.length).
-                    // TODO: This is a hack - we're treating these as builtin function references
-                    // by joining segments into a dotted path. Proper module resolution should
-                    // handle this case earlier in the pipeline.
-                    let full_path = segments
-                        .iter()
-                        .map(smol_str::SmolStr::as_str)
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    self.builder.assign(
-                        dest,
-                        Rvalue::Use(Operand::Constant(Constant::Function(Name::new(full_path)))),
-                    );
+                    ResolvedValue::BuiltinFunction(qn) => {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::Function(qn.clone()))),
+                        );
+                    }
+                    ResolvedValue::EnumVariant { enum_fqn, variant } => {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::EnumVariant {
+                                enum_qn: enum_fqn.clone(),
+                                variant: variant.clone(),
+                            })),
+                        );
+                    }
+                    ResolvedValue::ModuleItem {
+                        module_path,
+                        item_name,
+                    } => {
+                        let qn = QualifiedName::from_module_path(module_path, item_name.clone());
+                        self.builder
+                            .assign(dest, Rvalue::Use(Operand::Constant(Constant::Function(qn))));
+                    }
+                    ResolvedValue::Class(fqn)
+                    | ResolvedValue::Enum(fqn)
+                    | ResolvedValue::TypeAlias(fqn) => {
+                        // Type references used as values (e.g., constructor calls)
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::Function(fqn.clone()))),
+                        );
+                    }
+                    ResolvedValue::TypeMethod {
+                        receiver_type,
+                        method_name,
+                    } => {
+                        // Static method call like `image.from_url`
+                        let qn = QualifiedName::builtin_method(
+                            receiver_type.clone(),
+                            method_name.clone(),
+                        );
+                        self.builder
+                            .assign(dest, Rvalue::Use(Operand::Constant(Constant::Function(qn))));
+                    }
+                    ResolvedValue::Field { .. } => {
+                        panic!(
+                            "Field resolution should not appear in Path expression - should be FieldAccess"
+                        )
+                    }
+                    ResolvedValue::Unknown => {
+                        panic!(
+                            "Unresolved path reached MIR: {:?}",
+                            segments
+                                .iter()
+                                .map(smol_str::SmolStr::as_str)
+                                .collect::<Vec<_>>()
+                                .join(".")
+                        )
+                    }
                 }
             }
 
@@ -812,38 +898,43 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // Check if this is a method reference (result type is a function)
                 // vs an actual field access (result type is the field's type)
                 if matches!(result_ty, baml_compiler_vir::Ty::Function { .. }) {
-                    // Method reference - emit as a function constant
-                    // For builtin types, use the qualified path:
-                    // - Class with module path: "baml.llm.PrimitiveClient" + "render_prompt"
-                    //                        -> "baml.llm.PrimitiveClient.render_prompt"
-                    // - Primitive types: List -> "baml.Array", String -> "baml.String", Map -> "baml.Map"
-                    let base_ty = body.ty(*base);
-                    let method_name = match base_ty {
-                        Ty::Class(type_name) if !type_name.module_path.is_empty() => {
-                            // Builtin class type - use fully qualified path
-                            Name::new(format!("{}.{}", type_name.display_name, field))
+                    // Method reference - get resolution from VIR (computed in TIR)
+                    let resolution = body.resolution(expr_id).unwrap_or_else(|| {
+                        panic!("Missing resolution for method reference: {field}")
+                    });
+
+                    match resolution {
+                        ResolvedValue::BuiltinFunction(qn) => {
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::Function(qn.clone()))),
+                            );
                         }
-                        Ty::List(_) => {
-                            // Array methods: baml.Array.length, baml.Array.push, etc.
-                            Name::new(format!("baml.Array.{field}"))
+                        ResolvedValue::Function(fqn) => {
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::Function(fqn.clone()))),
+                            );
                         }
-                        Ty::String => {
-                            // String methods: baml.String.length, baml.String.toLowerCase, etc.
-                            Name::new(format!("baml.String.{field}"))
-                        }
-                        Ty::Map { .. } => {
-                            // Map methods: baml.Map.keys, baml.Map.values, etc.
-                            Name::new(format!("baml.Map.{field}"))
+                        ResolvedValue::TypeMethod {
+                            receiver_type,
+                            method_name,
+                        } => {
+                            let qn = QualifiedName::builtin_method(
+                                receiver_type.clone(),
+                                method_name.clone(),
+                            );
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::Function(qn))),
+                            );
                         }
                         _ => {
-                            // User-defined class or other - just use field name
-                            field.clone()
+                            panic!(
+                                "Unexpected resolution for method reference {field}: {resolution:?}"
+                            )
                         }
-                    };
-                    self.builder.assign(
-                        dest,
-                        Rvalue::Use(Operand::Constant(Constant::Function(method_name))),
-                    );
+                    }
                 } else {
                     // Actual field access
                     let base_ty = body.ty(*base).clone();
@@ -1433,8 +1524,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             }
             Pattern::EnumVariant { enum_name, variant } => {
                 // Compare scrutinee (enum value) with the variant
+                let enum_qn = QualifiedName::local(enum_name.clone());
                 let variant_const = Constant::EnumVariant {
-                    enum_name: enum_name.clone(),
+                    enum_qn,
                     variant: variant.clone(),
                 };
                 let cmp_local = self.builder.temp(Ty::Bool);

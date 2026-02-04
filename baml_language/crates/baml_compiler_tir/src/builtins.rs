@@ -7,14 +7,14 @@ use std::collections::HashMap;
 
 use baml_base::{Name, baml_debug};
 use baml_builtins::{BuiltinSignature, TypePattern};
-use baml_compiler_hir::FullyQualifiedName;
+use baml_compiler_hir::QualifiedName;
 
 use crate::Ty;
 
 /// Parse a builtin path string like "baml.http.Response" into an FQN.
 ///
 /// The path is expected to start with "baml." and have at least one segment after.
-pub fn parse_builtin_path(path: &str) -> FullyQualifiedName {
+pub fn parse_builtin_path(path: &str) -> QualifiedName {
     assert!(
         path.starts_with("baml."),
         "builtin path must start with 'baml.'"
@@ -30,12 +30,12 @@ pub fn parse_builtin_path(path: &str) -> FullyQualifiedName {
 
     if segments.len() == 1 {
         // Just a name with no path, e.g., "Array"
-        FullyQualifiedName::builtin_primitive(Name::new(segments[0]))
+        QualifiedName::builtin_primitive(Name::new(segments[0]))
     } else {
         // Multiple segments: all but last are path, last is name
         let (path_segments, name) = segments.split_at(segments.len() - 1);
         let path: Vec<Name> = path_segments.iter().map(|s| Name::new(*s)).collect();
-        FullyQualifiedName::builtin(path, Name::new(name[0]))
+        QualifiedName::builtin(path, Name::new(name[0]))
     }
 }
 
@@ -118,6 +118,9 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         // Unknown in Ty matches any pattern (for error recovery)
         (_, Ty::Unknown) => true,
 
+        // BuiltinUnknown accepts any type (for builtins that need heterogeneous values)
+        (TypePattern::BuiltinUnknown, _) => true,
+
         // No match
         _ => false,
     }
@@ -170,6 +173,7 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
             params: params.iter().map(|p| substitute(p, bindings)).collect(),
             ret: Box::new(substitute(ret, bindings)),
         },
+        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
     }
 }
 
@@ -197,6 +201,7 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
             params: params.iter().map(substitute_unknown).collect(),
             ret: Box::new(substitute_unknown(ret)),
         },
+        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
     }
 }
 

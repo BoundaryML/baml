@@ -196,7 +196,11 @@ impl OutputFormatContent {
             Ty::Literal(lit) => Ok(Some(render_literal(lit))),
 
             // Compiler-only variants should never reach runtime
-            Ty::TypeAlias(_) | Ty::Function { .. } | Ty::Void | Ty::WatchAccessor(_) => {
+            Ty::TypeAlias(_)
+            | Ty::Function { .. }
+            | Ty::Void
+            | Ty::WatchAccessor(_)
+            | Ty::BuiltinUnknown => {
                 unreachable!(
                     "compiler-only variant {:?} should not reach output_format",
                     ty

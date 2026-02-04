@@ -1,7 +1,7 @@
 ---
-source: target/debug/build/baml_tests-3880e224d4935138/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function TypeBuilderFn:
-    Return: Class(FullyQualifiedName { namespace: Local, name: "Resume" })
+    Return: Class(QualifiedName { namespace: Local, name: "Resume" })

@@ -1,13 +1,13 @@
 ---
-source: target/debug/build/baml_tests-5af6b621dd74eb70/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
-  Function BadUnionPattern:
+  Function Broken.MixedLiteralAndTyped:
+    Return: Literal(String("mixed"))
+  Function Broken.Invalid:
+    Return: Void
+  Function Broken.BadUnionPattern:
     Return: Union([Unknown, Literal(String("bad"))])
     Errors:
       - Unknown type b
-  Function Invalid:
-    Return: Void
-  Function MixedLiteralAndTyped:
-    Return: Literal(String("mixed"))

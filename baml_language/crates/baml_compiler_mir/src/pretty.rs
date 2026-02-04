@@ -335,8 +335,8 @@ fn write_constant(f: &mut impl Write, constant: &Constant) -> fmt::Result {
         Constant::String(s) => write!(f, "const {s:?}"),
         Constant::Bool(b) => write!(f, "const {b}"),
         Constant::Null => write!(f, "const null"),
-        Constant::Function(name) => write!(f, "const fn {name}"),
-        Constant::EnumVariant { enum_name, variant } => write!(f, "const {enum_name}.{variant}"),
+        Constant::Function(qn) => write!(f, "const fn {qn}"),
+        Constant::EnumVariant { enum_qn, variant } => write!(f, "const {enum_qn}.{variant}"),
         Constant::Ty(ty) => write!(f, "const type {ty:?}"),
     }
 }

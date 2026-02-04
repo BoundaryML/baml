@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-45411f112e4e4282/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -787,7 +787,7 @@ Function MatchComplexScrutinee (arity: 1, kind: Bytecode):
      23   RETURN                 
 
 Function MatchFunctionCallScrutinee (arity: 0, kind: Bytecode):
-     0    LOAD_GLOBAL 87         (<fn GetStatus>)
+     0    LOAD_GLOBAL 90         (<fn GetStatus>)
      1    CALL 0                 
      2    DISCRIMINANT           
      3    COPY 0                 

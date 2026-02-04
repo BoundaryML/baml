@@ -1,15 +1,11 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
+source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
 function array_length() -> int {
       let array = [1, 2, 3];
       return baml.Array.length(array);
-}
-
-function Greeting(self: Baz) -> string {
-      "Hello, " + self.name + "!"
 }
 
 function param_in_if_statement(b: bool) -> int {
@@ -32,6 +28,10 @@ function Foo(x: int) -> int {
 function GreetBaz(n: string) -> string {
       let baz = Baz { name: n };
       baz.Greeting()
+}
+
+function Baz.Greeting(self: Baz) -> string {
+      "Hello, " + self.name + "!"
 }
 
 class Baz {

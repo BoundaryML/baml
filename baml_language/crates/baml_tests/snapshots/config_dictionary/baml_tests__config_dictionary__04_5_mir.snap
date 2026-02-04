@@ -1,94 +1,98 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
+source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
 fn MyClient.resolve() -> null {
     // Locals:
     let _0: null // return
-    let _1: null
-    let _2: null
-    let _3: null
-    let _4: null
-    let _5: null
-    let _6: null
-    let _7: null
-    let _8: null
-    let _9: null
-    let _10: null
-    let _11: null
-    let _12: null
-    let _13: null
-    let _14: null
-    let _15: null
-    let _16: null
-    let _17: null
-    let _18: null
-    let _19: null
-    let _20: null
-    let _21: null
-    let _22: null
-    let _23: null
-    let _24: null
-    let _25: null
-    let _26: null
-    let _27: null
-    let _28: null
-    let _29: null
-    let _30: null
-    let _31: null
-    let _32: null
-    let _33: null
-    let _34: null
-    let _35: null
-    let _36: null
-    let _37: null
-    let _38: null
-    let _39: null
-    let _40: null
-    let _41: null
-    let _42: null
-    let _43: null
-    let _44: null
-    let _45: null
-    let _46: null
-    let _47: null
-    let _48: null
-    let _49: null
-    let _50: null
-    let _51: null
-    let _52: null
-    let _53: null
-    let _54: null
-    let _55: null
-    let _56: null
-    let _57: null
-    let _58: null
-    let _59: null
-    let _60: null
-    let _61: null
-    let _62: null
-    let _63: null
-    let _64: null
-    let _65: null
-    let _66: null
-    let _67: null
-    let _68: null
-    let _69: null
-    let _70: null
-    let _71: null
-    let _72: null
-    let _73: null
-    let _74: null
-    let _75: null
-    let _76: null
-    let _77: null
-    let _78: null
-    let _79: null
-    let _80: null
-    let _81: null
-    let _82: null
-    let _83: null
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
+    let _2: "MyClient"
+    let _3: "baml-openai-chat"
+    let _4: "user"
+    let _5: string[]
+    let _6: "user"
+    let _7: "assistant"
+    let _8: "system"
+    let _9: map<string, unknown>
+    let _10: "max_tokens"
+    let _11: 100
+    let _12: "array_key_with_quoted_unquoted"
+    let _13: string[]
+    let _14: "abc"
+    let _15: "abc"
+    let _16: "ccc"
+    let _17: "key2"
+    let _18: "some random value"
+    let _19: "hello"
+    let _20: "world"
+    let _21: "thing"
+    let _22: "hello"
+    let _23: "block_string"
+    let _24: "hello there my frien
+                d"
+    let _25: "inline_raw_string"
+    let _26: "inline "raw" string,,"
+    let _27: "keyStringNoSpacesWorksWithoutQuotes"
+    let _28: "NoQuotes"
+    let _29: "unquoted_string_whitespace"
+    let _30: "hello"
+    let _31: "filePathString"
+    let _32: "this-is-also-a-string"
+    let _33: "booleanValue"
+    let _34: true
+    let _35: "stringKey"
+    let _36: "true"
+    let _37: "array1"
+    let _38: string[]
+    let _39: "one"
+    let _40: "two"
+    let _41: "array2"
+    let _42: string[]
+    let _43: "one"
+    let _44: "two"
+    let _45: "array3Numbers"
+    let _46: int[]
+    let _47: 1
+    let _48: 2
+    let _49: 3
+    let _50: "nestedKey"
+    let _51: map<string, string>
+    let _52: "key"
+    let _53: "value"
+    let _54: "key2"
+    let _55: "value2"
+    let _56: "nestedArray"
+    let _57: string[]
+    let _58: "yes"
+    let _59: "queen"
+    let _60: "number"
+    let _61: 10
+    let _62: "oneMoreValueToTestBrokenness"
+    let _63: "value"
+    let _64: "myInteger"
+    let _65: 100
+    let _66: "tools"
+    let _67: map<string, string>[]
+    let _68: map<string, string>
+    let _69: "server_label"
+    let _70: "parallel_web_search"
+    let _71: "server_url"
+    let _72: "https://example.com"
+    let _73: "headers"
+    let _74: map<string, string>
+    let _75: "authorization"
+    let _76: "Bearer token"
+    let _77: "type"
+    let _78: "mcp"
+    let _79: map<string, string>
+    let _80: "another_tool"
+    let _81: "value"
+    let _82: "block_string"
+    let _83: "
+      hello there my friend
+      {# a comment in a prompt #}
+    "
     let _84: null
 
     bb0: {

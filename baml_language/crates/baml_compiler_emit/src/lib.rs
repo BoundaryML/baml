@@ -46,14 +46,11 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 
 use std::collections::HashMap;
 
-use baml_base::{FileId, Name, SourceFile, Span};
+use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{
-    self, ItemId, function_body, function_signature, function_signature_source_map,
+    self, ItemId, function_body, function_qualified_name, function_signature,
+    function_signature_source_map,
 };
-
-/// The path used for the builtin llm.baml file.
-/// Functions from this file are namespaced as `baml.llm.*`.
-pub const BUILTIN_LLM_PATH: &str = "<builtin>/llm.baml";
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
 pub use bex_vm_types::{
@@ -92,16 +89,8 @@ pub fn compile_files(
         ("baml.llm.get_client_function", 1),
     ];
 
-    // Create the builtin llm.baml file and combine with user files
-    let builtin_file = SourceFile::new(
-        db,
-        baml_builtins::baml_sources::LLM.to_string(),
-        BUILTIN_LLM_PATH.into(),
-        FileId::new(u32::MAX - 1), // Use a high ID to avoid conflicts
-    );
-    let mut all_files: Vec<SourceFile> = files.to_vec();
-    all_files.push(builtin_file);
-    let files = &all_files;
+    // Note: Builtin BAML files (like llm.baml) are now loaded at project setup time
+    // in ProjectDatabase::set_project_root(), so they're already in the files list.
 
     let mut program = Program::new();
     let project = db.project();
@@ -136,18 +125,13 @@ pub fn compile_files(
     }
 
     // Then, add user-defined functions (including builtin BAML files)
+    // Use function_qualified_name to get the proper namespaced name for builtins
     for file in files {
-        let is_builtin_llm = file.path(db).to_string_lossy() == BUILTIN_LLM_PATH;
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
-                let signature = function_signature(db, *func_loc);
-                // Namespace builtin functions with baml.llm. prefix
-                let func_name = if is_builtin_llm {
-                    format!("baml.llm.{}", signature.name)
-                } else {
-                    signature.name.to_string()
-                };
+                let qualified_name = baml_compiler_hir::function_qualified_name(db, *func_loc);
+                let func_name = qualified_name.display();
                 globals.insert(func_name, global_idx);
                 global_idx += 1;
             }
@@ -327,7 +311,6 @@ pub fn compile_files(
 
     // Compile each user function using MIR
     for file in files {
-        let is_builtin_llm = file.path(db).to_string_lossy() == BUILTIN_LLM_PATH;
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
@@ -335,12 +318,10 @@ pub fn compile_files(
                 let sig_source_map = function_signature_source_map(db, *func_loc);
                 let body = function_body(db, *func_loc);
 
-                // Namespace builtin functions with baml.llm. prefix
-                let func_name = if is_builtin_llm {
-                    format!("baml.llm.{}", signature.name)
-                } else {
-                    signature.name.to_string()
-                };
+                // Get the qualified name - for builtin files this includes the namespace
+                // e.g., "baml.llm.render_prompt" for functions in <builtin>/baml/llm.baml
+                let qualified_name = function_qualified_name(db, *func_loc);
+                let func_name = qualified_name.display();
 
                 // Handle different function body types
                 let mut compiled_fn = match &*body {
@@ -467,7 +448,9 @@ pub fn compile_files(
 
 /// Build typing context from source files.
 ///
-/// Maps function names to their arrow types for use during type inference.
+/// Maps function names (qualified for builtins) to their arrow types for type inference.
+/// Functions from builtin files (e.g., `<builtin>/baml/llm.baml`) are registered with
+/// their qualified names (e.g., `baml.llm.render_prompt`).
 fn build_typing_context(
     db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
@@ -480,6 +463,9 @@ fn build_typing_context(
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);
+
+                // Get the qualified name - for builtin files this includes the namespace
+                let qualified_name = baml_compiler_hir::function_qualified_name(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
                 let param_types: Vec<baml_compiler_tir::Ty> = signature
@@ -500,7 +486,8 @@ fn build_typing_context(
                     ret: Box::new(return_type),
                 };
 
-                context.insert(signature.name.clone(), func_type);
+                // Use the display name as the key (e.g., "baml.llm.render_prompt" or "my_func")
+                context.insert(qualified_name.display_name(), func_type);
             }
         }
     }
