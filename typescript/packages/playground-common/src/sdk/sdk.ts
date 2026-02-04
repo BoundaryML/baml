@@ -187,6 +187,11 @@ export class BAMLSDK {
       if (wasmInstance) {
         this.storage.setWasmRuntime(wasmInstance);
       }
+      // Store last-valid functions for error-state fallback
+      const validFunctions = this.runtime.getFunctions();
+      if (validFunctions.length > 0) {
+        this.storage.store.set(coreAtoms.lastValidFunctionsAtom, validFunctions);
+      }
     }
 
     // Log what was extracted from the runtime
@@ -862,7 +867,11 @@ export class BAMLSDK {
    */
   private getNavigationCoordinator(): NavigationCoordinator {
     const workflows = this.storage.getWorkflows();
-    const functions = this.runtime?.getFunctions() || [];
+    let functions = this.runtime?.getFunctions() || [];
+    // Fall back to last-valid functions if current runtime has errors
+    if (functions.length === 0) {
+      functions = this.storage.store.get(coreAtoms.lastValidFunctionsAtom);
+    }
     const bamlFiles = this.runtime?.getBAMLFiles() || [];
     const tests = bamlFiles.flatMap((file) => file.tests || []);
 
