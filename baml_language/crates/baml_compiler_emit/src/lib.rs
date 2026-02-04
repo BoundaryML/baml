@@ -178,6 +178,7 @@ pub fn compile_files(
             // Determine the Ty for this field
             let tir_ty = baml_compiler_tir::builtins::substitute_unknown(&field.ty);
             let field_ty = baml_type::convert_tir_ty(&tir_ty, &type_aliases, &recursive_aliases)
+                .and_then(baml_type::sanitize_for_runtime)
                 .unwrap_or(baml_type::Ty::Null);
 
             fields.push(ClassField {
