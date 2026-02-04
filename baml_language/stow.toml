@@ -77,14 +77,17 @@ name_exceptions = { "tools_stow" = "cargo-stow" }
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
+link_crates = ["baml_type", "sys_resource_types"]
 
 # llm namespace configuration
 [[namespaces]]
 name = "llm"
+link_crates = ["bex_external_types"]
 
 # lsp namespace configuration
 [[namespaces]]
 name = "lsp"
+link_crates = ["baml_project"]
 # this is named differently in the workspace to avoid confusion with the lsp_types crate
 name_exceptions = { "baml_lsp_types" = "baml_lsp_types" }
 
@@ -95,6 +98,7 @@ name = "bridge"
 # sys namespace configuration
 [[namespaces]]
 name = "sys"
+link_crates = ["bex_heap"]
 
 [[namespaces]]
 name = "surface"

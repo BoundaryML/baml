@@ -73,6 +73,10 @@ pub struct Namespace {
     /// Example: { "`tools_stow`" = "cargo-stow" }
     #[serde(default)]
     pub name_exceptions: HashMap<String, String>,
+    /// Link crates: commonly-depended-on crates that get proxy nodes in consuming
+    /// namespaces to reduce cross-namespace edge clutter in the dependency graph.
+    #[serde(default)]
+    pub link_crates: Vec<String>,
 }
 
 /// Stow configuration - can be loaded from stow.toml or [workspace.metadata.stow]
@@ -170,6 +174,7 @@ impl Config {
                 test_crate_exceptions: std::mem::take(&mut self.test_crate_exceptions),
                 dependency_rules: vec![],
                 name_exceptions: HashMap::new(),
+                link_crates: vec![],
             }];
         }
         self
@@ -2012,6 +2017,29 @@ fn generate_dependency_graph_svg(
         }
     };
 
+    // Build proxy mapping for link_crates: for each link crate, track which namespaces consume it
+    let all_link_crates: HashSet<&str> = config
+        .namespaces
+        .iter()
+        .flat_map(|ns| ns.link_crates.iter().map(String::as_str))
+        .collect();
+
+    // For each link crate -> set of consuming namespaces (namespaces different from the crate's own)
+    let mut link_crate_consumers: HashMap<&str, HashSet<String>> = HashMap::new();
+    for (from, to) in &sorted_edges {
+        if all_link_crates.contains(to) {
+            let (from_ns, _) = get_crate_parts(from);
+            let (to_ns, _) = get_crate_parts(to);
+            if from_ns != to_ns && from_ns != "external" {
+                link_crate_consumers.entry(to).or_default().insert(from_ns);
+            }
+        }
+    }
+
+    let proxy_node_id = |ns: &str, crate_name: &str| -> String {
+        format!("proxy_{}_{}", ns, crate_name.replace('-', "_"))
+    };
+
     // Build DOT format string directly
     let mut dot = String::new();
     dot.push_str("digraph dependencies {\n");
@@ -2023,7 +2051,9 @@ fn generate_dependency_graph_svg(
     dot.push_str("    nodesep=0.8;\n");
     dot.push_str("    ranksep=0.8;\n");
     dot.push_str("    compound=true;\n");
-    dot.push_str("    concentrate=true;\n");
+    // NOTE: concentrate=true is incompatible with link_crates proxy nodes inside clusters
+    // (graphviz fails with "contain_nodes clust ... missing node"). The link_crates feature
+    // already reduces cross-namespace edge clutter, making concentrate unnecessary.
     dot.push_str("    newrank=true;\n");
 
     // Default node attributes
@@ -2075,6 +2105,26 @@ fn generate_dependency_graph_svg(
             );
         }
 
+        // Add proxy nodes for link crates consumed by this namespace (sorted for deterministic output)
+        // Proxy nodes use the colors of the link crate's *original* namespace, not the consuming one
+        let mut ns_link_crates: Vec<&&str> = link_crate_consumers
+            .keys()
+            .filter(|lc| link_crate_consumers[*lc].contains(namespace))
+            .collect();
+        ns_link_crates.sort_unstable();
+        for link_crate in ns_link_crates {
+            let pid = proxy_node_id(namespace, link_crate);
+            let (origin_ns, _) = get_crate_parts(link_crate);
+            let (proxy_border, proxy_fill) = namespace_colors
+                .get(&origin_ns)
+                .cloned()
+                .unwrap_or_else(|| (external_border.clone(), external_fill.clone()));
+            let _ = writeln!(
+                dot,
+                "        {pid} [label=\"{link_crate}\", style=\"filled,dashed\", fillcolor=\"{proxy_fill}\", color=\"{proxy_border}\", penwidth=2];"
+            );
+        }
+
         // Add external deps used by this namespace (one node per unique feature set)
         for key in external_dep_nodes.keys() {
             if key.namespace != *namespace {
@@ -2106,6 +2156,29 @@ fn generate_dependency_graph_svg(
         let to_is_external = to_ns == "external";
 
         let from_id = node_id(from);
+
+        // Check if this edge should be redirected to a proxy node
+        let is_link_crate_cross_ns = all_link_crates.contains(to)
+            && from_ns != to_ns
+            && from_ns != "external"
+            && link_crate_consumers
+                .get(to)
+                .is_some_and(|c| c.contains(&from_ns));
+
+        if is_link_crate_cross_ns {
+            // Redirect to the proxy node in from's namespace
+            let pid = proxy_node_id(&from_ns, to);
+            let edge_color = namespace_colors
+                .get(&from_ns)
+                .map(|(border, _)| border.as_str())
+                .unwrap_or("#999999");
+            let _ = writeln!(
+                dot,
+                "    {from_id} -> {pid} [style=dashed, color=\"{edge_color}\", penwidth=1.5, weight=10];"
+            );
+            continue;
+        }
+
         let to_id = if to_is_external {
             // External dep - find the matching node with the right features
             let features: Vec<String> = if let Some(feat_info) = external_dep_features.get(to) {
@@ -2146,6 +2219,27 @@ fn generate_dependency_graph_svg(
         } else {
             let _ = writeln!(dot, "    {from_id} -> {to_id} [weight=1];");
         }
+    }
+
+    // Emit proxy-to-real dashed edges for link crates (sorted for deterministic output)
+    let mut proxy_edges: Vec<(&str, &str)> = Vec::new();
+    for (link_crate, consumers) in &link_crate_consumers {
+        for ns in consumers {
+            proxy_edges.push((ns.as_str(), *link_crate));
+        }
+    }
+    proxy_edges.sort_unstable();
+    for (ns, link_crate) in &proxy_edges {
+        let pid = proxy_node_id(ns, link_crate);
+        let real_id = node_id(link_crate);
+        let edge_color = namespace_colors
+            .get(*ns)
+            .map(|(border, _)| border.as_str())
+            .unwrap_or("#999999");
+        let _ = writeln!(
+            dot,
+            "    {pid} -> {real_id} [style=dashed, color=\"{edge_color}\", penwidth=1.5, weight=10];"
+        );
     }
 
     dot.push_str("}\n");
