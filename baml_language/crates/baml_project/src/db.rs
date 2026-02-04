@@ -259,15 +259,36 @@ impl ProjectDatabase {
     /// compilation pipeline from the start.
     ///
     /// Builtin files use the normal `FileId` allocation just like user files.
+    /// They are registered in `file_id_to_path` for proper diagnostic filename
+    /// display, but NOT in `file_map` to avoid being included in `files()` iteration.
+    ///
+    /// ## Note on goto-definition
+    ///
+    /// Builtin files use virtual paths like `<builtin>/baml/llm.baml`. These paths
+    /// are embedded in the compiler binary, not present on the user's filesystem.
+    /// As a result, goto-definition to builtins won't work in editors.
+    ///
+    /// Future enhancement: To support goto-definition for builtins, we could:
+    /// 1. Extract builtin files to a cache directory (e.g., `~/.cache/baml/builtins/`)
+    /// 2. Register the real filesystem paths instead of virtual paths
+    /// 3. Ensure the cache is updated when the compiler version changes
     fn load_builtin_baml_files(&mut self) -> Vec<SourceFile> {
         let mut builtin_files = Vec::new();
 
         // Load all builtin BAML sources using normal file ID allocation
         for builtin_source in baml_builtins::baml_sources() {
-            let file = self.add_file_internal(
-                PathBuf::from(builtin_source.path),
-                builtin_source.source.to_string(),
-            );
+            let path = PathBuf::from(builtin_source.path);
+            let file = self.add_file_internal(&path, builtin_source.source.to_string());
+            let file_id = file.file_id(self);
+
+            // Register in file_id_to_path for diagnostic filename display.
+            // NOTE: We intentionally do NOT add to file_map because:
+            // 1. file_map is used by files() which feeds into check() diagnostics
+            // 2. Builtin files reference internal types (PromptAst, Request) that
+            //    aren't defined as BAML types - they're compiler primitives
+            // 3. Including builtins in check() would cause spurious "unknown type" errors
+            self.file_id_to_path.insert(file_id, path);
+
             builtin_files.push(file);
         }
 
