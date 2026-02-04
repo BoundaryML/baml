@@ -44,7 +44,7 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub objects: &'obj mut ObjectPool,
 }
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::{FileId, Name, SourceFile, Span};
 use baml_compiler_hir::{
@@ -398,29 +398,12 @@ pub fn compile_files(
                         let params: Vec<baml_base::Name> =
                             signature.params.iter().map(|p| p.name.clone()).collect();
 
-                        // Build param types and return type
-                        let param_names: Vec<String> = signature
-                            .params
-                            .iter()
-                            .map(|p| p.name.to_string())
-                            .collect();
-                        let param_types: Vec<baml_type::Ty> = signature
-                            .params
-                            .iter()
-                            .map(|p| {
-                                let (ty, _) =
-                                    resolution_ctx.lower_type_ref(&p.type_ref, Span::default());
-                                baml_type::convert_tir_ty(&ty, &type_aliases, &recursive_aliases)
-                                    .and_then(baml_type::sanitize_for_runtime)
-                                    .unwrap_or(baml_type::Ty::Null)
-                            })
-                            .collect();
-                        let (ret_ty, _) =
-                            resolution_ctx.lower_type_ref(&signature.return_type, Span::default());
-                        let return_type =
-                            baml_type::convert_tir_ty(&ret_ty, &type_aliases, &recursive_aliases)
-                                .and_then(baml_type::sanitize_for_runtime)
-                                .unwrap_or(baml_type::Ty::Null);
+                        let (param_names, param_types, return_type) = compute_function_metadata(
+                            &signature,
+                            &resolution_ctx,
+                            &type_aliases,
+                            &recursive_aliases,
+                        );
 
                         // Extract prompt template and client from LLM body
                         let prompt_template = llm_body
@@ -536,28 +519,12 @@ pub fn compile_files(
 
                 // Populate return type and param metadata for expression functions
                 if compiled_fn.return_type.is_none() {
-                    let param_names: Vec<String> = signature
-                        .params
-                        .iter()
-                        .map(|p| p.name.to_string())
-                        .collect();
-                    let param_types: Vec<baml_type::Ty> = signature
-                        .params
-                        .iter()
-                        .map(|p| {
-                            let (ty, _) =
-                                resolution_ctx.lower_type_ref(&p.type_ref, Span::default());
-                            baml_type::convert_tir_ty(&ty, &type_aliases, &recursive_aliases)
-                                .and_then(baml_type::sanitize_for_runtime)
-                                .unwrap_or(baml_type::Ty::Null)
-                        })
-                        .collect();
-                    let (ret_ty, _) =
-                        resolution_ctx.lower_type_ref(&signature.return_type, Span::default());
-                    let return_type =
-                        baml_type::convert_tir_ty(&ret_ty, &type_aliases, &recursive_aliases)
-                            .and_then(baml_type::sanitize_for_runtime)
-                            .unwrap_or(baml_type::Ty::Null);
+                    let (param_names, param_types, return_type) = compute_function_metadata(
+                        &signature,
+                        &resolution_ctx,
+                        &type_aliases,
+                        &recursive_aliases,
+                    );
                     compiled_fn.return_type = Some(return_type);
                     compiled_fn.param_names = param_names;
                     compiled_fn.param_types = param_types;
@@ -601,6 +568,38 @@ pub fn compile_files(
     }
 
     Ok(program)
+}
+
+/// Extract param names, param types, and return type from a function signature.
+///
+/// Performs the standard `lower_type_ref` → `convert_tir_ty` → `sanitize_for_runtime`
+/// pipeline for each parameter and the return type.
+fn compute_function_metadata(
+    signature: &baml_compiler_hir::FunctionSignature,
+    resolution_ctx: &TypeResolutionContext,
+    type_aliases: &HashMap<Name, baml_compiler_tir::Ty>,
+    recursive_aliases: &HashSet<Name>,
+) -> (Vec<String>, Vec<baml_type::Ty>, baml_type::Ty) {
+    let param_names: Vec<String> = signature
+        .params
+        .iter()
+        .map(|p| p.name.to_string())
+        .collect();
+    let param_types: Vec<baml_type::Ty> = signature
+        .params
+        .iter()
+        .map(|p| {
+            let (ty, _) = resolution_ctx.lower_type_ref(&p.type_ref, Span::default());
+            baml_type::convert_tir_ty(&ty, type_aliases, recursive_aliases)
+                .and_then(baml_type::sanitize_for_runtime)
+                .unwrap_or(baml_type::Ty::Null)
+        })
+        .collect();
+    let (ret_ty, _) = resolution_ctx.lower_type_ref(&signature.return_type, Span::default());
+    let return_type = baml_type::convert_tir_ty(&ret_ty, type_aliases, recursive_aliases)
+        .and_then(baml_type::sanitize_for_runtime)
+        .unwrap_or(baml_type::Ty::Null);
+    (param_names, param_types, return_type)
 }
 
 /// Build typing context from source files.

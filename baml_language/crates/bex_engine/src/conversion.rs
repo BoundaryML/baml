@@ -230,17 +230,22 @@ impl BexEngine {
             Object::Variant(variant) => {
                 // Get enum name and variant name from the Enum object
                 let enum_obj = unsafe { variant.enm.get() };
-                let (enum_name, variant_name) = match enum_obj {
-                    Object::Enum(enm) => {
-                        let variant_name = enm
-                            .variants
-                            .get(variant.index)
-                            .map(|v| v.name.clone())
-                            .unwrap_or_else(|| format!("variant_{}", variant.index));
-                        (enm.name.clone(), variant_name)
-                    }
-                    _ => panic!("Variant.enm should point to an Enum object"),
+                let Object::Enum(enm) = enum_obj else {
+                    panic!("Variant.enm should point to an Enum object")
                 };
+                let variant_name = enm
+                    .variants
+                    .get(variant.index)
+                    .map(|v| v.name.clone())
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: format!(
+                            "enum '{}' has {} variants but variant index is {}",
+                            enm.name,
+                            enm.variants.len(),
+                            variant.index,
+                        ),
+                    })?;
+                let enum_name = enm.name.clone();
 
                 Ok(BexExternalValue::Variant {
                     enum_name,
