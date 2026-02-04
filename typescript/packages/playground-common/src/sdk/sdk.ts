@@ -868,9 +868,13 @@ export class BAMLSDK {
   private getNavigationCoordinator(): NavigationCoordinator {
     const workflows = this.storage.getWorkflows();
     let functions = this.runtime?.getFunctions() || [];
-    // Fall back to last-valid functions if current runtime has errors
+    // Fall back to last-valid functions only when empty due to diagnostic errors,
+    // not when the runtime legitimately has no functions
     if (functions.length === 0) {
-      functions = this.storage.store.get(coreAtoms.lastValidFunctionsAtom);
+      const hasErrors = this.runtime?.getDiagnostics().some((d) => d.type === 'error') ?? false;
+      if (hasErrors) {
+        functions = this.storage.store.get(coreAtoms.lastValidFunctionsAtom);
+      }
     }
     const bamlFiles = this.runtime?.getBAMLFiles() || [];
     const tests = bamlFiles.flatMap((file) => file.tests || []);
