@@ -17,3 +17,6 @@ baml_base = { workspace = true }
 baml_codegen_types = { workspace = true }
 insta = { workspace = true }
 paste.workspace = true
+
+[package.metadata.ci]
+wasm_support = false

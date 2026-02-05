@@ -18,3 +18,6 @@ tokio = { workspace = true, features = [ "sync", "fs", "net", "process", "io-uti
 
 [lints]
 workspace = true
+
+[package.metadata.ci]
+wasm_support = false

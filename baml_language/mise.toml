@@ -21,7 +21,11 @@ description = "Run cargo clippy"
 run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
 sources = ["**/*.rs", "**/Cargo.toml"]
 
+[tasks.wasm-excluded]
+description = "List crates excluded from WASM builds (metadata.ci.wasm_support = false)"
+run = "cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then false else (.metadata.ci.wasm_support | not) end) | .name' | sort"
+
 [tasks.clippy-wasm]
 description = "Run cargo clippy for wasm target"
-run = "cargo clippy --workspace --exclude tools_onionskin --exclude baml_lsp --exclude baml_cli --exclude cargo-stow --exclude sys_types --exclude sys_native --exclude bex_engine --exclude baml_codegen_tests --exclude baml_tests --exclude baml_ide_tests --exclude rig_python_empty --exclude rig_python_literal_types --exclude rig_python_map_types --exclude rig_python_mixed_complex_types --exclude rig_python_semantic_streaming --exclude rig_python_union_types_extended --exclude baml_bridge_cffi --target wasm32-unknown-unknown --all-features --locked -- -D warnings"
+run = "cargo clippy $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | \"-p \\(.name)\"' | xargs) --target wasm32-unknown-unknown --all-features --locked -- -D warnings"
 sources = ["**/*.rs", "**/Cargo.toml"]

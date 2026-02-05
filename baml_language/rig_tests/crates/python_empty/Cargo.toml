@@ -9,3 +9,6 @@ publish = false
 baml_codegen_python = { path = "../../../crates/baml_codegen_python" }
 baml_codegen_tests = { path = "../../../crates/baml_codegen_tests" }
 baml_codegen_types = { path = "../../../crates/baml_codegen_types" }
+
+[package.metadata.ci]
+wasm_support = false

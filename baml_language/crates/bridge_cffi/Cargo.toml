@@ -34,3 +34,6 @@ tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 cbindgen = { workspace = true }
 prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false

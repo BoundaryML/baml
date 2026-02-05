@@ -71,3 +71,6 @@ insta = { workspace = true }
 
 [lints]
 workspace = true
+
+[package.metadata.ci]
+wasm_support = false

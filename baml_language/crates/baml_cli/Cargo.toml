@@ -47,3 +47,6 @@ skip-integ-tests = [  ]
 name = "baml-cli"
 path = "src/main.rs"
 
+[package.metadata.ci]
+wasm_support = false
+
