@@ -84,7 +84,7 @@ function Bar1(a: string) -> int {
 //     │       ───┬──  
 //     │          ╰──── Function 'Foo' expects 0 arguments, but got 1
 //     │ 
-//     │ Note: Error code: E0070
+//     │ Note: Error code: E0080
 // ────╯
 // Warning: Function 'Foo' referenced without parentheses. Did you mean 'Foo()'?
 //     ╭─[ functions_v2_prompt_errors_prompt1.baml:32:17 ]
@@ -93,7 +93,7 @@ function Bar1(a: string) -> int {
 //     │                 ─┬─  
 //     │                  ╰─── Function 'Foo' referenced without parentheses. Did you mean 'Foo()'?
 //     │ 
-//     │ Note: Error code: E0070
+//     │ Note: Error code: E0071
 // ────╯
 // Warning: Function 'Foo2' referenced without parentheses. Did you mean 'Foo2()'?
 //     ╭─[ functions_v2_prompt_errors_prompt1.baml:34:17 ]
@@ -102,7 +102,7 @@ function Bar1(a: string) -> int {
 //     │                 ──┬─  
 //     │                   ╰─── Function 'Foo2' referenced without parentheses. Did you mean 'Foo2()'?
 //     │ 
-//     │ Note: Error code: E0070
+//     │ Note: Error code: E0071
 // ────╯
 // Warning: Variable `b` does not exist. Did you mean one of these: `_`, `a`, `Bar1`?
 //     ╭─[ functions_v2_prompt_errors_prompt1.baml:37:7 ]

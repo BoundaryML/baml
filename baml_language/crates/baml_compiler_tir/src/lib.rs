@@ -1098,6 +1098,155 @@ fn add_builtin_jinja_types(jinja_env: &mut jinja::JinjaTypeEnv) {
     jinja_env.add_variable("ctx", JinjaType::ClassRef("baml::Context".to_string()));
 }
 
+/// Convert a Jinja type error to a TIR type error.
+///
+/// This maps the structured `jinja::TypeError` enum to the compiler's `TypeError` enum,
+/// preserving all error data while converting the span to an `ErrorLocation`.
+fn jinja_error_to_tir(error: jinja::TypeError) -> TirTypeError {
+    let span = error.span();
+    let location = ErrorLocation::JinjaTemplate {
+        start_offset: span.start_offset,
+        end_offset: span.end_offset,
+    };
+
+    match error {
+        jinja::TypeError::UnresolvedVariable {
+            name, suggestions, ..
+        } => TypeError::JinjaUnresolvedVariable {
+            name,
+            suggestions,
+            location,
+        },
+        jinja::TypeError::FunctionReferenceWithoutCall { function_name, .. } => {
+            TypeError::JinjaFunctionReferenceWithoutCall {
+                function_name,
+                location,
+            }
+        }
+        jinja::TypeError::InvalidFilter {
+            filter_name,
+            suggestions,
+            ..
+        } => TypeError::JinjaInvalidFilter {
+            filter_name,
+            suggestions,
+            location,
+        },
+        jinja::TypeError::InvalidType {
+            expression,
+            expected,
+            found,
+            ..
+        } => TypeError::JinjaInvalidType {
+            expression,
+            expected,
+            found,
+            location,
+        },
+        jinja::TypeError::PropertyNotDefined {
+            variable,
+            class_name,
+            property,
+            ..
+        } => TypeError::JinjaPropertyNotDefined {
+            variable,
+            class_name,
+            property,
+            location,
+        },
+        jinja::TypeError::EnumValuePropertyAccess {
+            variable,
+            enum_value,
+            property,
+            ..
+        } => TypeError::JinjaEnumValuePropertyAccess {
+            variable,
+            enum_value,
+            property,
+            location,
+        },
+        jinja::TypeError::EnumStringComparison { enum_name, .. } => {
+            TypeError::JinjaEnumStringComparison {
+                enum_name,
+                location,
+            }
+        }
+        jinja::TypeError::PropertyNotFoundInUnion {
+            property,
+            missing_on,
+            ..
+        } => TypeError::JinjaPropertyNotFoundInUnion {
+            property,
+            missing_on,
+            location,
+        },
+        jinja::TypeError::PropertyTypeMismatchInUnion { property, .. } => {
+            TypeError::JinjaPropertyTypeMismatchInUnion { property, location }
+        }
+        jinja::TypeError::NonClassInUnion {
+            variable,
+            property,
+            non_class_type,
+            ..
+        } => TypeError::JinjaNonClassInUnion {
+            variable,
+            property,
+            non_class_type,
+            location,
+        },
+        jinja::TypeError::WrongArgCount {
+            function_name,
+            expected,
+            found,
+            ..
+        } => TypeError::JinjaWrongArgCount {
+            function_name,
+            expected,
+            found,
+            location,
+        },
+        jinja::TypeError::MissingArg {
+            function_name,
+            arg_name,
+            ..
+        } => TypeError::JinjaMissingArg {
+            function_name,
+            arg_name,
+            location,
+        },
+        jinja::TypeError::UnknownArg {
+            function_name,
+            arg_name,
+            suggestions,
+            ..
+        } => TypeError::JinjaUnknownArg {
+            function_name,
+            arg_name,
+            suggestions,
+            location,
+        },
+        jinja::TypeError::WrongArgType {
+            function_name,
+            arg_name,
+            expected,
+            found,
+            ..
+        } => TypeError::JinjaWrongArgType {
+            function_name,
+            arg_name,
+            expected,
+            found,
+            location,
+        },
+        jinja::TypeError::UnsupportedFeature { feature, .. } => {
+            TypeError::JinjaUnsupportedFeature { feature, location }
+        }
+        jinja::TypeError::InvalidSyntax { message, .. } => {
+            TypeError::JinjaInvalidSyntax { message, location }
+        }
+    }
+}
+
 /// Validate Jinja templates in an LLM function's prompt.
 ///
 /// This builds a Jinja type environment from the TIR context and validates
@@ -1174,20 +1323,13 @@ fn validate_llm_prompt(
             // We store relative offsets here; they'll be converted to absolute spans
             // at diagnostic rendering time by looking up the prompt's file offset from CST.
             for error in errors {
-                let jinja_span = error.span();
-                ctx.push_error(TypeError::JinjaError {
-                    message: error.message().to_string(),
-                    location: ErrorLocation::JinjaTemplate {
-                        start_offset: jinja_span.start_offset,
-                        end_offset: jinja_span.end_offset,
-                    },
-                });
+                ctx.push_error(jinja_error_to_tir(error));
             }
         }
         Err(parse_error) => {
             // Jinja parse error - report as a single error at the template start
-            ctx.push_error(TypeError::JinjaError {
-                message: format!("Failed to parse Jinja template: {parse_error}"),
+            ctx.push_error(TypeError::JinjaParseError {
+                message: parse_error.to_string(),
                 location: ErrorLocation::JinjaTemplate {
                     start_offset: 0,
                     end_offset: 1,
@@ -1376,19 +1518,12 @@ pub fn validate_template_string_body(
     match jinja::validate_template(&body.text, &mut jinja_env) {
         Ok(jinja_errors) => {
             for error in jinja_errors {
-                let jinja_span = error.span();
-                type_errors.push(TypeError::JinjaError {
-                    message: error.message().to_string(),
-                    location: ErrorLocation::JinjaTemplate {
-                        start_offset: jinja_span.start_offset,
-                        end_offset: jinja_span.end_offset,
-                    },
-                });
+                type_errors.push(jinja_error_to_tir(error));
             }
         }
         Err(parse_error) => {
-            type_errors.push(TypeError::JinjaError {
-                message: format!("Failed to parse Jinja template: {parse_error}"),
+            type_errors.push(TypeError::JinjaParseError {
+                message: parse_error.to_string(),
                 location: ErrorLocation::JinjaTemplate {
                     start_offset: 0,
                     end_offset: 1,

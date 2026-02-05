@@ -88,7 +88,7 @@ template_string BadCall4 #"
 //     │     ──────┬─────  
 //     │           ╰─────── Function 'WithParams' expects argument 'arg0'
 //     │ 
-//     │ Note: Error code: E0070
+//     │ Note: Error code: E0081
 // ────╯
 // Warning: Variable `Random` does not exist. Did you mean one of these: `_`, `ctx`, `BadCall1`?
 //     ╭─[ template_string_bad_calls.baml:18:5 ]
@@ -106,7 +106,7 @@ template_string BadCall4 #"
 //    │     ──────────┬─────────  
 //    │               ╰─────────── Function 'WithParams' does not have an argument 'a'. Did you mean 'arg0'?
 //    │ 
-//    │ Note: Error code: E0070
+//    │ Note: Error code: E0082
 // ───╯
 // Warning: Function 'WithParams' does not have an argument 'b'. Did you mean 'arg0'?
 //    ╭─[ template_string_bad_calls.baml:6:5 ]
@@ -115,7 +115,7 @@ template_string BadCall4 #"
 //    │     ──────────┬─────────  
 //    │               ╰─────────── Function 'WithParams' does not have an argument 'b'. Did you mean 'arg0'?
 //    │ 
-//    │ Note: Error code: E0070
+//    │ Note: Error code: E0082
 // ───╯
 // Warning: Function 'WithParams' expects argument 'arg0'
 //    ╭─[ template_string_bad_calls.baml:6:5 ]
@@ -124,5 +124,5 @@ template_string BadCall4 #"
 //    │     ──────────┬─────────  
 //    │               ╰─────────── Function 'WithParams' expects argument 'arg0'
 //    │ 
-//    │ Note: Error code: E0070
+//    │ Note: Error code: E0081
 // ───╯

@@ -89,10 +89,14 @@ fn walk_statement(stmt: &ast::Stmt, env: &mut JinjaTypeEnv, errors: &mut Vec<Typ
                         }
                         JinjaType::Tuple(item_types) => {
                             if list.items.len() != item_types.len() {
-                                errors.push(TypeError {
-                                    message: format!("Expected {} items", item_types.len()),
-                                    span: list.span(),
-                                });
+                                errors.push(TypeError::invalid_syntax(
+                                    &format!(
+                                        "Expected {} items in tuple unpacking, got {}",
+                                        item_types.len(),
+                                        list.items.len()
+                                    ),
+                                    list.span(),
+                                ));
                             } else {
                                 for (item, item_type) in list.items.iter().zip(item_types.iter()) {
                                     if let ast::Expr::Var(var) = item {
@@ -112,10 +116,10 @@ fn walk_statement(stmt: &ast::Stmt, env: &mut JinjaTypeEnv, errors: &mut Vec<Typ
                     }
                 }
                 _ => {
-                    errors.push(TypeError {
-                        message: "Invalid for loop target".to_string(),
-                        span: for_stmt.span(),
-                    });
+                    errors.push(TypeError::invalid_syntax(
+                        "Invalid for loop target",
+                        for_stmt.span(),
+                    ));
                 }
             }
 
@@ -174,10 +178,10 @@ fn walk_statement(stmt: &ast::Stmt, env: &mut JinjaTypeEnv, errors: &mut Vec<Typ
 
         ast::Stmt::WithBlock(with_stmt) => {
             // TODO: Implement with block validation
-            errors.push(TypeError {
-                message: "With blocks are not yet supported".to_string(),
-                span: with_stmt.span(),
-            });
+            errors.push(TypeError::unsupported_feature(
+                "with blocks",
+                with_stmt.span(),
+            ));
         }
 
         ast::Stmt::Set(set_stmt) => {
@@ -194,10 +198,10 @@ fn walk_statement(stmt: &ast::Stmt, env: &mut JinjaTypeEnv, errors: &mut Vec<Typ
             if let ast::Expr::Var(var) = &set_stmt.target {
                 env.add_variable(var.id, expr_type);
             } else {
-                errors.push(TypeError {
-                    message: "Invalid set target".to_string(),
-                    span: set_stmt.span(),
-                });
+                errors.push(TypeError::invalid_syntax(
+                    "Invalid set target",
+                    set_stmt.span(),
+                ));
             }
         }
 
@@ -224,18 +228,18 @@ fn walk_statement(stmt: &ast::Stmt, env: &mut JinjaTypeEnv, errors: &mut Vec<Typ
 
         ast::Stmt::AutoEscape(autoescape_stmt) => {
             // TODO: Implement autoescape validation
-            errors.push(TypeError {
-                message: "Autoescape blocks are not yet supported".to_string(),
-                span: autoescape_stmt.span(),
-            });
+            errors.push(TypeError::unsupported_feature(
+                "autoescape blocks",
+                autoescape_stmt.span(),
+            ));
         }
 
         ast::Stmt::FilterBlock(filter_stmt) => {
             // TODO: Implement filter block validation
-            errors.push(TypeError {
-                message: "Filter blocks are not yet supported".to_string(),
-                span: filter_stmt.span(),
-            });
+            errors.push(TypeError::unsupported_feature(
+                "filter blocks",
+                filter_stmt.span(),
+            ));
         }
 
         ast::Stmt::Macro(_) => {
@@ -244,18 +248,18 @@ fn walk_statement(stmt: &ast::Stmt, env: &mut JinjaTypeEnv, errors: &mut Vec<Typ
 
         ast::Stmt::CallBlock(call_stmt) => {
             // TODO: Implement call block validation
-            errors.push(TypeError {
-                message: "Call blocks are not yet supported".to_string(),
-                span: call_stmt.span(),
-            });
+            errors.push(TypeError::unsupported_feature(
+                "call blocks",
+                call_stmt.span(),
+            ));
         }
 
         ast::Stmt::Do(do_stmt) => {
             // TODO: Implement do statement validation
-            errors.push(TypeError {
-                message: "Do statements are not yet supported".to_string(),
-                span: do_stmt.span(),
-            });
+            errors.push(TypeError::unsupported_feature(
+                "do statements",
+                do_stmt.span(),
+            ));
         }
     }
 }

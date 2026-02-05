@@ -359,19 +359,133 @@ impl JinjaTypeEnv {
 // ============================================================================
 
 /// Type error found during Jinja template analysis.
+///
+/// This enum captures the structured error data without rendering messages.
+/// Message rendering is the responsibility of `baml_compiler_diagnostics`.
 #[derive(Debug, Clone)]
-pub struct TypeError {
-    message: String,
-    span: minijinja::machinery::Span,
+pub enum TypeError {
+    /// Variable referenced does not exist.
+    UnresolvedVariable {
+        name: String,
+        suggestions: Vec<String>,
+        span: minijinja::machinery::Span,
+    },
+    /// Function referenced without calling it (missing parentheses).
+    FunctionReferenceWithoutCall {
+        function_name: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Unknown Jinja filter.
+    InvalidFilter {
+        filter_name: String,
+        suggestions: Vec<String>,
+        span: minijinja::machinery::Span,
+    },
+    /// Type mismatch in expression.
+    InvalidType {
+        expression: String,
+        expected: String,
+        found: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Property access on class that doesn't have the property.
+    PropertyNotDefined {
+        variable: String,
+        class_name: String,
+        property: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Property access on enum value (not allowed).
+    EnumValuePropertyAccess {
+        variable: String,
+        enum_value: String,
+        property: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Comparing enum to string (deprecated).
+    EnumStringComparison {
+        enum_name: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Property access on union where some members don't have the property.
+    PropertyNotFoundInUnion {
+        property: String,
+        missing_on: Vec<String>,
+        span: minijinja::machinery::Span,
+    },
+    /// Property has inconsistent types across union members.
+    PropertyTypeMismatchInUnion {
+        property: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Union contains non-class type when accessing property.
+    NonClassInUnion {
+        variable: String,
+        property: String,
+        non_class_type: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Wrong number of arguments in function call.
+    WrongArgCount {
+        function_name: String,
+        expected: usize,
+        found: usize,
+        span: minijinja::machinery::Span,
+    },
+    /// Missing required argument in function call.
+    MissingArg {
+        function_name: String,
+        arg_name: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Unknown argument name in function call.
+    UnknownArg {
+        function_name: String,
+        arg_name: String,
+        suggestions: Vec<String>,
+        span: minijinja::machinery::Span,
+    },
+    /// Wrong argument type in function call.
+    WrongArgType {
+        function_name: String,
+        arg_name: String,
+        expected: String,
+        found: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Unsupported Jinja feature.
+    UnsupportedFeature {
+        feature: String,
+        span: minijinja::machinery::Span,
+    },
+    /// Invalid Jinja syntax (e.g., invalid for loop target).
+    InvalidSyntax {
+        message: String,
+        span: minijinja::machinery::Span,
+    },
 }
 
 impl TypeError {
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-
+    /// Get the span where this error occurred.
     pub fn span(&self) -> minijinja::machinery::Span {
-        self.span
+        match self {
+            TypeError::UnresolvedVariable { span, .. }
+            | TypeError::FunctionReferenceWithoutCall { span, .. }
+            | TypeError::InvalidFilter { span, .. }
+            | TypeError::InvalidType { span, .. }
+            | TypeError::PropertyNotDefined { span, .. }
+            | TypeError::EnumValuePropertyAccess { span, .. }
+            | TypeError::EnumStringComparison { span, .. }
+            | TypeError::PropertyNotFoundInUnion { span, .. }
+            | TypeError::PropertyTypeMismatchInUnion { span, .. }
+            | TypeError::NonClassInUnion { span, .. }
+            | TypeError::WrongArgCount { span, .. }
+            | TypeError::MissingArg { span, .. }
+            | TypeError::UnknownArg { span, .. }
+            | TypeError::WrongArgType { span, .. }
+            | TypeError::UnsupportedFeature { span, .. }
+            | TypeError::InvalidSyntax { span, .. } => *span,
+        }
     }
 
     // Error constructors
@@ -382,27 +496,16 @@ impl TypeError {
         available: &[String],
     ) -> Self {
         let suggestions = find_close_matches(name, available, 3);
-        let message = if suggestions.is_empty() {
-            format!("Variable `{name}` does not exist.")
-        } else if suggestions.len() == 1 {
-            format!(
-                "Variable `{name}` does not exist. Did you mean `{}`?",
-                suggestions[0]
-            )
-        } else {
-            format!(
-                "Variable `{name}` does not exist. Did you mean one of these: `{}`?",
-                suggestions.join("`, `")
-            )
-        };
-        Self { message, span }
+        TypeError::UnresolvedVariable {
+            name: name.to_string(),
+            suggestions,
+            span,
+        }
     }
 
     pub fn function_reference_without_call(name: &str, span: minijinja::machinery::Span) -> Self {
-        Self {
-            message: format!(
-                "Function '{name}' referenced without parentheses. Did you mean '{name}()'?"
-            ),
+        TypeError::FunctionReferenceWithoutCall {
+            function_name: name.to_string(),
             span,
         }
     }
@@ -420,23 +523,9 @@ impl TypeError {
                 .collect::<Vec<_>>(),
             5,
         );
-        let message = if suggestions.is_empty() {
-            format!("Filter '{name}' does not exist")
-        } else if suggestions.len() == 1 {
-            format!(
-                "Filter '{name}' does not exist. Did you mean '{}'?",
-                suggestions[0]
-            )
-        } else {
-            format!(
-                "Filter '{name}' does not exist. Did you mean one of these: '{}'?",
-                suggestions.join("', '")
-            )
-        };
-        Self {
-            message: format!(
-                "{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions"
-            ),
+        TypeError::InvalidFilter {
+            filter_name: name.to_string(),
+            suggestions,
             span,
         }
     }
@@ -447,17 +536,15 @@ impl TypeError {
         expected: &str,
         span: minijinja::machinery::Span,
     ) -> Self {
-        Self {
-            message: format!(
-                "'{}' is {}, expected {}",
-                pretty_print_expr(expr),
-                if matches!(got, JinjaType::Undefined) {
-                    "undefined".to_string()
-                } else {
-                    format!("a {}", got.name())
-                },
-                expected
-            ),
+        let found = if matches!(got, JinjaType::Undefined) {
+            "undefined".to_string()
+        } else {
+            got.name()
+        };
+        TypeError::InvalidType {
+            expression: pretty_print_expr(expr),
+            expected: expected.to_string(),
+            found,
             span,
         }
     }
@@ -468,8 +555,10 @@ impl TypeError {
         property: &str,
         span: minijinja::machinery::Span,
     ) -> Self {
-        Self {
-            message: format!("class {class} ({variable}) does not have a property '{property}'"),
+        TypeError::PropertyNotDefined {
+            variable: variable.to_string(),
+            class_name: class.to_string(),
+            property: property.to_string(),
             span,
         }
     }
@@ -480,10 +569,10 @@ impl TypeError {
         property: &str,
         span: minijinja::machinery::Span,
     ) -> Self {
-        Self {
-            message: format!(
-                "enum value {enum_value} ({variable}) does not have a property '{property}'"
-            ),
+        TypeError::EnumValuePropertyAccess {
+            variable: variable.to_string(),
+            enum_value: enum_value.to_string(),
+            property: property.to_string(),
             span,
         }
     }
@@ -493,10 +582,8 @@ impl TypeError {
         enum_name: &str,
         span: minijinja::machinery::Span,
     ) -> Self {
-        Self {
-            message: format!(
-                "Comparing enum {enum_name} to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."
-            ),
+        TypeError::EnumStringComparison {
+            enum_name: enum_name.to_string(),
             span,
         }
     }
@@ -508,9 +595,12 @@ impl TypeError {
         _union_name: Option<&str>,
         span: minijinja::machinery::Span,
     ) -> Self {
-        let classes_str = missing_on_classes.join(", ");
-        Self {
-            message: format!("property '{property}' does not exist on {classes_str}"),
+        TypeError::PropertyNotFoundInUnion {
+            property: property.to_string(),
+            missing_on: missing_on_classes
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect(),
             span,
         }
     }
@@ -521,8 +611,8 @@ impl TypeError {
         _union_name: Option<&str>,
         span: minijinja::machinery::Span,
     ) -> Self {
-        Self {
-            message: format!("property '{property}' has inconsistent types across union members"),
+        TypeError::PropertyTypeMismatchInUnion {
+            property: property.to_string(),
             span,
         }
     }
@@ -533,10 +623,10 @@ impl TypeError {
         non_class_type: &str,
         span: minijinja::machinery::Span,
     ) -> Self {
-        Self {
-            message: format!(
-                "cannot access property '{property}' on '{variable}': union contains non-class type {non_class_type}"
-            ),
+        TypeError::NonClassInUnion {
+            variable: variable.to_string(),
+            property: property.to_string(),
+            non_class_type: non_class_type.to_string(),
             span,
         }
     }
@@ -547,15 +637,18 @@ impl TypeError {
         expected: usize,
         got: usize,
     ) -> Self {
-        Self {
-            message: format!("Function '{func}' expects {expected} arguments, but got {got}"),
+        TypeError::WrongArgCount {
+            function_name: func.to_string(),
+            expected,
+            found: got,
             span,
         }
     }
 
     pub fn missing_arg(func: &str, span: minijinja::machinery::Span, name: &str) -> Self {
-        Self {
-            message: format!("Function '{func}' expects argument '{name}'"),
+        TypeError::MissingArg {
+            function_name: func.to_string(),
+            arg_name: name.to_string(),
             span,
         }
     }
@@ -572,22 +665,12 @@ impl TypeError {
             &names.iter().map(|s| (*s).clone()).collect::<Vec<_>>(),
             3,
         );
-
-        let message = if suggestions.is_empty() {
-            format!("Function '{func}' does not have an argument '{name}'")
-        } else if suggestions.len() == 1 {
-            format!(
-                "Function '{func}' does not have an argument '{name}'. Did you mean '{}'?",
-                suggestions[0]
-            )
-        } else {
-            format!(
-                "Function '{func}' does not have an argument '{name}'. Did you mean one of these: '{}'?",
-                suggestions.join("', '")
-            )
-        };
-
-        Self { message, span }
+        TypeError::UnknownArg {
+            function_name: func.to_string(),
+            arg_name: name.to_string(),
+            suggestions,
+            span,
+        }
     }
 
     pub fn wrong_arg_type(
@@ -597,12 +680,25 @@ impl TypeError {
         expected: &JinjaType,
         got: &JinjaType,
     ) -> Self {
-        Self {
-            message: format!(
-                "Function '{func}' expects argument '{name}' to be of type {}, but got {}",
-                expected.name(),
-                got.name()
-            ),
+        TypeError::WrongArgType {
+            function_name: func.to_string(),
+            arg_name: name.to_string(),
+            expected: expected.name(),
+            found: got.name(),
+            span,
+        }
+    }
+
+    pub fn unsupported_feature(feature: &str, span: minijinja::machinery::Span) -> Self {
+        TypeError::UnsupportedFeature {
+            feature: feature.to_string(),
+            span,
+        }
+    }
+
+    pub fn invalid_syntax(message: &str, span: minijinja::machinery::Span) -> Self {
+        TypeError::InvalidSyntax {
+            message: message.to_string(),
             span,
         }
     }

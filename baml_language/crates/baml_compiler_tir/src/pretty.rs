@@ -671,6 +671,157 @@ pub fn short_display(error: &TirTypeError) -> String {
         TypeError::ClassCycle { cycle_path, .. } => {
             format!("Class cycle detected: {cycle_path}")
         }
-        TypeError::JinjaError { message, .. } => message.clone(),
+        TypeError::JinjaUnresolvedVariable {
+            name, suggestions, ..
+        } => {
+            if suggestions.is_empty() {
+                format!("Variable `{name}` does not exist.")
+            } else if suggestions.len() == 1 {
+                format!(
+                    "Variable `{name}` does not exist. Did you mean `{}`?",
+                    suggestions[0]
+                )
+            } else {
+                format!(
+                    "Variable `{name}` does not exist. Did you mean one of these: `{}`?",
+                    suggestions.join("`, `")
+                )
+            }
+        }
+        TypeError::JinjaFunctionReferenceWithoutCall { function_name, .. } => {
+            format!(
+                "Function '{function_name}' referenced without parentheses. Did you mean '{function_name}()'?"
+            )
+        }
+        TypeError::JinjaInvalidFilter {
+            filter_name,
+            suggestions,
+            ..
+        } => {
+            let message = if suggestions.is_empty() {
+                format!("Filter '{filter_name}' does not exist")
+            } else if suggestions.len() == 1 {
+                format!(
+                    "Filter '{filter_name}' does not exist. Did you mean '{}'?",
+                    suggestions[0]
+                )
+            } else {
+                format!(
+                    "Filter '{filter_name}' does not exist. Did you mean one of these: '{}'?",
+                    suggestions.join("', '")
+                )
+            };
+            format!(
+                "{message}\n\nSee: https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions"
+            )
+        }
+        TypeError::JinjaInvalidType {
+            expression,
+            expected,
+            found,
+            ..
+        } => {
+            let found_desc = if found == "undefined" {
+                "undefined".to_string()
+            } else {
+                format!("a {found}")
+            };
+            format!("'{expression}' is {found_desc}, expected {expected}")
+        }
+        TypeError::JinjaPropertyNotDefined {
+            variable,
+            class_name,
+            property,
+            ..
+        } => {
+            format!("class {class_name} ({variable}) does not have a property '{property}'")
+        }
+        TypeError::JinjaEnumValuePropertyAccess {
+            variable,
+            enum_value,
+            property,
+            ..
+        } => {
+            format!("enum value {enum_value} ({variable}) does not have a property '{property}'")
+        }
+        TypeError::JinjaEnumStringComparison { enum_name, .. } => {
+            format!(
+                "Comparing enum {enum_name} to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339."
+            )
+        }
+        TypeError::JinjaPropertyNotFoundInUnion {
+            property,
+            missing_on,
+            ..
+        } => {
+            let classes_str = missing_on.join(", ");
+            format!("property '{property}' does not exist on {classes_str}")
+        }
+        TypeError::JinjaPropertyTypeMismatchInUnion { property, .. } => {
+            format!("property '{property}' has inconsistent types across union members")
+        }
+        TypeError::JinjaNonClassInUnion {
+            variable,
+            property,
+            non_class_type,
+            ..
+        } => {
+            format!(
+                "cannot access property '{property}' on '{variable}': union contains non-class type {non_class_type}"
+            )
+        }
+        TypeError::JinjaWrongArgCount {
+            function_name,
+            expected,
+            found,
+            ..
+        } => {
+            format!("Function '{function_name}' expects {expected} arguments, but got {found}")
+        }
+        TypeError::JinjaMissingArg {
+            function_name,
+            arg_name,
+            ..
+        } => {
+            format!("Function '{function_name}' expects argument '{arg_name}'")
+        }
+        TypeError::JinjaUnknownArg {
+            function_name,
+            arg_name,
+            suggestions,
+            ..
+        } => {
+            if suggestions.is_empty() {
+                format!("Function '{function_name}' does not have an argument '{arg_name}'")
+            } else if suggestions.len() == 1 {
+                format!(
+                    "Function '{function_name}' does not have an argument '{arg_name}'. Did you mean '{}'?",
+                    suggestions[0]
+                )
+            } else {
+                format!(
+                    "Function '{function_name}' does not have an argument '{arg_name}'. Did you mean one of these: '{}'?",
+                    suggestions.join("', '")
+                )
+            }
+        }
+        TypeError::JinjaWrongArgType {
+            function_name,
+            arg_name,
+            expected,
+            found,
+            ..
+        } => {
+            format!(
+                "Function '{function_name}' expects argument '{arg_name}' to be of type {expected}, but got {found}"
+            )
+        }
+        TypeError::JinjaParseError { message, .. } => {
+            format!("Failed to parse Jinja template: {message}")
+        }
+        TypeError::JinjaUnsupportedFeature { feature, .. } => {
+            format!("{feature} are not yet supported")
+        }
+        TypeError::JinjaInvalidSyntax { message, .. } => message.clone(),
     }
 }
