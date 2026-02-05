@@ -706,6 +706,191 @@ pub fn project_class_field_type_spans(
     std::sync::Arc::new(spans)
 }
 
+/// Returns type alias type spans for error location resolution.
+///
+/// Maps (`alias_name`, `path`) to the span of a specific type within the alias's RHS.
+/// The path navigates nested type constructors:
+/// - For List: index 0 is the element type
+/// - For Map: index 0 is the key type, index 1 is the value type
+/// - For Union: index is the variant number (0, 1, 2, ...)
+/// - For Optional: index 0 is the inner type
+/// - Empty path means the entire RHS type expression
+///
+/// Used by `ErrorLocation::TypeAliasType` to resolve to accurate spans.
+pub fn project_type_alias_type_spans(
+    db: &dyn Db,
+    root: baml_workspace::Project,
+) -> std::sync::Arc<std::collections::HashMap<(Name, Vec<usize>), Span>> {
+    let items = project_items(db, root);
+    let mut spans = std::collections::HashMap::new();
+
+    for item in items.items(db) {
+        if let ItemId::TypeAlias(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let alias = &item_tree[loc.id(db)];
+            let alias_name = alias.name.clone();
+
+            // Get the CST to find type spans
+            let tree = syntax_tree(db, file);
+            let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
+            let file_id = file.file_id(db);
+
+            // Find the type alias in the CST
+            if let Some(alias_node) = source_file.items().find_map(|item| {
+                if let baml_compiler_syntax::ast::Item::TypeAlias(a) = item {
+                    if a.name().as_ref().map(SyntaxToken::text) == Some(&alias_name) {
+                        return Some(a);
+                    }
+                }
+                None
+            }) {
+                // Get the RHS type expression
+                if let Some(type_expr) = alias_node.ty() {
+                    // Collect spans for all paths within this type expression
+                    collect_type_expr_spans(
+                        &type_expr,
+                        file_id,
+                        &alias_name,
+                        &mut vec![],
+                        &mut spans,
+                    );
+                }
+            }
+        }
+    }
+
+    std::sync::Arc::new(spans)
+}
+
+/// Recursively collect spans for all paths within a type expression.
+fn collect_type_expr_spans(
+    type_expr: &baml_compiler_syntax::ast::TypeExpr,
+    file_id: FileId,
+    alias_name: &Name,
+    current_path: &mut Vec<usize>,
+    spans: &mut std::collections::HashMap<(Name, Vec<usize>), Span>,
+) {
+    use rowan::ast::AstNode;
+
+    // Record the span for the current path
+    let range = type_expr.syntax().text_range();
+    let span = Span::new(file_id, range);
+    spans.insert((alias_name.clone(), current_path.clone()), span);
+
+    // Check if this is a union type
+    if type_expr.is_union() {
+        // For unions, use union_member_parts() to get each member's tokens/nodes
+        for (i, member) in type_expr.union_member_parts().iter().enumerate() {
+            current_path.push(i);
+
+            // If the member has a nested TYPE_EXPR (e.g., parenthesized type), recurse into it
+            if let Some(inner_type_expr) = member.type_expr() {
+                collect_type_expr_spans(&inner_type_expr, file_id, alias_name, current_path, spans);
+            } else {
+                // For simple types like `int`, `blah`, compute span from tokens/nodes
+                if let Some(range) = compute_union_member_range(member) {
+                    let span = Span::new(file_id, range);
+                    spans.insert((alias_name.clone(), current_path.clone()), span);
+                }
+            }
+
+            current_path.pop();
+        }
+        return;
+    }
+
+    // Check if this is an optional type (trailing ?)
+    if type_expr.is_optional() {
+        // The inner type is the same node without the ? modifier
+        // We need to find the base type - for simple cases, use child type exprs
+        // For now, record index 0 for the inner part
+        // Note: This is a simplification; the actual inner type span might need refinement
+        if let Some(inner) = type_expr.inner_type_expr() {
+            current_path.push(0);
+            collect_type_expr_spans(&inner, file_id, alias_name, current_path, spans);
+            current_path.pop();
+        }
+        return;
+    }
+
+    // Check if this is an array type (trailing [])
+    if type_expr.is_array() {
+        // Similar to optional, the element type needs to be found
+        // For now, use inner_type_expr or child_type_exprs
+        if let Some(inner) = type_expr.inner_type_expr() {
+            current_path.push(0);
+            collect_type_expr_spans(&inner, file_id, alias_name, current_path, spans);
+            current_path.pop();
+        }
+        return;
+    }
+
+    // Check for generic types like map<K, V>
+    let type_args = type_expr.type_arg_exprs();
+    if !type_args.is_empty() {
+        for (i, arg) in type_args.iter().enumerate() {
+            current_path.push(i);
+            collect_type_expr_spans(arg, file_id, alias_name, current_path, spans);
+            current_path.pop();
+        }
+        return;
+    }
+
+    // Check for parenthesized types
+    if type_expr.is_parenthesized() {
+        if let Some(inner) = type_expr.inner_type_expr() {
+            // Don't add to path for parentheses - they're just grouping
+            collect_type_expr_spans(&inner, file_id, alias_name, current_path, spans);
+        }
+    }
+
+    // For simple named types, function types, etc., we already recorded the span above
+}
+
+/// Compute the text range of a union member from its tokens and child nodes.
+fn compute_union_member_range(
+    member: &baml_compiler_syntax::ast::UnionMemberParts,
+) -> Option<TextRange> {
+    let mut start: Option<rowan::TextSize> = None;
+    let mut end: Option<rowan::TextSize> = None;
+
+    // Consider all tokens
+    for token in &member.tokens {
+        let range = token.text_range();
+        match start {
+            None => start = Some(range.start()),
+            Some(s) if range.start() < s => start = Some(range.start()),
+            _ => {}
+        }
+        match end {
+            None => end = Some(range.end()),
+            Some(e) if range.end() > e => end = Some(range.end()),
+            _ => {}
+        }
+    }
+
+    // Consider all child nodes
+    for node in &member.child_nodes {
+        let range = node.text_range();
+        match start {
+            None => start = Some(range.start()),
+            Some(s) if range.start() < s => start = Some(range.start()),
+            _ => {}
+        }
+        match end {
+            None => end = Some(range.end()),
+            Some(e) if range.end() > e => end = Some(range.end()),
+            _ => {}
+        }
+    }
+
+    match (start, end) {
+        (Some(s), Some(e)) => Some(TextRange::new(s, e)),
+        _ => None,
+    }
+}
+
 /// Returns the file offset of a template string's raw string literal.
 ///
 /// This is used at diagnostic rendering time to convert relative Jinja error

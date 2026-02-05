@@ -82,29 +82,29 @@ template_string BadCall4 #"
 //----
 //- diagnostics
 // Warning: Function 'WithParams' expects argument 'a'
-//     ╭─[ template_string_bad_calls.baml:14:5 ]
+//     ╭─[ template_string_bad_calls.baml:14:6 ]
 //     │
 //  14 │   {{ WithParams() }}
-//     │     ──────┬─────  
-//     │           ╰─────── Function 'WithParams' expects argument 'a'
+//     │      ──────┬─────  
+//     │            ╰─────── Function 'WithParams' expects argument 'a'
 //     │ 
 //     │ Note: Error code: E0081
 // ────╯
 // Warning: Variable `Random` does not exist. Did you mean one of these: `_`, `ctx`, `BadCall1`?
-//     ╭─[ template_string_bad_calls.baml:18:5 ]
+//     ╭─[ template_string_bad_calls.baml:18:6 ]
 //     │
 //  18 │   {{ Random(2) }}
-//     │     ───┬──  
-//     │        ╰──── Variable `Random` does not exist. Did you mean one of these: `_`, `ctx`, `BadCall1`?
+//     │      ───┬──  
+//     │         ╰──── Variable `Random` does not exist. Did you mean one of these: `_`, `ctx`, `BadCall1`?
 //     │ 
 //     │ Note: Error code: E0070
 // ────╯
 // Warning: Function 'WithParams' does not have an argument 'b'. Did you mean 'a'?
-//    ╭─[ template_string_bad_calls.baml:6:5 ]
+//    ╭─[ template_string_bad_calls.baml:6:6 ]
 //    │
 //  6 │   {{ WithParams(a=2, b=2) }}
-//    │     ──────────┬─────────  
-//    │               ╰─────────── Function 'WithParams' does not have an argument 'b'. Did you mean 'a'?
+//    │      ──────────┬─────────  
+//    │                ╰─────────── Function 'WithParams' does not have an argument 'b'. Did you mean 'a'?
 //    │ 
 //    │ Note: Error code: E0082
 // ───╯

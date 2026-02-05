@@ -48,7 +48,10 @@ struct TypeLoweringContextResolved<'a> {
     type_alias_names: &'a HashSet<Name>,
     class_names: &'a HashSet<Name>,
     enum_names: &'a HashSet<Name>,
-    location: ErrorLocation,
+    /// Base error location (e.g., TypeAliasType with alias_name)
+    base_location: ErrorLocation,
+    /// Current path within nested type constructors (for TypeAliasType)
+    current_path: Vec<usize>,
     errors: Vec<TirTypeError>,
 }
 
@@ -63,8 +66,20 @@ impl<'a> TypeLoweringContextResolved<'a> {
             type_alias_names,
             class_names,
             enum_names,
-            location,
+            base_location: location,
+            current_path: Vec::new(),
             errors: Vec::new(),
+        }
+    }
+
+    /// Get the current error location, incorporating the path for TypeAliasType.
+    fn current_location(&self) -> ErrorLocation {
+        match &self.base_location {
+            ErrorLocation::TypeAliasType { alias_name, .. } => ErrorLocation::TypeAliasType {
+                alias_name: alias_name.clone(),
+                path: self.current_path.clone(),
+            },
+            other => other.clone(),
         }
     }
 
@@ -75,7 +90,7 @@ impl<'a> TypeLoweringContextResolved<'a> {
     fn unknown_type_error(&mut self, name: &Name) -> Ty {
         self.errors.push(TypeError::UnknownType {
             name: name.to_string(),
-            location: self.location.clone(),
+            location: self.current_location(),
         });
         Ty::Error
     }
@@ -119,20 +134,30 @@ fn lower_type_ref_resolved_with_ctx(
         // Named type via path
         TypeRef::Path(path) => lower_path_type_resolved_with_ctx(ctx, path),
 
-        // Type constructors
+        // Type constructors - track path for error location
         TypeRef::Optional(inner) => {
+            ctx.current_path.push(0); // Optional inner is at index 0
             let inner_ty = lower_type_ref_resolved_with_ctx(ctx, inner);
+            ctx.current_path.pop();
             Ty::Optional(Box::new(inner_ty))
         }
 
         TypeRef::List(inner) => {
+            ctx.current_path.push(0); // List element is at index 0
             let inner_ty = lower_type_ref_resolved_with_ctx(ctx, inner);
+            ctx.current_path.pop();
             Ty::List(Box::new(inner_ty))
         }
 
         TypeRef::Map { key, value } => {
+            ctx.current_path.push(0); // Map key is at index 0
             let key_ty = lower_type_ref_resolved_with_ctx(ctx, key);
+            ctx.current_path.pop();
+
+            ctx.current_path.push(1); // Map value is at index 1
             let value_ty = lower_type_ref_resolved_with_ctx(ctx, value);
+            ctx.current_path.pop();
+
             Ty::Map {
                 key: Box::new(key_ty),
                 value: Box::new(value_ty),
@@ -142,7 +167,13 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::Union(types) => {
             let tys: Vec<Ty> = types
                 .iter()
-                .map(|t| lower_type_ref_resolved_with_ctx(ctx, t))
+                .enumerate()
+                .map(|(i, t)| {
+                    ctx.current_path.push(i); // Union variant is at its index
+                    let ty = lower_type_ref_resolved_with_ctx(ctx, t);
+                    ctx.current_path.pop();
+                    ty
+                })
                 .collect();
             normalize_union(tys)
         }

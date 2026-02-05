@@ -1,14 +1,14 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-54421beb7beafc13/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
-  [type] Error: Expected `(int) -> int`, found `int`
+  [type] Error: Expected `(x: int) -> int`, found `int`
     ╭─[ function_types.baml:25:5 ]
     │
  25 │     1
     │     ┬  
-    │     ╰── Expected `(int) -> int`, found `int`
+    │     ╰── Expected `(x: int) -> int`, found `int`
     │ 
     │ Note: Error code: E0001
 ────╯

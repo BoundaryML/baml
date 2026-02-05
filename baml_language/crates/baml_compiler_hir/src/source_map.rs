@@ -34,6 +34,10 @@ pub struct SpanResolutionContext<'a> {
     /// Maps (`class_name`, `field_index`) to the field's type annotation span.
     pub field_type_spans: &'a HashMap<(Name, usize), Span>,
 
+    /// Maps (`alias_name`, `path`) to the span of a specific type within a type alias RHS.
+    /// The path navigates nested type constructors (see `ErrorLocation::TypeAliasType`).
+    pub type_alias_type_spans: &'a HashMap<(Name, Vec<usize>), Span>,
+
     /// File ID for constructing spans (needed for `JinjaTemplate` errors).
     pub jinja_file_id: FileId,
 
@@ -74,10 +78,20 @@ pub enum ErrorLocation {
         class_name: Name,
         field_index: usize,
     },
-    /// Error at a type alias's definition.
+    /// Error at a specific type within a type alias's RHS definition.
     ///
     /// Used for unknown type errors in type alias declarations.
-    TypeAliasType { alias_name: Name },
+    /// The `path` navigates to the specific type within nested type constructors:
+    /// - For List: index 0 is the element type
+    /// - For Map: index 0 is the key type, index 1 is the value type
+    /// - For Union: index is the variant number (0, 1, 2, ...)
+    /// - For Optional: index 0 is the inner type
+    /// - Empty path means the entire RHS type expression
+    TypeAliasType {
+        alias_name: Name,
+        /// Path to the specific type within nested type constructors.
+        path: Vec<usize>,
+    },
     /// Error within a Jinja template (LLM function prompt or template string).
     ///
     /// Contains offsets relative to the start of the template text, not absolute file positions.
@@ -138,11 +152,21 @@ impl ErrorLocation {
                     .or_else(|| ctx.type_spans.get(class_name).copied())
                     .unwrap_or_else(Span::default)
             }
-            ErrorLocation::TypeAliasType { alias_name } => ctx
-                .type_spans
-                .get(alias_name)
-                .copied()
-                .unwrap_or_else(Span::default),
+            ErrorLocation::TypeAliasType { alias_name, path } => {
+                // Try to find the specific type span using the path
+                ctx.type_alias_type_spans
+                    .get(&(alias_name.clone(), path.clone()))
+                    .copied()
+                    // Fall back to the whole RHS (empty path)
+                    .or_else(|| {
+                        ctx.type_alias_type_spans
+                            .get(&(alias_name.clone(), vec![]))
+                            .copied()
+                    })
+                    // Fall back to the type alias name span
+                    .or_else(|| ctx.type_spans.get(alias_name).copied())
+                    .unwrap_or_else(Span::default)
+            }
             ErrorLocation::JinjaTemplate {
                 start_offset,
                 end_offset,

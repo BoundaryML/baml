@@ -18,7 +18,8 @@ use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
     self, FunctionBody, HirSourceMap, ItemId, SpanResolutionContext, file_items, file_lowering,
     function_body, function_signature, function_signature_source_map, llm_function_file_offset,
-    project_class_field_type_spans, project_type_item_spans, template_string_file_offset,
+    project_class_field_type_spans, project_type_alias_type_spans, project_type_item_spans,
+    template_string_file_offset,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
@@ -60,6 +61,7 @@ pub fn collect_diagnostics(
     // Get cached type item spans for error location resolution
     let type_spans = project_type_item_spans(db, project);
     let field_type_spans = project_class_field_type_spans(db, project);
+    let type_alias_type_spans = project_type_alias_type_spans(db, project);
 
     // 1. Collect parse errors
     for source_file in source_files {
@@ -98,6 +100,7 @@ pub fn collect_diagnostics(
         expr_fn_source_map: &HirSourceMap::default(),
         type_spans: &type_spans,
         field_type_spans: &field_type_spans,
+        type_alias_type_spans: &type_alias_type_spans,
         jinja_file_id: FileId::default(),
         template_file_offset: None,
     };
@@ -163,6 +166,7 @@ pub fn collect_diagnostics(
                     expr_fn_source_map: &HirSourceMap::default(),
                     type_spans: &type_spans,
                     field_type_spans: &field_type_spans,
+                    type_alias_type_spans: &type_alias_type_spans,
                     jinja_file_id: file_id,
                     template_file_offset,
                 };
@@ -221,6 +225,7 @@ pub fn collect_diagnostics(
                     expr_fn_source_map,
                     type_spans: &type_spans,
                     field_type_spans: &field_type_spans,
+                    type_alias_type_spans: &type_alias_type_spans,
                     jinja_file_id: file_id,
                     template_file_offset,
                 };

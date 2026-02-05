@@ -406,8 +406,10 @@ pub fn type_aliases(db: &dyn Db, project: Project) -> TypeAliasesMap<'_> {
             let alias_data = &item_tree[alias_loc.id(db)];
 
             // Use position-independent error location for cacheability
+            // Start with empty path; the path will be updated as we recurse into nested types
             let error_location = ErrorLocation::TypeAliasType {
                 alias_name: alias_data.name.clone(),
+                path: vec![],
             };
 
             let (lowered_ty, alias_errors) =
@@ -1115,9 +1117,11 @@ fn add_builtin_jinja_types(jinja_env: &mut jinja::JinjaTypeEnv) {
 /// preserving all error data while converting the span to an `ErrorLocation`.
 fn jinja_error_to_tir(error: jinja::TypeError) -> TirTypeError {
     let span = error.span();
+    // Minijinja spans are 0-based and point to the character *before* the actual token.
+    // We add 1 to both offsets to correct for this off-by-one.
     let location = ErrorLocation::JinjaTemplate {
-        start_offset: span.start_offset,
-        end_offset: span.end_offset,
+        start_offset: span.start_offset + 1,
+        end_offset: span.end_offset + 1,
     };
 
     match error {

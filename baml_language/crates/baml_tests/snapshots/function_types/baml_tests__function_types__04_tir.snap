@@ -1,9 +1,9 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-54421beb7beafc13/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function GetTransform:
     Return: Literal(Int(1))
     Errors:
-      - Expected (int) -> int. Found int
+      - Expected (x: int) -> int. Found int
