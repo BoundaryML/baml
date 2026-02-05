@@ -230,13 +230,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: rustup toolchain install
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux jobs for better hit rates
+          shared-key: "linux-cargo"
 
       - name: "Install cargo-binstall"
         run: |
@@ -367,13 +370,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux jobs for better hit rates
+          shared-key: "linux-cargo"
 
       - name: "Install codspeed"
         uses: taiki-e/install-action@v2

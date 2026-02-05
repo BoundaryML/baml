@@ -35,13 +35,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux jobs for better hit rates
+          shared-key: "linux-cargo"
 
       - name: "Install cargo insta"
         uses: taiki-e/install-action@v2
@@ -89,13 +92,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar macOS jobs for better hit rates
+          shared-key: "macos-cargo"
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
@@ -121,13 +127,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Windows jobs for better hit rates
+          shared-key: "windows-cargo"
 
       - name: "Install cargo nextest"
         uses: taiki-e/install-action@v2
@@ -154,15 +163,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: |
           rustup show
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux WASM jobs for better hit rates
+          shared-key: "linux-wasm"
 
       - name: "Build for WASM"
         run: |
@@ -193,10 +205,7 @@ jobs:
           file: "baml_language/Cargo.toml"
           field: "workspace.package.rust-version"
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain (MSRV)"
         env:
           MSRV: ${{ steps.msrv.outputs.value }}
@@ -204,6 +213,12 @@ jobs:
           rustup toolchain install "${MSRV}"
           rustup default "${MSRV}"
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across Linux MSRV jobs
+          shared-key: "linux-msrv"
 
       - name: "Build with MSRV"
         env:
@@ -244,13 +259,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: rustup show
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux jobs for better hit rates
+          shared-key: "linux-cargo"
 
       - name: "Install cargo insta"
         uses: taiki-e/install-action@v2

@@ -30,15 +30,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
         run: |
           rustup show
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          # Share cache across similar Linux WASM jobs for better hit rates
+          shared-key: "linux-wasm"
 
       - name: "Install wasm-pack"
         uses: taiki-e/install-action@v2
