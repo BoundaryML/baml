@@ -8,7 +8,7 @@ crates/baml_tests/BENCHMARKS.md
 crates/baml_tests/benches/incremental/*/description.md
 
 # LSP documentation
-crates/lsp_server/CONTRIBUTING.md
+crates/baml_lsp_server/CONTRIBUTING.md
 
 # Test instructions
 TEST_INSTRUCTIONS.md

@@ -417,12 +417,12 @@ name = "baml_cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "baml_lsp_server",
  "cfg-if 1.0.4",
  "clap",
  "clap-cargo",
  "colored",
  "ctrlc",
- "lsp_server",
 ]
 
 [[package]]
@@ -601,6 +601,87 @@ dependencies = [
  "baml_workspace",
  "rowan 0.16.1",
  "salsa",
+]
+
+[[package]]
+name = "baml_lsp_actions"
+version = "0.0.0"
+dependencies = [
+ "baml_db",
+ "baml_project",
+ "rowan 0.16.1",
+ "smol_str",
+ "text-size",
+ "tracing",
+]
+
+[[package]]
+name = "baml_lsp_actions_tests"
+version = "0.0.0"
+dependencies = [
+ "baml_compiler_diagnostics",
+ "baml_db",
+ "baml_lsp_actions",
+ "baml_project",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+ "text-size",
+ "walkdir",
+]
+
+[[package]]
+name = "baml_lsp_server"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.8",
+ "baml_db",
+ "baml_lsp_actions",
+ "baml_lsp_types",
+ "baml_project",
+ "colored",
+ "console-subscriber",
+ "crossbeam",
+ "filetime",
+ "futures",
+ "ignore",
+ "indexmap 2.13.0",
+ "insta",
+ "is-macro",
+ "itertools 0.14.0",
+ "jod-thread",
+ "libc",
+ "log",
+ "lsp-server",
+ "lsp-types",
+ "memchr",
+ "mime_guess",
+ "parking_lot",
+ "path-absolutize",
+ "pathdiff",
+ "regex",
+ "reqwest",
+ "rustc-hash 2.1.1",
+ "schemars",
+ "semver",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "shellexpand",
+ "similar",
+ "simple-logging",
+ "text-size",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tower-http 0.6.8",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
+ "url",
+ "webbrowser",
 ]
 
 [[package]]
@@ -2804,87 +2885,6 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "url",
-]
-
-[[package]]
-name = "lsp_actions"
-version = "0.0.0"
-dependencies = [
- "baml_db",
- "baml_project",
- "rowan 0.16.1",
- "smol_str",
- "text-size",
- "tracing",
-]
-
-[[package]]
-name = "lsp_actions_tests"
-version = "0.0.0"
-dependencies = [
- "baml_compiler_diagnostics",
- "baml_db",
- "baml_project",
- "lsp_actions",
- "prettyplease",
- "proc-macro2",
- "quote",
- "syn 2.0.114",
- "text-size",
- "walkdir",
-]
-
-[[package]]
-name = "lsp_server"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "axum 0.8.8",
- "baml_db",
- "baml_lsp_types",
- "baml_project",
- "colored",
- "console-subscriber",
- "crossbeam",
- "filetime",
- "futures",
- "ignore",
- "indexmap 2.13.0",
- "insta",
- "is-macro",
- "itertools 0.14.0",
- "jod-thread",
- "libc",
- "log",
- "lsp-server",
- "lsp-types",
- "lsp_actions",
- "memchr",
- "mime_guess",
- "parking_lot",
- "path-absolutize",
- "pathdiff",
- "regex",
- "reqwest",
- "rustc-hash 2.1.1",
- "schemars",
- "semver",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "shellexpand",
- "similar",
- "simple-logging",
- "text-size",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tower-http 0.6.8",
- "tracing",
- "tracing-log",
- "tracing-subscriber",
- "url",
- "webbrowser",
 ]
 
 [[package]]

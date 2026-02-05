@@ -56,12 +56,13 @@ impl SyncRequestHandler for Hover {
         let text = source_file.text(lsp_db.db());
         let offset = TextSize::from(lsp_position_to_offset(text, position) as u32);
 
-        // Use lsp_actions hover
-        let hover_result = lsp_actions::hover::hover(lsp_db.db(), source_file, project, offset);
+        // Use baml_lsp_actions hover
+        let hover_result =
+            baml_lsp_actions::hover::hover(lsp_db.db(), source_file, project, offset);
 
         match hover_result {
             Some(hover) => {
-                let content = hover.display(lsp_actions::MarkupKind::Markdown);
+                let content = hover.display(baml_lsp_actions::MarkupKind::Markdown);
                 Ok(Some(types::Hover {
                     contents: types::HoverContents::Markup(types::MarkupContent {
                         kind: types::MarkupKind::Markdown,

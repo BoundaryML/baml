@@ -177,6 +177,10 @@ impl Config {
                 link_crates: vec![],
             }];
         }
+        // Sort namespaces by name length descending so more-specific prefixes
+        // are matched first (e.g., "baml_lsp" before "baml")
+        self.namespaces
+            .sort_by(|a, b| b.name.len().cmp(&a.name.len()));
         self
     }
 

@@ -115,13 +115,13 @@ impl SyncRequestHandler for GotoDefinition {
             text_position.as_u32()
         );
 
-        // Call the lsp_actions goto_definition function (convert TextSize types)
+        // Call the baml_lsp_actions goto_definition function (convert TextSize types)
         let text_size_position = text_size::TextSize::from(text_position.as_u32());
         tracing::debug!(
-            "Calling lsp_actions::goto_definition with position: {:?}",
+            "Calling baml_lsp_actions::goto_definition with position: {:?}",
             text_size_position
         );
-        match lsp_actions::goto_definition(db, file_id, text_size_position) {
+        match baml_lsp_actions::goto_definition(db, file_id, text_size_position) {
             Some(nav_target) => {
                 tracing::debug!("Got navigation target!");
                 tracing::debug!("  Target name: {}", nav_target.name);

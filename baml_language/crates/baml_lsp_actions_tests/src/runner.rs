@@ -6,8 +6,8 @@
 use std::path::Path;
 
 use baml_compiler_diagnostics::{RenderConfig, render_diagnostic};
+use baml_lsp_actions::{MarkupKind, hover::hover as lsp_ide_hover};
 use baml_project::ProjectDatabase;
-use lsp_actions::{MarkupKind, hover::hover as lsp_ide_hover};
 use text_size::TextSize;
 
 use super::parser::ParsedTestFile;
@@ -133,7 +133,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         for marker in &parsed.cursor_markers {
             let source_file = file_map[&marker.file];
             let offset = TextSize::from(marker.offset as u32);
-            let completions = lsp_actions::complete(db, source_file, project, offset);
+            let completions = baml_lsp_actions::complete(db, source_file, project, offset);
 
             for item in completions {
                 all_labels.insert(item.label);

@@ -1,5 +1,5 @@
 [package]
-name = "lsp_actions"
+name = "baml_lsp_actions"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }

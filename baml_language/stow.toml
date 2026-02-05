@@ -39,7 +39,7 @@ graph_external_deps = ["serde", "tokio", "clap", "anyhow", "salsa", "rowan"]
 # Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
 pattern = "anyhow"
-allowed_crates = ["*_cli", "tools_*", "lsp_*", "baml_lsp_types"]
+allowed_crates = ["*_cli", "tools_*", "baml_lsp_*"]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
@@ -86,10 +86,8 @@ link_crates = ["bex_external_types"]
 
 # lsp namespace configuration
 [[namespaces]]
-name = "lsp"
+name = "baml_lsp"
 link_crates = ["baml_project"]
-# this is named differently in the workspace to avoid confusion with the lsp_types crate
-name_exceptions = { "baml_lsp_types" = "baml_lsp_types" }
 
 # bridge namespace configuration
 [[namespaces]]

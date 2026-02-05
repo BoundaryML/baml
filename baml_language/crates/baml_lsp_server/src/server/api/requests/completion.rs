@@ -63,8 +63,8 @@ impl SyncRequestHandler for Completion {
         let text = source_file.text(lsp_db.db());
         let offset = TextSize::from(lsp_position_to_offset(text, position) as u32);
 
-        // Use lsp_actions completion
-        let completions = lsp_actions::complete(lsp_db.db(), source_file, project, offset);
+        // Use baml_lsp_actions completion
+        let completions = baml_lsp_actions::complete(lsp_db.db(), source_file, project, offset);
 
         // Convert to LSP types
         let items: Vec<CompletionItem> = completions
@@ -83,8 +83,8 @@ impl SyncRequestHandler for Completion {
     }
 }
 
-/// Convert a lsp_actions CompletionItem to an LSP CompletionItem.
-fn to_lsp_completion_item(item: lsp_actions::CompletionItem) -> CompletionItem {
+/// Convert a baml_lsp_actions CompletionItem to an LSP CompletionItem.
+fn to_lsp_completion_item(item: baml_lsp_actions::CompletionItem) -> CompletionItem {
     CompletionItem {
         label: item.label,
         kind: Some(to_lsp_completion_kind(item.kind)),
@@ -96,21 +96,21 @@ fn to_lsp_completion_item(item: lsp_actions::CompletionItem) -> CompletionItem {
     }
 }
 
-/// Convert a lsp_actions CompletionKind to an LSP CompletionItemKind.
-fn to_lsp_completion_kind(kind: lsp_actions::CompletionKind) -> CompletionItemKind {
+/// Convert a baml_lsp_actions CompletionKind to an LSP CompletionItemKind.
+fn to_lsp_completion_kind(kind: baml_lsp_actions::CompletionKind) -> CompletionItemKind {
     match kind {
-        lsp_actions::CompletionKind::Keyword => CompletionItemKind::KEYWORD,
-        lsp_actions::CompletionKind::Function => CompletionItemKind::FUNCTION,
-        lsp_actions::CompletionKind::Class => CompletionItemKind::CLASS,
-        lsp_actions::CompletionKind::Enum => CompletionItemKind::ENUM,
-        lsp_actions::CompletionKind::EnumVariant => CompletionItemKind::ENUM_MEMBER,
-        lsp_actions::CompletionKind::Field => CompletionItemKind::FIELD,
-        lsp_actions::CompletionKind::Client => CompletionItemKind::MODULE,
-        lsp_actions::CompletionKind::TypeAlias => CompletionItemKind::TYPE_PARAMETER,
-        lsp_actions::CompletionKind::Property => CompletionItemKind::PROPERTY,
-        lsp_actions::CompletionKind::Snippet => CompletionItemKind::SNIPPET,
-        lsp_actions::CompletionKind::Generator => CompletionItemKind::MODULE,
-        lsp_actions::CompletionKind::Test => CompletionItemKind::METHOD,
-        lsp_actions::CompletionKind::Type => CompletionItemKind::TYPE_PARAMETER,
+        baml_lsp_actions::CompletionKind::Keyword => CompletionItemKind::KEYWORD,
+        baml_lsp_actions::CompletionKind::Function => CompletionItemKind::FUNCTION,
+        baml_lsp_actions::CompletionKind::Class => CompletionItemKind::CLASS,
+        baml_lsp_actions::CompletionKind::Enum => CompletionItemKind::ENUM,
+        baml_lsp_actions::CompletionKind::EnumVariant => CompletionItemKind::ENUM_MEMBER,
+        baml_lsp_actions::CompletionKind::Field => CompletionItemKind::FIELD,
+        baml_lsp_actions::CompletionKind::Client => CompletionItemKind::MODULE,
+        baml_lsp_actions::CompletionKind::TypeAlias => CompletionItemKind::TYPE_PARAMETER,
+        baml_lsp_actions::CompletionKind::Property => CompletionItemKind::PROPERTY,
+        baml_lsp_actions::CompletionKind::Snippet => CompletionItemKind::SNIPPET,
+        baml_lsp_actions::CompletionKind::Generator => CompletionItemKind::MODULE,
+        baml_lsp_actions::CompletionKind::Test => CompletionItemKind::METHOD,
+        baml_lsp_actions::CompletionKind::Type => CompletionItemKind::TYPE_PARAMETER,
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "lsp_server"
+name = "baml_lsp_server"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
@@ -21,9 +21,9 @@ default = [  ]
 
 [dependencies]
 baml_db = { workspace = true }
+baml_lsp_actions = { workspace = true }
 baml_lsp_types = { workspace = true }
 baml_project = { workspace = true }
-lsp_actions = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
 colored = { workspace = true }

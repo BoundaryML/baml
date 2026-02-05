@@ -17,7 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
-lsp_server = { workspace = true }
+baml_lsp_server = { workspace = true }
 anyhow = { workspace = true }
 cfg-if = { workspace = true }
 clap = { workspace = true, features = [ "color", "env" ] }

@@ -69,9 +69,9 @@ impl SyncRequestHandler for FindReferences {
             text,
         );
 
-        // Call the lsp_actions find_all_references function (convert TextSize types)
+        // Call the baml_lsp_actions find_all_references function (convert TextSize types)
         let text_size_position = text_size::TextSize::from(text_position.as_u32());
-        let references = lsp_actions::find_all_references(db, file_id, text_size_position);
+        let references = baml_lsp_actions::find_all_references(db, file_id, text_size_position);
 
         // Convert References to LSP Locations
         let locations: Vec<Location> = references
