@@ -121,7 +121,7 @@ pub fn convert_tir_ty(
         baml_compiler_tir::Ty::Function { params, ret } => {
             let converted_params: Result<Vec<_>, _> = params
                 .iter()
-                .map(|t| convert_tir_ty(t, aliases, recursive_aliases))
+                .map(|(_, t)| convert_tir_ty(t, aliases, recursive_aliases))
                 .collect();
             Ok(Ty::Function {
                 params: converted_params?,

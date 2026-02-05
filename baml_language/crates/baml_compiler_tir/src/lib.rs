@@ -85,7 +85,7 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
         TypePattern::Function { params, ret } => Ty::Function {
             params: params
                 .iter()
-                .map(|p| substitute_with_fallback(p, bindings))
+                .map(|p| (None, substitute_with_fallback(p, bindings)))
                 .collect(),
             ret: Box::new(substitute_with_fallback(ret, bindings)),
         },
@@ -161,6 +161,8 @@ pub struct EnumVariantsMap<'db> {
 }
 
 /// Tracked struct holding function types (function name -> function type).
+///
+/// Parameter names are stored in `Ty::Function` for Jinja template validation.
 #[salsa::tracked]
 pub struct TypingContextMap<'db> {
     #[tracked]
@@ -257,6 +259,7 @@ pub fn enum_variants(db: &dyn Db, project: Project) -> EnumVariantsMap<'_> {
 /// Query: Get the typing context for a project.
 ///
 /// Maps function names and template string names to their arrow types.
+/// Parameter names are stored in `Ty::Function` for Jinja template validation.
 #[salsa::tracked]
 pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
     let resolution_ctx = TypeResolutionContext::new(db, project);
@@ -273,10 +276,13 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
                     let qualified_name = baml_compiler_hir::function_qualified_name(db, *func_loc);
                     let span = Span::default(); // TODO: get proper span from signature
 
-                    let param_types: Vec<Ty> = signature
+                    let params: Vec<(Option<Name>, Ty)> = signature
                         .params
                         .iter()
-                        .map(|p| resolution_ctx.lower_type_ref(&p.type_ref, span).0)
+                        .map(|p| {
+                            let ty = resolution_ctx.lower_type_ref(&p.type_ref, span).0;
+                            (Some(p.name.clone()), ty)
+                        })
                         .collect();
 
                     let return_type = resolution_ctx
@@ -284,34 +290,39 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
                         .0;
 
                     let func_type = Ty::Function {
-                        params: param_types,
+                        params,
                         ret: Box::new(return_type),
                     };
 
                     // Use the qualified display name so builtin BAML functions are only
                     // callable via their namespace (e.g., "baml.llm.render_prompt").
-                    context.insert(qualified_name.display_name(), func_type);
+                    let func_name = qualified_name.display_name();
+                    context.insert(func_name, func_type);
                 }
 
                 baml_compiler_hir::ItemId::TemplateString(ts_loc) => {
                     let signature = baml_compiler_hir::template_string_signature(db, *ts_loc);
                     let span = Span::default();
 
-                    let param_types: Vec<Ty> = signature
+                    let params: Vec<(Option<Name>, Ty)> = signature
                         .params
                         .iter()
-                        .map(|p| resolution_ctx.lower_type_ref(&p.type_ref, span).0)
+                        .map(|p| {
+                            let ty = resolution_ctx.lower_type_ref(&p.type_ref, span).0;
+                            (Some(p.name.clone()), ty)
+                        })
                         .collect();
 
                     // Template strings always return String
                     let return_type = Ty::String;
 
                     let func_type = Ty::Function {
-                        params: param_types,
+                        params,
                         ret: Box::new(return_type),
                     };
 
-                    context.insert(signature.name.clone(), func_type);
+                    let ts_name = signature.name.clone();
+                    context.insert(ts_name, func_type);
                 }
                 _ => {}
             }
@@ -1296,11 +1307,18 @@ fn validate_llm_prompt(
     // (so {{ Foo() }} resolves "Foo" as a callable)
     for (func_name, func_ty) in ctx.scopes.first().unwrap_or(&HashMap::new()) {
         if let Ty::Function { params, ret } = func_ty {
-            // Generate placeholder names for params (arg0, arg1, ...)
+            // Extract parameter names and types from Ty::Function
+            // Names are stored directly in params as (Option<Name>, Ty)
             let jinja_params: Vec<(String, JinjaType)> = params
                 .iter()
                 .enumerate()
-                .map(|(i, ty)| (format!("arg{i}"), JinjaType::from(ty)))
+                .map(|(i, (name, ty))| {
+                    let param_name = name
+                        .as_ref()
+                        .map(|n| n.to_string())
+                        .unwrap_or_else(|| format!("arg{i}"));
+                    (param_name, JinjaType::from(ty))
+                })
                 .collect();
             let jinja_ret = JinjaType::from(ret.as_ref());
 
@@ -1499,10 +1517,18 @@ pub fn validate_template_string_body(
     // Add functions (including other template strings) from globals
     for (func_name, func_ty) in globals {
         if let Ty::Function { params, ret } = func_ty {
+            // Extract parameter names and types from Ty::Function
+            // Names are stored directly in params as (Option<Name>, Ty)
             let jinja_params: Vec<(String, JinjaType)> = params
                 .iter()
                 .enumerate()
-                .map(|(i, ty)| (format!("arg{i}"), JinjaType::from(ty)))
+                .map(|(i, (name, ty))| {
+                    let param_name = name
+                        .as_ref()
+                        .map(|n| n.to_string())
+                        .unwrap_or_else(|| format!("arg{i}"));
+                    (param_name, JinjaType::from(ty))
+                })
                 .collect();
             let jinja_ret = JinjaType::from(ret.as_ref());
 
@@ -1766,12 +1792,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     );
 
                     // It's a builtin function - return its function type
-                    let mut param_types: Vec<Ty> = Vec::new();
+                    let mut param_types: Vec<(Option<Name>, Ty)> = Vec::new();
                     if let Some(ref receiver_pattern) = def.receiver {
-                        param_types.push(builtins::substitute_unknown(receiver_pattern));
+                        param_types.push((None, builtins::substitute_unknown(receiver_pattern)));
                     }
-                    for (_, pattern) in &def.params {
-                        param_types.push(builtins::substitute_unknown(pattern));
+                    for (param_name, pattern) in &def.params {
+                        param_types.push((
+                            Some(Name::new(*param_name)),
+                            builtins::substitute_unknown(pattern),
+                        ));
                     }
                     let return_type = builtins::substitute_unknown(&def.returns);
                     return Ty::Function {
@@ -1965,12 +1994,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         builtins::lookup_method(&receiver_ty, field.as_str())
                     {
                         // Build the function type from the builtin definition
-                        let mut param_types: Vec<Ty> = Vec::new();
+                        let mut param_types: Vec<(Option<Name>, Ty)> = Vec::new();
                         if def.receiver.is_some() {
-                            param_types.push(receiver_ty.clone());
+                            param_types.push((None, receiver_ty.clone()));
                         }
-                        for (_, pattern) in &def.params {
-                            param_types.push(builtins::substitute(pattern, &bindings));
+                        for (param_name, pattern) in &def.params {
+                            param_types.push((
+                                Some(Name::new(*param_name)),
+                                builtins::substitute(pattern, &bindings),
+                            ));
                         }
                         let return_type = builtins::substitute(&def.returns, &bindings);
                         let callee_ty = Ty::Function {
@@ -2049,7 +2081,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         }
 
                         // Phase 2: Compute expected parameter types using bindings
-                        let param_types: Vec<Ty> = all_param_patterns
+                        let param_types_only: Vec<Ty> = all_param_patterns
                             .iter()
                             .map(|p| {
                                 if bindings.is_empty() {
@@ -2064,7 +2096,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         // This allows empty maps/arrays to pick up their expected types
                         let arg_types_with_spans: Vec<(Ty, Option<ErrorLocation>)> = args
                             .iter()
-                            .zip(param_types.iter())
+                            .zip(param_types_only.iter())
                             .map(|(arg, expected_ty)| {
                                 let ty = check_expr(ctx, *arg, body, expected_ty);
                                 let arg_location = Some(ErrorLocation::Expr(*arg));
@@ -2078,8 +2110,20 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             substitute_with_fallback(&def.returns, &bindings)
                         };
 
+                        // Build params with names for Ty::Function
+                        let mut params: Vec<(Option<Name>, Ty)> = Vec::new();
+                        let mut ty_iter = param_types_only.into_iter();
+                        if def.receiver.is_some() {
+                            if let Some(ty) = ty_iter.next() {
+                                params.push((None, ty));
+                            }
+                        }
+                        for ((param_name, _), ty) in def.params.iter().zip(ty_iter) {
+                            params.push((Some(Name::new(*param_name)), ty));
+                        }
+
                         let callee_ty = Ty::Function {
-                            params: param_types,
+                            params,
                             ret: Box::new(return_type),
                         };
                         // Store the callee type so downstream passes (VIR, MIR) can find it
@@ -2157,7 +2201,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     }
 
                     // Check argument types - use each argument's location for precise error location
-                    for ((arg_ty, arg_location), param_ty) in
+                    for ((arg_ty, arg_location), (_, param_ty)) in
                         effective_args.iter().zip(params.iter())
                     {
                         if !ctx.is_subtype_of(arg_ty, param_ty) {
@@ -3127,7 +3171,10 @@ fn infer_field_access(
                 // Returns null (void operation)
                 return Ty::Function {
                     // First param is receiver (the watched value), second is filter
-                    params: vec![*inner_ty.clone(), Ty::Unknown], // Filter type is flexible
+                    params: vec![
+                        (None, *inner_ty.clone()),
+                        (Some(Name::new("filter")), Ty::Unknown),
+                    ], // Filter type is flexible
                     ret: Box::new(Ty::Null),
                 };
             }
@@ -3135,7 +3182,7 @@ fn infer_field_access(
                 // $watch.notify() - manually trigger notification
                 // Returns null (void operation)
                 return Ty::Function {
-                    params: vec![*inner_ty.clone()], // Just the receiver
+                    params: vec![(None, *inner_ty.clone())], // Just the receiver
                     ret: Box::new(Ty::Null),
                 };
             }
@@ -3188,17 +3235,20 @@ fn infer_field_access(
                 ResolvedValue::BuiltinFunction(QualifiedName::from_builtin_path(def.path)),
             );
         }
-        let mut param_types: Vec<Ty> = Vec::new();
+        let mut params: Vec<(Option<Name>, Ty)> = Vec::new();
         if def.receiver.is_some() {
-            param_types.push(base.clone());
+            params.push((None, base.clone()));
         }
-        for (_, pattern) in &def.params {
-            param_types.push(builtins::substitute(pattern, &bindings));
+        for (param_name, pattern) in &def.params {
+            params.push((
+                Some(Name::new(*param_name)),
+                builtins::substitute(pattern, &bindings),
+            ));
         }
         let return_type = builtins::substitute(&def.returns, &bindings);
 
         return Ty::Function {
-            params: param_types,
+            params,
             ret: Box::new(return_type),
         };
     }

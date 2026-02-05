@@ -81,12 +81,12 @@ template_string BadCall4 #"
 
 //----
 //- diagnostics
-// Warning: Function 'WithParams' expects argument 'arg0'
+// Warning: Function 'WithParams' expects argument 'a'
 //     ╭─[ template_string_bad_calls.baml:14:5 ]
 //     │
 //  14 │   {{ WithParams() }}
 //     │     ──────┬─────  
-//     │           ╰─────── Function 'WithParams' expects argument 'arg0'
+//     │           ╰─────── Function 'WithParams' expects argument 'a'
 //     │ 
 //     │ Note: Error code: E0081
 // ────╯
@@ -99,30 +99,12 @@ template_string BadCall4 #"
 //     │ 
 //     │ Note: Error code: E0070
 // ────╯
-// Warning: Function 'WithParams' does not have an argument 'a'. Did you mean 'arg0'?
+// Warning: Function 'WithParams' does not have an argument 'b'. Did you mean 'a'?
 //    ╭─[ template_string_bad_calls.baml:6:5 ]
 //    │
 //  6 │   {{ WithParams(a=2, b=2) }}
 //    │     ──────────┬─────────  
-//    │               ╰─────────── Function 'WithParams' does not have an argument 'a'. Did you mean 'arg0'?
+//    │               ╰─────────── Function 'WithParams' does not have an argument 'b'. Did you mean 'a'?
 //    │ 
 //    │ Note: Error code: E0082
-// ───╯
-// Warning: Function 'WithParams' does not have an argument 'b'. Did you mean 'arg0'?
-//    ╭─[ template_string_bad_calls.baml:6:5 ]
-//    │
-//  6 │   {{ WithParams(a=2, b=2) }}
-//    │     ──────────┬─────────  
-//    │               ╰─────────── Function 'WithParams' does not have an argument 'b'. Did you mean 'arg0'?
-//    │ 
-//    │ Note: Error code: E0082
-// ───╯
-// Warning: Function 'WithParams' expects argument 'arg0'
-//    ╭─[ template_string_bad_calls.baml:6:5 ]
-//    │
-//  6 │   {{ WithParams(a=2, b=2) }}
-//    │     ──────────┬─────────  
-//    │               ╰─────────── Function 'WithParams' expects argument 'arg0'
-//    │ 
-//    │ Note: Error code: E0081
 // ───╯

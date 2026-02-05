@@ -153,11 +153,13 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::BoolLiteral(b) => Ty::Literal(LiteralValue::Bool(*b)),
 
         // Function types: (x: int, y: int) -> bool
-        // Note: parameter names are discarded - they are for documentation only
         TypeRef::Function { params, ret } => {
-            let param_tys: Vec<Ty> = params
+            let param_tys: Vec<(Option<Name>, Ty)> = params
                 .iter()
-                .map(|p| lower_type_ref_resolved_with_ctx(ctx, &p.ty))
+                .map(|p| {
+                    let ty = lower_type_ref_resolved_with_ctx(ctx, &p.ty);
+                    (p.name.clone(), ty)
+                })
                 .collect();
             let ret_ty = lower_type_ref_resolved_with_ctx(ctx, ret);
             Ty::Function {

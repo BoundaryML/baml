@@ -77,8 +77,11 @@ pub enum Ty {
     Union(Vec<Ty>),
 
     /// Function/arrow type: `(T1, T2, ...) -> R`
+    ///
+    /// Parameter names are optional and used only for diagnostics (e.g., error messages
+    /// like "missing argument 'foo'"). They are ignored in type equality and subtyping.
     Function {
-        params: Vec<Ty>,
+        params: Vec<(Option<baml_base::Name>, Ty)>,
         ret: Box<Ty>,
     },
 
@@ -256,7 +259,13 @@ impl fmt::Display for Ty {
             Ty::Function { params, ret } => {
                 let param_strs: Vec<std::string::String> = params
                     .iter()
-                    .map(std::string::ToString::to_string)
+                    .map(|(name, ty)| {
+                        if let Some(n) = name {
+                            format!("{n}: {ty}")
+                        } else {
+                            ty.to_string()
+                        }
+                    })
                     .collect();
                 write!(f, "({}) -> {}", param_strs.join(", "), ret)
             }

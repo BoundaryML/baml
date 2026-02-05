@@ -175,7 +175,10 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
         TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute(inner, bindings))),
         TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path)),
         TypePattern::Function { params, ret } => Ty::Function {
-            params: params.iter().map(|p| substitute(p, bindings)).collect(),
+            params: params
+                .iter()
+                .map(|p| (None, substitute(p, bindings)))
+                .collect(),
             ret: Box::new(substitute(ret, bindings)),
         },
         TypePattern::Resource => Ty::Resource,
@@ -206,7 +209,10 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
         TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute_unknown(inner))),
         TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path)),
         TypePattern::Function { params, ret } => Ty::Function {
-            params: params.iter().map(substitute_unknown).collect(),
+            params: params
+                .iter()
+                .map(|p| (None, substitute_unknown(p)))
+                .collect(),
             ret: Box::new(substitute_unknown(ret)),
         },
         TypePattern::Resource => Ty::Resource,

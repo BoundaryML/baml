@@ -605,13 +605,14 @@ fn build_typing_context(
                 let qualified_name = baml_compiler_hir::function_qualified_name(db, *func_loc);
 
                 // Build the arrow type: (param_types) -> return_type
-                let param_types: Vec<baml_compiler_tir::Ty> = signature
+                let params: Vec<(Option<Name>, baml_compiler_tir::Ty)> = signature
                     .params
                     .iter()
                     .map(|p| {
-                        resolution_ctx
+                        let ty = resolution_ctx
                             .lower_type_ref(&p.type_ref, Span::default())
-                            .0
+                            .0;
+                        (Some(p.name.clone()), ty)
                     })
                     .collect();
 
@@ -619,7 +620,7 @@ fn build_typing_context(
                     resolution_ctx.lower_type_ref(&signature.return_type, Span::default());
 
                 let func_type = baml_compiler_tir::Ty::Function {
-                    params: param_types,
+                    params,
                     ret: Box::new(return_type),
                 };
 
