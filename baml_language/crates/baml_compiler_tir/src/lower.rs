@@ -48,9 +48,9 @@ struct TypeLoweringContextResolved<'a> {
     type_alias_names: &'a HashSet<Name>,
     class_names: &'a HashSet<Name>,
     enum_names: &'a HashSet<Name>,
-    /// Base error location (e.g., TypeAliasType with alias_name)
+    /// Base error location (e.g., `TypeAliasType` with `alias_name`)
     base_location: ErrorLocation,
-    /// Current path within nested type constructors (for TypeAliasType)
+    /// Current path within nested type constructors (for `TypeAliasType`)
     current_path: Vec<usize>,
     errors: Vec<TirTypeError>,
 }
@@ -72,7 +72,7 @@ impl<'a> TypeLoweringContextResolved<'a> {
         }
     }
 
-    /// Get the current error location, incorporating the path for TypeAliasType.
+    /// Get the current error location, incorporating the path for `TypeAliasType`.
     fn current_location(&self) -> ErrorLocation {
         match &self.base_location {
             ErrorLocation::TypeAliasType { alias_name, .. } => ErrorLocation::TypeAliasType {

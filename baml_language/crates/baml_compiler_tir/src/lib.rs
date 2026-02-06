@@ -1319,7 +1319,7 @@ fn validate_llm_prompt(
                 .map(|(i, (name, ty))| {
                     let param_name = name
                         .as_ref()
-                        .map(|n| n.to_string())
+                        .map(std::string::ToString::to_string)
                         .unwrap_or_else(|| format!("arg{i}"));
                     (param_name, JinjaType::from(ty))
                 })
@@ -1529,7 +1529,7 @@ pub fn validate_template_string_body(
                 .map(|(i, (name, ty))| {
                     let param_name = name
                         .as_ref()
-                        .map(|n| n.to_string())
+                        .map(std::string::ToString::to_string)
                         .unwrap_or_else(|| format!("arg{i}"));
                     (param_name, JinjaType::from(ty))
                 })

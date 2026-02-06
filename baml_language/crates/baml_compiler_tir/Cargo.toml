@@ -29,5 +29,5 @@ minijinja = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
 smol_str = { workspace = true }
-strsim = "0.11"
+strsim = { workspace = true }
 text-size = { workspace = true }

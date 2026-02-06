@@ -784,14 +784,37 @@ fn collect_type_expr_spans(
         for (i, member) in type_expr.union_member_parts().iter().enumerate() {
             current_path.push(i);
 
+            // Record the span for this union member
+            if let Some(range) = compute_union_member_range(member) {
+                let span = Span::new(file_id, range);
+                spans.insert((alias_name.clone(), current_path.clone()), span);
+            }
+
             // If the member has a nested TYPE_EXPR (e.g., parenthesized type), recurse into it
             if let Some(inner_type_expr) = member.type_expr() {
                 collect_type_expr_spans(&inner_type_expr, file_id, alias_name, current_path, spans);
-            } else {
-                // For simple types like `int`, `blah`, compute span from tokens/nodes
-                if let Some(range) = compute_union_member_range(member) {
-                    let span = Span::new(file_id, range);
-                    spans.insert((alias_name.clone(), current_path.clone()), span);
+            }
+
+            // If the member has TYPE_ARGS (e.g., map<K, V>), recurse into those
+            if let Some(type_args_node) = member.type_args() {
+                let type_arg_exprs: Vec<_> = type_args_node
+                    .children()
+                    .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
+                    .collect();
+                for (j, arg_node) in type_arg_exprs.iter().enumerate() {
+                    if let Some(arg_type_expr) =
+                        baml_compiler_syntax::ast::TypeExpr::cast(arg_node.clone())
+                    {
+                        current_path.push(j);
+                        collect_type_expr_spans(
+                            &arg_type_expr,
+                            file_id,
+                            alias_name,
+                            current_path,
+                            spans,
+                        );
+                        current_path.pop();
+                    }
                 }
             }
 
