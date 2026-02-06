@@ -660,9 +660,14 @@ impl<'a> BexValue<'a> {
                                 actual: variant_obj.to_string(),
                             });
                         };
+                        let variant_def = enum_.variants.get(variant.index).ok_or_else(|| {
+                            AccessError::FieldNotFound {
+                                expected: format!("variant index {}", variant.index),
+                            }
+                        })?;
                         Ok(BexExternalValue::Variant {
                             enum_name: enum_.name.clone(),
-                            variant_name: enum_.variants[variant.index].name.clone(),
+                            variant_name: variant_def.name.clone(),
                         })
                     }
                     Object::Resource(resource_handle) => {
@@ -696,12 +701,43 @@ pub mod builtin_types {
     use super::*;
 
     pub mod owned {
+        use bex_external_types::BexExternalValue;
+
         pub struct PrimitiveClient {
             pub name: String,
             pub provider: String,
             pub default_role: String,
             pub allowed_roles: Vec<String>,
-            pub options: indexmap::IndexMap<String, String>,
+            pub options: indexmap::IndexMap<String, bex_external_types::BexExternalValue>,
+        }
+
+        impl PrimitiveClient {
+            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
+            pub fn as_bex_external_value(self) -> BexExternalValue {
+                let allowed_roles = BexExternalValue::Array {
+                    element_type: bex_external_types::Ty::String,
+                    items: self
+                        .allowed_roles
+                        .into_iter()
+                        .map(BexExternalValue::String)
+                        .collect(),
+                };
+                let options = BexExternalValue::Map {
+                    key_type: bex_external_types::Ty::String,
+                    value_type: bex_external_types::Ty::String,
+                    entries: self.options,
+                };
+                BexExternalValue::Instance {
+                    class_name: "baml.llm.PrimitiveClient".to_string(),
+                    fields: indexmap::indexmap! {
+                        "name".to_string() => BexExternalValue::String(self.name),
+                        "provider".to_string() => BexExternalValue::String(self.provider),
+                        "default_role".to_string() => BexExternalValue::String(self.default_role),
+                        "allowed_roles".to_string() => allowed_roles,
+                        "options".to_string() => options,
+                    },
+                }
+            }
         }
 
         pub struct HttpRequest {
@@ -711,6 +747,30 @@ pub mod builtin_types {
             pub body: String,
         }
 
+        impl HttpRequest {
+            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
+            pub fn as_bex_external_value(self) -> BexExternalValue {
+                let headers = BexExternalValue::Map {
+                    key_type: bex_external_types::Ty::String,
+                    value_type: bex_external_types::Ty::String,
+                    entries: self
+                        .headers
+                        .into_iter()
+                        .map(|(k, v)| (k, BexExternalValue::String(v)))
+                        .collect(),
+                };
+                BexExternalValue::Instance {
+                    class_name: "baml.http.Request".to_string(),
+                    fields: indexmap::indexmap! {
+                        "method".to_string() => BexExternalValue::String(self.method),
+                        "url".to_string() => BexExternalValue::String(self.url),
+                        "headers".to_string() => headers,
+                        "body".to_string() => BexExternalValue::String(self.body),
+                    },
+                }
+            }
+        }
+
         pub struct HttpResponse {
             pub status_code: i64,
             pub headers: indexmap::IndexMap<String, String>,
@@ -718,12 +778,60 @@ pub mod builtin_types {
             pub _handle: sys_resource_types::ResourceHandle,
         }
 
+        impl HttpResponse {
+            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
+            pub fn as_bex_external_value(self) -> BexExternalValue {
+                let headers = BexExternalValue::Map {
+                    key_type: bex_external_types::Ty::String,
+                    value_type: bex_external_types::Ty::String,
+                    entries: self
+                        .headers
+                        .into_iter()
+                        .map(|(k, v)| (k, BexExternalValue::String(v)))
+                        .collect(),
+                };
+                BexExternalValue::Instance {
+                    class_name: "baml.http.Response".to_string(),
+                    fields: indexmap::indexmap! {
+                        "_handle".to_string() => BexExternalValue::Resource(self._handle),
+                        "status_code".to_string() => BexExternalValue::Int(self.status_code),
+                        "headers".to_string() => headers,
+                        "url".to_string() => BexExternalValue::String(self.url),
+                    },
+                }
+            }
+        }
+
         pub struct FsFile {
             pub _handle: sys_resource_types::ResourceHandle,
         }
 
+        impl FsFile {
+            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
+            pub fn as_bex_external_value(self) -> BexExternalValue {
+                BexExternalValue::Instance {
+                    class_name: "baml.fs.File".to_string(),
+                    fields: indexmap::indexmap! {
+                        "_handle".to_string() => BexExternalValue::Resource(self._handle),
+                    },
+                }
+            }
+        }
+
         pub struct NetSocket {
             pub _handle: sys_resource_types::ResourceHandle,
+        }
+
+        impl NetSocket {
+            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
+            pub fn as_bex_external_value(self) -> BexExternalValue {
+                BexExternalValue::Instance {
+                    class_name: "baml.net.Socket".to_string(),
+                    fields: indexmap::indexmap! {
+                        "_handle".to_string() => BexExternalValue::Resource(self._handle),
+                    },
+                }
+            }
         }
     }
 
@@ -800,7 +908,7 @@ pub mod builtin_types {
                 options: self
                     .options(heap)?
                     .into_iter()
-                    .map(|(k, v)| Ok((k, v.as_string(heap)?.clone())))
+                    .map(|(k, v)| Ok((k, v.as_owned_but_very_slow(heap)?)))
                     .collect::<Result<_, _>>()?,
             })
         }

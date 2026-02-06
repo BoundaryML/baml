@@ -1,4 +1,7 @@
-//! HostValue -> BexValue conversion.
+//! Decode C FFI / protobuf host values into `BexExternalValue`.
+//!
+//! Converts `HostValue` (from the C bridge) to the engine's `BexExternalValue` representation
+//! so the BEX engine can use them as function arguments.
 
 use bex_external_types::{BexExternalValue, Ty};
 use indexmap::IndexMap;
@@ -11,7 +14,7 @@ use crate::{
     error::BridgeError,
 };
 
-/// Convert a protobuf HostValue to a BexExternalValue.
+/// Decode a protobuf `HostValue` into a `BexExternalValue` for use by the BEX engine.
 pub fn host_value_to_external(value: HostValue) -> Result<BexExternalValue, BridgeError> {
     match value.value {
         None => Ok(BexExternalValue::Null),
@@ -96,7 +99,7 @@ fn extract_string_key(entry: &HostMapEntry) -> Result<String, BridgeError> {
     }
 }
 
-/// Convert kwargs from protobuf to BexValue map.
+/// Decode protobuf kwargs into an `IndexMap<String, BexExternalValue>` for engine call arguments.
 pub fn kwargs_to_bex_values(
     kwargs: Vec<HostMapEntry>,
 ) -> Result<IndexMap<String, BexExternalValue>, BridgeError> {

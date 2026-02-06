@@ -53,7 +53,8 @@ async fn connect_async(addr: String) -> Result<BexExternalValue, OpErrorKind> {
         .map_err(|e| OpErrorKind::Other(format!("Failed to connect to '{addr}': {e}")))?;
 
     let handle = REGISTRY.register_socket(stream, addr);
-    Ok(bex_external_types::builtins::new_socket(handle))
+    let owned = builtin_types::owned::NetSocket { _handle: handle };
+    Ok(owned.as_bex_external_value())
 }
 
 /// Read data from a socket.

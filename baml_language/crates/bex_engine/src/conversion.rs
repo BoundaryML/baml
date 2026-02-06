@@ -272,8 +272,13 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::Media(media)) => vm.alloc_media(media),
             BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => vm.alloc_prompt_ast(ast),
             BexExternalValue::FunctionRef { global_index } => {
-                // Return the function value from the VM's globals array
-                vm.globals[bex_vm_types::GlobalIndex::from_raw(global_index)]
+                let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
+                assert!((global_index < vm.globals.len()),
+                        "FunctionRef global_index {} out of bounds (globals len {})",
+                        global_index,
+                        vm.globals.len()
+                    );
+                vm.globals[idx]
             }
         }
     }
@@ -379,6 +384,8 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(tn)) => {
             enum_name.as_str() == tn.display_name.as_str()
         }
+        (BexExternalValue::Adt(BexExternalAdt::Media(_)), Ty::Media(_)) => true,
+        (BexExternalValue::Adt(BexExternalAdt::PromptAst(_)), Ty::PromptAst) => true,
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         // Handle nested unions/optionals in the type
         (value, Ty::Union(members)) => members.iter().any(|m| value_matches_type(value, m)),
@@ -456,6 +463,8 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     }
                 }
                 Object::Map(_) => members.iter().find(|m| matches!(m, Ty::Map { .. })),
+                Object::Media(_) => members.iter().find(|m| matches!(m, Ty::Media(_))),
+                Object::PromptAst(_) => members.iter().find(|m| matches!(m, Ty::PromptAst)),
                 _ => None,
             }
         }

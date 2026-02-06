@@ -5,7 +5,7 @@
 use baml_builtins::PromptAst;
 use indexmap::IndexMap;
 
-use super::{BuildRequestError, LlmRequestBuilder, PrimitiveClientValue, get_string_option};
+use super::{BuildRequestError, LlmRequestBuilder, PrimitiveClient, get_string_option};
 use crate::{LlmProvider, build_request::prompt_to_content_parts_simple};
 
 /// Builder for OpenAI-compatible providers.
@@ -24,7 +24,7 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         &["resource_name", "api_version"]
     }
 
-    fn build_url(&self, client: &PrimitiveClientValue) -> Result<String, BuildRequestError> {
+    fn build_url(&self, client: &PrimitiveClient) -> Result<String, BuildRequestError> {
         let base_url = get_string_option(client, "base_url")
             .unwrap_or_else(|| "https://api.openai.com".to_string());
 
@@ -44,7 +44,7 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         Ok(format!("{base_url}/v1/chat/completions"))
     }
 
-    fn build_auth_headers(&self, client: &PrimitiveClientValue) -> IndexMap<String, String> {
+    fn build_auth_headers(&self, client: &PrimitiveClient) -> IndexMap<String, String> {
         let mut headers = IndexMap::new();
         if let Some(api_key) = get_string_option(client, "api_key") {
             if *self.provider == LlmProvider::AzureOpenAi {

@@ -13,7 +13,6 @@ use bex_heap::{
     BexHeap,
     builtin_types::{PrimitiveClient as HeapPrimitiveClient, owned::PrimitiveClient},
 };
-use indexmap::IndexMap;
 use sys_types::OpErrorKind;
 
 use crate::{LlmProvider, ModelFeatures};
@@ -30,8 +29,7 @@ fn specialize_prompt(
 ) -> bex_vm_types::PromptAst {
     let provider = LlmProvider::from_str(&client.provider).unwrap_or(LlmProvider::OpenAiGeneric);
 
-    // TODO: propertly support options
-    let features = ModelFeatures::for_provider(provider, &IndexMap::default());
+    let features = ModelFeatures::for_provider(provider, &client.options);
     let prompt = transformations::merge_adjacent_roles(prompt);
     let prompt = transformations::consolidate_system_prompts(prompt, &features);
 

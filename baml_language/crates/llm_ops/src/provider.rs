@@ -1,6 +1,6 @@
 /// Known LLM providers.
 ///
-/// Parsed from `PrimitiveClientValue.provider` using strum's `EnumString`.
+/// Parsed from `PrimitiveClient.provider` using strum's `EnumString`.
 /// Unknown provider strings fall through to parse errors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
 #[strum(serialize_all = "kebab-case")]

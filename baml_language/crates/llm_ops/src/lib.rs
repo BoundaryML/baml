@@ -14,9 +14,9 @@ mod specialize_prompt;
 use std::sync::Arc;
 
 use bex_external_types::BexExternalValue;
+pub use bex_heap::builtin_types::owned::PrimitiveClient;
 use bex_heap::{BexHeap, builtin_types};
 use bex_vm_types::{HeapPtr, Object};
-pub use build_request::PrimitiveClientValue;
 pub use model_features::{AllowedMetadata, ModelFeatures};
 pub use parse_response::{
     FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage, parse_response,
@@ -45,11 +45,11 @@ pub fn execute_build_primitive_client(
         });
     }
 
-    let arg4 = args.pop().expect("len is 5");
-    let arg3 = args.pop().expect("len is 4");
-    let arg2 = args.pop().expect("len is 3");
-    let arg1 = args.pop().expect("len is 2");
-    let arg0 = args.pop().expect("len is 1");
+    let arg0 = args.remove(0);
+    let arg1 = args.remove(0);
+    let arg2 = args.remove(0);
+    let arg3 = args.remove(0);
+    let arg4 = args.remove(0);
 
     let (name, provider, default_role, allowed_roles, options) = heap
         .with_gc_protection(|protected| {
@@ -89,7 +89,7 @@ pub fn execute_build_primitive_client(
         })
         .map_err(OpErrorKind::AccessError)?;
 
-    let client = PrimitiveClientValue {
+    let client = builtin_types::owned::PrimitiveClient {
         name,
         provider,
         default_role,
@@ -98,33 +98,7 @@ pub fn execute_build_primitive_client(
     };
 
     // Return as Instance so it can be passed to execute_build_request via as_builtin_class
-    Ok(primitive_client_value_to_instance(&client))
-}
-
-fn primitive_client_value_to_instance(client: &PrimitiveClientValue) -> BexExternalValue {
-    let allowed_roles = BexExternalValue::Array {
-        element_type: bex_external_types::Ty::String,
-        items: client
-            .allowed_roles
-            .iter()
-            .map(|s| BexExternalValue::String(s.clone()))
-            .collect(),
-    };
-    let options = BexExternalValue::Map {
-        key_type: bex_external_types::Ty::String,
-        value_type: bex_external_types::Ty::String,
-        entries: client.options.clone(),
-    };
-    BexExternalValue::Instance {
-        class_name: "baml.llm.PrimitiveClient".to_string(),
-        fields: indexmap::indexmap! {
-            "name".to_string() => BexExternalValue::String(client.name.clone()),
-            "provider".to_string() => BexExternalValue::String(client.provider.clone()),
-            "default_role".to_string() => BexExternalValue::String(client.default_role.clone()),
-            "allowed_roles".to_string() => allowed_roles,
-            "options".to_string() => options,
-        },
-    }
+    Ok(client.as_bex_external_value())
 }
 
 /// Execute the `build_request` LLM operation.
@@ -142,8 +116,8 @@ pub fn execute_build_request(
         });
     }
 
-    let arg1 = args.pop().expect("len is 2");
-    let arg0 = args.pop().expect("len is 1");
+    let arg0 = args.remove(0);
+    let arg1 = args.remove(0);
 
     let (client_owned, prompt) = heap
         .with_gc_protection(|protected| {
@@ -154,20 +128,8 @@ pub fn execute_build_request(
         })
         .map_err(OpErrorKind::AccessError)?;
 
-    // build_request expects PrimitiveClientValue with options: IndexMap<String, BexExternalValue>
-    let client = PrimitiveClientValue {
-        name: client_owned.name,
-        provider: client_owned.provider,
-        default_role: client_owned.default_role,
-        allowed_roles: client_owned.allowed_roles,
-        options: client_owned
-            .options
-            .into_iter()
-            .map(|(k, v)| (k, BexExternalValue::String(v)))
-            .collect(),
-    };
-
-    build_request::build_request(&client, prompt).map_err(|e| OpErrorKind::Other(e.to_string()))
+    build_request::build_request(&client_owned, prompt)
+        .map_err(|e| OpErrorKind::Other(e.to_string()))
 }
 
 /// Execute the `parse` LLM operation.
@@ -191,10 +153,9 @@ pub fn execute_parse_response(
         });
     }
 
-    let arg2 = args.pop().expect("len is 3");
-    let arg1 = args.pop().expect("len is 2");
-    // arg0 is not used
-    let _arg0 = args.pop().expect("len is 1");
+    let _arg0 = args.remove(0);
+    let arg1 = args.remove(0);
+    let arg2 = args.remove(0);
 
     let (response, function_name, expected_return_type) = heap.with_gc_protection(|protected| {
         let response = arg1.as_string(&protected).cloned()?;

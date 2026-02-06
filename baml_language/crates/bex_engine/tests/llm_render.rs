@@ -9,12 +9,11 @@ use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use bex_engine::Ty;
 use bex_external_types::BexExternalAdt;
 use bex_heap::BexExternalValue;
-use llm_ops::PrimitiveClientValue;
+use llm_ops::PrimitiveClient;
 use sys_types::SysOp;
 
 #[tokio::test]
 async fn test_render_prompt_directly() {
-    use bex_external_types::BexExternalValue;
     use indexmap::IndexMap;
 
     // Test the Jinja rendering directly
@@ -26,7 +25,7 @@ async fn test_render_prompt_directly() {
     );
     args.insert("age".to_string(), BexExternalValue::Int(30));
 
-    let client = PrimitiveClientValue {
+    let client = PrimitiveClient {
         name: "test".to_string(),
         provider: "openai".to_string(),
         default_role: "user".to_string(),
@@ -65,7 +64,6 @@ async fn test_render_prompt_directly() {
 
 #[tokio::test]
 async fn test_render_prompt_with_chat_roles() {
-    use bex_external_types::BexExternalValue;
     use indexmap::IndexMap;
 
     let template = r#"
@@ -80,7 +78,7 @@ You are a helpful assistant.
         BexExternalValue::String("What is 2+2?".to_string()),
     );
 
-    let client = PrimitiveClientValue {
+    let client = PrimitiveClient {
         name: "test".to_string(),
         provider: "openai".to_string(),
         default_role: "user".to_string(),
@@ -399,7 +397,16 @@ function test_call_llm() -> string {
 
     match result {
         Ok(value) => {
-            assert_eq!(value, BexExternalValue::String("{\n    \"error\": {\n        \"message\": \"You didn't provide an API key. You need to provide your API key in an Authorization header using Bearer auth (i.e. Authorization: Bearer YOUR_KEY), or as the password field (with blank username) if you're accessing the API from your browser and are prompted for a username and password. You can obtain an API key from https://platform.openai.com/account/api-keys.\",\n        \"type\": \"invalid_request_error\",\n        \"param\": null,\n        \"code\": null\n    }\n}\n".to_string()));
+            // Verify we got an error response without asserting exact upstream message
+            if let BexExternalValue::String(s) = &value {
+                assert!(s.contains("error"), "Expected error response, got: {s}");
+                assert!(
+                    s.contains("invalid_request_error") || s.contains("API key"),
+                    "Expected API key error, got: {s}"
+                );
+            } else {
+                panic!("Expected String result, got {value:?}");
+            }
         }
         Err(e) => {
             panic!("test_call_llm failed: {e}");

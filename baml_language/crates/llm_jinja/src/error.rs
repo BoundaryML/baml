@@ -13,7 +13,7 @@ pub enum RenderPromptError {
     #[error("Missing variable: {name}")]
     MissingVariable { name: String },
 
-    /// Handle should not be passed to Jinja templates.
+    /// Value could not be converted to a Jinja-compatible form (e.g. Handle or unsupported type).
     #[error("Failed to convert value to Jinja value: {reason}")]
     ConversionError { reason: String },
 }

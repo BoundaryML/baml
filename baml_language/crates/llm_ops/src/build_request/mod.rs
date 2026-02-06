@@ -9,20 +9,10 @@ use std::str::FromStr;
 
 use baml_builtins::PromptAstSimple;
 use bex_external_types::{BexExternalValue, Ty};
+use bex_heap::builtin_types::owned::PrimitiveClient;
 use indexmap::indexmap;
 
 use crate::LlmProvider;
-
-/// In-memory representation of a primitive client for request building.
-/// Options values can be strings or nested maps (e.g. "headers").
-#[derive(Clone, Debug)]
-pub struct PrimitiveClientValue {
-    pub name: String,
-    pub provider: String,
-    pub default_role: String,
-    pub allowed_roles: Vec<String>,
-    pub options: indexmap::IndexMap<String, BexExternalValue>,
-}
 
 /// Option keys consumed by `specialize_prompt` — never forwarded to the request body.
 const SPECIALIZE_PROMPT_SKIP_KEYS: &[&str] = &[
@@ -45,13 +35,10 @@ pub(crate) trait LlmRequestBuilder {
     fn provider_skip_keys(&self) -> &'static [&'static str];
 
     /// Build the request URL.
-    fn build_url(&self, client: &PrimitiveClientValue) -> Result<String, BuildRequestError>;
+    fn build_url(&self, client: &PrimitiveClient) -> Result<String, BuildRequestError>;
 
     /// Build auth + provider-specific headers (without content-type or custom headers).
-    fn build_auth_headers(
-        &self,
-        client: &PrimitiveClientValue,
-    ) -> indexmap::IndexMap<String, String>;
+    fn build_auth_headers(&self, client: &PrimitiveClient) -> indexmap::IndexMap<String, String>;
 
     /// Convert a specialized prompt into the JSON body fields specific to this provider.
     fn build_prompt_body(
@@ -64,7 +51,7 @@ pub(crate) trait LlmRequestBuilder {
     /// Build the full request. Default: POST with url/headers/body from trait methods.
     fn build_request(
         &self,
-        client: &PrimitiveClientValue,
+        client: &PrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> Result<RawHttpRequest, BuildRequestError> {
         let url = self.build_url(client)?;
@@ -79,7 +66,7 @@ pub(crate) trait LlmRequestBuilder {
     }
 
     /// Build headers: auth headers + content-type + custom headers from options.
-    fn build_headers(&self, client: &PrimitiveClientValue) -> indexmap::IndexMap<String, String> {
+    fn build_headers(&self, client: &PrimitiveClient) -> indexmap::IndexMap<String, String> {
         let mut headers = indexmap::IndexMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
         headers.extend(self.build_auth_headers(client));
@@ -97,7 +84,7 @@ pub(crate) trait LlmRequestBuilder {
     /// Build JSON body: model + prompt fields + forwarded options.
     fn build_body(
         &self,
-        client: &PrimitiveClientValue,
+        client: &PrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
@@ -115,7 +102,7 @@ pub(crate) trait LlmRequestBuilder {
     /// Forward non-skipped options to body.
     fn forward_options(
         &self,
-        client: &PrimitiveClientValue,
+        client: &PrimitiveClient,
         body: &mut serde_json::Map<String, serde_json::Value>,
     ) {
         let provider_keys = self.provider_skip_keys();
@@ -138,7 +125,7 @@ pub(crate) trait LlmRequestBuilder {
 /// Returns a `BexExternalValue::Instance` matching the `baml.http.Request` class:
 /// `{ method: String, url: String, headers: Map<String, String>, body: String }`
 pub(crate) fn build_request(
-    client: &PrimitiveClientValue,
+    client: &PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
 ) -> Result<BexExternalValue, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
@@ -212,7 +199,7 @@ pub(crate) enum BuildRequestError {
 }
 
 /// Helper to extract a string option from client.options.
-pub(crate) fn get_string_option(client: &PrimitiveClientValue, key: &str) -> Option<String> {
+pub(crate) fn get_string_option(client: &PrimitiveClient, key: &str) -> Option<String> {
     match client.options.get(key) {
         Some(BexExternalValue::String(s)) => Some(s.clone()),
         _ => None,
@@ -275,12 +262,12 @@ mod tests {
 
     use super::*;
 
-    fn make_client(provider: &str, options: Vec<(&str, BexExternalValue)>) -> PrimitiveClientValue {
+    fn make_client(provider: &str, options: Vec<(&str, BexExternalValue)>) -> PrimitiveClient {
         let mut opts = IndexMap::new();
         for (k, v) in options {
             opts.insert(k.to_string(), v);
         }
-        PrimitiveClientValue {
+        PrimitiveClient {
             name: "test-client".to_string(),
             provider: provider.to_string(),
             default_role: "user".to_string(),

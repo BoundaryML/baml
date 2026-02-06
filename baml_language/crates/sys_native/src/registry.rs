@@ -27,12 +27,6 @@ pub struct SocketResource {
 pub struct ResponseResource {
     /// The underlying reqwest response (None after body consumed).
     pub response: Arc<TokioMutex<Option<reqwest::Response>>>,
-    /// HTTP status code (captured at fetch time).
-    pub status: u16,
-    /// Response headers (captured at fetch time).
-    pub headers: HashMap<String, String>,
-    /// Request URL (captured at fetch time).
-    pub url: String,
 }
 
 /// Registry entry for a resource.
@@ -124,16 +118,11 @@ impl ResourceRegistry {
     pub fn register_http_response(
         self: &Arc<Self>,
         response: reqwest::Response,
-        status: u16,
-        headers: HashMap<String, String>,
         url: String,
     ) -> ResourceHandle {
         let key = self.next_key.fetch_add(1, Ordering::SeqCst);
         let resource = ResponseResource {
             response: Arc::new(TokioMutex::new(Some(response))),
-            status,
-            headers,
-            url: url.clone(),
         };
 
         self.entries
@@ -147,18 +136,6 @@ impl ResourceRegistry {
             url,
             Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
         )
-    }
-
-    /// Get HTTP response metadata (status, headers, url) by handle key.
-    pub fn get_http_response_metadata(
-        &self,
-        key: usize,
-    ) -> Option<(u16, HashMap<String, String>, String)> {
-        let entries = self.entries.read().unwrap();
-        match entries.get(&key) {
-            Some(RegistryEntry::Response(r)) => Some((r.status, r.headers.clone(), r.url.clone())),
-            _ => None,
-        }
     }
 
     /// Get the HTTP response mutex for body consumption.

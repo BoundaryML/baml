@@ -151,6 +151,7 @@ impl NativeFunctions for VmNatives {
     // =========================================================================
 
     fn baml_media_as_url(media: &MediaValue) -> Option<String> {
+        // SAFETY: Url content is immutable once set; no concurrent writes can occur.
         #[allow(unsafe_code)]
         unsafe {
             media.read_content_unguarded(|content| match content {
@@ -177,6 +178,7 @@ impl NativeFunctions for VmNatives {
     }
 
     fn baml_media_as_file(media: &MediaValue) -> Option<String> {
+        // SAFETY: File path is immutable once set; no concurrent writes can occur.
         #[allow(unsafe_code)]
         unsafe {
             media.read_content_unguarded(|content| match content {

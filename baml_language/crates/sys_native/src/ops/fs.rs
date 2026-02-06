@@ -54,7 +54,8 @@ async fn open_async(path: String) -> Result<BexExternalValue, OpErrorKind> {
         .map_err(|e| OpErrorKind::Other(format!("Failed to open file '{path}': {e}")))?;
 
     let handle = REGISTRY.register_file(file, path);
-    Ok(bex_external_types::builtins::new_file(handle))
+    let owned = builtin_types::owned::FsFile { _handle: handle };
+    Ok(owned.as_bex_external_value())
 }
 
 /// Reads the contents of a file.

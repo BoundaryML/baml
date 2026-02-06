@@ -189,7 +189,16 @@ fn filter_metadata_value(metadata: &Value, features: &ModelFeatures) -> Value {
 
     match metadata {
         Value::Object(map) => {
-            let filtered_map = map.iter().filter(|(key, _)| matches!(&features.allowed_metadata, AllowedMetadata::Only(keys) if keys.contains(key))).map(|(key, value)| (key.clone(), value.clone())).collect();
+            let filtered_map = map
+                .iter()
+                .filter(|(key, _)| {
+                    matches!(
+                        &features.allowed_metadata,
+                        AllowedMetadata::Only(keys) if keys.contains(key)
+                    )
+                })
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
             Value::Object(filtered_map)
         }
         _ => Value::Null,

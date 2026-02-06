@@ -64,10 +64,10 @@ pub fn render_prompt(
     let processed_template = preprocess_template(template);
     env.add_template("prompt", &processed_template)?;
 
-    // Add globals
-    add_globals(&mut env, ctx)?;
-
     let mut media_handles = HashMap::new();
+    // Add globals (tags may contain media; share media_handles so parse_rendered_output can resolve them)
+    add_globals(&mut env, ctx, &mut media_handles)?;
+
     // Build context - args are already extracted BexExternalValue
     let jinja_args: minijinja::value::Value = args
         .iter()
@@ -139,7 +139,11 @@ fn preprocess_template(template: &str) -> String {
         .to_string()
 }
 
-fn add_globals(env: &mut Environment, ctx: &RenderContext) -> Result<(), crate::RenderPromptError> {
+fn add_globals(
+    env: &mut Environment,
+    ctx: &RenderContext,
+    media_handles: &mut HashMap<usize, bex_vm_types::MediaValue>,
+) -> Result<(), crate::RenderPromptError> {
     use minijinja::context;
 
     // Create role function - same function used for both _.role() and _.chat()
@@ -180,7 +184,6 @@ fn add_globals(env: &mut Environment, ctx: &RenderContext) -> Result<(), crate::
         })
         .collect();
 
-    let mut media_handles = HashMap::default();
     // Add ctx namespace with output_format and enums
     // Ported from engine/baml-lib/jinja-runtime/src/output_format/mod.rs
     let output_format = OutputFormatObject::new(ctx.output_format.clone());
@@ -191,7 +194,7 @@ fn add_globals(env: &mut Environment, ctx: &RenderContext) -> Result<(), crate::
                 name => ctx.client.name.clone(),
                 provider => ctx.client.provider.clone(),
             },
-            tags => ctx.tags.iter().map(|(k, v)| Ok((k.clone(), external_value_to_jinja(v, &mut media_handles)?))).collect::<Result<IndexMap<String, minijinja::value::Value>, crate::RenderPromptError>>()?.into_iter().collect::<minijinja::value::Value>(),
+            tags => ctx.tags.iter().map(|(k, v)| Ok((k.clone(), external_value_to_jinja(v, media_handles)?))).collect::<Result<IndexMap<String, minijinja::value::Value>, crate::RenderPromptError>>()?.into_iter().collect::<minijinja::value::Value>(),
             output_format => minijinja::value::Value::from_object(output_format),
             enums => enums_map,
         },
@@ -284,12 +287,12 @@ fn parse_message_content(
                 // This is a media chunk - parse the handle
                 // Format: :baml-start-media:{handle}:baml-end-media:
                 if let Some(handle) = parse_media_handle(chunk) {
-                    parts.push(PromptAstSimple::Media(
-                        media_handles
-                            .get(&handle)
-                            .unwrap_or_else(|| panic!("Media handle {handle} not found"))
-                            .clone(),
-                    ));
+                    if let Some(media) = media_handles.get(&handle) {
+                        parts.push(PromptAstSimple::Media(media.clone()));
+                    } else {
+                        // Handle not found (e.g. mismatched delimiter); treat as literal string
+                        parts.push(PromptAstSimple::String((*chunk).to_string()));
+                    }
                 }
             } else if !chunk.trim().is_empty() {
                 parts.push(PromptAstSimple::String((*chunk).to_string()));

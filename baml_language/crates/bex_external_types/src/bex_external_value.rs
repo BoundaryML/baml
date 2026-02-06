@@ -91,9 +91,9 @@ pub enum BexExternalAdt {
 /// Use `BexEngine::call_function` to get the result. When the return type
 /// is a union, the value will be wrapped in the `Union` variant with metadata.
 ///
-/// # When to use BexExternalValue vs BexExternalValue
+/// # When to use BexValue vs BexExternalValue
 ///
-/// - **BexExternalValue**: When you want to keep data in the heap and access lazily.
+/// - **BexValue**: When you want to keep data in the heap and access lazily.
 ///   Good for passing handles across FFI without copying.
 ///
 /// - **BexExternalValue**: When you need to convert the entire value to another format

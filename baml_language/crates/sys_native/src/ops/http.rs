@@ -9,10 +9,7 @@
     clippy::match_wildcard_for_single_variants
 )]
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
+use std::sync::{Arc, LazyLock};
 
 use bex_heap::{BexHeap, builtin_types};
 use sys_types::{BexExternalValue, OpError, OpErrorKind, SysOp, SysOpResult};
@@ -122,10 +119,12 @@ async fn text_async(
         .get_http_response_body(response.key())
         .ok_or_else(|| OpErrorKind::Other("Response handle is invalid".into()))?;
 
-    let mut guard = response_mutex.lock().await;
-    let response = guard
-        .take()
-        .ok_or_else(|| OpErrorKind::Other("Response body has already been consumed".into()))?;
+    let response = {
+        let mut guard = response_mutex.lock().await;
+        guard
+            .take()
+            .ok_or_else(|| OpErrorKind::Other("Response body has already been consumed".into()))?
+    };
 
     let text = response
         .text()
@@ -218,16 +217,19 @@ async fn send_async(req: RequestRef) -> Result<BexExternalValue, OpErrorKind> {
 
     // Capture metadata before storing
     let status = response.status().as_u16();
-    let headers: HashMap<String, String> = response
+    let headers = response
         .headers()
         .iter()
         .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
     let final_url = response.url().to_string();
 
-    let handle =
-        REGISTRY.register_http_response(response, status, headers.clone(), final_url.clone());
-    Ok(bex_external_types::builtins::new_http_response(
-        handle, status, headers, final_url,
-    ))
+    let handle = REGISTRY.register_http_response(response, final_url.clone());
+    let owned = builtin_types::owned::HttpResponse {
+        status_code: i64::from(status),
+        headers,
+        url: final_url,
+        _handle: handle,
+    };
+    Ok(owned.as_bex_external_value())
 }

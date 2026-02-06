@@ -198,8 +198,8 @@ pub enum EngineError {
 ///
 /// // Concurrent calls are safe - each gets its own VM and TLAB
 /// let (result1, result2) = tokio::join!(
-///     engine.call_function("process_order", &order1_args),
-///     engine.call_function("process_order", &order2_args),
+///     engine.call_function("process_order", order1_args),
+///     engine.call_function("process_order", order2_args),
 /// );
 ///
 /// // Or with explicit spawning:
@@ -472,10 +472,10 @@ impl BexEngine {
     ///
     /// # Arguments
     ///
-    /// Arguments are passed as `BexValue` types:
-    /// - Primitives convert to `External(BexExternalValue)` via `From` impls
-    /// - `Opaque(Handle)` references existing heap objects
-    /// - `External(...)` allocates new objects on the heap
+    /// Arguments are passed as `Vec<BexExternalValue>`:
+    /// - Primitives and strings are passed directly (e.g. `BexExternalValue::String(...)`)
+    /// - `Handle` references existing heap objects
+    /// - `Adt(Media | PromptAst)` allocates new builtin ADT objects on the heap
     ///
     /// # Returns
     ///
@@ -485,7 +485,7 @@ impl BexEngine {
     /// # Example
     ///
     /// ```ignore
-    /// let result = engine.call_function("get_user", &[
+    /// let result = engine.call_function("get_user", vec![
     ///     "Alice".into(),
     ///     42i64.into(),
     /// ]).await?;

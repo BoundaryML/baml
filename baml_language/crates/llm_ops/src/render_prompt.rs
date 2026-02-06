@@ -9,7 +9,7 @@ use sys_types::OpErrorKind;
 /// Execute the `render_prompt` LLM operation.
 ///
 /// Arguments: `[PrimitiveClient, template: String, args: Map<String, Any>]`
-/// `PrimitiveClient` is passed as `BexExternalValue::Instance { class_name: "baml.llm.PrimitiveClient", fields }`.
+/// `PrimitiveClient` is extracted from the heap via the builtin class accessor (heap-backed).
 pub fn execute_render_prompt(
     heap: &Arc<bex_heap::BexHeap>,
     mut args: Vec<bex_heap::BexValue<'_>>,
@@ -21,9 +21,9 @@ pub fn execute_render_prompt(
         });
     }
 
-    let arg2 = args.pop().expect("len is 3");
-    let arg1 = args.pop().expect("len is 2");
-    let arg0 = args.pop().expect("len is 1");
+    let arg0 = args.remove(0);
+    let arg1 = args.remove(0);
+    let arg2 = args.remove(0);
 
     let (client, template, template_args) = heap.with_gc_protection(|protected| {
         let client = arg0
