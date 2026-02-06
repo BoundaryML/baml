@@ -237,7 +237,7 @@ impl RuntimeCli {
                 let cancel_notify = Arc::new(tokio::sync::Notify::new());
                 let cancel_clone = cancel_notify.clone();
                 let cancel_token = if ctrlc::set_handler(move || {
-                    cancel_clone.notify_waiters();
+                    emit_cancel_signal(cancel_clone.as_ref());
                 })
                 .is_ok()
                 {
@@ -342,8 +342,42 @@ impl RuntimeCli {
     }
 }
 
+fn emit_cancel_signal(cancel_notify: &tokio::sync::Notify) {
+    // Persist one permit in case SIGINT arrives before the executor starts awaiting.
+    cancel_notify.notify_one();
+}
+
 fn baml_internal_env_is_truthy() -> bool {
     std::env::var("BAML_INTERNAL")
         .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"))
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn notify_waiters_drops_signal_if_emitted_before_waiting() {
+        let notify = tokio::sync::Notify::new();
+        notify.notify_waiters();
+
+        let result = tokio::time::timeout(Duration::from_millis(20), notify.notified()).await;
+        assert!(
+            result.is_err(),
+            "notify_waiters should not persist signals for future waiters",
+        );
+    }
+
+    #[tokio::test]
+    async fn notify_one_persists_signal_if_emitted_before_waiting() {
+        let notify = tokio::sync::Notify::new();
+        super::emit_cancel_signal(&notify);
+
+        let result = tokio::time::timeout(Duration::from_millis(20), notify.notified()).await;
+        assert!(
+            result.is_ok(),
+            "notify_one should persist one signal for a future waiter",
+        );
+    }
 }
