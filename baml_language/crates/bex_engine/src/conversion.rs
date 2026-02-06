@@ -273,11 +273,12 @@ impl BexEngine {
             BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => vm.alloc_prompt_ast(ast),
             BexExternalValue::FunctionRef { global_index } => {
                 let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
-                assert!((global_index < vm.globals.len()),
-                        "FunctionRef global_index {} out of bounds (globals len {})",
-                        global_index,
-                        vm.globals.len()
-                    );
+                assert!(
+                    (global_index < vm.globals.len()),
+                    "FunctionRef global_index {} out of bounds (globals len {})",
+                    global_index,
+                    vm.globals.len()
+                );
                 vm.globals[idx]
             }
         }
