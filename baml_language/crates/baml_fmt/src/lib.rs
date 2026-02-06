@@ -1,3 +1,4 @@
+pub mod ast;
 mod trivia_classifier;
 
 use baml_compiler_diagnostics::ParseError;

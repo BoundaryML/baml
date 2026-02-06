@@ -1,0 +1,142 @@
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use rowan::TextRange;
+
+use crate::ast::{FromCST, StrongAstError, SyntaxNodeIter, tokens as t};
+
+/// Corresponds to a [`SyntaxKind::BLOCK_ATTRIBUTE`] node.
+#[derive(Debug)]
+pub struct BlockAttribute {
+    pub atat: t::AtAt,
+    pub name: t::Word,
+    pub args: Option<AttributeArgs>,
+}
+
+impl FromCST for BlockAttribute {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::BLOCK_ATTRIBUTE)?;
+
+        let mut visitor = SyntaxNodeIter::new(node);
+
+        // @@
+        let atat = visitor.expect_token_of_kind(SyntaxKind::AT_AT)?;
+
+        // name (can have dots like @stream.done)
+        let name = visitor.expect_token_of_kind(SyntaxKind::WORD)?;
+
+        let args = visitor.next().map(AttributeArgs::from_cst).transpose()?;
+
+        Ok(BlockAttribute {
+            atat: t::AtAt::new_from_span(atat.text_range()),
+            name: t::Word::new_from_span(name.text_range()),
+            args,
+        })
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::ATTRIBUTE`] node.
+#[derive(Debug)]
+pub struct Attribute {
+    pub at: t::At,
+    pub name: AttributeName,
+    pub args: Option<AttributeArgs>,
+}
+
+impl FromCST for Attribute {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::ATTRIBUTE)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        // @
+        let at = it.expect_token_of_kind(SyntaxKind::AT)?;
+
+        // name (can have dots like @stream.done)
+        let name_first = it.expect_next("attribute name part")?;
+        let name_first = AttributeNamePart::from_cst(name_first)?;
+        let mut name_rest = Vec::new();
+        let args = loop {
+            let Some(elem) = it.next() else {
+                break None;
+            };
+            match elem.kind() {
+                SyntaxKind::DOT => {
+                    let dot = StrongAstError::assert_is_token(elem)?;
+                    let name = it.expect_next("attribute name part")?;
+                    let name = AttributeNamePart::from_cst(name)?;
+                    name_rest.push((t::Dot::new_from_span(dot.text_range()), name));
+                }
+                SyntaxKind::ATTRIBUTE_ARGS => {
+                    let args = AttributeArgs::from_cst(elem)?;
+                    break Some(args);
+                }
+                _ => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "DOT or ATTRIBUTE_ARGS".into(),
+                        found: elem.kind(),
+                        at: elem.text_range(),
+                    });
+                }
+            }
+        };
+
+        let name = AttributeName {
+            first: name_first,
+            rest: name_rest,
+        };
+
+        Ok(Attribute {
+            at: t::At::new_from_span(at.text_range()),
+            name,
+            args,
+        })
+    }
+}
+
+/// Attribute names are not normal paths: they may contain keywords.
+#[derive(Debug)]
+pub enum AttributeNamePart {
+    Word(t::Word),
+    Keyword(TextRange),
+}
+
+impl FromCST for AttributeNamePart {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        match token.kind() {
+            SyntaxKind::WORD => Ok(AttributeNamePart::Word(t::Word::new_from_span(
+                token.text_range(),
+            ))),
+            keyword if keyword.is_keyword() => Ok(AttributeNamePart::Keyword(token.text_range())),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "KEYWORD or WORD".into(),
+                found: token.kind(),
+                at: token.text_range(),
+            }),
+        }
+    }
+}
+
+/// Attribute names are not normal paths: they may contain keywords.
+#[derive(Debug)]
+pub struct AttributeName {
+    pub first: AttributeNamePart,
+    pub rest: Vec<(t::Dot, AttributeNamePart)>,
+}
+
+/// Corresponds to a [`SyntaxKind::ATTRIBUTE_ARGS`] node.
+#[derive(Debug)]
+pub struct AttributeArgs {
+    pub todo: TextRange, // TODO
+}
+impl FromCST for AttributeArgs {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::ATTRIBUTE_ARGS)?;
+
+        let todo = node.text_range();
+
+        Ok(AttributeArgs { todo })
+    }
+}

@@ -327,6 +327,37 @@ impl SyntaxKind {
                 | GREATER_GREATER
         )
     }
+
+    /// Check if this is a keyword token.
+    pub fn is_keyword(self) -> bool {
+        matches!(
+            self,
+            Self::KW_CLASS
+                | Self::KW_ENUM
+                | Self::KW_FUNCTION
+                | Self::KW_CLIENT
+                | Self::KW_GENERATOR
+                | Self::KW_TEST
+                | Self::KW_RETRY_POLICY
+                | Self::KW_TEMPLATE_STRING
+                | Self::KW_TYPE_BUILDER
+                | Self::KW_IF
+                | Self::KW_ELSE
+                | Self::KW_FOR
+                | Self::KW_WHILE
+                | Self::KW_LET
+                | Self::KW_IN
+                | Self::KW_BREAK
+                | Self::KW_CONTINUE
+                | Self::KW_RETURN
+                | Self::KW_MATCH
+                | Self::KW_ASSERT
+                | Self::KW_WATCH
+                | Self::KW_INSTANCEOF
+                | Self::KW_ENV
+                | Self::KW_DYNAMIC
+        )
+    }
 }
 
 // Conversion for Rowan
