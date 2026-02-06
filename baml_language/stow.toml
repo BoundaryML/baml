@@ -34,7 +34,7 @@ ignore_crates = ["rig_*"]
 
 # External dependencies to show in dependency graph visualization
 # Run: cargo stow --graph /tmp/deps.svg
-graph_external_deps = ["serde", "tokio", "clap", "anyhow", "salsa", "rowan"]
+graph_external_deps = ["serde", "serde_json", "tokio", "clap", "anyhow", "salsa", "rowan"]
 
 # Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
