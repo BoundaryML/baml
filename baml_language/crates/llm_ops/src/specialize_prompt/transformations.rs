@@ -209,7 +209,6 @@ fn filter_metadata_value(metadata: &Value, features: &ModelFeatures) -> Value {
 mod tests {
     use std::sync::Arc;
 
-    use bex_external_types::BexExternalValue;
     use indexmap::IndexMap;
 
     use super::*;
@@ -248,7 +247,7 @@ mod tests {
         let mut options = IndexMap::new();
         options.insert(
             "max_one_system_prompt".to_string(),
-            BexExternalValue::Bool(false),
+            bex_external_types::BexExternalValue::Bool(false),
         );
         let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &options);
         assert!(!features.max_one_system_prompt);

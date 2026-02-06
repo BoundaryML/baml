@@ -291,11 +291,11 @@ fn parse_message_content(
                         parts.push(PromptAstSimple::Media(media.clone()));
                     } else {
                         // Handle not found (e.g. mismatched delimiter); treat as literal string
-                        parts.push(PromptAstSimple::String((*chunk).to_string()));
+                        parts.push(PromptAstSimple::String("[media not found]".to_string()));
                     }
                 }
             } else if !chunk.trim().is_empty() {
-                parts.push(PromptAstSimple::String((*chunk).to_string()));
+                parts.push(PromptAstSimple::String((*chunk).trim().to_string()));
             }
         }
 

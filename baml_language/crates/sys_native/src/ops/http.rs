@@ -9,7 +9,11 @@
     clippy::match_wildcard_for_single_variants
 )]
 
-use std::sync::{Arc, LazyLock};
+use std::{
+    error::Error,
+    fmt::Write,
+    sync::{Arc, LazyLock},
+};
 
 use bex_heap::{BexHeap, builtin_types};
 use sys_types::{BexExternalValue, OpError, OpErrorKind, SysOp, SysOpResult};
@@ -18,6 +22,17 @@ use crate::registry::REGISTRY;
 
 /// Shared HTTP client with connection pooling.
 pub(crate) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+
+/// Format an error and its full `source()` chain so the real cause is visible
+/// (e.g. reqwest's top-level "error sending request" often hides the actual reason).
+fn format_error_chain(mut err: &dyn Error) -> String {
+    let mut s = err.to_string();
+    while let Some(src) = err.source() {
+        let _ = write!(s, "\n  Caused by: {src}");
+        err = src;
+    }
+    s
+}
 
 // ============================================================================
 // HTTP Operations
@@ -100,10 +115,12 @@ async fn text_async(
             .ok_or_else(|| OpErrorKind::Other("Response body has already been consumed".into()))?
     };
 
-    let text = response
-        .text()
-        .await
-        .map_err(|e| OpErrorKind::Other(format!("Failed to read response body: {e}")))?;
+    let text = response.text().await.map_err(|e| {
+        OpErrorKind::Other(format!(
+            "Failed to read response body: {}",
+            format_error_chain(&e)
+        ))
+    })?;
 
     Ok(BexExternalValue::String(text))
 }
@@ -183,10 +200,13 @@ async fn send_async(
         builder = builder.body(req.body);
     }
 
-    let response = builder
-        .send()
-        .await
-        .map_err(|e| OpErrorKind::Other(format!("HTTP request failed for '{}': {e}", req.url)))?;
+    let response = builder.send().await.map_err(|e| {
+        OpErrorKind::Other(format!(
+            "HTTP request failed for '{}': {}",
+            req.url,
+            format_error_chain(&e)
+        ))
+    })?;
 
     // Capture metadata before storing
     let status = response.status().as_u16();
