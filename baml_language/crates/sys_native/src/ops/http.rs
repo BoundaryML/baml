@@ -9,19 +9,26 @@
     clippy::match_wildcard_for_single_variants
 )]
 
-use std::{
-    error::Error,
-    fmt::Write,
-    sync::{Arc, LazyLock},
-};
+use std::{error::Error, fmt::Write, sync::Arc};
 
 use bex_heap::{BexHeap, builtin_types};
 use sys_types::{BexExternalValue, OpError, OpErrorKind, SysOp, SysOpResult};
 
 use crate::registry::REGISTRY;
 
-/// Shared HTTP client with connection pooling.
-pub(crate) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+/// Create an HTTP client for use within the current async context.
+///
+/// We intentionally do NOT use a global `LazyLock<reqwest::Client>` because
+/// `reqwest::Client` spawns background connection-pool tasks on the Tokio
+/// runtime that is active at creation time. In tests each `#[tokio::test]`
+/// creates its own runtime, so a client created on runtime A will fail with
+/// "dispatch task is gone" when used on runtime B after A shuts down.
+///
+/// Creating a client per request is cheap (`reqwest::Client::new()` is just
+/// an `Arc` allocation) and avoids the cross-runtime lifetime issue.
+fn new_http_client() -> reqwest::Client {
+    reqwest::Client::new()
+}
 
 /// Format an error and its full `source()` chain so the real cause is visible
 /// (e.g. reqwest's top-level "error sending request" often hides the actual reason).
@@ -190,7 +197,8 @@ async fn send_async(
     let method = reqwest::Method::from_bytes(req.method.as_bytes())
         .map_err(|e| OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", req.method)))?;
 
-    let mut builder = HTTP_CLIENT.request(method, &req.url);
+    let client = new_http_client();
+    let mut builder = client.request(method, &req.url);
 
     for (key, value) in &req.headers {
         builder = builder.header(key.as_str(), value.as_str());
