@@ -6,41 +6,44 @@
 //!
 //! Other LLM operations are in the `llm_ops` crate.
 
-use bex_external_types::{BexExternalValue, BexValue};
+use bex_external_types::BexExternalValue;
+use bex_heap::BexHeap;
 use bex_vm_types::{FunctionMeta, HeapPtr, Object};
-use sys_types::OpError;
+use sys_types::OpErrorKind;
 
 /// Execute the `get_jinja_template` LLM operation.
 ///
 /// Arguments: `[function_name: String]`
 /// Returns: String (the Jinja template for the function's prompt)
 pub(crate) fn execute_get_jinja_template(
+    heap: &std::sync::Arc<BexHeap>,
     resolved_function_names: &std::collections::HashMap<
         String,
         (HeapPtr, bex_vm_types::FunctionKind),
     >,
-    args: &[BexValue],
-) -> Result<BexExternalValue, OpError> {
-    // Extract function name
-    let function_name = match &args[0] {
-        BexValue::External(BexExternalValue::String(s)) => s.as_str(),
-        other => {
-            return Err(OpError::TypeError {
-                expected: "String",
-                actual: format!("{other:?}"),
-            });
-        }
-    };
+    mut args: Vec<bex_heap::BexValue<'_>>,
+) -> Result<BexExternalValue, OpErrorKind> {
+    if args.len() != 1 {
+        return Err(OpErrorKind::InvalidArgumentCount {
+            expected: 1,
+            actual: args.len(),
+        });
+    }
+
+    let arg0 = args.pop().expect("len is 1");
+    let function_name = heap.with_gc_protection(|protected| arg0.as_string(&protected).cloned())?;
 
     // Look up function object
     let (ptr, _kind) = resolved_function_names
-        .get(function_name)
-        .ok_or_else(|| OpError::Other(format!("Function not found: {function_name}")))?;
+        .get(&function_name)
+        .ok_or_else(|| OpErrorKind::Other(format!("Function not found: {function_name}")))?;
 
     // SAFETY: ptr is from resolved_function_names, a compile-time object
     let obj = unsafe { ptr.get() };
     let Object::Function(func) = obj else {
-        return Err(OpError::Other(format!("Not a function: {function_name}")));
+        return Err(OpErrorKind::Other(format!(
+            "Not a function: {function_name}"
+        )));
     };
 
     // Extract prompt template from function metadata
@@ -48,7 +51,7 @@ pub(crate) fn execute_get_jinja_template(
         Some(FunctionMeta::Llm {
             prompt_template, ..
         }) => Ok(BexExternalValue::String(prompt_template.clone())),
-        _ => Err(OpError::Other(format!(
+        _ => Err(OpErrorKind::Other(format!(
             "Function '{function_name}' is not an LLM function"
         ))),
     }
@@ -62,40 +65,42 @@ pub(crate) fn execute_get_jinja_template(
 /// This returns a function reference that, when called, evaluates the client's
 /// options and returns a `PrimitiveClient`.
 pub(crate) fn execute_get_client_function(
+    heap: &std::sync::Arc<BexHeap>,
     resolved_function_names: &std::collections::HashMap<
         String,
         (HeapPtr, bex_vm_types::FunctionKind),
     >,
     function_global_indices: &std::collections::HashMap<String, usize>,
-    args: &[BexValue],
-) -> Result<BexExternalValue, OpError> {
-    // Extract function name
-    let function_name = match &args[0] {
-        BexValue::External(BexExternalValue::String(s)) => s.as_str(),
-        other => {
-            return Err(OpError::TypeError {
-                expected: "String",
-                actual: format!("{other:?}"),
-            });
-        }
-    };
+    mut args: Vec<bex_heap::BexValue<'_>>,
+) -> Result<BexExternalValue, OpErrorKind> {
+    if args.len() != 1 {
+        return Err(OpErrorKind::InvalidArgumentCount {
+            expected: 1,
+            actual: args.len(),
+        });
+    }
+
+    let arg0 = args.pop().expect("len is 1");
+    let function_name = heap.with_gc_protection(|protected| arg0.as_string(&protected).cloned())?;
 
     // Look up function object
     let (ptr, _kind) = resolved_function_names
-        .get(function_name)
-        .ok_or_else(|| OpError::Other(format!("Function not found: {function_name}")))?;
+        .get(&function_name)
+        .ok_or_else(|| OpErrorKind::Other(format!("Function not found: {function_name}")))?;
 
     // SAFETY: ptr is from resolved_function_names, a compile-time object
     let obj = unsafe { ptr.get() };
     let Object::Function(func) = obj else {
-        return Err(OpError::Other(format!("Not a function: {function_name}")));
+        return Err(OpErrorKind::Other(format!(
+            "Not a function: {function_name}"
+        )));
     };
 
     // Extract client name from function metadata
     let client_name = match &func.body_meta {
         Some(FunctionMeta::Llm { client, .. }) => client.as_str(),
         _ => {
-            return Err(OpError::Other(format!(
+            return Err(OpErrorKind::Other(format!(
                 "Function '{function_name}' is not an LLM function"
             )));
         }
@@ -108,7 +113,7 @@ pub(crate) fn execute_get_client_function(
     let global_index = function_global_indices
         .get(&resolve_fn_name)
         .ok_or_else(|| {
-            OpError::Other(format!(
+            OpErrorKind::Other(format!(
                 "Client resolve function not found: {resolve_fn_name}"
             ))
         })?;

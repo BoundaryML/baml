@@ -441,6 +441,12 @@ impl ConstValue {
     }
 }
 
+/// Media value.
+pub type MediaValue = std::sync::Arc<baml_builtins::MediaValue>;
+
+/// Prompt AST tree node.
+pub type PromptAst = std::sync::Arc<baml_builtins::PromptAst>;
+
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
 /// `Vm` (in `bex_vm` crate) should own objects and give references to them to the running Baml
@@ -484,18 +490,15 @@ pub enum Object {
     Map(IndexMap<String, Value>),
 
     Future(Future),
-    // TODO: Figure out media.
-    // /// Images, audio, pdf, video.
-    Media(MediaValue),
 
-    /// External resource (file handle, socket, etc.).
-    Resource(ResourceHandle),
+    /// Images, audio, pdf, video.
+    Media(MediaValue),
 
     /// Prompt AST tree node.
     PromptAst(PromptAst),
 
-    /// LLM primitive client (resolved, options evaluated).
-    PrimitiveClient(PrimitiveClient),
+    /// External resource (file handle, socket, etc.).
+    Resource(ResourceHandle),
 
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
@@ -518,9 +521,6 @@ impl std::fmt::Display for Object {
             Object::Media(media) => media.fmt(f),
             Object::Resource(r) => write!(f, "<{r}>"),
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
-            Object::PrimitiveClient(client) => {
-                write!(f, "<client {}:{}>", client.provider, client.name)
-            }
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.operation)
@@ -555,101 +555,6 @@ pub struct PendingFuture {
     pub operation: SysOp,
     /// Arguments to the operation.
     pub args: Vec<Value>,
-}
-
-#[derive(Clone, Debug)]
-pub struct MediaValue {
-    pub kind: baml_base::MediaKind,
-    pub content: MediaContent,
-    pub mime_type: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub enum MediaContent {
-    Url {
-        url: String,
-        base64_data: Option<String>,
-    },
-    Base64 {
-        base64_data: String,
-    },
-    File {
-        file: String,
-        base64_data: Option<String>,
-    },
-}
-
-impl std::fmt::Display for MediaValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.kind, self.content)
-    }
-}
-
-impl std::fmt::Display for MediaContent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MediaContent::Url { url, .. } => write!(f, "url({url})"),
-            MediaContent::Base64 { base64_data, .. } => {
-                // Show first 5, last 5, and total length for context
-                let len = base64_data.len();
-                if len <= 10 {
-                    write!(f, "base64({base64_data}, len={len})")
-                } else {
-                    let start = &base64_data[..5];
-                    let end = &base64_data[len.saturating_sub(5)..];
-                    write!(f, "base64({start}...{end}, len={len})")
-                }
-            }
-            MediaContent::File { file, .. } => write!(f, "file({file})"),
-        }
-    }
-}
-
-// ============================================================================
-// PrimitiveClient - represents a single LLM provider client
-// ============================================================================
-
-/// A primitive LLM client (single provider, not composite).
-///
-/// This is the resolved/evaluated form of a client, ready to make API calls.
-/// Options have been evaluated (env vars resolved, expressions computed).
-#[derive(Clone, Debug)]
-pub struct PrimitiveClient {
-    /// Client name (e.g., "GPT4").
-    pub name: String,
-    /// Provider type (e.g., "openai", "anthropic").
-    pub provider: String,
-    /// Default role for chat messages (e.g., "user").
-    pub default_role: String,
-    /// Allowed roles for chat messages.
-    pub allowed_roles: Vec<String>,
-    /// Provider-specific options (heap-allocated map, already evaluated).
-    pub options: HeapPtr,
-}
-
-// ============================================================================
-// PromptAst - represents a structured prompt (recursive tree)
-// ============================================================================
-
-/// A node in the prompt AST tree.
-#[derive(Clone, Debug, PartialEq)]
-pub enum PromptAst {
-    /// A plain string.
-    String(String),
-
-    /// A media value - serializable opaque handle.
-    /// WARNING: usize is platform-dependent. Serialization must occur within the same platform.
-    Media(usize),
-
-    /// A message with a role, content, and optional metadata.
-    Message {
-        role: String,
-        content: Box<PromptAst>,
-        metadata: Value,
-    },
-
-    /// A sequence of prompt nodes.
-    Vec(Vec<PromptAst>),
 }
 
 /// Types of values.
@@ -730,7 +635,6 @@ impl ObjectType {
             Object::Media(media) => Self::Media(media.kind),
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
-            Object::PrimitiveClient(_) => Self::PrimitiveClient,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,

@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
+source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 4
-Objects: 55
+Objects: 56
 Globals: 50
 
 Function TypeBuilderFn (arity: 1, kind: Bytecode):

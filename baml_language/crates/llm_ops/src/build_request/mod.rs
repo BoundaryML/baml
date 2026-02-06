@@ -7,10 +7,22 @@ mod openai;
 
 use std::str::FromStr;
 
-use bex_external_types::{BexExternalValue, PrimitiveClientValue, PromptAst, Ty};
+use baml_builtins::PromptAstSimple;
+use bex_external_types::{BexExternalValue, Ty};
 use indexmap::indexmap;
 
 use crate::LlmProvider;
+
+/// In-memory representation of a primitive client for request building.
+/// Options values can be strings or nested maps (e.g. "headers").
+#[derive(Clone, Debug)]
+pub struct PrimitiveClientValue {
+    pub name: String,
+    pub provider: String,
+    pub default_role: String,
+    pub allowed_roles: Vec<String>,
+    pub options: indexmap::IndexMap<String, BexExternalValue>,
+}
 
 /// Option keys consumed by `specialize_prompt` — never forwarded to the request body.
 const SPECIALIZE_PROMPT_SKIP_KEYS: &[&str] = &[
@@ -42,7 +54,10 @@ pub(crate) trait LlmRequestBuilder {
     ) -> indexmap::IndexMap<String, String>;
 
     /// Convert a specialized prompt into the JSON body fields specific to this provider.
-    fn build_prompt_body(&self, prompt: PromptAst) -> serde_json::Map<String, serde_json::Value>;
+    fn build_prompt_body(
+        &self,
+        prompt: bex_vm_types::PromptAst,
+    ) -> serde_json::Map<String, serde_json::Value>;
 
     // --- Default methods (shared logic) ---
 
@@ -50,7 +65,7 @@ pub(crate) trait LlmRequestBuilder {
     fn build_request(
         &self,
         client: &PrimitiveClientValue,
-        prompt: PromptAst,
+        prompt: bex_vm_types::PromptAst,
     ) -> Result<RawHttpRequest, BuildRequestError> {
         let url = self.build_url(client)?;
         let headers = self.build_headers(client);
@@ -83,7 +98,7 @@ pub(crate) trait LlmRequestBuilder {
     fn build_body(
         &self,
         client: &PrimitiveClientValue,
-        prompt: PromptAst,
+        prompt: bex_vm_types::PromptAst,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
         if let Some(model) = get_string_option(client, "model") {
@@ -124,7 +139,7 @@ pub(crate) trait LlmRequestBuilder {
 /// `{ method: String, url: String, headers: Map<String, String>, body: String }`
 pub(crate) fn build_request(
     client: &PrimitiveClientValue,
-    prompt: PromptAst,
+    prompt: bex_vm_types::PromptAst,
 ) -> Result<BexExternalValue, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
@@ -227,33 +242,35 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
     }
 }
 
-/// Convert `PromptAst` content to JSON content parts.
-///
-/// Used by both `OpenAI` and Anthropic builders.
-pub(crate) fn prompt_to_content_parts(content: PromptAst) -> Vec<serde_json::Value> {
+fn prompt_to_content_parts_simple(content: &PromptAstSimple) -> Vec<serde_json::Value> {
     match content {
-        PromptAst::String(s) => {
+        PromptAstSimple::String(s) => {
             vec![serde_json::json!({"type": "text", "text": s})]
         }
-        PromptAst::Vec(items) => items
-            .into_iter()
-            .flat_map(prompt_to_content_parts)
-            .collect(),
-        PromptAst::Media(_handle) => {
-            // Media resolution deferred — emit placeholder
-            vec![
-                serde_json::json!({"type": "text", "text": "[media placeholder - resolution deferred]"}),
-            ]
+        PromptAstSimple::Media(media) => {
+            media.read_content(|f| match f {
+                baml_builtins::MediaContent::Url { url, .. } => {
+                    vec![serde_json::json!({"type": "input_image", "image_url": url})]
+                }
+                baml_builtins::MediaContent::Base64 { base64_data, .. } => {
+                    vec![serde_json::json!({"type": "input_image", "image_url": format!("data:{};base64,{}", media.mime_type.as_deref().unwrap_or("image/png"), base64_data)})]
+                }
+                baml_builtins::MediaContent::File { file, .. } => {
+                    vec![serde_json::json!({"type": "file", "file_id": file})]
+                }
+            })
         }
-        PromptAst::Message { .. } => {
-            // Nested messages shouldn't appear in content parts
-            vec![]
+        PromptAstSimple::Multiple(multiple) => {
+            multiple.iter().flat_map(|i| prompt_to_content_parts_simple(i)).collect()
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use baml_builtins::PromptAst;
     use indexmap::IndexMap;
 
     use super::*;
@@ -276,12 +293,12 @@ mod tests {
         }
     }
 
-    fn msg(role: &str, text: &str) -> PromptAst {
-        PromptAst::Message {
+    fn msg(role: &str, text: &str) -> Arc<PromptAst> {
+        Arc::new(PromptAst::Message {
             role: role.to_string(),
-            content: Box::new(PromptAst::String(text.to_string())),
-            metadata: Box::new(BexExternalValue::Null),
-        }
+            content: Arc::new(text.to_string().into()),
+            metadata: serde_json::Value::Null,
+        })
     }
 
     /// Parse the body field out of a Request instance.
@@ -364,7 +381,7 @@ mod tests {
         );
 
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
-        let prompt = PromptAst::Vec(vec![msg("system", system_text)]);
+        let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
         let result = build_request(&client, prompt).unwrap();
 
@@ -415,10 +432,10 @@ mod tests {
             ],
         );
 
-        let prompt = PromptAst::Vec(vec![
+        let prompt = Arc::new(PromptAst::Vec(vec![
             msg("system", "You are a helpful assistant."),
             msg("user", "Write a nice short story about Dr. Pepper"),
-        ]);
+        ]));
 
         let result = build_request(&client, prompt).unwrap();
 
@@ -538,10 +555,10 @@ mod tests {
             ],
         );
 
-        let prompt = PromptAst::Vec(vec![
+        let prompt = Arc::new(PromptAst::Vec(vec![
             msg("system", "You are a helpful assistant."),
             msg("user", "Write a nice short story about Dr. Pepper"),
-        ]);
+        ]));
 
         let result = build_request(&client, prompt).unwrap();
 

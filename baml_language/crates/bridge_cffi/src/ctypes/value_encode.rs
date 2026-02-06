@@ -1,6 +1,6 @@
 //! BexExternalValue -> CffiValueHolder conversion.
 
-use bex_external_types::{BexExternalValue, Ty};
+use bex_external_types::{BexExternalAdt, BexExternalValue, Ty};
 
 use crate::{
     baml::cffi::{
@@ -17,6 +17,7 @@ use crate::{
 /// Convert BexExternalValue to CffiValueHolder for FFI return.
 pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolder, BridgeError> {
     let variant = match value {
+        &BexExternalValue::Handle(_) => return Err(BridgeError::HandleNotSupported),
         BexExternalValue::Null => None,
         BexExternalValue::Int(i) => Some(CffiValueVariant::IntValue(*i)),
         BexExternalValue::Float(f) => Some(CffiValueVariant::FloatValue(*f)),
@@ -95,10 +96,10 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
                 },
             )))
         }
-        BexExternalValue::Media { kind, .. } => {
+        BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
             // Media is stored as a handle - return a placeholder string for now
             // TODO: Properly serialize media content when needed
-            let kind_str = match kind {
+            let kind_str = match media.kind {
                 baml_base::MediaKind::Image => "image",
                 baml_base::MediaKind::Audio => "audio",
                 baml_base::MediaKind::Video => "video",
@@ -114,8 +115,7 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
             // Resources cannot be serialized across FFI - return null
             None
         }
-        BexExternalValue::PromptAst(_)
-        | BexExternalValue::PrimitiveClient(_)
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(_))
         | BexExternalValue::FunctionRef { .. } => {
             // Internal types cannot be serialized across FFI - return null
             None

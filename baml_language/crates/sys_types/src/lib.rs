@@ -7,7 +7,7 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 // Re-export BexExternalValue and BexValue for ops
-pub use bex_external_types::{BexExternalValue, BexValue};
+pub use bex_external_types::BexExternalValue;
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::SysOp;
@@ -21,8 +21,58 @@ pub use llm_jinja::RenderPromptError;
 pub use sys_resource_types::{ResourceHandle, ResourceType};
 
 /// Errors that can occur during external operation execution.
+/// Every error is tied to the operation (`fn_name`) that was being called.
+#[derive(Debug)]
+pub struct OpError {
+    pub fn_name: SysOp,
+    pub kind: OpErrorKind,
+}
+
+impl std::fmt::Display for OpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "failed to call {}: {}", self.fn_name, self.kind)
+    }
+}
+
+impl std::error::Error for OpError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.kind.source()
+    }
+}
+
+impl OpError {
+    fn unsupported(operation: SysOp) -> Self {
+        Self {
+            fn_name: operation,
+            kind: OpErrorKind::Unsupported,
+        }
+    }
+
+    fn cancelled(operation: SysOp) -> Self {
+        Self {
+            fn_name: operation,
+            kind: OpErrorKind::Cancelled,
+        }
+    }
+
+    pub fn new(fn_name: SysOp, kind: OpErrorKind) -> Self {
+        Self { fn_name, kind }
+    }
+}
+
+/// Errors that can occur during external operation execution.
 #[derive(Debug, thiserror::Error)]
-pub enum OpError {
+pub enum OpErrorKind {
+    #[error("Invalid number of arguments: expected {expected}, got {actual}")]
+    InvalidArgumentCount { expected: usize, actual: usize },
+
+    #[error("Invalid argument at position {position}: expected {expected}, got {actual}")]
+    InvalidArgument {
+        position: usize,
+        expected: &'static str,
+        actual: String,
+    },
+
     #[error("{0}")]
     Other(String),
 
@@ -35,11 +85,20 @@ pub enum OpError {
     #[error("Expected resource of type {expected}")]
     ResourceTypeMismatch { expected: &'static str },
 
-    #[error("Operation not supported: {operation:?}")]
-    Unsupported { operation: SysOp },
+    #[error("Operation not supported on this platform")]
+    Unsupported,
 
     #[error("Render prompt error: {0}")]
     RenderPrompt(#[from] RenderPromptError),
+
+    #[error("Access error: {0}")]
+    AccessError(#[from] bex_heap::AccessError),
+
+    #[error("Operation cancelled")]
+    Cancelled,
+
+    #[error("Not implemented: {message}")]
+    NotImplemented { message: String },
 }
 
 // ============================================================================
@@ -71,7 +130,7 @@ pub enum SysOpResult {
 /// Arguments are `BexValue` which can be either:
 /// - `BexValue::External(...)` for primitives/strings copied from VM
 /// - `BexValue::Opaque(Handle)` for heap objects (instances, arrays, maps)
-pub type SysOpFn = fn(heap: Arc<BexHeap>, args: &[BexValue]) -> SysOpResult;
+pub type SysOpFn = fn(heap: &Arc<BexHeap>, args: Vec<bex_heap::BexValue<'_>>) -> SysOpResult;
 
 /// Table of system operation implementations.
 ///
@@ -127,97 +186,51 @@ impl SysOps {
         // Match on the enum variant to return the appropriate function pointer.
         // Each closure captures nothing, so they can be coerced to fn pointers.
         match operation {
-            SysOp::FsOpen => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::FsOpen,
-                }))
-            },
-            SysOp::FsRead => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::FsRead,
-                }))
-            },
-            SysOp::FsClose => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::FsClose,
-                }))
-            },
-            SysOp::NetConnect => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::NetConnect,
-                }))
-            },
-            SysOp::NetRead => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::NetRead,
-                }))
-            },
-            SysOp::NetClose => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::NetClose,
-                }))
-            },
-            SysOp::Shell => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::Shell,
-                }))
-            },
-            SysOp::HttpFetch => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::HttpFetch,
-                }))
-            },
-            SysOp::ResponseText => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::ResponseText,
-                }))
-            },
-            SysOp::ResponseOk => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::ResponseOk,
-                }))
-            },
-            SysOp::RenderPrompt => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::RenderPrompt,
-                }))
-            },
-            SysOp::SpecializePrompt => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::SpecializePrompt,
-                }))
-            },
+            SysOp::FsOpen => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::FsOpen))),
+            SysOp::FsRead => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::FsRead))),
+            SysOp::FsClose => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::FsClose))),
+            SysOp::NetConnect => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::NetConnect)))
+            }
+            SysOp::NetRead => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::NetRead))),
+            SysOp::NetClose => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::NetClose)))
+            }
+            SysOp::Shell => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::Shell))),
+            SysOp::HttpFetch => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::HttpFetch)))
+            }
+            SysOp::ResponseText => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::ResponseText)))
+            }
+            SysOp::ResponseOk => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::ResponseOk)))
+            }
+            SysOp::RenderPrompt => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::RenderPrompt)))
+            }
+            SysOp::SpecializePrompt => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::SpecializePrompt)))
+            }
             // LLM operations are handled directly by the engine, not through SysOps table
-            SysOp::LlmGetJinjaTemplate => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::LlmGetJinjaTemplate,
-                }))
-            },
-            SysOp::LlmBuildPrimitiveClient => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::LlmBuildPrimitiveClient,
-                }))
-            },
-            SysOp::LlmGetClientFunction => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::LlmGetClientFunction,
-                }))
-            },
-            SysOp::LlmBuildRequest => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::LlmBuildRequest,
-                }))
-            },
-            SysOp::LlmParseResponse => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::LlmParseResponse,
-                }))
-            },
-            SysOp::HttpSend => |_, _| {
-                SysOpResult::Ready(Err(OpError::Unsupported {
-                    operation: SysOp::HttpSend,
-                }))
-            },
+            SysOp::LlmGetJinjaTemplate => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmGetJinjaTemplate)))
+            }
+            SysOp::LlmBuildPrimitiveClient => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmBuildPrimitiveClient)))
+            }
+            SysOp::LlmGetClientFunction => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmGetClientFunction)))
+            }
+            SysOp::LlmBuildRequest => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmBuildRequest)))
+            }
+            SysOp::LlmParseResponse => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmParseResponse)))
+            }
+            SysOp::HttpSend => {
+                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::HttpSend)))
+            }
         }
     }
 
@@ -281,12 +294,10 @@ impl SysOpResult {
     /// - `CompletionHandle` to complete the operation
     ///
     /// The future will resolve when `handle.complete()` is called.
-    pub fn pending() -> (Self, CompletionHandle) {
+    pub fn pending(operation: SysOp) -> (Self, CompletionHandle) {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let future = Box::pin(async move {
-            rx.await
-                .unwrap_or(Err(OpError::Other("Operation cancelled".into())))
-        });
+        let future =
+            Box::pin(async move { rx.await.unwrap_or(Err(OpError::cancelled(operation))) });
         (SysOpResult::Async(future), CompletionHandle(tx))
     }
 }
@@ -330,10 +341,11 @@ mod tests {
     fn test_unsupported_returns_error() {
         let heap = test_heap();
         let op = SysOps::unsupported(SysOp::Shell);
-        let result = op(heap, &[]);
+        let result = op(&heap, vec![]);
         match result {
-            SysOpResult::Ready(Err(OpError::Unsupported { operation })) => {
-                assert_eq!(operation, SysOp::Shell);
+            SysOpResult::Ready(Err(e)) => {
+                assert!(matches!(e.kind, OpErrorKind::Unsupported));
+                assert_eq!(e.fn_name, SysOp::Shell);
             }
             _ => panic!("Expected Unsupported error"),
         }
@@ -345,26 +357,28 @@ mod tests {
         let ops = SysOps::all_unsupported();
 
         // Test each operation returns Unsupported
-        let result = (ops.fs_open)(Arc::clone(&heap), &[]);
+        let result = (ops.fs_open)(&heap, vec![]);
         assert!(matches!(
             result,
-            SysOpResult::Ready(Err(OpError::Unsupported {
-                operation: SysOp::FsOpen
+            SysOpResult::Ready(Err(OpError {
+                fn_name: SysOp::FsOpen,
+                kind: OpErrorKind::Unsupported,
             }))
         ));
 
-        let result = (ops.shell)(Arc::clone(&heap), &[]);
+        let result = (ops.shell)(&heap, vec![]);
         assert!(matches!(
             result,
-            SysOpResult::Ready(Err(OpError::Unsupported {
-                operation: SysOp::Shell
+            SysOpResult::Ready(Err(OpError {
+                fn_name: SysOp::Shell,
+                kind: OpErrorKind::Unsupported,
             }))
         ));
     }
 
     #[tokio::test]
     async fn test_completion_handle() {
-        let (result, handle) = SysOpResult::pending();
+        let (result, handle) = SysOpResult::pending(SysOp::Shell);
 
         // Complete in another task
         tokio::spawn(async move {

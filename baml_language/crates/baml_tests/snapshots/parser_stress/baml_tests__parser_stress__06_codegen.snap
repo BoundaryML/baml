@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
+source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 106
-Objects: 1263
+Objects: 1264
 Globals: 152
 
 Function BodyTorture (arity: 0, kind: Bytecode):

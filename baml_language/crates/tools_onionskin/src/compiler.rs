@@ -2478,7 +2478,6 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Future(_) => "<future>".to_string(),
                 Object::Resource(r) => format!("<resource: {}>", r),
                 Object::PromptAst(_) => "<prompt_ast>".to_string(),
-                Object::PrimitiveClient(c) => format!("<client {}:{}>", c.provider, c.name),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => "<sentinel>".to_string(),
             }

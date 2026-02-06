@@ -64,7 +64,8 @@ use std::{
     },
 };
 
-pub use bex_external_types::{BexExternalValue, BexValue, EpochGuard, Ty, TypeName, UnionMetadata};
+use bex_external_types::BexExternalAdt;
+pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
@@ -135,7 +136,7 @@ pub enum EngineError {
     #[error("Function not found: {name}")]
     FunctionNotFound { name: String },
 
-    #[error("External operation failed: {0}")]
+    #[error("{0}")]
     ExternalOpFailed(#[from] OpError),
 
     #[error("Future channel closed unexpectedly")]
@@ -204,7 +205,7 @@ pub enum EngineError {
 /// // Or with explicit spawning:
 /// let engine_clone = Arc::clone(&engine);
 /// let handle = tokio::spawn(async move {
-///     engine_clone.call_function("background_task", &[]).await
+///     engine_clone.call_function("background_task", vec![]).await
 /// });
 /// ```
 ///
@@ -502,7 +503,7 @@ impl BexEngine {
     pub async fn call_function(
         &self,
         function_name: &str,
-        args: &[BexValue],
+        args: Vec<BexExternalValue>,
     ) -> Result<BexExternalValue, EngineError> {
         // Wait for any in-progress GC to complete.
         // This ensures Handles in args have stable indices.
@@ -534,15 +535,17 @@ impl BexEngine {
 
         // Convert ExternalValue args to Value, allocating BexExternalValue data on the heap
         let vm_args: Vec<Value> = args
-            .iter()
-            .map(|arg| Self::externalize_to_value(&mut vm, arg, &guard))
+            .into_iter()
+            .map(|arg| self.convert_external_to_vm_value(&mut vm, arg, &guard))
             .collect();
 
         // Set entry point with converted args
         vm.set_entry_point(function_index, &vm_args);
 
         // Run the event loop with epoch tracking
-        let result = self.run_event_loop_with_epoch(&mut vm, my_epoch).await;
+        let result = self
+            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch)
+            .await;
 
         // Unregister from epoch
         if self.epoch_states[slot]
@@ -555,7 +558,7 @@ impl BexEngine {
         }
 
         // Convert BexValue to BexExternalValue, wrapping in Union if return type is union
-        result.and_then(|value| self.to_bex_external(value, &return_type))
+        result
     }
 
     /// Look up a function by name and return its heap pointer.
@@ -651,31 +654,48 @@ impl BexEngine {
     /// (epoch advanced). VMs from old epochs will park at yield points.
     async fn run_event_loop_with_epoch(
         &self,
+        return_type: Ty,
         vm: &mut BexVm,
         my_epoch: u64,
-    ) -> Result<BexValue, EngineError> {
+    ) -> Result<BexExternalValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
 
         'vm_exec: loop {
             match vm.exec()? {
                 VmExecState::Complete(value) => {
-                    // Convert to BexValue (handles for objects, BexExternalValue for primitives)
-                    return Ok(self.value_to_external(value));
+                    return self.heap.with_gc_protection(|protected| {
+                        // Convert to BexValue (handles for objects, BexExternalValue for primitives)
+                        self.convert_vm_value_to_external_with_type(
+                            &value,
+                            &return_type,
+                            &protected.epoch_guard(),
+                        )
+                    });
                 }
 
                 VmExecState::ScheduleFuture(id) => {
                     let pending = vm.pending_future(id)?;
 
                     // Convert arguments to BexExternalValue
-                    let args = self.vm_args_to_bex_values(vm, &pending.args);
+                    let args: Vec<BexExternalValue> = pending
+                        .args
+                        .iter()
+                        .map(|v| self.vm_arg_to_bex_value(v))
+                        .collect();
 
                     match self.execute_sys_op(pending.operation, &args) {
                         SysOpResult::Ready(result) => {
                             // Sync operation - set future to Ready without touching stack.
                             // The VM will continue to the Await instruction which will
                             // extract the value from the Ready future.
-                            let value =
-                                self.external_to_vm_value(vm, result.map_err(EngineError::from)?);
+                            let result = result.map_err(EngineError::from)?;
+                            let value = self.heap.with_gc_protection(|protected| {
+                                self.convert_external_to_vm_value(
+                                    vm,
+                                    result,
+                                    &protected.epoch_guard(),
+                                )
+                            });
 
                             vm.set_future_ready(id, value)?;
                         }
@@ -740,7 +760,13 @@ impl BexEngine {
                     // First, drain any already-completed futures.
                     while let Ok(future) = processed_futures.try_recv() {
                         let external = future.result?;
-                        let value = self.external_to_vm_value(vm, external);
+                        let value = self.heap.with_gc_protection(|protected| {
+                            self.convert_external_to_vm_value(
+                                vm,
+                                external,
+                                &protected.epoch_guard(),
+                            )
+                        });
                         vm.fulfil_future(future.id, value)?;
                         if future.id == future_id {
                             continue 'vm_exec;
@@ -755,7 +781,13 @@ impl BexEngine {
                             .ok_or(EngineError::FutureChannelClosed)?;
 
                         let external = future.result?;
-                        let value = self.external_to_vm_value(vm, external);
+                        let value = self.heap.with_gc_protection(|protected| {
+                            self.convert_external_to_vm_value(
+                                vm,
+                                external,
+                                &protected.epoch_guard(),
+                            )
+                        });
                         vm.fulfil_future(future.id, value)?;
                         if future.id == future_id {
                             break;
@@ -771,8 +803,9 @@ impl BexEngine {
     }
 
     /// Execute a system operation.
-    fn execute_sys_op(&self, op: SysOp, args: &[BexValue]) -> SysOpResult {
-        let heap = Arc::clone(&self.heap);
+    fn execute_sys_op(&self, op: SysOp, args: &[BexExternalValue]) -> SysOpResult {
+        let args = args.iter().map(std::convert::Into::into).collect();
+        let heap = &self.heap;
         match op {
             SysOp::FsOpen => (self.sys_ops.fs_open)(heap, args),
             SysOp::FsRead => (self.sys_ops.fs_read)(heap, args),
@@ -785,25 +818,39 @@ impl BexEngine {
             SysOp::ResponseText => (self.sys_ops.http_response_text)(heap, args),
             SysOp::ResponseOk => (self.sys_ops.http_response_ok)(heap, args),
             SysOp::RenderPrompt => SysOpResult::Ready(
-                llm_ops::execute_render_prompt(args).map(BexExternalValue::PromptAst),
+                llm_ops::execute_render_prompt(heap, args)
+                    .map(|ast| BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)))
+                    .map_err(|e| OpError::new(op, e)),
             ),
             SysOp::SpecializePrompt => SysOpResult::Ready(
-                llm_ops::execute_specialize_prompt(args).map(BexExternalValue::PromptAst),
+                llm_ops::execute_specialize_prompt(heap, args)
+                    .map(|ast| BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)))
+                    .map_err(|e| OpError::new(op, e)),
             ),
-            SysOp::LlmGetJinjaTemplate => SysOpResult::Ready(llm::execute_get_jinja_template(
-                &self.resolved_function_names,
-                args,
-            )),
-            SysOp::LlmBuildPrimitiveClient => {
-                SysOpResult::Ready(llm_ops::execute_build_primitive_client(args))
-            }
-            SysOp::LlmGetClientFunction => SysOpResult::Ready(llm::execute_get_client_function(
-                &self.resolved_function_names,
-                &self.function_global_indices,
-                args,
-            )),
-            SysOp::LlmBuildRequest => SysOpResult::Ready(llm_ops::execute_build_request(args)),
-            SysOp::LlmParseResponse => SysOpResult::Ready(llm_ops::execute_parse_response(args)),
+            SysOp::LlmGetJinjaTemplate => SysOpResult::Ready(
+                llm::execute_get_jinja_template(heap, &self.resolved_function_names, args)
+                    .map_err(|e| OpError::new(op, e)),
+            ),
+            SysOp::LlmGetClientFunction => SysOpResult::Ready(
+                llm::execute_get_client_function(
+                    heap,
+                    &self.resolved_function_names,
+                    &self.function_global_indices,
+                    args,
+                )
+                .map_err(|e| OpError::new(op, e)),
+            ),
+            SysOp::LlmBuildPrimitiveClient => SysOpResult::Ready(
+                llm_ops::execute_build_primitive_client(heap, args)
+                    .map_err(|e| OpError::new(op, e)),
+            ),
+            SysOp::LlmBuildRequest => SysOpResult::Ready(
+                llm_ops::execute_build_request(heap, args).map_err(|e| OpError::new(op, e)),
+            ),
+            SysOp::LlmParseResponse => SysOpResult::Ready(
+                llm_ops::execute_parse_response(heap, args, &self.resolved_function_names)
+                    .map_err(|e| OpError::new(op, e)),
+            ),
             SysOp::HttpSend => (self.sys_ops.http_send)(heap, args),
         }
     }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use baml_builtins::{PromptAst, PromptAstSimple};
 use bex_external_types::BexExternalValue;
-use bex_vm_types::{PromptAst, Value};
 use indexmap::IndexMap;
 use llm_types::OutputFormatContent;
 use minijinja::Environment;
@@ -65,20 +65,21 @@ pub fn render_prompt(
     env.add_template("prompt", &processed_template)?;
 
     // Add globals
-    add_globals(&mut env, ctx);
+    add_globals(&mut env, ctx)?;
 
+    let mut media_handles = HashMap::new();
     // Build context - args are already extracted BexExternalValue
     let jinja_args: minijinja::value::Value = args
         .iter()
-        .map(|(k, v)| (k.clone(), external_value_to_jinja(v)))
-        .collect();
+        .map(|(k, v)| Ok((k.clone(), external_value_to_jinja(v, &mut media_handles)?)))
+        .collect::<Result<_, crate::RenderPromptError>>()?;
     let tmpl = env.get_template("prompt")?;
 
     // Render
     let rendered = tmpl.render(jinja_args)?;
 
     // Parse result into PromptAst
-    Ok(parse_rendered_output(&rendered, ctx))
+    Ok(parse_rendered_output(&rendered, ctx, &media_handles))
 }
 
 fn create_environment() -> Environment<'static> {
@@ -138,7 +139,7 @@ fn preprocess_template(template: &str) -> String {
         .to_string()
 }
 
-fn add_globals(env: &mut Environment, ctx: &RenderContext) {
+fn add_globals(env: &mut Environment, ctx: &RenderContext) -> Result<(), crate::RenderPromptError> {
     use minijinja::context;
 
     // Create role function - same function used for both _.role() and _.chat()
@@ -179,6 +180,7 @@ fn add_globals(env: &mut Environment, ctx: &RenderContext) {
         })
         .collect();
 
+    let mut media_handles = HashMap::default();
     // Add ctx namespace with output_format and enums
     // Ported from engine/baml-lib/jinja-runtime/src/output_format/mod.rs
     let output_format = OutputFormatObject::new(ctx.output_format.clone());
@@ -189,24 +191,33 @@ fn add_globals(env: &mut Environment, ctx: &RenderContext) {
                 name => ctx.client.name.clone(),
                 provider => ctx.client.provider.clone(),
             },
-            tags => ctx.tags.iter().map(|(k, v)| (k.clone(), external_value_to_jinja(v))).collect::<minijinja::value::Value>(),
+            tags => ctx.tags.iter().map(|(k, v)| Ok((k.clone(), external_value_to_jinja(v, &mut media_handles)?))).collect::<Result<IndexMap<String, minijinja::value::Value>, crate::RenderPromptError>>()?.into_iter().collect::<minijinja::value::Value>(),
             output_format => minijinja::value::Value::from_object(output_format),
             enums => enums_map,
         },
     );
+    Ok(())
 }
 
-fn parse_rendered_output(rendered: &str, ctx: &RenderContext) -> PromptAst {
+fn parse_rendered_output(
+    rendered: &str,
+    ctx: &RenderContext,
+    media_handles: &HashMap<usize, bex_vm_types::MediaValue>,
+) -> PromptAst {
     // Check if this is a chat-style prompt (contains role delimiters)
     if rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
-        parse_chat_prompt(rendered, ctx)
+        parse_chat_prompt(rendered, ctx, media_handles)
     } else {
         // Simple completion prompt
-        PromptAst::String(rendered.to_string())
+        rendered.to_string().into()
     }
 }
 
-fn parse_chat_prompt(rendered: &str, _ctx: &RenderContext) -> PromptAst {
+fn parse_chat_prompt(
+    rendered: &str,
+    _ctx: &RenderContext,
+    media_handles: &HashMap<usize, bex_vm_types::MediaValue>,
+) -> PromptAst {
     let mut messages = Vec::new();
 
     // Split on role delimiter
@@ -219,11 +230,11 @@ fn parse_chat_prompt(rendered: &str, _ctx: &RenderContext) -> PromptAst {
         if part.starts_with(":baml-start-role:") && part.ends_with(":baml-end-role:") {
             // Save previous message if any
             if let Some(role) = current_role.take() {
-                let content = parse_message_content(&current_content);
+                let content = parse_message_content(&current_content, media_handles);
                 messages.push(PromptAst::Message {
                     role,
-                    content: Box::new(content),
-                    metadata: Value::Null,
+                    content: content.into(),
+                    metadata: serde_json::Value::default(),
                 });
                 current_content.clear();
             }
@@ -242,24 +253,27 @@ fn parse_chat_prompt(rendered: &str, _ctx: &RenderContext) -> PromptAst {
 
     // Save last message
     if let Some(role) = current_role {
-        let content = parse_message_content(&current_content);
+        let content = parse_message_content(&current_content, media_handles);
         messages.push(PromptAst::Message {
             role,
-            content: Box::new(content),
-            metadata: Value::Null,
+            content: std::sync::Arc::new(content),
+            metadata: serde_json::Value::default(),
         });
     }
 
     if messages.is_empty() {
-        PromptAst::String(rendered.to_string())
+        rendered.to_string().into()
     } else if messages.len() == 1 {
         messages.pop().unwrap()
     } else {
-        PromptAst::Vec(messages)
+        PromptAst::Vec(messages.into_iter().map(std::sync::Arc::new).collect())
     }
 }
 
-fn parse_message_content(content: &str) -> PromptAst {
+fn parse_message_content(
+    content: &str,
+    media_handles: &HashMap<usize, bex_vm_types::MediaValue>,
+) -> PromptAstSimple {
     // Check for media delimiters
     if content.contains(MAGIC_MEDIA_DELIMITER) {
         let mut parts = Vec::new();
@@ -270,20 +284,25 @@ fn parse_message_content(content: &str) -> PromptAst {
                 // This is a media chunk - parse the handle
                 // Format: :baml-start-media:{handle}:baml-end-media:
                 if let Some(handle) = parse_media_handle(chunk) {
-                    parts.push(PromptAst::Media(handle));
+                    parts.push(PromptAstSimple::Media(
+                        media_handles
+                            .get(&handle)
+                            .unwrap_or_else(|| panic!("Media handle {handle} not found"))
+                            .clone(),
+                    ));
                 }
             } else if !chunk.trim().is_empty() {
-                parts.push(PromptAst::String((*chunk).to_string()));
+                parts.push(PromptAstSimple::String((*chunk).to_string()));
             }
         }
 
         if parts.len() == 1 {
             parts.pop().unwrap()
         } else {
-            PromptAst::Vec(parts)
+            PromptAstSimple::Multiple(parts.into_iter().map(std::sync::Arc::new).collect())
         }
     } else {
-        PromptAst::String(content.trim().to_string())
+        PromptAstSimple::String(content.trim().to_string())
     }
 }
 
@@ -297,6 +316,8 @@ fn parse_media_handle(chunk: &str) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use bex_program::Ty;
 
     use super::*;
@@ -325,7 +346,7 @@ mod tests {
         let args = IndexMap::new();
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(result, PromptAst::String("Hello, world!".to_string()));
+        assert_eq!(result, "Hello, world!".to_string().into());
     }
 
     #[test]
@@ -340,7 +361,7 @@ mod tests {
 
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(result, PromptAst::String("Hello, Alice!".to_string()));
+        assert_eq!(result, "Hello, Alice!".to_string().into());
     }
 
     #[test]
@@ -365,7 +386,7 @@ mod tests {
 
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(result, PromptAst::String("Name: Bob, Age: 30".to_string()));
+        assert_eq!(result, "Name: Bob, Age: 30".to_string().into());
     }
 
     #[test]
@@ -379,20 +400,23 @@ mod tests {
         let args = IndexMap::new();
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        let expected = PromptAst::Vec(vec![
-            PromptAst::Message {
-                role: "system".to_string(),
-                content: Box::new(PromptAst::String(
-                    "You are a helpful assistant.".to_string(),
-                )),
-                metadata: Value::Null,
-            },
-            PromptAst::Message {
-                role: "user".to_string(),
-                content: Box::new(PromptAst::String("Hello!".to_string())),
-                metadata: Value::Null,
-            },
-        ]);
+        let expected = PromptAst::Vec(
+            vec![
+                PromptAst::Message {
+                    role: "system".to_string(),
+                    content: Arc::new(("You are a helpful assistant.".to_string()).into()),
+                    metadata: serde_json::Value::default(),
+                },
+                PromptAst::Message {
+                    role: "user".to_string(),
+                    content: Arc::new("Hello!".to_string().into()),
+                    metadata: serde_json::Value::default(),
+                },
+            ]
+            .into_iter()
+            .map(std::sync::Arc::new)
+            .collect(),
+        );
 
         assert_eq!(result, expected);
     }
@@ -408,8 +432,8 @@ mod tests {
 
         let expected = PromptAst::Message {
             role: "user".to_string(),
-            content: Box::new(PromptAst::String("Hello with default role!".to_string())),
-            metadata: Value::Null,
+            content: Arc::new("Hello with default role!".to_string().into()),
+            metadata: serde_json::Value::default(),
         };
 
         assert_eq!(result, expected);
@@ -424,7 +448,7 @@ mod tests {
         let args = IndexMap::new();
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(result, PromptAst::String("Hello,\nWorld!".to_string()));
+        assert_eq!(result, "Hello,\nWorld!".to_string().into());
     }
 
     #[test]
@@ -446,10 +470,7 @@ mod tests {
 
         let result = render_prompt(template, &args, &test_ctx()).unwrap();
 
-        assert_eq!(
-            result,
-            PromptAst::String("Items: apple, banana, cherry".to_string())
-        );
+        assert_eq!(result, "Items: apple, banana, cherry".to_string().into());
     }
 
     #[test]
@@ -463,7 +484,7 @@ mod tests {
 
         let result = render_prompt(template, &args, &ctx).unwrap();
 
-        assert_eq!(result, PromptAst::String("Answer as an int".to_string()));
+        assert_eq!(result, "Answer as an int".to_string().into());
     }
 
     #[test]
@@ -476,10 +497,7 @@ mod tests {
 
         let result = render_prompt(template, &args, &ctx).unwrap();
 
-        assert_eq!(
-            result,
-            PromptAst::String("Please respond with: int".to_string())
-        );
+        assert_eq!(result, "Please respond with: int".to_string().into());
     }
 
     #[test]
@@ -508,6 +526,6 @@ mod tests {
 
         let result = render_prompt(template, &args, &ctx).unwrap();
 
-        assert_eq!(result, PromptAst::String("Category: SPORTS".to_string()));
+        assert_eq!(result, "Category: SPORTS".to_string().into());
     }
 }

@@ -22,14 +22,10 @@
 //! ```
 
 mod bex_external_value;
-mod bex_value;
 pub mod builtins;
 mod epoch_guard;
 mod handle;
 
-pub use bex_external_value::{
-    BexExternalValue, PrimitiveClientValue, PromptAst, Ty, TypeName, UnionMetadata,
-};
-pub use bex_value::BexValue;
+pub use bex_external_value::{BexExternalAdt, BexExternalValue, Ty, TypeName, UnionMetadata};
 pub use epoch_guard::EpochGuard;
 pub use handle::{Handle, HandleInner, WeakHeapRef};

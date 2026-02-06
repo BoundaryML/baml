@@ -94,7 +94,7 @@ fn call_function_inner(
     // Reorder kwargs to match function parameter declaration order.
     // This ensures arguments are passed correctly even if the client sends
     // them in a different order than the function expects.
-    let bex_args: Vec<bex_external_types::BexValue> = params
+    let bex_args: Vec<bex_external_types::BexExternalValue> = params
         .iter()
         .map(|(param_name, _param_type)| {
             kwargs
@@ -111,7 +111,7 @@ fn call_function_inner(
     let rt = get_runtime().clone();
     rt.spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
-        let result = AssertUnwindSafe(async { engine.call_function(&func_name, &bex_args).await })
+        let result = AssertUnwindSafe(async { engine.call_function(&func_name, bex_args).await })
             .catch_unwind()
             .await;
 

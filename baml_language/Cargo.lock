@@ -400,7 +400,9 @@ dependencies = [
 name = "baml_builtins"
 version = "0.0.0"
 dependencies = [
+ "baml_base",
  "baml_builtins_macros",
+ "serde_json",
 ]
 
 [[package]]
@@ -809,6 +811,7 @@ name = "bex_engine"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "baml_builtins",
  "baml_tests",
  "baml_type",
  "bex_external_types",
@@ -851,6 +854,8 @@ dependencies = [
  "crossbeam-queue",
  "indexmap 2.13.0",
  "sharded-slab",
+ "sys_resource_types",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2735,6 +2740,7 @@ name = "llm_jinja"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "baml_builtins",
  "bex_external_types",
  "bex_program",
  "bex_vm_types",
@@ -2751,7 +2757,9 @@ dependencies = [
 name = "llm_ops"
 version = "0.0.0"
 dependencies = [
+ "baml_builtins",
  "bex_external_types",
+ "bex_heap",
  "bex_program",
  "bex_vm_types",
  "indexmap 2.13.0",

@@ -76,7 +76,8 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
     // Build and send the HTTP request
     let http_request = primitive_client.build_request(specialized_prompt);
     let http_response = baml.http.send(http_request);
+    let result = http_response.text();
 
     // Parse the response
-    return primitive_client.parse(http_response, function_name);
+    return primitive_client.parse(result, function_name);
 }

@@ -2,11 +2,11 @@
 //!
 //! Supports: `OpenAi`, `OpenAiGeneric`, `AzureOpenAi`, Ollama, `OpenRouter`.
 
-use bex_external_types::{BexExternalValue, PrimitiveClientValue, PromptAst};
+use baml_builtins::PromptAst;
 use indexmap::IndexMap;
 
-use super::{BuildRequestError, LlmRequestBuilder, get_string_option, prompt_to_content_parts};
-use crate::LlmProvider;
+use super::{BuildRequestError, LlmRequestBuilder, PrimitiveClientValue, get_string_option};
+use crate::{LlmProvider, build_request::prompt_to_content_parts_simple};
 
 /// Builder for OpenAI-compatible providers.
 pub(crate) struct OpenAiBuilder<'a> {
@@ -56,9 +56,12 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         headers
     }
 
-    fn build_prompt_body(&self, prompt: PromptAst) -> serde_json::Map<String, serde_json::Value> {
+    fn build_prompt_body(
+        &self,
+        prompt: bex_vm_types::PromptAst,
+    ) -> serde_json::Map<String, serde_json::Value> {
         let mut map = serde_json::Map::new();
-        let messages = prompt_to_openai_messages(prompt);
+        let messages = prompt_to_openai_messages(&prompt);
         map.insert("messages".to_string(), serde_json::Value::Array(messages));
         map
     }
@@ -70,26 +73,23 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
 /// ```json
 /// [{"role": "system", "content": "..."}, {"role": "user", "content": [{"type": "text", "text": "..."}]}]
 /// ```
-fn prompt_to_openai_messages(prompt: PromptAst) -> Vec<serde_json::Value> {
-    match prompt {
-        PromptAst::Vec(items) => items
-            .into_iter()
-            .filter_map(prompt_node_to_message)
-            .collect(),
-        single => prompt_node_to_message(single).into_iter().collect(),
+fn prompt_to_openai_messages(prompt: &bex_vm_types::PromptAst) -> Vec<serde_json::Value> {
+    match prompt.as_ref() {
+        PromptAst::Vec(items) => items.iter().filter_map(prompt_node_to_message).collect(),
+        _ => prompt_node_to_message(prompt).into_iter().collect(),
     }
 }
 
-fn prompt_node_to_message(node: PromptAst) -> Option<serde_json::Value> {
-    match node {
+fn prompt_node_to_message(node: &bex_vm_types::PromptAst) -> Option<serde_json::Value> {
+    match node.as_ref() {
         PromptAst::Message {
             role,
             content,
             metadata,
         } => {
-            let content_parts = prompt_to_content_parts(*content);
+            let content_parts = prompt_to_content_parts_simple(content.as_ref());
             let mut msg = serde_json::Map::new();
-            msg.insert("role".to_string(), serde_json::Value::String(role));
+            msg.insert("role".to_string(), serde_json::Value::String(role.clone()));
 
             // Always use array format for content parts.
             msg.insert(
@@ -97,16 +97,9 @@ fn prompt_node_to_message(node: PromptAst) -> Option<serde_json::Value> {
                 serde_json::Value::Array(content_parts),
             );
 
-            // Add metadata (e.g., cache_control) if present
-            if let BexExternalValue::Map { entries, .. } = *metadata {
-                for (key, value) in entries {
-                    if let BexExternalValue::String(v) = value {
-                        msg.insert(key, serde_json::Value::String(v));
-                    } else if let BexExternalValue::Bool(v) = value {
-                        msg.insert(key, serde_json::Value::Bool(v));
-                    }
-                }
-            }
+            // TODO: Add metadata (e.g., cache_control) when metadata is available.
+            // PromptAst::Message has metadata: Value; would need heap resolution to read map.
+            let _ = metadata;
 
             Some(serde_json::Value::Object(msg))
         }

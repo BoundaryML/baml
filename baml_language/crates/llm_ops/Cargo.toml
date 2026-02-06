@@ -7,7 +7,10 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+baml_builtins = { workspace = true }
 bex_external_types = { workspace = true }
+bex_heap = { workspace = true }
+bex_program = { workspace = true }
 bex_vm_types = { workspace = true }
 llm_jinja = { workspace = true }
 llm_types = { workspace = true }

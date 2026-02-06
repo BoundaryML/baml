@@ -3,42 +3,48 @@
 use std::sync::Arc;
 
 use bex_heap::BexHeap;
-use sys_types::{BexExternalValue, BexValue, OpError, SysOpResult};
+use sys_types::{BexExternalValue, OpError, OpErrorKind, SysOp, SysOpResult};
 use tokio::process::Command;
 
 /// Execute a shell command and return stdout.
 ///
 /// Signature: `fn shell(command: String) -> String`
-pub(crate) fn shell(_heap: Arc<BexHeap>, args: &[BexValue]) -> SysOpResult {
-    let command = match extract_string(args.first()) {
-        Ok(c) => c,
-        Err(e) => return SysOpResult::Ready(Err(e)),
-    };
-    SysOpResult::Async(Box::pin(shell_async(command)))
-}
+pub(crate) fn shell(heap: &Arc<BexHeap>, mut args: Vec<bex_heap::BexValue<'_>>) -> SysOpResult {
+    let err = |kind: OpErrorKind| SysOpResult::Ready(Err(OpError::new(SysOp::Shell, kind)));
 
-fn extract_string(value: Option<&BexValue>) -> Result<String, OpError> {
-    match value {
-        Some(BexValue::External(BexExternalValue::String(s))) => Ok(s.clone()),
-        other => Err(OpError::TypeError {
-            expected: "string command",
-            actual: format!("{other:?}"),
-        }),
+    if args.len() != 1 {
+        return err(OpErrorKind::InvalidArgumentCount {
+            expected: 1,
+            actual: args.len(),
+        });
     }
+
+    let arg0 = args.remove(0);
+    let command =
+        match heap.with_gc_protection(move |protected| arg0.as_string(&protected).cloned()) {
+            Ok(command) => command,
+            Err(e) => return err(e.into()),
+        };
+
+    SysOpResult::Async(Box::pin(async move {
+        shell_async(command)
+            .await
+            .map_err(|e| OpError::new(SysOp::Shell, e))
+    }))
 }
 
-async fn shell_async(command: String) -> Result<BexExternalValue, OpError> {
+async fn shell_async(command: String) -> Result<BexExternalValue, OpErrorKind> {
     let output = Command::new("sh")
         .arg("-c")
         .arg(&command)
         .output()
         .await
-        .map_err(|e| OpError::Other(format!("Failed to execute command '{command}': {e}")))?;
+        .map_err(|e| OpErrorKind::Other(format!("Failed to execute command '{command}': {e}")))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let code = output.status.code().unwrap_or(-1);
-        return Err(OpError::Other(format!(
+        return Err(OpErrorKind::Other(format!(
             "Command '{}' failed with exit code {}: {}",
             command,
             code,

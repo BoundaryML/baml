@@ -14,7 +14,7 @@ use std::{collections::HashMap, fmt::Write};
 use baml_type::MediaKind;
 use bex_vm_types::{
     HeapPtr,
-    types::{Future, Instance, MediaContent, MediaValue, Object, Type, Value},
+    types::{Future, Instance, MediaValue, Object, Type, Value},
 };
 use indexmap::IndexMap;
 
@@ -151,14 +151,18 @@ impl NativeFunctions for VmNatives {
     // =========================================================================
 
     fn baml_media_as_url(media: &MediaValue) -> Option<String> {
-        match &media.content {
-            MediaContent::Url { url, .. } => Some(url.clone()),
-            _ => None,
+        #[allow(unsafe_code)]
+        unsafe {
+            media.read_content_unguarded(|content| match content {
+                baml_builtins::MediaContent::Url { url, .. } => Some(url.clone()),
+                _ => None,
+            })
         }
     }
 
     fn baml_media_as_base64(media: &MediaValue) -> Option<String> {
-        match &media.content {
+        use baml_builtins::MediaContent;
+        media.read_content(|content| match content {
             MediaContent::Base64 { base64_data, .. } => Some(base64_data.clone()),
             MediaContent::File {
                 base64_data: Some(base64_data),
@@ -169,13 +173,16 @@ impl NativeFunctions for VmNatives {
                 ..
             } => Some(base64_data.clone()),
             _ => None,
-        }
+        })
     }
 
     fn baml_media_as_file(media: &MediaValue) -> Option<String> {
-        match &media.content {
-            MediaContent::File { file, .. } => Some(file.clone()),
-            _ => None,
+        #[allow(unsafe_code)]
+        unsafe {
+            media.read_content_unguarded(|content| match content {
+                baml_builtins::MediaContent::File { file, .. } => Some(file.clone()),
+                _ => None,
+            })
         }
     }
 
@@ -291,7 +298,6 @@ fn deep_copy_value_recursive(
                 Object::Resource(r) => vm.tlab.alloc(Object::Resource(r)),
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
                 Object::PromptAst(ast) => vm.tlab.alloc(Object::PromptAst(ast)),
-                Object::PrimitiveClient(c) => vm.tlab.alloc(Object::PrimitiveClient(c)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };
@@ -530,7 +536,6 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Resource(r) => Ok(format!("<{r}>")),
             Object::Future(_) => Ok("<future>".to_string()),
             Object::PromptAst(_) => Ok("<prompt_ast>".to_string()),
-            Object::PrimitiveClient(c) => Ok(format!("<client {}:{}>", c.provider, c.name)),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },

@@ -1,9 +1,10 @@
 //! Anthropic-format HTTP request builder.
 
-use bex_external_types::{BexExternalValue, PrimitiveClientValue, PromptAst};
+use baml_builtins::PromptAst;
 use indexmap::IndexMap;
 
-use super::{BuildRequestError, LlmRequestBuilder, get_string_option, prompt_to_content_parts};
+use super::{BuildRequestError, LlmRequestBuilder, PrimitiveClientValue, get_string_option};
+use crate::build_request::prompt_to_content_parts_simple;
 
 /// Builder for the Anthropic provider.
 pub(crate) struct AnthropicBuilder;
@@ -32,7 +33,10 @@ impl LlmRequestBuilder for AnthropicBuilder {
         headers
     }
 
-    fn build_prompt_body(&self, prompt: PromptAst) -> serde_json::Map<String, serde_json::Value> {
+    fn build_prompt_body(
+        &self,
+        prompt: bex_vm_types::PromptAst,
+    ) -> serde_json::Map<String, serde_json::Value> {
         let mut map = serde_json::Map::new();
         let (system_parts, messages) = extract_system_and_messages(prompt);
         if !system_parts.is_empty() {
@@ -49,25 +53,25 @@ impl LlmRequestBuilder for AnthropicBuilder {
 /// - System: top-level `"system": [{"type": "text", "text": "..."}]`
 /// - Messages: `[{"role": "user", "content": [{"type": "text", "text": "..."}]}]`
 fn extract_system_and_messages(
-    prompt: PromptAst,
+    prompt: bex_vm_types::PromptAst,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
     let mut system_parts = Vec::new();
     let mut messages = Vec::new();
 
-    let items = match prompt {
+    let items = match prompt.as_ref() {
         PromptAst::Vec(items) => items,
-        single => vec![single],
+        _ => &vec![prompt],
     };
 
     for item in items {
-        match item {
+        match item.as_ref() {
             PromptAst::Message {
                 role,
                 content,
                 metadata: _,
             } if role == "system" => {
                 // System messages → top-level system field
-                let parts = prompt_to_content_parts(*content);
+                let parts = prompt_to_content_parts_simple(content.as_ref());
                 system_parts.extend(parts);
             }
             PromptAst::Message {
@@ -76,24 +80,16 @@ fn extract_system_and_messages(
                 metadata,
             } => {
                 // Non-system messages → messages array
-                let content_parts = prompt_to_content_parts(*content);
+                let content_parts = prompt_to_content_parts_simple(content.as_ref());
                 let mut msg = serde_json::Map::new();
-                msg.insert("role".to_string(), serde_json::Value::String(role));
+                msg.insert("role".to_string(), serde_json::Value::String(role.clone()));
                 msg.insert(
                     "content".to_string(),
                     serde_json::Value::Array(content_parts),
                 );
 
-                // Add metadata (e.g., cache_control)
-                if let BexExternalValue::Map { entries, .. } = *metadata {
-                    for (key, value) in entries {
-                        if let BexExternalValue::String(v) = value {
-                            msg.insert(key, serde_json::Value::String(v));
-                        } else if let BexExternalValue::Bool(v) = value {
-                            msg.insert(key, serde_json::Value::Bool(v));
-                        }
-                    }
-                }
+                // TODO: Add metadata (e.g., cache_control) when metadata is available.
+                let _ = metadata;
 
                 messages.push(serde_json::Value::Object(msg));
             }

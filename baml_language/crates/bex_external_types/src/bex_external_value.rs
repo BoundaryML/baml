@@ -80,14 +80,20 @@ impl UnionMetadata {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum BexExternalAdt {
+    Media(bex_vm_types::MediaValue),
+    PromptAst(bex_vm_types::PromptAst),
+}
+
 /// A deep-copied value tree with no heap references.
 ///
 /// Use `BexEngine::call_function` to get the result. When the return type
 /// is a union, the value will be wrapped in the `Union` variant with metadata.
 ///
-/// # When to use BexExternalValue vs BexValue
+/// # When to use BexExternalValue vs BexExternalValue
 ///
-/// - **BexValue**: When you want to keep data in the heap and access lazily.
+/// - **BexExternalValue**: When you want to keep data in the heap and access lazily.
 ///   Good for passing handles across FFI without copying.
 ///
 /// - **BexExternalValue**: When you need to convert the entire value to another format
@@ -152,19 +158,8 @@ pub enum BexExternalValue {
         metadata: UnionMetadata,
     },
 
-    Media {
-        handle: crate::Handle,
-        kind: baml_type::MediaKind,
-    },
-
     /// Resource handle (file, socket, etc.) for sys operations.
     Resource(ResourceHandle),
-
-    /// Prompt AST - a structured prompt for LLM calls.
-    PromptAst(PromptAst),
-
-    /// Primitive LLM client.
-    PrimitiveClient(PrimitiveClientValue),
 
     /// Reference to a function by its global index.
     ///
@@ -174,43 +169,29 @@ pub enum BexExternalValue {
         /// Global index of the function.
         global_index: usize,
     },
+
+    Handle(crate::Handle),
+
+    // This is a tagged union.
+    // Once BAML has support for ADTs, we can remove this
+    // and use instances of ADT variants directly similar to how we handle
+    // builtin classes and enums.
+    Adt(BexExternalAdt),
 }
 
-/// Extracted PrimitiveClient data (no HeapPtr, fully owned).
-#[derive(Clone, Debug, PartialEq)]
-pub struct PrimitiveClientValue {
-    /// Client name (e.g., "GPT4").
-    pub name: String,
-    /// Provider type (e.g., "openai", "anthropic").
-    pub provider: String,
-    /// Default role for chat messages (e.g., "user").
-    pub default_role: String,
-    /// Allowed roles for chat messages.
-    pub allowed_roles: Vec<String>,
-    /// Options extracted as a map (was HeapPtr in VM).
-    pub options: indexmap::IndexMap<String, BexExternalValue>,
-}
-
-/// Prompt AST - a structured prompt for LLM calls.
-/// This is a copy of bex_vm_types::PromptAst but with no HeapPtr references.
-#[derive(Clone, Debug, PartialEq)]
-pub enum PromptAst {
-    /// A plain string.
-    String(String),
-
-    /// A media value - serializable opaque handle.
-    Media(usize),
-
-    /// A message with a role, content, and optional metadata.
-    Message {
-        role: String,
-        content: Box<PromptAst>,
-        /// Metadata stored as extracted value.
-        metadata: Box<BexExternalValue>,
-    },
-
-    /// A sequence of prompt nodes.
-    Vec(Vec<PromptAst>),
+impl BexExternalAdt {
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            BexExternalAdt::Media(media) => match media.kind {
+                baml_type::MediaKind::Image => "image",
+                baml_type::MediaKind::Audio => "audio",
+                baml_type::MediaKind::Video => "video",
+                baml_type::MediaKind::Pdf => "pdf",
+                baml_type::MediaKind::Generic => "media",
+            },
+            BexExternalAdt::PromptAst(_) => "prompt_ast",
+        }
+    }
 }
 
 impl BexExternalValue {
@@ -227,22 +208,51 @@ impl BexExternalValue {
             BexExternalValue::Instance { .. } => "instance",
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
-            BexExternalValue::Media { kind, .. } => match kind {
-                baml_type::MediaKind::Image => "image",
-                baml_type::MediaKind::Audio => "audio",
-                baml_type::MediaKind::Video => "video",
-                baml_type::MediaKind::Pdf => "pdf",
-                baml_type::MediaKind::Generic => "media",
-            },
             BexExternalValue::Resource(handle) => match handle.kind() {
                 sys_resource_types::ResourceType::File => "file",
                 sys_resource_types::ResourceType::Socket => "socket",
                 sys_resource_types::ResourceType::Response => "http-response",
             },
-            BexExternalValue::PromptAst(_) => "prompt_ast",
-            BexExternalValue::PrimitiveClient(_) => "primitive_client",
+            BexExternalValue::Adt(adt) => adt.type_name(),
             BexExternalValue::FunctionRef { .. } => "function",
+            BexExternalValue::Handle(_) => "handle",
         }
+    }
+}
+
+impl From<i64> for BexExternalValue {
+    fn from(value: i64) -> Self {
+        BexExternalValue::Int(value)
+    }
+}
+
+impl From<f64> for BexExternalValue {
+    fn from(value: f64) -> Self {
+        BexExternalValue::Float(value)
+    }
+}
+
+impl From<bool> for BexExternalValue {
+    fn from(value: bool) -> Self {
+        BexExternalValue::Bool(value)
+    }
+}
+
+impl From<crate::Handle> for BexExternalValue {
+    fn from(value: crate::Handle) -> Self {
+        BexExternalValue::Handle(value)
+    }
+}
+
+impl From<String> for BexExternalValue {
+    fn from(value: String) -> Self {
+        BexExternalValue::String(value)
+    }
+}
+
+impl From<&str> for BexExternalValue {
+    fn from(value: &str) -> Self {
+        BexExternalValue::String(value.to_string())
     }
 }
 

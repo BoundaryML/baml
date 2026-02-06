@@ -1,5 +1,7 @@
-use bex_external_types::{BexExternalValue, PromptAst};
-use indexmap::IndexMap;
+use std::sync::Arc;
+
+use baml_builtins::PromptAst;
+use serde_json::Value;
 
 use crate::{AllowedMetadata, ModelFeatures};
 
@@ -9,63 +11,58 @@ use crate::{AllowedMetadata, ModelFeatures};
 /// that share the same role by combining their contents into a `Vec` node.
 ///
 /// Ported from: engine/baml-runtime/src/internal/llm_client/traits/mod.rs:89-102
-pub(super) fn merge_adjacent_messages(prompt: PromptAst) -> PromptAst {
-    match prompt {
-        PromptAst::Vec(messages) => {
-            let mut merged: Vec<PromptAst> = Vec::with_capacity(messages.len());
+pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_types::PromptAst {
+    // first handle invariants (strings next to strings, etc.)
+    let prompt = prompt.merge_adjacent();
 
-            for msg in messages {
-                let should_merge = match (&merged.last(), &msg) {
-                    (
-                        Some(PromptAst::Message {
-                            role: prev_role, ..
-                        }),
-                        PromptAst::Message {
-                            role: next_role, ..
-                        },
-                    ) => prev_role == next_role,
-                    _ => false,
+    match prompt.as_ref() {
+        PromptAst::Vec(messages) => {
+            // First merge any inner nodes, so we're guaranteed to have a flat list of messages.
+            let mut final_messages: Vec<bex_vm_types::PromptAst> =
+                Vec::with_capacity(messages.len());
+
+            for curr in messages {
+                let Some(last) = final_messages.last().map(std::convert::AsRef::as_ref) else {
+                    final_messages.push(curr.clone());
+                    continue;
                 };
 
-                if should_merge {
-                    let prev = merged.pop().unwrap();
-                    if let (
+                match (last, curr.as_ref()) {
+                    (
                         PromptAst::Message {
-                            role,
-                            content: prev_content,
-                            metadata: prev_meta,
+                            role: last_role,
+                            content: last_content,
+                            metadata: last_metadata,
                         },
                         PromptAst::Message {
-                            content: next_content,
-                            ..
+                            role: curr_role,
+                            content: curr_content,
+                            metadata: curr_metadata,
                         },
-                    ) = (prev, msg)
-                    {
-                        let combined = match *prev_content {
-                            PromptAst::Vec(mut items) => {
-                                items.push(*next_content);
-                                PromptAst::Vec(items)
-                            }
-                            other => PromptAst::Vec(vec![other, *next_content]),
-                        };
-                        merged.push(PromptAst::Message {
-                            role,
-                            content: Box::new(combined),
-                            metadata: prev_meta,
+                    ) if last_role == curr_role && (last_metadata == curr_metadata) => {
+                        let merged = Arc::new(PromptAst::Message {
+                            role: last_role.clone(),
+                            content: last_content.clone().join(curr_content.clone()),
+                            metadata: last_metadata.clone(),
                         });
+                        final_messages
+                            .pop()
+                            .expect("invariant violated: final_messages is not empty");
+                        final_messages.push(merged);
                     }
-                } else {
-                    merged.push(msg);
+                    _ => {
+                        final_messages.push(curr.clone());
+                    }
                 }
             }
 
-            if merged.len() == 1 {
-                merged.pop().unwrap()
+            if final_messages.len() == 1 {
+                final_messages.pop().unwrap()
             } else {
-                PromptAst::Vec(merged)
+                Arc::new(PromptAst::Vec(final_messages))
             }
         }
-        other => other,
+        _ => prompt,
     }
 }
 
@@ -77,63 +74,66 @@ pub(super) fn merge_adjacent_messages(prompt: PromptAst) -> PromptAst {
 ///   system messages to "user"
 ///
 /// Ported from: engine/baml-runtime/src/internal/llm_client/traits/mod.rs:280-296
-pub(super) fn consolidate_system_prompts(prompt: PromptAst, features: &ModelFeatures) -> PromptAst {
+pub(super) fn consolidate_system_prompts(
+    prompt: bex_vm_types::PromptAst,
+    features: &ModelFeatures,
+) -> bex_vm_types::PromptAst {
     if !features.max_one_system_prompt {
         return prompt;
     }
 
-    match prompt {
+    match prompt.as_ref() {
         PromptAst::Vec(messages) => {
             let total = messages.len();
             let mut seen_first_system = false;
 
-            let transformed: Vec<PromptAst> = messages
-                .into_iter()
-                .map(|msg| match msg {
+            let transformed: Vec<_> = messages
+                .iter()
+                .map(|msg| match msg.as_ref() {
                     PromptAst::Message {
                         role,
                         content,
                         metadata,
                     } if role == "system" => {
                         if total == 1 {
-                            return PromptAst::Message {
+                            return Arc::new(PromptAst::Message {
                                 role: "user".to_string(),
-                                content,
-                                metadata,
-                            };
+                                content: content.clone(),
+                                metadata: metadata.clone(),
+                            });
                         }
 
                         if !seen_first_system {
                             seen_first_system = true;
-                            PromptAst::Message {
-                                role,
-                                content,
-                                metadata,
-                            }
+                            Arc::new(PromptAst::Message {
+                                role: role.clone(),
+                                content: content.clone(),
+                                metadata: metadata.clone(),
+                            })
                         } else {
-                            PromptAst::Message {
+                            Arc::new(PromptAst::Message {
                                 role: "user".to_string(),
-                                content,
-                                metadata,
-                            }
+                                content: content.clone(),
+                                metadata: metadata.clone(),
+                            })
                         }
                     }
-                    other => other,
+                    _ => msg.clone(),
                 })
                 .collect();
 
-            PromptAst::Vec(transformed)
+            Arc::new(PromptAst::Vec(transformed))
         }
         PromptAst::Message {
             role,
             content,
             metadata,
-        } if role == "system" => PromptAst::Message {
+        } if role == "system" => Arc::new(PromptAst::Message {
             role: "user".to_string(),
-            content,
-            metadata,
-        },
-        other => other,
+            content: content.clone(),
+            metadata: metadata.clone(),
+        }),
+        _ => prompt,
     }
 }
 
@@ -142,7 +142,10 @@ pub(super) fn consolidate_system_prompts(prompt: PromptAst, features: &ModelFeat
 /// Walks all Message nodes and removes disallowed metadata keys.
 ///
 /// Ported from: engine/baml-runtime/src/internal/llm_client/traits/mod.rs:110-128
-pub(super) fn filter_metadata(prompt: PromptAst, features: &ModelFeatures) -> PromptAst {
+pub(super) fn filter_metadata(
+    prompt: bex_vm_types::PromptAst,
+    features: &ModelFeatures,
+) -> bex_vm_types::PromptAst {
     if matches!(features.allowed_metadata, AllowedMetadata::All) {
         return prompt;
     }
@@ -150,79 +153,65 @@ pub(super) fn filter_metadata(prompt: PromptAst, features: &ModelFeatures) -> Pr
     filter_metadata_recursive(prompt, features)
 }
 
-fn filter_metadata_recursive(prompt: PromptAst, features: &ModelFeatures) -> PromptAst {
-    match prompt {
+fn filter_metadata_recursive(
+    prompt: bex_vm_types::PromptAst,
+    features: &ModelFeatures,
+) -> bex_vm_types::PromptAst {
+    match prompt.as_ref() {
         PromptAst::Message {
             role,
             content,
             metadata,
         } => {
-            let filtered_metadata = filter_metadata_value(*metadata, features);
-            PromptAst::Message {
-                role,
-                content: Box::new(filter_metadata_recursive(*content, features)),
-                metadata: Box::new(filtered_metadata),
-            }
+            let filtered_metadata = filter_metadata_value(metadata, features);
+            Arc::new(PromptAst::Message {
+                role: role.clone(),
+                content: content.clone(),
+                metadata: filtered_metadata,
+            })
         }
-        PromptAst::Vec(items) => PromptAst::Vec(
+        PromptAst::Vec(items) => Arc::new(PromptAst::Vec(
             items
-                .into_iter()
-                .map(|item| filter_metadata_recursive(item, features))
+                .iter()
+                .map(|item| filter_metadata_recursive(item.clone(), features))
                 .collect(),
-        ),
-        other => other,
+        )),
+        PromptAst::Simple(_) => prompt,
     }
 }
 
-fn filter_metadata_value(metadata: BexExternalValue, features: &ModelFeatures) -> BexExternalValue {
+/// Filter metadata (Value) by allowed keys. Object refs are passed through unchanged
+/// since we don't have heap access here to read map contents.
+fn filter_metadata_value(metadata: &Value, features: &ModelFeatures) -> Value {
+    if matches!(features.allowed_metadata, AllowedMetadata::None) {
+        return Value::Null;
+    }
+
     match metadata {
-        BexExternalValue::Map {
-            key_type,
-            value_type,
-            entries,
-        } => {
-            let filtered: IndexMap<String, BexExternalValue> = entries
-                .into_iter()
-                .filter(|(key, _)| features.allowed_metadata.is_allowed(key))
-                .collect();
-            BexExternalValue::Map {
-                key_type,
-                value_type,
-                entries: filtered,
-            }
+        Value::Object(map) => {
+            let filtered_map = map.iter().filter(|(key, _)| matches!(&features.allowed_metadata, AllowedMetadata::Only(keys) if keys.contains(key))).map(|(key, value)| (key.clone(), value.clone())).collect();
+            Value::Object(filtered_map)
         }
-        other => {
-            if matches!(features.allowed_metadata, AllowedMetadata::None) {
-                BexExternalValue::Null
-            } else {
-                other
-            }
-        }
+        _ => Value::Null,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use bex_external_types::{BexExternalValue, PromptAst};
+    use std::sync::Arc;
+
+    use bex_external_types::BexExternalValue;
     use indexmap::IndexMap;
 
     use super::*;
     use crate::{AllowedMetadata, LlmProvider, ModelFeatures};
 
-    fn msg(role: &str, text: &str) -> PromptAst {
-        PromptAst::Message {
+    fn msg(role: &str, text: &str) -> Arc<PromptAst> {
+        Arc::new(PromptAst::Message {
             role: role.to_string(),
-            content: Box::new(PromptAst::String(text.to_string())),
-            metadata: Box::new(BexExternalValue::Null),
-        }
-    }
-
-    fn msg_with_meta(role: &str, text: &str, meta: BexExternalValue) -> PromptAst {
-        PromptAst::Message {
-            role: role.to_string(),
-            content: Box::new(PromptAst::String(text.to_string())),
-            metadata: Box::new(meta),
-        }
+            content: Arc::new(text.to_string().into()),
+            metadata: Value::Null,
+        })
     }
 
     // ---- ModelFeatures tests ----
@@ -260,47 +249,53 @@ mod tests {
 
     #[test]
     fn test_merge_adjacent_same_role() {
-        let prompt = PromptAst::Vec(vec![msg("user", "Hello"), msg("user", "World")]);
-        let result = merge_adjacent_messages(prompt);
-        let expected = PromptAst::Message {
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("user", "Hello"),
+            msg("user", "World"),
+        ]));
+        let result = merge_adjacent_roles(prompt);
+        let expected = Arc::new(PromptAst::Message {
             role: "user".to_string(),
-            content: Box::new(PromptAst::Vec(vec![
-                PromptAst::String("Hello".to_string()),
-                PromptAst::String("World".to_string()),
-            ])),
-            metadata: Box::new(BexExternalValue::Null),
-        };
+            content: Arc::new("HelloWorld".to_string().into()),
+            metadata: Value::Null,
+        });
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_no_merge_different_roles() {
-        let prompt = PromptAst::Vec(vec![msg("system", "You are helpful"), msg("user", "Hello")]);
-        let result = merge_adjacent_messages(prompt);
-        let expected = PromptAst::Vec(vec![msg("system", "You are helpful"), msg("user", "Hello")]);
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful"),
+            msg("user", "Hello"),
+        ]));
+        let result = merge_adjacent_roles(prompt);
+        let expected = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful"),
+            msg("user", "Hello"),
+        ]));
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_merge_three_same_role() {
-        let prompt = PromptAst::Vec(vec![msg("user", "A"), msg("user", "B"), msg("user", "C")]);
-        let result = merge_adjacent_messages(prompt);
-        let expected = PromptAst::Message {
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("user", "A"),
+            msg("user", "B"),
+            msg("user", "C"),
+        ]));
+        let result = merge_adjacent_roles(prompt);
+        let expected = Arc::new(PromptAst::Message {
             role: "user".to_string(),
-            content: Box::new(PromptAst::Vec(vec![
-                PromptAst::String("A".to_string()),
-                PromptAst::String("B".to_string()),
-                PromptAst::String("C".to_string()),
-            ])),
-            metadata: Box::new(BexExternalValue::Null),
-        };
+            content: Arc::new("ABC".to_string().into()),
+            metadata: Value::Null,
+        });
         assert_eq!(result, expected);
     }
 
     #[test]
     fn test_merge_passthrough_non_vec() {
         let prompt = msg("user", "Hello");
-        let result = merge_adjacent_messages(prompt);
+        let result = merge_adjacent_roles(prompt);
         assert_eq!(result, msg("user", "Hello"));
     }
 
@@ -323,17 +318,17 @@ mod tests {
             max_one_system_prompt: true,
             allowed_metadata: AllowedMetadata::All,
         };
-        let prompt = PromptAst::Vec(vec![
+        let prompt = Arc::new(PromptAst::Vec(vec![
             msg("system", "First system"),
             msg("user", "Hello"),
             msg("system", "Second system"),
-        ]);
+        ]));
         let result = consolidate_system_prompts(prompt, &features);
-        let expected = PromptAst::Vec(vec![
+        let expected = Arc::new(PromptAst::Vec(vec![
             msg("system", "First system"),
             msg("user", "Hello"),
             msg("user", "Second system"),
-        ]);
+        ]));
         assert_eq!(result, expected);
     }
 
@@ -343,9 +338,15 @@ mod tests {
             max_one_system_prompt: false,
             allowed_metadata: AllowedMetadata::All,
         };
-        let prompt = PromptAst::Vec(vec![msg("system", "First"), msg("system", "Second")]);
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "First"),
+            msg("system", "Second"),
+        ]));
         let result = consolidate_system_prompts(prompt, &features);
-        let expected = PromptAst::Vec(vec![msg("system", "First"), msg("system", "Second")]);
+        let expected = Arc::new(PromptAst::Vec(vec![
+            msg("system", "First"),
+            msg("system", "Second"),
+        ]));
         assert_eq!(result, expected);
     }
 
@@ -357,25 +358,9 @@ mod tests {
             max_one_system_prompt: false,
             allowed_metadata: AllowedMetadata::All,
         };
-        let mut meta_entries = IndexMap::new();
-        meta_entries.insert("cache_control".to_string(), BexExternalValue::Bool(true));
-        let meta = BexExternalValue::Map {
-            key_type: bex_program::Ty::String,
-            value_type: bex_program::Ty::Bool,
-            entries: meta_entries.clone(),
-        };
-        let prompt = msg_with_meta("user", "Hello", meta);
+        let prompt = msg("user", "Hello");
         let result = filter_metadata(prompt, &features);
-        let expected = msg_with_meta(
-            "user",
-            "Hello",
-            BexExternalValue::Map {
-                key_type: bex_program::Ty::String,
-                value_type: bex_program::Ty::Bool,
-                entries: meta_entries,
-            },
-        );
-        assert_eq!(result, expected);
+        assert_eq!(result, msg("user", "Hello"));
     }
 
     #[test]
@@ -384,25 +369,9 @@ mod tests {
             max_one_system_prompt: false,
             allowed_metadata: AllowedMetadata::None,
         };
-        let mut meta_entries = IndexMap::new();
-        meta_entries.insert("cache_control".to_string(), BexExternalValue::Bool(true));
-        let meta = BexExternalValue::Map {
-            key_type: bex_program::Ty::String,
-            value_type: bex_program::Ty::Bool,
-            entries: meta_entries,
-        };
-        let prompt = msg_with_meta("user", "Hello", meta);
+        let prompt = msg("user", "Hello");
         let result = filter_metadata(prompt, &features);
-        let expected = msg_with_meta(
-            "user",
-            "Hello",
-            BexExternalValue::Map {
-                key_type: bex_program::Ty::String,
-                value_type: bex_program::Ty::Bool,
-                entries: IndexMap::new(),
-            },
-        );
-        assert_eq!(result, expected);
+        assert_eq!(result, msg("user", "Hello"));
     }
 
     #[test]
@@ -411,64 +380,39 @@ mod tests {
             max_one_system_prompt: false,
             allowed_metadata: AllowedMetadata::Only(vec!["cache_control".to_string()]),
         };
-        let mut meta_entries = IndexMap::new();
-        meta_entries.insert("cache_control".to_string(), BexExternalValue::Bool(true));
-        meta_entries.insert(
-            "secret_field".to_string(),
-            BexExternalValue::String("x".to_string()),
-        );
-        let meta = BexExternalValue::Map {
-            key_type: bex_program::Ty::String,
-            value_type: bex_program::Ty::String,
-            entries: meta_entries,
-        };
-        let prompt = msg_with_meta("user", "Hello", meta);
+        let prompt = msg("user", "Hello");
         let result = filter_metadata(prompt, &features);
-        let mut expected_entries = IndexMap::new();
-        expected_entries.insert("cache_control".to_string(), BexExternalValue::Bool(true));
-        let expected = msg_with_meta(
-            "user",
-            "Hello",
-            BexExternalValue::Map {
-                key_type: bex_program::Ty::String,
-                value_type: bex_program::Ty::String,
-                entries: expected_entries,
-            },
-        );
-        assert_eq!(result, expected);
+        assert_eq!(result, msg("user", "Hello"));
     }
 
     // ---- Integration: full specialize_prompt pipeline ----
 
     #[test]
     fn test_specialize_anthropic_prompt() {
-        let prompt = PromptAst::Vec(vec![
+        let prompt = Arc::new(PromptAst::Vec(vec![
             msg("system", "You are helpful"),
             msg("user", "Hello"),
             msg("user", "How are you?"),
             msg("system", "Also be concise"),
             msg("assistant", "I'm fine"),
-        ]);
+        ]));
 
         let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
 
-        let result = merge_adjacent_messages(prompt);
+        let result = merge_adjacent_roles(prompt);
         let result = consolidate_system_prompts(result, &features);
         let result = filter_metadata(result, &features);
 
-        let expected = PromptAst::Vec(vec![
+        let expected = Arc::new(PromptAst::Vec(vec![
             msg("system", "You are helpful"),
-            PromptAst::Message {
+            Arc::new(PromptAst::Message {
                 role: "user".to_string(),
-                content: Box::new(PromptAst::Vec(vec![
-                    PromptAst::String("Hello".to_string()),
-                    PromptAst::String("How are you?".to_string()),
-                ])),
-                metadata: Box::new(BexExternalValue::Null),
-            },
+                content: Arc::new("HelloHow are you?".to_string().into()),
+                metadata: Value::Null,
+            }),
             msg("user", "Also be concise"),
             msg("assistant", "I'm fine"),
-        ]);
+        ]));
         assert_eq!(result, expected);
     }
 }

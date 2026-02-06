@@ -9,7 +9,7 @@
 use std::{collections::HashMap, io::Write};
 
 use baml_tests::bytecode::compile_source_with_schema;
-use bex_engine::{BexEngine, BexExternalValue, BexValue};
+use bex_engine::{BexEngine, BexExternalValue};
 use bex_vm_types::Program;
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
@@ -73,13 +73,7 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
         .expect("Failed to create engine");
 
-    // Convert BexExternalValue inputs to BexValue for call_function
-    let args: Vec<BexValue> = input
-        .inputs
-        .into_iter()
-        .map(std::convert::Into::into)
-        .collect();
-    let result = engine.call_function(input.entry, &args).await;
+    let result = engine.call_function(input.entry, input.inputs).await;
 
     match (result, input.expected) {
         (Ok(value), Ok(expected)) => {

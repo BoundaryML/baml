@@ -7,11 +7,14 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+baml_type = { workspace = true }
 bex_external_types = { workspace = true }
 bex_vm_types = { workspace = true }
+sys_resource_types = { workspace = true }
 crossbeam-queue = { workspace = true }
 indexmap = { workspace = true }
 sharded-slab = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 baml_type = { workspace = true }

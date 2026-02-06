@@ -21,6 +21,7 @@ tokio = { workspace = true, features = [ "sync", "rt" ] }
 tracing = { workspace = true }
 
 [dev-dependencies]
+baml_builtins = { workspace = true }
 baml_tests = { workspace = true }
 llm_jinja = { workspace = true }
 llm_types = { workspace = true }

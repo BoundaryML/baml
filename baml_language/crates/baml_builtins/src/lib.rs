@@ -11,6 +11,10 @@
 //! Add a new entry in the `define_builtins!` macro invocation below.
 //! This generates both the path constant and the signature in one place.
 
+mod adt;
+
+pub use adt::*;
+
 /// Type pattern for matching/constructing types with type variables.
 ///
 /// Used for generic builtin functions like `Array<T>.push(item: T)`.
@@ -287,10 +291,17 @@ macro_rules! with_builtins {
                     #[builtin]
                     struct PromptAst {}
 
+
                     /// A primitive LLM client (single provider, fully resolved).
                     /// Options have been evaluated (env vars resolved, expressions computed).
                     #[builtin]
                     struct PrimitiveClient {
+                        name: String,
+                        provider: String,
+                        default_role: String,
+                        allowed_roles: Vec<String>,
+                        options: Map<String, Unknown>,
+
                         /// Render a Jinja template with the given arguments.
                         /// Returns a structured PromptAst that can be sent to an LLM.
                         #[sys_op]
