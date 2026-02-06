@@ -180,8 +180,8 @@ fn filter_metadata_recursive(
     }
 }
 
-/// Filter metadata (Value) by allowed keys. Object refs are passed through unchanged
-/// since we don't have heap access here to read map contents.
+/// Filter metadata (serde_json::Value) by allowed keys.
+/// Returns Null for non-Object values or when no metadata is allowed.
 fn filter_metadata_value(metadata: &Value, features: &ModelFeatures) -> Value {
     if matches!(features.allowed_metadata, AllowedMetadata::None) {
         return Value::Null;
