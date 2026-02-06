@@ -19,38 +19,6 @@ use crate::registry::REGISTRY;
 /// Shared HTTP client with connection pooling.
 pub(crate) static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
 
-/// Wrapper for Request instance that provides GC-safe access to fields.
-struct RequestRef {
-    method: String,
-    url: String,
-    headers: Vec<(String, String)>,
-    body: Option<String>,
-}
-
-impl RequestRef {
-    fn from_owned_request(req: builtin_types::owned::HttpRequest) -> Self {
-        Self {
-            method: req.method,
-            url: req.url,
-            headers: req.headers.into_iter().collect(),
-            body: if req.body.is_empty() {
-                None
-            } else {
-                Some(req.body)
-            },
-        }
-    }
-
-    fn from_url(url: String) -> Self {
-        Self {
-            method: "GET".to_string(),
-            url,
-            headers: Vec::new(),
-            body: None,
-        }
-    }
-}
-
 // ============================================================================
 // HTTP Operations
 // ============================================================================
@@ -76,8 +44,14 @@ pub(crate) fn fetch(heap: &Arc<BexHeap>, mut args: Vec<bex_heap::BexValue<'_>>) 
         Err(e) => return err(e.into()),
     };
 
+    let req = builtin_types::owned::HttpRequest {
+        method: "GET".to_string(),
+        url,
+        headers: indexmap::IndexMap::new(),
+        body: String::new(),
+    };
     SysOpResult::Async(Box::pin(async move {
-        send_async(RequestRef::from_url(url))
+        send_async(req)
             .await
             .map_err(|e| OpError::new(SysOp::HttpFetch, e))
     }))
@@ -186,15 +160,16 @@ pub(crate) fn send(heap: &Arc<BexHeap>, mut args: Vec<bex_heap::BexValue<'_>>) -
         Err(e) => return err(e.into()),
     };
 
-    let request_ref = RequestRef::from_owned_request(request);
     SysOpResult::Async(Box::pin(async move {
-        send_async(request_ref)
+        send_async(request)
             .await
             .map_err(|e| OpError::new(SysOp::HttpSend, e))
     }))
 }
 
-async fn send_async(req: RequestRef) -> Result<BexExternalValue, OpErrorKind> {
+async fn send_async(
+    req: builtin_types::owned::HttpRequest,
+) -> Result<BexExternalValue, OpErrorKind> {
     let method = reqwest::Method::from_bytes(req.method.as_bytes())
         .map_err(|e| OpErrorKind::Other(format!("Invalid HTTP method '{}': {e}", req.method)))?;
 
@@ -204,10 +179,8 @@ async fn send_async(req: RequestRef) -> Result<BexExternalValue, OpErrorKind> {
         builder = builder.header(key.as_str(), value.as_str());
     }
 
-    if let Some(body) = req.body {
-        if !body.is_empty() {
-            builder = builder.body(body);
-        }
+    if !req.body.is_empty() {
+        builder = builder.body(req.body);
     }
 
     let response = builder
