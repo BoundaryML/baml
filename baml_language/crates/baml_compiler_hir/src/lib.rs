@@ -972,11 +972,19 @@ pub fn llm_function_file_offset<'db>(db: &'db dyn Db, function: FunctionLoc<'db>
             baml_compiler_syntax::ast::Item::Class(class_node) => {
                 // Also check class methods
                 for method in class_node.methods() {
-                    if method.name().as_ref().map(SyntaxToken::text) == Some(func_name) {
-                        if let Some(llm_body) = method.llm_body() {
-                            if let Some(prompt_field) = llm_body.prompt_field() {
-                                if let Some(raw_string) = prompt_field.raw_string() {
-                                    return Some(PromptTemplate::get_file_offset(&raw_string));
+                    if let (Some(method_name), Some(class_name_token)) =
+                        (method.name(), class_node.name())
+                    {
+                        let qualified = QualifiedName::local_method_from_str(
+                            class_name_token.text(),
+                            method_name.text(),
+                        );
+                        if qualified.as_str() == func_name.as_str() {
+                            if let Some(llm_body) = method.llm_body() {
+                                if let Some(prompt_field) = llm_body.prompt_field() {
+                                    if let Some(raw_string) = prompt_field.raw_string() {
+                                        return Some(PromptTemplate::get_file_offset(&raw_string));
+                                    }
                                 }
                             }
                         }
@@ -2635,7 +2643,10 @@ pub fn get_item_name_span(
 ) -> Option<Span> {
     use baml_compiler_syntax::{
         SyntaxKind,
-        ast::{ClassDef, ClientDef, EnumDef, FunctionDef, GeneratorDef, TestDef, TypeAliasDef},
+        ast::{
+            ClassDef, ClientDef, EnumDef, FunctionDef, GeneratorDef, TemplateStringDef, TestDef,
+            TypeAliasDef,
+        },
     };
 
     let tree = baml_compiler_parser::syntax_tree(db, file);
@@ -2743,6 +2754,18 @@ pub fn get_item_name_span(
             "test" if node.kind() == SyntaxKind::TEST_DEF => {
                 if let Some(test) = TestDef::cast(node) {
                     if let Some(name_token) = test.name() {
+                        if name_token.text() == name {
+                            if matches_found == occurrence {
+                                return Some(Span::new(file_id, name_token.text_range()));
+                            }
+                            matches_found += 1;
+                        }
+                    }
+                }
+            }
+            "template_string" if node.kind() == SyntaxKind::TEMPLATE_STRING_DEF => {
+                if let Some(ts) = TemplateStringDef::cast(node) {
+                    if let Some(name_token) = ts.name() {
                         if name_token.text() == name {
                             if matches_found == occurrence {
                                 return Some(Span::new(file_id, name_token.text_range()));

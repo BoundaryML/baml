@@ -12,7 +12,7 @@
 mod expr;
 mod stmt;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub use expr::infer_expression_type;
 use indexmap::IndexMap;
@@ -88,6 +88,14 @@ impl JinjaType {
             return true;
         }
 
+        // Unwrap aliases before checking
+        if let JinjaType::Alias { resolved, .. } = self {
+            return resolved.is_subtype_of(other);
+        }
+        if let JinjaType::Alias { resolved, .. } = other {
+            return self.is_subtype_of(resolved);
+        }
+
         // Check union types
         if let JinjaType::Union(items) = other {
             return items.iter().any(|item| self.is_subtype_of(item));
@@ -97,6 +105,11 @@ impl JinjaType {
             // Undefined and None are only subtypes of themselves
             (JinjaType::Undefined | JinjaType::None, _) => false,
             (_, JinjaType::Undefined | JinjaType::None) => false,
+
+            // Literal subtypes
+            (JinjaType::Literal(LiteralValue::Int(_)), JinjaType::Int | JinjaType::Number) => true,
+            (JinjaType::Literal(LiteralValue::Bool(_)), JinjaType::Bool) => true,
+            (JinjaType::Literal(LiteralValue::String(_)), JinjaType::String) => true,
 
             // Numeric types
             (JinjaType::Int, JinjaType::Number) => true,
@@ -156,6 +169,12 @@ impl JinjaType {
     /// This is used for checking type consistency across union branches.
     pub fn equals_ignoring_literals(&self, other: &Self) -> bool {
         match (self, other) {
+            (JinjaType::Literal(left), JinjaType::Literal(right)) => matches!(
+                (left, right),
+                (LiteralValue::Int(_), LiteralValue::Int(_))
+                    | (LiteralValue::Bool(_), LiteralValue::Bool(_))
+                    | (LiteralValue::String(_), LiteralValue::String(_))
+            ),
             (JinjaType::List(l), JinjaType::List(r)) => l.equals_ignoring_literals(r),
             (JinjaType::Map(lk, lv), JinjaType::Map(rk, rv)) => {
                 lk.equals_ignoring_literals(rk) && lv.equals_ignoring_literals(rv)
@@ -197,9 +216,72 @@ impl From<&Ty> for JinjaType {
                 JinjaType::Union(vec![JinjaType::None, JinjaType::from(inner.as_ref())])
             }
             Ty::Class(name) => JinjaType::ClassRef(name.to_string()),
+            Ty::Literal(crate::LiteralValue::String(s)) => {
+                JinjaType::Literal(LiteralValue::String(s.clone()))
+            }
+            Ty::Literal(crate::LiteralValue::Int(i)) => JinjaType::Literal(LiteralValue::Int(*i)),
+            Ty::Literal(crate::LiteralValue::Bool(b)) => JinjaType::Literal(LiteralValue::Bool(*b)),
+            Ty::Literal(crate::LiteralValue::Float(_)) => JinjaType::Float,
             Ty::Enum(name) => JinjaType::EnumRef(name.to_string()),
-            Ty::Media(_) => JinjaType::Image, // Simplification
+            Ty::Media(baml_base::MediaKind::Image) => JinjaType::Image,
+            Ty::Media(baml_base::MediaKind::Audio) => JinjaType::Audio,
+            Ty::Media(_) => JinjaType::Audio, // TODO: Do we need more jinja media types?
             _ => JinjaType::Unknown,
+        }
+    }
+}
+
+impl JinjaType {
+    /// Convert a TIR type to a Jinja type, resolving type aliases.
+    ///
+    /// Unlike the `From<&Ty>` impl, this has access to the type alias map
+    /// so it can resolve `Ty::TypeAlias` to `JinjaType::Alias { name, resolved }`.
+    pub fn from_ty(ty: &Ty, aliases: &HashMap<baml_base::Name, Ty>) -> Self {
+        let mut expanding = HashSet::new();
+        Self::from_ty_impl(ty, aliases, &mut expanding)
+    }
+
+    fn from_ty_impl(
+        ty: &Ty,
+        aliases: &HashMap<baml_base::Name, Ty>,
+        expanding: &mut HashSet<baml_base::Name>,
+    ) -> Self {
+        match ty {
+            Ty::TypeAlias(fqn) => {
+                if expanding.contains(&fqn.name) {
+                    return JinjaType::RecursiveTypeAlias(fqn.name.to_string());
+                }
+                if let Some(alias_ty) = aliases.get(&fqn.name) {
+                    expanding.insert(fqn.name.clone());
+                    let resolved = Self::from_ty_impl(alias_ty, aliases, expanding);
+                    expanding.remove(&fqn.name);
+                    JinjaType::Alias {
+                        name: fqn.name.to_string(),
+                        resolved: Box::new(resolved),
+                    }
+                } else {
+                    JinjaType::RecursiveTypeAlias(fqn.name.to_string())
+                }
+            }
+            Ty::List(elem) => {
+                JinjaType::List(Box::new(Self::from_ty_impl(elem, aliases, expanding)))
+            }
+            Ty::Map { key, value } => JinjaType::Map(
+                Box::new(Self::from_ty_impl(key, aliases, expanding)),
+                Box::new(Self::from_ty_impl(value, aliases, expanding)),
+            ),
+            Ty::Union(items) => JinjaType::Union(
+                items
+                    .iter()
+                    .map(|t| Self::from_ty_impl(t, aliases, expanding))
+                    .collect(),
+            ),
+            Ty::Optional(inner) => JinjaType::Union(vec![
+                JinjaType::None,
+                Self::from_ty_impl(inner, aliases, expanding),
+            ]),
+            // All other types don't need alias resolution
+            other => JinjaType::from(other),
         }
     }
 }
@@ -463,6 +545,12 @@ pub enum TypeError {
         message: String,
         span: minijinja::machinery::Span,
     },
+    /// Unknown Jinja test (e.g., `x is foo`).
+    InvalidTest {
+        test_name: String,
+        suggestions: Vec<String>,
+        span: minijinja::machinery::Span,
+    },
 }
 
 impl TypeError {
@@ -484,7 +572,8 @@ impl TypeError {
             | TypeError::UnknownArg { span, .. }
             | TypeError::WrongArgType { span, .. }
             | TypeError::UnsupportedFeature { span, .. }
-            | TypeError::InvalidSyntax { span, .. } => *span,
+            | TypeError::InvalidSyntax { span, .. }
+            | TypeError::InvalidTest { span, .. } => *span,
         }
     }
 
@@ -702,6 +791,20 @@ impl TypeError {
             span,
         }
     }
+
+    pub fn invalid_test(
+        name: &str,
+        span: minijinja::machinery::Span,
+        valid_tests: &[&str],
+    ) -> Self {
+        let valid_as_strings: Vec<String> = valid_tests.iter().map(|s| (*s).to_string()).collect();
+        let suggestions = find_close_matches(name, &valid_as_strings, 3);
+        TypeError::InvalidTest {
+            test_name: name.to_string(),
+            suggestions,
+            span,
+        }
+    }
 }
 
 /// Find close string matches using edit distance.
@@ -797,6 +900,39 @@ mod tests {
         assert!(JinjaType::Int.is_subtype_of(&union));
         assert!(JinjaType::String.is_subtype_of(&union));
         assert!(!JinjaType::Bool.is_subtype_of(&union));
+    }
+
+    #[test]
+    fn test_alias_subtyping() {
+        // Alias resolving to a union: type Pet = Cat | Dog
+        let pet_alias = JinjaType::Alias {
+            name: "Pet".to_string(),
+            resolved: Box::new(JinjaType::Union(vec![
+                JinjaType::ClassRef("Cat".to_string()),
+                JinjaType::ClassRef("Dog".to_string()),
+            ])),
+        };
+
+        // ClassRef("Cat") should be a subtype of Alias("Pet" -> Cat | Dog)
+        assert!(JinjaType::ClassRef("Cat".to_string()).is_subtype_of(&pet_alias));
+        assert!(JinjaType::ClassRef("Dog".to_string()).is_subtype_of(&pet_alias));
+        assert!(!JinjaType::String.is_subtype_of(&pet_alias));
+
+        // Alias on the left side: Pet should be subtype of Union(Cat, Dog)
+        let union = JinjaType::Union(vec![
+            JinjaType::ClassRef("Cat".to_string()),
+            JinjaType::ClassRef("Dog".to_string()),
+        ]);
+        assert!(pet_alias.is_subtype_of(&union));
+
+        // Alias resolving to a simple type
+        let name_alias = JinjaType::Alias {
+            name: "Name".to_string(),
+            resolved: Box::new(JinjaType::String),
+        };
+        assert!(JinjaType::String.is_subtype_of(&name_alias));
+        assert!(!JinjaType::Int.is_subtype_of(&name_alias));
+        assert!(name_alias.is_subtype_of(&JinjaType::String));
     }
 
     #[test]

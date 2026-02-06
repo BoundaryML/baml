@@ -823,5 +823,24 @@ pub fn short_display(error: &TirTypeError) -> String {
             format!("{feature} are not yet supported")
         }
         TypeError::JinjaInvalidSyntax { message, .. } => message.clone(),
+        TypeError::JinjaInvalidTest {
+            test_name,
+            suggestions,
+            ..
+        } => {
+            if suggestions.is_empty() {
+                format!("Unknown test '{test_name}'")
+            } else if suggestions.len() == 1 {
+                format!(
+                    "Unknown test '{test_name}'. Did you mean '{}'?",
+                    suggestions[0]
+                )
+            } else {
+                format!(
+                    "Unknown test '{test_name}'. Did you mean one of these: '{}'?",
+                    suggestions.join("', '")
+                )
+            }
+        }
     }
 }

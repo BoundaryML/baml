@@ -781,8 +781,11 @@ impl StringLiteral {
         let text = self.syntax.text().to_string();
         // String literals are of the form: "..." (tokens: Quote, words/spaces, Quote)
         // Strip leading and trailing quote characters
-        let trimmed = text.trim_matches('"');
-        trimmed.to_string()
+        if text.starts_with('"') && text.ends_with('"') && text.len() > 2 {
+            text[1..text.len() - 1].to_string()
+        } else {
+            text
+        }
     }
 }
 

@@ -90,6 +90,15 @@ template_string BadCall4 #"
 //     │ 
 //     │ Note: Error code: E0081
 // ────╯
+// Warning: Function 'WithParams' expects argument 'a' to be of type int, but got string
+//     ╭─[ template_string_bad_calls.baml:10:6 ]
+//     │
+//  10 │   {{ WithParams("a") }}
+//     │      ───────┬───────  
+//     │             ╰───────── Function 'WithParams' expects argument 'a' to be of type int, but got string
+//     │ 
+//     │ Note: Error code: E0083
+// ────╯
 // Warning: Variable `Random` does not exist. Did you mean one of these: `_`, `ctx`, `BadCall1`?
 //     ╭─[ template_string_bad_calls.baml:18:6 ]
 //     │

@@ -150,6 +150,7 @@ pub enum DiagnosticId {
     JinjaParseError,
     JinjaUnsupportedFeature,
     JinjaInvalidSyntax,
+    JinjaInvalidTest,
 }
 
 impl DiagnosticId {
@@ -259,6 +260,7 @@ impl DiagnosticId {
             DiagnosticId::JinjaParseError => "E0084",
             DiagnosticId::JinjaUnsupportedFeature => "E0085",
             DiagnosticId::JinjaInvalidSyntax => "E0086",
+            DiagnosticId::JinjaInvalidTest => "E0087",
         }
     }
 }

@@ -444,6 +444,23 @@ impl<C: ErrorContext> TypeError<C> {
                 Diagnostic::warning(DiagnosticId::JinjaInvalidSyntax, message.clone())
                     .with_primary_span(loc_fn(location))
             }
+
+            TypeError::JinjaInvalidTest {
+                test_name,
+                suggestions,
+                location,
+            } => {
+                let msg = if suggestions.is_empty() {
+                    format!("unknown test '{test_name}'")
+                } else {
+                    format!(
+                        "unknown test '{test_name}'. Valid tests: {}",
+                        suggestions.join(", ")
+                    )
+                };
+                Diagnostic::warning(DiagnosticId::JinjaInvalidTest, msg)
+                    .with_primary_span(loc_fn(location))
+            }
         };
         diag.with_phase(DiagnosticPhase::Type)
     }

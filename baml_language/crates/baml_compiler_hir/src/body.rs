@@ -174,8 +174,15 @@ impl PromptTemplate {
                     }
                 }
                 baml_compiler_syntax::SyntaxKind::TEMPLATE_COMMENT => {
-                    // Jinja comment {# ... #} - skip (comments are stripped)
-                    // Don't add to text, don't update offset
+                    // Keep Jinja comments in text so byte offsets stay aligned with file positions.
+                    // Minijinja handles {# ... #} natively and ignores them during evaluation.
+                    if let Some(jinja_comment) =
+                        baml_compiler_syntax::ast::JinjaComment::cast(child.clone())
+                    {
+                        let content = jinja_comment.full_text();
+                        text.push_str(&content);
+                        current_offset += content.len() as u32;
+                    }
                 }
                 _ => {
                     // Other tokens (delimiters, etc.) - skip

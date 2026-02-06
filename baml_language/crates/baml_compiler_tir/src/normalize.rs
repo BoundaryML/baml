@@ -275,7 +275,7 @@ fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
             StructuralTy::Null => false,
             StructuralTy::Media(_) => false,
             StructuralTy::Class(_) => false,
-            StructuralTy::Enum(_) => false,
+            StructuralTy::Enum(_) => true,
             StructuralTy::Optional(_) => false,
             StructuralTy::List(_) => false,
             StructuralTy::Map { .. } => false,

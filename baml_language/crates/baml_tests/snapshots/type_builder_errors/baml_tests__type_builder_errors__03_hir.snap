@@ -4,7 +4,7 @@ expression: output
 ---
 === HIR ITEMS ===
 function TypeBuilderFn(from_text: string) -> Resume {
-  client  "openai/gpt-4o-mini
+  client  "openai/gpt-4o-mini"
   prompt #"
     Hello
   "#

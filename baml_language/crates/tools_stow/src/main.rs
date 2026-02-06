@@ -97,7 +97,6 @@ pub struct GraphConfig {
     pub external_deps: Vec<String>,
     /// Implied dependencies: when a crate depends on both the key and a value,
     /// the edge to the value is hidden (it's visually implied by the key).
-    /// Example: { `baml_builtins` = ["`baml_builtins_macros`"] }
     pub implied_deps: HashMap<String, Vec<String>>,
 }
 

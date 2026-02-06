@@ -286,7 +286,7 @@ fn format_hir_file(
                 let ts = &item_tree[ts_id.id(db)];
                 let sig = template_string_signature(db, *ts_id);
 
-                // Format as: template_string Name(param: Type, ...) -> String
+                // Format as: template_string Name(param: Type, ...)
                 write!(result, "template_string {}(", ts.name).unwrap();
                 for (i, param) in sig.params.iter().enumerate() {
                     if i > 0 {
@@ -300,7 +300,7 @@ fn format_hir_file(
                     )
                     .unwrap();
                 }
-                writeln!(result, ") -> String").unwrap();
+                write!(result, ")").unwrap();
                 writeln!(result).unwrap(); // blank line after template_string
             }
         }

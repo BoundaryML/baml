@@ -228,4 +228,10 @@ pub enum TypeError<C: ErrorContext> {
         message: String,
         location: C::Location,
     },
+    /// Unknown Jinja test.
+    JinjaInvalidTest {
+        test_name: String,
+        suggestions: Vec<String>,
+        location: C::Location,
+    },
 }

@@ -187,12 +187,17 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::Function { params, ret } => {
             let param_tys: Vec<(Option<Name>, Ty)> = params
                 .iter()
-                .map(|p| {
+                .enumerate()
+                .map(|(i, p)| {
+                    ctx.current_path.push(i);
                     let ty = lower_type_ref_resolved_with_ctx(ctx, &p.ty);
+                    ctx.current_path.pop();
                     (p.name.clone(), ty)
                 })
                 .collect();
+            ctx.current_path.push(params.len());
             let ret_ty = lower_type_ref_resolved_with_ctx(ctx, ret);
+            ctx.current_path.pop();
             Ty::Function {
                 params: param_tys,
                 ret: Box::new(ret_ty),

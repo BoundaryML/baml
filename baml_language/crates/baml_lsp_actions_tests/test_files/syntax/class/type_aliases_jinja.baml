@@ -73,3 +73,39 @@ function InvalidAlias(i: I) -> string {
 //     │ 
 //     │ Note: Error code: E0068
 // ────╯
+// Warning: 'c' is a type alias C (resolves to type alias B (resolves to type alias A (resolves to float))), expected class
+//     ╭─[ class_type_aliases_jinja.baml:14:15 ]
+//     │
+//  14 │   prompt #"{{ c.value }}"#
+//     │               ───┬───  
+//     │                  ╰───── 'c' is a type alias C (resolves to type alias B (resolves to type alias A (resolves to float))), expected class
+//     │ 
+//     │ Note: Error code: E0073
+// ────╯
+// Warning: 'pid' is a type alias ProjectId (resolves to int), expected class
+//    ╭─[ class_type_aliases_jinja.baml:5:20 ]
+//    │
+//  5 │   prompt #"Pid: {{ pid.id }}. Generate a fake name for it."#
+//    │                    ───┬──  
+//    │                       ╰──── 'pid' is a type alias ProjectId (resolves to int), expected class
+//    │ 
+//    │ Note: Error code: E0073
+// ───╯
+// Warning: cannot access property 'value' on 'j': union contains non-class type list[recursive type alias JsonValue]
+//     ╭─[ class_type_aliases_jinja.baml:23:15 ]
+//     │
+//  23 │   prompt #"{{ j.value }}"#
+//     │               ───┬───  
+//     │                  ╰───── cannot access property 'value' on 'j': union contains non-class type list[recursive type alias JsonValue]
+//     │ 
+//     │ Note: Error code: E0079
+// ────╯
+// Warning: 'i' is a type alias I (resolves to type alias J (resolves to recursive type alias I)), expected class
+//     ╭─[ class_type_aliases_jinja.baml:31:15 ]
+//     │
+//  31 │   prompt #"{{ i.value }}"#
+//     │               ───┬───  
+//     │                  ╰───── 'i' is a type alias I (resolves to type alias J (resolves to recursive type alias I)), expected class
+//     │ 
+//     │ Note: Error code: E0073
+// ────╯

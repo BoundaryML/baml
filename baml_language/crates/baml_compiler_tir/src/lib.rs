@@ -272,11 +272,17 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
         for item in items {
             match item {
                 baml_compiler_hir::ItemId::Function(func_loc) => {
-                    let signature = baml_compiler_hir::function_signature(db, *func_loc);
+                    let hir_signature = baml_compiler_hir::function_signature(db, *func_loc);
                     let qualified_name = baml_compiler_hir::function_qualified_name(db, *func_loc);
-                    let span = Span::default(); // TODO: get proper span from signature
 
-                    let params: Vec<(Option<Name>, Ty)> = signature
+                    // We don't care about the span here because any errors produced by
+                    // this lowering will be immediately discarded. `infer_function` will
+                    // lower the same types, and in that context, there are error locations
+                    // to send, and those are the `lower_type_ref` calls whose errors we
+                    // would surface to the user.
+                    let span = Span::default();
+
+                    let params: Vec<(Option<Name>, Ty)> = hir_signature
                         .params
                         .iter()
                         .map(|p| {
@@ -286,7 +292,7 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
                         .collect();
 
                     let return_type = resolution_ctx
-                        .lower_type_ref(&signature.return_type, span)
+                        .lower_type_ref(&hir_signature.return_type, span)
                         .0;
 
                     let func_type = Ty::Function {
@@ -301,10 +307,10 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
                 }
 
                 baml_compiler_hir::ItemId::TemplateString(ts_loc) => {
-                    let signature = baml_compiler_hir::template_string_signature(db, *ts_loc);
+                    let hir_signature = baml_compiler_hir::template_string_signature(db, *ts_loc);
                     let span = Span::default();
 
-                    let params: Vec<(Option<Name>, Ty)> = signature
+                    let params: Vec<(Option<Name>, Ty)> = hir_signature
                         .params
                         .iter()
                         .map(|p| {
@@ -321,7 +327,7 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
                         ret: Box::new(return_type),
                     };
 
-                    let ts_name = signature.name.clone();
+                    let ts_name = hir_signature.name.clone();
                     context.insert(ts_name, func_type);
                 }
                 _ => {}
@@ -1106,6 +1112,13 @@ fn add_builtin_jinja_types(jinja_env: &mut jinja::JinjaTypeEnv) {
         ]),
     );
 
+    // Define baml::Chat function as String -> ()
+    jinja_env.add_function(
+        "baml::Chat".to_string(),
+        JinjaType::None, // Returns null/void
+        vec![("role".to_string(), JinjaType::String)],
+    );
+
     // Add the special variables
     jinja_env.add_variable("_", JinjaType::ClassRef("baml::BuiltIn".to_string()));
     jinja_env.add_variable("ctx", JinjaType::ClassRef("baml::Context".to_string()));
@@ -1259,6 +1272,15 @@ fn jinja_error_to_tir(error: jinja::TypeError) -> TirTypeError {
         jinja::TypeError::InvalidSyntax { message, .. } => {
             TypeError::JinjaInvalidSyntax { message, location }
         }
+        jinja::TypeError::InvalidTest {
+            test_name,
+            suggestions,
+            ..
+        } => TypeError::JinjaInvalidTest {
+            test_name,
+            suggestions,
+            location,
+        },
     }
 }
 
@@ -1266,6 +1288,7 @@ fn jinja_error_to_tir(error: jinja::TypeError) -> TirTypeError {
 ///
 /// This builds a Jinja type environment from the TIR context and validates
 /// the prompt template, converting any Jinja type errors to TIR type errors.
+#[allow(clippy::cast_possible_truncation)]
 fn validate_llm_prompt(
     ctx: &mut TypeContext<'_>,
     prompt: &PromptTemplate,
@@ -1276,9 +1299,11 @@ fn validate_llm_prompt(
     // Build a Jinja type environment from the TIR context
     let mut jinja_env = JinjaTypeEnv::new();
 
+    let aliases = &ctx.type_aliases;
+
     // Add function parameters
     for (param_name, param_ty) in param_types {
-        let jinja_ty = JinjaType::from(param_ty);
+        let jinja_ty = JinjaType::from_ty(param_ty, aliases);
         jinja_env.add_variable(param_name.to_string(), jinja_ty);
     }
 
@@ -1289,7 +1314,7 @@ fn validate_llm_prompt(
     for (class_name, fields) in &ctx.class_fields {
         let field_types: indexmap::IndexMap<String, JinjaType> = fields
             .iter()
-            .map(|(fname, fty)| (fname.to_string(), JinjaType::from(fty)))
+            .map(|(fname, fty)| (fname.to_string(), JinjaType::from_ty(fty, aliases)))
             .collect();
         jinja_env.add_class(class_name.to_string(), field_types);
     }
@@ -1321,10 +1346,10 @@ fn validate_llm_prompt(
                         .as_ref()
                         .map(std::string::ToString::to_string)
                         .unwrap_or_else(|| format!("arg{i}"));
-                    (param_name, JinjaType::from(ty))
+                    (param_name, JinjaType::from_ty(ty, aliases))
                 })
                 .collect();
-            let jinja_ret = JinjaType::from(ret.as_ref());
+            let jinja_ret = JinjaType::from_ty(ret.as_ref(), aliases);
 
             // Add function to the function map (for signature validation)
             jinja_env.add_function(func_name.to_string(), jinja_ret, jinja_params);
@@ -1349,12 +1374,16 @@ fn validate_llm_prompt(
             }
         }
         Err(parse_error) => {
-            // Jinja parse error - report as a single error at the template start
+            // Jinja parse error - report the error location if available.
+            let (start_offset, end_offset) = parse_error
+                .range()
+                .map(|r| (r.start as u32, r.end as u32))
+                .unwrap_or((0, 1));
             ctx.push_error(TypeError::JinjaParseError {
                 message: parse_error.to_string(),
                 location: ErrorLocation::JinjaTemplate {
-                    start_offset: 0,
-                    end_offset: 1,
+                    start_offset,
+                    end_offset,
                 },
             });
         }
@@ -1450,6 +1479,10 @@ pub fn validate_template_string_body(
     let enum_variants_map = enum_variants(db, project);
     let enum_variants = enum_variants_map.enums(db);
 
+    // Get type aliases for resolving alias types in Jinja
+    let type_aliases_map = type_aliases(db, project);
+    let aliases = type_aliases_map.aliases(db);
+
     // Build a Jinja type environment
     let mut jinja_env = JinjaTypeEnv::new();
 
@@ -1491,7 +1524,7 @@ pub fn validate_template_string_body(
         let (ty, param_errors) = resolution_ctx.lower_type_ref(&param.type_ref, span);
         type_errors.extend(param_errors);
 
-        let jinja_ty = JinjaType::from(&ty);
+        let jinja_ty = JinjaType::from_ty(&ty, aliases);
         jinja_env.add_variable(param.name.to_string(), jinja_ty);
     }
 
@@ -1502,7 +1535,7 @@ pub fn validate_template_string_body(
     for (class_name, fields) in class_fields {
         let field_types: indexmap::IndexMap<String, JinjaType> = fields
             .iter()
-            .map(|(fname, fty)| (fname.to_string(), JinjaType::from(fty)))
+            .map(|(fname, fty)| (fname.to_string(), JinjaType::from_ty(fty, aliases)))
             .collect();
         jinja_env.add_class(class_name.to_string(), field_types);
     }
@@ -1531,10 +1564,10 @@ pub fn validate_template_string_body(
                         .as_ref()
                         .map(std::string::ToString::to_string)
                         .unwrap_or_else(|| format!("arg{i}"));
-                    (param_name, JinjaType::from(ty))
+                    (param_name, JinjaType::from_ty(ty, aliases))
                 })
                 .collect();
-            let jinja_ret = JinjaType::from(ret.as_ref());
+            let jinja_ret = JinjaType::from_ty(ret.as_ref(), aliases);
 
             jinja_env.add_function(func_name.to_string(), jinja_ret, jinja_params);
             jinja_env.add_variable(

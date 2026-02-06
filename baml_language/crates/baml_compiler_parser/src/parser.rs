@@ -1153,7 +1153,7 @@ impl<'a> Parser<'a> {
             }
 
             // Check for closing delimiter
-            if self.at(TokenKind::Quote) {
+            if self.at_raw(TokenKind::Quote) {
                 let closing_hashes = self.count_consecutive_hashes_after_quote();
                 if closing_hashes == opening_hashes {
                     // Found matching closing delimiter
@@ -1167,11 +1167,11 @@ impl<'a> Parser<'a> {
 
             // Check for Jinja constructs
             if self.at_jinja_expression() {
-                self.parse_jinja_expression();
+                self.parse_jinja_expression(opening_hashes);
             } else if self.at_jinja_statement() {
-                self.parse_jinja_statement();
+                self.parse_jinja_statement(opening_hashes);
             } else if self.at_jinja_comment() {
-                self.parse_jinja_comment();
+                self.parse_jinja_comment(opening_hashes);
             } else {
                 // Plain text content - collect tokens until we hit a Jinja construct or closing delimiter
                 self.parse_prompt_text(opening_hashes);
@@ -1181,21 +1181,24 @@ impl<'a> Parser<'a> {
 
     /// Check if we're at the start of a Jinja expression: {{
     fn at_jinja_expression(&self) -> bool {
-        self.at(TokenKind::LBrace) && self.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace)
+        self.at_raw(TokenKind::LBrace)
+            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::LBrace)
     }
 
     /// Check if we're at the start of a Jinja statement: {%
     fn at_jinja_statement(&self) -> bool {
-        self.at(TokenKind::LBrace) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Percent)
+        self.at_raw(TokenKind::LBrace)
+            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::Percent)
     }
 
     /// Check if we're at the start of a Jinja comment: {#
     fn at_jinja_comment(&self) -> bool {
-        self.at(TokenKind::LBrace) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Hash)
+        self.at_raw(TokenKind::LBrace)
+            && self.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::Hash)
     }
 
     /// Parse a Jinja expression: {{ ... }}
-    fn parse_jinja_expression(&mut self) {
+    fn parse_jinja_expression(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_INTERPOLATION, |p| {
             p.bump(); // {
             p.bump(); // {
@@ -1203,12 +1206,20 @@ impl<'a> Parser<'a> {
             // Collect tokens until we find }}
             let mut depth = 1;
             while !p.at_end() && depth > 0 {
-                if p.at(TokenKind::LBrace) && p.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace) {
+                if p.at_raw(TokenKind::Quote)
+                    && p.count_consecutive_hashes_after_quote() == opening_hashes
+                {
+                    p.error_unexpected_token("Unclosed Jinja expression (expected }})".to_string());
+                    return;
+                }
+                if p.at_raw(TokenKind::LBrace)
+                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::LBrace)
+                {
                     depth += 1;
                     p.bump_raw();
                     p.bump_raw();
-                } else if p.at(TokenKind::RBrace)
-                    && p.peek(1).map(|t| t.kind) == Some(TokenKind::RBrace)
+                } else if p.at_raw(TokenKind::RBrace)
+                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
                 {
                     depth -= 1;
                     if depth == 0 {
@@ -1230,14 +1241,21 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a Jinja statement: {% ... %}
-    fn parse_jinja_statement(&mut self) {
+    fn parse_jinja_statement(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_CONTROL, |p| {
             p.bump(); // {
             p.bump(); // %
 
             // Collect tokens until we find %}
             while !p.at_end() {
-                if p.at(TokenKind::Percent) && p.peek(1).map(|t| t.kind) == Some(TokenKind::RBrace)
+                if p.at_raw(TokenKind::Quote)
+                    && p.count_consecutive_hashes_after_quote() == opening_hashes
+                {
+                    p.error_unexpected_token("Unclosed Jinja statement (expected %})".to_string());
+                    return;
+                }
+                if p.at_raw(TokenKind::Percent)
+                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
                 {
                     p.bump(); // %
                     p.bump(); // }
@@ -1249,14 +1267,22 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a Jinja comment: {# ... #}
-    fn parse_jinja_comment(&mut self) {
+    fn parse_jinja_comment(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::TEMPLATE_COMMENT, |p| {
             p.bump(); // {
             p.bump(); // #
 
             // Collect tokens until we find #}
             while !p.at_end() {
-                if p.at(TokenKind::Hash) && p.peek(1).map(|t| t.kind) == Some(TokenKind::RBrace) {
+                if p.at_raw(TokenKind::Quote)
+                    && p.count_consecutive_hashes_after_quote() == opening_hashes
+                {
+                    p.error_unexpected_token("Unclosed Jinja comment (expected #})".to_string());
+                    return;
+                }
+                if p.at_raw(TokenKind::Hash)
+                    && p.peek_impl(1, false).map(|t| t.kind) == Some(TokenKind::RBrace)
+                {
                     p.bump(); // #
                     p.bump(); // }
                     break;
@@ -1272,7 +1298,7 @@ impl<'a> Parser<'a> {
             // Collect tokens until we hit a Jinja construct or closing delimiter
             while !p.at_end() {
                 // Check for closing delimiter
-                if p.at(TokenKind::Quote) {
+                if p.at_raw(TokenKind::Quote) {
                     let closing_hashes = p.count_consecutive_hashes_after_quote();
                     if closing_hashes == opening_hashes {
                         break;

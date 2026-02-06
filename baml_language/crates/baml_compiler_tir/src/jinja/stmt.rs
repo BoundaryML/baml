@@ -401,6 +401,8 @@ fn predicate_implications(
 ///
 /// For example: `if message.type == "user"` where message is `UserMessage | AssistantMessage`
 /// narrows message to `UserMessage` in the true branch.
+///
+/// Ported from `engine/baml-lib/jinja/src/evaluate_type/stmt.rs`.
 fn narrow_attr_access_on_union_var(
     var: &ast::Spanned<ast::Var>,
     get_attr: &ast::Spanned<ast::GetAttr>,
@@ -421,50 +423,78 @@ fn narrow_attr_access_on_union_var(
         _ => return vec![],
     };
 
-    let mut matched_types = Vec::new();
-    let mut all_have_attr = true;
+    let mut implications = vec![];
+    let mut attr_type = None;
 
-    for union_item in union_items {
-        match union_item {
+    let mut stack: Vec<&JinjaType> = union_items.iter().collect();
+
+    while let Some(union_item_type) = stack.pop() {
+        match union_item_type {
             JinjaType::ClassRef(class_name) => {
-                // Check if this class has the attribute
-                if let Some(attr_type) = env.get_class_property(class_name, get_attr.name) {
-                    // Check if the attribute matches the literal value
-                    if let (JinjaType::Literal(LiteralValue::String(lit)), Some(val)) =
-                        (&attr_type, const_expr.value.as_str())
-                    {
-                        if lit == val {
-                            matched_types.push(union_item.clone());
+                // Check if this class has the property
+                let Some(prop_type) = env.get_class_property(class_name, get_attr.name) else {
+                    // Property not found on one of the union members — can't narrow
+                    return vec![];
+                };
+
+                // Verify type consistency across union members
+                match &attr_type {
+                    None => attr_type = Some(prop_type.clone()),
+                    Some(known_type) => {
+                        if !prop_type.equals_ignoring_literals(known_type) {
+                            return vec![];
                         }
                     }
-                } else {
-                    all_have_attr = false;
+                }
+
+                // Check if the literal value matches the constant
+                match &prop_type {
+                    JinjaType::Literal(LiteralValue::String(literal_string)) => {
+                        if let Some(value) = const_expr.value.as_str() {
+                            if value == literal_string {
+                                implications.push((var.id.to_string(), union_item_type.clone()));
+                            }
+                        }
+                    }
+                    JinjaType::Literal(LiteralValue::Int(literal_int)) => {
+                        if let Some(value) = const_expr.value.as_i64() {
+                            if value == *literal_int {
+                                implications.push((var.id.to_string(), union_item_type.clone()));
+                            }
+                        }
+                    }
+                    JinjaType::Literal(LiteralValue::Bool(_)) => {
+                        // Can't narrow on bool literals (Jinja truthy/falsy is ambiguous)
+                        return vec![];
+                    }
+                    // Can't narrow against non-literal types
+                    _ => return vec![],
                 }
             }
-            JinjaType::Union(_nested) => {
-                // Recursively check nested unions
-                // Simplified: don't recurse for now
-                all_have_attr = false;
-            }
-            JinjaType::Alias { resolved: _, .. } => {
-                // Would need to resolve aliases
-                all_have_attr = false;
-            }
-            _ => {
-                all_have_attr = false;
-            }
+
+            // Recurse into nested unions
+            JinjaType::Union(nested) => stack.extend(nested.iter()),
+
+            // Resolve aliases
+            JinjaType::Alias { resolved, .. } => stack.push(resolved),
+
+            // Non-class type — can't narrow
+            _ => return vec![],
         }
     }
 
-    // Only narrow if all union members have the attribute and exactly one matches
-    if all_have_attr && matched_types.len() == 1 {
-        vec![(var.id.to_string(), matched_types[0].clone())]
+    // Finding exactly one match means it's safe to infer the type.
+    // More than one is ambiguous.
+    if implications.len() == 1 {
+        implications
     } else {
         vec![]
     }
 }
 
 /// Check if a constant is null/none.
+/// TODO: Test if we can use minijinja's `.is_none()` method
+/// instead, or if that breaks our prompts somehow.
 fn is_null_const(c: &ast::Spanned<ast::Const>) -> bool {
     c.value.to_string().to_lowercase() == "none"
 }
@@ -534,5 +564,85 @@ mod tests {
         let ty = JinjaType::Int;
         let narrowed = truthy_type(&ty);
         assert_eq!(narrowed, None); // No narrowing possible
+    }
+
+    /// Helper: build the Pet = Cat | Dog | Rock environment from the user's example.
+    fn pet_env() -> JinjaTypeEnv {
+        let mut env = JinjaTypeEnv::new();
+        env.add_class(
+            "Cat",
+            indexmap::IndexMap::from([
+                (
+                    "type".to_string(),
+                    JinjaType::Literal(LiteralValue::String("cat".to_string())),
+                ),
+                ("name".to_string(), JinjaType::String),
+            ]),
+        );
+        env.add_class(
+            "Dog",
+            indexmap::IndexMap::from([
+                (
+                    "type".to_string(),
+                    JinjaType::Literal(LiteralValue::String("dog".to_string())),
+                ),
+                ("name".to_string(), JinjaType::String),
+            ]),
+        );
+        env.add_class(
+            "Rock",
+            indexmap::IndexMap::from([
+                (
+                    "type".to_string(),
+                    JinjaType::Literal(LiteralValue::String("rock".to_string())),
+                ),
+                ("weight".to_string(), JinjaType::Float),
+            ]),
+        );
+        env.add_variable(
+            "a",
+            JinjaType::Alias {
+                name: "Pet".to_string(),
+                resolved: Box::new(JinjaType::Union(vec![
+                    JinjaType::ClassRef("Cat".to_string()),
+                    JinjaType::ClassRef("Dog".to_string()),
+                    JinjaType::ClassRef("Rock".to_string()),
+                ])),
+            },
+        );
+        env
+    }
+
+    #[test]
+    fn test_narrowing_discriminated_union_eq() {
+        // `if a.type == "cat"` should narrow Pet to Cat, so `a.name` is valid
+        let mut env = pet_env();
+        let template = r#"{% if a.type == "cat" %}{{ a.name }}{% endif %}"#;
+        let errors = super::super::validate_template(template, &mut env).unwrap();
+        assert!(errors.is_empty(), "Expected no errors, got: {errors:?}");
+    }
+
+    #[test]
+    fn test_narrowing_discriminated_union_or() {
+        // `if a.type == "cat" or a.type == "dog"` should narrow to Cat | Dog,
+        // and both have `name`, so `a.name` is valid
+        let mut env = pet_env();
+        let template = r#"{% if a.type == "cat" or a.type == "dog" %}{{ a.name }}{% endif %}"#;
+        let errors = super::super::validate_template(template, &mut env).unwrap();
+        assert!(errors.is_empty(), "Expected no errors, got: {errors:?}");
+    }
+
+    #[test]
+    fn test_no_narrowing_property_missing_on_variant() {
+        // Without narrowing, `a.name` errors because Rock doesn't have `name`
+        let mut env = pet_env();
+        let template = r#"{{ a.name }}"#;
+        let errors = super::super::validate_template(template, &mut env).unwrap();
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, TypeError::PropertyNotFoundInUnion { .. })),
+            "Expected PropertyNotFoundInUnion error, got: {errors:?}"
+        );
     }
 }

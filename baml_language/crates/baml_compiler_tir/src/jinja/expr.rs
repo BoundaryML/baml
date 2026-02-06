@@ -42,6 +42,53 @@ pub fn infer_expression_type(
     }
 }
 
+// List of valid filters (from engine)
+const VALID_FILTERS: &[&str] = &[
+    "abs",
+    "attrs",
+    "batch",
+    "bool",
+    "capitalize",
+    "escape",
+    "first",
+    "last",
+    "default",
+    "float",
+    "indent",
+    "int",
+    "dictsort",
+    "items",
+    "join",
+    "length",
+    "list",
+    "lower",
+    "upper",
+    "map",
+    "max",
+    "min",
+    "pprint",
+    "regex_match",
+    "reject",
+    "rejectattr",
+    "replace",
+    "reverse",
+    "round",
+    "safe",
+    "select",
+    "selectattr",
+    "slice",
+    "sort",
+    "split",
+    "sum",
+    "title",
+    "tojson",
+    "json",
+    "format",
+    "trim",
+    "unique",
+    "urlencode",
+];
+
 /// Main expression visitor that infers types.
 fn visit_expr(expr: &ast::Expr, errors: &mut Vec<TypeError>, env: &JinjaTypeEnv) -> JinjaType {
     match expr {
@@ -60,15 +107,28 @@ fn visit_expr(expr: &ast::Expr, errors: &mut Vec<TypeError>, env: &JinjaTypeEnv)
         ast::Expr::Const(c) => infer_const_type(&c.value),
 
         ast::Expr::UnaryOp(op_expr) => {
-            let expected = match op_expr.op {
-                ast::UnaryOpKind::Not => JinjaType::Bool,
-                ast::UnaryOpKind::Neg => JinjaType::Number,
-            };
+            let inner = visit_expr(&op_expr.expr, errors, env);
 
-            let _inner = visit_expr(&op_expr.expr, errors, env);
-            // TODO: Check for type compatibility
-
-            expected
+            match op_expr.op {
+                ast::UnaryOpKind::Not => {
+                    // `not` coerces to bool in Jinja, so most types are fine.
+                    // Only flag clearly non-boolean types that are likely mistakes.
+                    JinjaType::Bool
+                }
+                ast::UnaryOpKind::Neg => {
+                    if !inner.is_subtype_of(&JinjaType::Number)
+                        && !matches!(inner, JinjaType::Unknown)
+                    {
+                        errors.push(TypeError::invalid_type(
+                            &op_expr.expr,
+                            &inner,
+                            "number",
+                            expr.span(),
+                        ));
+                    }
+                    JinjaType::Number
+                }
+            }
         }
 
         ast::Expr::BinOp(bin_expr) => handle_binary_op(expr, bin_expr, errors, env),
@@ -90,20 +150,42 @@ fn visit_expr(expr: &ast::Expr, errors: &mut Vec<TypeError>, env: &JinjaTypeEnv)
 
         ast::Expr::Test(test_expr) => {
             let _inner = visit_expr(&test_expr.expr, errors, env);
-            // TODO: Check for type compatibility
-            JinjaType::Bool
+            handle_test(test_expr, errors)
         }
 
         ast::Expr::GetAttr(attr_expr) => handle_get_attr(expr, attr_expr, errors, env),
 
-        ast::Expr::GetItem(_item_expr) => {
-            // TODO: Implement indexing type inference
-            JinjaType::Unknown
+        ast::Expr::GetItem(item_expr) => {
+            let base = visit_expr(&item_expr.expr, errors, env);
+            let _subscript = visit_expr(&item_expr.subscript_expr, errors, env);
+
+            match base {
+                JinjaType::List(elem) => *elem,
+                JinjaType::Map(_, val) => *val,
+                JinjaType::String => JinjaType::String,
+                JinjaType::Unknown => JinjaType::Unknown,
+                _ => JinjaType::Unknown,
+            }
         }
 
-        ast::Expr::Slice(_slice_expr) => {
-            // TODO: Implement slice type inference
-            JinjaType::Unknown
+        ast::Expr::Slice(slice_expr) => {
+            let base = visit_expr(&slice_expr.expr, errors, env);
+            if let Some(start) = &slice_expr.start {
+                let _ = visit_expr(start, errors, env);
+            }
+            if let Some(stop) = &slice_expr.stop {
+                let _ = visit_expr(stop, errors, env);
+            }
+            if let Some(step) = &slice_expr.step {
+                let _ = visit_expr(step, errors, env);
+            }
+
+            match base {
+                JinjaType::List(_) => base,
+                JinjaType::String => JinjaType::String,
+                JinjaType::Unknown => JinjaType::Unknown,
+                _ => JinjaType::Unknown,
+            }
         }
 
         ast::Expr::Call(call_expr) => handle_call(call_expr, errors, env),
@@ -348,59 +430,14 @@ fn handle_filter(
 
     let mut ensure_type = |expected: &str| {
         errors.push(TypeError::invalid_type(
-            filter_expr.expr.as_ref().unwrap(),
+            // Use the parent expr as a backup expr in the error message if
+            // the expr inside of the filter can't be found for some reason.
+            filter_expr.expr.as_ref().unwrap_or(expr),
             &inner,
             expected,
             expr.span(),
         ));
     };
-
-    // List of valid filters (from engine)
-    let valid_filters = vec![
-        "abs",
-        "attrs",
-        "batch",
-        "bool",
-        "capitalize",
-        "escape",
-        "first",
-        "last",
-        "default",
-        "float",
-        "indent",
-        "int",
-        "dictsort",
-        "items",
-        "join",
-        "length",
-        "list",
-        "lower",
-        "upper",
-        "map",
-        "max",
-        "min",
-        "pprint",
-        "regex_match",
-        "reject",
-        "rejectattr",
-        "replace",
-        "reverse",
-        "round",
-        "safe",
-        "select",
-        "selectattr",
-        "slice",
-        "sort",
-        "split",
-        "sum",
-        "title",
-        "tojson",
-        "json",
-        "format",
-        "trim",
-        "unique",
-        "urlencode",
-    ];
 
     match filter_expr.name {
         "abs" => {
@@ -487,14 +524,58 @@ fn handle_filter(
         "tojson" | "json" => JinjaType::String,
         "urlencode" => JinjaType::String,
         other => {
-            errors.push(TypeError::invalid_filter(
-                other,
-                expr.span(),
-                &valid_filters,
-            ));
+            errors.push(TypeError::invalid_filter(other, expr.span(), VALID_FILTERS));
             JinjaType::Unknown
         }
     }
+}
+
+/// Valid Jinja test names (used with `is` operator).
+const VALID_TESTS: &[&str] = &[
+    "boolean",
+    "callable",
+    "defined",
+    "divisibleby",
+    "eq",
+    "equalto",
+    "even",
+    "false",
+    "filter",
+    "float",
+    "ge",
+    "gt",
+    "greaterthan",
+    "in",
+    "integer",
+    "iterable",
+    "le",
+    "lower",
+    "lt",
+    "lessthan",
+    "mapping",
+    "ne",
+    "none",
+    "number",
+    "odd",
+    "sameas",
+    "sequence",
+    "string",
+    "test",
+    "true",
+    "undefined",
+    "upper",
+];
+
+/// Handle `is` test expressions (e.g., `x is defined`, `x is odd`).
+fn handle_test(test_expr: &ast::Spanned<ast::Test>, errors: &mut Vec<TypeError>) -> JinjaType {
+    if !VALID_TESTS.contains(&test_expr.name) {
+        errors.push(TypeError::invalid_test(
+            test_expr.name,
+            test_expr.span(),
+            VALID_TESTS,
+        ));
+    }
+    JinjaType::Bool
 }
 
 /// Handle property access (dot notation).
@@ -548,7 +629,9 @@ fn handle_get_attr(
             }
         },
 
-        JinjaType::Union(_) => typecheck_attr_access_on_union(&parent, attr_expr, errors, env),
+        JinjaType::Union(_) | JinjaType::Alias { .. } => {
+            typecheck_attr_access_on_union(&parent, attr_expr, errors, env)
+        }
 
         JinjaType::Unknown => JinjaType::Unknown,
 
@@ -573,15 +656,36 @@ fn typecheck_attr_access_on_union(
     errors: &mut Vec<TypeError>,
     env: &JinjaTypeEnv,
 ) -> JinjaType {
-    // Extract union items
-    let JinjaType::Union(union_items) = union_type else {
-        errors.push(TypeError::invalid_type(
-            &attr_expr.expr,
-            union_type,
-            "class",
-            attr_expr.span(),
-        ));
-        return JinjaType::Unknown;
+    // Extract union name if this is a type alias
+    let union_name = match union_type {
+        JinjaType::Alias { name, .. } => Some(name.as_str()),
+        _ => None,
+    };
+
+    // Resolve items — handle both bare Union and Alias wrapping a Union
+    let union_items = match union_type {
+        JinjaType::Union(items) => items,
+        JinjaType::Alias { resolved, .. } => match resolved.as_ref() {
+            JinjaType::Union(items) => items,
+            _ => {
+                errors.push(TypeError::invalid_type(
+                    &attr_expr.expr,
+                    union_type,
+                    "class",
+                    attr_expr.span(),
+                ));
+                return JinjaType::Unknown;
+            }
+        },
+        _ => {
+            errors.push(TypeError::invalid_type(
+                &attr_expr.expr,
+                union_type,
+                "class",
+                attr_expr.span(),
+            ));
+            return JinjaType::Unknown;
+        }
     };
 
     // Attribute must be present on all items with the same type
@@ -614,6 +718,9 @@ fn typecheck_attr_access_on_union(
                 }
             }
 
+            // Resolve aliases
+            JinjaType::Alias { resolved, .. } => stack.push(resolved),
+
             // Recurse into nested unions
             JinjaType::Union(nested) => stack.extend(nested.iter()),
 
@@ -636,7 +743,7 @@ fn typecheck_attr_access_on_union(
             &pretty_print(&attr_expr.expr),
             attr_expr.name,
             &classes_missing_property,
-            None,
+            union_name,
             attr_expr.span(),
         ));
         return JinjaType::Unknown;
@@ -646,7 +753,7 @@ fn typecheck_attr_access_on_union(
         errors.push(TypeError::property_type_mismatch_in_union(
             &pretty_print(&attr_expr.expr),
             attr_expr.name,
-            None,
+            union_name,
             attr_expr.span(),
         ));
         return JinjaType::Unknown;
@@ -670,11 +777,11 @@ fn handle_call(
     };
 
     match func_type {
-        JinjaType::FunctionRef(_) | JinjaType::Unknown if func_name.is_some() => {
-            let name = func_name.unwrap();
-
-            // Look up function signature
-            if let Some((return_type, expected_params)) = env.get_function(name) {
+        JinjaType::FunctionRef(_) | JinjaType::Unknown => {
+            // Look up name and function signature
+            let fn_data =
+                func_name.and_then(|name| env.get_function(name).map(|ty_info| (name, ty_info)));
+            if let Some((name, (return_type, expected_params))) = fn_data {
                 // Validate arguments
                 validate_function_call(
                     name,
@@ -682,18 +789,11 @@ fn handle_call(
                     expected_params,
                     errors,
                     call_expr.span(),
+                    env,
                 );
                 return_type.clone()
             } else {
                 // Function not found - error already reported by variable resolution
-                JinjaType::Unknown
-            }
-        }
-        JinjaType::FunctionRef(name) => {
-            // Function reference without call site info
-            if let Some((return_type, _)) = env.get_function(&name) {
-                return_type.clone()
-            } else {
                 JinjaType::Unknown
             }
         }
@@ -711,8 +811,9 @@ fn validate_function_call(
     expected_params: &[(String, JinjaType)],
     errors: &mut Vec<TypeError>,
     span: minijinja::machinery::Span,
+    env: &JinjaTypeEnv,
 ) {
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
 
     // Separate positional and keyword arguments
     let mut positional_count = 0;
@@ -742,26 +843,41 @@ fn validate_function_call(
         return;
     }
 
-    // Check positional arguments
+    let expected_map: HashMap<&str, &JinjaType> = expected_params
+        .iter()
+        .map(|(name, ty)| (name.as_str(), ty))
+        .collect();
+
+    // Check positional arguments (count and types)
     for (i, arg) in args.iter().enumerate() {
-        if let ast::CallArg::Pos(_expr) = arg {
+        if let ast::CallArg::Pos(expr) = arg {
             if i < expected_params.len() {
-                let (_param_name, _expected_type) = &expected_params[i];
-                // Type checking would go here - simplified for now
-                // let arg_type = infer_expression_type(expr, env)?;
-                // errors.push(TypeError::wrong_arg_type(...));
+                let (param_name, expected_type) = &expected_params[i];
+                let got = visit_expr(expr, errors, env);
+                if !got.is_subtype_of(expected_type)
+                    && !matches!(got, JinjaType::Unknown)
+                    && !matches!(expected_type, JinjaType::Unknown)
+                {
+                    errors.push(TypeError::wrong_arg_type(
+                        func_name,
+                        span,
+                        param_name,
+                        expected_type,
+                        &got,
+                    ));
+                }
             }
         }
     }
 
-    // Check keyword arguments
+    // Check keyword arguments (names and types)
     let valid_param_names: HashSet<&str> = expected_params
         .iter()
         .map(|(name, _)| name.as_str())
         .collect();
 
     for arg in args {
-        if let ast::CallArg::Kwarg(name, _expr) = arg {
+        if let ast::CallArg::Kwarg(name, expr) = arg {
             if !valid_param_names.contains(name) {
                 let valid_as_strings: HashSet<&String> =
                     expected_params.iter().map(|(name, _)| name).collect();
@@ -771,6 +887,20 @@ fn validate_function_call(
                     name,
                     valid_as_strings,
                 ));
+            } else if let Some(expected_type) = expected_map.get(name) {
+                let got = visit_expr(expr, errors, env);
+                if !got.is_subtype_of(expected_type)
+                    && !matches!(got, JinjaType::Unknown)
+                    && !matches!(expected_type, JinjaType::Unknown)
+                {
+                    errors.push(TypeError::wrong_arg_type(
+                        func_name,
+                        span,
+                        name,
+                        expected_type,
+                        &got,
+                    ));
+                }
             }
         }
     }
@@ -876,5 +1006,535 @@ fn pretty_print(expr: &ast::Expr) -> String {
             format!("{}({})", pretty_print(&call.expr), args.join(", "))
         }
         _ => "...".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Parse a Jinja expression and run type inference on it.
+    fn infer(expr: &str, env: &JinjaTypeEnv) -> Result<JinjaType, Vec<TypeError>> {
+        let ast = minijinja::machinery::parse_expr(expr).expect("failed to parse expression");
+        infer_expression_type(&ast, env)
+    }
+
+    // ── Literals ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_string_literal() {
+        let env = JinjaTypeEnv::new();
+        assert_eq!(infer(r#""hello""#, &env).unwrap(), JinjaType::String);
+    }
+
+    #[test]
+    fn test_int_literal() {
+        let env = JinjaTypeEnv::new();
+        assert_eq!(infer("42", &env).unwrap(), JinjaType::Int);
+    }
+
+    #[test]
+    fn test_float_literal() {
+        let env = JinjaTypeEnv::new();
+        assert_eq!(infer("3.14", &env).unwrap(), JinjaType::Float);
+    }
+
+    #[test]
+    fn test_bool_literal() {
+        let env = JinjaTypeEnv::new();
+        assert_eq!(infer("true", &env).unwrap(), JinjaType::Bool);
+        assert_eq!(infer("false", &env).unwrap(), JinjaType::Bool);
+    }
+
+    #[test]
+    fn test_none_literal() {
+        let env = JinjaTypeEnv::new();
+        assert_eq!(infer("none", &env).unwrap(), JinjaType::None);
+    }
+
+    // ── Variables ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_variable_resolution() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("x", JinjaType::Int);
+        assert_eq!(infer("x", &env).unwrap(), JinjaType::Int);
+    }
+
+    #[test]
+    fn test_unresolved_variable() {
+        let env = JinjaTypeEnv::new();
+        let errs = infer("missing_var", &env).unwrap_err();
+        assert_eq!(errs.len(), 1);
+        assert!(
+            matches!(&errs[0], TypeError::UnresolvedVariable { name, .. } if name == "missing_var")
+        );
+    }
+
+    // ── Attribute access ──────────────────────────────────────────────
+
+    #[test]
+    fn test_class_property_access() {
+        let mut env = JinjaTypeEnv::new();
+        let mut fields = indexmap::IndexMap::new();
+        fields.insert("name".to_string(), JinjaType::String);
+        fields.insert("age".to_string(), JinjaType::Int);
+        env.add_class("Person", fields);
+        env.add_variable("p", JinjaType::ClassRef("Person".to_string()));
+
+        assert_eq!(infer("p.name", &env).unwrap(), JinjaType::String);
+        assert_eq!(infer("p.age", &env).unwrap(), JinjaType::Int);
+    }
+
+    #[test]
+    fn test_class_missing_property() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_class("Person", indexmap::IndexMap::new());
+        env.add_variable("p", JinjaType::ClassRef("Person".to_string()));
+
+        let errs = infer("p.missing", &env).unwrap_err();
+        assert!(
+            matches!(&errs[0], TypeError::PropertyNotDefined { property, .. } if property == "missing")
+        );
+    }
+
+    // ── Enum access ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_enum_value_access() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_enum("Color", vec!["Red".to_string(), "Blue".to_string()]);
+        env.add_variable("Color", JinjaType::EnumRef("Color".to_string()));
+
+        assert_eq!(
+            infer("Color.Red", &env).unwrap(),
+            JinjaType::EnumValueRef("Color".to_string())
+        );
+    }
+
+    #[test]
+    fn test_enum_invalid_value() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_enum("Color", vec!["Red".to_string(), "Blue".to_string()]);
+        env.add_variable("Color", JinjaType::EnumRef("Color".to_string()));
+
+        let errs = infer("Color.Green", &env).unwrap_err();
+        assert!(
+            matches!(&errs[0], TypeError::PropertyNotDefined { property, .. } if property == "Green")
+        );
+    }
+
+    // ── Filters ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_length_filter() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("items", JinjaType::List(Box::new(JinjaType::Int)));
+
+        assert_eq!(infer("items|length", &env).unwrap(), JinjaType::Int);
+    }
+
+    #[test]
+    fn test_lower_filter() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("s", JinjaType::String);
+
+        assert_eq!(infer("s|lower", &env).unwrap(), JinjaType::String);
+    }
+
+    #[test]
+    fn test_unknown_filter() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("x", JinjaType::String);
+
+        let errs = infer("x|nonexistent_filter", &env).unwrap_err();
+        assert!(
+            matches!(&errs[0], TypeError::InvalidFilter { filter_name, .. } if filter_name == "nonexistent_filter")
+        );
+    }
+
+    // ── Binary operations ─────────────────────────────────────────────
+
+    #[test]
+    fn test_arithmetic() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("a", JinjaType::Int);
+        env.add_variable("b", JinjaType::Int);
+
+        assert_eq!(infer("a + b", &env).unwrap(), JinjaType::Number);
+    }
+
+    #[test]
+    fn test_string_concat() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("s", JinjaType::String);
+
+        assert_eq!(infer("s ~ \"!\"", &env).unwrap(), JinjaType::String);
+    }
+
+    #[test]
+    fn test_comparison() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("a", JinjaType::Int);
+
+        assert_eq!(infer("a > 0", &env).unwrap(), JinjaType::Bool);
+    }
+
+    // ── Function calls ────────────────────────────────────────────────
+
+    #[test]
+    fn test_function_call() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_function(
+            "greet",
+            JinjaType::String,
+            vec![("name".to_string(), JinjaType::String)],
+        );
+        env.add_variable("greet", JinjaType::FunctionRef("greet".to_string()));
+
+        assert_eq!(
+            infer("greet(name=\"world\")", &env).unwrap(),
+            JinjaType::String
+        );
+    }
+
+    #[test]
+    fn test_function_missing_arg() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_function(
+            "greet",
+            JinjaType::String,
+            vec![("name".to_string(), JinjaType::String)],
+        );
+        env.add_variable("greet", JinjaType::FunctionRef("greet".to_string()));
+
+        let errs = infer("greet()", &env).unwrap_err();
+        assert!(matches!(&errs[0], TypeError::MissingArg { arg_name, .. } if arg_name == "name"));
+    }
+
+    #[test]
+    fn test_function_reference_without_call() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_function("greet", JinjaType::String, vec![]);
+        env.add_variable("greet", JinjaType::FunctionRef("greet".to_string()));
+
+        let errs = infer("greet", &env).unwrap_err();
+        assert!(matches!(
+            &errs[0],
+            TypeError::FunctionReferenceWithoutCall { .. }
+        ));
+    }
+
+    // ── Conditional expressions ───────────────────────────────────────
+
+    #[test]
+    fn test_ternary_expression() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("flag", JinjaType::Bool);
+
+        // Both branches are strings → result is String
+        assert_eq!(
+            infer(r#""yes" if flag else "no""#, &env).unwrap(),
+            JinjaType::String
+        );
+    }
+
+    // ── List / Map construction ───────────────────────────────────────
+
+    #[test]
+    fn test_list_literal() {
+        let env = JinjaTypeEnv::new();
+        assert_eq!(
+            infer("[1, 2, 3]", &env).unwrap(),
+            JinjaType::List(Box::new(JinjaType::Int))
+        );
+    }
+
+    // ── Union attribute access ────────────────────────────────────────
+
+    #[test]
+    fn test_union_property_access() {
+        let mut env = JinjaTypeEnv::new();
+        let mut dog_fields = indexmap::IndexMap::new();
+        dog_fields.insert("name".to_string(), JinjaType::String);
+        let mut cat_fields = indexmap::IndexMap::new();
+        cat_fields.insert("name".to_string(), JinjaType::String);
+        env.add_class("Dog", dog_fields);
+        env.add_class("Cat", cat_fields);
+        env.add_variable(
+            "pet",
+            JinjaType::Union(vec![
+                JinjaType::ClassRef("Dog".to_string()),
+                JinjaType::ClassRef("Cat".to_string()),
+            ]),
+        );
+
+        assert_eq!(infer("pet.name", &env).unwrap(), JinjaType::String);
+    }
+
+    #[test]
+    fn test_union_missing_property() {
+        let mut env = JinjaTypeEnv::new();
+        let mut dog_fields = indexmap::IndexMap::new();
+        dog_fields.insert("name".to_string(), JinjaType::String);
+        env.add_class("Dog", dog_fields);
+        env.add_class("Cat", indexmap::IndexMap::new());
+        env.add_variable(
+            "pet",
+            JinjaType::Union(vec![
+                JinjaType::ClassRef("Dog".to_string()),
+                JinjaType::ClassRef("Cat".to_string()),
+            ]),
+        );
+
+        let errs = infer("pet.name", &env).unwrap_err();
+        assert!(matches!(
+            &errs[0],
+            TypeError::PropertyNotFoundInUnion { .. }
+        ));
+    }
+
+    #[test]
+    fn test_alias_union_property_access() {
+        let mut env = JinjaTypeEnv::new();
+        let mut dog_fields = indexmap::IndexMap::new();
+        dog_fields.insert("name".to_string(), JinjaType::String);
+        let mut cat_fields = indexmap::IndexMap::new();
+        cat_fields.insert("name".to_string(), JinjaType::String);
+        env.add_class("Dog", dog_fields);
+        env.add_class("Cat", cat_fields);
+        // pet is Alias("Pet" -> Union(Dog, Cat)) — like `type Pet = Cat | Dog`
+        env.add_variable(
+            "pet",
+            JinjaType::Alias {
+                name: "Pet".to_string(),
+                resolved: Box::new(JinjaType::Union(vec![
+                    JinjaType::ClassRef("Dog".to_string()),
+                    JinjaType::ClassRef("Cat".to_string()),
+                ])),
+            },
+        );
+
+        assert_eq!(infer("pet.name", &env).unwrap(), JinjaType::String);
+    }
+
+    #[test]
+    fn test_alias_union_missing_property() {
+        let mut env = JinjaTypeEnv::new();
+        let mut dog_fields = indexmap::IndexMap::new();
+        dog_fields.insert("name".to_string(), JinjaType::String);
+        env.add_class("Dog", dog_fields);
+        env.add_class("Cat", indexmap::IndexMap::new());
+        env.add_variable(
+            "pet",
+            JinjaType::Alias {
+                name: "Pet".to_string(),
+                resolved: Box::new(JinjaType::Union(vec![
+                    JinjaType::ClassRef("Dog".to_string()),
+                    JinjaType::ClassRef("Cat".to_string()),
+                ])),
+            },
+        );
+
+        let errs = infer("pet.name", &env).unwrap_err();
+        assert!(matches!(
+            &errs[0],
+            TypeError::PropertyNotFoundInUnion { .. }
+        ));
+    }
+
+    // ── Unary operations (type checking) ──────────────────────────────
+
+    #[test]
+    fn test_negation_of_number() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("x", JinjaType::Int);
+
+        // No error — negating a number is fine
+        assert_eq!(infer("-x", &env).unwrap(), JinjaType::Number);
+    }
+
+    #[test]
+    fn test_negation_of_string_errors() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("s", JinjaType::String);
+
+        let errs = infer("-s", &env).unwrap_err();
+        assert!(matches!(
+            &errs[0],
+            TypeError::InvalidType { expected, .. } if expected == "number"
+        ));
+    }
+
+    #[test]
+    fn test_not_returns_bool() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("x", JinjaType::Int);
+
+        // `not` always returns bool, no error for any type
+        assert_eq!(infer("not x", &env).unwrap(), JinjaType::Bool);
+    }
+
+    // ── Test expressions (`is` operator) ──────────────────────────────
+
+    #[test]
+    fn test_is_defined() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("x", JinjaType::Int);
+
+        assert_eq!(infer("x is defined", &env).unwrap(), JinjaType::Bool);
+    }
+
+    #[test]
+    fn test_is_odd() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("x", JinjaType::Int);
+
+        assert_eq!(infer("x is odd", &env).unwrap(), JinjaType::Bool);
+    }
+
+    #[test]
+    fn test_is_none() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("x", JinjaType::None);
+
+        assert_eq!(infer("x is none", &env).unwrap(), JinjaType::Bool);
+    }
+
+    #[test]
+    fn test_is_unknown_test() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("x", JinjaType::Int);
+
+        let errs = infer("x is foobar", &env).unwrap_err();
+        assert!(matches!(
+            &errs[0],
+            TypeError::InvalidTest { test_name, .. } if test_name == "foobar"
+        ));
+    }
+
+    // ── GetItem (indexing) ────────────────────────────────────────────
+
+    #[test]
+    fn test_list_indexing() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("items", JinjaType::List(Box::new(JinjaType::String)));
+
+        assert_eq!(infer("items[0]", &env).unwrap(), JinjaType::String);
+    }
+
+    #[test]
+    fn test_map_indexing() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable(
+            "m",
+            JinjaType::Map(Box::new(JinjaType::String), Box::new(JinjaType::Int)),
+        );
+
+        assert_eq!(infer("m[\"key\"]", &env).unwrap(), JinjaType::Int);
+    }
+
+    #[test]
+    fn test_string_indexing() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("s", JinjaType::String);
+
+        assert_eq!(infer("s[0]", &env).unwrap(), JinjaType::String);
+    }
+
+    // ── Slice ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_list_slice() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("items", JinjaType::List(Box::new(JinjaType::Int)));
+
+        assert_eq!(
+            infer("items[1:3]", &env).unwrap(),
+            JinjaType::List(Box::new(JinjaType::Int))
+        );
+    }
+
+    #[test]
+    fn test_string_slice() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_variable("s", JinjaType::String);
+
+        assert_eq!(infer("s[1:3]", &env).unwrap(), JinjaType::String);
+    }
+
+    // ── Function call arg type checking ───────────────────────────────
+
+    #[test]
+    fn test_function_positional_arg_type_mismatch() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_function(
+            "greet",
+            JinjaType::String,
+            vec![("name".to_string(), JinjaType::String)],
+        );
+        env.add_variable("greet", JinjaType::FunctionRef("greet".to_string()));
+
+        let errs = infer("greet(42)", &env).unwrap_err();
+        assert!(matches!(
+            &errs[0],
+            TypeError::WrongArgType { arg_name, expected, found, .. }
+                if arg_name == "name" && expected == "string" && found == "int"
+        ));
+    }
+
+    #[test]
+    fn test_function_kwarg_type_mismatch() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_function(
+            "greet",
+            JinjaType::String,
+            vec![("name".to_string(), JinjaType::String)],
+        );
+        env.add_variable("greet", JinjaType::FunctionRef("greet".to_string()));
+
+        let errs = infer("greet(name=42)", &env).unwrap_err();
+        assert!(matches!(
+            &errs[0],
+            TypeError::WrongArgType { arg_name, expected, found, .. }
+                if arg_name == "name" && expected == "string" && found == "int"
+        ));
+    }
+
+    #[test]
+    fn test_function_arg_subtype_ok() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_function(
+            "compute",
+            JinjaType::Number,
+            vec![("val".to_string(), JinjaType::Number)],
+        );
+        env.add_variable("compute", JinjaType::FunctionRef("compute".to_string()));
+
+        // Int is a subtype of Number, so no error
+        assert_eq!(infer("compute(42)", &env).unwrap(), JinjaType::Number);
+    }
+
+    #[test]
+    fn test_function_multiple_args_type_check() {
+        let mut env = JinjaTypeEnv::new();
+        env.add_function(
+            "add",
+            JinjaType::String,
+            vec![
+                ("a".to_string(), JinjaType::String),
+                ("b".to_string(), JinjaType::Int),
+            ],
+        );
+        env.add_variable("add", JinjaType::FunctionRef("add".to_string()));
+
+        // First arg is wrong type, second is correct
+        let errs = infer("add(123, 456)", &env).unwrap_err();
+        assert!(matches!(
+            &errs[0],
+            TypeError::WrongArgType { arg_name, .. } if arg_name == "a"
+        ));
+        // Second arg (int) matches Int, so only one error
+        assert_eq!(errs.len(), 1);
     }
 }

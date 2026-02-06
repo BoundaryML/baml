@@ -76,7 +76,7 @@ pub enum ErrorLocation {
     /// Contains (`class_name`, `field_index`) for position-independent lookup.
     ClassFieldType {
         class_name: Name,
-        field_index: usize,
+        field_index: usize, // TODO: use a full path here, not just field index.
     },
     /// Error at a specific type within a type alias's RHS definition.
     ///
@@ -115,19 +115,6 @@ impl ErrorLocation {
     /// - Expression locations (Expr, `MatchArm`) use the `expr_fn_source_map`
     /// - Type-level locations (`TypeItem`, `ClassFieldType`, `TypeAliasType`) use the `type_spans`
     /// - Jinja template locations use the `template_file_offset`
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let ctx = SpanResolutionContext {
-    ///     expr_fn_source_map: &hir_source_map,
-    ///     type_spans: &type_spans,
-    ///     field_type_spans: &field_type_spans,
-    ///     file_id,
-    ///     template_file_offset: llm_function_file_offset(db, func_loc),
-    /// };
-    /// let span = loc.to_span(&ctx);
-    /// ```
     pub fn to_span(&self, ctx: &SpanResolutionContext<'_>) -> Span {
         match self {
             ErrorLocation::Expr(id) => ctx.expr_fn_source_map.expr_span(*id).unwrap_or_default(),
