@@ -8,9 +8,8 @@ mod openai;
 use std::str::FromStr;
 
 use baml_builtins::PromptAstSimple;
-use bex_external_types::{BexExternalValue, Ty};
-use bex_heap::builtin_types::owned::PrimitiveClient;
-use indexmap::indexmap;
+use bex_external_types::BexExternalValue;
+use bex_heap::{builtin_types, builtin_types::owned::PrimitiveClient};
 
 use crate::LlmProvider;
 
@@ -122,12 +121,12 @@ pub(crate) trait LlmRequestBuilder {
 
 /// Build a provider-specific HTTP request from a specialized prompt.
 ///
-/// Returns a `BexExternalValue::Instance` matching the `baml.http.Request` class:
+/// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
 /// `{ method: String, url: String, headers: Map<String, String>, body: String }`
 pub(crate) fn build_request(
     client: &PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-) -> Result<BexExternalValue, BuildRequestError> {
+) -> Result<builtin_types::owned::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
@@ -152,11 +151,10 @@ pub(crate) fn build_request(
         }
     };
 
-    // Convert RawHttpRequest to BexExternalValue::Instance matching baml.http.Request
-    Ok(raw.into_instance())
+    Ok(raw.into_owned())
 }
 
-/// Intermediate struct before converting to `BexExternalValue::Instance`.
+/// Intermediate struct before converting to an owned `HttpRequest`.
 pub(crate) struct RawHttpRequest {
     pub method: String,
     pub url: String,
@@ -165,25 +163,13 @@ pub(crate) struct RawHttpRequest {
 }
 
 impl RawHttpRequest {
-    /// Convert to `BexExternalValue::Instance` matching `baml.http.Request`.
-    ///
-    /// Field order must match the builtin struct definition:
-    /// `method`, `url`, `headers`, `body`.
-    fn into_instance(self) -> BexExternalValue {
-        BexExternalValue::Instance {
-            class_name: "baml.http.Request".to_string(),
-            fields: indexmap! {
-                "method".to_string() => BexExternalValue::String(self.method),
-                "url".to_string() => BexExternalValue::String(self.url),
-                "headers".to_string() => BexExternalValue::Map {
-                    key_type: Ty::String,
-                    value_type: Ty::String,
-                    entries: self.headers.into_iter()
-                        .map(|(k, v)| (k, BexExternalValue::String(v)))
-                        .collect(),
-                },
-                "body".to_string() => BexExternalValue::String(self.body),
-            },
+    /// Convert to an owned `builtin_types::owned::HttpRequest`.
+    fn into_owned(self) -> builtin_types::owned::HttpRequest {
+        builtin_types::owned::HttpRequest {
+            method: self.method,
+            url: self.url,
+            headers: self.headers,
+            body: self.body,
         }
     }
 }
@@ -258,6 +244,7 @@ mod tests {
     use std::sync::Arc;
 
     use baml_builtins::PromptAst;
+    use bex_external_types::Ty;
     use indexmap::IndexMap;
 
     use super::*;
@@ -288,54 +275,9 @@ mod tests {
         })
     }
 
-    /// Parse the body field out of a Request instance.
-    fn parse_body(instance: &BexExternalValue) -> serde_json::Value {
-        let BexExternalValue::Instance { fields, .. } = instance else {
-            panic!("expected Instance");
-        };
-        let BexExternalValue::String(body) = &fields["body"] else {
-            panic!("expected String body");
-        };
-        serde_json::from_str(body).unwrap()
-    }
-
-    fn get_field_str<'a>(instance: &'a BexExternalValue, field: &str) -> &'a str {
-        let BexExternalValue::Instance { fields, .. } = instance else {
-            panic!("expected Instance");
-        };
-        let BexExternalValue::String(s) = &fields[field] else {
-            panic!("expected String for {field}");
-        };
-        s.as_str()
-    }
-
-    fn get_header<'a>(instance: &'a BexExternalValue, header: &str) -> Option<&'a str> {
-        let BexExternalValue::Instance { fields, .. } = instance else {
-            panic!("expected Instance");
-        };
-        let BexExternalValue::Map { entries, .. } = &fields["headers"] else {
-            panic!("expected Map for headers");
-        };
-        match entries.get(header) {
-            Some(BexExternalValue::String(s)) => Some(s.as_str()),
-            _ => None,
-        }
-    }
-
-    // ---- Result shape tests ----
-
-    #[test]
-    fn test_instance_class_name() {
-        let client = make_client(
-            "openai",
-            vec![("model", BexExternalValue::String("gpt-4o".into()))],
-        );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
-        let BexExternalValue::Instance { class_name, .. } = &result else {
-            panic!("expected Instance");
-        };
-        assert_eq!(class_name, "baml.http.Request");
+    /// Parse the body JSON from an `HttpRequest`.
+    fn parse_body(req: &builtin_types::owned::HttpRequest) -> serde_json::Value {
+        serde_json::from_str(&req.body).unwrap()
     }
 
     #[test]
@@ -373,17 +315,14 @@ mod tests {
         let result = build_request(&client, prompt).unwrap();
 
         // Verify envelope
-        assert_eq!(get_field_str(&result, "method"), "POST");
+        assert_eq!(result.method, "POST");
+        assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
         assert_eq!(
-            get_field_str(&result, "url"),
-            "https://api.openai.com/v1/chat/completions"
-        );
-        assert_eq!(
-            get_header(&result, "authorization").unwrap(),
+            result.headers.get("authorization").unwrap(),
             "Bearer sk-test-key"
         );
         assert_eq!(
-            get_header(&result, "content-type").unwrap(),
+            result.headers.get("content-type").unwrap(),
             "application/json"
         );
 
@@ -426,10 +365,7 @@ mod tests {
 
         let result = build_request(&client, prompt).unwrap();
 
-        assert_eq!(
-            get_field_str(&result, "url"),
-            "https://api.openai.com/v1/chat/completions"
-        );
+        assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
 
         let body = parse_body(&result);
         assert_eq!(
@@ -480,10 +416,7 @@ mod tests {
         );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
-        assert_eq!(
-            get_field_str(&result, "url"),
-            "https://custom.api.com/v1/chat/completions"
-        );
+        assert_eq!(result.url, "https://custom.api.com/v1/chat/completions");
     }
 
     #[test]
@@ -550,17 +483,14 @@ mod tests {
         let result = build_request(&client, prompt).unwrap();
 
         // Verify envelope
-        assert_eq!(get_field_str(&result, "method"), "POST");
+        assert_eq!(result.method, "POST");
+        assert_eq!(result.url, "https://api.anthropic.com/v1/messages");
+        assert_eq!(result.headers.get("x-api-key").unwrap(), "sk-ant-test");
         assert_eq!(
-            get_field_str(&result, "url"),
-            "https://api.anthropic.com/v1/messages"
-        );
-        assert_eq!(get_header(&result, "x-api-key").unwrap(), "sk-ant-test");
-        assert_eq!(
-            get_header(&result, "content-type").unwrap(),
+            result.headers.get("content-type").unwrap(),
             "application/json"
         );
-        assert!(get_header(&result, "anthropic-version").is_some());
+        assert!(result.headers.contains_key("anthropic-version"));
 
         let body = parse_body(&result);
         assert_eq!(
@@ -642,7 +572,7 @@ mod tests {
         let result = build_request(&client, prompt).unwrap();
 
         assert_eq!(
-            get_header(&result, "anthropic-beta").unwrap(),
+            result.headers.get("anthropic-beta").unwrap(),
             "prompt-caching-2024-07-31"
         );
 
@@ -663,7 +593,7 @@ mod tests {
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
         assert_eq!(
-            get_header(&result, "anthropic-version").unwrap(),
+            result.headers.get("anthropic-version").unwrap(),
             "2024-01-01"
         );
     }
@@ -674,7 +604,7 @@ mod tests {
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
         assert_eq!(
-            get_header(&result, "anthropic-version").unwrap(),
+            result.headers.get("anthropic-version").unwrap(),
             "2023-06-01"
         );
     }

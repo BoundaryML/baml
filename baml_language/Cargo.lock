@@ -4608,8 +4608,10 @@ version = "0.0.0"
 dependencies = [
  "bex_external_types",
  "bex_heap",
+ "bex_program",
  "bex_vm_types",
  "indexmap 2.13.0",
+ "llm_ops",
  "reqwest",
  "sys_resource_types",
  "sys_types",
@@ -4624,6 +4626,9 @@ version = "0.0.0"
 name = "sys_types"
 version = "0.0.0"
 dependencies = [
+ "baml_builtins",
+ "baml_builtins_macros",
+ "baml_type",
  "bex_external_types",
  "bex_heap",
  "bex_vm_types",

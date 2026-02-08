@@ -410,7 +410,7 @@ pub fn compile_files(
                             name: signature.name.to_string(),
                             arity: params.len(),
                             bytecode: Bytecode::new(),
-                            kind: FunctionKind::SysOp(SysOp::RenderPrompt),
+                            kind: FunctionKind::SysOp(SysOp::BamlLlmPrimitiveClientRenderPrompt),
                             locals_in_scope: vec![
                                 params
                                     .iter()
@@ -637,27 +637,7 @@ fn build_typing_context(
 /// This is used during code generation to set the correct `SysOp` variant
 /// for `sys_op` builtin functions.
 fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
-    match path {
-        // LLM operations
-        "baml.llm.PrimitiveClient.render_prompt" => Some(SysOp::RenderPrompt),
-        "baml.llm.PrimitiveClient.specialize_prompt" => Some(SysOp::SpecializePrompt),
-        "baml.llm.PrimitiveClient.build_request" => Some(SysOp::LlmBuildRequest),
-        "baml.llm.PrimitiveClient.parse" => Some(SysOp::LlmParseResponse),
-        "baml.llm.get_jinja_template" => Some(SysOp::LlmGetJinjaTemplate),
-        "baml.llm.build_primitive_client" => Some(SysOp::LlmBuildPrimitiveClient),
-        "baml.llm.get_client_function" => Some(SysOp::LlmGetClientFunction),
-        // System operations
-        "baml.fs.open" => Some(SysOp::FsOpen),
-        "baml.fs.File.read" => Some(SysOp::FsRead),
-        "baml.fs.File.close" => Some(SysOp::FsClose),
-        "baml.sys.shell" => Some(SysOp::Shell),
-        "baml.net.connect" => Some(SysOp::NetConnect),
-        "baml.net.Socket.read" => Some(SysOp::NetRead),
-        "baml.net.Socket.close" => Some(SysOp::NetClose),
-        "baml.http.fetch" => Some(SysOp::HttpFetch),
-        "baml.http.send" => Some(SysOp::HttpSend),
-        "baml.http.Response.text" => Some(SysOp::ResponseText),
-        "baml.http.Response.ok" => Some(SysOp::ResponseOk),
-        _ => None,
-    }
+    // Delegate to the generated function from bex_vm_types, which is
+    // derived from the same #[sys_op] definitions in with_builtins!.
+    bex_vm_types::sys_op_for_path(path)
 }

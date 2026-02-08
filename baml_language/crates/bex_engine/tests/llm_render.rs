@@ -460,7 +460,7 @@ function test_call_llm() -> string {
                     e,
                     bex_engine::EngineError::ExternalOpFailed(sys_types::OpError {
                         kind: sys_types::OpErrorKind::NotImplemented { message: _ },
-                        fn_name: SysOp::LlmParseResponse,
+                        fn_name: SysOp::BamlLlmPrimitiveClientParse,
                     })
                 ),
                 "Expected NotImplemented error, got {e}"

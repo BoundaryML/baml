@@ -256,6 +256,18 @@ impl From<&str> for BexExternalValue {
     }
 }
 
+impl From<()> for BexExternalValue {
+    fn from(_: ()) -> Self {
+        BexExternalValue::Null
+    }
+}
+
+impl From<bex_vm_types::PromptAst> for BexExternalValue {
+    fn from(ast: bex_vm_types::PromptAst) -> Self {
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

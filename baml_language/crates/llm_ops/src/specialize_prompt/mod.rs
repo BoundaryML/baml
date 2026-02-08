@@ -23,6 +23,14 @@ use crate::{LlmProvider, ModelFeatures};
 /// 1. Merge adjacent same-role messages
 /// 2. Consolidate system prompts (when `max_one_system_prompt` is true)
 /// 3. Filter role metadata (strip disallowed metadata keys)
+/// Apply prompt specialization given already-extracted owned types.
+pub(crate) fn specialize_prompt_from_owned(
+    client: &PrimitiveClient,
+    prompt: bex_vm_types::PromptAst,
+) -> bex_vm_types::PromptAst {
+    specialize_prompt(client, prompt)
+}
+
 fn specialize_prompt(
     client: &PrimitiveClient,
     prompt: bex_vm_types::PromptAst,

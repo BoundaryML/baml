@@ -16,7 +16,6 @@ use std::sync::Arc;
 use bex_external_types::BexExternalValue;
 pub use bex_heap::builtin_types::owned::PrimitiveClient;
 use bex_heap::{BexHeap, builtin_types};
-use bex_vm_types::{HeapPtr, Object};
 pub use model_features::{AllowedMetadata, ModelFeatures};
 pub use parse_response::{
     FinishReason, LlmProviderResponse, ParseResponseError, TokenUsage, parse_response,
@@ -24,11 +23,233 @@ pub use parse_response::{
 pub use provider::LlmProvider;
 pub use render_prompt::execute_render_prompt;
 pub use specialize_prompt::execute_specialize_prompt;
-use sys_types::OpErrorKind;
+use sys_types::{FunctionRef, OpErrorKind, SysOpContext};
 
 // ============================================================================
-// SysOp Implementations
+// Clean (owned-type) entry points for trait-based dispatch
 // ============================================================================
+
+/// Render a Jinja template given already-extracted owned types.
+///
+/// `args` is expected to be `BexExternalValue::Map { entries, .. }`.
+pub fn execute_render_prompt_from_owned(
+    client: &builtin_types::owned::PrimitiveClient,
+    template: &str,
+    args: &BexExternalValue,
+) -> Result<bex_vm_types::PromptAst, OpErrorKind> {
+    let template_args: indexmap::IndexMap<String, BexExternalValue> = match args {
+        BexExternalValue::Map { entries, .. } => entries.clone(),
+        _ => {
+            return Err(OpErrorKind::TypeError {
+                expected: "map",
+                actual: args.type_name().to_string(),
+            });
+        }
+    };
+
+    let render_ctx = llm_jinja::RenderContext {
+        client: llm_jinja::RenderContextClient {
+            name: client.name.clone(),
+            provider: client.provider.clone(),
+            default_role: client.default_role.clone(),
+            allowed_roles: client.allowed_roles.clone(),
+        },
+        output_format: llm_types::OutputFormatContent::new(bex_external_types::Ty::String),
+        tags: indexmap::IndexMap::new(),
+        enums: std::collections::HashMap::new(),
+    };
+
+    let prompt_ast = llm_jinja::render_prompt(template, &template_args, &render_ctx)?;
+    Ok(std::sync::Arc::new(prompt_ast))
+}
+
+/// Specialize a prompt for a provider given already-extracted owned types.
+pub fn execute_specialize_prompt_from_owned(
+    client: &builtin_types::owned::PrimitiveClient,
+    prompt: bex_vm_types::PromptAst,
+) -> Result<bex_vm_types::PromptAst, OpErrorKind> {
+    Ok(specialize_prompt::specialize_prompt_from_owned(
+        client, prompt,
+    ))
+}
+
+/// Build an HTTP request from a prompt given already-extracted owned types.
+pub fn execute_build_request_from_owned(
+    client: &builtin_types::owned::PrimitiveClient,
+    prompt: bex_vm_types::PromptAst,
+) -> Result<builtin_types::owned::HttpRequest, OpErrorKind> {
+    build_request::build_request(client, prompt).map_err(|e| OpErrorKind::Other(e.to_string()))
+}
+
+// ============================================================================
+// SysOp Implementations (legacy fn-pointer wrappers)
+// ============================================================================
+
+/// SysOpFn-compatible wrapper for `render_prompt`.
+pub fn sys_op_render_prompt(
+    heap: &Arc<BexHeap>,
+    args: Vec<bex_heap::BexValue<'_>>,
+    _ctx: &SysOpContext,
+) -> sys_types::SysOpResult {
+    sys_types::SysOpResult::Ready(
+        execute_render_prompt(heap, args)
+            .map(|ast| BexExternalValue::Adt(bex_external_types::BexExternalAdt::PromptAst(ast)))
+            .map_err(|e| {
+                sys_types::OpError::new(bex_vm_types::SysOp::BamlLlmPrimitiveClientRenderPrompt, e)
+            }),
+    )
+}
+
+/// SysOpFn-compatible wrapper for `specialize_prompt`.
+pub fn sys_op_specialize_prompt(
+    heap: &Arc<BexHeap>,
+    args: Vec<bex_heap::BexValue<'_>>,
+    _ctx: &SysOpContext,
+) -> sys_types::SysOpResult {
+    sys_types::SysOpResult::Ready(
+        execute_specialize_prompt(heap, args)
+            .map(|ast| BexExternalValue::Adt(bex_external_types::BexExternalAdt::PromptAst(ast)))
+            .map_err(|e| {
+                sys_types::OpError::new(
+                    bex_vm_types::SysOp::BamlLlmPrimitiveClientSpecializePrompt,
+                    e,
+                )
+            }),
+    )
+}
+
+/// SysOpFn-compatible wrapper for `build_primitive_client`.
+pub fn sys_op_build_primitive_client(
+    heap: &Arc<BexHeap>,
+    args: Vec<bex_heap::BexValue<'_>>,
+    _ctx: &SysOpContext,
+) -> sys_types::SysOpResult {
+    sys_types::SysOpResult::Ready(
+        execute_build_primitive_client(heap, args).map_err(|e| {
+            sys_types::OpError::new(bex_vm_types::SysOp::BamlLlmBuildPrimitiveClient, e)
+        }),
+    )
+}
+
+/// SysOpFn-compatible wrapper for `build_request`.
+pub fn sys_op_build_request(
+    heap: &Arc<BexHeap>,
+    args: Vec<bex_heap::BexValue<'_>>,
+    _ctx: &SysOpContext,
+) -> sys_types::SysOpResult {
+    sys_types::SysOpResult::Ready(execute_build_request(heap, args).map_err(|e| {
+        sys_types::OpError::new(bex_vm_types::SysOp::BamlLlmPrimitiveClientBuildRequest, e)
+    }))
+}
+
+/// SysOpFn-compatible wrapper for `get_jinja_template` (uses engine context).
+pub fn sys_op_get_jinja_template(
+    heap: &Arc<BexHeap>,
+    mut args: Vec<bex_heap::BexValue<'_>>,
+    ctx: &SysOpContext,
+) -> sys_types::SysOpResult {
+    sys_types::SysOpResult::Ready(
+        execute_get_jinja_template(heap, &mut args, ctx)
+            .map_err(|e| sys_types::OpError::new(bex_vm_types::SysOp::BamlLlmGetJinjaTemplate, e)),
+    )
+}
+
+/// SysOpFn-compatible wrapper for `get_client_function` (uses engine context).
+pub fn sys_op_get_client_function(
+    heap: &Arc<BexHeap>,
+    mut args: Vec<bex_heap::BexValue<'_>>,
+    ctx: &SysOpContext,
+) -> sys_types::SysOpResult {
+    sys_types::SysOpResult::Ready(
+        execute_get_client_function(heap, &mut args, ctx)
+            .map_err(|e| sys_types::OpError::new(bex_vm_types::SysOp::BamlLlmGetClientFunction, e)),
+    )
+}
+
+/// SysOpFn-compatible wrapper for `parse` (uses engine context).
+pub fn sys_op_parse_response(
+    heap: &Arc<BexHeap>,
+    args: Vec<bex_heap::BexValue<'_>>,
+    ctx: &SysOpContext,
+) -> sys_types::SysOpResult {
+    sys_types::SysOpResult::Ready(
+        execute_parse_response(heap, args, ctx).map_err(|e| {
+            sys_types::OpError::new(bex_vm_types::SysOp::BamlLlmPrimitiveClientParse, e)
+        }),
+    )
+}
+
+// ============================================================================
+// Engine-context ops (previously in bex_engine::llm)
+// ============================================================================
+
+/// Execute the `get_jinja_template` LLM operation.
+///
+/// Arguments: `[function_name: String]`
+/// Returns: String (the Jinja template for the function's prompt)
+fn execute_get_jinja_template(
+    heap: &Arc<BexHeap>,
+    args: &mut Vec<bex_heap::BexValue<'_>>,
+    ctx: &SysOpContext,
+) -> Result<BexExternalValue, OpErrorKind> {
+    if args.len() != 1 {
+        return Err(OpErrorKind::InvalidArgumentCount {
+            expected: 1,
+            actual: args.len(),
+        });
+    }
+
+    let arg0 = args.pop().expect("len is 1");
+    let function_name = heap.with_gc_protection(|protected| arg0.as_string(&protected).cloned())?;
+
+    let info = ctx
+        .llm_functions
+        .get(&function_name)
+        .ok_or_else(|| OpErrorKind::Other(format!("LLM function not found: {function_name}")))?;
+
+    Ok(BexExternalValue::String(info.prompt_template.clone()))
+}
+
+/// Execute the `get_client_function` LLM operation.
+///
+/// Arguments: `[function_name: String]`
+/// Returns: `FunctionRef` (a callable reference to the client's resolve function)
+fn execute_get_client_function(
+    heap: &Arc<BexHeap>,
+    args: &mut Vec<bex_heap::BexValue<'_>>,
+    ctx: &SysOpContext,
+) -> Result<BexExternalValue, OpErrorKind> {
+    if args.len() != 1 {
+        return Err(OpErrorKind::InvalidArgumentCount {
+            expected: 1,
+            actual: args.len(),
+        });
+    }
+
+    let arg0 = args.pop().expect("len is 1");
+    let function_name = heap.with_gc_protection(|protected| arg0.as_string(&protected).cloned())?;
+
+    let info = ctx
+        .llm_functions
+        .get(&function_name)
+        .ok_or_else(|| OpErrorKind::Other(format!("LLM function not found: {function_name}")))?;
+
+    let resolve_fn_name = format!("{}.resolve", info.client_name);
+
+    let global_index = ctx
+        .function_global_indices
+        .get(&resolve_fn_name)
+        .ok_or_else(|| {
+            OpErrorKind::Other(format!(
+                "Client resolve function not found: {resolve_fn_name}"
+            ))
+        })?;
+
+    Ok(
+        FunctionRef::<bex_heap::builtin_types::owned::PrimitiveClient>::new(*global_index)
+            .into_external(),
+    )
+}
 
 /// Execute the `build_primitive_client` LLM operation.
 ///
@@ -129,6 +350,7 @@ pub fn execute_build_request(
         .map_err(OpErrorKind::AccessError)?;
 
     build_request::build_request(&client_owned, prompt)
+        .map(Into::into)
         .map_err(|e| OpErrorKind::Other(e.to_string()))
 }
 
@@ -138,13 +360,10 @@ pub fn execute_build_request(
 /// Returns: The parsed BAML value
 ///
 /// TODO: Implement this by porting logic from legacy response parsing.
-pub fn execute_parse_response(
+fn execute_parse_response(
     heap: &Arc<BexHeap>,
     mut args: Vec<bex_heap::BexValue<'_>>,
-    resolved_function_names: &std::collections::HashMap<
-        String,
-        (HeapPtr, bex_vm_types::FunctionKind),
-    >,
+    ctx: &SysOpContext,
 ) -> Result<BexExternalValue, OpErrorKind> {
     if args.len() != 3 {
         return Err(OpErrorKind::InvalidArgumentCount {
@@ -157,26 +376,20 @@ pub fn execute_parse_response(
     let arg1 = args.remove(0);
     let arg2 = args.remove(0);
 
-    let (response, function_name, expected_return_type) = heap.with_gc_protection(|protected| {
-        let response = arg1.as_string(&protected).cloned()?;
-        let function_name = arg2.as_string(&protected).cloned()?;
-        let (ptr, _kind) = resolved_function_names.get(&function_name).ok_or_else(|| {
-            bex_heap::AccessError::FunctionNotFound {
-                expected: function_name.clone(),
-            }
-        })?;
-        #[allow(unsafe_code)]
-        let obj = unsafe { ptr.get() };
-        let Object::Function(func) = obj else {
-            return Err(OpErrorKind::Other(format!(
-                "Not a function: {function_name}"
-            )));
-        };
+    let (response, function_name) = heap
+        .with_gc_protection(|protected| {
+            let response = arg1.as_string(&protected).cloned()?;
+            let function_name = arg2.as_string(&protected).cloned()?;
+            Ok::<_, bex_heap::AccessError>((response, function_name))
+        })
+        .map_err(OpErrorKind::AccessError)?;
 
-        Ok((response, function_name, func.return_type.clone()))
-    })?;
+    let info = ctx
+        .llm_functions
+        .get(&function_name)
+        .ok_or_else(|| OpErrorKind::Other(format!("LLM function not found: {function_name}")))?;
 
-    if expected_return_type != bex_program::Ty::String {
+    if info.return_type != bex_program::Ty::String {
         return Err(OpErrorKind::NotImplemented {
             message: format!("Function {function_name} does not return a string"),
         });

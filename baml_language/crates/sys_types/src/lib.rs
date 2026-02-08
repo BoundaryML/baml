@@ -118,21 +118,180 @@ pub enum SysOpResult {
 }
 
 // ============================================================================
+// SysOpOutput — Clean return type for trait-based sys_op implementations
+// ============================================================================
+
+/// Clean return type for `sys_op` trait methods, generic over the success value.
+///
+/// Like [`SysOpResult`] but uses [`OpErrorKind`] instead of [`OpError`] —
+/// the implementor never needs to specify which [`SysOp`] variant they are.
+/// The generated glue code wraps this into a full [`SysOpResult`] via
+/// [`into_result`](SysOpOutput::into_result), which converts `T` into
+/// [`BexExternalValue`] using `Into`.
+///
+/// # Example
+///
+/// ```ignore
+/// impl SysOpFs for MyProvider {
+///     fn baml_fs_open(path: String) -> SysOpOutput<FsFile> {
+///         SysOpOutput::async_op(async move {
+///             let file = File::open(&path).await
+///                 .map_err(|e| OpErrorKind::Other(format!("open failed: {e}")))?;
+///             let handle = REGISTRY.register_file(file, path);
+///             Ok(FsFile { _handle: handle })
+///         })
+///     }
+/// }
+/// ```
+#[allow(clippy::large_enum_variant)]
+pub enum SysOpOutput<T = BexExternalValue> {
+    /// Operation completed synchronously.
+    Ready(Result<T, OpErrorKind>),
+    /// Operation is async.
+    Async(Pin<Box<dyn Future<Output = Result<T, OpErrorKind>> + Send>>),
+}
+
+impl<T> SysOpOutput<T> {
+    /// Create a successful synchronous result.
+    pub fn ok(value: T) -> Self {
+        Self::Ready(Ok(value))
+    }
+
+    /// Create a synchronous error.
+    pub fn err(kind: OpErrorKind) -> Self {
+        Self::Ready(Err(kind))
+    }
+}
+
+impl<T: Send + 'static> SysOpOutput<T> {
+    /// Create an async result from a future.
+    pub fn async_op(fut: impl Future<Output = Result<T, OpErrorKind>> + Send + 'static) -> Self {
+        Self::Async(Box::pin(fut))
+    }
+}
+
+impl<T: Into<BexExternalValue> + Send + 'static> SysOpOutput<T> {
+    /// Convert to [`SysOpResult`] by attaching the [`SysOp`] variant to errors
+    /// and converting `T` into [`BexExternalValue`].
+    ///
+    /// This is called by generated glue code — implementors don't use this directly.
+    pub fn into_result(self, op: SysOp) -> SysOpResult {
+        match self {
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(v.into())),
+            Self::Ready(Err(kind)) => SysOpResult::Ready(Err(OpError::new(op, kind))),
+            Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
+                fut.await
+                    .map(Into::into)
+                    .map_err(|kind| OpError::new(op, kind))
+            })),
+        }
+    }
+}
+
+// ============================================================================
 // System Operations Table
 // ============================================================================
 
 /// Function pointer type for system operations.
 ///
-/// Each operation takes a heap reference and arguments, returning a `SysOpResult`
-/// which is either an immediate result or a future to await.
+/// Each operation takes a heap reference, arguments, and a context reference,
+/// returning a `SysOpResult` which is either an immediate result or a future to await.
 ///
 /// The heap reference allows ops to access instance fields via `with_gc_protection`.
 /// Arguments are `BexValue` which can be either:
 /// - `BexValue::External(...)` for primitives/strings copied from VM
 /// - `BexValue::Opaque(Handle)` for heap objects (instances, arrays, maps)
-pub type SysOpFn = fn(heap: &Arc<BexHeap>, args: Vec<bex_heap::BexValue<'_>>) -> SysOpResult;
+///
+/// The context reference provides engine-level information (e.g., function metadata)
+/// that some `sys_ops` need. Ops that don't need it simply ignore the parameter.
+pub type SysOpFn =
+    fn(heap: &Arc<BexHeap>, args: Vec<bex_heap::BexValue<'_>>, ctx: &SysOpContext) -> SysOpResult;
+
+// ============================================================================
+// Engine Context for Sys Ops
+// ============================================================================
+
+/// Context available to `sys_ops` that need engine-level information.
+///
+/// Most `sys_ops` don't need this — only those marked with `#[uses(engine_ctx)]`
+/// in the DSL use it. The engine populates this at construction time.
+///
+/// All `sys_ops` receive `&SysOpContext` for signature uniformity (keeps `SysOpFn`
+/// as a plain `fn` pointer). Ops that don't use it ignore the parameter.
+pub struct SysOpContext {
+    /// Pre-extracted LLM function metadata, keyed by function name.
+    /// Used by LLM ops that need to look up function prompt templates, client names, etc.
+    pub llm_functions: std::collections::HashMap<String, LlmFunctionInfo>,
+
+    /// Maps function names to their global indices in the VM.
+    /// Used by `get_client_function` to return `FunctionRef` values.
+    pub function_global_indices: std::collections::HashMap<String, usize>,
+}
+
+/// Pre-extracted metadata for an LLM function.
+///
+/// This is built during engine construction by reading function objects from the heap,
+/// so that LLM `sys_ops` don't need to access raw heap pointers.
+pub struct LlmFunctionInfo {
+    /// The Jinja prompt template for this function.
+    pub prompt_template: String,
+    /// The client name (e.g., `"MyClient"`) declared in the function.
+    pub client_name: String,
+    /// The expected return type, used for response parsing.
+    pub return_type: baml_type::Ty,
+}
+
+impl SysOpContext {
+    /// Create an empty context (for testing or when no LLM functions exist).
+    pub fn empty() -> Self {
+        Self {
+            llm_functions: std::collections::HashMap::new(),
+            function_global_indices: std::collections::HashMap::new(),
+        }
+    }
+}
+
+// ============================================================================
+// FunctionRef<T> — Typed wrapper for VM function references
+// ============================================================================
+
+/// Typed wrapper for VM function references.
+///
+/// The phantom type parameter `T` represents the return type of the referenced
+/// function. It provides no runtime checking, but ensures the impl author
+/// declares what kind of function they're returning — preventing accidental
+/// misuse of the `BexExternalValue` escape hatch.
+pub struct FunctionRef<T> {
+    /// The global index into the VM's globals array.
+    pub global_index: usize,
+    _phantom: std::marker::PhantomData<T>,
+}
+
+impl<T> FunctionRef<T> {
+    /// Create a new function reference with the given global index.
+    pub fn new(global_index: usize) -> Self {
+        Self {
+            global_index,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Convert to `BexExternalValue::FunctionRef`.
+    pub fn into_external(self) -> BexExternalValue {
+        BexExternalValue::FunctionRef {
+            global_index: self.global_index,
+        }
+    }
+}
+
+// ============================================================================
+// SysOps Table (generated from for_all_sys_ops!)
+// ============================================================================
 
 /// Table of system operation implementations.
+///
+/// Generated from `#[sys_op]` definitions in `baml_builtins::with_builtins!`.
+/// This struct has one field per `sys_op`, ensuring complete coverage.
 ///
 /// This struct is passed to `BexEngine::new()` and determines how system
 /// operations are executed. Different providers (native Tokio, WASM, FFI)
@@ -145,114 +304,51 @@ pub type SysOpFn = fn(heap: &Arc<BexHeap>, args: Vec<bex_heap::BexValue<'_>>) ->
 /// let sys_ops = sys_types_native::SysOps::native();
 /// let engine = BexEngine::new(program, env_vars, sys_ops)?;
 /// ```
-#[derive(Clone)]
-pub struct SysOps {
-    // File system operations
-    pub fs_open: SysOpFn,
-    pub fs_read: SysOpFn,
-    pub fs_close: SysOpFn,
+macro_rules! define_sys_ops_struct {
+    ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr })*) => {
+        #[derive(Clone)]
+        pub struct SysOps {
+            $( pub $snake: SysOpFn, )*
+        }
 
-    // Network operations
-    pub net_connect: SysOpFn,
-    pub net_read: SysOpFn,
-    pub net_close: SysOpFn,
+        impl SysOps {
+            /// Look up the function pointer for a given `SysOp`.
+            pub fn get(&self, op: SysOp) -> SysOpFn {
+                match op {
+                    $( SysOp::$Variant => self.$snake, )*
+                }
+            }
 
-    // System operations
-    pub shell: SysOpFn,
+            /// Create a function that always returns `OpError::Unsupported` for a given op.
+            ///
+            /// Useful for providers that don't support certain operations.
+            pub fn unsupported(operation: SysOp) -> SysOpFn {
+                match operation {
+                    $( SysOp::$Variant => |_, _, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::$Variant))), )*
+                }
+            }
 
-    // HTTP operations
-    pub http_fetch: SysOpFn,
-    pub http_response_text: SysOpFn,
-    pub http_response_ok: SysOpFn,
-    pub http_send: SysOpFn,
-}
-
-impl SysOps {
-    /// Create a function that always returns `OpError::Unsupported`.
-    ///
-    /// Useful for providers that don't support certain operations.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use bex_vm_types::SysOp;
-    ///
-    /// let sys_ops = SysOps {
-    ///     shell: SysOps::unsupported(SysOp::Shell),  // WASM can't run shell commands
-    ///     // ... other ops
-    /// };
-    /// ```
-    pub fn unsupported(operation: SysOp) -> SysOpFn {
-        // Match on the enum variant to return the appropriate function pointer.
-        // Each closure captures nothing, so they can be coerced to fn pointers.
-        match operation {
-            SysOp::FsOpen => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::FsOpen))),
-            SysOp::FsRead => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::FsRead))),
-            SysOp::FsClose => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::FsClose))),
-            SysOp::NetConnect => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::NetConnect)))
-            }
-            SysOp::NetRead => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::NetRead))),
-            SysOp::NetClose => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::NetClose)))
-            }
-            SysOp::Shell => |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::Shell))),
-            SysOp::HttpFetch => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::HttpFetch)))
-            }
-            SysOp::ResponseText => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::ResponseText)))
-            }
-            SysOp::ResponseOk => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::ResponseOk)))
-            }
-            SysOp::RenderPrompt => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::RenderPrompt)))
-            }
-            SysOp::SpecializePrompt => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::SpecializePrompt)))
-            }
-            // LLM operations are handled directly by the engine, not through SysOps table
-            SysOp::LlmGetJinjaTemplate => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmGetJinjaTemplate)))
-            }
-            SysOp::LlmBuildPrimitiveClient => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmBuildPrimitiveClient)))
-            }
-            SysOp::LlmGetClientFunction => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmGetClientFunction)))
-            }
-            SysOp::LlmBuildRequest => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmBuildRequest)))
-            }
-            SysOp::LlmParseResponse => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::LlmParseResponse)))
-            }
-            SysOp::HttpSend => {
-                |_, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::HttpSend)))
+            /// Create a `SysOps` table where all operations return `Unsupported`.
+            ///
+            /// Useful as a base for providers that only implement some operations.
+            pub fn all_unsupported() -> Self {
+                Self {
+                    $( $snake: Self::unsupported(SysOp::$Variant), )*
+                }
             }
         }
-    }
-
-    /// Create a `SysOps` table where all operations return `Unsupported`.
-    ///
-    /// Useful as a base for providers that only implement some operations.
-    pub fn all_unsupported() -> Self {
-        Self {
-            fs_open: Self::unsupported(SysOp::FsOpen),
-            fs_read: Self::unsupported(SysOp::FsRead),
-            fs_close: Self::unsupported(SysOp::FsClose),
-            net_connect: Self::unsupported(SysOp::NetConnect),
-            net_read: Self::unsupported(SysOp::NetRead),
-            net_close: Self::unsupported(SysOp::NetClose),
-            shell: Self::unsupported(SysOp::Shell),
-            http_fetch: Self::unsupported(SysOp::HttpFetch),
-            http_response_text: Self::unsupported(SysOp::ResponseText),
-            http_response_ok: Self::unsupported(SysOp::ResponseOk),
-            http_send: Self::unsupported(SysOp::HttpSend),
-        }
-    }
+    };
 }
+
+baml_builtins::for_all_sys_ops!(define_sys_ops_struct);
+
+// ============================================================================
+// Per-module sys_op traits (generated from DSL definitions)
+// ============================================================================
+
+// Generates: SysOpFs, SysOpSys, SysOpNet, SysOpHttp, SysOpLlm traits
+// and SysOps::from_impl<T>() constructor.
+baml_builtins::with_builtins!(baml_builtins_macros::generate_sys_op_traits);
 
 // ============================================================================
 // Async Completion Utilities
@@ -337,15 +433,20 @@ mod tests {
         BexHeap::new(vec![])
     }
 
+    fn test_ctx() -> SysOpContext {
+        SysOpContext::empty()
+    }
+
     #[test]
     fn test_unsupported_returns_error() {
         let heap = test_heap();
-        let op = SysOps::unsupported(SysOp::Shell);
-        let result = op(&heap, vec![]);
+        let ctx = test_ctx();
+        let op = SysOps::unsupported(SysOp::BamlSysShell);
+        let result = op(&heap, vec![], &ctx);
         match result {
             SysOpResult::Ready(Err(e)) => {
                 assert!(matches!(e.kind, OpErrorKind::Unsupported));
-                assert_eq!(e.fn_name, SysOp::Shell);
+                assert_eq!(e.fn_name, SysOp::BamlSysShell);
             }
             _ => panic!("Expected Unsupported error"),
         }
@@ -354,31 +455,45 @@ mod tests {
     #[test]
     fn test_all_unsupported() {
         let heap = test_heap();
+        let ctx = test_ctx();
         let ops = SysOps::all_unsupported();
 
-        // Test each operation returns Unsupported
-        let result = (ops.fs_open)(&heap, vec![]);
+        // Test fs_open returns Unsupported
+        let result = (ops.baml_fs_open)(&heap, vec![], &ctx);
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
-                fn_name: SysOp::FsOpen,
+                fn_name: SysOp::BamlFsOpen,
                 kind: OpErrorKind::Unsupported,
             }))
         ));
 
-        let result = (ops.shell)(&heap, vec![]);
+        // Test shell returns Unsupported
+        let result = (ops.baml_sys_shell)(&heap, vec![], &ctx);
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
-                fn_name: SysOp::Shell,
+                fn_name: SysOp::BamlSysShell,
                 kind: OpErrorKind::Unsupported,
             }))
         ));
     }
 
+    #[test]
+    fn test_sys_ops_get() {
+        let ops = SysOps::all_unsupported();
+        let heap = test_heap();
+        let ctx = test_ctx();
+
+        // Test that get() returns the correct function pointer
+        let fn_ptr = ops.get(SysOp::BamlFsOpen);
+        let result = fn_ptr(&heap, vec![], &ctx);
+        assert!(matches!(result, SysOpResult::Ready(Err(_))));
+    }
+
     #[tokio::test]
     async fn test_completion_handle() {
-        let (result, handle) = SysOpResult::pending(SysOp::Shell);
+        let (result, handle) = SysOpResult::pending(SysOp::BamlSysShell);
 
         // Complete in another task
         tokio::spawn(async move {

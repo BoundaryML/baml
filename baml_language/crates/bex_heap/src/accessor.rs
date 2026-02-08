@@ -703,12 +703,19 @@ pub mod builtin_types {
     pub mod owned {
         use bex_external_types::BexExternalValue;
 
+        #[derive(Debug)]
         pub struct PrimitiveClient {
             pub name: String,
             pub provider: String,
             pub default_role: String,
             pub allowed_roles: Vec<String>,
             pub options: indexmap::IndexMap<String, bex_external_types::BexExternalValue>,
+        }
+
+        impl From<PrimitiveClient> for BexExternalValue {
+            fn from(c: PrimitiveClient) -> Self {
+                c.as_bex_external_value()
+            }
         }
 
         impl PrimitiveClient {
@@ -740,11 +747,18 @@ pub mod builtin_types {
             }
         }
 
+        #[derive(Debug)]
         pub struct HttpRequest {
             pub method: String,
             pub url: String,
             pub headers: indexmap::IndexMap<String, String>,
             pub body: String,
+        }
+
+        impl From<HttpRequest> for BexExternalValue {
+            fn from(r: HttpRequest) -> Self {
+                r.as_bex_external_value()
+            }
         }
 
         impl HttpRequest {
@@ -771,11 +785,18 @@ pub mod builtin_types {
             }
         }
 
+        #[derive(Debug)]
         pub struct HttpResponse {
             pub status_code: i64,
             pub headers: indexmap::IndexMap<String, String>,
             pub url: String,
             pub _handle: sys_resource_types::ResourceHandle,
+        }
+
+        impl From<HttpResponse> for BexExternalValue {
+            fn from(r: HttpResponse) -> Self {
+                r.as_bex_external_value()
+            }
         }
 
         impl HttpResponse {
@@ -802,6 +823,7 @@ pub mod builtin_types {
             }
         }
 
+        #[derive(Debug)]
         pub struct FsFile {
             pub _handle: sys_resource_types::ResourceHandle,
         }
@@ -818,6 +840,13 @@ pub mod builtin_types {
             }
         }
 
+        impl From<FsFile> for BexExternalValue {
+            fn from(f: FsFile) -> Self {
+                f.as_bex_external_value()
+            }
+        }
+
+        #[derive(Debug)]
         pub struct NetSocket {
             pub _handle: sys_resource_types::ResourceHandle,
         }
@@ -831,6 +860,12 @@ pub mod builtin_types {
                         "_handle".to_string() => BexExternalValue::Resource(self._handle),
                     },
                 }
+            }
+        }
+
+        impl From<NetSocket> for BexExternalValue {
+            fn from(s: NetSocket) -> Self {
+                s.as_bex_external_value()
             }
         }
     }

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
+source: target/debug/build/baml_tests-15cf2be5bc9d87e9/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -13,13 +13,13 @@ Function Ambiguous (arity: 1, kind: Bytecode):
 Function AnotherLLM (arity: 1, kind: Bytecode):
   (no bytecode)
 
-Function ChainedProcess (arity: 1, kind: SysOp(RenderPrompt)):
+Function ChainedProcess (arity: 1, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
   (no bytecode)
 
-Function ExtractData (arity: 1, kind: SysOp(RenderPrompt)):
+Function ExtractData (arity: 1, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
   (no bytecode)
 
-Function LLMAnalyze (arity: 1, kind: SysOp(RenderPrompt)):
+Function LLMAnalyze (arity: 1, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
   (no bytecode)
 
 Function ProcessAnalysis (arity: 1, kind: Bytecode):

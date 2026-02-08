@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
+source: target/debug/build/baml_tests-15cf2be5bc9d87e9/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -7,10 +7,10 @@ Functions: 6
 Objects: 63
 Globals: 52
 
-Function CommentAfterArrow (arity: 0, kind: SysOp(RenderPrompt)):
+Function CommentAfterArrow (arity: 0, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
   (no bytecode)
 
-Function FunctionWithComments (arity: 2, kind: SysOp(RenderPrompt)):
+Function FunctionWithComments (arity: 2, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
   (no bytecode)
 
 Function TestClient.resolve (arity: 0, kind: Bytecode):
