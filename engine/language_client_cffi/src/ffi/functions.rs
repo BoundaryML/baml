@@ -387,7 +387,7 @@ fn build_request_from_c_inner(
         None => false,
     };
     // Remove `stream` from kwargs so it's not passed as a function argument.
-    kwargs.remove("stream");
+    kwargs.shift_remove("stream");
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
