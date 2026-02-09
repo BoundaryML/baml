@@ -25,7 +25,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for AaaSamOutputFormat (returns baml.HTTPRequest)
+// Build HTTP request for AaaSamOutputFormat (returns baml.HTTPRequest)
 func (*build_request) AaaSamOutputFormat(recipe string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -68,15 +68,10 @@ func (*build_request) AaaSamOutputFormat(recipe string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AaaSamOutputFormat", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AaaSamOutputFormat", encoded)
 }
 
-// / Build HTTP request for AliasThatPointsToRecursiveType (returns baml.HTTPRequest)
+// Build HTTP request for AliasThatPointsToRecursiveType (returns baml.HTTPRequest)
 func (*build_request) AliasThatPointsToRecursiveType(data types.LinkedListAliasNode, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -119,15 +114,10 @@ func (*build_request) AliasThatPointsToRecursiveType(data types.LinkedListAliasN
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AliasThatPointsToRecursiveType", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AliasThatPointsToRecursiveType", encoded)
 }
 
-// / Build HTTP request for AliasWithMultipleAttrs (returns baml.HTTPRequest)
+// Build HTTP request for AliasWithMultipleAttrs (returns baml.HTTPRequest)
 func (*build_request) AliasWithMultipleAttrs(money int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -170,15 +160,10 @@ func (*build_request) AliasWithMultipleAttrs(money int64, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AliasWithMultipleAttrs", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AliasWithMultipleAttrs", encoded)
 }
 
-// / Build HTTP request for AliasedInputClass (returns baml.HTTPRequest)
+// Build HTTP request for AliasedInputClass (returns baml.HTTPRequest)
 func (*build_request) AliasedInputClass(input types.InputClass, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -221,15 +206,10 @@ func (*build_request) AliasedInputClass(input types.InputClass, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AliasedInputClass", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AliasedInputClass", encoded)
 }
 
-// / Build HTTP request for AliasedInputClass2 (returns baml.HTTPRequest)
+// Build HTTP request for AliasedInputClass2 (returns baml.HTTPRequest)
 func (*build_request) AliasedInputClass2(input types.InputClass, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -272,15 +252,10 @@ func (*build_request) AliasedInputClass2(input types.InputClass, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AliasedInputClass2", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AliasedInputClass2", encoded)
 }
 
-// / Build HTTP request for AliasedInputClassNested (returns baml.HTTPRequest)
+// Build HTTP request for AliasedInputClassNested (returns baml.HTTPRequest)
 func (*build_request) AliasedInputClassNested(input types.InputClassNested, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -323,15 +298,10 @@ func (*build_request) AliasedInputClassNested(input types.InputClassNested, opts
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AliasedInputClassNested", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AliasedInputClassNested", encoded)
 }
 
-// / Build HTTP request for AliasedInputEnum (returns baml.HTTPRequest)
+// Build HTTP request for AliasedInputEnum (returns baml.HTTPRequest)
 func (*build_request) AliasedInputEnum(input types.AliasedEnum, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -374,15 +344,10 @@ func (*build_request) AliasedInputEnum(input types.AliasedEnum, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AliasedInputEnum", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AliasedInputEnum", encoded)
 }
 
-// / Build HTTP request for AliasedInputList (returns baml.HTTPRequest)
+// Build HTTP request for AliasedInputList (returns baml.HTTPRequest)
 func (*build_request) AliasedInputList(input []types.AliasedEnum, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -425,15 +390,10 @@ func (*build_request) AliasedInputList(input []types.AliasedEnum, opts ...CallOp
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AliasedInputList", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AliasedInputList", encoded)
 }
 
-// / Build HTTP request for AllowedOptionals (returns baml.HTTPRequest)
+// Build HTTP request for AllowedOptionals (returns baml.HTTPRequest)
 func (*build_request) AllowedOptionals(optionals types.OptionalListAndMap, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -476,15 +436,10 @@ func (*build_request) AllowedOptionals(optionals types.OptionalListAndMap, opts 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AllowedOptionals", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AllowedOptionals", encoded)
 }
 
-// / Build HTTP request for AssertFn (returns baml.HTTPRequest)
+// Build HTTP request for AssertFn (returns baml.HTTPRequest)
 func (*build_request) AssertFn(a int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -527,15 +482,10 @@ func (*build_request) AssertFn(a int64, opts ...CallOptionFunc) (baml.HTTPReques
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AssertFn", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AssertFn", encoded)
 }
 
-// / Build HTTP request for AudioInput (returns baml.HTTPRequest)
+// Build HTTP request for AudioInput (returns baml.HTTPRequest)
 func (*build_request) AudioInput(aud types.Audio, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -578,15 +528,10 @@ func (*build_request) AudioInput(aud types.Audio, opts ...CallOptionFunc) (baml.
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AudioInput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AudioInput", encoded)
 }
 
-// / Build HTTP request for AudioInputOpenai (returns baml.HTTPRequest)
+// Build HTTP request for AudioInputOpenai (returns baml.HTTPRequest)
 func (*build_request) AudioInputOpenai(aud types.Audio, prompt string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -629,15 +574,10 @@ func (*build_request) AudioInputOpenai(aud types.Audio, prompt string, opts ...C
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "AudioInputOpenai", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "AudioInputOpenai", encoded)
 }
 
-// / Build HTTP request for BuildLinkedList (returns baml.HTTPRequest)
+// Build HTTP request for BuildLinkedList (returns baml.HTTPRequest)
 func (*build_request) BuildLinkedList(input []int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -680,15 +620,10 @@ func (*build_request) BuildLinkedList(input []int64, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "BuildLinkedList", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "BuildLinkedList", encoded)
 }
 
-// / Build HTTP request for BuildTree (returns baml.HTTPRequest)
+// Build HTTP request for BuildTree (returns baml.HTTPRequest)
 func (*build_request) BuildTree(input types.BinaryNode, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -731,15 +666,10 @@ func (*build_request) BuildTree(input types.BinaryNode, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "BuildTree", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "BuildTree", encoded)
 }
 
-// / Build HTTP request for CheckWordEquality (returns baml.HTTPRequest)
+// Build HTTP request for CheckWordEquality (returns baml.HTTPRequest)
 func (*build_request) CheckWordEquality(word string, target string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -782,15 +712,10 @@ func (*build_request) CheckWordEquality(word string, target string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "CheckWordEquality", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "CheckWordEquality", encoded)
 }
 
-// / Build HTTP request for ChooseTodoTools (returns baml.HTTPRequest)
+// Build HTTP request for ChooseTodoTools (returns baml.HTTPRequest)
 func (*build_request) ChooseTodoTools(query string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -833,15 +758,10 @@ func (*build_request) ChooseTodoTools(query string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ChooseTodoTools", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ChooseTodoTools", encoded)
 }
 
-// / Build HTTP request for ClassThatPointsToRecursiveClassThroughAlias (returns baml.HTTPRequest)
+// Build HTTP request for ClassThatPointsToRecursiveClassThroughAlias (returns baml.HTTPRequest)
 func (*build_request) ClassThatPointsToRecursiveClassThroughAlias(cls types.ClassToRecAlias, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -884,15 +804,10 @@ func (*build_request) ClassThatPointsToRecursiveClassThroughAlias(cls types.Clas
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ClassThatPointsToRecursiveClassThroughAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ClassThatPointsToRecursiveClassThroughAlias", encoded)
 }
 
-// / Build HTTP request for ClassifyDynEnumTwo (returns baml.HTTPRequest)
+// Build HTTP request for ClassifyDynEnumTwo (returns baml.HTTPRequest)
 func (*build_request) ClassifyDynEnumTwo(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -935,15 +850,10 @@ func (*build_request) ClassifyDynEnumTwo(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ClassifyDynEnumTwo", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ClassifyDynEnumTwo", encoded)
 }
 
-// / Build HTTP request for ClassifyDynamicStatus (returns baml.HTTPRequest)
+// Build HTTP request for ClassifyDynamicStatus (returns baml.HTTPRequest)
 func (*build_request) ClassifyDynamicStatus(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -986,15 +896,10 @@ func (*build_request) ClassifyDynamicStatus(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ClassifyDynamicStatus", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ClassifyDynamicStatus", encoded)
 }
 
-// / Build HTTP request for ClassifyMessage (returns baml.HTTPRequest)
+// Build HTTP request for ClassifyMessage (returns baml.HTTPRequest)
 func (*build_request) ClassifyMessage(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1037,15 +942,10 @@ func (*build_request) ClassifyMessage(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ClassifyMessage", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ClassifyMessage", encoded)
 }
 
-// / Build HTTP request for ClassifyMessage2 (returns baml.HTTPRequest)
+// Build HTTP request for ClassifyMessage2 (returns baml.HTTPRequest)
 func (*build_request) ClassifyMessage2(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1088,15 +988,10 @@ func (*build_request) ClassifyMessage2(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ClassifyMessage2", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ClassifyMessage2", encoded)
 }
 
-// / Build HTTP request for ClassifyMessage3 (returns baml.HTTPRequest)
+// Build HTTP request for ClassifyMessage3 (returns baml.HTTPRequest)
 func (*build_request) ClassifyMessage3(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1139,15 +1034,10 @@ func (*build_request) ClassifyMessage3(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ClassifyMessage3", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ClassifyMessage3", encoded)
 }
 
-// / Build HTTP request for Completion (returns baml.HTTPRequest)
+// Build HTTP request for Completion (returns baml.HTTPRequest)
 func (*build_request) Completion(prefix string, suffix string, language string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1190,15 +1080,10 @@ func (*build_request) Completion(prefix string, suffix string, language string, 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "Completion", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "Completion", encoded)
 }
 
-// / Build HTTP request for CustomTask (returns baml.HTTPRequest)
+// Build HTTP request for CustomTask (returns baml.HTTPRequest)
 func (*build_request) CustomTask(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1241,15 +1126,10 @@ func (*build_request) CustomTask(input string, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "CustomTask", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "CustomTask", encoded)
 }
 
-// / Build HTTP request for DescribeAudio (returns baml.HTTPRequest)
+// Build HTTP request for DescribeAudio (returns baml.HTTPRequest)
 func (*build_request) DescribeAudio(audio types.Audio, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1292,15 +1172,10 @@ func (*build_request) DescribeAudio(audio types.Audio, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DescribeAudio", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DescribeAudio", encoded)
 }
 
-// / Build HTTP request for DescribeAudio2 (returns baml.HTTPRequest)
+// Build HTTP request for DescribeAudio2 (returns baml.HTTPRequest)
 func (*build_request) DescribeAudio2(audio types.Audio, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1343,15 +1218,10 @@ func (*build_request) DescribeAudio2(audio types.Audio, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DescribeAudio2", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DescribeAudio2", encoded)
 }
 
-// / Build HTTP request for DescribeImage (returns baml.HTTPRequest)
+// Build HTTP request for DescribeImage (returns baml.HTTPRequest)
 func (*build_request) DescribeImage(img types.Image, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1394,15 +1264,10 @@ func (*build_request) DescribeImage(img types.Image, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DescribeImage", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DescribeImage", encoded)
 }
 
-// / Build HTTP request for DescribeImage2 (returns baml.HTTPRequest)
+// Build HTTP request for DescribeImage2 (returns baml.HTTPRequest)
 func (*build_request) DescribeImage2(classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1445,15 +1310,10 @@ func (*build_request) DescribeImage2(classWithImage types.ClassWithImage, img2 t
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DescribeImage2", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DescribeImage2", encoded)
 }
 
-// / Build HTTP request for DescribeImage3 (returns baml.HTTPRequest)
+// Build HTTP request for DescribeImage3 (returns baml.HTTPRequest)
 func (*build_request) DescribeImage3(classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1496,15 +1356,10 @@ func (*build_request) DescribeImage3(classWithImage types.ClassWithImage, img2 t
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DescribeImage3", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DescribeImage3", encoded)
 }
 
-// / Build HTTP request for DescribeImage4 (returns baml.HTTPRequest)
+// Build HTTP request for DescribeImage4 (returns baml.HTTPRequest)
 func (*build_request) DescribeImage4(classWithImage types.ClassWithImage, img2 types.Image, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1547,15 +1402,10 @@ func (*build_request) DescribeImage4(classWithImage types.ClassWithImage, img2 t
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DescribeImage4", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DescribeImage4", encoded)
 }
 
-// / Build HTTP request for DescribeMedia1599 (returns baml.HTTPRequest)
+// Build HTTP request for DescribeMedia1599 (returns baml.HTTPRequest)
 func (*build_request) DescribeMedia1599(img types.Image, client_sector string, client_name string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1598,15 +1448,10 @@ func (*build_request) DescribeMedia1599(img types.Image, client_sector string, c
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DescribeMedia1599", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DescribeMedia1599", encoded)
 }
 
-// / Build HTTP request for DifferentiateUnions (returns baml.HTTPRequest)
+// Build HTTP request for DifferentiateUnions (returns baml.HTTPRequest)
 func (*build_request) DifferentiateUnions(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1649,15 +1494,10 @@ func (*build_request) DifferentiateUnions(opts ...CallOptionFunc) (baml.HTTPRequ
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DifferentiateUnions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DifferentiateUnions", encoded)
 }
 
-// / Build HTTP request for DummyOutputFunction (returns baml.HTTPRequest)
+// Build HTTP request for DummyOutputFunction (returns baml.HTTPRequest)
 func (*build_request) DummyOutputFunction(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1700,15 +1540,10 @@ func (*build_request) DummyOutputFunction(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DummyOutputFunction", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DummyOutputFunction", encoded)
 }
 
-// / Build HTTP request for DynamicFunc (returns baml.HTTPRequest)
+// Build HTTP request for DynamicFunc (returns baml.HTTPRequest)
 func (*build_request) DynamicFunc(input types.DynamicClassOne, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1751,15 +1586,10 @@ func (*build_request) DynamicFunc(input types.DynamicClassOne, opts ...CallOptio
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DynamicFunc", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DynamicFunc", encoded)
 }
 
-// / Build HTTP request for DynamicInputOutput (returns baml.HTTPRequest)
+// Build HTTP request for DynamicInputOutput (returns baml.HTTPRequest)
 func (*build_request) DynamicInputOutput(input types.DynInputOutput, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1802,15 +1632,10 @@ func (*build_request) DynamicInputOutput(input types.DynInputOutput, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DynamicInputOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DynamicInputOutput", encoded)
 }
 
-// / Build HTTP request for DynamicListInputOutput (returns baml.HTTPRequest)
+// Build HTTP request for DynamicListInputOutput (returns baml.HTTPRequest)
 func (*build_request) DynamicListInputOutput(input []types.DynInputOutput, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1853,15 +1678,10 @@ func (*build_request) DynamicListInputOutput(input []types.DynInputOutput, opts 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "DynamicListInputOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "DynamicListInputOutput", encoded)
 }
 
-// / Build HTTP request for ExpectFailure (returns baml.HTTPRequest)
+// Build HTTP request for ExpectFailure (returns baml.HTTPRequest)
 func (*build_request) ExpectFailure(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1904,15 +1724,10 @@ func (*build_request) ExpectFailure(opts ...CallOptionFunc) (baml.HTTPRequest, e
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExpectFailure", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExpectFailure", encoded)
 }
 
-// / Build HTTP request for ExtractContactInfo (returns baml.HTTPRequest)
+// Build HTTP request for ExtractContactInfo (returns baml.HTTPRequest)
 func (*build_request) ExtractContactInfo(document string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -1955,15 +1770,10 @@ func (*build_request) ExtractContactInfo(document string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractContactInfo", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractContactInfo", encoded)
 }
 
-// / Build HTTP request for ExtractDynamicCategories (returns baml.HTTPRequest)
+// Build HTTP request for ExtractDynamicCategories (returns baml.HTTPRequest)
 func (*build_request) ExtractDynamicCategories(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2006,15 +1816,10 @@ func (*build_request) ExtractDynamicCategories(input string, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractDynamicCategories", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractDynamicCategories", encoded)
 }
 
-// / Build HTTP request for ExtractEntities (returns baml.HTTPRequest)
+// Build HTTP request for ExtractEntities (returns baml.HTTPRequest)
 func (*build_request) ExtractEntities(text string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2057,15 +1862,10 @@ func (*build_request) ExtractEntities(text string, opts ...CallOptionFunc) (baml
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractEntities", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractEntities", encoded)
 }
 
-// / Build HTTP request for ExtractHobby (returns baml.HTTPRequest)
+// Build HTTP request for ExtractHobby (returns baml.HTTPRequest)
 func (*build_request) ExtractHobby(text string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2108,15 +1908,10 @@ func (*build_request) ExtractHobby(text string, opts ...CallOptionFunc) (baml.HT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractHobby", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractHobby", encoded)
 }
 
-// / Build HTTP request for ExtractName (returns baml.HTTPRequest)
+// Build HTTP request for ExtractName (returns baml.HTTPRequest)
 func (*build_request) ExtractName(text string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2159,15 +1954,10 @@ func (*build_request) ExtractName(text string, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractName", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractName", encoded)
 }
 
-// / Build HTTP request for ExtractNames (returns baml.HTTPRequest)
+// Build HTTP request for ExtractNames (returns baml.HTTPRequest)
 func (*build_request) ExtractNames(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2210,15 +2000,10 @@ func (*build_request) ExtractNames(input string, opts ...CallOptionFunc) (baml.H
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractNames", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractNames", encoded)
 }
 
-// / Build HTTP request for ExtractPeople (returns baml.HTTPRequest)
+// Build HTTP request for ExtractPeople (returns baml.HTTPRequest)
 func (*build_request) ExtractPeople(text string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2261,15 +2046,10 @@ func (*build_request) ExtractPeople(text string, opts ...CallOptionFunc) (baml.H
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractPeople", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractPeople", encoded)
 }
 
-// / Build HTTP request for ExtractPersonWithMeta (returns baml.HTTPRequest)
+// Build HTTP request for ExtractPersonWithMeta (returns baml.HTTPRequest)
 func (*build_request) ExtractPersonWithMeta(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2312,15 +2092,10 @@ func (*build_request) ExtractPersonWithMeta(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractPersonWithMeta", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractPersonWithMeta", encoded)
 }
 
-// / Build HTTP request for ExtractReceiptInfo (returns baml.HTTPRequest)
+// Build HTTP request for ExtractReceiptInfo (returns baml.HTTPRequest)
 func (*build_request) ExtractReceiptInfo(email string, reason types.Union2KcuriosityOrKpersonal_finance, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2363,15 +2138,10 @@ func (*build_request) ExtractReceiptInfo(email string, reason types.Union2Kcurio
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractReceiptInfo", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractReceiptInfo", encoded)
 }
 
-// / Build HTTP request for ExtractResume (returns baml.HTTPRequest)
+// Build HTTP request for ExtractResume (returns baml.HTTPRequest)
 func (*build_request) ExtractResume(resume string, img *types.Image, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2414,15 +2184,10 @@ func (*build_request) ExtractResume(resume string, img *types.Image, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractResume", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractResume", encoded)
 }
 
-// / Build HTTP request for ExtractResume2 (returns baml.HTTPRequest)
+// Build HTTP request for ExtractResume2 (returns baml.HTTPRequest)
 func (*build_request) ExtractResume2(resume string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2465,15 +2230,10 @@ func (*build_request) ExtractResume2(resume string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ExtractResume2", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ExtractResume2", encoded)
 }
 
-// / Build HTTP request for FnAlwaysFails (returns baml.HTTPRequest)
+// Build HTTP request for FnAlwaysFails (returns baml.HTTPRequest)
 func (*build_request) FnAlwaysFails(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2516,15 +2276,10 @@ func (*build_request) FnAlwaysFails(input string, opts ...CallOptionFunc) (baml.
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnAlwaysFails", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnAlwaysFails", encoded)
 }
 
-// / Build HTTP request for FnClassOptionalOutput (returns baml.HTTPRequest)
+// Build HTTP request for FnClassOptionalOutput (returns baml.HTTPRequest)
 func (*build_request) FnClassOptionalOutput(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2567,15 +2322,10 @@ func (*build_request) FnClassOptionalOutput(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnClassOptionalOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnClassOptionalOutput", encoded)
 }
 
-// / Build HTTP request for FnClassOptionalOutput2 (returns baml.HTTPRequest)
+// Build HTTP request for FnClassOptionalOutput2 (returns baml.HTTPRequest)
 func (*build_request) FnClassOptionalOutput2(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2618,15 +2368,10 @@ func (*build_request) FnClassOptionalOutput2(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnClassOptionalOutput2", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnClassOptionalOutput2", encoded)
 }
 
-// / Build HTTP request for FnEnumListOutput (returns baml.HTTPRequest)
+// Build HTTP request for FnEnumListOutput (returns baml.HTTPRequest)
 func (*build_request) FnEnumListOutput(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2669,15 +2414,10 @@ func (*build_request) FnEnumListOutput(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnEnumListOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnEnumListOutput", encoded)
 }
 
-// / Build HTTP request for FnEnumOutput (returns baml.HTTPRequest)
+// Build HTTP request for FnEnumOutput (returns baml.HTTPRequest)
 func (*build_request) FnEnumOutput(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2720,15 +2460,10 @@ func (*build_request) FnEnumOutput(input string, opts ...CallOptionFunc) (baml.H
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnEnumOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnEnumOutput", encoded)
 }
 
-// / Build HTTP request for FnFailRetryConstantDelay (returns baml.HTTPRequest)
+// Build HTTP request for FnFailRetryConstantDelay (returns baml.HTTPRequest)
 func (*build_request) FnFailRetryConstantDelay(retries int64, delay_ms int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2771,15 +2506,10 @@ func (*build_request) FnFailRetryConstantDelay(retries int64, delay_ms int64, op
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnFailRetryConstantDelay", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnFailRetryConstantDelay", encoded)
 }
 
-// / Build HTTP request for FnFailRetryExponentialDelay (returns baml.HTTPRequest)
+// Build HTTP request for FnFailRetryExponentialDelay (returns baml.HTTPRequest)
 func (*build_request) FnFailRetryExponentialDelay(retries int64, initial_delay_ms int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2822,15 +2552,10 @@ func (*build_request) FnFailRetryExponentialDelay(retries int64, initial_delay_m
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnFailRetryExponentialDelay", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnFailRetryExponentialDelay", encoded)
 }
 
-// / Build HTTP request for FnFallbackAlwaysFails (returns baml.HTTPRequest)
+// Build HTTP request for FnFallbackAlwaysFails (returns baml.HTTPRequest)
 func (*build_request) FnFallbackAlwaysFails(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2873,15 +2598,10 @@ func (*build_request) FnFallbackAlwaysFails(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnFallbackAlwaysFails", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnFallbackAlwaysFails", encoded)
 }
 
-// / Build HTTP request for FnLiteralClassInputOutput (returns baml.HTTPRequest)
+// Build HTTP request for FnLiteralClassInputOutput (returns baml.HTTPRequest)
 func (*build_request) FnLiteralClassInputOutput(input types.LiteralClassHello, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2924,15 +2644,10 @@ func (*build_request) FnLiteralClassInputOutput(input types.LiteralClassHello, o
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnLiteralClassInputOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnLiteralClassInputOutput", encoded)
 }
 
-// / Build HTTP request for FnLiteralUnionClassInputOutput (returns baml.HTTPRequest)
+// Build HTTP request for FnLiteralUnionClassInputOutput (returns baml.HTTPRequest)
 func (*build_request) FnLiteralUnionClassInputOutput(input types.Union2LiteralClassOneOrLiteralClassTwo, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -2975,15 +2690,10 @@ func (*build_request) FnLiteralUnionClassInputOutput(input types.Union2LiteralCl
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnLiteralUnionClassInputOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnLiteralUnionClassInputOutput", encoded)
 }
 
-// / Build HTTP request for FnNamedArgsSingleStringOptional (returns baml.HTTPRequest)
+// Build HTTP request for FnNamedArgsSingleStringOptional (returns baml.HTTPRequest)
 func (*build_request) FnNamedArgsSingleStringOptional(myString *string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3026,15 +2736,10 @@ func (*build_request) FnNamedArgsSingleStringOptional(myString *string, opts ...
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnNamedArgsSingleStringOptional", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnNamedArgsSingleStringOptional", encoded)
 }
 
-// / Build HTTP request for FnOutputBool (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputBool (returns baml.HTTPRequest)
 func (*build_request) FnOutputBool(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3077,15 +2782,10 @@ func (*build_request) FnOutputBool(input string, opts ...CallOptionFunc) (baml.H
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputBool", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputBool", encoded)
 }
 
-// / Build HTTP request for FnOutputClass (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputClass (returns baml.HTTPRequest)
 func (*build_request) FnOutputClass(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3128,15 +2828,10 @@ func (*build_request) FnOutputClass(input string, opts ...CallOptionFunc) (baml.
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputClass", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputClass", encoded)
 }
 
-// / Build HTTP request for FnOutputClassList (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputClassList (returns baml.HTTPRequest)
 func (*build_request) FnOutputClassList(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3179,15 +2874,10 @@ func (*build_request) FnOutputClassList(input string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputClassList", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputClassList", encoded)
 }
 
-// / Build HTTP request for FnOutputClassNested (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputClassNested (returns baml.HTTPRequest)
 func (*build_request) FnOutputClassNested(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3230,15 +2920,10 @@ func (*build_request) FnOutputClassNested(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputClassNested", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputClassNested", encoded)
 }
 
-// / Build HTTP request for FnOutputClassWithEnum (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputClassWithEnum (returns baml.HTTPRequest)
 func (*build_request) FnOutputClassWithEnum(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3281,15 +2966,10 @@ func (*build_request) FnOutputClassWithEnum(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputClassWithEnum", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputClassWithEnum", encoded)
 }
 
-// / Build HTTP request for FnOutputInt (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputInt (returns baml.HTTPRequest)
 func (*build_request) FnOutputInt(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3332,15 +3012,10 @@ func (*build_request) FnOutputInt(input string, opts ...CallOptionFunc) (baml.HT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputInt", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputInt", encoded)
 }
 
-// / Build HTTP request for FnOutputLiteralBool (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputLiteralBool (returns baml.HTTPRequest)
 func (*build_request) FnOutputLiteralBool(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3383,15 +3058,10 @@ func (*build_request) FnOutputLiteralBool(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputLiteralBool", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputLiteralBool", encoded)
 }
 
-// / Build HTTP request for FnOutputLiteralInt (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputLiteralInt (returns baml.HTTPRequest)
 func (*build_request) FnOutputLiteralInt(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3434,15 +3104,10 @@ func (*build_request) FnOutputLiteralInt(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputLiteralInt", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputLiteralInt", encoded)
 }
 
-// / Build HTTP request for FnOutputLiteralString (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputLiteralString (returns baml.HTTPRequest)
 func (*build_request) FnOutputLiteralString(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3485,15 +3150,10 @@ func (*build_request) FnOutputLiteralString(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputLiteralString", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputLiteralString", encoded)
 }
 
-// / Build HTTP request for FnOutputStringList (returns baml.HTTPRequest)
+// Build HTTP request for FnOutputStringList (returns baml.HTTPRequest)
 func (*build_request) FnOutputStringList(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3536,15 +3196,10 @@ func (*build_request) FnOutputStringList(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnOutputStringList", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnOutputStringList", encoded)
 }
 
-// / Build HTTP request for FnTestAliasedEnumOutput (returns baml.HTTPRequest)
+// Build HTTP request for FnTestAliasedEnumOutput (returns baml.HTTPRequest)
 func (*build_request) FnTestAliasedEnumOutput(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3587,15 +3242,10 @@ func (*build_request) FnTestAliasedEnumOutput(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnTestAliasedEnumOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnTestAliasedEnumOutput", encoded)
 }
 
-// / Build HTTP request for FnTestClassAlias (returns baml.HTTPRequest)
+// Build HTTP request for FnTestClassAlias (returns baml.HTTPRequest)
 func (*build_request) FnTestClassAlias(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3638,15 +3288,10 @@ func (*build_request) FnTestClassAlias(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnTestClassAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnTestClassAlias", encoded)
 }
 
-// / Build HTTP request for FnTestNamedArgsSingleEnum (returns baml.HTTPRequest)
+// Build HTTP request for FnTestNamedArgsSingleEnum (returns baml.HTTPRequest)
 func (*build_request) FnTestNamedArgsSingleEnum(myArg types.NamedArgsSingleEnum, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3689,15 +3334,10 @@ func (*build_request) FnTestNamedArgsSingleEnum(myArg types.NamedArgsSingleEnum,
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnTestNamedArgsSingleEnum", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnTestNamedArgsSingleEnum", encoded)
 }
 
-// / Build HTTP request for GetDataType (returns baml.HTTPRequest)
+// Build HTTP request for GetDataType (returns baml.HTTPRequest)
 func (*build_request) GetDataType(text string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3740,15 +3380,10 @@ func (*build_request) GetDataType(text string, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "GetDataType", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "GetDataType", encoded)
 }
 
-// / Build HTTP request for GetOrderInfo (returns baml.HTTPRequest)
+// Build HTTP request for GetOrderInfo (returns baml.HTTPRequest)
 func (*build_request) GetOrderInfo(email types.Email, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3791,15 +3426,10 @@ func (*build_request) GetOrderInfo(email types.Email, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "GetOrderInfo", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "GetOrderInfo", encoded)
 }
 
-// / Build HTTP request for GetQuery (returns baml.HTTPRequest)
+// Build HTTP request for GetQuery (returns baml.HTTPRequest)
 func (*build_request) GetQuery(query string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3842,15 +3472,10 @@ func (*build_request) GetQuery(query string, opts ...CallOptionFunc) (baml.HTTPR
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "GetQuery", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "GetQuery", encoded)
 }
 
-// / Build HTTP request for InOutEnumMapKey (returns baml.HTTPRequest)
+// Build HTTP request for InOutEnumMapKey (returns baml.HTTPRequest)
 func (*build_request) InOutEnumMapKey(i1 map[types.MapKey]string, i2 map[types.MapKey]string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3893,15 +3518,10 @@ func (*build_request) InOutEnumMapKey(i1 map[types.MapKey]string, i2 map[types.M
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "InOutEnumMapKey", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "InOutEnumMapKey", encoded)
 }
 
-// / Build HTTP request for InOutLiteralStringUnionMapKey (returns baml.HTTPRequest)
+// Build HTTP request for InOutLiteralStringUnionMapKey (returns baml.HTTPRequest)
 func (*build_request) InOutLiteralStringUnionMapKey(i1 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, i2 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3944,15 +3564,10 @@ func (*build_request) InOutLiteralStringUnionMapKey(i1 map[types.Union4KfourOrKo
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "InOutLiteralStringUnionMapKey", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "InOutLiteralStringUnionMapKey", encoded)
 }
 
-// / Build HTTP request for InOutSingleLiteralStringMapKey (returns baml.HTTPRequest)
+// Build HTTP request for InOutSingleLiteralStringMapKey (returns baml.HTTPRequest)
 func (*build_request) InOutSingleLiteralStringMapKey(m map[string]string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -3995,15 +3610,10 @@ func (*build_request) InOutSingleLiteralStringMapKey(m map[string]string, opts .
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "InOutSingleLiteralStringMapKey", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "InOutSingleLiteralStringMapKey", encoded)
 }
 
-// / Build HTTP request for JsonTypeAliasCycle (returns baml.HTTPRequest)
+// Build HTTP request for JsonTypeAliasCycle (returns baml.HTTPRequest)
 func (*build_request) JsonTypeAliasCycle(input types.JsonValue, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4046,15 +3656,10 @@ func (*build_request) JsonTypeAliasCycle(input types.JsonValue, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "JsonTypeAliasCycle", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "JsonTypeAliasCycle", encoded)
 }
 
-// / Build HTTP request for LLMEcho (returns baml.HTTPRequest)
+// Build HTTP request for LLMEcho (returns baml.HTTPRequest)
 func (*build_request) LLMEcho(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4097,15 +3702,10 @@ func (*build_request) LLMEcho(input string, opts ...CallOptionFunc) (baml.HTTPRe
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "LLMEcho", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "LLMEcho", encoded)
 }
 
-// / Build HTTP request for LiteralUnionsTest (returns baml.HTTPRequest)
+// Build HTTP request for LiteralUnionsTest (returns baml.HTTPRequest)
 func (*build_request) LiteralUnionsTest(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4148,15 +3748,10 @@ func (*build_request) LiteralUnionsTest(input string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "LiteralUnionsTest", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "LiteralUnionsTest", encoded)
 }
 
-// / Build HTTP request for LlmReturnNumber (returns baml.HTTPRequest)
+// Build HTTP request for LlmReturnNumber (returns baml.HTTPRequest)
 func (*build_request) LlmReturnNumber(n int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4199,15 +3794,10 @@ func (*build_request) LlmReturnNumber(n int64, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "LlmReturnNumber", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "LlmReturnNumber", encoded)
 }
 
-// / Build HTTP request for MakeBlockConstraint (returns baml.HTTPRequest)
+// Build HTTP request for MakeBlockConstraint (returns baml.HTTPRequest)
 func (*build_request) MakeBlockConstraint(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4250,15 +3840,10 @@ func (*build_request) MakeBlockConstraint(opts ...CallOptionFunc) (baml.HTTPRequ
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeBlockConstraint", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeBlockConstraint", encoded)
 }
 
-// / Build HTTP request for MakeClassWithBlockDone (returns baml.HTTPRequest)
+// Build HTTP request for MakeClassWithBlockDone (returns baml.HTTPRequest)
 func (*build_request) MakeClassWithBlockDone(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4301,15 +3886,10 @@ func (*build_request) MakeClassWithBlockDone(opts ...CallOptionFunc) (baml.HTTPR
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeClassWithBlockDone", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeClassWithBlockDone", encoded)
 }
 
-// / Build HTTP request for MakeClassWithExternalDone (returns baml.HTTPRequest)
+// Build HTTP request for MakeClassWithExternalDone (returns baml.HTTPRequest)
 func (*build_request) MakeClassWithExternalDone(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4352,15 +3932,10 @@ func (*build_request) MakeClassWithExternalDone(opts ...CallOptionFunc) (baml.HT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeClassWithExternalDone", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeClassWithExternalDone", encoded)
 }
 
-// / Build HTTP request for MakeNestedBlockConstraint (returns baml.HTTPRequest)
+// Build HTTP request for MakeNestedBlockConstraint (returns baml.HTTPRequest)
 func (*build_request) MakeNestedBlockConstraint(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4403,15 +3978,10 @@ func (*build_request) MakeNestedBlockConstraint(opts ...CallOptionFunc) (baml.HT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeNestedBlockConstraint", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeNestedBlockConstraint", encoded)
 }
 
-// / Build HTTP request for MakeSemanticContainer (returns baml.HTTPRequest)
+// Build HTTP request for MakeSemanticContainer (returns baml.HTTPRequest)
 func (*build_request) MakeSemanticContainer(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4454,15 +4024,10 @@ func (*build_request) MakeSemanticContainer(opts ...CallOptionFunc) (baml.HTTPRe
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeSemanticContainer", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeSemanticContainer", encoded)
 }
 
-// / Build HTTP request for MapAlias (returns baml.HTTPRequest)
+// Build HTTP request for MapAlias (returns baml.HTTPRequest)
 func (*build_request) MapAlias(m map[string][]string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4505,15 +4070,10 @@ func (*build_request) MapAlias(m map[string][]string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MapAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MapAlias", encoded)
 }
 
-// / Build HTTP request for MergeAliasAttributes (returns baml.HTTPRequest)
+// Build HTTP request for MergeAliasAttributes (returns baml.HTTPRequest)
 func (*build_request) MergeAliasAttributes(money int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4556,15 +4116,10 @@ func (*build_request) MergeAliasAttributes(money int64, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MergeAliasAttributes", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MergeAliasAttributes", encoded)
 }
 
-// / Build HTTP request for MyFunc (returns baml.HTTPRequest)
+// Build HTTP request for MyFunc (returns baml.HTTPRequest)
 func (*build_request) MyFunc(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4607,15 +4162,10 @@ func (*build_request) MyFunc(input string, opts ...CallOptionFunc) (baml.HTTPReq
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MyFunc", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MyFunc", encoded)
 }
 
-// / Build HTTP request for NestedAlias (returns baml.HTTPRequest)
+// Build HTTP request for NestedAlias (returns baml.HTTPRequest)
 func (*build_request) NestedAlias(c types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4658,15 +4208,10 @@ func (*build_request) NestedAlias(c types.Union6BoolOrFloatOrIntOrListStringOrMa
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "NestedAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "NestedAlias", encoded)
 }
 
-// / Build HTTP request for NullLiteralClassHello (returns baml.HTTPRequest)
+// Build HTTP request for NullLiteralClassHello (returns baml.HTTPRequest)
 func (*build_request) NullLiteralClassHello(s string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4709,15 +4254,10 @@ func (*build_request) NullLiteralClassHello(s string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "NullLiteralClassHello", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "NullLiteralClassHello", encoded)
 }
 
-// / Build HTTP request for OpenAIGPT4oMissingBaseUrlEnvVar (returns baml.HTTPRequest)
+// Build HTTP request for OpenAIGPT4oMissingBaseUrlEnvVar (returns baml.HTTPRequest)
 func (*build_request) OpenAIGPT4oMissingBaseUrlEnvVar(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4760,15 +4300,10 @@ func (*build_request) OpenAIGPT4oMissingBaseUrlEnvVar(input string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "OpenAIGPT4oMissingBaseUrlEnvVar", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "OpenAIGPT4oMissingBaseUrlEnvVar", encoded)
 }
 
-// / Build HTTP request for OpenAIWithAnthropicResponseHello (returns baml.HTTPRequest)
+// Build HTTP request for OpenAIWithAnthropicResponseHello (returns baml.HTTPRequest)
 func (*build_request) OpenAIWithAnthropicResponseHello(s string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4811,15 +4346,10 @@ func (*build_request) OpenAIWithAnthropicResponseHello(s string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "OpenAIWithAnthropicResponseHello", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "OpenAIWithAnthropicResponseHello", encoded)
 }
 
-// / Build HTTP request for OptionalTest_Function (returns baml.HTTPRequest)
+// Build HTTP request for OptionalTest_Function (returns baml.HTTPRequest)
 func (*build_request) OptionalTest_Function(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4862,15 +4392,10 @@ func (*build_request) OptionalTest_Function(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "OptionalTest_Function", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "OptionalTest_Function", encoded)
 }
 
-// / Build HTTP request for PdfInput (returns baml.HTTPRequest)
+// Build HTTP request for PdfInput (returns baml.HTTPRequest)
 func (*build_request) PdfInput(pdf types.PDF, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4913,15 +4438,10 @@ func (*build_request) PdfInput(pdf types.PDF, opts ...CallOptionFunc) (baml.HTTP
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PdfInput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PdfInput", encoded)
 }
 
-// / Build HTTP request for PdfInputAnthropic (returns baml.HTTPRequest)
+// Build HTTP request for PdfInputAnthropic (returns baml.HTTPRequest)
 func (*build_request) PdfInputAnthropic(pdf types.PDF, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -4964,15 +4484,10 @@ func (*build_request) PdfInputAnthropic(pdf types.PDF, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PdfInputAnthropic", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PdfInputAnthropic", encoded)
 }
 
-// / Build HTTP request for PdfInputOpenai (returns baml.HTTPRequest)
+// Build HTTP request for PdfInputOpenai (returns baml.HTTPRequest)
 func (*build_request) PdfInputOpenai(pdf types.PDF, prompt string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5015,15 +4530,10 @@ func (*build_request) PdfInputOpenai(pdf types.PDF, prompt string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PdfInputOpenai", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PdfInputOpenai", encoded)
 }
 
-// / Build HTTP request for PdfInputVertex (returns baml.HTTPRequest)
+// Build HTTP request for PdfInputVertex (returns baml.HTTPRequest)
 func (*build_request) PdfInputVertex(pdf types.PDF, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5066,15 +4576,10 @@ func (*build_request) PdfInputVertex(pdf types.PDF, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PdfInputVertex", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PdfInputVertex", encoded)
 }
 
-// / Build HTTP request for PredictAge (returns baml.HTTPRequest)
+// Build HTTP request for PredictAge (returns baml.HTTPRequest)
 func (*build_request) PredictAge(name string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5117,15 +4622,10 @@ func (*build_request) PredictAge(name string, opts ...CallOptionFunc) (baml.HTTP
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PredictAge", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PredictAge", encoded)
 }
 
-// / Build HTTP request for PredictAgeBare (returns baml.HTTPRequest)
+// Build HTTP request for PredictAgeBare (returns baml.HTTPRequest)
 func (*build_request) PredictAgeBare(inp string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5168,15 +4668,10 @@ func (*build_request) PredictAgeBare(inp string, opts ...CallOptionFunc) (baml.H
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PredictAgeBare", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PredictAgeBare", encoded)
 }
 
-// / Build HTTP request for PrimitiveAlias (returns baml.HTTPRequest)
+// Build HTTP request for PrimitiveAlias (returns baml.HTTPRequest)
 func (*build_request) PrimitiveAlias(p types.Union4BoolOrFloatOrIntOrString, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5219,15 +4714,10 @@ func (*build_request) PrimitiveAlias(p types.Union4BoolOrFloatOrIntOrString, opt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PrimitiveAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PrimitiveAlias", encoded)
 }
 
-// / Build HTTP request for PromptTestClaude (returns baml.HTTPRequest)
+// Build HTTP request for PromptTestClaude (returns baml.HTTPRequest)
 func (*build_request) PromptTestClaude(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5270,15 +4760,10 @@ func (*build_request) PromptTestClaude(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PromptTestClaude", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PromptTestClaude", encoded)
 }
 
-// / Build HTTP request for PromptTestClaudeChat (returns baml.HTTPRequest)
+// Build HTTP request for PromptTestClaudeChat (returns baml.HTTPRequest)
 func (*build_request) PromptTestClaudeChat(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5321,15 +4806,10 @@ func (*build_request) PromptTestClaudeChat(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PromptTestClaudeChat", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PromptTestClaudeChat", encoded)
 }
 
-// / Build HTTP request for PromptTestClaudeChatNoSystem (returns baml.HTTPRequest)
+// Build HTTP request for PromptTestClaudeChatNoSystem (returns baml.HTTPRequest)
 func (*build_request) PromptTestClaudeChatNoSystem(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5372,15 +4852,10 @@ func (*build_request) PromptTestClaudeChatNoSystem(input string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PromptTestClaudeChatNoSystem", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PromptTestClaudeChatNoSystem", encoded)
 }
 
-// / Build HTTP request for PromptTestOpenAI (returns baml.HTTPRequest)
+// Build HTTP request for PromptTestOpenAI (returns baml.HTTPRequest)
 func (*build_request) PromptTestOpenAI(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5423,15 +4898,10 @@ func (*build_request) PromptTestOpenAI(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PromptTestOpenAI", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PromptTestOpenAI", encoded)
 }
 
-// / Build HTTP request for PromptTestOpenAIChat (returns baml.HTTPRequest)
+// Build HTTP request for PromptTestOpenAIChat (returns baml.HTTPRequest)
 func (*build_request) PromptTestOpenAIChat(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5474,15 +4944,10 @@ func (*build_request) PromptTestOpenAIChat(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PromptTestOpenAIChat", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PromptTestOpenAIChat", encoded)
 }
 
-// / Build HTTP request for PromptTestOpenAIChatNoSystem (returns baml.HTTPRequest)
+// Build HTTP request for PromptTestOpenAIChatNoSystem (returns baml.HTTPRequest)
 func (*build_request) PromptTestOpenAIChatNoSystem(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5525,15 +4990,10 @@ func (*build_request) PromptTestOpenAIChatNoSystem(input string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PromptTestOpenAIChatNoSystem", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PromptTestOpenAIChatNoSystem", encoded)
 }
 
-// / Build HTTP request for PromptTestStreaming (returns baml.HTTPRequest)
+// Build HTTP request for PromptTestStreaming (returns baml.HTTPRequest)
 func (*build_request) PromptTestStreaming(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5576,15 +5036,10 @@ func (*build_request) PromptTestStreaming(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PromptTestStreaming", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PromptTestStreaming", encoded)
 }
 
-// / Build HTTP request for RecursiveAliasCycle (returns baml.HTTPRequest)
+// Build HTTP request for RecursiveAliasCycle (returns baml.HTTPRequest)
 func (*build_request) RecursiveAliasCycle(input types.RecAliasOne, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5627,15 +5082,10 @@ func (*build_request) RecursiveAliasCycle(input types.RecAliasOne, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "RecursiveAliasCycle", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "RecursiveAliasCycle", encoded)
 }
 
-// / Build HTTP request for RecursiveClassWithAliasIndirection (returns baml.HTTPRequest)
+// Build HTTP request for RecursiveClassWithAliasIndirection (returns baml.HTTPRequest)
 func (*build_request) RecursiveClassWithAliasIndirection(cls types.NodeWithAliasIndirection, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5678,15 +5128,10 @@ func (*build_request) RecursiveClassWithAliasIndirection(cls types.NodeWithAlias
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "RecursiveClassWithAliasIndirection", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "RecursiveClassWithAliasIndirection", encoded)
 }
 
-// / Build HTTP request for RecursiveUnionTest (returns baml.HTTPRequest)
+// Build HTTP request for RecursiveUnionTest (returns baml.HTTPRequest)
 func (*build_request) RecursiveUnionTest(input types.RecursiveUnion, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5729,15 +5174,10 @@ func (*build_request) RecursiveUnionTest(input types.RecursiveUnion, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "RecursiveUnionTest", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "RecursiveUnionTest", encoded)
 }
 
-// / Build HTTP request for RenderDynamicClass (returns baml.HTTPRequest)
+// Build HTTP request for RenderDynamicClass (returns baml.HTTPRequest)
 func (*build_request) RenderDynamicClass(input types.RenderTestClass, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5780,15 +5220,10 @@ func (*build_request) RenderDynamicClass(input types.RenderTestClass, opts ...Ca
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "RenderDynamicClass", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "RenderDynamicClass", encoded)
 }
 
-// / Build HTTP request for RenderDynamicEnum (returns baml.HTTPRequest)
+// Build HTTP request for RenderDynamicEnum (returns baml.HTTPRequest)
 func (*build_request) RenderDynamicEnum(bike types.RenderTestEnum, other types.RenderTestEnum, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5831,15 +5266,10 @@ func (*build_request) RenderDynamicEnum(bike types.RenderTestEnum, other types.R
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "RenderDynamicEnum", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "RenderDynamicEnum", encoded)
 }
 
-// / Build HTTP request for ReturnAliasWithMergedAttributes (returns baml.HTTPRequest)
+// Build HTTP request for ReturnAliasWithMergedAttributes (returns baml.HTTPRequest)
 func (*build_request) ReturnAliasWithMergedAttributes(money int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5882,15 +5312,10 @@ func (*build_request) ReturnAliasWithMergedAttributes(money int64, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ReturnAliasWithMergedAttributes", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ReturnAliasWithMergedAttributes", encoded)
 }
 
-// / Build HTTP request for ReturnFailingAssert (returns baml.HTTPRequest)
+// Build HTTP request for ReturnFailingAssert (returns baml.HTTPRequest)
 func (*build_request) ReturnFailingAssert(inp int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5933,15 +5358,10 @@ func (*build_request) ReturnFailingAssert(inp int64, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ReturnFailingAssert", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ReturnFailingAssert", encoded)
 }
 
-// / Build HTTP request for ReturnJsonEntry (returns baml.HTTPRequest)
+// Build HTTP request for ReturnJsonEntry (returns baml.HTTPRequest)
 func (*build_request) ReturnJsonEntry(s string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -5984,15 +5404,10 @@ func (*build_request) ReturnJsonEntry(s string, opts ...CallOptionFunc) (baml.HT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ReturnJsonEntry", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ReturnJsonEntry", encoded)
 }
 
-// / Build HTTP request for ReturnMalformedConstraints (returns baml.HTTPRequest)
+// Build HTTP request for ReturnMalformedConstraints (returns baml.HTTPRequest)
 func (*build_request) ReturnMalformedConstraints(a int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6035,15 +5450,10 @@ func (*build_request) ReturnMalformedConstraints(a int64, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ReturnMalformedConstraints", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ReturnMalformedConstraints", encoded)
 }
 
-// / Build HTTP request for SchemaDescriptions (returns baml.HTTPRequest)
+// Build HTTP request for SchemaDescriptions (returns baml.HTTPRequest)
 func (*build_request) SchemaDescriptions(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6086,15 +5496,10 @@ func (*build_request) SchemaDescriptions(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "SchemaDescriptions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "SchemaDescriptions", encoded)
 }
 
-// / Build HTTP request for SimpleRecursiveListAlias (returns baml.HTTPRequest)
+// Build HTTP request for SimpleRecursiveListAlias (returns baml.HTTPRequest)
 func (*build_request) SimpleRecursiveListAlias(input types.RecursiveListAlias, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6137,15 +5542,10 @@ func (*build_request) SimpleRecursiveListAlias(input types.RecursiveListAlias, o
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "SimpleRecursiveListAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "SimpleRecursiveListAlias", encoded)
 }
 
-// / Build HTTP request for SimpleRecursiveMapAlias (returns baml.HTTPRequest)
+// Build HTTP request for SimpleRecursiveMapAlias (returns baml.HTTPRequest)
 func (*build_request) SimpleRecursiveMapAlias(input types.RecursiveMapAlias, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6188,15 +5588,10 @@ func (*build_request) SimpleRecursiveMapAlias(input types.RecursiveMapAlias, opt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "SimpleRecursiveMapAlias", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "SimpleRecursiveMapAlias", encoded)
 }
 
-// / Build HTTP request for StreamBigNumbers (returns baml.HTTPRequest)
+// Build HTTP request for StreamBigNumbers (returns baml.HTTPRequest)
 func (*build_request) StreamBigNumbers(digits int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6239,15 +5634,10 @@ func (*build_request) StreamBigNumbers(digits int64, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "StreamBigNumbers", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "StreamBigNumbers", encoded)
 }
 
-// / Build HTTP request for StreamFailingAssertion (returns baml.HTTPRequest)
+// Build HTTP request for StreamFailingAssertion (returns baml.HTTPRequest)
 func (*build_request) StreamFailingAssertion(theme string, length int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6290,15 +5680,10 @@ func (*build_request) StreamFailingAssertion(theme string, length int64, opts ..
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "StreamFailingAssertion", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "StreamFailingAssertion", encoded)
 }
 
-// / Build HTTP request for StreamFailingCheck (returns baml.HTTPRequest)
+// Build HTTP request for StreamFailingCheck (returns baml.HTTPRequest)
 func (*build_request) StreamFailingCheck(theme string, length int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6341,15 +5726,10 @@ func (*build_request) StreamFailingCheck(theme string, length int64, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "StreamFailingCheck", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "StreamFailingCheck", encoded)
 }
 
-// / Build HTTP request for StreamOneBigNumber (returns baml.HTTPRequest)
+// Build HTTP request for StreamOneBigNumber (returns baml.HTTPRequest)
 func (*build_request) StreamOneBigNumber(digits int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6392,15 +5772,10 @@ func (*build_request) StreamOneBigNumber(digits int64, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "StreamOneBigNumber", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "StreamOneBigNumber", encoded)
 }
 
-// / Build HTTP request for StreamUnionIntegers (returns baml.HTTPRequest)
+// Build HTTP request for StreamUnionIntegers (returns baml.HTTPRequest)
 func (*build_request) StreamUnionIntegers(digits int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6443,15 +5818,10 @@ func (*build_request) StreamUnionIntegers(digits int64, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "StreamUnionIntegers", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "StreamUnionIntegers", encoded)
 }
 
-// / Build HTTP request for StreamingCompoundNumbers (returns baml.HTTPRequest)
+// Build HTTP request for StreamingCompoundNumbers (returns baml.HTTPRequest)
 func (*build_request) StreamingCompoundNumbers(digits int64, yapping bool, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6494,15 +5864,10 @@ func (*build_request) StreamingCompoundNumbers(digits int64, yapping bool, opts 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "StreamingCompoundNumbers", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "StreamingCompoundNumbers", encoded)
 }
 
-// / Build HTTP request for StructureDocument1559 (returns baml.HTTPRequest)
+// Build HTTP request for StructureDocument1559 (returns baml.HTTPRequest)
 func (*build_request) StructureDocument1559(document_txt string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6545,15 +5910,10 @@ func (*build_request) StructureDocument1559(document_txt string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "StructureDocument1559", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "StructureDocument1559", encoded)
 }
 
-// / Build HTTP request for TakeRecAliasDep (returns baml.HTTPRequest)
+// Build HTTP request for TakeRecAliasDep (returns baml.HTTPRequest)
 func (*build_request) TakeRecAliasDep(input types.RecursiveAliasDependency, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6596,15 +5956,10 @@ func (*build_request) TakeRecAliasDep(input types.RecursiveAliasDependency, opts
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TakeRecAliasDep", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TakeRecAliasDep", encoded)
 }
 
-// / Build HTTP request for TellStory (returns baml.HTTPRequest)
+// Build HTTP request for TellStory (returns baml.HTTPRequest)
 func (*build_request) TellStory(story string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6647,15 +6002,10 @@ func (*build_request) TellStory(story string, opts ...CallOptionFunc) (baml.HTTP
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TellStory", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TellStory", encoded)
 }
 
-// / Build HTTP request for TemplateStringTestEcho (returns baml.HTTPRequest)
+// Build HTTP request for TemplateStringTestEcho (returns baml.HTTPRequest)
 func (*build_request) TemplateStringTestEcho(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6698,15 +6048,10 @@ func (*build_request) TemplateStringTestEcho(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TemplateStringTestEcho", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TemplateStringTestEcho", encoded)
 }
 
-// / Build HTTP request for TestAbortFallbackChain (returns baml.HTTPRequest)
+// Build HTTP request for TestAbortFallbackChain (returns baml.HTTPRequest)
 func (*build_request) TestAbortFallbackChain(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6749,15 +6094,10 @@ func (*build_request) TestAbortFallbackChain(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAbortFallbackChain", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAbortFallbackChain", encoded)
 }
 
-// / Build HTTP request for TestAnthropic (returns baml.HTTPRequest)
+// Build HTTP request for TestAnthropic (returns baml.HTTPRequest)
 func (*build_request) TestAnthropic(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6800,15 +6140,10 @@ func (*build_request) TestAnthropic(input string, opts ...CallOptionFunc) (baml.
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAnthropic", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAnthropic", encoded)
 }
 
-// / Build HTTP request for TestAnthropicShorthand (returns baml.HTTPRequest)
+// Build HTTP request for TestAnthropicShorthand (returns baml.HTTPRequest)
 func (*build_request) TestAnthropicShorthand(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6851,15 +6186,10 @@ func (*build_request) TestAnthropicShorthand(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAnthropicShorthand", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAnthropicShorthand", encoded)
 }
 
-// / Build HTTP request for TestAws (returns baml.HTTPRequest)
+// Build HTTP request for TestAws (returns baml.HTTPRequest)
 func (*build_request) TestAws(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6902,15 +6232,10 @@ func (*build_request) TestAws(input string, opts ...CallOptionFunc) (baml.HTTPRe
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAws", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAws", encoded)
 }
 
-// / Build HTTP request for TestAwsClaude37 (returns baml.HTTPRequest)
+// Build HTTP request for TestAwsClaude37 (returns baml.HTTPRequest)
 func (*build_request) TestAwsClaude37(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -6953,15 +6278,10 @@ func (*build_request) TestAwsClaude37(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAwsClaude37", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsClaude37", encoded)
 }
 
-// / Build HTTP request for TestAwsInferenceProfile (returns baml.HTTPRequest)
+// Build HTTP request for TestAwsInferenceProfile (returns baml.HTTPRequest)
 func (*build_request) TestAwsInferenceProfile(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7004,15 +6324,10 @@ func (*build_request) TestAwsInferenceProfile(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAwsInferenceProfile", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsInferenceProfile", encoded)
 }
 
-// / Build HTTP request for TestAwsInvalidAccessKey (returns baml.HTTPRequest)
+// Build HTTP request for TestAwsInvalidAccessKey (returns baml.HTTPRequest)
 func (*build_request) TestAwsInvalidAccessKey(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7055,15 +6370,10 @@ func (*build_request) TestAwsInvalidAccessKey(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidAccessKey", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidAccessKey", encoded)
 }
 
-// / Build HTTP request for TestAwsInvalidEndpoint (returns baml.HTTPRequest)
+// Build HTTP request for TestAwsInvalidEndpoint (returns baml.HTTPRequest)
 func (*build_request) TestAwsInvalidEndpoint(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7106,15 +6416,10 @@ func (*build_request) TestAwsInvalidEndpoint(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidEndpoint", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidEndpoint", encoded)
 }
 
-// / Build HTTP request for TestAwsInvalidProfile (returns baml.HTTPRequest)
+// Build HTTP request for TestAwsInvalidProfile (returns baml.HTTPRequest)
 func (*build_request) TestAwsInvalidProfile(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7157,15 +6462,10 @@ func (*build_request) TestAwsInvalidProfile(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidProfile", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidProfile", encoded)
 }
 
-// / Build HTTP request for TestAwsInvalidRegion (returns baml.HTTPRequest)
+// Build HTTP request for TestAwsInvalidRegion (returns baml.HTTPRequest)
 func (*build_request) TestAwsInvalidRegion(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7208,15 +6508,10 @@ func (*build_request) TestAwsInvalidRegion(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidRegion", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidRegion", encoded)
 }
 
-// / Build HTTP request for TestAwsInvalidSessionToken (returns baml.HTTPRequest)
+// Build HTTP request for TestAwsInvalidSessionToken (returns baml.HTTPRequest)
 func (*build_request) TestAwsInvalidSessionToken(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7259,15 +6554,10 @@ func (*build_request) TestAwsInvalidSessionToken(input string, opts ...CallOptio
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidSessionToken", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsInvalidSessionToken", encoded)
 }
 
-// / Build HTTP request for TestAwsVideoDescribe (returns baml.HTTPRequest)
+// Build HTTP request for TestAwsVideoDescribe (returns baml.HTTPRequest)
 func (*build_request) TestAwsVideoDescribe(video_input types.Video, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7310,15 +6600,10 @@ func (*build_request) TestAwsVideoDescribe(video_input types.Video, opts ...Call
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAwsVideoDescribe", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAwsVideoDescribe", encoded)
 }
 
-// / Build HTTP request for TestAzure (returns baml.HTTPRequest)
+// Build HTTP request for TestAzure (returns baml.HTTPRequest)
 func (*build_request) TestAzure(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7361,15 +6646,10 @@ func (*build_request) TestAzure(input string, opts ...CallOptionFunc) (baml.HTTP
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAzure", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAzure", encoded)
 }
 
-// / Build HTTP request for TestAzureFailure (returns baml.HTTPRequest)
+// Build HTTP request for TestAzureFailure (returns baml.HTTPRequest)
 func (*build_request) TestAzureFailure(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7412,15 +6692,10 @@ func (*build_request) TestAzureFailure(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAzureFailure", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAzureFailure", encoded)
 }
 
-// / Build HTTP request for TestAzureO1NoMaxTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestAzureO1NoMaxTokens (returns baml.HTTPRequest)
 func (*build_request) TestAzureO1NoMaxTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7463,15 +6738,10 @@ func (*build_request) TestAzureO1NoMaxTokens(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAzureO1NoMaxTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAzureO1NoMaxTokens", encoded)
 }
 
-// / Build HTTP request for TestAzureO1WithMaxCompletionTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestAzureO1WithMaxCompletionTokens (returns baml.HTTPRequest)
 func (*build_request) TestAzureO1WithMaxCompletionTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7514,15 +6784,10 @@ func (*build_request) TestAzureO1WithMaxCompletionTokens(input string, opts ...C
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAzureO1WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAzureO1WithMaxCompletionTokens", encoded)
 }
 
-// / Build HTTP request for TestAzureO1WithMaxTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestAzureO1WithMaxTokens (returns baml.HTTPRequest)
 func (*build_request) TestAzureO1WithMaxTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7565,15 +6830,10 @@ func (*build_request) TestAzureO1WithMaxTokens(input string, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAzureO1WithMaxTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAzureO1WithMaxTokens", encoded)
 }
 
-// / Build HTTP request for TestAzureO3NoMaxTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestAzureO3NoMaxTokens (returns baml.HTTPRequest)
 func (*build_request) TestAzureO3NoMaxTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7616,15 +6876,10 @@ func (*build_request) TestAzureO3NoMaxTokens(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAzureO3NoMaxTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAzureO3NoMaxTokens", encoded)
 }
 
-// / Build HTTP request for TestAzureO3WithMaxCompletionTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestAzureO3WithMaxCompletionTokens (returns baml.HTTPRequest)
 func (*build_request) TestAzureO3WithMaxCompletionTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7667,15 +6922,10 @@ func (*build_request) TestAzureO3WithMaxCompletionTokens(input string, opts ...C
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAzureO3WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAzureO3WithMaxCompletionTokens", encoded)
 }
 
-// / Build HTTP request for TestAzureWithMaxTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestAzureWithMaxTokens (returns baml.HTTPRequest)
 func (*build_request) TestAzureWithMaxTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7718,15 +6968,10 @@ func (*build_request) TestAzureWithMaxTokens(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAzureWithMaxTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAzureWithMaxTokens", encoded)
 }
 
-// / Build HTTP request for TestCaching (returns baml.HTTPRequest)
+// Build HTTP request for TestCaching (returns baml.HTTPRequest)
 func (*build_request) TestCaching(input string, not_cached string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7769,15 +7014,10 @@ func (*build_request) TestCaching(input string, not_cached string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestCaching", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestCaching", encoded)
 }
 
-// / Build HTTP request for TestDefaultStreamingTimeout (returns baml.HTTPRequest)
+// Build HTTP request for TestDefaultStreamingTimeout (returns baml.HTTPRequest)
 func (*build_request) TestDefaultStreamingTimeout(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7820,15 +7060,10 @@ func (*build_request) TestDefaultStreamingTimeout(input string, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestDefaultStreamingTimeout", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestDefaultStreamingTimeout", encoded)
 }
 
-// / Build HTTP request for TestFallbackClient (returns baml.HTTPRequest)
+// Build HTTP request for TestFallbackClient (returns baml.HTTPRequest)
 func (*build_request) TestFallbackClient(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7871,15 +7106,10 @@ func (*build_request) TestFallbackClient(opts ...CallOptionFunc) (baml.HTTPReque
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFallbackClient", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFallbackClient", encoded)
 }
 
-// / Build HTTP request for TestFallbackStrategy (returns baml.HTTPRequest)
+// Build HTTP request for TestFallbackStrategy (returns baml.HTTPRequest)
 func (*build_request) TestFallbackStrategy(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7922,15 +7152,10 @@ func (*build_request) TestFallbackStrategy(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFallbackStrategy", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFallbackStrategy", encoded)
 }
 
-// / Build HTTP request for TestFallbackToShorthand (returns baml.HTTPRequest)
+// Build HTTP request for TestFallbackToShorthand (returns baml.HTTPRequest)
 func (*build_request) TestFallbackToShorthand(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -7973,15 +7198,10 @@ func (*build_request) TestFallbackToShorthand(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFallbackToShorthand", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFallbackToShorthand", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleBool (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleBool (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleBool(myBool bool, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8024,15 +7244,10 @@ func (*build_request) TestFnNamedArgsSingleBool(myBool bool, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleBool", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleBool", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleClass (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleClass (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleClass(myArg types.NamedArgsSingleClass, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8075,15 +7290,10 @@ func (*build_request) TestFnNamedArgsSingleClass(myArg types.NamedArgsSingleClas
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleClass", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleClass", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleEnumList (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleEnumList (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleEnumList(myArg []types.NamedArgsSingleEnumList, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8126,15 +7336,10 @@ func (*build_request) TestFnNamedArgsSingleEnumList(myArg []types.NamedArgsSingl
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleEnumList", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleEnumList", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleFloat (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleFloat (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleFloat(myFloat float64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8177,15 +7382,10 @@ func (*build_request) TestFnNamedArgsSingleFloat(myFloat float64, opts ...CallOp
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleFloat", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleFloat", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleInt (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleInt (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleInt(myInt int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8228,15 +7428,10 @@ func (*build_request) TestFnNamedArgsSingleInt(myInt int64, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleInt", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleInt", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleMapStringToClass (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleMapStringToClass (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleMapStringToClass(myMap map[string]types.StringToClassEntry, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8279,15 +7474,10 @@ func (*build_request) TestFnNamedArgsSingleMapStringToClass(myMap map[string]typ
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleMapStringToClass", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleMapStringToClass", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleMapStringToMap (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleMapStringToMap (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleMapStringToMap(myMap map[string]map[string]string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8330,15 +7520,10 @@ func (*build_request) TestFnNamedArgsSingleMapStringToMap(myMap map[string]map[s
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleMapStringToMap", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleMapStringToMap", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleMapStringToString (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleMapStringToString (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleMapStringToString(myMap map[string]string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8381,15 +7566,10 @@ func (*build_request) TestFnNamedArgsSingleMapStringToString(myMap map[string]st
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleMapStringToString", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleMapStringToString", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleString (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleString (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleString(myString string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8432,15 +7612,10 @@ func (*build_request) TestFnNamedArgsSingleString(myString string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleString", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleString", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleStringArray (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleStringArray (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleStringArray(myStringArray []string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8483,15 +7658,10 @@ func (*build_request) TestFnNamedArgsSingleStringArray(myStringArray []string, o
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleStringArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleStringArray", encoded)
 }
 
-// / Build HTTP request for TestFnNamedArgsSingleStringList (returns baml.HTTPRequest)
+// Build HTTP request for TestFnNamedArgsSingleStringList (returns baml.HTTPRequest)
 func (*build_request) TestFnNamedArgsSingleStringList(myArg []string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8534,15 +7704,10 @@ func (*build_request) TestFnNamedArgsSingleStringList(myArg []string, opts ...Ca
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleStringList", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestFnNamedArgsSingleStringList", encoded)
 }
 
-// / Build HTTP request for TestGemini (returns baml.HTTPRequest)
+// Build HTTP request for TestGemini (returns baml.HTTPRequest)
 func (*build_request) TestGemini(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8585,15 +7750,10 @@ func (*build_request) TestGemini(input string, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestGemini", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestGemini", encoded)
 }
 
-// / Build HTTP request for TestGeminiOpenAiGeneric (returns baml.HTTPRequest)
+// Build HTTP request for TestGeminiOpenAiGeneric (returns baml.HTTPRequest)
 func (*build_request) TestGeminiOpenAiGeneric(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8636,15 +7796,10 @@ func (*build_request) TestGeminiOpenAiGeneric(opts ...CallOptionFunc) (baml.HTTP
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestGeminiOpenAiGeneric", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestGeminiOpenAiGeneric", encoded)
 }
 
-// / Build HTTP request for TestGeminiSystem (returns baml.HTTPRequest)
+// Build HTTP request for TestGeminiSystem (returns baml.HTTPRequest)
 func (*build_request) TestGeminiSystem(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8687,15 +7842,10 @@ func (*build_request) TestGeminiSystem(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestGeminiSystem", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestGeminiSystem", encoded)
 }
 
-// / Build HTTP request for TestGeminiSystemAsChat (returns baml.HTTPRequest)
+// Build HTTP request for TestGeminiSystemAsChat (returns baml.HTTPRequest)
 func (*build_request) TestGeminiSystemAsChat(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8738,15 +7888,10 @@ func (*build_request) TestGeminiSystemAsChat(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestGeminiSystemAsChat", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestGeminiSystemAsChat", encoded)
 }
 
-// / Build HTTP request for TestGeminiThinking (returns baml.HTTPRequest)
+// Build HTTP request for TestGeminiThinking (returns baml.HTTPRequest)
 func (*build_request) TestGeminiThinking(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8789,15 +7934,10 @@ func (*build_request) TestGeminiThinking(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestGeminiThinking", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestGeminiThinking", encoded)
 }
 
-// / Build HTTP request for TestGroq (returns baml.HTTPRequest)
+// Build HTTP request for TestGroq (returns baml.HTTPRequest)
 func (*build_request) TestGroq(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8840,15 +7980,10 @@ func (*build_request) TestGroq(input string, opts ...CallOptionFunc) (baml.HTTPR
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestGroq", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestGroq", encoded)
 }
 
-// / Build HTTP request for TestImageInput (returns baml.HTTPRequest)
+// Build HTTP request for TestImageInput (returns baml.HTTPRequest)
 func (*build_request) TestImageInput(img types.Image, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8891,15 +8026,10 @@ func (*build_request) TestImageInput(img types.Image, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestImageInput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestImageInput", encoded)
 }
 
-// / Build HTTP request for TestImageInputAnthropic (returns baml.HTTPRequest)
+// Build HTTP request for TestImageInputAnthropic (returns baml.HTTPRequest)
 func (*build_request) TestImageInputAnthropic(img types.Image, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8942,15 +8072,10 @@ func (*build_request) TestImageInputAnthropic(img types.Image, opts ...CallOptio
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestImageInputAnthropic", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestImageInputAnthropic", encoded)
 }
 
-// / Build HTTP request for TestImageListInput (returns baml.HTTPRequest)
+// Build HTTP request for TestImageListInput (returns baml.HTTPRequest)
 func (*build_request) TestImageListInput(imgs []types.Image, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -8993,15 +8118,10 @@ func (*build_request) TestImageListInput(imgs []types.Image, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestImageListInput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestImageListInput", encoded)
 }
 
-// / Build HTTP request for TestMemory (returns baml.HTTPRequest)
+// Build HTTP request for TestMemory (returns baml.HTTPRequest)
 func (*build_request) TestMemory(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9044,15 +8164,10 @@ func (*build_request) TestMemory(input string, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMemory", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMemory", encoded)
 }
 
-// / Build HTTP request for TestMulticlassNamedArgs (returns baml.HTTPRequest)
+// Build HTTP request for TestMulticlassNamedArgs (returns baml.HTTPRequest)
 func (*build_request) TestMulticlassNamedArgs(myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9095,15 +8210,10 @@ func (*build_request) TestMulticlassNamedArgs(myArg types.NamedArgsSingleClass, 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMulticlassNamedArgs", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMulticlassNamedArgs", encoded)
 }
 
-// / Build HTTP request for TestNamedArgsLiteralBool (returns baml.HTTPRequest)
+// Build HTTP request for TestNamedArgsLiteralBool (returns baml.HTTPRequest)
 func (*build_request) TestNamedArgsLiteralBool(myBool bool, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9146,15 +8256,10 @@ func (*build_request) TestNamedArgsLiteralBool(myBool bool, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestNamedArgsLiteralBool", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestNamedArgsLiteralBool", encoded)
 }
 
-// / Build HTTP request for TestNamedArgsLiteralInt (returns baml.HTTPRequest)
+// Build HTTP request for TestNamedArgsLiteralInt (returns baml.HTTPRequest)
 func (*build_request) TestNamedArgsLiteralInt(myInt int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9197,15 +8302,10 @@ func (*build_request) TestNamedArgsLiteralInt(myInt int64, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestNamedArgsLiteralInt", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestNamedArgsLiteralInt", encoded)
 }
 
-// / Build HTTP request for TestNamedArgsLiteralString (returns baml.HTTPRequest)
+// Build HTTP request for TestNamedArgsLiteralString (returns baml.HTTPRequest)
 func (*build_request) TestNamedArgsLiteralString(myString string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9248,15 +8348,10 @@ func (*build_request) TestNamedArgsLiteralString(myString string, opts ...CallOp
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestNamedArgsLiteralString", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestNamedArgsLiteralString", encoded)
 }
 
-// / Build HTTP request for TestOllama (returns baml.HTTPRequest)
+// Build HTTP request for TestOllama (returns baml.HTTPRequest)
 func (*build_request) TestOllama(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9299,15 +8394,10 @@ func (*build_request) TestOllama(input string, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOllama", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOllama", encoded)
 }
 
-// / Build HTTP request for TestOllamaHaiku (returns baml.HTTPRequest)
+// Build HTTP request for TestOllamaHaiku (returns baml.HTTPRequest)
 func (*build_request) TestOllamaHaiku(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9350,15 +8440,10 @@ func (*build_request) TestOllamaHaiku(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOllamaHaiku", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOllamaHaiku", encoded)
 }
 
-// / Build HTTP request for TestOpenAI (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAI (returns baml.HTTPRequest)
 func (*build_request) TestOpenAI(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9401,15 +8486,10 @@ func (*build_request) TestOpenAI(input string, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAI", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAI", encoded)
 }
 
-// / Build HTTP request for TestOpenAIDummyClient (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIDummyClient (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIDummyClient(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9452,15 +8532,10 @@ func (*build_request) TestOpenAIDummyClient(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIDummyClient", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIDummyClient", encoded)
 }
 
-// / Build HTTP request for TestOpenAIGPT4oMini (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIGPT4oMini (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIGPT4oMini(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9503,15 +8578,10 @@ func (*build_request) TestOpenAIGPT4oMini(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIGPT4oMini", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIGPT4oMini", encoded)
 }
 
-// / Build HTTP request for TestOpenAIGPT4oMini2 (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIGPT4oMini2 (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIGPT4oMini2(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9554,15 +8624,10 @@ func (*build_request) TestOpenAIGPT4oMini2(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIGPT4oMini2", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIGPT4oMini2", encoded)
 }
 
-// / Build HTTP request for TestOpenAIGPT4oMini3 (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIGPT4oMini3 (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIGPT4oMini3(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9605,15 +8670,10 @@ func (*build_request) TestOpenAIGPT4oMini3(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIGPT4oMini3", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIGPT4oMini3", encoded)
 }
 
-// / Build HTTP request for TestOpenAILegacyProvider (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAILegacyProvider (returns baml.HTTPRequest)
 func (*build_request) TestOpenAILegacyProvider(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9656,15 +8716,10 @@ func (*build_request) TestOpenAILegacyProvider(input string, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAILegacyProvider", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAILegacyProvider", encoded)
 }
 
-// / Build HTTP request for TestOpenAIO1NoMaxTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIO1NoMaxTokens (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIO1NoMaxTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9707,15 +8762,10 @@ func (*build_request) TestOpenAIO1NoMaxTokens(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIO1NoMaxTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIO1NoMaxTokens", encoded)
 }
 
-// / Build HTTP request for TestOpenAIO1WithMaxCompletionTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIO1WithMaxCompletionTokens (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIO1WithMaxCompletionTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9758,15 +8808,10 @@ func (*build_request) TestOpenAIO1WithMaxCompletionTokens(input string, opts ...
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIO1WithMaxCompletionTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIO1WithMaxCompletionTokens", encoded)
 }
 
-// / Build HTTP request for TestOpenAIO1WithMaxTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIO1WithMaxTokens (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIO1WithMaxTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9809,15 +8854,10 @@ func (*build_request) TestOpenAIO1WithMaxTokens(input string, opts ...CallOption
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIO1WithMaxTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIO1WithMaxTokens", encoded)
 }
 
-// / Build HTTP request for TestOpenAIProviderWithResponsesType (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIProviderWithResponsesType (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIProviderWithResponsesType(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9860,15 +8900,10 @@ func (*build_request) TestOpenAIProviderWithResponsesType(input string, opts ...
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIProviderWithResponsesType", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIProviderWithResponsesType", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponses (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponses (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponses(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9911,15 +8946,10 @@ func (*build_request) TestOpenAIResponses(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponses", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponses", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesAllRoles (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesAllRoles (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesAllRoles(problem string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -9962,15 +8992,10 @@ func (*build_request) TestOpenAIResponsesAllRoles(problem string, opts ...CallOp
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesAllRoles", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesAllRoles", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesAutoType (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesAutoType (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesAutoType(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10013,15 +9038,10 @@ func (*build_request) TestOpenAIResponsesAutoType(input string, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesAutoType", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesAutoType", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesConversation (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesConversation (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesConversation(topic string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10064,15 +9084,10 @@ func (*build_request) TestOpenAIResponsesConversation(topic string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesConversation", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesConversation", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesCustomURL (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesCustomURL (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesCustomURL(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10115,15 +9130,10 @@ func (*build_request) TestOpenAIResponsesCustomURL(input string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesCustomURL", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesCustomURL", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesDifferentModel (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesDifferentModel (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesDifferentModel(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10166,15 +9176,10 @@ func (*build_request) TestOpenAIResponsesDifferentModel(input string, opts ...Ca
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesDifferentModel", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesDifferentModel", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesEndpoint (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesEndpoint (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesEndpoint(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10217,15 +9222,10 @@ func (*build_request) TestOpenAIResponsesEndpoint(input string, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesEndpoint", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesEndpoint", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesExplicit (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesExplicit (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesExplicit(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10268,15 +9268,10 @@ func (*build_request) TestOpenAIResponsesExplicit(input string, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesExplicit", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesExplicit", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesFunctionCall (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesFunctionCall (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesFunctionCall(query string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10319,15 +9314,10 @@ func (*build_request) TestOpenAIResponsesFunctionCall(query string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesFunctionCall", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesFunctionCall", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesImageInput (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesImageInput (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesImageInput(image types.Union4AudioOrImageOrPDFOrString, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10370,15 +9360,10 @@ func (*build_request) TestOpenAIResponsesImageInput(image types.Union4AudioOrIma
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesImageInput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesImageInput", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesReasoning (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesReasoning (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesReasoning(problem string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10421,15 +9406,10 @@ func (*build_request) TestOpenAIResponsesReasoning(problem string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesReasoning", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesReasoning", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesShorthand (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesShorthand (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesShorthand(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10472,15 +9452,10 @@ func (*build_request) TestOpenAIResponsesShorthand(input string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesShorthand", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesShorthand", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesWebSearch (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesWebSearch (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesWebSearch(query string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10523,15 +9498,10 @@ func (*build_request) TestOpenAIResponsesWebSearch(query string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesWebSearch", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesWebSearch", encoded)
 }
 
-// / Build HTTP request for TestOpenAIResponsesWithOpenAIResponseType (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIResponsesWithOpenAIResponseType (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIResponsesWithOpenAIResponseType(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10574,15 +9544,10 @@ func (*build_request) TestOpenAIResponsesWithOpenAIResponseType(input string, op
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesWithOpenAIResponseType", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIResponsesWithOpenAIResponseType", encoded)
 }
 
-// / Build HTTP request for TestOpenAIShorthand (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIShorthand (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIShorthand(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10625,15 +9590,10 @@ func (*build_request) TestOpenAIShorthand(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIShorthand", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIShorthand", encoded)
 }
 
-// / Build HTTP request for TestOpenAIWithFinishReasonError (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIWithFinishReasonError (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIWithFinishReasonError(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10676,15 +9636,10 @@ func (*build_request) TestOpenAIWithFinishReasonError(input string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIWithFinishReasonError", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIWithFinishReasonError", encoded)
 }
 
-// / Build HTTP request for TestOpenAIWithMaxTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIWithMaxTokens (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIWithMaxTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10727,15 +9682,10 @@ func (*build_request) TestOpenAIWithMaxTokens(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIWithMaxTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIWithMaxTokens", encoded)
 }
 
-// / Build HTTP request for TestOpenAIWithNullMaxTokens (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenAIWithNullMaxTokens (returns baml.HTTPRequest)
 func (*build_request) TestOpenAIWithNullMaxTokens(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10778,15 +9728,10 @@ func (*build_request) TestOpenAIWithNullMaxTokens(input string, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenAIWithNullMaxTokens", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenAIWithNullMaxTokens", encoded)
 }
 
-// / Build HTTP request for TestOpenRouterMistralSmall3_1_24b (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenRouterMistralSmall3_1_24b (returns baml.HTTPRequest)
 func (*build_request) TestOpenRouterMistralSmall3_1_24b(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10829,15 +9774,10 @@ func (*build_request) TestOpenRouterMistralSmall3_1_24b(input string, opts ...Ca
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenRouterMistralSmall3_1_24b", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenRouterMistralSmall3_1_24b", encoded)
 }
 
-// / Build HTTP request for TestOpenaiResponsesPdfs (returns baml.HTTPRequest)
+// Build HTTP request for TestOpenaiResponsesPdfs (returns baml.HTTPRequest)
 func (*build_request) TestOpenaiResponsesPdfs(pdf types.PDF, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10880,15 +9820,10 @@ func (*build_request) TestOpenaiResponsesPdfs(pdf types.PDF, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOpenaiResponsesPdfs", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOpenaiResponsesPdfs", encoded)
 }
 
-// / Build HTTP request for TestRequestTimeout (returns baml.HTTPRequest)
+// Build HTTP request for TestRequestTimeout (returns baml.HTTPRequest)
 func (*build_request) TestRequestTimeout(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10931,15 +9866,10 @@ func (*build_request) TestRequestTimeout(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestRequestTimeout", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestRequestTimeout", encoded)
 }
 
-// / Build HTTP request for TestRetryConstant (returns baml.HTTPRequest)
+// Build HTTP request for TestRetryConstant (returns baml.HTTPRequest)
 func (*build_request) TestRetryConstant(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -10982,15 +9912,10 @@ func (*build_request) TestRetryConstant(opts ...CallOptionFunc) (baml.HTTPReques
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestRetryConstant", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestRetryConstant", encoded)
 }
 
-// / Build HTTP request for TestRetryExponential (returns baml.HTTPRequest)
+// Build HTTP request for TestRetryExponential (returns baml.HTTPRequest)
 func (*build_request) TestRetryExponential(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11033,15 +9958,10 @@ func (*build_request) TestRetryExponential(opts ...CallOptionFunc) (baml.HTTPReq
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestRetryExponential", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestRetryExponential", encoded)
 }
 
-// / Build HTTP request for TestRoundRobinStrategy (returns baml.HTTPRequest)
+// Build HTTP request for TestRoundRobinStrategy (returns baml.HTTPRequest)
 func (*build_request) TestRoundRobinStrategy(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11084,15 +10004,10 @@ func (*build_request) TestRoundRobinStrategy(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestRoundRobinStrategy", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestRoundRobinStrategy", encoded)
 }
 
-// / Build HTTP request for TestSingleFallbackClient (returns baml.HTTPRequest)
+// Build HTTP request for TestSingleFallbackClient (returns baml.HTTPRequest)
 func (*build_request) TestSingleFallbackClient(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11135,15 +10050,10 @@ func (*build_request) TestSingleFallbackClient(opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestSingleFallbackClient", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestSingleFallbackClient", encoded)
 }
 
-// / Build HTTP request for TestSkipDynamic (returns baml.HTTPRequest)
+// Build HTTP request for TestSkipDynamic (returns baml.HTTPRequest)
 func (*build_request) TestSkipDynamic(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11186,15 +10096,10 @@ func (*build_request) TestSkipDynamic(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestSkipDynamic", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestSkipDynamic", encoded)
 }
 
-// / Build HTTP request for TestSkipNonDynamic (returns baml.HTTPRequest)
+// Build HTTP request for TestSkipNonDynamic (returns baml.HTTPRequest)
 func (*build_request) TestSkipNonDynamic(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11237,15 +10142,10 @@ func (*build_request) TestSkipNonDynamic(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestSkipNonDynamic", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestSkipNonDynamic", encoded)
 }
 
-// / Build HTTP request for TestStreamingTimeout (returns baml.HTTPRequest)
+// Build HTTP request for TestStreamingTimeout (returns baml.HTTPRequest)
 func (*build_request) TestStreamingTimeout(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11288,15 +10188,10 @@ func (*build_request) TestStreamingTimeout(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestStreamingTimeout", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestStreamingTimeout", encoded)
 }
 
-// / Build HTTP request for TestThinking (returns baml.HTTPRequest)
+// Build HTTP request for TestThinking (returns baml.HTTPRequest)
 func (*build_request) TestThinking(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11339,15 +10234,10 @@ func (*build_request) TestThinking(input string, opts ...CallOptionFunc) (baml.H
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestThinking", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestThinking", encoded)
 }
 
-// / Build HTTP request for TestTimeoutError (returns baml.HTTPRequest)
+// Build HTTP request for TestTimeoutError (returns baml.HTTPRequest)
 func (*build_request) TestTimeoutError(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11390,15 +10280,10 @@ func (*build_request) TestTimeoutError(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTimeoutError", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTimeoutError", encoded)
 }
 
-// / Build HTTP request for TestTimeoutFallback (returns baml.HTTPRequest)
+// Build HTTP request for TestTimeoutFallback (returns baml.HTTPRequest)
 func (*build_request) TestTimeoutFallback(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11441,15 +10326,10 @@ func (*build_request) TestTimeoutFallback(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTimeoutFallback", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTimeoutFallback", encoded)
 }
 
-// / Build HTTP request for TestUniverseQuestion (returns baml.HTTPRequest)
+// Build HTTP request for TestUniverseQuestion (returns baml.HTTPRequest)
 func (*build_request) TestUniverseQuestion(question types.UniverseQuestionInput, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11492,15 +10372,10 @@ func (*build_request) TestUniverseQuestion(question types.UniverseQuestionInput,
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestUniverseQuestion", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestUniverseQuestion", encoded)
 }
 
-// / Build HTTP request for TestVertex (returns baml.HTTPRequest)
+// Build HTTP request for TestVertex (returns baml.HTTPRequest)
 func (*build_request) TestVertex(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11543,15 +10418,10 @@ func (*build_request) TestVertex(input string, opts ...CallOptionFunc) (baml.HTT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestVertex", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestVertex", encoded)
 }
 
-// / Build HTTP request for TestVertexClaude (returns baml.HTTPRequest)
+// Build HTTP request for TestVertexClaude (returns baml.HTTPRequest)
 func (*build_request) TestVertexClaude(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11594,15 +10464,10 @@ func (*build_request) TestVertexClaude(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestVertexClaude", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestVertexClaude", encoded)
 }
 
-// / Build HTTP request for TestVertexWithSystemInstructions (returns baml.HTTPRequest)
+// Build HTTP request for TestVertexWithSystemInstructions (returns baml.HTTPRequest)
 func (*build_request) TestVertexWithSystemInstructions(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11645,15 +10510,10 @@ func (*build_request) TestVertexWithSystemInstructions(opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestVertexWithSystemInstructions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestVertexWithSystemInstructions", encoded)
 }
 
-// / Build HTTP request for TestZeroTimeout (returns baml.HTTPRequest)
+// Build HTTP request for TestZeroTimeout (returns baml.HTTPRequest)
 func (*build_request) TestZeroTimeout(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11696,15 +10556,10 @@ func (*build_request) TestZeroTimeout(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestZeroTimeout", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestZeroTimeout", encoded)
 }
 
-// / Build HTTP request for UnionTest_Function (returns baml.HTTPRequest)
+// Build HTTP request for UnionTest_Function (returns baml.HTTPRequest)
 func (*build_request) UnionTest_Function(input types.Union2BoolOrString, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11747,15 +10602,10 @@ func (*build_request) UnionTest_Function(input types.Union2BoolOrString, opts ..
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "UnionTest_Function", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "UnionTest_Function", encoded)
 }
 
-// / Build HTTP request for UseBlockConstraint (returns baml.HTTPRequest)
+// Build HTTP request for UseBlockConstraint (returns baml.HTTPRequest)
 func (*build_request) UseBlockConstraint(inp types.BlockConstraintForParam, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11798,15 +10648,10 @@ func (*build_request) UseBlockConstraint(inp types.BlockConstraintForParam, opts
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "UseBlockConstraint", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "UseBlockConstraint", encoded)
 }
 
-// / Build HTTP request for UseMaintainFieldOrder (returns baml.HTTPRequest)
+// Build HTTP request for UseMaintainFieldOrder (returns baml.HTTPRequest)
 func (*build_request) UseMaintainFieldOrder(input types.MaintainFieldOrder, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11849,15 +10694,10 @@ func (*build_request) UseMaintainFieldOrder(input types.MaintainFieldOrder, opts
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "UseMaintainFieldOrder", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "UseMaintainFieldOrder", encoded)
 }
 
-// / Build HTTP request for UseMalformedConstraints (returns baml.HTTPRequest)
+// Build HTTP request for UseMalformedConstraints (returns baml.HTTPRequest)
 func (*build_request) UseMalformedConstraints(a types.MalformedConstraints2, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11900,15 +10740,10 @@ func (*build_request) UseMalformedConstraints(a types.MalformedConstraints2, opt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "UseMalformedConstraints", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "UseMalformedConstraints", encoded)
 }
 
-// / Build HTTP request for UseNestedBlockConstraint (returns baml.HTTPRequest)
+// Build HTTP request for UseNestedBlockConstraint (returns baml.HTTPRequest)
 func (*build_request) UseNestedBlockConstraint(inp types.NestedBlockConstraintForParam, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -11951,15 +10786,10 @@ func (*build_request) UseNestedBlockConstraint(inp types.NestedBlockConstraintFo
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "UseNestedBlockConstraint", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "UseNestedBlockConstraint", encoded)
 }
 
-// / Build HTTP request for ValidateBasicResponses (returns baml.HTTPRequest)
+// Build HTTP request for ValidateBasicResponses (returns baml.HTTPRequest)
 func (*build_request) ValidateBasicResponses(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -12002,15 +10832,10 @@ func (*build_request) ValidateBasicResponses(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ValidateBasicResponses", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ValidateBasicResponses", encoded)
 }
 
-// / Build HTTP request for ValidateResponseTypes (returns baml.HTTPRequest)
+// Build HTTP request for ValidateResponseTypes (returns baml.HTTPRequest)
 func (*build_request) ValidateResponseTypes(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -12053,15 +10878,10 @@ func (*build_request) ValidateResponseTypes(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ValidateResponseTypes", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ValidateResponseTypes", encoded)
 }
 
-// / Build HTTP request for VideoInputGemini (returns baml.HTTPRequest)
+// Build HTTP request for VideoInputGemini (returns baml.HTTPRequest)
 func (*build_request) VideoInputGemini(vid types.Video, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -12104,15 +10924,10 @@ func (*build_request) VideoInputGemini(vid types.Video, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "VideoInputGemini", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "VideoInputGemini", encoded)
 }
 
-// / Build HTTP request for VideoInputVertex (returns baml.HTTPRequest)
+// Build HTTP request for VideoInputVertex (returns baml.HTTPRequest)
 func (*build_request) VideoInputVertex(vid types.Video, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -12155,10 +10970,5 @@ func (*build_request) VideoInputVertex(vid types.Video, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "VideoInputVertex", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "VideoInputVertex", encoded)
 }

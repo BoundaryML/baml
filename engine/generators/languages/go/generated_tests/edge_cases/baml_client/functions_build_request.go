@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for TestCircularReference (returns baml.HTTPRequest)
+// Build HTTP request for TestCircularReference (returns baml.HTTPRequest)
 func (*build_request) TestCircularReference(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) TestCircularReference(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestCircularReference", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestCircularReference", encoded)
 }
 
-// / Build HTTP request for TestDeepRecursion (returns baml.HTTPRequest)
+// Build HTTP request for TestDeepRecursion (returns baml.HTTPRequest)
 func (*build_request) TestDeepRecursion(depth int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request) TestDeepRecursion(depth int64, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestDeepRecursion", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestDeepRecursion", encoded)
 }
 
-// / Build HTTP request for TestEmptyCollections (returns baml.HTTPRequest)
+// Build HTTP request for TestEmptyCollections (returns baml.HTTPRequest)
 func (*build_request) TestEmptyCollections(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request) TestEmptyCollections(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestEmptyCollections", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestEmptyCollections", encoded)
 }
 
-// / Build HTTP request for TestLargeStructure (returns baml.HTTPRequest)
+// Build HTTP request for TestLargeStructure (returns baml.HTTPRequest)
 func (*build_request) TestLargeStructure(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,15 +205,10 @@ func (*build_request) TestLargeStructure(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestLargeStructure", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestLargeStructure", encoded)
 }
 
-// / Build HTTP request for TestNumberEdgeCases (returns baml.HTTPRequest)
+// Build HTTP request for TestNumberEdgeCases (returns baml.HTTPRequest)
 func (*build_request) TestNumberEdgeCases(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -271,15 +251,10 @@ func (*build_request) TestNumberEdgeCases(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestNumberEdgeCases", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestNumberEdgeCases", encoded)
 }
 
-// / Build HTTP request for TestSpecialCharacters (returns baml.HTTPRequest)
+// Build HTTP request for TestSpecialCharacters (returns baml.HTTPRequest)
 func (*build_request) TestSpecialCharacters(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -322,10 +297,5 @@ func (*build_request) TestSpecialCharacters(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestSpecialCharacters", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestSpecialCharacters", encoded)
 }

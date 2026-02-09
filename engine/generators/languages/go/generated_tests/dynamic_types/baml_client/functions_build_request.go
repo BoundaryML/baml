@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for ClassifyArticle (returns baml.HTTPRequest)
+// Build HTTP request for ClassifyArticle (returns baml.HTTPRequest)
 func (*build_request) ClassifyArticle(text string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) ClassifyArticle(text string, opts ...CallOptionFunc) (baml
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ClassifyArticle", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ClassifyArticle", encoded)
 }
 
-// / Build HTTP request for CreateArticle (returns baml.HTTPRequest)
+// Build HTTP request for CreateArticle (returns baml.HTTPRequest)
 func (*build_request) CreateArticle(topic string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request) CreateArticle(topic string, opts ...CallOptionFunc) (baml.
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "CreateArticle", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "CreateArticle", encoded)
 }
 
-// / Build HTTP request for GetDynamicResponse (returns baml.HTTPRequest)
+// Build HTTP request for GetDynamicResponse (returns baml.HTTPRequest)
 func (*build_request) GetDynamicResponse(prompt string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request) GetDynamicResponse(prompt string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "GetDynamicResponse", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "GetDynamicResponse", encoded)
 }
 
-// / Build HTTP request for GetPerson (returns baml.HTTPRequest)
+// Build HTTP request for GetPerson (returns baml.HTTPRequest)
 func (*build_request) GetPerson(description string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,10 +205,5 @@ func (*build_request) GetPerson(description string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "GetPerson", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "GetPerson", encoded)
 }

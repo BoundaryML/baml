@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for TestBooleanLiterals (returns baml.HTTPRequest)
+// Build HTTP request for TestBooleanLiterals (returns baml.HTTPRequest)
 func (*build_request) TestBooleanLiterals(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) TestBooleanLiterals(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestBooleanLiterals", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestBooleanLiterals", encoded)
 }
 
-// / Build HTTP request for TestComplexLiterals (returns baml.HTTPRequest)
+// Build HTTP request for TestComplexLiterals (returns baml.HTTPRequest)
 func (*build_request) TestComplexLiterals(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request) TestComplexLiterals(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestComplexLiterals", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestComplexLiterals", encoded)
 }
 
-// / Build HTTP request for TestIntegerLiterals (returns baml.HTTPRequest)
+// Build HTTP request for TestIntegerLiterals (returns baml.HTTPRequest)
 func (*build_request) TestIntegerLiterals(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request) TestIntegerLiterals(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestIntegerLiterals", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestIntegerLiterals", encoded)
 }
 
-// / Build HTTP request for TestMixedLiterals (returns baml.HTTPRequest)
+// Build HTTP request for TestMixedLiterals (returns baml.HTTPRequest)
 func (*build_request) TestMixedLiterals(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,15 +205,10 @@ func (*build_request) TestMixedLiterals(input string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMixedLiterals", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMixedLiterals", encoded)
 }
 
-// / Build HTTP request for TestStringLiterals (returns baml.HTTPRequest)
+// Build HTTP request for TestStringLiterals (returns baml.HTTPRequest)
 func (*build_request) TestStringLiterals(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -271,10 +251,5 @@ func (*build_request) TestStringLiterals(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestStringLiterals", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestStringLiterals", encoded)
 }

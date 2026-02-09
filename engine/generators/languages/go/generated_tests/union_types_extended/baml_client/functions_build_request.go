@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for TestComplexUnions (returns baml.HTTPRequest)
+// Build HTTP request for TestComplexUnions (returns baml.HTTPRequest)
 func (*build_request) TestComplexUnions(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) TestComplexUnions(input string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestComplexUnions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestComplexUnions", encoded)
 }
 
-// / Build HTTP request for TestDiscriminatedUnions (returns baml.HTTPRequest)
+// Build HTTP request for TestDiscriminatedUnions (returns baml.HTTPRequest)
 func (*build_request) TestDiscriminatedUnions(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request) TestDiscriminatedUnions(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestDiscriminatedUnions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestDiscriminatedUnions", encoded)
 }
 
-// / Build HTTP request for TestPrimitiveUnions (returns baml.HTTPRequest)
+// Build HTTP request for TestPrimitiveUnions (returns baml.HTTPRequest)
 func (*build_request) TestPrimitiveUnions(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request) TestPrimitiveUnions(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveUnions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveUnions", encoded)
 }
 
-// / Build HTTP request for TestUnionArrays (returns baml.HTTPRequest)
+// Build HTTP request for TestUnionArrays (returns baml.HTTPRequest)
 func (*build_request) TestUnionArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,10 +205,5 @@ func (*build_request) TestUnionArrays(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestUnionArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestUnionArrays", encoded)
 }

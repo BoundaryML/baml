@@ -24,7 +24,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for TestComplexUnions (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestComplexUnions (returns baml.HTTPRequest)
 func (*build_request_stream) TestComplexUnions(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request_stream) TestComplexUnions(input string, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestComplexUnions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestComplexUnions", encoded)
 }
 
-// / Build streaming HTTP request for TestDiscriminatedUnions (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestDiscriminatedUnions (returns baml.HTTPRequest)
 func (*build_request_stream) TestDiscriminatedUnions(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request_stream) TestDiscriminatedUnions(input string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestDiscriminatedUnions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestDiscriminatedUnions", encoded)
 }
 
-// / Build streaming HTTP request for TestPrimitiveUnions (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestPrimitiveUnions (returns baml.HTTPRequest)
 func (*build_request_stream) TestPrimitiveUnions(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request_stream) TestPrimitiveUnions(input string, opts ...CallOptio
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveUnions", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveUnions", encoded)
 }
 
-// / Build streaming HTTP request for TestUnionArrays (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestUnionArrays (returns baml.HTTPRequest)
 func (*build_request_stream) TestUnionArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,10 +205,5 @@ func (*build_request_stream) TestUnionArrays(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestUnionArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestUnionArrays", encoded)
 }

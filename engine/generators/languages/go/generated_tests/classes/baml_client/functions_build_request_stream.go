@@ -26,7 +26,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for ConsumeSimpleClass (returns baml.HTTPRequest)
+// Build streaming HTTP request for ConsumeSimpleClass (returns baml.HTTPRequest)
 func (*build_request_stream) ConsumeSimpleClass(item types.SimpleClass, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -69,15 +69,10 @@ func (*build_request_stream) ConsumeSimpleClass(item types.SimpleClass, opts ...
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ConsumeSimpleClass", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ConsumeSimpleClass", encoded)
 }
 
-// / Build streaming HTTP request for MakeSimpleClass (returns baml.HTTPRequest)
+// Build streaming HTTP request for MakeSimpleClass (returns baml.HTTPRequest)
 func (*build_request_stream) MakeSimpleClass(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -120,10 +115,5 @@ func (*build_request_stream) MakeSimpleClass(opts ...CallOptionFunc) (baml.HTTPR
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeSimpleClass", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeSimpleClass", encoded)
 }

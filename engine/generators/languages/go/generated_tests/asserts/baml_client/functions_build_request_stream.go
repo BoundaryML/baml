@@ -24,7 +24,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for PersonTest (returns baml.HTTPRequest)
+// Build streaming HTTP request for PersonTest (returns baml.HTTPRequest)
 func (*build_request_stream) PersonTest(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,10 +67,5 @@ func (*build_request_stream) PersonTest(opts ...CallOptionFunc) (baml.HTTPReques
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "PersonTest", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "PersonTest", encoded)
 }

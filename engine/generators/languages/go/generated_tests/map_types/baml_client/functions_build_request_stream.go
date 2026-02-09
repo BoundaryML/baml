@@ -24,7 +24,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for TestComplexMaps (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestComplexMaps (returns baml.HTTPRequest)
 func (*build_request_stream) TestComplexMaps(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request_stream) TestComplexMaps(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestComplexMaps", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestComplexMaps", encoded)
 }
 
-// / Build streaming HTTP request for TestEdgeCaseMaps (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestEdgeCaseMaps (returns baml.HTTPRequest)
 func (*build_request_stream) TestEdgeCaseMaps(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request_stream) TestEdgeCaseMaps(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestEdgeCaseMaps", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestEdgeCaseMaps", encoded)
 }
 
-// / Build streaming HTTP request for TestLargeMaps (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestLargeMaps (returns baml.HTTPRequest)
 func (*build_request_stream) TestLargeMaps(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request_stream) TestLargeMaps(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestLargeMaps", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestLargeMaps", encoded)
 }
 
-// / Build streaming HTTP request for TestNestedMaps (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestNestedMaps (returns baml.HTTPRequest)
 func (*build_request_stream) TestNestedMaps(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,15 +205,10 @@ func (*build_request_stream) TestNestedMaps(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestNestedMaps", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestNestedMaps", encoded)
 }
 
-// / Build streaming HTTP request for TestSimpleMaps (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestSimpleMaps (returns baml.HTTPRequest)
 func (*build_request_stream) TestSimpleMaps(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -271,15 +251,10 @@ func (*build_request_stream) TestSimpleMaps(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestSimpleMaps", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestSimpleMaps", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelBoolMap (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelBoolMap (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelBoolMap(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -322,15 +297,10 @@ func (*build_request_stream) TestTopLevelBoolMap(input string, opts ...CallOptio
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelBoolMap", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelBoolMap", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelEmptyMap (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelEmptyMap (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelEmptyMap(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -373,15 +343,10 @@ func (*build_request_stream) TestTopLevelEmptyMap(input string, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelEmptyMap", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelEmptyMap", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelFloatMap (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelFloatMap (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelFloatMap(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -424,15 +389,10 @@ func (*build_request_stream) TestTopLevelFloatMap(input string, opts ...CallOpti
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelFloatMap", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelFloatMap", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelIntMap (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelIntMap (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelIntMap(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -475,15 +435,10 @@ func (*build_request_stream) TestTopLevelIntMap(input string, opts ...CallOption
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelIntMap", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelIntMap", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelMapOfArrays (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelMapOfArrays (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelMapOfArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -526,15 +481,10 @@ func (*build_request_stream) TestTopLevelMapOfArrays(input string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelMapOfArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelMapOfArrays", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelMapOfObjects (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelMapOfObjects (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelMapOfObjects(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -577,15 +527,10 @@ func (*build_request_stream) TestTopLevelMapOfObjects(input string, opts ...Call
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelMapOfObjects", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelMapOfObjects", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelMapWithNullable (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelMapWithNullable (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelMapWithNullable(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -628,15 +573,10 @@ func (*build_request_stream) TestTopLevelMapWithNullable(input string, opts ...C
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelMapWithNullable", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelMapWithNullable", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelNestedMap (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelNestedMap (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelNestedMap(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -679,15 +619,10 @@ func (*build_request_stream) TestTopLevelNestedMap(input string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelNestedMap", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelNestedMap", encoded)
 }
 
-// / Build streaming HTTP request for TestTopLevelStringMap (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestTopLevelStringMap (returns baml.HTTPRequest)
 func (*build_request_stream) TestTopLevelStringMap(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -730,10 +665,5 @@ func (*build_request_stream) TestTopLevelStringMap(input string, opts ...CallOpt
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelStringMap", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelStringMap", encoded)
 }

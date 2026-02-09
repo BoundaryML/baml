@@ -24,7 +24,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for MakeClassWithBlockDone (returns baml.HTTPRequest)
+// Build streaming HTTP request for MakeClassWithBlockDone (returns baml.HTTPRequest)
 func (*build_request_stream) MakeClassWithBlockDone(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request_stream) MakeClassWithBlockDone(opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeClassWithBlockDone", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeClassWithBlockDone", encoded)
 }
 
-// / Build streaming HTTP request for MakeClassWithExternalDone (returns baml.HTTPRequest)
+// Build streaming HTTP request for MakeClassWithExternalDone (returns baml.HTTPRequest)
 func (*build_request_stream) MakeClassWithExternalDone(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request_stream) MakeClassWithExternalDone(opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeClassWithExternalDone", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeClassWithExternalDone", encoded)
 }
 
-// / Build streaming HTTP request for MakeSemanticContainer (returns baml.HTTPRequest)
+// Build streaming HTTP request for MakeSemanticContainer (returns baml.HTTPRequest)
 func (*build_request_stream) MakeSemanticContainer(opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,10 +159,5 @@ func (*build_request_stream) MakeSemanticContainer(opts ...CallOptionFunc) (baml
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "MakeSemanticContainer", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "MakeSemanticContainer", encoded)
 }

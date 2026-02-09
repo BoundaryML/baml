@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for Bar (returns baml.HTTPRequest)
+// Build HTTP request for Bar (returns baml.HTTPRequest)
 func (*build_request) Bar(x int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) Bar(x int64, opts ...CallOptionFunc) (baml.HTTPRequest, er
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "Bar", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "Bar", encoded)
 }
 
-// / Build HTTP request for Foo (returns baml.HTTPRequest)
+// Build HTTP request for Foo (returns baml.HTTPRequest)
 func (*build_request) Foo(x int64, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,10 +113,5 @@ func (*build_request) Foo(x int64, opts ...CallOptionFunc) (baml.HTTPRequest, er
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "Foo", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "Foo", encoded)
 }

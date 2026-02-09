@@ -26,7 +26,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for ConsumeTestEnum (returns baml.HTTPRequest)
+// Build streaming HTTP request for ConsumeTestEnum (returns baml.HTTPRequest)
 func (*build_request_stream) ConsumeTestEnum(input types.TestEnum, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -69,15 +69,10 @@ func (*build_request_stream) ConsumeTestEnum(input types.TestEnum, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ConsumeTestEnum", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ConsumeTestEnum", encoded)
 }
 
-// / Build streaming HTTP request for FnTestAliasedEnumOutput (returns baml.HTTPRequest)
+// Build streaming HTTP request for FnTestAliasedEnumOutput (returns baml.HTTPRequest)
 func (*build_request_stream) FnTestAliasedEnumOutput(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -120,10 +115,5 @@ func (*build_request_stream) FnTestAliasedEnumOutput(input string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "FnTestAliasedEnumOutput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "FnTestAliasedEnumOutput", encoded)
 }

@@ -26,7 +26,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for JsonInput (returns baml.HTTPRequest)
+// Build streaming HTTP request for JsonInput (returns baml.HTTPRequest)
 func (*build_request_stream) JsonInput(x []types.ExistingSystemComponent, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -69,10 +69,5 @@ func (*build_request_stream) JsonInput(x []types.ExistingSystemComponent, opts .
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "JsonInput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "JsonInput", encoded)
 }

@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for TestEmptyArrays (returns baml.HTTPRequest)
+// Build HTTP request for TestEmptyArrays (returns baml.HTTPRequest)
 func (*build_request) TestEmptyArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) TestEmptyArrays(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestEmptyArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestEmptyArrays", encoded)
 }
 
-// / Build HTTP request for TestLargeArrays (returns baml.HTTPRequest)
+// Build HTTP request for TestLargeArrays (returns baml.HTTPRequest)
 func (*build_request) TestLargeArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request) TestLargeArrays(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestLargeArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestLargeArrays", encoded)
 }
 
-// / Build HTTP request for TestMixedArrays (returns baml.HTTPRequest)
+// Build HTTP request for TestMixedArrays (returns baml.HTTPRequest)
 func (*build_request) TestMixedArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request) TestMixedArrays(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMixedArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMixedArrays", encoded)
 }
 
-// / Build HTTP request for TestNestedArrays (returns baml.HTTPRequest)
+// Build HTTP request for TestNestedArrays (returns baml.HTTPRequest)
 func (*build_request) TestNestedArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,15 +205,10 @@ func (*build_request) TestNestedArrays(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestNestedArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestNestedArrays", encoded)
 }
 
-// / Build HTTP request for TestObjectArrays (returns baml.HTTPRequest)
+// Build HTTP request for TestObjectArrays (returns baml.HTTPRequest)
 func (*build_request) TestObjectArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -271,15 +251,10 @@ func (*build_request) TestObjectArrays(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestObjectArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestObjectArrays", encoded)
 }
 
-// / Build HTTP request for TestSimpleArrays (returns baml.HTTPRequest)
+// Build HTTP request for TestSimpleArrays (returns baml.HTTPRequest)
 func (*build_request) TestSimpleArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -322,15 +297,10 @@ func (*build_request) TestSimpleArrays(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestSimpleArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestSimpleArrays", encoded)
 }
 
-// / Build HTTP request for TestTopLevel3DArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevel3DArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevel3DArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -373,15 +343,10 @@ func (*build_request) TestTopLevel3DArray(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevel3DArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevel3DArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelArrayOfMaps (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelArrayOfMaps (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelArrayOfMaps(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -424,15 +389,10 @@ func (*build_request) TestTopLevelArrayOfMaps(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelArrayOfMaps", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelArrayOfMaps", encoded)
 }
 
-// / Build HTTP request for TestTopLevelBoolArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelBoolArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelBoolArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -475,15 +435,10 @@ func (*build_request) TestTopLevelBoolArray(input string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelBoolArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelBoolArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelEmptyArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelEmptyArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelEmptyArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -526,15 +481,10 @@ func (*build_request) TestTopLevelEmptyArray(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelEmptyArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelEmptyArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelFloatArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelFloatArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelFloatArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -577,15 +527,10 @@ func (*build_request) TestTopLevelFloatArray(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelFloatArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelFloatArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelIntArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelIntArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelIntArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -628,15 +573,10 @@ func (*build_request) TestTopLevelIntArray(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelIntArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelIntArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelMixedArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelMixedArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelMixedArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -679,15 +619,10 @@ func (*build_request) TestTopLevelMixedArray(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelMixedArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelMixedArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelNestedArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelNestedArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelNestedArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -730,15 +665,10 @@ func (*build_request) TestTopLevelNestedArray(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelNestedArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelNestedArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelNullableArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelNullableArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelNullableArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -781,15 +711,10 @@ func (*build_request) TestTopLevelNullableArray(input string, opts ...CallOption
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelNullableArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelNullableArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelObjectArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelObjectArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelObjectArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -832,15 +757,10 @@ func (*build_request) TestTopLevelObjectArray(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelObjectArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelObjectArray", encoded)
 }
 
-// / Build HTTP request for TestTopLevelStringArray (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelStringArray (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelStringArray(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -883,10 +803,5 @@ func (*build_request) TestTopLevelStringArray(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelStringArray", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelStringArray", encoded)
 }

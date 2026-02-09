@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for TestEmptyCollections (returns baml.HTTPRequest)
+// Build HTTP request for TestEmptyCollections (returns baml.HTTPRequest)
 func (*build_request) TestEmptyCollections(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) TestEmptyCollections(input string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestEmptyCollections", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestEmptyCollections", encoded)
 }
 
-// / Build HTTP request for TestMixedPrimitives (returns baml.HTTPRequest)
+// Build HTTP request for TestMixedPrimitives (returns baml.HTTPRequest)
 func (*build_request) TestMixedPrimitives(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request) TestMixedPrimitives(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMixedPrimitives", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMixedPrimitives", encoded)
 }
 
-// / Build HTTP request for TestPrimitiveArrays (returns baml.HTTPRequest)
+// Build HTTP request for TestPrimitiveArrays (returns baml.HTTPRequest)
 func (*build_request) TestPrimitiveArrays(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request) TestPrimitiveArrays(input string, opts ...CallOptionFunc) 
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveArrays", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveArrays", encoded)
 }
 
-// / Build HTTP request for TestPrimitiveMaps (returns baml.HTTPRequest)
+// Build HTTP request for TestPrimitiveMaps (returns baml.HTTPRequest)
 func (*build_request) TestPrimitiveMaps(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,15 +205,10 @@ func (*build_request) TestPrimitiveMaps(input string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveMaps", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveMaps", encoded)
 }
 
-// / Build HTTP request for TestPrimitiveTypes (returns baml.HTTPRequest)
+// Build HTTP request for TestPrimitiveTypes (returns baml.HTTPRequest)
 func (*build_request) TestPrimitiveTypes(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -271,15 +251,10 @@ func (*build_request) TestPrimitiveTypes(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveTypes", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestPrimitiveTypes", encoded)
 }
 
-// / Build HTTP request for TestTopLevelBool (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelBool (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelBool(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -322,15 +297,10 @@ func (*build_request) TestTopLevelBool(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelBool", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelBool", encoded)
 }
 
-// / Build HTTP request for TestTopLevelFloat (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelFloat (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelFloat(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -373,15 +343,10 @@ func (*build_request) TestTopLevelFloat(input string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelFloat", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelFloat", encoded)
 }
 
-// / Build HTTP request for TestTopLevelInt (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelInt (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelInt(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -424,15 +389,10 @@ func (*build_request) TestTopLevelInt(input string, opts ...CallOptionFunc) (bam
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelInt", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelInt", encoded)
 }
 
-// / Build HTTP request for TestTopLevelNull (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelNull (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelNull(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -475,15 +435,10 @@ func (*build_request) TestTopLevelNull(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelNull", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelNull", encoded)
 }
 
-// / Build HTTP request for TestTopLevelString (returns baml.HTTPRequest)
+// Build HTTP request for TestTopLevelString (returns baml.HTTPRequest)
 func (*build_request) TestTopLevelString(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -526,10 +481,5 @@ func (*build_request) TestTopLevelString(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestTopLevelString", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestTopLevelString", encoded)
 }

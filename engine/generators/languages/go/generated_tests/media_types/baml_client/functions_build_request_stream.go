@@ -26,7 +26,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for TestMediaArrayInputs (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestMediaArrayInputs (returns baml.HTTPRequest)
 func (*build_request_stream) TestMediaArrayInputs(imageArray []types.Image, textInput string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -69,15 +69,10 @@ func (*build_request_stream) TestMediaArrayInputs(imageArray []types.Image, text
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMediaArrayInputs", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMediaArrayInputs", encoded)
 }
 
-// / Build streaming HTTP request for TestMediaInput (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestMediaInput (returns baml.HTTPRequest)
 func (*build_request_stream) TestMediaInput(media types.Union4AudioOrImageOrPDFOrVideo, textInput string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -120,10 +115,5 @@ func (*build_request_stream) TestMediaInput(media types.Union4AudioOrImageOrPDFO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMediaInput", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMediaInput", encoded)
 }

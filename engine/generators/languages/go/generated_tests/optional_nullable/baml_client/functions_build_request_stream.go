@@ -24,7 +24,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for TestAllNull (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestAllNull (returns baml.HTTPRequest)
 func (*build_request_stream) TestAllNull(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request_stream) TestAllNull(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAllNull", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAllNull", encoded)
 }
 
-// / Build streaming HTTP request for TestAllOptionalOmitted (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestAllOptionalOmitted (returns baml.HTTPRequest)
 func (*build_request_stream) TestAllOptionalOmitted(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request_stream) TestAllOptionalOmitted(input string, opts ...CallOp
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAllOptionalOmitted", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAllOptionalOmitted", encoded)
 }
 
-// / Build streaming HTTP request for TestMixedOptionalNullable (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestMixedOptionalNullable (returns baml.HTTPRequest)
 func (*build_request_stream) TestMixedOptionalNullable(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request_stream) TestMixedOptionalNullable(input string, opts ...Cal
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMixedOptionalNullable", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMixedOptionalNullable", encoded)
 }
 
-// / Build streaming HTTP request for TestNullableTypes (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestNullableTypes (returns baml.HTTPRequest)
 func (*build_request_stream) TestNullableTypes(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,15 +205,10 @@ func (*build_request_stream) TestNullableTypes(input string, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestNullableTypes", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestNullableTypes", encoded)
 }
 
-// / Build streaming HTTP request for TestOptionalFields (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestOptionalFields (returns baml.HTTPRequest)
 func (*build_request_stream) TestOptionalFields(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -271,10 +251,5 @@ func (*build_request_stream) TestOptionalFields(input string, opts ...CallOption
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOptionalFields", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOptionalFields", encoded)
 }

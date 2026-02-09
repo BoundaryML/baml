@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for TestAllNull (returns baml.HTTPRequest)
+// Build HTTP request for TestAllNull (returns baml.HTTPRequest)
 func (*build_request) TestAllNull(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) TestAllNull(input string, opts ...CallOptionFunc) (baml.HT
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAllNull", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAllNull", encoded)
 }
 
-// / Build HTTP request for TestAllOptionalOmitted (returns baml.HTTPRequest)
+// Build HTTP request for TestAllOptionalOmitted (returns baml.HTTPRequest)
 func (*build_request) TestAllOptionalOmitted(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request) TestAllOptionalOmitted(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestAllOptionalOmitted", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestAllOptionalOmitted", encoded)
 }
 
-// / Build HTTP request for TestMixedOptionalNullable (returns baml.HTTPRequest)
+// Build HTTP request for TestMixedOptionalNullable (returns baml.HTTPRequest)
 func (*build_request) TestMixedOptionalNullable(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request) TestMixedOptionalNullable(input string, opts ...CallOption
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestMixedOptionalNullable", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestMixedOptionalNullable", encoded)
 }
 
-// / Build HTTP request for TestNullableTypes (returns baml.HTTPRequest)
+// Build HTTP request for TestNullableTypes (returns baml.HTTPRequest)
 func (*build_request) TestNullableTypes(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,15 +205,10 @@ func (*build_request) TestNullableTypes(input string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestNullableTypes", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestNullableTypes", encoded)
 }
 
-// / Build HTTP request for TestOptionalFields (returns baml.HTTPRequest)
+// Build HTTP request for TestOptionalFields (returns baml.HTTPRequest)
 func (*build_request) TestOptionalFields(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -271,10 +251,5 @@ func (*build_request) TestOptionalFields(input string, opts ...CallOptionFunc) (
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestOptionalFields", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestOptionalFields", encoded)
 }

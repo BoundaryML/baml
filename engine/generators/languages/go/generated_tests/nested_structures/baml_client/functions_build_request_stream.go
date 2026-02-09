@@ -24,7 +24,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for TestComplexNested (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestComplexNested (returns baml.HTTPRequest)
 func (*build_request_stream) TestComplexNested(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request_stream) TestComplexNested(input string, opts ...CallOptionF
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestComplexNested", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestComplexNested", encoded)
 }
 
-// / Build streaming HTTP request for TestDeeplyNested (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestDeeplyNested (returns baml.HTTPRequest)
 func (*build_request_stream) TestDeeplyNested(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request_stream) TestDeeplyNested(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestDeeplyNested", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestDeeplyNested", encoded)
 }
 
-// / Build streaming HTTP request for TestRecursiveStructure (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestRecursiveStructure (returns baml.HTTPRequest)
 func (*build_request_stream) TestRecursiveStructure(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request_stream) TestRecursiveStructure(input string, opts ...CallOp
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestRecursiveStructure", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestRecursiveStructure", encoded)
 }
 
-// / Build streaming HTTP request for TestSimpleNested (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestSimpleNested (returns baml.HTTPRequest)
 func (*build_request_stream) TestSimpleNested(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,10 +205,5 @@ func (*build_request_stream) TestSimpleNested(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestSimpleNested", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestSimpleNested", encoded)
 }

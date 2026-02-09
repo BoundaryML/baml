@@ -24,7 +24,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for TestKitchenSink (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestKitchenSink (returns baml.HTTPRequest)
 func (*build_request_stream) TestKitchenSink(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request_stream) TestKitchenSink(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestKitchenSink", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestKitchenSink", encoded)
 }
 
-// / Build streaming HTTP request for TestRecursiveComplexity (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestRecursiveComplexity (returns baml.HTTPRequest)
 func (*build_request_stream) TestRecursiveComplexity(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request_stream) TestRecursiveComplexity(input string, opts ...CallO
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestRecursiveComplexity", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestRecursiveComplexity", encoded)
 }
 
-// / Build streaming HTTP request for TestUltraComplex (returns baml.HTTPRequest)
+// Build streaming HTTP request for TestUltraComplex (returns baml.HTTPRequest)
 func (*build_request_stream) TestUltraComplex(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,10 +159,5 @@ func (*build_request_stream) TestUltraComplex(input string, opts ...CallOptionFu
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestUltraComplex", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestUltraComplex", encoded)
 }

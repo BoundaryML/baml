@@ -24,7 +24,7 @@ type build_request struct{}
 
 var Request = &build_request{}
 
-// / Build HTTP request for TestComplexNested (returns baml.HTTPRequest)
+// Build HTTP request for TestComplexNested (returns baml.HTTPRequest)
 func (*build_request) TestComplexNested(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request) TestComplexNested(input string, opts ...CallOptionFunc) (b
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestComplexNested", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestComplexNested", encoded)
 }
 
-// / Build HTTP request for TestDeeplyNested (returns baml.HTTPRequest)
+// Build HTTP request for TestDeeplyNested (returns baml.HTTPRequest)
 func (*build_request) TestDeeplyNested(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request) TestDeeplyNested(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestDeeplyNested", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestDeeplyNested", encoded)
 }
 
-// / Build HTTP request for TestRecursiveStructure (returns baml.HTTPRequest)
+// Build HTTP request for TestRecursiveStructure (returns baml.HTTPRequest)
 func (*build_request) TestRecursiveStructure(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request) TestRecursiveStructure(input string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestRecursiveStructure", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestRecursiveStructure", encoded)
 }
 
-// / Build HTTP request for TestSimpleNested (returns baml.HTTPRequest)
+// Build HTTP request for TestSimpleNested (returns baml.HTTPRequest)
 func (*build_request) TestSimpleNested(input string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,10 +205,5 @@ func (*build_request) TestSimpleNested(input string, opts ...CallOptionFunc) (ba
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "TestSimpleNested", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "TestSimpleNested", encoded)
 }

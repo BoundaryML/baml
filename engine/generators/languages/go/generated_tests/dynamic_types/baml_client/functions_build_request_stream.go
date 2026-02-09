@@ -24,7 +24,7 @@ type build_request_stream struct{}
 
 var StreamRequest = &build_request_stream{}
 
-// / Build streaming HTTP request for ClassifyArticle (returns baml.HTTPRequest)
+// Build streaming HTTP request for ClassifyArticle (returns baml.HTTPRequest)
 func (*build_request_stream) ClassifyArticle(text string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -67,15 +67,10 @@ func (*build_request_stream) ClassifyArticle(text string, opts ...CallOptionFunc
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "ClassifyArticle", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "ClassifyArticle", encoded)
 }
 
-// / Build streaming HTTP request for CreateArticle (returns baml.HTTPRequest)
+// Build streaming HTTP request for CreateArticle (returns baml.HTTPRequest)
 func (*build_request_stream) CreateArticle(topic string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -118,15 +113,10 @@ func (*build_request_stream) CreateArticle(topic string, opts ...CallOptionFunc)
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "CreateArticle", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "CreateArticle", encoded)
 }
 
-// / Build streaming HTTP request for GetDynamicResponse (returns baml.HTTPRequest)
+// Build streaming HTTP request for GetDynamicResponse (returns baml.HTTPRequest)
 func (*build_request_stream) GetDynamicResponse(prompt string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -169,15 +159,10 @@ func (*build_request_stream) GetDynamicResponse(prompt string, opts ...CallOptio
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "GetDynamicResponse", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "GetDynamicResponse", encoded)
 }
 
-// / Build streaming HTTP request for GetPerson (returns baml.HTTPRequest)
+// Build streaming HTTP request for GetPerson (returns baml.HTTPRequest)
 func (*build_request_stream) GetPerson(description string, opts ...CallOptionFunc) (baml.HTTPRequest, error) {
 
 	var callOpts callOption
@@ -220,10 +205,5 @@ func (*build_request_stream) GetPerson(description string, opts ...CallOptionFun
 		panic(wrapped_err)
 	}
 
-	result, err := bamlRuntime.BuildRequest(context.Background(), "GetPerson", encoded)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
+	return bamlRuntime.BuildRequest(context.Background(), "GetPerson", encoded)
 }
