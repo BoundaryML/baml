@@ -466,16 +466,16 @@ function test_call_llm() -> string {
             panic!("test_call_llm should return an error: {value:?}");
         }
         Err(EngineError::ExternalOpFailed(OpError {
-            fn_name: SysOp::BamlLlmPrimitiveClientParse,
-            kind: OpErrorKind::LlmClientError { message },
-        })) if message.contains("You didn't provide an API key.") => {
-            // this is ok, we had an API Error due to invalid API keys
-        }
-        Err(EngineError::ExternalOpFailed(OpError {
             fn_name: SysOp::BamlHttpSend,
             kind: OpErrorKind::Other(message),
         })) if message.contains("HTTP request failed for") => {
             // network failed
+        }
+        Err(EngineError::ExternalOpFailed(OpError {
+            fn_name: SysOp::BamlLlmPrimitiveClientParse,
+            kind: OpErrorKind::LlmClientError { message },
+        })) if message.contains("You didn't provide an API key.") => {
+            // this is ok, we had an API Error due to invalid API keys
         }
         Err(e) => {
             assert!(

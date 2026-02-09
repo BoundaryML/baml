@@ -96,10 +96,11 @@ pub fn execute_parse_response_from_owned(
     return_type: &baml_type::Ty,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
     let response = parse_response::parse_response(
-        LlmProvider::from_str(&client.provider).map_err(|e| LlmOpError::Other(e.to_string()))?,
+        LlmProvider::from_str(&client.provider)
+            .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?,
         response,
     )
-    .map_err(|e| LlmOpError::Other(e.to_string()))?;
+    .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
     match return_type {
         baml_type::Ty::String => Ok(bex_external_types::BexExternalValue::String(
             response.content,
