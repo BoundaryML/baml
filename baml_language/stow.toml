@@ -11,6 +11,9 @@
 #   approved_prefixes    - Valid sub-prefixes (e.g., "compiler" allows baml_compiler_*)
 #   test_crate_exceptions - Test crates exempt from "must have prefix crate" rule
 #   dependency_rules     - Rules that only apply to crates in this namespace
+#   link_crates          - Cross-namespace deps shown as proxy nodes in this cluster
+#   embed_crates         - Crates from other namespaces placed inside this cluster
+#                          (shown with dashed border; reduces cross-cluster noise)
 #
 # Dependency Rules ([[dependency_rules]] or [[namespaces.dependency_rules]]):
 #   pattern              - Simple glob: "foo*", "*bar", or exact match
@@ -20,6 +23,12 @@
 #   allowed_crates       - Specific crates/patterns allowed (e.g., "*_cli")
 #   regular_deps_only    - If true, rule only applies to [dependencies], not dev/build
 #   reason               - Error message shown when rule is violated
+#
+# Graph visualization ([graph]):
+#   external_deps        - External deps to show as nodes in the graph
+#   [graph.implied_deps] - When a crate depends on both the key and a value,
+#                          the edge to the value is hidden (implied by the key)
+#                          Example: baml_builtins = ["baml_builtins_macros"]
 #
 # Auto-allowed naming suffixes: _types, _test, _tests (no prefix needed)
 # Auto-allowed dependency access: _test/_tests crates
@@ -32,9 +41,21 @@
 # - rig_*: Third-party rig test crates
 ignore_crates = ["rig_*"]
 
-# External dependencies to show in dependency graph visualization
+# Graph visualization settings
 # Run: cargo stow --graph /tmp/deps.svg
-graph_external_deps = ["serde", "serde_json", "tokio", "clap", "anyhow", "salsa", "rowan"]
+[graph]
+external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan"]
+
+# Implied dependencies: if a crate depends on both the key and a value,
+# the edge to the value is hidden (it's visually implied by the key).
+[graph.implied_deps]
+baml_builtins = ["baml_builtins_macros"]
+baml_project = ["baml_db"]
+baml_type = ["baml_base", "baml_builtins"]
+bex_heap = ["bex_external_types"]
+bex_external_types = ["bex_program"]
+bex_program = ["bex_vm_types"]
+bex_vm_types = ["bex_resource_types"]
 
 # Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
@@ -48,6 +69,7 @@ reason = "Use thiserror for proper error types in library crates."
 name = "baml"
 approved_prefixes = ["compiler", "builtins", "codegen"]
 test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
+embed_crates = ["tools_onionskin"]
 
 # baml-specific dependency rules
 [[namespaces.dependency_rules]]
@@ -77,17 +99,12 @@ name_exceptions = { "tools_stow" = "cargo-stow" }
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
-link_crates = ["baml_type", "sys_resource_types"]
-
-# llm namespace configuration
-[[namespaces]]
-name = "llm"
-link_crates = ["bex_external_types"]
+link_crates = ["baml_builtins", "baml_type"]
 
 # lsp namespace configuration
 [[namespaces]]
 name = "baml_lsp"
-link_crates = ["baml_project"]
+link_crates = ["baml_db", "baml_project"]
 
 # bridge namespace configuration
 [[namespaces]]
@@ -96,7 +113,7 @@ name = "bridge"
 # sys namespace configuration
 [[namespaces]]
 name = "sys"
-link_crates = ["bex_heap"]
+link_crates = ["baml_type",  "bex_heap", "bex_program", "bex_vm_types"]
 
 [[namespaces]]
 name = "surface"

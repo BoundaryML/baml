@@ -318,6 +318,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::many_single_char_names)]
     fn test_prompt_ast_merge_adjacent_nested_vec_preserves_order() {
         // [A, Vec([B, C]), D] should flatten in order to A,B,C,D then adjacent Simples merge to one string "abcd".
         let a = simple("a");
@@ -343,6 +344,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::many_single_char_names)]
     fn test_prompt_ast_simple_merge_adjacent_multiple_preserves_order() {
         // Two adjacent Simples: first has nested Multiple([a, Multiple([b]), c]), second is "d".
         // Flattening preserves order; adjacent strings merge, so we get one Simple("abcd").

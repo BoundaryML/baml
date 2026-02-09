@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use baml_type::Ty;
+use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
-use sys_resource_types::ResourceHandle;
 
 use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
 
@@ -71,72 +71,45 @@ impl Program {
 
 /// System operations that run outside the VM.
 ///
-/// These are built-in async operations provided by the engine.
-/// Add new variants here as new system capabilities are added.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SysOp {
-    /// Open a file: `baml.fs.open(path: String) -> File`
-    FsOpen,
-    /// Read file contents: `File.read() -> String`
-    FsRead,
-    /// Close a file: `File.close()`
-    FsClose,
-    /// Execute a shell command: `baml.sys.shell(cmd: String) -> String`
-    Shell,
-    /// Connect to a TCP socket: `baml.net.connect(addr: String) -> Socket`
-    NetConnect,
-    /// Read from a socket: `Socket.read() -> String`
-    NetRead,
-    /// Close a socket: `Socket.close()`
-    NetClose,
-    /// HTTP fetch: `baml.http.fetch(url: String) -> Response`
-    HttpFetch,
-    /// Get response body as text: `Response.text() -> String`
-    ResponseText,
-    /// Check if response is OK (2xx): `Response.ok() -> bool`
-    ResponseOk,
-    /// Render a Jinja template: `PrimitiveClient.render_prompt(template, args) -> PromptAst`
-    RenderPrompt,
-    /// Specialize a prompt for a specific provider: `PrimitiveClient.specialize_prompt(prompt) -> PromptAst`
-    SpecializePrompt,
-    /// Get the Jinja template for a function: `baml.llm.get_jinja_template(function_name) -> String`
-    LlmGetJinjaTemplate,
-    /// Build a `PrimitiveClient` from evaluated options: `baml.llm.build_primitive_client(...) -> PrimitiveClient`
-    LlmBuildPrimitiveClient,
-    /// Get the client function for a function: `baml.llm.get_client_function(function_name) -> fn() -> PrimitiveClient`
-    LlmGetClientFunction,
-    /// Build an HTTP request from a prompt: `PrimitiveClient.build_request(prompt: PromptAst) -> HttpRequest`
-    LlmBuildRequest,
-    /// Parse an HTTP response into a BAML value: `PrimitiveClient.parse(response: Response, function_name: String) -> T`
-    LlmParseResponse,
-    /// Send an HTTP request: `baml.http.send(request: Request) -> Response`
-    HttpSend,
+/// Generated from `#[sys_op]` definitions in `baml_builtins::with_builtins!`.
+/// Adding a new `#[sys_op]` in the DSL automatically adds an enum variant here.
+///
+/// The `for_all_sys_ops!` macro carries the definitive list of variants, paths,
+/// and `snake_case` names. This enum, `path()`, `sys_op_for_path()`, and `Display`
+/// are all generated from it — no manual maintenance needed.
+macro_rules! define_sys_op_enum {
+    ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr })*) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum SysOp {
+            $( $Variant, )*
+        }
+
+        impl SysOp {
+            /// Get the DSL path for this `sys_op` (e.g., `"baml.fs.open"`).
+            pub const fn path(&self) -> &'static str {
+                match self {
+                    $( SysOp::$Variant => $path, )*
+                }
+            }
+        }
+
+        /// Look up a `SysOp` by its DSL path string.
+        pub fn sys_op_for_path(path: &str) -> Option<SysOp> {
+            match path {
+                $( $path => Some(SysOp::$Variant), )*
+                _ => None,
+            }
+        }
+
+        impl std::fmt::Display for SysOp {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.path())
+            }
+        }
+    };
 }
 
-impl std::fmt::Display for SysOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SysOp::FsOpen => write!(f, "fs.open"),
-            SysOp::FsRead => write!(f, "fs.read"),
-            SysOp::FsClose => write!(f, "fs.close"),
-            SysOp::Shell => write!(f, "sys.shell"),
-            SysOp::NetConnect => write!(f, "net.connect"),
-            SysOp::NetRead => write!(f, "net.read"),
-            SysOp::NetClose => write!(f, "net.close"),
-            SysOp::HttpFetch => write!(f, "http.fetch"),
-            SysOp::ResponseText => write!(f, "http.Response.text"),
-            SysOp::ResponseOk => write!(f, "http.Response.ok"),
-            SysOp::RenderPrompt => write!(f, "llm.render_prompt"),
-            SysOp::SpecializePrompt => write!(f, "llm.specialize_prompt"),
-            SysOp::LlmGetJinjaTemplate => write!(f, "llm.get_jinja_template"),
-            SysOp::LlmBuildPrimitiveClient => write!(f, "llm.build_primitive_client"),
-            SysOp::LlmGetClientFunction => write!(f, "llm.get_client_function"),
-            SysOp::LlmBuildRequest => write!(f, "llm.build_request"),
-            SysOp::LlmParseResponse => write!(f, "llm.parse"),
-            SysOp::HttpSend => write!(f, "http.send"),
-        }
-    }
-}
+baml_builtins::for_all_sys_ops!(define_sys_op_enum);
 
 // ============================================================================
 // Function Types

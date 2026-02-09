@@ -819,11 +819,8 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "indexmap 2.13.0",
- "llm_jinja",
- "llm_ops",
- "llm_types",
+ "sys_llm",
  "sys_native",
- "sys_resource_types",
  "sys_types",
  "tempfile",
  "thiserror 2.0.18",
@@ -838,9 +835,9 @@ version = "0.0.0"
 dependencies = [
  "baml_type",
  "bex_program",
+ "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.13.0",
- "sys_resource_types",
  "tokio",
 ]
 
@@ -850,11 +847,11 @@ version = "0.0.0"
 dependencies = [
  "baml_type",
  "bex_external_types",
+ "bex_resource_types",
  "bex_vm_types",
  "crossbeam-queue",
  "indexmap 2.13.0",
  "sharded-slab",
- "sys_resource_types",
  "thiserror 2.0.18",
 ]
 
@@ -868,6 +865,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_resource_types"
+version = "0.0.0"
+
+[[package]]
 name = "bex_vm"
 version = "0.0.0"
 dependencies = [
@@ -878,12 +879,12 @@ dependencies = [
  "baml_tests",
  "baml_type",
  "bex_heap",
+ "bex_resource_types",
  "bex_vm_types",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.13.0",
  "paste",
- "sys_resource_types",
  "thiserror 2.0.18",
  "tokio",
 ]
@@ -899,13 +900,13 @@ dependencies = [
  "baml_compiler_emit",
  "baml_tests",
  "baml_type",
+ "bex_resource_types",
  "codspeed-divan-compat",
  "colored",
  "indexmap 2.13.0",
  "paste",
  "serde",
  "serde_json",
- "sys_resource_types",
  "tokio",
 ]
 
@@ -2736,53 +2737,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 
 [[package]]
-name = "llm_jinja"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "baml_builtins",
- "bex_external_types",
- "bex_program",
- "bex_vm_types",
- "indexmap 2.13.0",
- "llm_types",
- "minijinja",
- "regex",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "llm_ops"
-version = "0.0.0"
-dependencies = [
- "baml_builtins",
- "bex_external_types",
- "bex_heap",
- "bex_program",
- "bex_vm_types",
- "indexmap 2.13.0",
- "llm_jinja",
- "llm_types",
- "serde",
- "serde_json",
- "strum",
- "sys_types",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "llm_types"
-version = "0.0.0"
-dependencies = [
- "baml_base",
- "baml_type",
- "indexmap 2.13.0",
- "thiserror 2.0.18",
-]
-
-[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4603,32 +4557,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "sys_llm"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "baml_base",
+ "baml_builtins",
+ "baml_type",
+ "bex_external_types",
+ "bex_heap",
+ "bex_program",
+ "bex_vm_types",
+ "indexmap 2.13.0",
+ "minijinja",
+ "regex",
+ "serde",
+ "serde_json",
+ "strum",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "sys_native"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
  "bex_heap",
+ "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.13.0",
  "reqwest",
- "sys_resource_types",
  "sys_types",
  "tokio",
 ]
 
 [[package]]
-name = "sys_resource_types"
-version = "0.0.0"
-
-[[package]]
 name = "sys_types"
 version = "0.0.0"
 dependencies = [
+ "baml_builtins",
+ "baml_builtins_macros",
+ "baml_type",
  "bex_external_types",
  "bex_heap",
  "bex_vm_types",
- "llm_jinja",
- "sys_resource_types",
+ "sys_llm",
  "thiserror 2.0.18",
  "tokio",
 ]

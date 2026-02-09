@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use sys_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
+use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 use tokio::{fs::File, net::TcpStream, sync::Mutex as TokioMutex};
 
 /// A file resource with async-safe access.

@@ -71,6 +71,8 @@ struct NativeFnDef {
     uses_vm: bool,
     /// Whether this is a `sys_op` function (runs async outside VM)
     is_sys_op: bool,
+    /// Whether this `sys_op` needs engine context (marked with #[`uses(engine_ctx)`])
+    uses_engine_ctx: bool,
 }
 
 /// The root input to the macro: a list of modules.
@@ -147,6 +149,8 @@ struct FunctionItem {
     /// Whether this function is a `sys_op` (marked with #[`sys_op`])
     /// `Sys_op` functions run asynchronously outside the VM.
     is_sys_op: bool,
+    /// Whether this `sys_op` needs engine context (marked with #[`uses(engine_ctx)`])
+    uses_engine_ctx: bool,
 }
 
 impl ModuleItem {
@@ -292,6 +296,14 @@ impl FunctionItem {
             }
             false
         });
+        let uses_engine_ctx = attrs.iter().any(|attr| {
+            if attr.path().is_ident("uses") {
+                if let Ok(nested) = attr.parse_args::<Ident>() {
+                    return nested == "engine_ctx";
+                }
+            }
+            false
+        });
         let is_sys_op = attrs.iter().any(|attr| attr.path().is_ident("sys_op"));
 
         // Parse: fn name<Generics>(params...) -> RetType;
@@ -359,6 +371,7 @@ impl FunctionItem {
             return_type,
             uses_vm,
             is_sys_op,
+            uses_engine_ctx,
         })
     }
 }
@@ -573,6 +586,25 @@ fn to_snake_case(s: &str) -> String {
         result.push(c.to_ascii_lowercase());
     }
     result
+}
+
+/// Convert a `snake_case` identifier to `PascalCase`.
+///
+/// Used to generate `SysOp` enum variant names from function names.
+/// E.g., "`baml_fs_open`" -> "`BamlFsOpen`"
+fn to_pascal_case(s: &str) -> String {
+    s.split('_')
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(c) => {
+                    let upper: String = c.to_uppercase().collect();
+                    upper + &chars.collect::<String>()
+                }
+            }
+        })
+        .collect()
 }
 
 /// Get the simple type name from a Type (for native fn generation).
@@ -827,6 +859,7 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             returns: native_returns,
             uses_vm: method.uses_vm,
             is_sys_op: method.is_sys_op,
+            uses_engine_ctx: method.uses_engine_ctx,
         });
     }
 }
@@ -918,6 +951,7 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         returns: native_returns,
         uses_vm: f.uses_vm,
         is_sys_op: f.is_sys_op,
+        uses_engine_ctx: f.uses_engine_ctx,
     });
 }
 
@@ -1065,6 +1099,23 @@ pub fn define_builtins(input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Generate sys_op entries for for_all_sys_ops! macro
+    let sys_op_entries: Vec<_> = native_defs
+        .iter()
+        .filter(|d| d.is_sys_op)
+        .map(|d| {
+            let fn_name_str = d.fn_name.to_string();
+            let variant_name = format_ident!("{}", to_pascal_case(&fn_name_str));
+            let path = &d.path;
+            let fn_name = &d.fn_name;
+            let uses_engine_ctx = d.uses_engine_ctx;
+
+            quote! {
+                { #variant_name, #path, #fn_name, #uses_engine_ctx }
+            }
+        })
+        .collect();
+
     let output = quote! {
         /// Path constants for all builtins.
         ///
@@ -1128,6 +1179,30 @@ pub fn define_builtins(input: TokenStream) -> TokenStream {
                 $callback!(
                     #(#native_fn_entries),*
                 );
+            };
+        }
+
+        /// Invoke a macro with all sys_op definitions.
+        ///
+        /// Each entry has format:
+        /// `{ VariantName, "path.string", snake_name, uses_engine_ctx }`
+        ///
+        /// - `VariantName`: PascalCase enum variant (e.g., `BamlFsOpen`)
+        /// - `"path.string"`: DSL path (e.g., `"baml.fs.open"`)
+        /// - `snake_name`: snake_case function name (e.g., `baml_fs_open`)
+        /// - `uses_engine_ctx`: whether the op needs `SysOpContext`
+        ///
+        /// Usage:
+        /// ```ignore
+        /// baml_builtins::for_all_sys_ops!(my_macro);
+        /// // Expands to: my_macro! { { BamlFsOpen, "baml.fs.open", baml_fs_open, false } ... }
+        /// ```
+        #[macro_export]
+        macro_rules! for_all_sys_ops {
+            ($callback:ident) => {
+                $callback! {
+                    #(#sys_op_entries)*
+                }
             };
         }
 
@@ -1710,4 +1785,452 @@ fn generate_result_conversion(d: &NativeFnDef) -> TokenStream2 {
         "PrimitiveClient" => quote!(Ok(vm.alloc_primitive_client(result))),
         _ => quote!(Ok(result)),
     }
+}
+
+// ============================================================================
+// Per-module sys_op traits
+// ============================================================================
+
+/// Extract the module name (second path segment) from a `sys_op` path.
+///
+/// E.g., `"baml.fs.open"` → `"fs"`, `"baml.llm.PrimitiveClient.parse"` → `"llm"`.
+fn module_from_path(path: &str) -> &str {
+    path.split('.').nth(1).unwrap_or_else(|| {
+        panic!("sys_op path '{path}' should have at least 2 segments (e.g., baml.fs.open)")
+    })
+}
+
+/// Generate per-module traits for `sys_op` implementations.
+///
+/// This proc macro is invoked via `baml_builtins::with_builtins!(...)` in `sys_types`.
+/// It generates:
+///
+/// - One trait per DSL module (e.g., `SysOpFs`, `SysOpHttp`, `SysOpLlm`)
+/// - **Clean trait methods** with typed parameters (no raw `Vec<BexValue>`)
+///   that return `SysOpOutput` (no need to specify the `SysOp` variant)
+/// - **Glue methods** (`__baml_*`) that handle arg extraction and error wrapping
+/// - `SysOps::from_impl<T>()` to wire glue methods into the fn-pointer table
+///
+/// # Example
+///
+/// ```ignore
+/// // Generated trait:
+/// pub trait SysOpFs {
+///     fn baml_fs_open(path: String) -> SysOpOutput { ... }
+///     fn __baml_fs_open(heap: &Arc<BexHeap>, args: Vec<BexValue<'_>>, ctx: &SysOpContext) -> SysOpResult { ... }
+/// }
+///
+/// // In sys_native:
+/// impl SysOpFs for NativeSysOps {
+///     fn baml_fs_open(path: String) -> SysOpOutput {
+///         SysOpOutput::async_op(async move {
+///             let file = File::open(&path).await.map_err(|e| OpErrorKind::Other(...))?;
+///             Ok(BexExternalValue::String("done".into()))
+///         })
+///     }
+/// }
+/// ```
+#[proc_macro]
+pub fn generate_sys_op_traits(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as BuiltinsInput);
+
+    // Collect all builtin definitions (we only need native_defs for sys_ops)
+    let builtin_types = collect_builtin_types(&input.modules);
+    let mut native_defs = Vec::new();
+    let mut defs = Vec::new();
+    let mut type_defs = Vec::new();
+    for module in &input.modules {
+        let mut ctx = CollectContext {
+            path_prefix: String::new(),
+            const_prefix: String::new(),
+            fn_name_prefix: String::new(),
+            defs: &mut defs,
+            native_defs: &mut native_defs,
+            type_defs: &mut type_defs,
+            builtin_types: &builtin_types,
+            is_hidden: false,
+        };
+        collect_builtins(module, &mut ctx);
+    }
+
+    // Collect sys_ops with full NativeFnDef info
+    let sys_op_defs: Vec<&NativeFnDef> = native_defs.iter().filter(|d| d.is_sys_op).collect();
+
+    // Group by module (preserving insertion order)
+    let mut module_order: Vec<String> = Vec::new();
+    let mut module_ops: std::collections::HashMap<String, Vec<&NativeFnDef>> =
+        std::collections::HashMap::new();
+    for d in &sys_op_defs {
+        let module = module_from_path(&d.path).to_string();
+        if !module_ops.contains_key(&module) {
+            module_order.push(module.clone());
+        }
+        module_ops.entry(module).or_default().push(d);
+    }
+
+    // Generate one trait per module
+    let trait_defs: Vec<_> = module_order
+        .iter()
+        .map(|module_name| {
+            let ops = &module_ops[module_name];
+            let trait_name = format_ident!("SysOp{}", to_pascal_case(module_name));
+
+            let methods: Vec<_> = ops
+                .iter()
+                .flat_map(|d| {
+                    let fn_name = &d.fn_name;
+                    let fn_name_str = fn_name.to_string();
+                    let variant_name = format_ident!("{}", to_pascal_case(&fn_name_str));
+                    let glue_fn_name = format_ident!("__{}", fn_name);
+
+                    // Build clean parameter list
+                    let clean_params = sys_op_clean_params(d, &builtin_types);
+                    let clean_call_args = sys_op_clean_call_args(d, &builtin_types);
+
+                    // Generate arg count (receiver counts as 1)
+                    let arg_count = d.receiver.iter().count() + d.params.len();
+                    let arg_count_lit = proc_macro2::Literal::usize_unsuffixed(arg_count);
+
+                    // Generate extraction code
+                    let extraction = sys_op_extraction(d, &builtin_types);
+
+                    // Does the clean method get ctx?
+                    let uses_ctx = d.uses_engine_ctx;
+                    let ctx_param = if uses_ctx {
+                        quote!(, ctx: &SysOpContext)
+                    } else {
+                        quote!()
+                    };
+                    let ctx_arg = if uses_ctx {
+                        quote!(, ctx)
+                    } else {
+                        quote!()
+                    };
+
+                    // Compute the typed return: SysOpOutput<T>
+                    let output_type = sys_op_output_type(d, &builtin_types);
+
+                    // Clean method (overridable, default = Unsupported)
+                    let clean_method = quote! {
+                        #[allow(unused_variables)]
+                        fn #fn_name(#clean_params #ctx_param) -> #output_type {
+                            SysOpOutput::err(OpErrorKind::Unsupported)
+                        }
+                    };
+
+                    // Glue method (default, not meant to be overridden)
+                    let glue_method = quote! {
+                        #[doc(hidden)]
+                        fn #glue_fn_name(
+                            heap: &::std::sync::Arc<BexHeap>,
+                            args: Vec<bex_heap::BexValue<'_>>,
+                            ctx: &SysOpContext,
+                        ) -> SysOpResult {
+                            if args.len() != #arg_count_lit {
+                                return SysOpResult::Ready(Err(OpError::new(
+                                    SysOp::#variant_name,
+                                    OpErrorKind::InvalidArgumentCount {
+                                        expected: #arg_count_lit,
+                                        actual: args.len(),
+                                    },
+                                )));
+                            }
+                            #extraction
+                            Self::#fn_name(#clean_call_args #ctx_arg).into_result(SysOp::#variant_name)
+                        }
+                    };
+
+                    vec![clean_method, glue_method]
+                })
+                .collect();
+
+            let doc = format!(
+                "Per-module sys_op trait for the `{module_name}` module.\n\n\
+                 Override the clean methods (e.g., `baml_fs_open`) with your \
+                 implementation. The `__baml_*` glue methods handle arg \
+                 extraction and error wrapping automatically."
+            );
+            quote! {
+                #[doc = #doc]
+                pub trait #trait_name {
+                    #(#methods)*
+                }
+            }
+        })
+        .collect();
+
+    // Generate SysOps::from_impl<T>() — wires to the GLUE methods
+    let trait_names: Vec<_> = module_order
+        .iter()
+        .map(|m| format_ident!("SysOp{}", to_pascal_case(m)))
+        .collect();
+
+    let field_assignments: Vec<_> = sys_op_defs
+        .iter()
+        .map(|d| {
+            let fn_name = &d.fn_name;
+            let glue_fn_name = format_ident!("__{}", fn_name);
+            quote! { #fn_name: T::#glue_fn_name, }
+        })
+        .collect();
+
+    let from_impl_method = quote! {
+        impl SysOps {
+            /// Build a `SysOps` table from a type that implements the per-module traits.
+            ///
+            /// Each module trait (`SysOpFs`, `SysOpHttp`, etc.) provides default
+            /// `Unsupported` implementations, so you only need to override the ops
+            /// your provider supports.
+            pub fn from_impl<T: #(#trait_names)+*>() -> Self {
+                Self {
+                    #(#field_assignments)*
+                }
+            }
+        }
+    };
+
+    let output = quote! {
+        #(#trait_defs)*
+        #from_impl_method
+    };
+
+    output.into()
+}
+
+// ============================================================================
+// Helpers for generating clean sys_op trait signatures
+// ============================================================================
+
+/// Map a DSL type name to the Rust type used in clean `sys_op` trait signatures.
+///
+/// Returns `Ok(tokens)` for known types, `Err(type_name)` for unrecognised ones.
+/// Callers decide whether to fall back to `BexExternalValue` or emit a compile error.
+fn sys_op_rust_type(
+    type_name: &str,
+    builtin_types: &HashMap<String, String>,
+) -> std::result::Result<TokenStream2, String> {
+    match type_name {
+        "String" => Ok(quote!(String)),
+        "i64" => Ok(quote!(i64)),
+        "f64" => Ok(quote!(f64)),
+        "bool" => Ok(quote!(bool)),
+        "()" => Ok(quote!(())),
+        "Media" => Ok(quote!(bex_vm_types::MediaValue)),
+        "PromptAst" => Ok(quote!(bex_vm_types::PromptAst)),
+        _ if builtin_types.contains_key(type_name) => {
+            let ref_ident = sys_op_ref_type_ident(type_name, builtin_types);
+            Ok(quote!(bex_heap::builtin_types::owned::#ref_ident))
+        }
+        other => Err(other.to_string()),
+    }
+}
+
+/// Derive the Rust type identifier for a builtin struct from its DSL path.
+///
+/// Given a DSL path like `"baml.fs.File"`, strips the `baml.` prefix, `PascalCases`
+/// the module segment, and joins with the struct name: `"fs.File"` → `FsFile`.
+///
+/// This is deterministic and requires no hardcoded mapping — adding a new builtin
+/// struct to the DSL automatically gives it the correct Rust name.
+fn sys_op_ref_type_ident(type_name: &str, builtin_types: &HashMap<String, String>) -> Ident {
+    let path = builtin_types
+        .get(type_name)
+        .unwrap_or_else(|| panic!("Unknown builtin struct for sys_op extraction: {type_name}"));
+    // path is e.g. "baml.fs.File" → strip "baml." → "fs.File"
+    let without_baml = path
+        .strip_prefix("baml.")
+        .unwrap_or_else(|| panic!("builtin path '{path}' should start with 'baml.'"));
+    // Split into ["fs", "File"], PascalCase each segment, join
+    let ident_str: String = without_baml
+        .split('.')
+        .map(|seg| {
+            let mut chars = seg.chars();
+            match chars.next() {
+                Some(c) => {
+                    let mut s = c.to_uppercase().to_string();
+                    s.extend(chars);
+                    s
+                }
+                None => String::new(),
+            }
+        })
+        .collect();
+    format_ident!("{}", ident_str)
+}
+
+/// Generate the extraction expression for a single arg inside `with_gc_protection`.
+fn sys_op_extract_one(
+    type_name: &str,
+    arg_ident: &Ident,
+    builtin_types: &HashMap<String, String>,
+) -> TokenStream2 {
+    match type_name {
+        "String" => quote!(#arg_ident.as_string(&__p).cloned()?),
+        _ if builtin_types.contains_key(type_name) && type_name != "PromptAst" => {
+            let ref_type = sys_op_ref_type_ident(type_name, builtin_types);
+            quote!(
+                #arg_ident
+                    .as_builtin_class::<bex_heap::builtin_types::#ref_type>(&__p)?
+                    .into_owned(&__p)?
+            )
+        }
+        "PromptAst" => quote!(#arg_ident.as_prompt_ast_owned(&__p)?),
+        // Generic fallback for Map, Array, Any, Unknown
+        _ => quote!(#arg_ident.as_owned_but_very_slow(&__p)?),
+    }
+}
+
+/// Generate the clean parameter list for a `sys_op` trait method.
+///
+/// Receiver becomes the first param (renamed from "self" to a safe name).
+/// `ctx` is NOT included here — it's appended separately for `#[uses(engine_ctx)]` ops.
+fn sys_op_clean_params(d: &NativeFnDef, builtin_types: &HashMap<String, String>) -> TokenStream2 {
+    let mut params = Vec::new();
+
+    if let Some((_name, type_name, _is_generic, _is_mut)) = &d.receiver {
+        let param_name = sys_op_receiver_name(type_name);
+        let param_type = sys_op_rust_type(type_name, builtin_types)
+            .unwrap_or_else(|_| quote!(bex_external_types::BexExternalValue));
+        params.push(quote!(#param_name: #param_type));
+    }
+
+    for (name, type_name, _is_generic) in &d.params {
+        let param_name = format_ident!("{}", name);
+        let param_type = sys_op_rust_type(type_name, builtin_types)
+            .unwrap_or_else(|_| quote!(bex_external_types::BexExternalValue));
+        params.push(quote!(#param_name: #param_type));
+    }
+
+    quote!(#(#params),*)
+}
+
+/// Generate the argument list for calling the clean method from the glue.
+fn sys_op_clean_call_args(
+    d: &NativeFnDef,
+    _builtin_types: &HashMap<String, String>,
+) -> TokenStream2 {
+    let mut args = Vec::new();
+
+    if let Some((_name, type_name, _is_generic, _is_mut)) = &d.receiver {
+        let param_name = sys_op_receiver_name(type_name);
+        args.push(quote!(#param_name));
+    }
+
+    for (name, _type_name, _is_generic) in &d.params {
+        let param_name = format_ident!("{}", name);
+        args.push(quote!(#param_name));
+    }
+
+    quote!(#(#args),*)
+}
+
+/// Generate the full extraction block for a `sys_op`'s glue method.
+///
+/// This creates:
+/// 1. `args.into_iter()` and `next().unwrap()` for each arg
+/// 2. `heap.with_gc_protection(|p| { ... })` to extract all args at once
+/// 3. Destructuring of the extracted tuple into named variables
+fn sys_op_extraction(d: &NativeFnDef, builtin_types: &HashMap<String, String>) -> TokenStream2 {
+    // Collect all args: receiver (if any) + params
+    struct ArgInfo {
+        param_name: Ident,
+        type_name: String,
+        arg_var: Ident,
+    }
+
+    let fn_name_str = d.fn_name.to_string();
+    let variant_name = format_ident!("{}", to_pascal_case(&fn_name_str));
+
+    let mut all_args: Vec<ArgInfo> = Vec::new();
+
+    if let Some((_name, type_name, _is_generic, _is_mut)) = &d.receiver {
+        all_args.push(ArgInfo {
+            param_name: sys_op_receiver_name(type_name),
+            type_name: type_name.clone(),
+            arg_var: format_ident!("__arg{}", all_args.len()),
+        });
+    }
+
+    for (name, type_name, _is_generic) in &d.params {
+        all_args.push(ArgInfo {
+            param_name: format_ident!("{}", name),
+            type_name: type_name.clone(),
+            arg_var: format_ident!("__arg{}", all_args.len()),
+        });
+    }
+
+    // Step 1: destructure args vec
+    let arg_destructuring: Vec<_> = all_args
+        .iter()
+        .map(|a| {
+            let arg_var = &a.arg_var;
+            quote! { let #arg_var = __args_iter.next().unwrap(); }
+        })
+        .collect();
+
+    // Step 2: extraction expressions inside with_gc_protection
+    let extraction_exprs: Vec<_> = all_args
+        .iter()
+        .map(|a| {
+            let extract = sys_op_extract_one(&a.type_name, &a.arg_var, builtin_types);
+            let param_name = &a.param_name;
+            quote! { let #param_name = #extract; }
+        })
+        .collect();
+
+    // Step 3: result tuple (the names extracted inside GC scope)
+    let result_names: Vec<_> = all_args.iter().map(|a| &a.param_name).collect();
+
+    quote! {
+        let mut __args_iter = args.into_iter();
+        #(#arg_destructuring)*
+        let (#(#result_names,)*) = match heap.with_gc_protection(move |__p| {
+            #(#extraction_exprs)*
+            Ok::<_, bex_heap::AccessError>((#(#result_names,)*))
+        }) {
+            Ok(v) => v,
+            Err(e) => return SysOpResult::Ready(Err(OpError::new(
+                SysOp::#variant_name,
+                OpErrorKind::AccessError(e),
+            ))),
+        };
+    }
+}
+
+/// Generate the typed `SysOpOutput<T>` return type for a `sys_op` trait method.
+///
+/// Uses the return type info from `NativeFnDef.returns` to pick a concrete `T`.
+/// Falls back to `SysOpOutput` (= `SysOpOutput<BexExternalValue>`) for explicitly
+/// generic/unknown return types. Panics at macro-expansion time for unrecognised
+/// concrete types — add them to `sys_op_rust_type` instead.
+fn sys_op_output_type(d: &NativeFnDef, builtin_types: &HashMap<String, String>) -> TokenStream2 {
+    let (ref type_name, is_generic, _is_fallible) = d.returns;
+
+    // Generic or unknown types → use the default (BexExternalValue)
+    if is_generic || type_name == "Any" || type_name == "Unknown" || type_name == "unknown" {
+        return quote!(SysOpOutput);
+    }
+
+    match sys_op_rust_type(type_name, builtin_types) {
+        Ok(inner) => quote!(SysOpOutput<#inner>),
+        Err(unknown) => panic!(
+            "sys_op_output_type: unsupported return type `{unknown}`. \
+             Add it to `sys_op_rust_type` in baml_builtins_macros."
+        ),
+    }
+}
+
+/// Generate a safe parameter name for a receiver (since "self" is a keyword).
+fn sys_op_receiver_name(type_name: &str) -> Ident {
+    let snake = type_name
+        .chars()
+        .enumerate()
+        .fold(String::new(), |mut acc, (i, c)| {
+            if c.is_uppercase() && i > 0 {
+                acc.push('_');
+            }
+            acc.push(c.to_ascii_lowercase());
+            acc
+        });
+    format_ident!("{}", snake)
 }

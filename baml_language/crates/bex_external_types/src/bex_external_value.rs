@@ -24,8 +24,8 @@
 
 // Re-export Ty and TypeName from baml_type for convenience
 pub use baml_type::{Ty, TypeName};
+use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
-use sys_resource_types::ResourceHandle;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
 ///
@@ -209,9 +209,9 @@ impl BexExternalValue {
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
             BexExternalValue::Resource(handle) => match handle.kind() {
-                sys_resource_types::ResourceType::File => "file",
-                sys_resource_types::ResourceType::Socket => "socket",
-                sys_resource_types::ResourceType::Response => "http-response",
+                bex_resource_types::ResourceType::File => "file",
+                bex_resource_types::ResourceType::Socket => "socket",
+                bex_resource_types::ResourceType::Response => "http-response",
             },
             BexExternalValue::Adt(adt) => adt.type_name(),
             BexExternalValue::FunctionRef { .. } => "function",
@@ -256,6 +256,53 @@ impl From<&str> for BexExternalValue {
     }
 }
 
+/// Trait for types that can be converted to a [`BexExternalValue`].
+///
+/// Implemented by owned builtin types (`FsFile`, `HttpResponse`, etc.)
+/// and simple types (`String`, `bool`, `()`).
+///
+/// Used by `SysOpOutput<T>::into_result()` to convert typed results
+/// back to the common `BexExternalValue` representation.
+pub trait AsBexExternalValue {
+    fn into_bex_external_value(self) -> BexExternalValue;
+}
+
+impl AsBexExternalValue for BexExternalValue {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        self
+    }
+}
+
+impl AsBexExternalValue for () {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Null
+    }
+}
+
+impl AsBexExternalValue for String {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::String(self)
+    }
+}
+
+impl AsBexExternalValue for bool {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Bool(self)
+    }
+}
+
+impl AsBexExternalValue for bex_vm_types::PromptAst {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
+    }
+}
+
+impl AsBexExternalValue for bex_vm_types::MediaValue {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::Media(self))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,9 +310,9 @@ mod tests {
     #[test]
     fn test_resource_variant_construction() {
         // Test that we can construct a Resource variant with an opaque handle
-        let handle = sys_resource_types::ResourceHandle::new_without_cleanup(
+        let handle = bex_resource_types::ResourceHandle::new_without_cleanup(
             1,
-            sys_resource_types::ResourceType::File,
+            bex_resource_types::ResourceType::File,
             "test.txt".to_string(),
         );
 
@@ -277,9 +324,9 @@ mod tests {
 
     #[test]
     fn test_resource_socket_type_name() {
-        let handle = sys_resource_types::ResourceHandle::new_without_cleanup(
+        let handle = bex_resource_types::ResourceHandle::new_without_cleanup(
             2,
-            sys_resource_types::ResourceType::Socket,
+            bex_resource_types::ResourceType::Socket,
             "localhost:8080".to_string(),
         );
 

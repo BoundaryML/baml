@@ -54,7 +54,6 @@
 #![allow(unsafe_code)]
 
 mod conversion;
-mod llm;
 
 use std::{
     collections::HashMap,
@@ -64,17 +63,13 @@ use std::{
     },
 };
 
-use bex_external_types::BexExternalAdt;
 pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{GlobalPool, HeapPtr, Object, Value};
-// Re-export sys_types types for convenience
-pub use sys_types::{
-    CompletionHandle, OpError, ResourceHandle, ResourceType, SysOp, SysOpFn, SysOpResult, SysOps,
-};
+use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
+use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 
@@ -235,14 +230,14 @@ pub struct BexEngine {
     globals: GlobalPool,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
-    /// Maps function names to their global indices (for dynamic function lookup).
-    function_global_indices: HashMap<String, usize>,
     /// Resolved class names for instance allocation
     resolved_class_names: HashMap<String, HeapPtr>,
     /// Environment variables passed to VM.
     env_vars: HashMap<String, String>,
     /// System operations provider.
     sys_ops: sys_types::SysOps,
+    /// Context passed to `sys_ops` that need engine-level information.
+    sys_op_ctx: sys_types::SysOpContext,
 
     // --- Epoch-based GC coordination ---
     /// Current epoch counter (monotonically increasing).
@@ -326,14 +321,23 @@ impl BexEngine {
             .collect();
         let globals = GlobalPool::from_vec(globals_vec);
 
+        // Build SysOpContext by pre-extracting LLM function metadata from the heap.
+        // This avoids passing raw HeapPtrs to sys_ops.
+        let llm_functions = Self::extract_llm_function_info(&resolved_function_names);
+
+        let sys_op_ctx = sys_types::SysOpContext {
+            llm_functions,
+            function_global_indices: bytecode.function_global_indices,
+        };
+
         Ok(Self {
             heap,
             globals,
             resolved_function_names,
-            function_global_indices: bytecode.function_global_indices,
             resolved_class_names,
             env_vars,
             sys_ops,
+            sys_op_ctx,
             // Initialize epoch tracking
             current_epoch: AtomicU64::new(0),
             epoch_states: [EpochState::new(), EpochState::new()],
@@ -341,6 +345,37 @@ impl BexEngine {
             gc_complete: Notify::new(),
             gc_in_progress: AtomicBool::new(false),
         })
+    }
+
+    /// Pre-extract LLM function metadata from heap objects.
+    ///
+    /// This avoids passing raw `HeapPtr`s to `sys_ops` — instead, we read the
+    /// data once during construction and store it in `SysOpContext`.
+    fn extract_llm_function_info(
+        resolved_function_names: &HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
+    ) -> HashMap<String, sys_types::LlmFunctionInfo> {
+        let mut llm_functions = HashMap::new();
+        for (name, (ptr, _kind)) in resolved_function_names {
+            // SAFETY: ptr is from resolved_function_names, a compile-time object
+            let obj = unsafe { ptr.get() };
+            if let Object::Function(func) = obj {
+                if let Some(FunctionMeta::Llm {
+                    prompt_template,
+                    client,
+                }) = &func.body_meta
+                {
+                    llm_functions.insert(
+                        name.clone(),
+                        sys_types::LlmFunctionInfo {
+                            prompt_template: prompt_template.clone(),
+                            client_name: client.clone(),
+                            return_type: func.return_type.clone(),
+                        },
+                    );
+                }
+            }
+        }
+        llm_functions
     }
 
     /// Get a reference to the shared heap.
@@ -802,57 +837,15 @@ impl BexEngine {
         }
     }
 
-    /// Execute a system operation.
+    /// Execute a system operation via uniform dispatch through function pointers.
+    ///
+    /// All `sys_ops` (including LLM ops) go through the `SysOps` function pointer table.
+    /// No more special-case matching — adding a new `#[sys_op]` in the DSL automatically
+    /// gets dispatched here via the generated `SysOps::get()`.
     fn execute_sys_op(&self, op: SysOp, args: &[BexExternalValue]) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
-        let heap = &self.heap;
-        match op {
-            SysOp::FsOpen => (self.sys_ops.fs_open)(heap, args),
-            SysOp::FsRead => (self.sys_ops.fs_read)(heap, args),
-            SysOp::FsClose => (self.sys_ops.fs_close)(heap, args),
-            SysOp::NetConnect => (self.sys_ops.net_connect)(heap, args),
-            SysOp::NetRead => (self.sys_ops.net_read)(heap, args),
-            SysOp::NetClose => (self.sys_ops.net_close)(heap, args),
-            SysOp::Shell => (self.sys_ops.shell)(heap, args),
-            SysOp::HttpFetch => (self.sys_ops.http_fetch)(heap, args),
-            SysOp::ResponseText => (self.sys_ops.http_response_text)(heap, args),
-            SysOp::ResponseOk => (self.sys_ops.http_response_ok)(heap, args),
-            SysOp::RenderPrompt => SysOpResult::Ready(
-                llm_ops::execute_render_prompt(heap, args)
-                    .map(|ast| BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)))
-                    .map_err(|e| OpError::new(op, e)),
-            ),
-            SysOp::SpecializePrompt => SysOpResult::Ready(
-                llm_ops::execute_specialize_prompt(heap, args)
-                    .map(|ast| BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)))
-                    .map_err(|e| OpError::new(op, e)),
-            ),
-            SysOp::LlmGetJinjaTemplate => SysOpResult::Ready(
-                llm::execute_get_jinja_template(heap, &self.resolved_function_names, args)
-                    .map_err(|e| OpError::new(op, e)),
-            ),
-            SysOp::LlmGetClientFunction => SysOpResult::Ready(
-                llm::execute_get_client_function(
-                    heap,
-                    &self.resolved_function_names,
-                    &self.function_global_indices,
-                    args,
-                )
-                .map_err(|e| OpError::new(op, e)),
-            ),
-            SysOp::LlmBuildPrimitiveClient => SysOpResult::Ready(
-                llm_ops::execute_build_primitive_client(heap, args)
-                    .map_err(|e| OpError::new(op, e)),
-            ),
-            SysOp::LlmBuildRequest => SysOpResult::Ready(
-                llm_ops::execute_build_request(heap, args).map_err(|e| OpError::new(op, e)),
-            ),
-            SysOp::LlmParseResponse => SysOpResult::Ready(
-                llm_ops::execute_parse_response(heap, args, &self.resolved_function_names)
-                    .map_err(|e| OpError::new(op, e)),
-            ),
-            SysOp::HttpSend => (self.sys_ops.http_send)(heap, args),
-        }
+        let fn_ptr = self.sys_ops.get(op);
+        fn_ptr(&self.heap, args, &self.sys_op_ctx)
     }
 }
 

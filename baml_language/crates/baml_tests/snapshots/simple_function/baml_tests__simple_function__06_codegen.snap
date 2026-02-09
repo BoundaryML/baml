@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
+source: target/debug/build/baml_tests-15cf2be5bc9d87e9/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -7,7 +7,7 @@ Functions: 4
 Objects: 56
 Globals: 50
 
-Function HelloWorld (arity: 1, kind: SysOp(RenderPrompt)):
+Function HelloWorld (arity: 1, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
   (no bytecode)
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):

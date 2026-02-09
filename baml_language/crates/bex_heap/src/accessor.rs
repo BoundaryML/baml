@@ -263,7 +263,7 @@ impl<'a> BexValue<'a> {
     pub fn as_resource_handle(
         self,
         heap: &GcProtectedHeap<'_>,
-    ) -> Result<sys_resource_types::ResourceHandle, AccessError> {
+    ) -> Result<bex_resource_types::ResourceHandle, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::Resource(handle)) => Ok(handle.clone()),
             other => other.as_object("resource", heap, |ptr| {
@@ -701,9 +701,10 @@ pub mod builtin_types {
     use super::*;
 
     pub mod owned {
-        use bex_external_types::BexExternalValue;
+        use bex_external_types::{AsBexExternalValue, BexExternalValue};
 
-        pub struct PrimitiveClient {
+        #[derive(Debug)]
+        pub struct LlmPrimitiveClient {
             pub name: String,
             pub provider: String,
             pub default_role: String,
@@ -711,9 +712,8 @@ pub mod builtin_types {
             pub options: indexmap::IndexMap<String, bex_external_types::BexExternalValue>,
         }
 
-        impl PrimitiveClient {
-            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
-            pub fn as_bex_external_value(self) -> BexExternalValue {
+        impl AsBexExternalValue for LlmPrimitiveClient {
+            fn into_bex_external_value(self) -> BexExternalValue {
                 let allowed_roles = BexExternalValue::Array {
                     element_type: bex_external_types::Ty::String,
                     items: self
@@ -740,6 +740,7 @@ pub mod builtin_types {
             }
         }
 
+        #[derive(Debug)]
         pub struct HttpRequest {
             pub method: String,
             pub url: String,
@@ -747,9 +748,8 @@ pub mod builtin_types {
             pub body: String,
         }
 
-        impl HttpRequest {
-            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
-            pub fn as_bex_external_value(self) -> BexExternalValue {
+        impl AsBexExternalValue for HttpRequest {
+            fn into_bex_external_value(self) -> BexExternalValue {
                 let headers = BexExternalValue::Map {
                     key_type: bex_external_types::Ty::String,
                     value_type: bex_external_types::Ty::String,
@@ -771,16 +771,16 @@ pub mod builtin_types {
             }
         }
 
+        #[derive(Debug)]
         pub struct HttpResponse {
             pub status_code: i64,
             pub headers: indexmap::IndexMap<String, String>,
             pub url: String,
-            pub _handle: sys_resource_types::ResourceHandle,
+            pub _handle: bex_resource_types::ResourceHandle,
         }
 
-        impl HttpResponse {
-            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
-            pub fn as_bex_external_value(self) -> BexExternalValue {
+        impl AsBexExternalValue for HttpResponse {
+            fn into_bex_external_value(self) -> BexExternalValue {
                 let headers = BexExternalValue::Map {
                     key_type: bex_external_types::Ty::String,
                     value_type: bex_external_types::Ty::String,
@@ -802,13 +802,13 @@ pub mod builtin_types {
             }
         }
 
+        #[derive(Debug)]
         pub struct FsFile {
-            pub _handle: sys_resource_types::ResourceHandle,
+            pub _handle: bex_resource_types::ResourceHandle,
         }
 
-        impl FsFile {
-            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
-            pub fn as_bex_external_value(self) -> BexExternalValue {
+        impl AsBexExternalValue for FsFile {
+            fn into_bex_external_value(self) -> BexExternalValue {
                 BexExternalValue::Instance {
                     class_name: "baml.fs.File".to_string(),
                     fields: indexmap::indexmap! {
@@ -818,13 +818,13 @@ pub mod builtin_types {
             }
         }
 
+        #[derive(Debug)]
         pub struct NetSocket {
-            pub _handle: sys_resource_types::ResourceHandle,
+            pub _handle: bex_resource_types::ResourceHandle,
         }
 
-        impl NetSocket {
-            /// Consume self and convert to a BexExternalValue Instance for FFI / SysOp return.
-            pub fn as_bex_external_value(self) -> BexExternalValue {
+        impl AsBexExternalValue for NetSocket {
+            fn into_bex_external_value(self) -> BexExternalValue {
                 BexExternalValue::Instance {
                     class_name: "baml.net.Socket".to_string(),
                     fields: indexmap::indexmap! {
@@ -835,23 +835,23 @@ pub mod builtin_types {
         }
     }
 
-    pub struct PrimitiveClient<'a> {
+    pub struct LlmPrimitiveClient<'a> {
         cls: super::BexClass<'a>,
     }
 
-    impl<'a> From<BexClass<'a>> for PrimitiveClient<'a> {
+    impl<'a> From<BexClass<'a>> for LlmPrimitiveClient<'a> {
         fn from(cls: BexClass<'a>) -> Self {
             Self { cls }
         }
     }
 
-    impl<'a> BuiltinClass<'a> for PrimitiveClient<'a> {
+    impl<'a> BuiltinClass<'a> for LlmPrimitiveClient<'a> {
         fn name() -> &'static str {
             "baml.llm.PrimitiveClient"
         }
     }
 
-    impl<'a> PrimitiveClient<'a> {
+    impl<'a> LlmPrimitiveClient<'a> {
         pub fn name(&self, heap: &'a GcProtectedHeap<'a>) -> Result<&'a String, AccessError> {
             self.cls
                 .field("name")
@@ -899,8 +899,8 @@ pub mod builtin_types {
         pub fn into_owned(
             self,
             heap: &'a GcProtectedHeap<'a>,
-        ) -> Result<owned::PrimitiveClient, AccessError> {
-            Ok(owned::PrimitiveClient {
+        ) -> Result<owned::LlmPrimitiveClient, AccessError> {
+            Ok(owned::LlmPrimitiveClient {
                 name: self.name(heap)?.clone(),
                 provider: self.provider(heap)?.clone(),
                 default_role: self.default_role(heap)?.clone(),
@@ -1026,7 +1026,7 @@ pub mod builtin_types {
         pub fn _handle(
             &self,
             heap: &'a GcProtectedHeap<'a>,
-        ) -> Result<sys_resource_types::ResourceHandle, AccessError> {
+        ) -> Result<bex_resource_types::ResourceHandle, AccessError> {
             self.cls
                 .field("_handle")
                 .and_then(|value| value.as_resource_handle(heap))
@@ -1069,7 +1069,7 @@ pub mod builtin_types {
         pub fn _handle(
             &self,
             heap: &'a GcProtectedHeap<'a>,
-        ) -> Result<sys_resource_types::ResourceHandle, AccessError> {
+        ) -> Result<bex_resource_types::ResourceHandle, AccessError> {
             self.cls
                 .field("_handle")
                 .and_then(|value| value.as_resource_handle(heap))
@@ -1105,7 +1105,7 @@ pub mod builtin_types {
         pub fn _handle(
             &self,
             heap: &'a GcProtectedHeap<'a>,
-        ) -> Result<sys_resource_types::ResourceHandle, AccessError> {
+        ) -> Result<bex_resource_types::ResourceHandle, AccessError> {
             self.cls
                 .field("_handle")
                 .and_then(|value| value.as_resource_handle(heap))

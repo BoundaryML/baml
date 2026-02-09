@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
+source: target/debug/build/baml_tests-15cf2be5bc9d87e9/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
@@ -7,7 +7,7 @@ Functions: 5
 Objects: 65
 Globals: 51
 
-Function FetchDatax (arity: 1, kind: SysOp(RenderPrompt)):
+Function FetchDatax (arity: 1, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
   (no bytecode)
 
 Function VertexGCP.resolve (arity: 0, kind: Bytecode):
