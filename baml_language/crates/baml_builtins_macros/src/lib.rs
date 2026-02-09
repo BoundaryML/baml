@@ -1795,9 +1795,9 @@ fn generate_result_conversion(d: &NativeFnDef) -> TokenStream2 {
 ///
 /// E.g., `"baml.fs.open"` → `"fs"`, `"baml.llm.PrimitiveClient.parse"` → `"llm"`.
 fn module_from_path(path: &str) -> &str {
-    path.split('.')
-        .nth(1)
-        .expect("sys_op path should have at least 2 segments (e.g., baml.fs.open)")
+    path.split('.').nth(1).unwrap_or_else(|| {
+        panic!("sys_op path '{path}' should have at least 2 segments (e.g., baml.fs.open)")
+    })
 }
 
 /// Generate per-module traits for `sys_op` implementations.

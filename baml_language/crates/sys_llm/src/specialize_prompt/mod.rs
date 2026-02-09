@@ -14,20 +14,13 @@ use bex_heap::builtin_types::owned::LlmPrimitiveClient;
 use crate::{LlmProvider, ModelFeatures};
 
 /// Apply prompt specialization given already-extracted owned types.
-pub(crate) fn specialize_prompt_from_owned(
-    client: &LlmPrimitiveClient,
-    prompt: bex_vm_types::PromptAst,
-) -> bex_vm_types::PromptAst {
-    specialize_prompt(client, prompt)
-}
-
 /// Specialize a prompt for a specific provider.
 ///
 /// Applies three transformations in order:
 /// 1. Merge adjacent same-role messages
 /// 2. Consolidate system prompts (when `max_one_system_prompt` is true)
 /// 3. Filter role metadata (strip disallowed metadata keys)
-fn specialize_prompt(
+pub(crate) fn specialize_prompt_from_owned(
     client: &LlmPrimitiveClient,
     prompt: bex_vm_types::PromptAst,
 ) -> bex_vm_types::PromptAst {

@@ -143,7 +143,7 @@ pub enum SysOpResult {
 /// the implementor never needs to specify which [`SysOp`] variant they are.
 /// The generated glue code wraps this into a full [`SysOpResult`] via
 /// [`into_result`](SysOpOutput::into_result), which converts `T` into
-/// [`BexExternalValue`] using `Into`.
+/// [`BexExternalValue`] using [`AsBexExternalValue`].
 ///
 /// # Example
 ///
