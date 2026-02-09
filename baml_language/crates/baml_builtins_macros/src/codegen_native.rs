@@ -247,7 +247,7 @@ fn rust_type_for_output(type_name: &str, is_generic: bool) -> TokenStream2 {
         t if t.starts_with("Array") => quote!(Vec<Value>),
         t if t.starts_with("Map") => quote!(IndexMap<String, Value>),
         t if t.starts_with("Option<") => {
-            let inner = &t[7..t.len() - 1];
+            let inner = t[7..t.len() - 1].trim();
             let inner_type = rust_type_for_output(inner, false);
             quote!(Option<#inner_type>)
         }
