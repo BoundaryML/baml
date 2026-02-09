@@ -47,7 +47,7 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
         .usage
         .as_ref()
         .map(|u| TokenUsage {
-            prompt_tokens: Some(u.prompt_tokens),
+            input_tokens: Some(u.prompt_tokens),
             output_tokens: Some(u.completion_tokens),
             total_tokens: Some(u.total_tokens),
         })
@@ -119,7 +119,7 @@ mod tests {
         assert_eq!(resp.model, "gpt-4o");
         assert_eq!(resp.finish_reason, FinishReason::Stop);
         assert!(resp.finish_reason.is_complete());
-        assert_eq!(resp.usage.prompt_tokens, Some(9));
+        assert_eq!(resp.usage.input_tokens, Some(9));
         assert_eq!(resp.usage.output_tokens, Some(12));
         assert_eq!(resp.usage.total_tokens, Some(21));
 
@@ -148,7 +148,7 @@ mod tests {
         assert_eq!(resp.model, "basic-model");
         assert_eq!(resp.finish_reason, FinishReason::Unknown);
         assert!(!resp.finish_reason.is_complete());
-        assert_eq!(resp.usage.prompt_tokens, None);
+        assert_eq!(resp.usage.input_tokens, None);
         assert_eq!(resp.usage.output_tokens, None);
         assert_eq!(resp.usage.total_tokens, None);
 

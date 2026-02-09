@@ -3,20 +3,21 @@
 
 use std::sync::Arc;
 
-use llm_types::{HoistClasses, MapStyle, OutputFormatContent, RenderOptions, RenderSetting};
 use minijinja::{
     ErrorKind,
     value::{Kwargs, Value},
 };
 
+use crate::types::{HoistClasses, MapStyle, OutputFormatContent, RenderOptions, RenderSetting};
+
 /// Wrapper around `OutputFormatContent` that implements `minijinja::value::Object`.
 #[derive(Debug)]
-pub struct OutputFormatObject {
+pub(super) struct OutputFormatObject {
     content: OutputFormatContent,
 }
 
 impl OutputFormatObject {
-    pub fn new(content: OutputFormatContent) -> Self {
+    pub(super) fn new(content: OutputFormatContent) -> Self {
         Self { content }
     }
 }

@@ -22,7 +22,7 @@ baml_base = { workspace = true }
 baml_builtins = { workspace = true }
 baml_builtins_macros = { workspace = true }
 baml_type = { workspace = true }
-sys_resource_types = { workspace = true }
+bex_resource_types = { workspace = true }
 colored = { workspace = true }
 indexmap = { workspace = true }
 paste = { workspace = true }

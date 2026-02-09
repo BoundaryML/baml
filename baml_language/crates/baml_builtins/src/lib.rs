@@ -322,7 +322,7 @@ macro_rules! with_builtins {
                         /// Interprets the provider-specific response format and parses the output.
                         #[sys_op]
                         #[uses(engine_ctx)]
-                        fn parse(self: PrimitiveClient, response: Response, function_name: String) -> Any;
+                        fn parse(self: PrimitiveClient, http_response_body: String, function_name: String) -> Any;
                     }
 
                     /// Get the Jinja template for an LLM function.

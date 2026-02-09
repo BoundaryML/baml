@@ -1,17 +1,15 @@
 mod anthropic;
-#[allow(unreachable_pub)]
 mod anthropic_types;
 mod openai;
-#[allow(unreachable_pub)]
 mod openai_types;
 mod types;
 
-pub use types::{FinishReason, LlmProviderResponse, TokenUsage};
+pub(super) use types::LlmProviderResponse;
 
 use crate::LlmProvider;
 
 #[derive(Debug, thiserror::Error)]
-pub enum ParseResponseError {
+pub(crate) enum ParseResponseError {
     #[error("failed to deserialize {provider} response: {source}")]
     Deserialize {
         provider: &'static str,
@@ -38,7 +36,7 @@ pub enum ParseResponseError {
 /// Parse a raw HTTP response body into a normalized `LlmProviderResponse`.
 ///
 /// The `provider` determines which deserialization format to use.
-pub fn parse_response(
+pub(crate) fn parse_response(
     provider: LlmProvider,
     body: &str,
 ) -> Result<LlmProviderResponse, ParseResponseError> {

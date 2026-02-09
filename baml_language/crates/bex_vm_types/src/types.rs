@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use baml_type::Ty;
+use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
-use sys_resource_types::ResourceHandle;
 
 use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};
 
@@ -85,7 +85,7 @@ macro_rules! define_sys_op_enum {
         }
 
         impl SysOp {
-            /// Get the DSL path for this sys_op (e.g., `"baml.fs.open"`).
+            /// Get the DSL path for this `sys_op` (e.g., `"baml.fs.open"`).
             pub const fn path(&self) -> &'static str {
                 match self {
                     $( SysOp::$Variant => $path, )*

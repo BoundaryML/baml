@@ -68,11 +68,8 @@ use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, Value};
-// Re-export sys_types types for convenience
-pub use sys_types::{
-    CompletionHandle, OpError, ResourceHandle, ResourceType, SysOp, SysOpFn, SysOpResult, SysOps,
-};
+use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
+use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 

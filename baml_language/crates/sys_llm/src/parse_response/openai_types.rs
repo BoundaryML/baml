@@ -1,9 +1,9 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
-pub type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
+pub(super) type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct ChatCompletionGeneric<C> {
+pub(super) struct ChatCompletionGeneric<C> {
     pub id: Option<String>,
     pub choices: Vec<C>,
     #[serde(default, deserialize_with = "deserialize_float_to_u32")]
@@ -34,7 +34,7 @@ where
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct ChatCompletionChoice {
+pub(super) struct ChatCompletionChoice {
     pub index: u32,
     pub message: ChatCompletionResponseMessage,
     pub finish_reason: Option<String>,
@@ -43,21 +43,21 @@ pub struct ChatCompletionChoice {
 
 #[allow(clippy::struct_field_names)]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct CompletionUsage {
+pub(super) struct CompletionUsage {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
     pub total_tokens: u64,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct ChatCompletionResponseMessage {
+pub(super) struct ChatCompletionResponseMessage {
     pub content: Option<String>,
     pub role: ChatCompletionMessageRole,
 }
 
 #[derive(Debug, Deserialize, Clone, Default, PartialEq)]
 #[serde(rename_all = "lowercase")]
-pub enum ChatCompletionMessageRole {
+pub(super) enum ChatCompletionMessageRole {
     System,
     #[default]
     User,
@@ -67,12 +67,12 @@ pub enum ChatCompletionMessageRole {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct ChatChoiceLogprobs {
+pub(super) struct ChatChoiceLogprobs {
     pub content: Option<Vec<ChatCompletionTokenLogprob>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct ChatCompletionTokenLogprob {
+pub(super) struct ChatCompletionTokenLogprob {
     pub token: String,
     pub logprob: f32,
     pub bytes: Option<Vec<u8>>,
@@ -80,7 +80,7 @@ pub struct ChatCompletionTokenLogprob {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct TopLogprobs {
+pub(super) struct TopLogprobs {
     pub token: String,
     pub logprob: f32,
     pub bytes: Option<Vec<u8>>,

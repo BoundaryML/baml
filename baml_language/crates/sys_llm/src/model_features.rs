@@ -8,7 +8,7 @@ use crate::LlmProvider;
 /// Derived from provider name + client options at specialization time.
 /// Media resolution fields are deferred to a future phase.
 #[derive(Clone, Debug)]
-pub struct ModelFeatures {
+pub(crate) struct ModelFeatures {
     /// If true, only one system message is allowed. Additional system messages
     /// are converted to user messages.
     pub max_one_system_prompt: bool,
@@ -19,7 +19,7 @@ pub struct ModelFeatures {
 
 /// Controls which metadata keys are allowed on messages.
 #[derive(Clone, Debug)]
-pub enum AllowedMetadata {
+pub(crate) enum AllowedMetadata {
     /// All metadata keys are allowed.
     All,
     /// No metadata keys are allowed.
@@ -29,7 +29,8 @@ pub enum AllowedMetadata {
 }
 
 impl AllowedMetadata {
-    pub fn is_allowed(&self, key: &str) -> bool {
+    #[allow(dead_code)]
+    pub(crate) fn is_allowed(&self, key: &str) -> bool {
         match self {
             Self::All => true,
             Self::None => false,
@@ -43,7 +44,7 @@ impl ModelFeatures {
     ///
     /// Uses a hardcoded lookup table for provider defaults, then overrides
     /// with any matching keys in the `options` map.
-    pub fn for_provider(
+    pub(crate) fn for_provider(
         provider: LlmProvider,
         options: &IndexMap<String, BexExternalValue>,
     ) -> Self {

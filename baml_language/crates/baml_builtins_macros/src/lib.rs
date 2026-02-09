@@ -2000,34 +2000,59 @@ pub fn generate_sys_op_traits(input: TokenStream) -> TokenStream {
 // ============================================================================
 
 /// Map a DSL type name to the Rust type used in clean `sys_op` trait signatures.
-fn sys_op_rust_type(type_name: &str, builtin_types: &HashMap<String, String>) -> TokenStream2 {
+///
+/// Returns `Ok(tokens)` for known types, `Err(type_name)` for unrecognised ones.
+/// Callers decide whether to fall back to `BexExternalValue` or emit a compile error.
+fn sys_op_rust_type(
+    type_name: &str,
+    builtin_types: &HashMap<String, String>,
+) -> std::result::Result<TokenStream2, String> {
     match type_name {
-        "String" => quote!(String),
-        "i64" => quote!(i64),
-        "bool" => quote!(bool),
-        "()" => quote!(()),
-        _ if builtin_types.contains_key(type_name) && type_name != "PromptAst" => {
-            let ref_ident = sys_op_ref_type_ident(type_name);
-            quote!(bex_heap::builtin_types::owned::#ref_ident)
+        "String" => Ok(quote!(String)),
+        "i64" => Ok(quote!(i64)),
+        "bool" => Ok(quote!(bool)),
+        "()" => Ok(quote!(())),
+        "Media" => Ok(quote!(bex_vm_types::MediaValue)),
+        "PromptAst" => Ok(quote!(bex_vm_types::PromptAst)),
+        _ if builtin_types.contains_key(type_name) => {
+            let ref_ident = sys_op_ref_type_ident(type_name, builtin_types);
+            Ok(quote!(bex_heap::builtin_types::owned::#ref_ident))
         }
-        "PromptAst" => quote!(bex_vm_types::PromptAst),
-        // Map, Array, Any, Unknown → generic fallback
-        _ => quote!(bex_external_types::BexExternalValue),
+        other => Err(other.to_string()),
     }
 }
 
-/// Map a DSL builtin struct name to its `bex_heap::builtin_types` ref type identifier.
+/// Derive the Rust type identifier for a builtin struct from its DSL path.
 ///
-/// This must match the manually-defined types in `bex_heap::builtin_types`.
-fn sys_op_ref_type_ident(type_name: &str) -> Ident {
-    match type_name {
-        "File" => format_ident!("FsFile"),
-        "Socket" => format_ident!("NetSocket"),
-        "Response" => format_ident!("HttpResponse"),
-        "Request" => format_ident!("HttpRequest"),
-        "PrimitiveClient" => format_ident!("PrimitiveClient"),
-        other => panic!("Unknown builtin struct for sys_op extraction: {other}"),
-    }
+/// Given a DSL path like `"baml.fs.File"`, strips the `baml.` prefix, `PascalCases`
+/// the module segment, and joins with the struct name: `"fs.File"` → `FsFile`.
+///
+/// This is deterministic and requires no hardcoded mapping — adding a new builtin
+/// struct to the DSL automatically gives it the correct Rust name.
+fn sys_op_ref_type_ident(type_name: &str, builtin_types: &HashMap<String, String>) -> Ident {
+    let path = builtin_types
+        .get(type_name)
+        .unwrap_or_else(|| panic!("Unknown builtin struct for sys_op extraction: {type_name}"));
+    // path is e.g. "baml.fs.File" → strip "baml." → "fs.File"
+    let without_baml = path
+        .strip_prefix("baml.")
+        .unwrap_or_else(|| panic!("builtin path '{path}' should start with 'baml.'"));
+    // Split into ["fs", "File"], PascalCase each segment, join
+    let ident_str: String = without_baml
+        .split('.')
+        .map(|seg| {
+            let mut chars = seg.chars();
+            match chars.next() {
+                Some(c) => {
+                    let mut s = c.to_uppercase().to_string();
+                    s.extend(chars);
+                    s
+                }
+                None => String::new(),
+            }
+        })
+        .collect();
+    format_ident!("{}", ident_str)
 }
 
 /// Generate the extraction expression for a single arg inside `with_gc_protection`.
@@ -2039,7 +2064,7 @@ fn sys_op_extract_one(
     match type_name {
         "String" => quote!(#arg_ident.as_string(&__p).cloned()?),
         _ if builtin_types.contains_key(type_name) && type_name != "PromptAst" => {
-            let ref_type = sys_op_ref_type_ident(type_name);
+            let ref_type = sys_op_ref_type_ident(type_name, builtin_types);
             quote!(
                 #arg_ident
                     .as_builtin_class::<bex_heap::builtin_types::#ref_type>(&__p)?
@@ -2061,13 +2086,15 @@ fn sys_op_clean_params(d: &NativeFnDef, builtin_types: &HashMap<String, String>)
 
     if let Some((_name, type_name, _is_generic, _is_mut)) = &d.receiver {
         let param_name = sys_op_receiver_name(type_name);
-        let param_type = sys_op_rust_type(type_name, builtin_types);
+        let param_type = sys_op_rust_type(type_name, builtin_types)
+            .unwrap_or_else(|_| quote!(bex_external_types::BexExternalValue));
         params.push(quote!(#param_name: #param_type));
     }
 
     for (name, type_name, _is_generic) in &d.params {
         let param_name = format_ident!("{}", name);
-        let param_type = sys_op_rust_type(type_name, builtin_types);
+        let param_type = sys_op_rust_type(type_name, builtin_types)
+            .unwrap_or_else(|_| quote!(bex_external_types::BexExternalValue));
         params.push(quote!(#param_name: #param_type));
     }
 
@@ -2101,15 +2128,15 @@ fn sys_op_clean_call_args(
 /// 2. `heap.with_gc_protection(|p| { ... })` to extract all args at once
 /// 3. Destructuring of the extracted tuple into named variables
 fn sys_op_extraction(d: &NativeFnDef, builtin_types: &HashMap<String, String>) -> TokenStream2 {
-    let fn_name_str = d.fn_name.to_string();
-    let variant_name = format_ident!("{}", to_pascal_case(&fn_name_str));
-
     // Collect all args: receiver (if any) + params
     struct ArgInfo {
         param_name: Ident,
         type_name: String,
         arg_var: Ident,
     }
+
+    let fn_name_str = d.fn_name.to_string();
+    let variant_name = format_ident!("{}", to_pascal_case(&fn_name_str));
 
     let mut all_args: Vec<ArgInfo> = Vec::new();
 
@@ -2170,8 +2197,9 @@ fn sys_op_extraction(d: &NativeFnDef, builtin_types: &HashMap<String, String>) -
 /// Generate the typed `SysOpOutput<T>` return type for a `sys_op` trait method.
 ///
 /// Uses the return type info from `NativeFnDef.returns` to pick a concrete `T`.
-/// Falls back to `SysOpOutput` (= `SysOpOutput<BexExternalValue>`) for generic
-/// or unknown return types.
+/// Falls back to `SysOpOutput` (= `SysOpOutput<BexExternalValue>`) for explicitly
+/// generic/unknown return types. Panics at macro-expansion time for unrecognised
+/// concrete types — add them to `sys_op_rust_type` instead.
 fn sys_op_output_type(d: &NativeFnDef, builtin_types: &HashMap<String, String>) -> TokenStream2 {
     let (ref type_name, is_generic, _is_fallible) = d.returns;
 
@@ -2180,20 +2208,13 @@ fn sys_op_output_type(d: &NativeFnDef, builtin_types: &HashMap<String, String>) 
         return quote!(SysOpOutput);
     }
 
-    let inner = sys_op_rust_type(type_name, builtin_types);
-
-    // If inner is BexExternalValue (fallback), just use bare SysOpOutput
-    if type_name != "String"
-        && type_name != "bool"
-        && type_name != "i64"
-        && type_name != "()"
-        && type_name != "PromptAst"
-        && !builtin_types.contains_key(type_name)
-    {
-        return quote!(SysOpOutput);
+    match sys_op_rust_type(type_name, builtin_types) {
+        Ok(inner) => quote!(SysOpOutput<#inner>),
+        Err(unknown) => panic!(
+            "sys_op_output_type: unsupported return type `{unknown}`. \
+             Add it to `sys_op_rust_type` in baml_builtins_macros."
+        ),
     }
-
-    quote!(SysOpOutput<#inner>)
 }
 
 /// Generate a safe parameter name for a receiver (since "self" is a keyword).

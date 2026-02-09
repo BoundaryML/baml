@@ -3,7 +3,7 @@ use bex_vm_types::MediaValue;
 use indexmap::IndexMap;
 use minijinja::value::Value as JinjaValue;
 
-use crate::{MAGIC_MEDIA_DELIMITER, RenderPromptError};
+use super::{MAGIC_MEDIA_DELIMITER, RenderPromptError};
 
 /// Convert a `BexExternalValue` to a minijinja Value.
 ///

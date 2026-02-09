@@ -57,7 +57,7 @@ pub(super) fn parse_anthropic_response(
     let input = response.usage.input_tokens;
     let output = response.usage.output_tokens;
     let usage = TokenUsage {
-        prompt_tokens: Some(input),
+        input_tokens: Some(input),
         output_tokens: Some(output),
         total_tokens: Some(input + output),
     };
@@ -133,7 +133,7 @@ mod tests {
         assert_eq!(resp.model, "claude-3-haiku-20240307");
         assert_eq!(resp.finish_reason, FinishReason::Stop);
         assert!(resp.finish_reason.is_complete());
-        assert_eq!(resp.usage.prompt_tokens, Some(9));
+        assert_eq!(resp.usage.input_tokens, Some(9));
         assert_eq!(resp.usage.output_tokens, Some(8));
         assert_eq!(resp.usage.total_tokens, Some(17));
 

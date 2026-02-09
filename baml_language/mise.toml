@@ -29,3 +29,8 @@ run = "cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select
 description = "Run cargo clippy for wasm target"
 run = "cargo clippy $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | \"-p \\(.name)\"' | xargs) --target wasm32-unknown-unknown --all-features --locked -- -D warnings"
 sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.stow]
+description = "Run cargo stow"
+run = "cargo run -p cargo-stow -- stow --fix"
+sources = ["**/*.rs", "**/Cargo.toml"]

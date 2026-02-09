@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use baml_builtins::{PromptAst, PromptAstSimple};
 use bex_external_types::BexExternalValue;
 use indexmap::IndexMap;
-use llm_types::OutputFormatContent;
 use minijinja::Environment;
 
-use crate::{
+use super::{
     MAGIC_CHAT_ROLE_DELIMITER, MAGIC_MEDIA_DELIMITER, filters,
     output_format_object::OutputFormatObject, value_conversion::external_value_to_jinja,
 };
+use crate::types::OutputFormatContent;
 
 /// Enum variant for Jinja rendering.
 #[derive(Clone, Debug)]
@@ -57,7 +57,7 @@ pub fn render_prompt(
     template: &str,
     args: &IndexMap<String, BexExternalValue>,
     ctx: &RenderContext,
-) -> Result<PromptAst, crate::RenderPromptError> {
+) -> Result<PromptAst, super::RenderPromptError> {
     let mut env = create_environment();
 
     // Preprocess template
@@ -72,7 +72,7 @@ pub fn render_prompt(
     let jinja_args: minijinja::value::Value = args
         .iter()
         .map(|(k, v)| Ok((k.clone(), external_value_to_jinja(v, &mut media_handles)?)))
-        .collect::<Result<_, crate::RenderPromptError>>()?;
+        .collect::<Result<_, super::RenderPromptError>>()?;
     let tmpl = env.get_template("prompt")?;
 
     // Render
@@ -143,7 +143,7 @@ fn add_globals(
     env: &mut Environment,
     ctx: &RenderContext,
     media_handles: &mut HashMap<usize, bex_vm_types::MediaValue>,
-) -> Result<(), crate::RenderPromptError> {
+) -> Result<(), super::RenderPromptError> {
     use minijinja::context;
 
     // Create role function - same function used for both _.role() and _.chat()
@@ -194,7 +194,7 @@ fn add_globals(
                 name => ctx.client.name.clone(),
                 provider => ctx.client.provider.clone(),
             },
-            tags => ctx.tags.iter().map(|(k, v)| Ok((k.clone(), external_value_to_jinja(v, media_handles)?))).collect::<Result<IndexMap<String, minijinja::value::Value>, crate::RenderPromptError>>()?.into_iter().collect::<minijinja::value::Value>(),
+            tags => ctx.tags.iter().map(|(k, v)| Ok((k.clone(), external_value_to_jinja(v, media_handles)?))).collect::<Result<IndexMap<String, minijinja::value::Value>, super::RenderPromptError>>()?.into_iter().collect::<minijinja::value::Value>(),
             output_format => minijinja::value::Value::from_object(output_format),
             enums => enums_map,
         },
@@ -321,7 +321,7 @@ fn parse_media_handle(chunk: &str) -> Option<usize> {
 mod tests {
     use std::sync::Arc;
 
-    use bex_program::Ty;
+    use baml_type::Ty;
 
     use super::*;
 

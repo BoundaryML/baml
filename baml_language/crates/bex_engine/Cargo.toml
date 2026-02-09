@@ -12,8 +12,6 @@ bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
-llm_ops = { workspace = true }
-sys_resource_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
@@ -23,8 +21,7 @@ tracing = { workspace = true }
 [dev-dependencies]
 baml_builtins = { workspace = true }
 baml_tests = { workspace = true }
-llm_jinja = { workspace = true }
-llm_types = { workspace = true }
+sys_llm = { workspace = true }
 sys_native = { workspace = true }
 anyhow = { workspace = true }
 indexmap = { workspace = true }

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum AnthropicMessageContent {
+pub(super) enum AnthropicMessageContent {
     Text {
         text: String,
     },
@@ -19,7 +19,7 @@ pub enum AnthropicMessageContent {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AnthropicUsage {
+pub(super) struct AnthropicUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
     #[serde(default)]
@@ -31,7 +31,7 @@ pub struct AnthropicUsage {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AnthropicMessageResponse {
+pub(super) struct AnthropicMessageResponse {
     pub id: String,
     pub role: String,
     pub r#type: String,
@@ -44,20 +44,20 @@ pub struct AnthropicMessageResponse {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(transparent)]
-pub struct StopSequence {
+pub(super) struct StopSequence {
     pub value: String,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct AnthropicErrorResponse {
+pub(super) struct AnthropicErrorResponse {
     pub r#type: String,
     pub error: AnthropicErrorInner,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct AnthropicErrorInner {
+pub(super) struct AnthropicErrorInner {
     pub r#type: String,
     pub message: Option<String>,
     pub details: Option<serde_json::Value>,

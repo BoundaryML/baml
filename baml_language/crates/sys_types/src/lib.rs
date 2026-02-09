@@ -7,18 +7,13 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 // Re-export BexExternalValue and BexValue for ops
-pub use bex_external_types::BexExternalValue;
+pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::SysOp;
 // ============================================================================
 // Operation Errors
 // ============================================================================
-
-// Re-export RenderPromptError for convenience
-pub use llm_jinja::RenderPromptError;
-// Re-export resource types
-pub use sys_resource_types::{ResourceHandle, ResourceType};
 
 /// Errors that can occur during external operation execution.
 /// Every error is tied to the operation (`fn_name`) that was being called.
@@ -89,7 +84,7 @@ pub enum OpErrorKind {
     Unsupported,
 
     #[error("Render prompt error: {0}")]
-    RenderPrompt(#[from] RenderPromptError),
+    RenderPrompt(String),
 
     #[error("Access error: {0}")]
     AccessError(#[from] bex_heap::AccessError),
@@ -99,6 +94,21 @@ pub enum OpErrorKind {
 
     #[error("Not implemented: {message}")]
     NotImplemented { message: String },
+}
+
+impl From<sys_llm::LlmOpError> for OpErrorKind {
+    fn from(e: sys_llm::LlmOpError) -> Self {
+        match e {
+            sys_llm::LlmOpError::TypeError { expected, actual } => {
+                OpErrorKind::TypeError { expected, actual }
+            }
+            sys_llm::LlmOpError::RenderPrompt(msg) => OpErrorKind::RenderPrompt(msg),
+            sys_llm::LlmOpError::Other(msg) => OpErrorKind::Other(msg),
+            sys_llm::LlmOpError::NotImplemented { message } => {
+                OpErrorKind::NotImplemented { message }
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -170,18 +180,18 @@ impl<T: Send + 'static> SysOpOutput<T> {
     }
 }
 
-impl<T: Into<BexExternalValue> + Send + 'static> SysOpOutput<T> {
+impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
     /// Convert to [`SysOpResult`] by attaching the [`SysOp`] variant to errors
-    /// and converting `T` into [`BexExternalValue`].
+    /// and converting `T` into [`BexExternalValue`] via [`AsBexExternalValue`].
     ///
     /// This is called by generated glue code — implementors don't use this directly.
     pub fn into_result(self, op: SysOp) -> SysOpResult {
         match self {
-            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(v.into())),
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(v.into_bex_external_value())),
             Self::Ready(Err(kind)) => SysOpResult::Ready(Err(OpError::new(op, kind))),
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
                 fut.await
-                    .map(Into::into)
+                    .map(AsBexExternalValue::into_bex_external_value)
                     .map_err(|kind| OpError::new(op, kind))
             })),
         }
@@ -351,6 +361,156 @@ baml_builtins::for_all_sys_ops!(define_sys_ops_struct);
 baml_builtins::with_builtins!(baml_builtins_macros::generate_sys_op_traits);
 
 // ============================================================================
+// Blanket SysOpLlm implementation (delegates to sys_llm)
+// ============================================================================
+
+/// Blanket implementation of `SysOpLlm` for all types.
+///
+/// Every type gets the real LLM behavior via `sys_llm::execute_*` functions.
+/// When future cross-op calls are needed (e.g., HTTP for media URL resolution),
+/// the bound can be tightened to `impl<T: SysOpHttp> SysOpLlm for T` and
+/// closures can be passed to the `execute_*` functions.
+impl<T> SysOpLlm for T {
+    fn baml_llm_primitive_client_render_prompt(
+        primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
+        template: String,
+        args: BexExternalValue,
+    ) -> SysOpOutput<bex_vm_types::PromptAst> {
+        SysOpOutput::Ready(
+            sys_llm::execute_render_prompt_from_owned(&primitive_client, &template, &args)
+                .map_err(OpErrorKind::from),
+        )
+    }
+
+    fn baml_llm_primitive_client_specialize_prompt(
+        primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
+        prompt: bex_vm_types::PromptAst,
+    ) -> SysOpOutput<bex_vm_types::PromptAst> {
+        SysOpOutput::Ready(
+            sys_llm::execute_specialize_prompt_from_owned(&primitive_client, prompt)
+                .map_err(OpErrorKind::from),
+        )
+    }
+
+    fn baml_llm_primitive_client_build_request(
+        primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
+        prompt: bex_vm_types::PromptAst,
+    ) -> SysOpOutput<bex_heap::builtin_types::owned::HttpRequest> {
+        SysOpOutput::Ready(
+            sys_llm::execute_build_request_from_owned(&primitive_client, prompt)
+                .map_err(OpErrorKind::from),
+        )
+    }
+
+    fn baml_llm_primitive_client_parse(
+        primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
+        response: String,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput {
+        let Some(info) = ctx.llm_functions.get(&function_name) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "LLM function not found: {function_name}"
+            )));
+        };
+
+        SysOpOutput::Ready(
+            sys_llm::execute_parse_response_from_owned(
+                &primitive_client,
+                &response,
+                &info.return_type,
+            )
+            .map_err(OpErrorKind::from),
+        )
+    }
+
+    fn baml_llm_get_jinja_template(
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let Some(info) = ctx.llm_functions.get(&function_name) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "LLM function not found: {function_name}"
+            )));
+        };
+        SysOpOutput::ok(info.prompt_template.clone())
+    }
+
+    fn baml_llm_build_primitive_client(
+        name: String,
+        provider: String,
+        default_role: String,
+        allowed_roles: BexExternalValue,
+        options: BexExternalValue,
+    ) -> SysOpOutput<bex_heap::builtin_types::owned::LlmPrimitiveClient> {
+        // Extract allowed_roles from BexExternalValue::Array
+        let allowed_roles = match &allowed_roles {
+            BexExternalValue::Array { items, .. } => {
+                match items
+                    .iter()
+                    .map(|v| match v {
+                        BexExternalValue::String(s) => Ok(s.clone()),
+                        _ => Err(OpErrorKind::TypeError {
+                            expected: "string",
+                            actual: v.type_name().to_string(),
+                        }),
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                {
+                    Ok(v) => v,
+                    Err(e) => return SysOpOutput::err(e),
+                }
+            }
+            _ => {
+                return SysOpOutput::err(OpErrorKind::TypeError {
+                    expected: "array",
+                    actual: allowed_roles.type_name().to_string(),
+                });
+            }
+        };
+
+        // Extract options from BexExternalValue::Map
+        let BexExternalValue::Map {
+            entries: options, ..
+        } = options
+        else {
+            return SysOpOutput::err(OpErrorKind::TypeError {
+                expected: "map",
+                actual: options.type_name().to_string(),
+            });
+        };
+
+        SysOpOutput::ok(bex_heap::builtin_types::owned::LlmPrimitiveClient {
+            name,
+            provider,
+            default_role,
+            allowed_roles,
+            options,
+        })
+    }
+
+    fn baml_llm_get_client_function(function_name: String, ctx: &SysOpContext) -> SysOpOutput {
+        let Some(info) = ctx.llm_functions.get(&function_name) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "LLM function not found: {function_name}"
+            )));
+        };
+
+        let resolve_fn_name = format!("{}.resolve", info.client_name);
+        let Some(global_index) = ctx.function_global_indices.get(&resolve_fn_name) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "Client resolve function not found: {resolve_fn_name}"
+            )));
+        };
+
+        SysOpOutput::ok(
+            FunctionRef::<bex_heap::builtin_types::owned::LlmPrimitiveClient>::new(*global_index)
+                .into_external(),
+        )
+    }
+}
+
+// ============================================================================
 // Async Completion Utilities
 // ============================================================================
 
@@ -395,31 +555,6 @@ impl SysOpResult {
         let future =
             Box::pin(async move { rx.await.unwrap_or(Err(OpError::cancelled(operation))) });
         (SysOpResult::Async(future), CompletionHandle(tx))
-    }
-}
-
-// ============================================================================
-// Host Resource Abstraction
-// ============================================================================
-
-// Re-export ResourceType and ResourceHandle from sys_resource_types
-// (already done above)
-
-/// Callback trait for host to release resources when GC collects them.
-///
-/// Implementations receive notifications when the VM no longer references
-/// a resource, allowing the host language to clean up the underlying handle.
-pub trait HostResourceRef: Send + Sync {
-    /// Called when a resource is no longer referenced by the VM.
-    fn release_resource(&self, handle_id: u64, resource_type: ResourceType);
-}
-
-/// A no-op implementation for native Rust where Arc handles cleanup.
-pub struct NoopHostRef;
-
-impl HostResourceRef for NoopHostRef {
-    fn release_resource(&self, _handle_id: u64, _resource_type: ResourceType) {
-        // No-op - cleanup is handled by ResourceHandle's Drop
     }
 }
 

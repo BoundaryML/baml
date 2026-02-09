@@ -6,8 +6,8 @@
 
 use std::collections::HashMap;
 
+use bex_resource_types::ResourceHandle;
 use indexmap::indexmap;
-use sys_resource_types::ResourceHandle;
 
 use crate::{BexExternalValue, Ty};
 

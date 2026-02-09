@@ -1,3 +1,6 @@
+// TODO: Remove this once we consume all the fields in this struct via collector etc
+#![allow(dead_code)]
+
 use serde_json::Value as JsonValue;
 
 /// Normalized response from any LLM provider.
@@ -9,7 +12,7 @@ use serde_json::Value as JsonValue;
 /// Provider-specific data that doesn't fit the common fields is
 /// preserved in `metadata` as a JSON map.
 #[derive(Debug, Clone)]
-pub struct LlmProviderResponse {
+pub(crate) struct LlmProviderResponse {
     /// The text content extracted from the LLM response.
     /// For chat completions this is typically `choices[0].message.content`.
     pub content: String,
@@ -35,7 +38,7 @@ pub struct LlmProviderResponse {
 
 /// Normalized finish reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FinishReason {
+pub(crate) enum FinishReason {
     /// The model finished generating naturally (`OpenAI`: `stop`, Anthropic: `end_turn`/`stop_sequence`, Google: `STOP`).
     Stop,
     /// The model hit the maximum token limit.
@@ -50,15 +53,16 @@ pub enum FinishReason {
 
 impl FinishReason {
     /// Whether this finish reason indicates a complete response.
-    pub fn is_complete(&self) -> bool {
+    pub(crate) fn is_complete(&self) -> bool {
         matches!(self, FinishReason::Stop)
     }
 }
 
 /// Token usage reported by the provider.
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Default)]
-pub struct TokenUsage {
-    pub prompt_tokens: Option<u64>,
+pub(crate) struct TokenUsage {
+    pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
 }
