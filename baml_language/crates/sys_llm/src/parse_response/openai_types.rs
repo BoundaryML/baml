@@ -1,11 +1,15 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
 pub(super) enum ChatCompletionResponse {
-    #[serde(rename = "chat.completion")]
     Success(ChatCompletionGeneric<ChatCompletionChoice>),
-    #[serde(rename = "error")]
-    Error(OpenAiErrorResponse),
+    Error(OpenAiErrorWrapper),
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub(super) struct OpenAiErrorWrapper {
+    pub error: OpenAiErrorResponse,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -165,6 +169,46 @@ mod tests {
             panic!("expected success");
         };
         assert_eq!(response.created, Some(1_677_652_288));
+    }
+
+    #[test]
+    fn test_deserialize_error_response() {
+        let json = r#"{
+            "error": {
+                "message": "Invalid request",
+                "type": "invalid_request_error",
+                "param": "model",
+                "code": "invalid_model"
+            }
+        }"#;
+
+        let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
+        let ChatCompletionResponse::Error(wrapper) = response else {
+            panic!("expected error");
+        };
+        assert_eq!(wrapper.error.message, "Invalid request");
+        assert_eq!(wrapper.error.r#type, "invalid_request_error");
+        assert_eq!(wrapper.error.param, Some("model".to_string()));
+        assert_eq!(wrapper.error.code, Some("invalid_model".to_string()));
+    }
+
+    #[test]
+    fn test_deserialize_error_response_minimal() {
+        let json = r#"{
+            "error": {
+                "message": "Something went wrong",
+                "type": "server_error"
+            }
+        }"#;
+
+        let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
+        let ChatCompletionResponse::Error(wrapper) = response else {
+            panic!("expected error");
+        };
+        assert_eq!(wrapper.error.message, "Something went wrong");
+        assert_eq!(wrapper.error.r#type, "server_error");
+        assert_eq!(wrapper.error.param, None);
+        assert_eq!(wrapper.error.code, None);
     }
 
     #[test]

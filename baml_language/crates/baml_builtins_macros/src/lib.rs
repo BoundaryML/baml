@@ -1944,12 +1944,14 @@ pub fn generate_sys_op_traits(input: TokenStream) -> TokenStream {
                 })
                 .collect();
 
+            let doc = format!(
+                "Per-module sys_op trait for the `{module_name}` module.\n\n\
+                 Override the clean methods (e.g., `baml_fs_open`) with your \
+                 implementation. The `__baml_*` glue methods handle arg \
+                 extraction and error wrapping automatically."
+            );
             quote! {
-                /// Per-module sys_op trait for the `#module_name` module.
-                ///
-                /// Override the clean methods (e.g., `baml_fs_open`) with your
-                /// implementation. The `__baml_*` glue methods handle arg
-                /// extraction and error wrapping automatically.
+                #[doc = #doc]
                 pub trait #trait_name {
                     #(#methods)*
                 }
@@ -2010,6 +2012,7 @@ fn sys_op_rust_type(
     match type_name {
         "String" => Ok(quote!(String)),
         "i64" => Ok(quote!(i64)),
+        "f64" => Ok(quote!(f64)),
         "bool" => Ok(quote!(bool)),
         "()" => Ok(quote!(())),
         "Media" => Ok(quote!(bex_vm_types::MediaValue)),

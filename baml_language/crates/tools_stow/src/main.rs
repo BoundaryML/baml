@@ -2277,7 +2277,9 @@ fn generate_dependency_graph_svg(
         // Add proxy nodes for embedded crates assigned to this namespace
         let mut ns_embed_crates: Vec<(&str, &str)> = embed_map
             .iter()
-            .filter(|(_, &host)| host == namespace)
+            .filter(|(&crate_name, &host)| {
+                host == namespace && included_crates.contains(crate_name)
+            })
             .map(|(&crate_name, &host)| (crate_name, host))
             .collect();
         ns_embed_crates.sort_unstable();

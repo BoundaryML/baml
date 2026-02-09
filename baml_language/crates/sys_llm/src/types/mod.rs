@@ -17,7 +17,7 @@ pub enum LlmOpError {
     #[error("Render prompt error: {0}")]
     RenderPrompt(String),
 
-    #[error("{0}")]
+    #[error("Parse response error: {0}")]
     ParseResponseError(String),
 
     #[error("{0}")]

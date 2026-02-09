@@ -15,12 +15,12 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
 
     let response = match response {
         ChatCompletionResponse::Success(success) => success,
-        ChatCompletionResponse::Error(error) => {
+        ChatCompletionResponse::Error(wrapper) => {
             return Err(ParseResponseError::ApiError {
                 provider: "openai",
-                message: error.message,
-                code: error.code,
-                param: error.param,
+                message: wrapper.error.message,
+                code: wrapper.error.code,
+                param: wrapper.error.param,
             });
         }
     };

@@ -95,7 +95,7 @@ pub enum OpErrorKind {
     #[error("Not implemented: {message}")]
     NotImplemented { message: String },
 
-    #[error("LLLM client error: {message}")]
+    #[error("LLM client error: {message}")]
     LlmClientError { message: String },
 }
 

@@ -90,6 +90,7 @@ pub fn execute_build_request_from_owned(
     build_request::build_request(client, prompt).map_err(|e| LlmOpError::Other(e.to_string()))
 }
 
+/// Parse an LLM response and extract the return value given already-extracted owned types.
 pub fn execute_parse_response_from_owned(
     client: &builtin_types::owned::LlmPrimitiveClient,
     response: &str,
