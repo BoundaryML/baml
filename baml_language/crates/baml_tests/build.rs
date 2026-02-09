@@ -188,6 +188,8 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
 
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
+    let strong_ast_tests: TokenStream = project.files.iter().map(generate_strong_ast_test).collect();
+
     let hir_test = generate_hir_test(project);
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
@@ -226,6 +228,8 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             use baml_db::baml_compiler_vir;
             use baml_db::baml_compiler_mir;
             use baml_db::baml_compiler_emit;
+            use baml_db::baml_compiler_syntax::SyntaxElement;
+            use baml_fmt::ast::FromCST as _;
             use baml_compiler_hir::{function_body, function_signature, function_signature_source_map};
             use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_compiler_tir::pretty::short_display;
@@ -241,6 +245,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
 
             #lexer_tests
             #parser_tests
+            #strong_ast_tests
             #hir_test
             #tir_test
             #mir_test
@@ -330,6 +335,35 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             with_settings!({snapshot_path => SNAPSHOT_PATH}, {
                 assert_snapshot!(#snapshot_name, output);
             });
+        }
+    }
+}
+
+fn generate_strong_ast_test(baml_file: &BamlFile) -> TokenStream {
+    let test_name = format_ident!("test_02b_strong_ast_{}", baml_file.name);
+    let full_path = baml_file.full_path.display().to_string();
+    let relative_path = baml_file.relative_path.display().to_string();
+    let include_content = make_include_str(&full_path);
+
+    quote! {
+        #[test]
+        fn #test_name() {
+            let content = #include_content;
+            let content = content.replace("\r\n", "\n");
+            let mut db = ProjectDatabase::new();
+            let source_file = db.add_file(#relative_path, &content);
+            let errors = baml_compiler_parser::parse_errors(&db, source_file);
+
+            // Skip files with parse errors — from_cst requires a well-formed CST
+            if !errors.is_empty() {
+                return;
+            }
+
+            let tree = baml_compiler_parser::syntax_tree(&db, source_file);
+            let result = baml_fmt::ast::SourceFile::from_cst(SyntaxElement::Node(tree));
+            if let Err(e) = result {
+                panic!("SourceFile::from_cst failed on {}: {}", #relative_path, e);
+            }
         }
     }
 }

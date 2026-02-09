@@ -665,6 +665,7 @@ dependencies = [
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_db",
+ "baml_fmt",
  "baml_project",
  "baml_type",
  "baml_workspace",
