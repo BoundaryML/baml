@@ -205,22 +205,21 @@ impl Parse for StructItem {
 
 impl FunctionItem {
     pub(crate) fn parse_with_attrs(input: ParseStream, attrs: &[Attribute]) -> Result<Self> {
-        let uses_vm = attrs.iter().any(|attr| {
-            if attr.path().is_ident("uses") {
-                if let Ok(nested) = attr.parse_args::<Ident>() {
-                    return nested == "vm";
+        let mut uses_vm = false;
+        let mut uses_engine_ctx = false;
+        for attr in attrs.iter().filter(|a| a.path().is_ident("uses")) {
+            let nested: Ident = attr.parse_args()?;
+            match nested.to_string().as_str() {
+                "vm" => uses_vm = true,
+                "engine_ctx" => uses_engine_ctx = true,
+                other => {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        format!("unknown uses(...) argument: {other}"),
+                    ));
                 }
             }
-            false
-        });
-        let uses_engine_ctx = attrs.iter().any(|attr| {
-            if attr.path().is_ident("uses") {
-                if let Ok(nested) = attr.parse_args::<Ident>() {
-                    return nested == "engine_ctx";
-                }
-            }
-            false
-        });
+        }
         let is_sys_op = attrs.iter().any(|attr| attr.path().is_ident("sys_op"));
 
         input.parse::<Token![fn]>()?;
@@ -244,6 +243,9 @@ impl FunctionItem {
             first = false;
 
             if params_content.peek(Token![self]) {
+                if !params.is_empty() || receiver.is_some() {
+                    return Err(params_content.error("`self` must be the first parameter"));
+                }
                 params_content.parse::<Token![self]>()?;
                 params_content.parse::<Token![:]>()?;
                 let is_mut = params_content.peek(Token![mut]);

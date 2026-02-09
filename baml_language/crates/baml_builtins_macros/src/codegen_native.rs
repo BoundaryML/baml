@@ -12,6 +12,15 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
         .filter(|d| !d.is_sys_op)
         .collect();
 
+    // Fail fast when #[uses(vm)] is combined with a mutable receiver (unsupported).
+    for d in &non_sys_ops {
+        if d.uses_vm && d.receiver.as_ref().is_some_and(|r| r.is_mut) {
+            return quote! {
+                compile_error!("`#[uses(vm)]` cannot be combined with a mutable receiver.");
+            };
+        }
+    }
+
     // Generate required trait methods (clean signatures).
     let required_methods: Vec<_> = non_sys_ops
         .iter()
@@ -295,6 +304,116 @@ fn generate_arg_extraction(d: &NativeFnDef) -> TokenStream2 {
     quote!(#(#extractions)*)
 }
 
+/// Generate the RHS expression that extracts a value of type `type_name` from `value_expr`.
+/// Used for both direct extraction and for the `Some(...)` branch of `Option<T>`.
+fn extraction_rhs_expr(
+    value_expr: &TokenStream2,
+    type_name: &str,
+    is_generic: bool,
+    is_mut: bool,
+) -> TokenStream2 {
+    if is_generic {
+        return if is_mut {
+            quote!(vm.as_value_mut(#value_expr)?)
+        } else {
+            quote!(#value_expr)
+        };
+    }
+    match type_name {
+        "String" => {
+            if is_mut {
+                quote!(vm.as_string_mut(#value_expr)?)
+            } else {
+                quote!(vm.as_string(#value_expr)?.clone())
+            }
+        }
+        "i64" => quote! {
+            match #value_expr {
+                Value::Int(i) => i,
+                _ => return Err(InternalError::TypeError {
+                    expected: Type::Int,
+                    got: vm.type_of(#value_expr),
+                }.into()),
+            }
+        },
+        "f64" => quote! {
+            match #value_expr {
+                Value::Float(f) => f,
+                _ => return Err(InternalError::TypeError {
+                    expected: Type::Float,
+                    got: vm.type_of(#value_expr),
+                }.into()),
+            }
+        },
+        "bool" => quote! {
+            match #value_expr {
+                Value::Bool(b) => b,
+                _ => return Err(InternalError::TypeError {
+                    expected: Type::Bool,
+                    got: vm.type_of(#value_expr),
+                }.into()),
+            }
+        },
+        "Media" => {
+            if is_mut {
+                quote!(vm.as_media_mut(#value_expr, MediaKind::Generic)?)
+            } else {
+                quote!(vm.as_media(#value_expr, MediaKind::Generic)?.clone())
+            }
+        }
+        "PromptAst" => {
+            if is_mut {
+                quote!(compile_error!(
+                    "Mutable PromptAst parameters not yet supported"
+                ))
+            } else {
+                quote!(vm.as_prompt_ast(#value_expr)?.clone())
+            }
+        }
+        "PrimitiveClient" => {
+            if is_mut {
+                quote!(compile_error!(
+                    "Mutable PrimitiveClient parameters not yet supported"
+                ))
+            } else {
+                quote!(vm.as_primitive_client(#value_expr)?.clone())
+            }
+        }
+        t if t.starts_with("Array") => {
+            if is_mut {
+                quote!(vm.as_array_mut(#value_expr)?)
+            } else {
+                quote!(vm.as_array(#value_expr)?.to_vec())
+            }
+        }
+        t if t.starts_with("Map") => {
+            if is_mut {
+                quote!(vm.as_map_mut(#value_expr)?)
+            } else {
+                quote!(vm.as_map(#value_expr)?.clone())
+            }
+        }
+        t if t.starts_with("Option<") => {
+            let inner = t[7..t.len() - 1].trim();
+            let other_expr = quote!(other);
+            let inner_expr = extraction_rhs_expr(&other_expr, inner, false, false);
+            quote! {
+                match #value_expr {
+                    Value::Null => None,
+                    other => Some(#inner_expr),
+                }
+            }
+        }
+        _ => {
+            if is_mut {
+                quote!(vm.as_value_mut(#value_expr)?)
+            } else {
+                quote!(#value_expr)
+            }
+        }
+    }
+}
+
 /// Generate extraction code for a single argument.
 fn generate_single_extraction(
     var_name: &syn::Ident,
@@ -303,123 +422,21 @@ fn generate_single_extraction(
     is_generic: bool,
     is_mut: bool,
 ) -> TokenStream2 {
-    if is_generic {
-        return if is_mut {
-            quote! {
-                let #var_name = vm.as_value_mut(&args[#idx])?;
-            }
-        } else {
-            quote! {
-                let #var_name = &args[#idx];
-            }
+    let value_expr = quote!(&args[#idx]);
+    if type_name.starts_with("Option<") {
+        let inner = type_name[7..type_name.len() - 1].trim();
+        let other_expr = quote!(other);
+        let inner_rhs = extraction_rhs_expr(&other_expr, inner, false, false);
+        return quote! {
+            let #var_name = match #value_expr {
+                Value::Null => None,
+                other => Some(#inner_rhs),
+            };
         };
     }
-
-    match type_name {
-        "String" => {
-            if is_mut {
-                quote! {
-                    let #var_name = vm.as_string_mut(&args[#idx])?;
-                }
-            } else {
-                quote! {
-                    let #var_name = vm.as_string(&args[#idx])?.clone();
-                }
-            }
-        }
-        "i64" => quote! {
-            let #var_name = match args[#idx] {
-                Value::Int(i) => i,
-                _ => return Err(InternalError::TypeError {
-                    expected: Type::Int,
-                    got: vm.type_of(&args[#idx]),
-                }.into()),
-            };
-        },
-        "f64" => quote! {
-            let #var_name = match args[#idx] {
-                Value::Float(f) => f,
-                _ => return Err(InternalError::TypeError {
-                    expected: Type::Float,
-                    got: vm.type_of(&args[#idx]),
-                }.into()),
-            };
-        },
-        "bool" => quote! {
-            let #var_name = match args[#idx] {
-                Value::Bool(b) => b,
-                _ => return Err(InternalError::TypeError {
-                    expected: Type::Bool,
-                    got: vm.type_of(&args[#idx]),
-                }.into()),
-            };
-        },
-        "Media" => {
-            if is_mut {
-                quote! {
-                    let #var_name = vm.as_media_mut(&args[#idx], MediaKind::Generic)?;
-                }
-            } else {
-                quote! {
-                    let #var_name = vm.as_media(&args[#idx], MediaKind::Generic)?.clone();
-                }
-            }
-        }
-        "PromptAst" => {
-            if is_mut {
-                quote! {
-                    compile_error!("Mutable PromptAst parameters not yet supported");
-                }
-            } else {
-                quote! {
-                    let #var_name = vm.as_prompt_ast(&args[#idx])?.clone();
-                }
-            }
-        }
-        "PrimitiveClient" => {
-            if is_mut {
-                quote! {
-                    compile_error!("Mutable PrimitiveClient parameters not yet supported");
-                }
-            } else {
-                quote! {
-                    let #var_name = vm.as_primitive_client(&args[#idx])?.clone();
-                }
-            }
-        }
-        t if t.starts_with("Array") => {
-            if is_mut {
-                quote! {
-                    let #var_name = vm.as_array_mut(&args[#idx])?;
-                }
-            } else {
-                quote! {
-                    let #var_name = vm.as_array(&args[#idx])?.to_vec();
-                }
-            }
-        }
-        t if t.starts_with("Map") => {
-            if is_mut {
-                quote! {
-                    let #var_name = vm.as_map_mut(&args[#idx])?;
-                }
-            } else {
-                quote! {
-                    let #var_name = vm.as_map(&args[#idx])?.clone();
-                }
-            }
-        }
-        _ => {
-            if is_mut {
-                quote! {
-                    let #var_name = vm.as_value_mut(&args[#idx])?;
-                }
-            } else {
-                quote! {
-                    let #var_name = &args[#idx];
-                }
-            }
-        }
+    let rhs = extraction_rhs_expr(&value_expr, type_name, is_generic, is_mut);
+    quote! {
+        let #var_name = #rhs;
     }
 }
 

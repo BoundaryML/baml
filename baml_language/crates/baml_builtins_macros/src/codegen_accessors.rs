@@ -95,7 +95,7 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
             let binding = quote! {
                 let #name = BexExternalValue::Map {
                     key_type: bex_external_types::Ty::String,
-                    value_type: bex_external_types::Ty::String,
+                    value_type: bex_external_types::Ty::BuiltinUnknown,
                     entries: self.#name,
                 };
             };
