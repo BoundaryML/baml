@@ -545,6 +545,7 @@ dependencies = [
  "baml_project",
  "rowan 0.16.1",
  "salsa",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -4741,6 +4742,7 @@ dependencies = [
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_db",
+ "baml_fmt",
  "baml_project",
  "baml_type",
  "baml_workspace",

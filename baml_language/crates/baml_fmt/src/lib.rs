@@ -1,14 +1,20 @@
 pub mod ast;
+pub mod printer;
 mod trivia_classifier;
 
 use baml_compiler_diagnostics::ParseError;
-use baml_compiler_syntax::SyntaxNode;
+use baml_compiler_syntax::{SyntaxElement, SyntaxNode};
 use baml_project::ProjectDatabase;
 
 use rowan::ast::AstNode;
 pub use trivia_classifier::{EmittableTrivia, classify_trivia};
 
-pub fn format(source: &str, options: &FormatOptions) -> Result<String, Vec<ParseError>> {
+use crate::{
+    ast::FromCST as _,
+    printer::{Printer, Shape},
+};
+
+pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
     let mut db = ProjectDatabase::new();
     let source_file = db.add_file("file.baml", source);
     format_salsa(&db, source_file, options.clone())
@@ -19,17 +25,27 @@ pub fn format_salsa(
     db: &dyn salsa::Database,
     file: baml_base::SourceFile,
     options: FormatOptions,
-) -> Result<String, Vec<ParseError>> {
+) -> Result<String, FormatterError> {
     let tokens = baml_compiler_lexer::lex_file(db, file);
     let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
     if !errors.is_empty() {
-        return Err(errors);
+        return Err(FormatterError::ParseErrors(errors));
     }
 
-    let ast = SyntaxNode::new_root(parsed);
-    let file_root: baml_compiler_syntax::SourceFile = AstNode::cast(ast).unwrap();
-    let trivia = classify_trivia(&file_root);
-    todo!()
+    let cst = SyntaxNode::new_root(parsed);
+    let trivia = classify_trivia(&cst);
+    let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
+
+    let mut printer = Printer::new_empty(file.text(db), &options, &trivia);
+    printer.print(
+        &strong_ast,
+        Shape {
+            width: options.line_width,
+            indent: 0,
+            first_line_offset: 0,
+        },
+    );
+    Ok(printer.output)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -46,4 +62,12 @@ impl Default for FormatOptions {
             indent_width: 4,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum FormatterError {
+    #[error("{0:?}")]
+    ParseErrors(Vec<ParseError>),
+    #[error("{0}")]
+    StrongAstError(#[from] ast::StrongAstError),
 }

@@ -1,8 +1,12 @@
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
-use crate::ast::{
-    BlockExpr, Expression, FromCST, HeaderComment, StrongAstError, SyntaxNodeIter, Type,
+use crate::{
+    ast::{
+        BlockExpr, Expression, FromCST, HeaderComment, ParenExpr, StrongAstError, SyntaxNodeIter,
+        Type,
+    },
+    printer::*,
 };
 
 use super::tokens as t;
@@ -54,6 +58,33 @@ impl FromCST for Statement {
     }
 }
 
+impl Printable for Statement {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Statement::Expr(expression_stmt) => expression_stmt.print(shape, printer),
+            Statement::Let(let_stmt) => let_stmt.print(shape, printer),
+            Statement::While(while_stmt) => while_stmt.print(shape, printer),
+            Statement::Return(return_stmt) => return_stmt.print(shape, printer),
+            Statement::Break(break_stmt) => break_stmt.print(shape, printer),
+            Statement::Continue(continue_stmt) => continue_stmt.print(shape, printer),
+            Statement::Assert(assert_stmt) => assert_stmt.print(shape, printer),
+            Statement::For(for_stmt) => for_stmt.print(shape, printer),
+            Statement::HeaderComment(header_comment) => {
+                printer.print_raw_token(header_comment);
+                PrintInfo::default_single_line()
+            }
+            Statement::EmptySemicolon(semicolon) => {
+                printer.print_raw_token(semicolon);
+                PrintInfo::default_single_line()
+            }
+            Statement::Unknown(range) => {
+                printer.print_input_range(range.clone());
+                PrintInfo::default_multi_lined()
+            }
+        }
+    }
+}
+
 /// Does not correspond to a [`SyntaxKind`].
 ///
 /// Unlike most implementations of `FromCST`, this will never parse the semicolon, as it is not a child of the node.
@@ -79,6 +110,18 @@ impl FromCST for ExpressionStmt {
     }
 }
 
+impl Printable for ExpressionStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let info = printer.print(&self.expr, shape);
+        if let Some(semicolon) = &self.semicolon {
+            printer.print_raw_token(semicolon);
+        } else {
+            printer.print_str(";");
+        }
+        info
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::LET_STMT`] node.
 #[derive(Debug)]
 pub struct LetStmt {
@@ -86,6 +129,7 @@ pub struct LetStmt {
     pub name: t::Word,
     pub type_annotation: Option<(t::Colon, Type)>,
     pub initializer: Option<(t::Equals, Expression)>,
+    /// Unlike lots of other nodes, semicolon is not optional.
     pub semicolon: t::Semicolon,
 }
 
@@ -136,13 +180,37 @@ impl FromCST for LetStmt {
     }
 }
 
+impl Printable for LetStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+
+        if let Some((colon, ty)) = &self.type_annotation {
+            printer.print_raw_token(colon);
+            printer.print_str(" ");
+            multi_lined |= printer.print(ty, shape.clone()).multi_lined;
+        }
+
+        if let Some((equals, expr)) = &self.initializer {
+            printer.print_str(" ");
+            printer.print_raw_token(equals);
+            printer.print_str(" ");
+            multi_lined |= printer.print(expr, shape).multi_lined;
+        }
+
+        printer.print_raw_token(&self.semicolon);
+        PrintInfo { multi_lined }
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::WHILE_STMT`] node.
 #[derive(Debug)]
 pub struct WhileStmt {
     pub keyword: t::While,
-    pub open_paren: t::LParen,
-    pub condition: Expression,
-    pub close_paren: t::RParen,
+    pub condition: ParenExpr,
     pub body: BlockExpr,
 }
 
@@ -174,11 +242,37 @@ impl FromCST for WhileStmt {
 
         Ok(WhileStmt {
             keyword: t::While::new_from_span(keyword.text_range()),
-            open_paren: t::LParen::new_from_span(open_paren.text_range()),
-            condition,
-            close_paren: t::RParen::new_from_span(close_paren.text_range()),
+            condition: ParenExpr {
+                open_paren: t::LParen::new_from_span(open_paren.text_range()),
+                expr: Box::new(condition),
+                close_paren: t::RParen::new_from_span(close_paren.text_range()),
+            },
             body,
         })
+    }
+}
+
+impl Printable for WhileStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+
+        let condition_shape = Shape {
+            width: shape.width,
+            indent: shape.indent,
+            first_line_offset: shape.first_line_offset + const { "while ".len() },
+        };
+        printer.print(&self.condition, condition_shape);
+
+        printer.print_str(" ");
+
+        let body_shape = Shape {
+            width: shape.width,
+            indent: shape.indent,
+            first_line_offset: 0, // irrelevant since body new-lines immediately after `{`
+        };
+        printer.print(&self.body, body_shape);
+        PrintInfo::default_multi_lined()
     }
 }
 
@@ -200,71 +294,56 @@ impl FromCST for ForStmt {
         // KW_FOR
         let keyword = it.expect_token_of_kind(SyntaxKind::KW_FOR)?;
 
-        fn take_args(it: &mut SyntaxNodeIter) -> Result<ForArgs, StrongAstError> {
-            let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
+        let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
 
-            let args_first = it.expect_next("a statement")?;
-            let args_first = Statement::from_cst(args_first)?;
+        let args_first = it.expect_next("a statement")?;
+        let mut args_first = Statement::from_cst(args_first)?;
 
-            let (args_first, args_second) = if let Statement::Let(let_stmt) = args_first {
-                // Could be either for-in pattern or C-style
-                let args_second = it.expect_next("an expression or KW_IN")?;
-                if args_second.kind() == SyntaxKind::KW_IN {
-                    // We are iterator style
-                    let kw_in = StrongAstError::assert_is_token(args_second)?;
-                    let kw_in = t::In::new_from_span(kw_in.text_range());
-
-                    let expr = it.expect_next("iterator expression")?;
-                    let expression = Expression::from_cst(expr)?;
-
-                    let close_paren = it.expect_token_of_kind(SyntaxKind::R_PAREN)?;
-
-                    return Ok(ForArgs::Iterator(ForIteratorArgs {
-                        open_paren: t::LParen::new_from_span(open_paren.text_range()),
-                        let_stmt,
-                        in_keyword: kw_in,
-                        expression,
-                        close_paren: t::RParen::new_from_span(close_paren.text_range()),
-                    }));
-                }
-                (Statement::Let(let_stmt), Expression::from_cst(args_second)?)
-            } else if let Statement::Expr(expr_stmt) = args_first {
-                // we need to parse the semicolon
-                let semicolon = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
-                let expr_stmt = ExpressionStmt {
-                    expr: expr_stmt.expr,
-                    semicolon: Some(t::Semicolon::new_from_span(semicolon.text_range())),
-                };
-
-                let args_second = it.expect_next("an expression")?;
-                (
-                    Statement::Expr(expr_stmt),
-                    Expression::from_cst(args_second)?,
-                )
-            } else {
-                let args_second = it.expect_next("an expression")?;
-                (args_first, Expression::from_cst(args_second)?)
-            };
-
-            // For loop is C-style
-            let semicolon = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
-
-            let args_last = it.expect_next("a statement")?;
-            let args_last = Statement::from_cst(args_last)?;
+        let args = if let Some(kw_in) = it.next_if(|elem| elem.kind() == SyntaxKind::KW_IN)
+            && let Statement::Let(let_stmt) = args_first
+        {
+            // for-in
+            let expr = it.expect_next("iterator expression")?;
+            let expression = Expression::from_cst(expr)?;
 
             let close_paren = it.expect_token_of_kind(SyntaxKind::R_PAREN)?;
 
-            Ok(ForArgs::CStyle(ForCStyleArgs {
+            ForArgs::Iterator(ForIteratorArgs {
+                open_paren: t::LParen::new_from_span(open_paren.text_range()),
+                let_stmt,
+                in_keyword: t::In::new_from_span(kw_in.text_range()),
+                expression,
+                close_paren: t::RParen::new_from_span(close_paren.text_range()),
+            })
+        } else {
+            // C-style
+            if let Statement::Expr(expr_first) = args_first {
+                let semicolon = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
+                args_first = Statement::Expr(ExpressionStmt {
+                    expr: expr_first.expr,
+                    semicolon: Some(t::Semicolon::new_from_span(semicolon.text_range())),
+                });
+            }
+
+            let condition = it.expect_next("an expression")?;
+            let condition = Expression::from_cst(condition)?;
+
+            let semicolon = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
+
+            let update = it.expect_next("a statement")?;
+            let update = Statement::from_cst(update)?;
+
+            let close_paren = it.expect_token_of_kind(SyntaxKind::R_PAREN)?;
+
+            ForArgs::CStyle(ForCStyleArgs {
                 open_paren: t::LParen::new_from_span(open_paren.text_range()),
                 init: Box::new(args_first),
-                condition: args_second,
+                condition,
                 semicolon: t::Semicolon::new_from_span(semicolon.text_range()),
-                update: Box::new(args_last),
+                update: Box::new(update),
                 close_paren: t::RParen::new_from_span(close_paren.text_range()),
-            }))
-        }
-
-        let args = take_args(&mut it)?;
+            })
+        };
 
         // BLOCK_EXPR
         let body_node = it.expect_node_of_kind(SyntaxKind::BLOCK_EXPR)?;
@@ -280,10 +359,30 @@ impl FromCST for ForStmt {
     }
 }
 
+impl Printable for ForStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print(&self.args, shape.clone());
+        printer.print_str(" ");
+        printer.print(&self.body, shape);
+        PrintInfo::default_multi_lined()
+    }
+}
+
 #[derive(Debug)]
 pub enum ForArgs {
     Iterator(ForIteratorArgs),
     CStyle(ForCStyleArgs),
+}
+
+impl Printable for ForArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ForArgs::Iterator(iter) => iter.print(shape, printer),
+            ForArgs::CStyle(cstyle) => cstyle.print(shape, printer),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -296,6 +395,20 @@ pub struct ForCStyleArgs {
     pub close_paren: t::RParen,
 }
 
+impl Printable for ForCStyleArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        printer.print(&*self.init, shape.clone());
+        printer.print_str(" ");
+        printer.print(&self.condition, shape.clone());
+        printer.print_raw_token(&self.semicolon);
+        printer.print_str(" ");
+        printer.print(&*self.update, shape);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct ForIteratorArgs {
     pub open_paren: t::LParen,
@@ -303,6 +416,21 @@ pub struct ForIteratorArgs {
     pub in_keyword: t::In,
     pub expression: Expression,
     pub close_paren: t::RParen,
+}
+
+impl Printable for ForIteratorArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        printer.print_raw_token(&self.let_stmt.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.let_stmt.name);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.in_keyword);
+        printer.print_str(" ");
+        printer.print(&self.expression, shape);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_single_line()
+    }
 }
 
 #[derive(Debug)]
@@ -323,23 +451,10 @@ impl FromCST for ReturnStmt {
         let keyword = it.expect_token_of_kind(SyntaxKind::KW_RETURN)?;
 
         // Optional return value
-        let value = if let Some(elem) = it.next() {
-            if elem.kind() == SyntaxKind::SEMICOLON {
-                // Just a semicolon, no value
-                let token = StrongAstError::assert_is_token(elem)?;
-                it.expect_end()?;
-                return Ok(ReturnStmt {
-                    keyword: t::Return::new_from_span(keyword.text_range()),
-                    value: None,
-                    semicolon: Some(t::Semicolon::new_from_span(token.text_range())),
-                });
-            } else {
-                // Expression value
-                Some(Expression::from_cst(elem)?)
-            }
-        } else {
-            None
-        };
+        let value = it
+            .next_if(|elem| elem.kind() != SyntaxKind::SEMICOLON)
+            .map(Expression::from_cst)
+            .transpose()?;
 
         // Optional semicolon
         let semicolon = it
@@ -358,6 +473,25 @@ impl FromCST for ReturnStmt {
             value,
             semicolon,
         })
+    }
+}
+
+impl Printable for ReturnStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+
+        if let Some(value) = &self.value {
+            printer.print_str(" ");
+            printer.print(value, shape);
+        }
+
+        if let Some(semicolon) = &self.semicolon {
+            printer.print_raw_token(semicolon);
+        } else {
+            printer.print_str(";");
+        }
+
+        PrintInfo::default_single_line()
     }
 }
 
@@ -395,6 +529,20 @@ impl FromCST for BreakStmt {
     }
 }
 
+impl Printable for BreakStmt {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+
+        if let Some(semicolon) = self.semicolon.as_ref() {
+            printer.print_raw_token(semicolon);
+        } else {
+            printer.print_str(";");
+        }
+
+        PrintInfo::default_single_line()
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::CONTINUE_STMT`] node.
 #[derive(Debug)]
 pub struct ContinueStmt {
@@ -426,6 +574,18 @@ impl FromCST for ContinueStmt {
             keyword: t::Continue::new_from_span(keyword.text_range()),
             semicolon,
         })
+    }
+}
+
+impl Printable for ContinueStmt {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        if let Some(semicolon) = self.semicolon.as_ref() {
+            printer.print_raw_token(semicolon);
+        } else {
+            printer.print_str(";");
+        }
+        PrintInfo::default_single_line()
     }
 }
 
@@ -465,5 +625,24 @@ impl FromCST for AssertStmt {
             condition,
             semicolon,
         })
+    }
+}
+
+impl Printable for AssertStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let expr_shape = Shape {
+            width: shape.width,
+            indent: shape.indent,
+            first_line_offset: const { "assert ".len() },
+        };
+        printer.print_raw_token(&self.keyword);
+        printer.print_spaces(1);
+        let info = printer.print(&self.condition, expr_shape);
+        if let Some(semicolon) = &self.semicolon {
+            printer.print_raw_token(semicolon);
+        } else {
+            printer.print_str(";");
+        }
+        info
     }
 }

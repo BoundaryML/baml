@@ -25,3 +25,4 @@ baml_compiler_syntax = { workspace = true }
 baml_project = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
+thiserror = { workspace = true }

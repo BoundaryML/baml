@@ -1,8 +1,9 @@
 //! Reference: [baml_compiler_syntax::ast::MatchPattern] and [baml_compiler_hir::body::Pattern]
 
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
-use crate::ast::{FromCST, Literal, StrongAstError, SyntaxNodeIter, Type, tokens as t};
+use crate::ast::{FromCST, Literal, StrongAstError, SyntaxNodeIter, tokens as t};
+use crate::printer::*;
 
 /// Corresponds to a [`SyntaxKind::MATCH_PATTERN`] node.
 ///
@@ -31,125 +32,68 @@ impl FromCST for MatchPattern {
             ));
         };
 
-        match first_elem.kind() {
-            // Literal patterns (string, integer, float)
-            SyntaxKind::STRING_LITERAL => {
-                let token = StrongAstError::assert_is_token(first_elem)?;
-                it.expect_end()?;
-                Ok(MatchPattern::Literal(Literal::String(t::QuotedString {
-                    token_span: token.text_range(),
-                })))
-            }
-            SyntaxKind::INTEGER_LITERAL => {
-                let token = StrongAstError::assert_is_token(first_elem)?;
-                it.expect_end()?;
-                Ok(MatchPattern::Literal(Literal::Integer(t::IntegerLiteral {
-                    token_span: token.text_range(),
-                })))
-            }
-            SyntaxKind::FLOAT_LITERAL => {
-                let token = StrongAstError::assert_is_token(first_elem)?;
-                it.expect_end()?;
-                Ok(MatchPattern::Literal(Literal::Float(t::FloatLiteral {
-                    token_span: token.text_range(),
-                })))
-            }
-            // Word can be binding or start of enum variant
-            SyntaxKind::WORD => {
-                let word_token = StrongAstError::assert_is_token(first_elem)?;
-                let word = t::Word {
-                    token_span: word_token.text_range(),
-                };
+        let mut first_elem = UnionPatternMember::take(&mut it)?;
 
-                // Check next element to determine if it's binding or enum variant
-                if let Some(next_elem) = it.next() {
-                    match next_elem.kind() {
-                        SyntaxKind::COLON => {
-                            // Binding with type annotation: name : Type
-                            let colon = StrongAstError::assert_is_token(next_elem)?;
-                            let type_node = it.expect_node_of_kind(SyntaxKind::TYPE_EXPR)?;
-                            let ty = Type::from_cst(SyntaxElement::Node(type_node))?;
-                            it.expect_end()?;
+        let binding = if it.peek().is_none() {
+            return Ok(first_elem.into());
+        } else if let Some(colon) = it.next_if(|elem| elem.kind() == SyntaxKind::COLON) {
+            let colon = StrongAstError::assert_is_token(colon)?;
+            let UnionPatternMember::Word(binding_name) = first_elem else {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "PIPE".into(),
+                    found: colon.kind(),
+                    at: colon.text_range(),
+                });
+            };
+            first_elem = UnionPatternMember::take(&mut it)?;
+            Some((binding_name, t::Colon::new_from_span(colon.text_range())))
+        } else {
+            None
+        };
 
-                            Ok(MatchPattern::Binding(BindingPattern {
-                                name: word,
-                                ty: Some((t::Colon::new_from_span(colon.text_range()), ty)),
-                            }))
-                        }
-                        SyntaxKind::DOT => {
-                            // Enum variant: EnumName.VariantName
-                            let dot = StrongAstError::assert_is_token(next_elem)?;
-                            let variant = it.expect_token_of_kind(SyntaxKind::WORD)?;
-                            it.expect_end()?;
+        let mut rest = Vec::new();
+        while let Some(pipe) = it.next() {
+            let pipe = StrongAstError::assert_is_token(pipe)?;
+            StrongAstError::assert_kind_token(&pipe, SyntaxKind::PIPE)?;
 
-                            Ok(MatchPattern::EnumVariant(EnumVariantPattern {
-                                enum_name: word,
-                                dot: t::Dot::new_from_span(dot.text_range()),
-                                variant_name: t::Word {
-                                    token_span: variant.text_range(),
-                                },
-                            }))
-                        }
-                        SyntaxKind::PIPE => {
-                            // Union pattern: pattern | pattern | ...
-                            // The first pattern is just a binding
-                            let first_pattern = MatchPattern::Binding(BindingPattern {
-                                name: word,
-                                ty: None,
-                            });
+            let next = UnionPatternMember::take(&mut it)?;
 
-                            let mut rest = Vec::new();
-                            let mut current_elem = next_elem;
-                            loop {
-                                let pipe = StrongAstError::assert_is_token(current_elem)?;
-                                let next_pattern_node =
-                                    it.expect_node_of_kind(SyntaxKind::MATCH_PATTERN)?;
-                                let next_pattern =
-                                    MatchPattern::from_cst(SyntaxElement::Node(next_pattern_node))?;
-                                rest.push((
-                                    t::Pipe::new_from_span(pipe.text_range()),
-                                    next_pattern,
-                                ));
+            rest.push((t::Pipe::new_from_span(pipe.text_range()), next));
+        }
 
-                                if let Some(elem) = it.next() {
-                                    if elem.kind() == SyntaxKind::PIPE {
-                                        current_elem = elem;
-                                    } else {
-                                        return Err(StrongAstError::UnexpectedAdditionalElement {
-                                            parent: node.text_range(),
-                                            at: elem.text_range(),
-                                        });
-                                    }
-                                } else {
-                                    break;
-                                }
-                            }
-
-                            it.expect_end()?;
-                            Ok(MatchPattern::Union(UnionPattern {
-                                first: Box::new(first_pattern),
-                                rest,
-                            }))
-                        }
-                        _ => Err(StrongAstError::UnexpectedKindDesc {
-                            expected_desc: "COLON, DOT, or PIPE after WORD in pattern".into(),
-                            found: next_elem.kind(),
-                            at: next_elem.text_range(),
-                        }),
-                    }
-                } else {
-                    // Just a binding without type annotation
-                    Ok(MatchPattern::Binding(BindingPattern {
-                        name: word,
-                        ty: None,
-                    }))
+        let ty = if rest.is_empty() {
+            match first_elem {
+                UnionPatternMember::Literal(lit) => BindingPatternPattern::Literal(lit),
+                UnionPatternMember::EnumVariant(variant) => {
+                    BindingPatternPattern::EnumVariant(variant)
                 }
+                UnionPatternMember::Word(word) => BindingPatternPattern::Word(word),
             }
-            _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "STRING_LITERAL, INTEGER_LITERAL, FLOAT_LITERAL, or WORD".into(),
-                found: first_elem.kind(),
-                at: first_elem.text_range(),
-            }),
+        } else {
+            BindingPatternPattern::Union(UnionPattern {
+                first: Box::new(first_elem),
+                rest,
+            })
+        };
+
+        if let Some((binding_name, colon)) = binding {
+            Ok(MatchPattern::Binding(BindingPattern {
+                name: binding_name,
+                ty: Some((colon, ty)),
+            }))
+        } else {
+            Ok(ty.into())
+        }
+    }
+}
+
+impl Printable for MatchPattern {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            MatchPattern::Literal(lit) => printer.print(lit, shape),
+            MatchPattern::Binding(binding) => binding.print(shape, printer),
+            MatchPattern::EnumVariant(variant) => variant.print(shape, printer),
+            MatchPattern::Union(union) => union.print(shape, printer),
         }
     }
 }
@@ -157,7 +101,55 @@ impl FromCST for MatchPattern {
 #[derive(Debug)]
 pub struct BindingPattern {
     pub name: t::Word,
-    pub ty: Option<(t::Colon, Type)>,
+    pub ty: Option<(t::Colon, BindingPatternPattern)>,
+}
+
+impl Printable for BindingPattern {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.name);
+        if let Some((colon, ty)) = &self.ty {
+            printer.print_raw_token(colon);
+            printer.print_str(" ");
+            printer.print(ty, shape);
+        }
+        PrintInfo::default_single_line()
+    }
+}
+
+#[derive(Debug)]
+pub enum BindingPatternPattern {
+    Literal(Literal),
+    Word(t::Word),
+    EnumVariant(EnumVariantPattern),
+    Union(UnionPattern),
+}
+
+impl From<BindingPatternPattern> for MatchPattern {
+    fn from(pattern: BindingPatternPattern) -> Self {
+        match pattern {
+            BindingPatternPattern::Literal(lit) => MatchPattern::Literal(lit),
+            BindingPatternPattern::Word(word) => MatchPattern::Binding(BindingPattern {
+                name: word,
+                ty: None,
+            }),
+            BindingPatternPattern::EnumVariant(variant) => MatchPattern::EnumVariant(variant),
+            BindingPatternPattern::Union(union) => MatchPattern::Union(union),
+        }
+    }
+}
+
+impl Printable for BindingPatternPattern {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            BindingPatternPattern::Literal(lit) => printer.print(lit, shape),
+            BindingPatternPattern::Word(word) => {
+                printer.print_raw_token(word);
+                PrintInfo::default_single_line()
+            }
+            BindingPatternPattern::EnumVariant(variant) => variant.print(shape, printer),
+            BindingPatternPattern::Union(union) => union.print(shape, printer),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -167,10 +159,33 @@ pub struct EnumVariantPattern {
     pub variant_name: t::Word,
 }
 
+impl Printable for EnumVariantPattern {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.enum_name);
+        printer.print_raw_token(&self.dot);
+        printer.print_raw_token(&self.variant_name);
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct UnionPattern {
-    pub first: Box<MatchPattern>,
-    pub rest: Vec<(t::Pipe, MatchPattern)>,
+    pub first: Box<UnionPatternMember>,
+    pub rest: Vec<(t::Pipe, UnionPatternMember)>,
+}
+
+impl Printable for UnionPattern {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.first, shape.clone());
+
+        for (pipe, pattern) in &self.rest {
+            printer.print_str(" ");
+            printer.print_raw_token(pipe);
+            printer.print_str(" ");
+            printer.print(pattern, shape.clone());
+        }
+        PrintInfo::default_single_line()
+    }
 }
 
 #[derive(Debug)]
@@ -180,4 +195,76 @@ pub enum UnionPatternMember {
     /// Should probably treat these as literals, but we can change if we have a use case.
     Word(t::Word),
     EnumVariant(EnumVariantPattern),
+}
+
+impl UnionPatternMember {
+    pub fn take(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
+        let first = it.expect_next("a literal or WORD")?;
+        let first = match first.kind() {
+            SyntaxKind::WORD => t::Word::new_from_span(first.text_range()),
+            SyntaxKind::INTEGER_LITERAL => {
+                let token = StrongAstError::assert_is_token(first.clone())?;
+                return Ok(UnionPatternMember::Literal(Literal::Integer(
+                    t::IntegerLiteral::new_from_span(token.text_range()),
+                )));
+            }
+            SyntaxKind::FLOAT_LITERAL => {
+                let token = StrongAstError::assert_is_token(first.clone())?;
+                return Ok(UnionPatternMember::Literal(Literal::Float(
+                    t::FloatLiteral::new_from_span(token.text_range()),
+                )));
+            }
+            SyntaxKind::STRING_LITERAL => {
+                let token = StrongAstError::assert_is_token(first.clone())?;
+                return Ok(UnionPatternMember::Literal(Literal::String(
+                    t::QuotedString::new_from_span(token.text_range()),
+                )));
+            }
+            found => {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "literal or WORD".into(),
+                    found,
+                    at: first.text_range(),
+                });
+            }
+        };
+
+        if let Some(dot) = it.next_if(|elem| elem.kind() == SyntaxKind::DOT) {
+            let dot = StrongAstError::assert_is_token(dot)?;
+            let word = it.expect_token_of_kind(SyntaxKind::WORD)?;
+            Ok(UnionPatternMember::EnumVariant(EnumVariantPattern {
+                enum_name: first,
+                dot: t::Dot::new_from_span(dot.text_range()),
+                variant_name: t::Word::new_from_span(word.text_range()),
+            }))
+        } else {
+            Ok(UnionPatternMember::Word(first))
+        }
+    }
+}
+
+impl From<UnionPatternMember> for MatchPattern {
+    fn from(member: UnionPatternMember) -> Self {
+        match member {
+            UnionPatternMember::Literal(lit) => MatchPattern::Literal(lit),
+            UnionPatternMember::EnumVariant(variant) => MatchPattern::EnumVariant(variant),
+            UnionPatternMember::Word(word) => MatchPattern::Binding(BindingPattern {
+                name: word,
+                ty: None,
+            }),
+        }
+    }
+}
+
+impl Printable for UnionPatternMember {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            UnionPatternMember::Literal(lit) => printer.print(lit, shape),
+            UnionPatternMember::Word(word) => {
+                printer.print_raw_token(word);
+                PrintInfo::default_single_line()
+            }
+            UnionPatternMember::EnumVariant(variant) => variant.print(shape, printer),
+        }
+    }
 }

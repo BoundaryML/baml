@@ -1,3 +1,4 @@
+use crate::printer::*;
 use rowan::TextRange;
 
 pub trait Token {
@@ -317,6 +318,48 @@ impl RawString {
 impl Token for RawString {
     fn span(&self) -> TextRange {
         self.token_span
+    }
+}
+impl Printable for RawString {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let text = &printer.input[self.span()];
+        let multi_lined = text.contains('\n');
+        printer.print_raw_token(self);
+        PrintInfo { multi_lined }
+    }
+}
+
+impl Printable for BinaryOp {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            BinaryOp::Less(t) => printer.print_raw_token(t),
+            BinaryOp::Greater(t) => printer.print_raw_token(t),
+            BinaryOp::LessEquals(t) => printer.print_raw_token(t),
+            BinaryOp::GreaterEquals(t) => printer.print_raw_token(t),
+            BinaryOp::AndAnd(t) => printer.print_raw_token(t),
+            BinaryOp::OrOr(t) => printer.print_raw_token(t),
+            BinaryOp::Pipe(t) => printer.print_raw_token(t),
+            BinaryOp::Caret(t) => printer.print_raw_token(t),
+            BinaryOp::Instanceof(t) => printer.print_raw_token(t),
+            BinaryOp::LessLess(t) => printer.print_raw_token(t),
+            BinaryOp::GreaterGreater(t) => printer.print_raw_token(t),
+            BinaryOp::Plus(t) => printer.print_raw_token(t),
+            BinaryOp::Minus(t) => printer.print_raw_token(t),
+            BinaryOp::Star(t) => printer.print_raw_token(t),
+            BinaryOp::Slash(t) => printer.print_raw_token(t),
+            BinaryOp::Percent(t) => printer.print_raw_token(t),
+        }
+        PrintInfo::default_single_line()
+    }
+}
+
+impl Printable for UnaryOp {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            UnaryOp::Not(t) => printer.print_raw_token(t),
+            UnaryOp::Minus(t) => printer.print_raw_token(t),
+        }
+        PrintInfo::default_single_line()
     }
 }
 

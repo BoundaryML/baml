@@ -2,6 +2,7 @@ use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use crate::ast::{FromCST, StrongAstError, SyntaxNodeIter, tokens as t};
+use crate::printer::*;
 
 /// Corresponds to a [`SyntaxKind::BLOCK_ATTRIBUTE`] node.
 #[derive(Debug)]
@@ -31,6 +32,17 @@ impl FromCST for BlockAttribute {
             name: t::Word::new_from_span(name.text_range()),
             args,
         })
+    }
+}
+
+impl Printable for BlockAttribute {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.atat);
+        printer.print_raw_token(&self.name);
+        if let Some(args) = &self.args {
+            printer.print(args, shape);
+        }
+        PrintInfo::default_single_line()
     }
 }
 
@@ -94,6 +106,17 @@ impl FromCST for Attribute {
     }
 }
 
+impl Printable for Attribute {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.at);
+        printer.print(&self.name, shape.clone());
+        if let Some(args) = &self.args {
+            printer.print(args, shape);
+        }
+        PrintInfo::default_single_line()
+    }
+}
+
 /// Attribute names are not normal paths: they may contain keywords.
 #[derive(Debug)]
 pub enum AttributeNamePart {
@@ -118,11 +141,32 @@ impl FromCST for AttributeNamePart {
     }
 }
 
+impl Printable for AttributeNamePart {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            AttributeNamePart::Word(word) => printer.print_raw_token(word),
+            AttributeNamePart::Keyword(range) => printer.print_input_range(*range),
+        }
+        PrintInfo::default_single_line()
+    }
+}
+
 /// Attribute names are not normal paths: they may contain keywords.
 #[derive(Debug)]
 pub struct AttributeName {
     pub first: AttributeNamePart,
     pub rest: Vec<(t::Dot, AttributeNamePart)>,
+}
+
+impl Printable for AttributeName {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&self.first, shape.clone());
+        for (dot, part) in &self.rest {
+            printer.print_raw_token(dot);
+            printer.print(part, shape.clone());
+        }
+        PrintInfo::default_single_line()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::ATTRIBUTE_ARGS`] node.
@@ -138,5 +182,12 @@ impl FromCST for AttributeArgs {
         let todo = node.text_range();
 
         Ok(AttributeArgs { todo })
+    }
+}
+
+impl Printable for AttributeArgs {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_input_range(self.todo);
+        PrintInfo::default_single_line()
     }
 }

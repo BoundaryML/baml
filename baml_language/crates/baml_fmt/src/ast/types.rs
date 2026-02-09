@@ -5,6 +5,7 @@
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
 use super::{FromCST, StrongAstError, tokens as t};
+use crate::printer::*;
 use rowan::TextRange;
 
 /// Corresponds to a [`SyntaxKind::TYPE_EXPR`] node.
@@ -46,19 +47,68 @@ impl FromCST for Type {
     }
 }
 
+impl Printable for Type {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Type::Path(path) => path.print(shape, printer),
+            Type::String(string) => string.print(shape, printer),
+            Type::Union(union) => union.print(shape, printer),
+            Type::Optional(optional) => optional.print(shape, printer),
+            Type::Array(array) => array.print(shape, printer),
+            Type::Generic(generic) => generic.print(shape, printer),
+            Type::Function(function) => function.print(shape, printer),
+            Type::Constrained(range) | Type::Unknown(range) => {
+                printer.print_input_range(*range);
+                PrintInfo::default_single_line()
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PathType {
     pub first: t::Word,
     pub rest: Vec<(t::Dot, t::Word)>,
 }
 
+impl Printable for PathType {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.first);
+        for (dot, word) in &self.rest {
+            printer.print_raw_token(dot);
+            printer.print_raw_token(word);
+        }
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct StringType(pub t::QuotedString);
+
+impl Printable for StringType {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.0);
+        PrintInfo::default_single_line()
+    }
+}
 
 #[derive(Debug)]
 pub struct UnionType {
     pub first: Box<Type>,
     pub rest: Vec<(t::Pipe, Box<Type>)>,
+}
+
+impl Printable for UnionType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.first, shape.clone());
+        for (pipe, ty) in &self.rest {
+            printer.print_str(" ");
+            printer.print_raw_token(pipe);
+            printer.print_str(" ");
+            printer.print(&**ty, shape.clone());
+        }
+        PrintInfo::default_single_line()
+    }
 }
 
 #[derive(Debug)]
@@ -67,10 +117,29 @@ pub struct OptionalType {
     pub question: t::Question,
 }
 
+impl Printable for OptionalType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.ty, shape);
+        printer.print_raw_token(&self.question);
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct ArrayType {
     pub ty: Box<Type>,
     pub brackets: Vec<(t::LBracket, t::RBracket)>,
+}
+
+impl Printable for ArrayType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.ty, shape);
+        for (open, close) in &self.brackets {
+            printer.print_raw_token(open);
+            printer.print_raw_token(close);
+        }
+        PrintInfo::default_single_line()
+    }
 }
 
 #[derive(Debug)]
@@ -79,6 +148,16 @@ pub struct GenericType {
     pub open_angle: t::Less,
     pub params: TextRange, // TODO
     pub close_angle: t::Greater,
+}
+
+impl Printable for GenericType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.base, shape);
+        printer.print_raw_token(&self.open_angle);
+        printer.print_input_range(self.params);
+        printer.print_raw_token(&self.close_angle);
+        PrintInfo::default_single_line()
+    }
 }
 
 #[derive(Debug)]
@@ -90,11 +169,45 @@ pub struct FunctionType {
     pub return_type: Box<Type>,
 }
 
+impl Printable for FunctionType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        for (i, param) in self.params.iter().enumerate() {
+            if i > 0 {
+                printer.print_str(", ");
+            }
+            printer.print(param, shape.clone());
+        }
+        printer.print_raw_token(&self.close_paren);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.arrow);
+        printer.print_str(" ");
+        printer.print(&*self.return_type, shape);
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct FunctionTypeParam {
     pub name: Option<(t::Word, Option<t::Colon>)>,
     pub ty: Box<Type>,
     pub comma: Option<t::Comma>,
+}
+
+impl Printable for FunctionTypeParam {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        if let Some((name, colon)) = &self.name {
+            printer.print_raw_token(name);
+            if let Some(colon) = colon {
+                printer.print_raw_token(colon);
+            } else {
+                printer.print_str(":");
+            }
+            printer.print_str(" ");
+        }
+        printer.print(&*self.ty, shape);
+        PrintInfo::default_single_line()
+    }
 }
 
 fn parse_type_from_elements(

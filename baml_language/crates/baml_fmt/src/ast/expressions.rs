@@ -3,8 +3,9 @@
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
-use crate::ast::{
-    BinaryOp, FromCST, MatchPattern, Statement, StrongAstError, SyntaxNodeIter, UnaryOp,
+use crate::{
+    ast::{BinaryOp, FromCST, MatchPattern, Statement, StrongAstError, SyntaxNodeIter, UnaryOp},
+    printer::{PrintInfo, Printable, Printer, Shape},
 };
 
 use super::tokens as t;
@@ -72,11 +73,48 @@ impl FromCST for Expression {
     }
 }
 
+impl Printable for Expression {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Expression::Literal(lit) => lit.print(shape, printer),
+            Expression::Path(path) => path.print(shape, printer),
+            Expression::Paren(paren) => paren.print(shape, printer),
+            Expression::Binary(binary) => binary.print(shape, printer),
+            Expression::Unary(unary) => unary.print(shape, printer),
+            Expression::If(if_expr) => if_expr.print(shape, printer),
+            Expression::Match(match_expr) => match_expr.print(shape, printer),
+            Expression::Call(call) => call.print(shape, printer),
+            Expression::Index(index) => index.print(shape, printer),
+            Expression::FieldAccess(field) => field.print(shape, printer),
+            Expression::Block(block) => block.print(shape, printer),
+            Expression::ArrayInitializer(array) => array.print(shape, printer),
+            Expression::MapInitializer(map) => map.print(shape, printer),
+            Expression::ObjectInitializer(obj) => obj.print(shape, printer),
+            Expression::RawString(raw) => raw.print(shape, printer),
+            Expression::Unknown(range) => {
+                printer.print_input_range(*range);
+                PrintInfo::default_single_line()
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Literal {
     String(t::QuotedString),
     Integer(t::IntegerLiteral),
     Float(t::FloatLiteral),
+}
+
+impl Printable for Literal {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            Literal::String(s) => printer.print_raw_token(s),
+            Literal::Integer(i) => printer.print_raw_token(i),
+            Literal::Float(f) => printer.print_raw_token(f),
+        }
+        PrintInfo::default_single_line()
+    }
 }
 
 #[derive(Debug)]
@@ -122,6 +160,17 @@ impl FromCST for PathExpr {
     }
 }
 
+impl Printable for PathExpr {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.first);
+        for (dot, word) in &self.rest {
+            printer.print_raw_token(dot);
+            printer.print_raw_token(word);
+        }
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct ParenExpr {
     pub open_paren: t::LParen,
@@ -150,6 +199,15 @@ impl FromCST for ParenExpr {
             expr: Box::new(expr),
             close_paren: t::RParen::new_from_span(close_paren.text_range()),
         })
+    }
+}
+
+impl Printable for ParenExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        printer.print(&*self.expr, shape);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_single_line()
     }
 }
 
@@ -187,6 +245,18 @@ impl FromCST for BinaryExpr {
     }
 }
 
+impl Printable for BinaryExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let (left, right) = &*self.sides;
+        printer.print(left, shape.clone());
+        printer.print_str(" ");
+        printer.print(&self.op, shape.clone());
+        printer.print_str(" ");
+        printer.print(right, shape);
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct UnaryExpr {
     pub op: UnaryOp,
@@ -214,6 +284,14 @@ impl FromCST for UnaryExpr {
             op,
             expr: Box::new(expr),
         })
+    }
+}
+
+impl Printable for UnaryExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&self.op, shape.clone());
+        printer.print(&*self.expr, shape);
+        PrintInfo::default_single_line()
     }
 }
 
@@ -282,12 +360,40 @@ impl FromCST for IfExpr {
     }
 }
 
+impl Printable for IfExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print(&self.condition, shape.clone());
+        printer.print_str(" ");
+        printer.print(&self.block, shape.clone());
+
+        if let Some((else_kw, else_expr)) = &self.else_branch {
+            printer.print_str(" ");
+            printer.print_raw_token(else_kw);
+            printer.print_str(" ");
+            printer.print(else_expr, shape);
+        }
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
 #[derive(Debug)]
 pub enum ElseExpr {
     /// else if
     If(Box<IfExpr>),
     /// final else block
     Block(Box<BlockExpr>),
+}
+
+impl Printable for ElseExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ElseExpr::If(if_expr) => if_expr.print(shape, printer),
+            ElseExpr::Block(block) => block.print(shape, printer),
+        }
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::MATCH_EXPR`] node.
@@ -388,6 +494,39 @@ impl FromCST for MatchExpr {
     }
 }
 
+impl Printable for MatchExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_paren);
+        printer.print(&*self.scrutinee, shape.clone());
+        printer.print_raw_token(&self.close_paren);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+
+        for (arm, comma) in &self.arms {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(arm, inner_shape.clone());
+            if comma.is_some() || !self.arms.is_empty() {
+                printer.print_str(",");
+            }
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::MATCH_ARM`] node.
 #[derive(Debug)]
 pub struct MatchArm {
@@ -458,6 +597,26 @@ impl FromCST for MatchArm {
             fat_arrow: t::FatArrow::new_from_span(fat_arrow.text_range()),
             body: Box::new(body),
         })
+    }
+}
+
+impl Printable for MatchArm {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&self.pattern, shape.clone());
+
+        if let Some((if_kw, guard)) = &self.guard {
+            printer.print_str(" ");
+            printer.print_raw_token(if_kw);
+            printer.print_str(" ");
+            printer.print(&**guard, shape.clone());
+        }
+
+        printer.print_str(" ");
+        printer.print_raw_token(&self.fat_arrow);
+        printer.print_str(" ");
+        printer.print(&*self.body, shape);
+
+        PrintInfo::default_single_line()
     }
 }
 
@@ -537,6 +696,23 @@ impl FromCST for CallExpr {
             SyntaxKind::R_PAREN,
             open_paren.text_range(),
         ))
+    }
+}
+
+impl Printable for CallExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.callee, shape.clone());
+        printer.print_raw_token(&self.open_paren);
+
+        for (i, arg) in self.args.iter().enumerate() {
+            if i > 0 {
+                printer.print_str(", ");
+            }
+            printer.print(arg, shape.clone());
+        }
+
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_single_line()
     }
 }
 
@@ -637,6 +813,16 @@ impl FromCST for IndexExpr {
     }
 }
 
+impl Printable for IndexExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.base, shape.clone());
+        printer.print_raw_token(&self.open_bracket);
+        printer.print(&*self.index, shape);
+        printer.print_raw_token(&self.close_bracket);
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct FieldAccessExpr {
     pub base: Box<Expression>,
@@ -670,6 +856,15 @@ impl FromCST for FieldAccessExpr {
                 token_span: field.text_range(),
             },
         })
+    }
+}
+
+impl Printable for FieldAccessExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.base, shape);
+        printer.print_raw_token(&self.dot);
+        printer.print_raw_token(&self.field);
+        PrintInfo::default_single_line()
     }
 }
 
@@ -740,6 +935,33 @@ impl FromCST for BlockExpr {
     }
 }
 
+impl Printable for BlockExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+        for stmt in &self.stmts {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(stmt, inner_shape.clone());
+            printer.print_newline();
+        }
+        if let Some(expr) = self.expr.as_deref() {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(expr, inner_shape.clone());
+            printer.print_newline();
+        }
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo { multi_lined: true }
+    }
+}
+
 #[derive(Debug)]
 pub struct ArrayInitializer {
     pub open_bracket: t::LBracket,
@@ -776,23 +998,17 @@ impl FromCST for ArrayInitializer {
                     let token = StrongAstError::assert_is_token(elem)?;
                     break token;
                 }
-                SyntaxKind::COMMA => {
-                    let comma = StrongAstError::assert_is_token(elem)?;
-                    if let Some(last) = elements.last_mut()
-                        && last.1.is_none()
-                    {
-                        last.1 = Some(t::Comma::new_from_span(comma.text_range()));
-                    } else {
-                        return Err(StrongAstError::UnexpectedKindDesc {
-                            expected_desc: "expression or R_BRACKET".into(),
-                            found: comma.kind(),
-                            at: comma.text_range(),
-                        });
-                    }
-                }
                 _ => {
                     let expr = Expression::from_cst(elem)?;
-                    elements.push((expr, None));
+                    let comma = it
+                        .next_if(|elem| elem.kind() == SyntaxKind::COMMA)
+                        .map(|comma| {
+                            let comma = StrongAstError::assert_is_token(comma)?;
+                            Ok(t::Comma::new_from_span(comma.text_range()))
+                        })
+                        .transpose()?;
+
+                    elements.push((expr, comma));
                 }
             }
         };
@@ -802,6 +1018,22 @@ impl FromCST for ArrayInitializer {
             elements,
             close_bracket: t::RBracket::new_from_span(close_bracket.text_range()),
         });
+    }
+}
+
+impl Printable for ArrayInitializer {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_bracket);
+
+        for (i, (elem, _comma)) in self.elements.iter().enumerate() {
+            if i > 0 {
+                printer.print_str(", ");
+            }
+            printer.print(elem, shape.clone());
+        }
+
+        printer.print_raw_token(&self.close_bracket);
+        PrintInfo::default_single_line()
     }
 }
 
@@ -864,6 +1096,32 @@ impl FromCST for ObjectInitializer {
     }
 }
 
+impl Printable for ObjectInitializer {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+
+        for field in &self.fields {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(field, inner_shape.clone());
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::MAP_LITERAL`] node.
 #[derive(Debug)]
 pub struct MapLiteral {
@@ -918,6 +1176,30 @@ impl FromCST for MapLiteral {
     }
 }
 
+impl Printable for MapLiteral {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+
+        for field in &self.fields {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(field, inner_shape.clone());
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::OBJECT_FIELD`] node.
 #[derive(Debug)]
 pub struct ObjectField {
@@ -958,5 +1240,20 @@ impl FromCST for ObjectField {
             value,
             comma,
         })
+    }
+}
+
+impl Printable for ObjectField {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.name);
+        printer.print_raw_token(&self.colon);
+        printer.print_str(" ");
+        printer.print(&self.value, shape);
+
+        if self.comma.is_some() {
+            printer.print_str(",");
+        }
+
+        PrintInfo::default_single_line()
     }
 }

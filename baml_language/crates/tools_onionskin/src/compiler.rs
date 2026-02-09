@@ -37,6 +37,7 @@ pub(crate) enum CompilerPhase {
     Codegen,
     VmRunner,
     Metrics,
+    Formatter,
 }
 
 impl CompilerPhase {
@@ -52,6 +53,7 @@ impl CompilerPhase {
         CompilerPhase::Codegen,
         CompilerPhase::VmRunner,
         CompilerPhase::Metrics,
+        CompilerPhase::Formatter,
     ];
 
     pub(crate) fn name(self) -> &'static str {
@@ -67,6 +69,7 @@ impl CompilerPhase {
             CompilerPhase::Codegen => "Codegen (Bytecode)",
             CompilerPhase::VmRunner => "VM Runner",
             CompilerPhase::Metrics => "Metrics (Incremental)",
+            CompilerPhase::Formatter => "Formatter",
         }
     }
 
@@ -82,13 +85,14 @@ impl CompilerPhase {
             CompilerPhase::Diagnostics => CompilerPhase::Codegen,
             CompilerPhase::Codegen => CompilerPhase::VmRunner,
             CompilerPhase::VmRunner => CompilerPhase::Metrics,
-            CompilerPhase::Metrics => CompilerPhase::Lexer,
+            CompilerPhase::Metrics => CompilerPhase::Formatter,
+            CompilerPhase::Formatter => CompilerPhase::Lexer,
         }
     }
 
     pub(crate) fn prev(self) -> CompilerPhase {
         match self {
-            CompilerPhase::Lexer => CompilerPhase::Metrics,
+            CompilerPhase::Lexer => CompilerPhase::Formatter,
             CompilerPhase::Parser => CompilerPhase::Lexer,
             CompilerPhase::Ast => CompilerPhase::Parser,
             CompilerPhase::Hir => CompilerPhase::Ast,
@@ -99,6 +103,7 @@ impl CompilerPhase {
             CompilerPhase::Codegen => CompilerPhase::Diagnostics,
             CompilerPhase::VmRunner => CompilerPhase::Codegen,
             CompilerPhase::Metrics => CompilerPhase::VmRunner,
+            CompilerPhase::Formatter => CompilerPhase::Metrics,
         }
     }
 
@@ -116,6 +121,7 @@ impl CompilerPhase {
             CompilerPhase::Codegen => "codegen",
             CompilerPhase::VmRunner => "vmrunner",
             CompilerPhase::Metrics => "metrics",
+            CompilerPhase::Formatter => "formatter",
         }
     }
 }
@@ -430,6 +436,7 @@ impl CompilerRunner {
         }
 
         self.run_single_phase(CompilerPhase::Metrics);
+        self.run_single_phase(CompilerPhase::Formatter);
     }
 
     pub(crate) fn run_single_phase(&mut self, phase: CompilerPhase) {
@@ -445,6 +452,7 @@ impl CompilerRunner {
             CompilerPhase::Codegen => self.run_codegen(),
             CompilerPhase::VmRunner => self.run_vm_runner(),
             CompilerPhase::Metrics => self.run_metrics(),
+            CompilerPhase::Formatter => self.run_formatter(),
         }
     }
 
@@ -1737,6 +1745,46 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::Metrics, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::Metrics, output_annotated);
+    }
+
+    fn run_formatter(&mut self) {
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Sort files alphabetically by path
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let source_text = source_file.text(&self.db);
+
+            writeln!(output, "File: {file_path}").ok();
+            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
+
+            // Format the source code using baml_fmt
+            let format_options = baml_fmt::FormatOptions::default();
+            match baml_fmt::format(source_text, &format_options) {
+                Ok(formatted) => {
+                    writeln!(output, "{}", formatted).ok();
+                    for line in formatted.lines() {
+                        output_annotated.push((line.to_string(), LineStatus::Cached));
+                    }
+                }
+                Err(err) => {
+                    let error_msg = format!("Error formatting: {:?}", err);
+                    writeln!(output, "{}", error_msg).ok();
+                    output_annotated.push((error_msg, LineStatus::Recomputed));
+                }
+            }
+
+            writeln!(output).ok();
+            output_annotated.push((String::new(), LineStatus::Unknown));
+        }
+
+        self.phase_outputs.insert(CompilerPhase::Formatter, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::Formatter, output_annotated);
     }
 
     pub(crate) fn get_phase_output(&self, phase: CompilerPhase) -> Option<&str> {

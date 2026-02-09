@@ -1,10 +1,11 @@
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use crate::ast::{
-    Attribute, BlockAttribute, BlockExpr, FromCST, StrongAstError, SyntaxNodeIter, Type,
-    tokens as t,
+    Attribute, BlockAttribute, BlockExpr, Expression, FromCST, StrongAstError, SyntaxNodeIter,
+    Type, tokens as t,
 };
+use crate::{ printer::*};
 
 #[derive(Debug)]
 pub enum TopLevelDeclaration {
@@ -18,6 +19,7 @@ pub enum TopLevelDeclaration {
     TypeAlias(TypeAliasDecl),
     Unknown(TextRange),
 }
+
 impl FromCST for TopLevelDeclaration {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let decl = match elem.kind() {
@@ -40,6 +42,33 @@ impl FromCST for TopLevelDeclaration {
             _ => return Ok(TopLevelDeclaration::Unknown(elem.text_range())),
         };
         Ok(decl)
+    }
+}
+
+impl Printable for TopLevelDeclaration {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            TopLevelDeclaration::Function(function_decl) => function_decl.print(shape, printer),
+            TopLevelDeclaration::Class(class_decl) => class_decl.print(shape, printer),
+            TopLevelDeclaration::Enum(enum_decl) => enum_decl.print(shape, printer),
+            TopLevelDeclaration::Client(client_decl) => client_decl.print(shape, printer),
+            TopLevelDeclaration::Test(test_decl) => test_decl.print(shape, printer),
+            TopLevelDeclaration::RetryPolicy(range) => {
+                printer.print_input_range(*range);
+                PrintInfo::default_multi_lined()
+            }
+            TopLevelDeclaration::TemplateString(range) => {
+                printer.print_input_range(*range);
+                PrintInfo::default_multi_lined()
+            }
+            TopLevelDeclaration::TypeAlias(type_alias_decl) => {
+                type_alias_decl.print(shape, printer)
+            }
+            TopLevelDeclaration::Unknown(range) => {
+                printer.print_input_range(*range);
+                PrintInfo::default_multi_lined()
+            }
+        }
     }
 }
 
@@ -86,6 +115,22 @@ impl FromCST for FunctionDecl {
             return_type,
             body,
         })
+    }
+}
+
+impl Printable for FunctionDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print(&self.params, shape.clone());
+        printer.print_str(" ");
+        printer.print_raw_token(&self.arrow);
+        printer.print_str(" ");
+        printer.print(&self.return_type, shape.clone());
+        printer.print_str(" ");
+        printer.print(&self.body, shape);
+        PrintInfo::default_multi_lined()
     }
 }
 
@@ -141,6 +186,20 @@ impl FromCST for FunctionParamList {
     }
 }
 
+impl Printable for FunctionParamList {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        for (i, param) in self.params.iter().enumerate() {
+            if i > 0 {
+                printer.print_str(", ");
+            }
+            printer.print(param, shape.clone());
+        }
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub struct FunctionParam {
     pub name: t::Word,
@@ -188,6 +247,22 @@ impl FromCST for FunctionParam {
     }
 }
 
+impl Printable for FunctionParam {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.name);
+        if let Some((colon, ty)) = &self.ty {
+            if let Some(colon) = colon {
+                printer.print_raw_token(colon);
+            } else {
+                printer.print_str(":");
+            }
+            printer.print_str(" ");
+            printer.print(ty, shape);
+        }
+        PrintInfo::default_single_line()
+    }
+}
+
 #[derive(Debug)]
 pub enum FunctionDeclBody {
     Llm(LlmFunctionBody),
@@ -216,6 +291,15 @@ impl FromCST for FunctionDeclBody {
     }
 }
 
+impl Printable for FunctionDeclBody {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            FunctionDeclBody::Llm(llm) => llm.print(shape, printer),
+            FunctionDeclBody::Block(block) => block.print(shape, printer),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct LlmFunctionBody {
     pub todo: TextRange, // TODO
@@ -228,6 +312,13 @@ impl FromCST for LlmFunctionBody {
         return Ok(LlmFunctionBody {
             todo: node.text_range(),
         });
+    }
+}
+
+impl Printable for LlmFunctionBody {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_input_range(self.todo);
+        PrintInfo::default_multi_lined()
     }
 }
 
@@ -295,6 +386,35 @@ impl FromCST for ClassDecl {
         })
     }
 }
+
+impl Printable for ClassDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+
+        for item in &self.items {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(item, inner_shape.clone());
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
 #[derive(Debug)]
 pub struct ClassField {
     pub name: t::Word,
@@ -315,64 +435,65 @@ impl FromCST for ClassField {
         let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
 
         // optional colon (fields can be defined without colons in BAML)
-        let mut colon = None;
-        let mut next_elem = it.next();
-        if let Some(elem) = &next_elem {
-            if elem.kind() == SyntaxKind::COLON {
-                colon = elem
-                    .as_token()
-                    .map(|t| t::Colon::new_from_span(t.text_range()));
-                next_elem = it.next();
-            }
-        }
+        let colon = it
+            .next_if(|elem| elem.kind() == SyntaxKind::COLON)
+            .map(|elem| {
+                let colon = StrongAstError::assert_is_token(elem)?;
+                Ok(t::Colon::new_from_span(colon.text_range()))
+            })
+            .transpose()?;
 
         // type expression
-        let type_expr = next_elem
-            .ok_or_else(|| StrongAstError::missing(SyntaxKind::TYPE_EXPR, name.text_range()))?;
-        if type_expr.kind() != SyntaxKind::TYPE_EXPR {
-            return Err(StrongAstError::UnexpectedKind {
-                expected: SyntaxKind::TYPE_EXPR,
-                found: type_expr.kind(),
-                at: type_expr.text_range(),
-            });
-        }
-        let type_expr_node = StrongAstError::assert_is_node(type_expr)?;
-        let ty = Type::from_cst(SyntaxElement::Node(type_expr_node))?;
+        let ty = it.expect_next("a type")?;
+        let ty = Type::from_cst(ty)?;
 
         // collect attributes
         let mut attributes = Vec::new();
-        let mut comma = None;
-
-        while let Some(elem) = it.next() {
+        let comma = loop {
+            let Some(elem) = it.next() else {
+                break None;
+            };
             match elem.kind() {
                 SyntaxKind::ATTRIBUTE => {
                     let attr_node = StrongAstError::assert_is_node(elem)?;
                     attributes.push(Attribute::from_cst(SyntaxElement::Node(attr_node))?);
                 }
                 SyntaxKind::COMMA => {
-                    comma = elem
-                        .as_token()
-                        .map(|t| t::Comma::new_from_span(t.text_range()));
+                    let comma = StrongAstError::assert_is_token(elem)?;
+                    break Some(t::Comma::new_from_span(comma.text_range()));
                 }
-                _ => {
-                    // Unexpected element
-                    return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: name.text_range(),
+                found => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "COMMA or ATTRIBUTE".into(),
+                        found,
                         at: elem.text_range(),
                     });
                 }
             }
-        }
+        };
 
         Ok(ClassField {
-            name: t::Word {
-                token_span: name.text_range(),
-            },
+            name: t::Word::new_from_span(name.text_range()),
             colon,
             ty,
             attributes,
             comma,
         })
+    }
+}
+
+impl Printable for ClassField {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print(&self.ty, shape.clone());
+
+        for attr in &self.attributes {
+            printer.print_str(" ");
+            printer.print(attr, shape.clone());
+        }
+
+        PrintInfo::default_single_line()
     }
 }
 
@@ -394,15 +515,25 @@ impl FromCST for ClassItem {
             SyntaxKind::BLOCK_ATTRIBUTE => {
                 ClassItem::BlockAttribute(BlockAttribute::from_cst(SyntaxElement::Node(node))?)
             }
-            _ => {
-                return Err(StrongAstError::UnexpectedKind {
-                    expected: SyntaxKind::FIELD, // placeholder
-                    found: node.kind(),
+            found => {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "FIELD, FUNCTION_DEF, or BLOCK_ATTRIBUTE".into(),
+                    found,
                     at: node.text_range(),
                 });
             }
         };
         Ok(item)
+    }
+}
+
+impl Printable for ClassItem {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ClassItem::Field(field) => field.print(shape, printer),
+            ClassItem::Function(function) => function.print(shape, printer),
+            ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
+        }
     }
 }
 
@@ -433,9 +564,8 @@ impl FromCST for EnumDecl {
         let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
 
         let mut items = Vec::new();
-        let mut peeked: Option<SyntaxElement> = None;
         let close_brace = loop {
-            let Some(elem) = peeked.take().or_else(|| it.next()) else {
+            let Some(elem) = it.next() else {
                 return Err(StrongAstError::missing_desc(
                     "kinds ENUM_VARIANT, BLOCK_ATTRIBUTE, or R_BRACE",
                     enum_range,
@@ -446,20 +576,15 @@ impl FromCST for EnumDecl {
                     let variant = StrongAstError::assert_is_node(elem)?;
                     let variant = EnumVariant::from_cst(SyntaxElement::Node(variant))?;
 
-                    let variant = match it.next() {
-                        Some(comma) if comma.kind() == SyntaxKind::COMMA => {
+                    let comma = it
+                        .next_if(|elem| elem.kind() == SyntaxKind::COMMA)
+                        .map(|comma| {
                             let comma = StrongAstError::assert_is_token(comma)?;
-                            EnumItem::Variant(
-                                variant,
-                                Some(t::Comma::new_from_span(comma.text_range())),
-                            )
-                        }
-                        otherwise => {
-                            peeked = otherwise;
-                            EnumItem::Variant(variant, None)
-                        }
-                    };
-                    items.push(variant);
+                            Ok(t::Comma::new_from_span(comma.text_range()))
+                        })
+                        .transpose()?;
+
+                    items.push(EnumItem::Variant(variant, comma));
                 }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     let attr_node = StrongAstError::assert_is_node(elem)?;
@@ -495,10 +620,47 @@ impl FromCST for EnumDecl {
     }
 }
 
+impl Printable for EnumDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+
+        for item in &self.items {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(item, inner_shape.clone());
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
 #[derive(Debug)]
 pub enum EnumItem {
     Variant(EnumVariant, Option<t::Comma>),
     BlockAttribute(BlockAttribute),
+}
+
+impl Printable for EnumItem {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            EnumItem::Variant(variant, _comma) => variant.print(shape, printer),
+            EnumItem::BlockAttribute(attr) => attr.print(shape, printer),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -516,17 +678,25 @@ impl FromCST for EnumVariant {
 
         let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
 
-        let mut attributes = Vec::new();
-        while let Some(elem) = it.next() {
-            let node = StrongAstError::assert_is_node(elem)?;
-            let attribute = Attribute::from_cst(SyntaxElement::Node(node))?;
-            attributes.push(attribute);
-        }
+        let attributes = it.map(Attribute::from_cst).collect::<Result<_, _>>()?;
 
         Ok(EnumVariant {
             name: t::Word::new_from_span(name.text_range()),
             attributes,
         })
+    }
+}
+
+impl Printable for EnumVariant {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.name);
+
+        for attr in &self.attributes {
+            printer.print_str(" ");
+            printer.print(attr, shape.clone());
+        }
+
+        PrintInfo::default_single_line()
     }
 }
 
@@ -585,18 +755,170 @@ impl FromCST for ClientDecl {
     }
 }
 
+impl Printable for ClientDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.rangle);
+        printer.print_raw_token(&self.generic);
+        printer.print_raw_token(&self.langle);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print(&self.config_block, shape);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CONFIG_BLOCK`] node.
 #[derive(Debug)]
 pub struct ConfigBlock {
-    pub todo: TextRange, // TODO
+    pub open_brace: t::LBrace,
+    pub items: Vec<(ConfigItem, Option<t::Comma>)>,
+    pub close_brace: t::RBrace,
 }
 
 impl FromCST for ConfigBlock {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CONFIG_BLOCK)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
+
+        let mut items = Vec::new();
+        let close_brace = loop {
+            let elem = it.expect_next("CONFIG_ITEM or R_BRACE")?;
+            if elem.kind() == SyntaxKind::R_BRACE {
+                let token = StrongAstError::assert_is_token(elem)?;
+                break t::RBrace::new_from_span(token.text_range());
+            }
+
+            let item = ConfigItem::from_cst(elem)?;
+            let comma = it
+                .next_if(|elem| elem.kind() == SyntaxKind::COMMA)
+                .map(|comma| {
+                    let comma = StrongAstError::assert_is_token(comma)?;
+                    Ok(t::Comma::new_from_span(comma.text_range()))
+                })
+                .transpose()?;
+
+            items.push((item, comma));
+        };
         Ok(ConfigBlock {
-            todo: node.text_range(),
+            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            items,
+            close_brace,
         })
+    }
+}
+
+impl Printable for ConfigBlock {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+
+        for (item, _comma) in &self.items {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(item, inner_shape.clone());
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CONFIG_ITEM`] node.
+#[derive(Debug)]
+pub struct ConfigItem {
+    pub key: t::Word,
+    // /// Colons are currently invalid, it seems
+    // pub colon: Option<t::Colon>,
+    pub value: ConfigItemValue,
+}
+
+impl FromCST for ConfigItem {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CONFIG_ITEM)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let key = it.expect_token_of_kind(SyntaxKind::WORD)?;
+
+        // let colon = it
+        //     .next_if(|elem| elem.kind() == SyntaxKind::COLON)
+        //     .map(|elem| {
+        //         let colon = StrongAstError::assert_is_token(elem)?;
+        //         Ok(t::Colon::new_from_span(colon.text_range()))
+        //     })
+        //     .transpose()?;
+
+        let value = it.expect_next("a config value")?;
+        let value = ConfigItemValue::from_cst(value)?;
+
+        it.expect_end()?;
+
+        Ok(ConfigItem {
+            key: t::Word::new_from_span(key.text_range()),
+            // colon,
+            value,
+        })
+    }
+}
+
+impl Printable for ConfigItem {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.key);
+        printer.print_str(" ");
+        printer.print(&self.value, shape);
+        PrintInfo::default_single_line()
+    }
+}
+
+/// Does not correspond to a specific [`SyntaxKind`].
+#[derive(Debug)]
+pub enum ConfigItemValue {
+    Value(Expression),
+    NestedBlock(ConfigBlock),
+}
+
+impl FromCST for ConfigItemValue {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        match node.kind() {
+            SyntaxKind::CONFIG_VALUE => {
+                let value = Expression::from_cst(SyntaxElement::Node(node))?;
+                Ok(ConfigItemValue::Value(value))
+            }
+            SyntaxKind::CONFIG_BLOCK => {
+                let block = ConfigBlock::from_cst(SyntaxElement::Node(node))?;
+                Ok(ConfigItemValue::NestedBlock(block))
+            }
+            _ => Err(StrongAstError::UnexpectedKind {
+                expected: SyntaxKind::CONFIG_VALUE,
+                found: node.kind(),
+                at: node.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for ConfigItemValue {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ConfigItemValue::Value(expr) => expr.print(shape, printer),
+            ConfigItemValue::NestedBlock(block) => block.print(shape, printer),
+        }
     }
 }
 
@@ -653,6 +975,17 @@ impl FromCST for TestDecl {
             functions: config_block_node.text_range(), // TODO: Parse the actual functions
             close_brace: t::RBrace::new_from_span(close_brace.text_range()),
         })
+    }
+}
+
+impl Printable for TestDecl {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print_input_range(self.functions);
+        PrintInfo::default_multi_lined()
     }
 }
 
@@ -772,5 +1105,23 @@ impl FromCST for TypeAliasDecl {
             type_expr,
             semicolon,
         })
+    }
+}
+
+impl Printable for TypeAliasDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.equals);
+        printer.print_str(" ");
+        printer.print(&self.type_expr, shape);
+
+        if let Some(semicolon) = &self.semicolon {
+            printer.print_raw_token(semicolon);
+        }
+
+        PrintInfo::default_single_line()
     }
 }

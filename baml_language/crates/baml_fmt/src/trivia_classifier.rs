@@ -1,14 +1,11 @@
-use baml_compiler_syntax::{SourceFile, SyntaxKind};
-use rowan::{TextRange, ast::AstNode};
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+use rowan::TextRange;
 
 /// We walk through the syntax tree and classify trivia tokens.
 ///
-/// Note that this will also handle header comments, despite them not being considered trivia in [`SyntaxKind::is_trivia`].
-/// This is okay because we maintain ordering, so header comments will not be separated from their correct relative location.
-///
 /// The output will always be sorted with regard to the range they are attached to (with EOF being later than everything else),
 /// then ordered by the location of the order the trivia should be emitted (based on the order in the input).
-pub fn classify_trivia(root: &SourceFile) -> Vec<EmittableTrivia> {
+pub fn classify_trivia(root: &SyntaxNode) -> Vec<EmittableTrivia> {
     let mut found_trivia = Vec::new();
 
     let mut prev_non_trivia_on_line: Option<TextRange> = None;
@@ -21,7 +18,7 @@ pub fn classify_trivia(root: &SourceFile) -> Vec<EmittableTrivia> {
     }
     let mut trivia_to_attach_next = Vec::new();
 
-    let mut next = root.syntax().first_token();
+    let mut next = root.first_token();
     while let Some(token) = next {
         next = token.next_token();
         match token.kind() {
@@ -35,14 +32,14 @@ pub fn classify_trivia(root: &SourceFile) -> Vec<EmittableTrivia> {
                 has_comment_on_line = false;
                 prev_non_trivia_on_line = None;
             }
-            SyntaxKind::LINE_COMMENT | SyntaxKind::HEADER_COMMENT => {
+            SyntaxKind::LINE_COMMENT => {
                 if let Some(prev) = prev_non_trivia_on_line {
                     debug_assert!(
                         next.is_none()
                             || next
                                 .as_ref()
                                 .is_some_and(|next| next.kind() == SyntaxKind::NEWLINE),
-                        "We expect a newline after a line/header comment",
+                        "We expect a newline after a line comment",
                     );
                     found_trivia.push(EmittableTrivia::TrailingLineComment {
                         comment: token.text_range(),
@@ -128,8 +125,6 @@ pub enum EmittableTrivia {
     /// At the end of a line, must stay at the end of a line.
     ///
     /// Placed after the preceding non-trivia token.
-    ///
-    /// E.g. a `//` or `//#` comment
     TrailingLineComment {
         comment: TextRange,
         /// The input location of the non-trivia token that this is after
@@ -149,8 +144,6 @@ pub enum EmittableTrivia {
     ///
     /// Placed before the following non-trivia token (or before EOF).
     /// Since it cannot have tokens after it on the same line, this means it is always on its own line.
-    ///
-    /// E.g. a `//` or `//#` comment
     LeadingLineComment {
         comment: TextRange,
         /// The input location of the non-trivia token that this precedes
@@ -226,7 +219,7 @@ function MyFunction() -> int {
         let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
         assert!(errors.is_empty());
         let ast = SyntaxNode::new_root(parsed);
-        let trivia = classify_trivia(&SourceFile::cast(ast).unwrap());
+        let trivia = classify_trivia(&ast);
 
         assert_eq!(
             trivia,

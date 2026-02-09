@@ -9,6 +9,7 @@ mod types;
 
 use std::borrow::Cow;
 
+use crate::printer::*;
 pub use attributes::*;
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use declarations::*;
@@ -19,6 +20,8 @@ use rowan::TextRange;
 pub use statements::*;
 pub use tokens::*;
 pub use types::*;
+
+use crate::printer::Printable;
 
 pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
@@ -275,6 +278,36 @@ impl SyntaxNodeIter {
             self.peeked.as_ref()
         }
     }
+
+    /// Peeks at the next element and:
+    /// - If there is no next element, returns `None`.
+    /// - Calls the given function with the next element, if it returns `true` then the element is consumed and `Some(next)` is returned.
+    /// - Otherwise, the next element is not consumed and `None` is returned.
+    pub fn next_if<F: FnOnce(&SyntaxElement) -> bool>(&mut self, f: F) -> Option<SyntaxElement> {
+        if let Some(ref peeked) = self.peek() {
+            if f(peeked) {
+                return self.peeked.take();
+            }
+        }
+        None
+    }
+
+    /// Peeks at the next element and:
+    /// - If there is no next element, returns `None`.
+    /// - Calls the given function with the next element, if it returns `Some(t)` then the element is consumed and `Some(t)` is returned.
+    /// - Otherwise, the next element is not consumed and `None` is returned.
+    pub fn next_if_and_map<T, F: FnOnce(&SyntaxElement) -> Option<T>>(
+        &mut self,
+        f: F,
+    ) -> Option<T> {
+        if let Some(ref peeked) = self.peek() {
+            if let Some(t) = f(peeked) {
+                self.peeked = None;
+                return Some(t);
+            }
+        }
+        None
+    }
 }
 impl Iterator for SyntaxNodeIter {
     type Item = SyntaxElement;
@@ -302,6 +335,23 @@ impl FromCST for SourceFile {
         }
 
         Ok(SourceFile { items })
+    }
+}
+
+impl Printable for SourceFile {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        assert_eq!(shape.indent, 0);
+        assert_eq!(shape.first_line_offset, 0);
+        assert_eq!(shape.width, printer.config.line_width);
+
+        for decl in &self.items {
+            let _ = printer.print(decl, shape.clone());
+            printer.print_newline();
+        }
+
+        printer.print_newline();
+
+        PrintInfo::default_multi_lined()
     }
 }
 
