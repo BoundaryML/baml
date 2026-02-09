@@ -1807,7 +1807,7 @@ fn module_from_path(path: &str) -> &str {
 ///
 /// - One trait per DSL module (e.g., `SysOpFs`, `SysOpHttp`, `SysOpLlm`)
 /// - **Clean trait methods** with typed parameters (no raw `Vec<BexValue>`)
-///   that return [`SysOpOutput`] (no need to specify the `SysOp` variant)
+///   that return `SysOpOutput` (no need to specify the `SysOp` variant)
 /// - **Glue methods** (`__baml_*`) that handle arg extraction and error wrapping
 /// - `SysOps::from_impl<T>()` to wire glue methods into the fn-pointer table
 ///
