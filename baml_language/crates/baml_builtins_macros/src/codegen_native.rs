@@ -329,7 +329,7 @@ fn extraction_rhs_expr(
         }
         "i64" => quote! {
             match #value_expr {
-                Value::Int(i) => i,
+                Value::Int(i) => *i,
                 _ => return Err(InternalError::TypeError {
                     expected: Type::Int,
                     got: vm.type_of(#value_expr),
@@ -338,7 +338,7 @@ fn extraction_rhs_expr(
         },
         "f64" => quote! {
             match #value_expr {
-                Value::Float(f) => f,
+                Value::Float(f) => *f,
                 _ => return Err(InternalError::TypeError {
                     expected: Type::Float,
                     got: vm.type_of(#value_expr),
@@ -347,7 +347,7 @@ fn extraction_rhs_expr(
         },
         "bool" => quote! {
             match #value_expr {
-                Value::Bool(b) => b,
+                Value::Bool(b) => *b,
                 _ => return Err(InternalError::TypeError {
                     expected: Type::Bool,
                     got: vm.type_of(#value_expr),
