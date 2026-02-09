@@ -8,7 +8,7 @@ use crate::printer::*;
 #[derive(Debug)]
 pub struct BlockAttribute {
     pub atat: t::AtAt,
-    pub name: t::Word,
+    pub name: AttributeName,
     pub args: Option<AttributeArgs>,
 }
 
@@ -17,19 +17,19 @@ impl FromCST for BlockAttribute {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::BLOCK_ATTRIBUTE)?;
 
-        let mut visitor = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(node);
 
         // @@
-        let atat = visitor.expect_token_of_kind(SyntaxKind::AT_AT)?;
+        let atat = it.expect_token_of_kind(SyntaxKind::AT_AT)?;
 
         // name (can have dots like @stream.done)
-        let name = visitor.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = AttributeName::take(&mut it)?;
 
-        let args = visitor.next().map(AttributeArgs::from_cst).transpose()?;
+        let args = it.next().map(AttributeArgs::from_cst).transpose()?;
 
         Ok(BlockAttribute {
             atat: t::AtAt::new_from_span(atat.text_range()),
-            name: t::Word::new_from_span(name.text_range()),
+            name,
             args,
         })
     }
@@ -37,12 +37,13 @@ impl FromCST for BlockAttribute {
 
 impl Printable for BlockAttribute {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
         printer.print_raw_token(&self.atat);
-        printer.print_raw_token(&self.name);
+        multi_lined |= printer.print(&self.name, shape.clone()).multi_lined;
         if let Some(args) = &self.args {
-            printer.print(args, shape);
+            multi_lined |= printer.print(args, shape).multi_lined;
         }
-        PrintInfo::default_single_line()
+        PrintInfo { multi_lined }
     }
 }
 
@@ -156,6 +157,23 @@ impl Printable for AttributeNamePart {
 pub struct AttributeName {
     pub first: AttributeNamePart,
     pub rest: Vec<(t::Dot, AttributeNamePart)>,
+}
+
+impl AttributeName {
+    pub fn take(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
+        let first = it.expect_token("attribute name part")?;
+        let first = AttributeNamePart::from_cst(SyntaxElement::Token(first))?;
+
+        let mut rest = Vec::new();
+        while let Some(dot) = it.next_if(|elem| elem.kind() == SyntaxKind::DOT) {
+            let dot_token = StrongAstError::assert_is_token(dot)?;
+            let part = it.expect_token("attribute name part")?;
+            let part = AttributeNamePart::from_cst(SyntaxElement::Token(part))?;
+            rest.push((t::Dot::new_from_span(dot_token.text_range()), part));
+        }
+
+        Ok(AttributeName { first, rest })
+    }
 }
 
 impl Printable for AttributeName {

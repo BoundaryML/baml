@@ -5,7 +5,7 @@ use crate::ast::{
     Attribute, BlockAttribute, BlockExpr, Expression, FromCST, StrongAstError, SyntaxNodeIter,
     Type, tokens as t,
 };
-use crate::{ printer::*};
+use crate::printer::*;
 
 #[derive(Debug)]
 pub enum TopLevelDeclaration {
@@ -137,7 +137,7 @@ impl Printable for FunctionDecl {
 #[derive(Debug)]
 pub struct FunctionParamList {
     pub open_paren: t::LParen,
-    pub params: Vec<FunctionParam>,
+    pub params: Vec<(FunctionParam, Option<t::Comma>)>,
     pub close_paren: t::RParen,
 }
 impl FromCST for FunctionParamList {
@@ -145,14 +145,14 @@ impl FromCST for FunctionParamList {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::PARAMETER_LIST)?;
 
-        let mut visitor = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(node);
 
-        let open_paren = visitor.expect_token_of_kind(SyntaxKind::L_PAREN)?;
+        let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
 
         let mut params = Vec::new();
 
         let close_paren = loop {
-            let Some(elem) = visitor.next() else {
+            let Some(elem) = it.next() else {
                 return Err(StrongAstError::missing(
                     SyntaxKind::R_PAREN,
                     open_paren.text_range(),
@@ -161,7 +161,17 @@ impl FromCST for FunctionParamList {
             match elem.kind() {
                 SyntaxKind::PARAMETER => {
                     let param_node = StrongAstError::assert_is_node(elem)?;
-                    params.push(FunctionParam::from_cst(SyntaxElement::Node(param_node))?);
+                    let comma = it
+                        .next_if(|next| next.kind() == SyntaxKind::COMMA)
+                        .map(|comma| {
+                            let comma = StrongAstError::assert_is_token(comma)?;
+                            Ok(t::Comma::new_from_span(comma.text_range()))
+                        })
+                        .transpose()?;
+                    params.push((
+                        FunctionParam::from_cst(SyntaxElement::Node(param_node))?,
+                        comma,
+                    ));
                 }
                 SyntaxKind::R_PAREN => {
                     let token = StrongAstError::assert_is_token(elem)?;
@@ -176,7 +186,7 @@ impl FromCST for FunctionParamList {
             }
         };
 
-        visitor.expect_end()?;
+        it.expect_end()?;
 
         Ok(FunctionParamList {
             open_paren: t::LParen::new_from_span(open_paren.text_range()),
@@ -188,15 +198,65 @@ impl FromCST for FunctionParamList {
 
 impl Printable for FunctionParamList {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.open_paren);
-        for (i, param) in self.params.iter().enumerate() {
-            if i > 0 {
-                printer.print_str(", ");
-            }
-            printer.print(param, shape.clone());
+        // give shapes as if we were multi-lined.
+        // If they would all still fit in single line, print them as single line.
+        let param_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        let mut any_multi_lined = false;
+        let mut printed_params = Vec::new();
+        for (param, comma) in &self.params {
+            let mut param_printer =
+                Printer::new_empty(printer.input, printer.config, printer.trivia);
+            let info = param.print(param_shape.clone(), &mut param_printer);
+            any_multi_lined |= info.multi_lined;
+            printed_params.push((param_printer, comma));
         }
-        printer.print_raw_token(&self.close_paren);
-        PrintInfo::default_single_line()
+
+        let single_lined_width = printed_params
+            .iter()
+            .map(|(p, _)| p.output.len() + 2)
+            .sum::<usize>();
+        let multi_lined = any_multi_lined
+            || single_lined_width > shape.width.saturating_sub(shape.first_line_offset);
+
+        if multi_lined {
+            printer.print_raw_token(&self.open_paren);
+            printer.print_newline();
+
+            for (param_printer, comma) in printed_params {
+                printer.print_spaces(param_shape.indent);
+                printer.append_from_printer(param_printer);
+                if let Some(comma) = comma {
+                    printer.print_raw_token(comma);
+                } else {
+                    printer.print_str(",");
+                }
+                printer.print_newline();
+            }
+
+            printer.print_spaces(shape.indent);
+            printer.print_raw_token(&self.close_paren);
+            PrintInfo::default_multi_lined()
+        } else {
+            printer.print_raw_token(&self.open_paren);
+            for (i, (param_printer, comma)) in printed_params.into_iter().enumerate() {
+                printer.append_from_printer(param_printer);
+                if i + 1 < self.params.len() {
+                    if let Some(comma) = comma {
+                        printer.print_raw_token(comma);
+                    } else {
+                        printer.print_str(",");
+                    }
+                    printer.print_spaces(1);
+                }
+            }
+            printer.print_raw_token(&self.close_paren);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
@@ -210,38 +270,34 @@ impl FromCST for FunctionParam {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::PARAMETER)?;
 
-        let mut visitor = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(node);
 
-        let name = visitor.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
 
-        let Some(colon) = visitor.next() else {
-            // no type annotation. Valid in the case of `self`
-            return Ok(FunctionParam {
-                name: t::Word {
-                    token_span: name.text_range(),
-                },
-                ty: None,
-            });
+        let colon = it
+            .next_if(|next| next.kind() == SyntaxKind::COLON)
+            .map(|colon| {
+                let colon = StrongAstError::assert_is_token(colon)?;
+                Ok(t::Colon::new_from_span(colon.text_range()))
+            })
+            .transpose()?;
+
+        let ty = if let Some(colon) = colon {
+            // If there is a colon, there MUST be a type
+            let ty = it.expect_next("a type")?;
+            Some((Some(colon), Type::from_cst(ty)?))
+        } else {
+            // If there is no colon, type is optional (e.g. `self` lacks a type)
+            it.next()
+                .map(Type::from_cst)
+                .transpose()?
+                .map(|ty| (None, ty))
         };
 
-        if colon.kind() != SyntaxKind::COLON {
-            return Err(StrongAstError::UnexpectedKind {
-                expected: SyntaxKind::COLON,
-                found: colon.kind(),
-                at: colon.text_range(),
-            });
-        }
+        it.expect_end()?;
 
-        let ty = visitor.expect_node_of_kind(SyntaxKind::TYPE_EXPR)?;
-        let ty = Type::from_cst(SyntaxElement::Node(ty))?;
-
-        visitor.expect_end()?;
-
-        let ty = Some((Some(t::Colon::new_from_span(colon.text_range())), ty));
         Ok(FunctionParam {
-            name: t::Word {
-                token_span: name.text_range(),
-            },
+            name: t::Word::new_from_span(name.text_range()),
             ty,
         })
     }
@@ -657,7 +713,15 @@ pub enum EnumItem {
 impl Printable for EnumItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            EnumItem::Variant(variant, _comma) => variant.print(shape, printer),
+            EnumItem::Variant(variant, comma) => {
+                let info = variant.print(shape, printer);
+                if let Some(comma) = &comma {
+                    printer.print_raw_token(comma);
+                } else {
+                    printer.print_str(",");
+                }
+                info
+            }
             EnumItem::BlockAttribute(attr) => attr.print(shape, printer),
         }
     }

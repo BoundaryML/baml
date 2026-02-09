@@ -1,7 +1,6 @@
 pub use crate::EmittableTrivia;
 use crate::{FormatOptions, ast::Token};
-use baml_compiler_syntax::Item;
-use rowan::{TextRange, ast::AstNode};
+use rowan::TextRange;
 
 pub struct Printer<'a> {
     pub input: &'a str,
@@ -40,11 +39,6 @@ impl<'a> Printer<'a> {
             trivia,
             warnings: Vec::new(),
         }
-    }
-
-    /// Create a new printer with the same configuration as the given printer but with an empty output buffer and no warnings.
-    pub fn new_empty_like(printer: &'a Printer) -> Self {
-        Printer::new_empty(printer.input, &printer.config, printer.trivia)
     }
 
     /// Prints some number of spaces. Useful for indentation.

@@ -1,4 +1,8 @@
-use crate::printer::*;
+use crate::{
+    ast::{FromCST, StrongAstError},
+    printer::*,
+};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 pub trait Token {
@@ -121,6 +125,8 @@ define_punctuation_tokens! {
     "@" => At;
     "|" => Pipe;
     "?" => Question;
+    "==" => EqualsEquals;
+    "!=" => NotEquals;
     "<=" => LessEquals;
     ">=" => GreaterEquals;
     "<<" => LessLess;
@@ -159,8 +165,8 @@ pub enum AssignmentOp {
 
 #[derive(Debug)]
 pub enum BinaryOp {
-    // EqualsEquals(EqualsEquals),
-    // NotEquals(NotEquals),
+    EqualsEquals(EqualsEquals),
+    NotEquals(NotEquals),
     Less(Less),
     Greater(Greater),
     LessEquals(LessEquals),
@@ -177,40 +183,95 @@ pub enum BinaryOp {
     Star(Star),
     Slash(Slash),
     Percent(Percent),
+    Equals(Equals),
+    PlusEquals(PlusEquals),
+    MinusEquals(MinusEquals),
+    StarEquals(StarEquals),
+    SlashEquals(SlashEquals),
+    PercentEquals(PercentEquals),
+    AndEquals(AndEquals),
+    PipeEquals(PipeEquals),
+    CaretEquals(CaretEquals),
+    LessLessEquals(LessLessEquals),
+    GreaterGreaterEquals(GreaterGreaterEquals),
 }
 
-impl BinaryOp {
-    pub fn from_cst_token(
-        token: baml_compiler_syntax::SyntaxToken,
-    ) -> Result<Self, super::StrongAstError> {
-        use baml_compiler_syntax::SyntaxKind;
-        let span = token.text_range();
+impl FromCST for BinaryOp {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
 
         match token.kind() {
-            SyntaxKind::LESS => Ok(BinaryOp::Less(Less::new_from_span(span))),
-            SyntaxKind::GREATER => Ok(BinaryOp::Greater(Greater::new_from_span(span))),
-            SyntaxKind::LESS_EQUALS => Ok(BinaryOp::LessEquals(LessEquals::new_from_span(span))),
-            SyntaxKind::GREATER_EQUALS => {
-                Ok(BinaryOp::GreaterEquals(GreaterEquals::new_from_span(span)))
-            }
-            SyntaxKind::AND_AND => Ok(BinaryOp::AndAnd(AndAnd::new_from_span(span))),
-            SyntaxKind::OR_OR => Ok(BinaryOp::OrOr(OrOr::new_from_span(span))),
-            SyntaxKind::PIPE => Ok(BinaryOp::Pipe(Pipe::new_from_span(span))),
-            SyntaxKind::CARET => Ok(BinaryOp::Caret(Caret::new_from_span(span))),
-            SyntaxKind::KW_INSTANCEOF => Ok(BinaryOp::Instanceof(Instanceof::new_from_span(span))),
-            SyntaxKind::LESS_LESS => Ok(BinaryOp::LessLess(LessLess::new_from_span(span))),
-            SyntaxKind::GREATER_GREATER => Ok(BinaryOp::GreaterGreater(
-                GreaterGreater::new_from_span(span),
+            SyntaxKind::EQUALS_EQUALS => Ok(BinaryOp::EqualsEquals(EqualsEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::NOT_EQUALS => Ok(BinaryOp::NotEquals(NotEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::LESS => Ok(BinaryOp::Less(Less::new_from_span(token.text_range()))),
+            SyntaxKind::GREATER => Ok(BinaryOp::Greater(Greater::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::LESS_EQUALS => Ok(BinaryOp::LessEquals(LessEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::GREATER_EQUALS => Ok(BinaryOp::GreaterEquals(
+                GreaterEquals::new_from_span(token.text_range()),
             )),
-            SyntaxKind::PLUS => Ok(BinaryOp::Plus(Plus::new_from_span(span))),
-            SyntaxKind::MINUS => Ok(BinaryOp::Minus(Minus::new_from_span(span))),
-            SyntaxKind::STAR => Ok(BinaryOp::Star(Star::new_from_span(span))),
-            SyntaxKind::SLASH => Ok(BinaryOp::Slash(Slash::new_from_span(span))),
-            SyntaxKind::PERCENT => Ok(BinaryOp::Percent(Percent::new_from_span(span))),
-            _ => Err(super::StrongAstError::UnexpectedKindDesc {
+            SyntaxKind::AND_AND => Ok(BinaryOp::AndAnd(AndAnd::new_from_span(token.text_range()))),
+            SyntaxKind::OR_OR => Ok(BinaryOp::OrOr(OrOr::new_from_span(token.text_range()))),
+            SyntaxKind::PIPE => Ok(BinaryOp::Pipe(Pipe::new_from_span(token.text_range()))),
+            SyntaxKind::CARET => Ok(BinaryOp::Caret(Caret::new_from_span(token.text_range()))),
+            SyntaxKind::KW_INSTANCEOF => Ok(BinaryOp::Instanceof(Instanceof::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::LESS_LESS => Ok(BinaryOp::LessLess(LessLess::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::GREATER_GREATER => Ok(BinaryOp::GreaterGreater(
+                GreaterGreater::new_from_span(token.text_range()),
+            )),
+            SyntaxKind::PLUS => Ok(BinaryOp::Plus(Plus::new_from_span(token.text_range()))),
+            SyntaxKind::MINUS => Ok(BinaryOp::Minus(Minus::new_from_span(token.text_range()))),
+            SyntaxKind::STAR => Ok(BinaryOp::Star(Star::new_from_span(token.text_range()))),
+            SyntaxKind::SLASH => Ok(BinaryOp::Slash(Slash::new_from_span(token.text_range()))),
+            SyntaxKind::PERCENT => Ok(BinaryOp::Percent(Percent::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::EQUALS => Ok(BinaryOp::Equals(Equals::new_from_span(token.text_range()))),
+            SyntaxKind::PLUS_EQUALS => Ok(BinaryOp::PlusEquals(PlusEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::MINUS_EQUALS => Ok(BinaryOp::MinusEquals(MinusEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::STAR_EQUALS => Ok(BinaryOp::StarEquals(StarEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::SLASH_EQUALS => Ok(BinaryOp::SlashEquals(SlashEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::PERCENT_EQUALS => Ok(BinaryOp::PercentEquals(
+                PercentEquals::new_from_span(token.text_range()),
+            )),
+            SyntaxKind::AND_EQUALS => Ok(BinaryOp::AndEquals(AndEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::PIPE_EQUALS => Ok(BinaryOp::PipeEquals(PipeEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::CARET_EQUALS => Ok(BinaryOp::CaretEquals(CaretEquals::new_from_span(
+                token.text_range(),
+            ))),
+            SyntaxKind::LESS_LESS_EQUALS => Ok(BinaryOp::LessLessEquals(
+                LessLessEquals::new_from_span(token.text_range()),
+            )),
+            SyntaxKind::GREATER_GREATER_EQUALS => Ok(BinaryOp::GreaterGreaterEquals(
+                GreaterGreaterEquals::new_from_span(token.text_range()),
+            )),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc: "binary operator".into(),
                 found: token.kind(),
-                at: span,
+                at: token.text_range(),
             }),
         }
     }
@@ -332,6 +393,8 @@ impl Printable for RawString {
 impl Printable for BinaryOp {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
+            BinaryOp::EqualsEquals(t) => printer.print_raw_token(t),
+            BinaryOp::NotEquals(t) => printer.print_raw_token(t),
             BinaryOp::Less(t) => printer.print_raw_token(t),
             BinaryOp::Greater(t) => printer.print_raw_token(t),
             BinaryOp::LessEquals(t) => printer.print_raw_token(t),
@@ -348,6 +411,17 @@ impl Printable for BinaryOp {
             BinaryOp::Star(t) => printer.print_raw_token(t),
             BinaryOp::Slash(t) => printer.print_raw_token(t),
             BinaryOp::Percent(t) => printer.print_raw_token(t),
+            BinaryOp::Equals(t) => printer.print_raw_token(t),
+            BinaryOp::PlusEquals(t) => printer.print_raw_token(t),
+            BinaryOp::MinusEquals(t) => printer.print_raw_token(t),
+            BinaryOp::StarEquals(t) => printer.print_raw_token(t),
+            BinaryOp::SlashEquals(t) => printer.print_raw_token(t),
+            BinaryOp::PercentEquals(t) => printer.print_raw_token(t),
+            BinaryOp::AndEquals(t) => printer.print_raw_token(t),
+            BinaryOp::PipeEquals(t) => printer.print_raw_token(t),
+            BinaryOp::CaretEquals(t) => printer.print_raw_token(t),
+            BinaryOp::LessLessEquals(t) => printer.print_raw_token(t),
+            BinaryOp::GreaterGreaterEquals(t) => printer.print_raw_token(t),
         }
         PrintInfo::default_single_line()
     }

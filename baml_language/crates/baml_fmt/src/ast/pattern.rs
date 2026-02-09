@@ -24,14 +24,7 @@ impl FromCST for MatchPattern {
 
         let mut it = SyntaxNodeIter::new(node.clone());
 
-        // Look at first element to determine pattern type
-        let Some(first_elem) = it.next() else {
-            return Err(StrongAstError::missing_desc(
-                "pattern content",
-                node.text_range(),
-            ));
-        };
-
+        // if first elem is a word, it could also be a binding, not a pattern
         let mut first_elem = UnionPatternMember::take(&mut it)?;
 
         let binding = if it.peek().is_none() {

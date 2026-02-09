@@ -4,7 +4,9 @@ use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use crate::{
-    ast::{BinaryOp, FromCST, MatchPattern, Statement, StrongAstError, SyntaxNodeIter, UnaryOp},
+    ast::{
+        BinaryOp, FromCST, MatchPattern, Statement, StrongAstError, SyntaxNodeIter, Token, UnaryOp,
+    },
     printer::{PrintInfo, Printable, Printer, Shape},
 };
 
@@ -29,6 +31,17 @@ pub enum Expression {
     ObjectInitializer(ObjectInitializer),
     RawString(t::RawString),
     Unknown(TextRange),
+}
+
+impl Expression {
+    pub const fn statement_needs_semicolon(&self) -> bool {
+        match self {
+            Expression::If(_) => false,
+            Expression::Match(_) => false,
+            Expression::Unknown(_) => false,
+            _ => true,
+        }
+    }
 }
 
 impl FromCST for Expression {
@@ -93,7 +106,7 @@ impl Printable for Expression {
             Expression::RawString(raw) => raw.print(shape, printer),
             Expression::Unknown(range) => {
                 printer.print_input_range(*range);
-                PrintInfo::default_single_line()
+                PrintInfo::default_multi_lined()
             }
         }
     }
@@ -161,13 +174,31 @@ impl FromCST for PathExpr {
 }
 
 impl Printable for PathExpr {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.first);
-        for (dot, word) in &self.rest {
-            printer.print_raw_token(dot);
-            printer.print_raw_token(word);
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let single_line_len = usize::from(self.first.span().len())
+            + self
+                .rest
+                .iter()
+                .map(|(dot, word)| usize::from(dot.span().len() + word.span().len()))
+                .sum::<usize>();
+        let multi_line = single_line_len + shape.first_line_offset > shape.width;
+        if multi_line {
+            printer.print_raw_token(&self.first);
+            for (dot, word) in &self.rest {
+                printer.print_newline();
+                printer.print_spaces(shape.indent + printer.config.indent_width);
+                printer.print_raw_token(dot);
+                printer.print_raw_token(word);
+            }
+            PrintInfo::default_multi_lined()
+        } else {
+            printer.print_raw_token(&self.first);
+            for (dot, word) in &self.rest {
+                printer.print_raw_token(dot);
+                printer.print_raw_token(word);
+            }
+            PrintInfo::default_single_line()
         }
-        PrintInfo::default_single_line()
     }
 }
 
@@ -204,10 +235,34 @@ impl FromCST for ParenExpr {
 
 impl Printable for ParenExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.open_paren);
-        printer.print(&*self.expr, shape);
-        printer.print_raw_token(&self.close_paren);
-        PrintInfo::default_single_line()
+        let mut inner_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let inner_shape_single_line = Shape {
+            width: shape.width.saturating_sub(1),
+            indent: shape.indent,
+            first_line_offset: shape.first_line_offset + 1,
+        };
+        let inner_info = inner_printer.print(&*self.expr, inner_shape_single_line);
+
+        if inner_info.multi_lined {
+            let inner_shape_multi_line = Shape {
+                width: shape.width.saturating_sub(printer.config.indent_width),
+                indent: shape.indent + printer.config.indent_width,
+                first_line_offset: 0,
+            };
+            printer.print_raw_token(&self.open_paren);
+            printer.print_newline();
+            printer.print_spaces(inner_shape_multi_line.indent);
+            printer.print(&*self.expr, inner_shape_multi_line);
+            printer.print_newline();
+            printer.print_spaces(shape.indent);
+            printer.print_raw_token(&self.close_paren);
+            PrintInfo::default_multi_lined()
+        } else {
+            printer.print_raw_token(&self.open_paren);
+            printer.append_from_printer(inner_printer);
+            printer.print_raw_token(&self.close_paren);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
@@ -229,8 +284,8 @@ impl FromCST for BinaryExpr {
         let left_expr = Expression::from_cst(left)?;
 
         // Get operator
-        let op_token = it.expect_token("binary operator")?;
-        let op = BinaryOp::from_cst_token(op_token)?;
+        let op = it.expect_next("binary operator")?;
+        let op = BinaryOp::from_cst(op)?;
 
         // Get right expression
         let right = it.expect_next("right expression")?;
@@ -248,12 +303,14 @@ impl FromCST for BinaryExpr {
 impl Printable for BinaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let (left, right) = &*self.sides;
-        printer.print(left, shape.clone());
+        let mut multi_lined = false;
+        multi_lined |= printer.print(left, shape.clone()).multi_lined;
         printer.print_str(" ");
-        printer.print(&self.op, shape.clone());
+        multi_lined |= printer.print(&self.op, shape.clone()).multi_lined;
         printer.print_str(" ");
-        printer.print(right, shape);
-        PrintInfo::default_single_line()
+        multi_lined |= printer.print(right, shape).multi_lined;
+
+        PrintInfo { multi_lined }
     }
 }
 
@@ -289,9 +346,11 @@ impl FromCST for UnaryExpr {
 
 impl Printable for UnaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&self.op, shape.clone());
-        printer.print(&*self.expr, shape);
-        PrintInfo::default_single_line()
+        let mut multi_lined = false;
+        multi_lined |= printer.print(&self.op, shape.clone()).multi_lined;
+        multi_lined |= printer.print(&*self.expr, shape).multi_lined;
+
+        PrintInfo { multi_lined }
     }
 }
 
@@ -404,7 +463,7 @@ pub struct MatchExpr {
     pub scrutinee: Box<Expression>,
     pub close_paren: t::RParen,
     pub open_brace: t::LBrace,
-    pub arms: Vec<(MatchArm, Option<t::Comma>)>,
+    pub arms: Vec<MatchArm>,
     pub close_brace: t::RBrace,
 }
 
@@ -433,64 +492,46 @@ impl FromCST for MatchExpr {
 
         // Collect match arms
         let mut arms = Vec::new();
-        while let Some(elem) = it.next() {
-            if elem.kind() == SyntaxKind::R_BRACE {
-                let token = StrongAstError::assert_is_token(elem)?;
-                let close_brace = t::RBrace::new_from_span(token.text_range());
-                it.expect_end()?;
-
-                return Ok(MatchExpr {
-                    keyword: t::Match::new_from_span(keyword.text_range()),
-                    open_paren: t::LParen::new_from_span(open_paren.text_range()),
-                    scrutinee,
-                    close_paren: t::RParen::new_from_span(close_paren.text_range()),
-                    open_brace: t::LBrace::new_from_span(open_brace.text_range()),
-                    arms,
-                    close_brace,
-                });
-            }
-
-            let arm_node = StrongAstError::assert_is_node(elem)?;
-            let arm = MatchArm::from_cst(SyntaxElement::Node(arm_node))?;
-
-            // Check for optional comma
-            let comma = if let Some(next_elem) = it.next() {
-                if next_elem.kind() == SyntaxKind::COMMA {
-                    let comma_token = StrongAstError::assert_is_token(next_elem)?;
-                    Some(t::Comma::new_from_span(comma_token.text_range()))
-                } else if next_elem.kind() == SyntaxKind::R_BRACE {
-                    let token = StrongAstError::assert_is_token(next_elem)?;
+        let close_brace = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(
+                    SyntaxKind::R_BRACE,
+                    open_brace.text_range(),
+                ));
+            };
+            match elem.kind() {
+                SyntaxKind::R_BRACE => {
+                    let token = StrongAstError::assert_is_token(elem)?;
                     let close_brace = t::RBrace::new_from_span(token.text_range());
-                    arms.push((arm, None));
                     it.expect_end()?;
-
-                    return Ok(MatchExpr {
-                        keyword: t::Match::new_from_span(keyword.text_range()),
-                        open_paren: t::LParen::new_from_span(open_paren.text_range()),
-                        scrutinee,
-                        close_paren: t::RParen::new_from_span(close_paren.text_range()),
-                        open_brace: t::LBrace::new_from_span(open_brace.text_range()),
-                        arms,
-                        close_brace,
-                    });
-                } else {
+                    break close_brace;
+                }
+                SyntaxKind::MATCH_ARM => {
+                    let arm_node = StrongAstError::assert_is_node(elem)?;
+                    let arm = MatchArm::from_cst(SyntaxElement::Node(arm_node))?;
+                    arms.push(arm);
+                }
+                _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "COMMA or R_BRACE".into(),
-                        found: next_elem.kind(),
-                        at: next_elem.text_range(),
+                        expected_desc: "MATCH_ARM or R_BRACE".into(),
+                        found: elem.kind(),
+                        at: elem.text_range(),
                     });
                 }
-            } else {
-                None
-            };
+            }
+        };
 
-            arms.push((arm, comma));
-        }
+        it.expect_end()?;
 
-        Err(StrongAstError::missing(
-            SyntaxKind::R_BRACE,
-            open_brace.text_range(),
-        ))
+        Ok(MatchExpr {
+            keyword: t::Match::new_from_span(keyword.text_range()),
+            open_paren: t::LParen::new_from_span(open_paren.text_range()),
+            scrutinee,
+            close_paren: t::RParen::new_from_span(close_paren.text_range()),
+            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            arms,
+            close_brace,
+        })
     }
 }
 
@@ -511,12 +552,9 @@ impl Printable for MatchExpr {
         printer.print_raw_token(&self.open_brace);
         printer.print_newline();
 
-        for (arm, comma) in &self.arms {
+        for arm in &self.arms {
             printer.print_spaces(inner_shape.indent);
             printer.print(arm, inner_shape.clone());
-            if comma.is_some() || !self.arms.is_empty() {
-                printer.print_str(",");
-            }
             printer.print_newline();
         }
 
@@ -534,6 +572,7 @@ pub struct MatchArm {
     pub guard: Option<(t::If, Box<Expression>)>,
     pub fat_arrow: t::FatArrow,
     pub body: Box<Expression>,
+    pub comma: Option<t::Comma>,
 }
 
 impl FromCST for MatchArm {
@@ -545,41 +584,19 @@ impl FromCST for MatchArm {
 
         // MATCH_PATTERN
         let pattern_node = it.expect_node_of_kind(SyntaxKind::MATCH_PATTERN)?;
-        let pattern_range = pattern_node.text_range();
         let pattern = MatchPattern::from_cst(SyntaxElement::Node(pattern_node))?;
 
         // Check for optional guard (if condition)
-        let guard = if let Some(elem) = it.next() {
-            if elem.kind() == SyntaxKind::KW_IF {
-                let if_token = StrongAstError::assert_is_token(elem)?;
-                let guard_expr_node = it.expect_next("guard expression")?;
-                let guard_expr = Expression::from_cst(guard_expr_node)?;
-                Some((
-                    t::If::new_from_span(if_token.text_range()),
-                    Box::new(guard_expr),
-                ))
-            } else if elem.kind() == SyntaxKind::FAT_ARROW {
-                // No guard, this is the fat arrow
-                let fat_arrow_token = StrongAstError::assert_is_token(elem)?;
-                let body_node = it.expect_next("match arm body")?;
-                let body = Expression::from_cst(body_node)?;
-                it.expect_end()?;
-
-                return Ok(MatchArm {
-                    pattern,
-                    guard: None,
-                    fat_arrow: t::FatArrow::new_from_span(fat_arrow_token.text_range()),
-                    body: Box::new(body),
-                });
-            } else {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "KW_IF or FAT_ARROW".into(),
-                    found: elem.kind(),
-                    at: elem.text_range(),
-                });
-            }
+        let guard = if let Some(elem) = it.next_if(|next| next.kind() == SyntaxKind::KW_IF) {
+            let if_token = StrongAstError::assert_is_token(elem)?;
+            let guard_expr_node = it.expect_next("guard expression")?;
+            let guard_expr = Expression::from_cst(guard_expr_node)?;
+            Some((
+                t::If::new_from_span(if_token.text_range()),
+                Box::new(guard_expr),
+            ))
         } else {
-            return Err(StrongAstError::missing_desc("FAT_ARROW", pattern_range));
+            None
         };
 
         // FAT_ARROW
@@ -589,6 +606,15 @@ impl FromCST for MatchArm {
         let body_node = it.expect_next("match arm body")?;
         let body = Expression::from_cst(body_node)?;
 
+        let comma = it
+            .next()
+            .map(|comma| {
+                let comma = StrongAstError::assert_is_token(comma)?;
+                StrongAstError::assert_kind_token(&comma, SyntaxKind::COMMA)?;
+                Ok(t::Comma::new_from_span(comma.text_range()))
+            })
+            .transpose()?;
+
         it.expect_end()?;
 
         Ok(MatchArm {
@@ -596,6 +622,7 @@ impl FromCST for MatchArm {
             guard,
             fat_arrow: t::FatArrow::new_from_span(fat_arrow.text_range()),
             body: Box::new(body),
+            comma,
         })
     }
 }
@@ -615,6 +642,12 @@ impl Printable for MatchArm {
         printer.print_raw_token(&self.fat_arrow);
         printer.print_str(" ");
         printer.print(&*self.body, shape);
+
+        if let Some(comma) = &self.comma {
+            printer.print_raw_token(comma);
+        } else {
+            printer.print_str(",");
+        }
 
         PrintInfo::default_single_line()
     }

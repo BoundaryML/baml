@@ -115,7 +115,7 @@ impl Printable for ExpressionStmt {
         let info = printer.print(&self.expr, shape);
         if let Some(semicolon) = &self.semicolon {
             printer.print_raw_token(semicolon);
-        } else {
+        } else if self.expr.statement_needs_semicolon() {
             printer.print_str(";");
         }
         info
@@ -146,28 +146,27 @@ impl FromCST for LetStmt {
         // Variable name
         let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
 
-        let mut next = it.expect_token("COLON, EQUALS, or SEMICOLON")?;
-        let type_annotation = if next.kind() == SyntaxKind::COLON {
-            let ty = it.expect_next("a type")?;
-            next = it.expect_token("EQUALS or SEMICOLON")?;
-            Some((
-                t::Colon::new_from_span(next.text_range()),
-                Type::from_cst(ty)?,
-            ))
-        } else {
-            None
-        };
+        let type_annotation =
+            if let Some(colon) = it.next_if(|next| next.kind() == SyntaxKind::COLON) {
+                let ty = it.expect_next("a type")?;
+                Some((
+                    t::Colon::new_from_span(colon.text_range()),
+                    Type::from_cst(ty)?,
+                ))
+            } else {
+                None
+            };
 
-        let initializer = if next.kind() == SyntaxKind::EQUALS {
+        let initializer = if let Some(equals) = it.next_if(|next| next.kind() == SyntaxKind::EQUALS)
+        {
             let value = it.expect_next("an expression")?;
             let value = Expression::from_cst(value)?;
-            next = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
-            Some((t::Equals::new_from_span(next.text_range()), value))
+            Some((t::Equals::new_from_span(equals.text_range()), value))
         } else {
             None
         };
 
-        StrongAstError::assert_kind_token(&next, SyntaxKind::SEMICOLON)?;
+        let semicolon = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
         it.expect_end()?;
 
         Ok(LetStmt {
@@ -175,7 +174,7 @@ impl FromCST for LetStmt {
             name: t::Word::new_from_span(name.text_range()),
             type_annotation,
             initializer,
-            semicolon: t::Semicolon::new_from_span(next.text_range()),
+            semicolon: t::Semicolon::new_from_span(semicolon.text_range()),
         })
     }
 }
@@ -225,14 +224,8 @@ impl FromCST for WhileStmt {
         let keyword = it.expect_token_of_kind(SyntaxKind::KW_WHILE)?;
 
         // L_PAREN
-        let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
-
-        // Condition expression
-        let cond = it.expect_next("condition expression")?;
-        let condition = Expression::from_cst(cond)?;
-
-        // R_PAREN
-        let close_paren = it.expect_token_of_kind(SyntaxKind::R_PAREN)?;
+        let condition = it.expect_node_of_kind(SyntaxKind::PAREN_EXPR)?;
+        let condition = ParenExpr::from_cst(SyntaxElement::Node(condition))?;
 
         // BLOCK_EXPR
         let body_node = it.expect_node_of_kind(SyntaxKind::BLOCK_EXPR)?;
@@ -242,11 +235,7 @@ impl FromCST for WhileStmt {
 
         Ok(WhileStmt {
             keyword: t::While::new_from_span(keyword.text_range()),
-            condition: ParenExpr {
-                open_paren: t::LParen::new_from_span(open_paren.text_range()),
-                expr: Box::new(condition),
-                close_paren: t::RParen::new_from_span(close_paren.text_range()),
-            },
+            condition,
             body,
         })
     }
