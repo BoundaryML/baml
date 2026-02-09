@@ -179,6 +179,7 @@ impl StructItem {
                 let field_name: Ident = content.parse()?;
                 content.parse::<Token![:]>()?;
                 let field_type: Type = content.parse()?;
+                // Trailing comma required after every field (including the last).
                 content.parse::<Token![,]>()?;
                 members.push(StructMember::Field(Box::new(StructField {
                     name: field_name,

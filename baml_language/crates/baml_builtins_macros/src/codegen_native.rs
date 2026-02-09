@@ -215,7 +215,7 @@ fn rust_type_for_input(type_name: &str, is_generic: bool, is_mut: bool) -> Token
             }
         }
         t if t.starts_with("Option<") => {
-            let inner = &t[7..t.len() - 1];
+            let inner = t[7..t.len() - 1].trim();
             let inner_type = rust_type_for_input(inner, false, is_mut);
             quote!(Option<#inner_type>)
         }
@@ -430,7 +430,7 @@ fn generate_single_extraction(
         return quote! {
             let #var_name = match #value_expr {
                 Value::Null => None,
-                other => Some(#inner_rhs),
+                ref other => Some(#inner_rhs),
             };
         };
     }
@@ -440,7 +440,17 @@ fn generate_single_extraction(
     }
 }
 
+/// Extract inner type from `Option<Inner>` for call-arg conversion.
+fn option_inner(type_name: &str) -> Option<&str> {
+    type_name
+        .strip_prefix("Option<")
+        .and_then(|s| s.strip_suffix('>'))
+        .map(str::trim)
+}
+
 /// Generate the arguments to pass to the clean function.
+/// For `Option<T>` with reference-based T, we extract `Option<Owned>` but the trait
+/// expects `Option<&T>`, so we pass `.as_deref()` or `.as_ref()`.
 fn generate_call_args(d: &NativeFnDef) -> TokenStream2 {
     let mut args = Vec::new();
 
@@ -448,6 +458,13 @@ fn generate_call_args(d: &NativeFnDef) -> TokenStream2 {
         let var_name = format_ident!("{}", r.name);
         if r.is_mut {
             args.push(quote!(#var_name));
+        } else if let Some(inner) = option_inner(&r.type_name) {
+            if needs_reference(inner, r.is_generic) {
+                let arg = option_ref_arg(&var_name, inner);
+                args.push(arg);
+            } else {
+                args.push(quote!(#var_name));
+            }
         } else {
             let needs_ref = needs_reference(&r.type_name, r.is_generic);
             if needs_ref {
@@ -460,15 +477,33 @@ fn generate_call_args(d: &NativeFnDef) -> TokenStream2 {
 
     for p in &d.params {
         let var_name = format_ident!("{}", p.name);
-        let needs_ref = needs_reference(&p.type_name, p.is_generic);
-        if needs_ref {
-            args.push(quote!(&#var_name));
+        if let Some(inner) = option_inner(&p.type_name) {
+            if needs_reference(inner, p.is_generic) {
+                args.push(option_ref_arg(&var_name, inner));
+            } else {
+                args.push(quote!(#var_name));
+            }
         } else {
-            args.push(quote!(#var_name));
+            let needs_ref = needs_reference(&p.type_name, p.is_generic);
+            if needs_ref {
+                args.push(quote!(&#var_name));
+            } else {
+                args.push(quote!(#var_name));
+            }
         }
     }
 
     quote!(#(#args),*)
+}
+
+/// For `Option<T>` where T is reference-based: we have `Option<Owned>` and need
+/// `Option<&T>`. Use `.as_deref()` for String/Array, `.as_ref()` for other ref types.
+fn option_ref_arg(var: &syn::Ident, inner: &str) -> TokenStream2 {
+    if inner == "String" || inner.starts_with("Array") {
+        quote!(#var.as_deref())
+    } else {
+        quote!(#var.as_ref())
+    }
 }
 
 /// Check if a type needs a reference when passing to the clean function.
