@@ -1,9 +1,9 @@
 mod bindings;
 pub mod callbacks;
 
-pub(crate) use bindings::*;
 use crate::proto::baml_cffi_v1::{invocation_response::Response, InvocationResponse};
 use baml_sys::Buffer;
+pub(crate) use bindings::*;
 use prost::Message;
 
 /// RAII guard that frees Buffer on drop

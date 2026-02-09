@@ -350,6 +350,112 @@ mod async_tests {
 }
 
 #[cfg(test)]
+mod build_request_tests {
+    use crate::baml_client::sync_client::B;
+
+    #[test]
+    fn test_build_request_foo() {
+        let req = B.Foo.build_request(8192).expect("Failed to build request for Foo");
+
+        // Verify URL
+        let url = req.url();
+        assert!(url.starts_with("http"), "URL should start with http, got: {}", url);
+        println!("Foo build_request URL: {}", url);
+
+        // Verify method
+        let method = req.method();
+        assert_eq!(method, "POST", "Expected POST method, got: {}", method);
+
+        // Verify headers
+        let headers = req.headers();
+        assert!(!headers.is_empty(), "Expected non-empty headers");
+        println!("Foo build_request headers: {:?}", headers.keys().collect::<Vec<_>>());
+
+        // Verify body is valid JSON
+        let body = req.body();
+        let body_json = body.json();
+        assert!(body_json.is_ok(), "Expected body to be valid JSON: {:?}", body_json.err());
+        println!("Foo build_request body is valid JSON");
+    }
+
+    #[test]
+    fn test_build_request_bar() {
+        let req = B.Bar.build_request(42).expect("Failed to build request for Bar");
+
+        let url = req.url();
+        assert!(url.starts_with("http"), "URL should start with http, got: {}", url);
+
+        let method = req.method();
+        assert_eq!(method, "POST", "Expected POST method, got: {}", method);
+
+        let body = req.body();
+        assert!(body.json().is_ok(), "Expected body to be valid JSON");
+    }
+
+    #[test]
+    fn test_build_request_stream_foo() {
+        let req = B.Foo.build_request_stream(8192).expect("Failed to build stream request for Foo");
+
+        let url = req.url();
+        assert!(url.starts_with("http"), "URL should start with http, got: {}", url);
+        println!("Foo build_request_stream URL: {}", url);
+
+        let method = req.method();
+        assert_eq!(method, "POST", "Expected POST method, got: {}", method);
+
+        let body = req.body();
+        assert!(body.json().is_ok(), "Expected body to be valid JSON");
+    }
+
+    #[test]
+    fn test_build_request_stream_bar() {
+        let req = B.Bar.build_request_stream(42).expect("Failed to build stream request for Bar");
+
+        let url = req.url();
+        assert!(url.starts_with("http"), "URL should start with http, got: {}", url);
+
+        let method = req.method();
+        assert_eq!(method, "POST", "Expected POST method, got: {}", method);
+    }
+}
+
+#[cfg(test)]
+mod build_request_async_tests {
+    use crate::baml_client::async_client::B;
+
+    #[tokio::test]
+    async fn test_build_request_foo_async() {
+        let req = B.Foo.build_request(8192).await.expect("Failed to build request for Foo async");
+
+        let url = req.url();
+        assert!(url.starts_with("http"), "URL should start with http, got: {}", url);
+
+        let method = req.method();
+        assert_eq!(method, "POST");
+
+        let headers = req.headers();
+        assert!(!headers.is_empty());
+
+        let body = req.body();
+        assert!(body.json().is_ok(), "Expected body to be valid JSON");
+    }
+
+    #[tokio::test]
+    async fn test_build_request_stream_foo_async() {
+        let req = B.Foo.build_request_stream(8192).await.expect("Failed to build stream request for Foo async");
+
+        let url = req.url();
+        assert!(url.starts_with("http"), "URL should start with http, got: {}", url);
+
+        let method = req.method();
+        assert_eq!(method, "POST");
+
+        let body = req.body();
+        assert!(body.json().is_ok(), "Expected body to be valid JSON");
+    }
+}
+
+#[cfg(test)]
 mod client_registry_tests {
     use super::*;
 

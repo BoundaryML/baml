@@ -360,8 +360,7 @@ mod type_builder {
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
             enum_builder.add_value("Active").unwrap();
 
-            let found = enum_builder
-                .get_value("Active");
+            let found = enum_builder.get_value("Active");
             assert!(found.is_some());
             assert_eq!(found.unwrap().name().unwrap(), "Active");
         }
@@ -372,8 +371,7 @@ mod type_builder {
             let tb = runtime.new_type_builder();
             let enum_builder = tb.add_enum("Status").expect("Failed to add enum");
 
-            let found = enum_builder
-                .get_value("NonExistent");
+            let found = enum_builder.get_value("NonExistent");
             assert!(found.is_none());
         }
 
@@ -591,8 +589,7 @@ mod type_builder {
             let string_type = tb.string();
             class_builder.add_property("name", &string_type).unwrap();
 
-            let found = class_builder
-                .get_property("name");
+            let found = class_builder.get_property("name");
             assert!(found.is_some());
             assert_eq!(found.unwrap().name().unwrap(), "name");
         }
@@ -603,8 +600,7 @@ mod type_builder {
             let tb = runtime.new_type_builder();
             let class_builder = tb.add_class("Person").expect("Failed to add class");
 
-            let found = class_builder
-                .get_property("nonexistent");
+            let found = class_builder.get_property("nonexistent");
             assert!(found.is_none());
         }
 

@@ -181,7 +181,11 @@ impl RawObject {
         runtime: *const c_void,
         object_type: BamlObjectType,
     ) -> Self {
-        client_log!("[CLIENT_RUST_RECEIVE] type={:?} ptr={:#x}", object_type, ptr);
+        client_log!(
+            "[CLIENT_RUST_RECEIVE] type={:?} ptr={:#x}",
+            object_type,
+            ptr
+        );
         Self {
             inner: Arc::new(RawObjectInner {
                 ptr,
@@ -513,7 +517,11 @@ impl Drop for RawObject {
             // Call destructor via FFI
             match self.try_call_method::<(), _>("~destructor", ()) {
                 Ok(()) => {
-                    client_log!("[CLIENT_RUST_DESTRUCTOR_OK] type={:?} ptr={:#x}", object_type, ptr);
+                    client_log!(
+                        "[CLIENT_RUST_DESTRUCTOR_OK] type={:?} ptr={:#x}",
+                        object_type,
+                        ptr
+                    );
                 }
                 Err(e) => {
                     client_log!(

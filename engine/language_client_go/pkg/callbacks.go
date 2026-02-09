@@ -45,10 +45,18 @@ type ResultCallback struct {
 	Data          any
 }
 
+// responseType constants for callback dispatch
+const (
+	responseTypeValue        = "value"         // Default: decode as CFFIValueHolder
+	responseTypeObjectHandle = "object_handle" // Decode as InvocationResponse with BamlObjectHandle
+)
+
 type CallbackData struct {
-	channel chan ResultCallback
-	ctx     context.Context
-	onTick  OnTickCallbackData
+	channel      chan ResultCallback
+	ctx          context.Context
+	onTick       OnTickCallbackData
+	responseType string         // "value" (default) or "object_handle"
+	runtime      unsafe.Pointer // runtime pointer, needed for object handle decoding
 }
 
 type OnTickCallbackData interface {
@@ -58,12 +66,12 @@ type OnTickCallbackData interface {
 
 // Map to store callbacks by ID
 var (
-	dynamicCallbacks   = make(map[uint32]CallbackData)
-	callbackMutex      sync.RWMutex
-	typeMap            serde.TypeMap
-	callbackLogFile    *os.File
-	callbackLogFileMu  sync.Mutex
-	callbackLogOnce    sync.Once
+	dynamicCallbacks  = make(map[uint32]CallbackData)
+	callbackMutex     sync.RWMutex
+	typeMap           serde.TypeMap
+	callbackLogFile   *os.File
+	callbackLogFileMu sync.Mutex
+	callbackLogOnce   sync.Once
 )
 
 // getCallbackLogFile returns the log file for client callback events, or nil if logging is disabled
@@ -165,6 +173,11 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 	if exists {
 		content_bytes := C.GoBytes(unsafe.Pointer(content), length)
 
+		if callback.responseType == responseTypeObjectHandle {
+			trigger_callback_object_handle(id_uint, callback, content_bytes)
+			return
+		}
+
 		var content_holder cffi.CFFIValueHolder
 		err := proto.Unmarshal(content_bytes, &content_holder)
 		if err != nil {
@@ -199,6 +212,50 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 	}
 }
 
+// trigger_callback_object_handle handles callbacks that return an InvocationResponse
+// containing a BamlObjectHandle (e.g. from build_request_from_c).
+func trigger_callback_object_handle(id uint32, callback CallbackData, content_bytes []byte) {
+	var response cffi.InvocationResponse
+	err := proto.Unmarshal(content_bytes, &response)
+	if err != nil {
+		callback.channel <- ResultCallback{Error: fmt.Errorf("failed to unmarshal InvocationResponse: %w", err)}
+		close(callback.channel)
+		callbackMutex.Lock()
+		defer callbackMutex.Unlock()
+		deleteCallback(id)
+		return
+	}
+
+	switch resp := response.GetResponse().(type) {
+	case *cffi.InvocationResponse_Error:
+		callback.channel <- ResultCallback{Error: BamlError{Message: resp.Error}}
+	case *cffi.InvocationResponse_Success:
+		success := resp.Success
+		if success == nil {
+			callback.channel <- ResultCallback{Error: fmt.Errorf("nil success in InvocationResponse")}
+		} else {
+			switch result := success.GetResult().(type) {
+			case *cffi.InvocationResponseSuccess_Object:
+				decoded, decodeErr := decodeRawObjectImpl(callback.runtime, result.Object)
+				if decodeErr != nil {
+					callback.channel <- ResultCallback{Error: fmt.Errorf("failed to decode object handle: %w", decodeErr)}
+				} else {
+					callback.channel <- ResultCallback{HasData: true, Data: decoded}
+				}
+			default:
+				callback.channel <- ResultCallback{Error: fmt.Errorf("unexpected result type in InvocationResponse: %T", success.GetResult())}
+			}
+		}
+	default:
+		callback.channel <- ResultCallback{Error: fmt.Errorf("unexpected response type in InvocationResponse")}
+	}
+
+	close(callback.channel)
+	callbackMutex.Lock()
+	defer callbackMutex.Unlock()
+	deleteCallback(id)
+}
+
 func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, chan ResultCallback) {
 	callbackMutex.Lock()
 	defer callbackMutex.Unlock()
@@ -206,8 +263,27 @@ func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, c
 	for _, exists := dynamicCallbacks[id]; exists; {
 		id = uint32(rand.Intn(1000000))
 	}
-	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx, onTick: onTick}
+	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx, onTick: onTick, responseType: responseTypeValue}
 	callbackLog("[CLIENT_GO_CALLBACK_ADD] id=%d map_size=%d", id, len(dynamicCallbacks))
+	return id, dynamicCallbacks[id].channel
+}
+
+// create_unique_id_for_object creates a callback ID for object-handle responses (e.g. build_request).
+// The runtime pointer is needed to decode the object handle on the Go side.
+func create_unique_id_for_object(ctx context.Context, runtime unsafe.Pointer) (uint32, chan ResultCallback) {
+	callbackMutex.Lock()
+	defer callbackMutex.Unlock()
+	id := uint32(rand.Intn(1000000))
+	for _, exists := dynamicCallbacks[id]; exists; {
+		id = uint32(rand.Intn(1000000))
+	}
+	dynamicCallbacks[id] = CallbackData{
+		channel:      make(chan ResultCallback),
+		ctx:          ctx,
+		responseType: responseTypeObjectHandle,
+		runtime:      runtime,
+	}
+	callbackLog("[CLIENT_GO_CALLBACK_ADD] id=%d type=object_handle map_size=%d", id, len(dynamicCallbacks))
 	return id, dynamicCallbacks[id].channel
 }
 

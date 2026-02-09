@@ -62,6 +62,19 @@ struct Buffer call_function_stream_from_c(const void *runtime,
                                           uint32_t id);
 
 /**
+ * Extern "C" function that returns immediately, scheduling the async build_request call.
+ * Once the asynchronous function completes, the provided callback is invoked with an
+ * InvocationResponse containing a BamlObjectHandle (http_request pointer).
+ * Returns Buffer with InvocationResponse (empty on success, error message on failure).
+ * Caller must free with free_buffer().
+ */
+struct Buffer build_request_from_c(const void *runtime,
+                                   const char *function_name,
+                                   const char *encoded_args,
+                                   uintptr_t length,
+                                   uint32_t id);
+
+/**
  * Cancel a function call by its ID
  * Returns Buffer with InvocationResponse (empty = success).
  * Caller must free with free_buffer().

@@ -9,11 +9,15 @@ use prost::Message;
 use crate::{
     args::FunctionArgs,
     async_stream::AsyncStreamingCall,
-    codec::BamlDecode,
+    codec::{traits::DecodeHandle, BamlDecode},
     error::BamlError,
     ffi::{self, callbacks},
-    proto::baml_cffi_v1::CffiValueHolder,
-    raw_objects::{Audio, Collector, Image, Pdf, TypeBuilder, Video},
+    proto::baml_cffi_v1::{
+        invocation_response::Response as InvResponse,
+        invocation_response_success::Result as InvSuccessResult, CffiValueHolder,
+        InvocationResponse,
+    },
+    raw_objects::{Audio, Collector, HTTPRequest, Image, Pdf, TypeBuilder, Video},
     stream::StreamingCall,
 };
 
@@ -368,6 +372,162 @@ impl BamlRuntime {
             }
             Ok(callbacks::CallbackResult::Error(e)) => Err(e),
             Err(_) => Err(BamlError::internal("callback channel closed")),
+        }
+    }
+
+    // =========================================================================
+    // Build Request Methods
+    // =========================================================================
+
+    /// Build an HTTP request for a BAML function without executing it (sync, non-streaming).
+    /// The `stream` arg should already be set in the FunctionArgs.
+    pub fn build_request(&self, name: &str, args: &FunctionArgs) -> Result<HTTPRequest, BamlError> {
+        self.build_request_inner(name, args)
+    }
+
+    /// Build an HTTP request for a streaming BAML function without executing it (sync).
+    /// The `stream` arg should already be set in the FunctionArgs.
+    pub fn build_request_stream(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<HTTPRequest, BamlError> {
+        self.build_request_inner(name, args)
+    }
+
+    /// Build an HTTP request for a BAML function without executing it (async, non-streaming).
+    /// The `stream` arg should already be set in the FunctionArgs.
+    pub async fn build_request_async(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<HTTPRequest, BamlError> {
+        self.build_request_inner_async(name, args).await
+    }
+
+    /// Build an HTTP request for a streaming BAML function without executing it (async).
+    /// The `stream` arg should already be set in the FunctionArgs.
+    pub async fn build_request_stream_async(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<HTTPRequest, BamlError> {
+        self.build_request_inner_async(name, args).await
+    }
+
+    /// Internal sync implementation for build_request
+    fn build_request_inner(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<HTTPRequest, BamlError> {
+        let encoded = args.encode()?;
+        let name_cstr =
+            CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
+
+        let (id, receiver) = callbacks::create_callback();
+
+        #[allow(unsafe_code)]
+        let buf = unsafe {
+            ffi::build_request_from_c(
+                self.ptr,
+                name_cstr.as_ptr(),
+                encoded.as_ptr().cast::<i8>(),
+                encoded.len(),
+                id,
+            )
+            .map_err(|e| {
+                callbacks::remove_callback(id);
+                BamlError::internal(format!("Failed to load BAML library: {e}"))
+            })?
+        };
+
+        // Check for immediate error (decode Buffer response)
+        ffi::decode_async_response(buf).map_err(|e| {
+            callbacks::remove_callback(id);
+            BamlError::internal(e)
+        })?;
+
+        // Wait for result
+        match receiver.recv() {
+            Ok(callbacks::CallbackResult::Final(data)) => {
+                Self::decode_http_request_from_invocation_response(&data, self.ptr)
+            }
+            Ok(callbacks::CallbackResult::Partial(_)) => Err(BamlError::internal(
+                "unexpected partial result in build_request call",
+            )),
+            Ok(callbacks::CallbackResult::Error(e)) => Err(e),
+            Err(_) => Err(BamlError::internal("callback channel closed")),
+        }
+    }
+
+    /// Internal async implementation for build_request
+    async fn build_request_inner_async(
+        &self,
+        name: &str,
+        args: &FunctionArgs,
+    ) -> Result<HTTPRequest, BamlError> {
+        let encoded = args.encode()?;
+        let name_cstr =
+            CString::new(name).map_err(|_| BamlError::internal("invalid function name"))?;
+
+        let (id, receiver) = callbacks::create_async_callback();
+
+        #[allow(unsafe_code)]
+        let buf = unsafe {
+            ffi::build_request_from_c(
+                self.ptr,
+                name_cstr.as_ptr(),
+                encoded.as_ptr().cast::<i8>(),
+                encoded.len(),
+                id,
+            )
+            .map_err(|e| {
+                callbacks::remove_callback(id);
+                BamlError::internal(format!("Failed to load BAML library: {e}"))
+            })?
+        };
+
+        // Check for immediate error (decode Buffer response)
+        ffi::decode_async_response(buf).map_err(|e| {
+            callbacks::remove_callback(id);
+            BamlError::internal(e)
+        })?;
+
+        // Await result (non-blocking)
+        match receiver.recv().await {
+            Ok(callbacks::CallbackResult::Final(data)) => {
+                Self::decode_http_request_from_invocation_response(&data, self.ptr)
+            }
+            Ok(callbacks::CallbackResult::Partial(_)) => Err(BamlError::internal(
+                "unexpected partial result in build_request async call",
+            )),
+            Ok(callbacks::CallbackResult::Error(e)) => Err(e),
+            Err(_) => Err(BamlError::internal("callback channel closed")),
+        }
+    }
+
+    /// Decode an InvocationResponse containing a BamlObjectHandle into an HTTPRequest
+    fn decode_http_request_from_invocation_response(
+        data: &[u8],
+        runtime_ptr: *const c_void,
+    ) -> Result<HTTPRequest, BamlError> {
+        let response = InvocationResponse::decode(data)
+            .map_err(|e| BamlError::internal(format!("decode InvocationResponse error: {e}")))?;
+
+        match response.response {
+            Some(InvResponse::Success(success)) => match success.result {
+                Some(InvSuccessResult::Object(handle)) => {
+                    HTTPRequest::decode_handle(handle, runtime_ptr)
+                }
+                other => Err(BamlError::internal(format!(
+                    "expected object handle in InvocationResponse, got: {other:?}"
+                ))),
+            },
+            Some(InvResponse::Error(msg)) => Err(BamlError::internal(msg)),
+            None => Err(BamlError::internal(
+                "empty response in InvocationResponse for build_request",
+            )),
         }
     }
 

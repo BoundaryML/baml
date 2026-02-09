@@ -132,6 +132,48 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 	return wrappedCallback, nil
 }
 
+func (r *BamlRuntime) BuildRequest(ctx context.Context, functionName string, encoded_args []byte) (HTTPRequest, error) {
+	callback_id, callback := create_unique_id_for_object(ctx, r.runtime)
+
+	// Channel to signal when the call is complete, so the goroutine can exit
+	done := make(chan struct{})
+	defer close(done)
+
+	// Monitor context for early cancellation
+	go func() {
+		select {
+		case <-ctx.Done():
+			baml_go.CancelFunctionCall(callback_id)
+		case <-done:
+		}
+	}()
+
+	err := baml_go.BuildRequestFromC(r.runtime, functionName, encoded_args, callback_id)
+	if err != nil {
+		close(callback)
+		return nil, err
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-callback:
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		if result.HasData {
+			httpReq, ok := result.Data.(HTTPRequest)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type from build_request callback: %T", result.Data)
+			}
+			return httpReq, nil
+		}
+
+		return nil, fmt.Errorf("no data returned from build_request")
+	}
+}
+
 func (r *BamlRuntime) CallFunctionParse(ctx context.Context, functionName string, encoded_args []byte) (any, error) {
 	callback_id, callback := create_unique_id(ctx, nil)
 

@@ -880,6 +880,156 @@ func testSSEResponseAPI(t *testing.T, sse baml.SSEResponse, prefix string) {
 	}
 }
 
+// =============================================================================
+// build_request tests
+// =============================================================================
+
+func TestBuildRequestFoo(t *testing.T) {
+	t.Parallel()
+	req, err := b.Request.Foo(8192)
+	if err != nil {
+		t.Fatalf("Error building request for Foo: %v", err)
+	}
+
+	// Verify URL
+	url, err := req.Url()
+	if err != nil {
+		t.Fatalf("Error getting URL: %v", err)
+	}
+	if !strings.HasPrefix(url, "http") {
+		t.Errorf("Expected URL to start with http, got: %s", url)
+	}
+	t.Logf("Foo build_request URL: %s", url)
+
+	// Verify method
+	method, err := req.Method()
+	if err != nil {
+		t.Fatalf("Error getting method: %v", err)
+	}
+	if method != "POST" {
+		t.Errorf("Expected POST method, got: %s", method)
+	}
+
+	// Verify headers
+	headers, err := req.Headers()
+	if err != nil {
+		t.Fatalf("Error getting headers: %v", err)
+	}
+	if len(headers) == 0 {
+		t.Errorf("Expected non-empty headers")
+	}
+	t.Logf("Foo build_request headers: %d", len(headers))
+
+	// Verify body
+	body, err := req.Body()
+	if err != nil {
+		t.Fatalf("Error getting body: %v", err)
+	}
+	bodyText, err := body.Text()
+	if err != nil {
+		t.Fatalf("Error getting body text: %v", err)
+	}
+	if len(bodyText) == 0 {
+		t.Errorf("Expected non-empty body")
+	}
+	t.Logf("Foo build_request body length: %d", len(bodyText))
+
+	// Verify body is valid JSON
+	bodyJSON, err := body.JSON()
+	if err != nil {
+		t.Errorf("Expected body to be valid JSON: %v", err)
+	} else if bodyJSON != nil {
+		t.Logf("Foo build_request body is valid JSON")
+	}
+}
+
+func TestBuildRequestBar(t *testing.T) {
+	t.Parallel()
+	req, err := b.Request.Bar(42)
+	if err != nil {
+		t.Fatalf("Error building request for Bar: %v", err)
+	}
+
+	url, err := req.Url()
+	if err != nil {
+		t.Fatalf("Error getting URL: %v", err)
+	}
+	if !strings.HasPrefix(url, "http") {
+		t.Errorf("Expected URL to start with http, got: %s", url)
+	}
+
+	method, err := req.Method()
+	if err != nil {
+		t.Fatalf("Error getting method: %v", err)
+	}
+	if method != "POST" {
+		t.Errorf("Expected POST method, got: %s", method)
+	}
+}
+
+func TestBuildRequestStreamFoo(t *testing.T) {
+	t.Parallel()
+	req, err := b.StreamRequest.Foo(8192)
+	if err != nil {
+		t.Fatalf("Error building stream request for Foo: %v", err)
+	}
+
+	// Verify URL
+	url, err := req.Url()
+	if err != nil {
+		t.Fatalf("Error getting URL: %v", err)
+	}
+	if !strings.HasPrefix(url, "http") {
+		t.Errorf("Expected URL to start with http, got: %s", url)
+	}
+	t.Logf("Foo build_request_stream URL: %s", url)
+
+	// Verify method
+	method, err := req.Method()
+	if err != nil {
+		t.Fatalf("Error getting method: %v", err)
+	}
+	if method != "POST" {
+		t.Errorf("Expected POST method, got: %s", method)
+	}
+
+	// Verify body
+	body, err := req.Body()
+	if err != nil {
+		t.Fatalf("Error getting body: %v", err)
+	}
+	bodyJSON, err := body.JSON()
+	if err != nil {
+		t.Errorf("Expected body to be valid JSON: %v", err)
+	} else if bodyJSON != nil {
+		t.Logf("Foo build_request_stream body is valid JSON")
+	}
+}
+
+func TestBuildRequestStreamBar(t *testing.T) {
+	t.Parallel()
+	req, err := b.StreamRequest.Bar(42)
+	if err != nil {
+		t.Fatalf("Error building stream request for Bar: %v", err)
+	}
+
+	url, err := req.Url()
+	if err != nil {
+		t.Fatalf("Error getting URL: %v", err)
+	}
+	if !strings.HasPrefix(url, "http") {
+		t.Errorf("Expected URL to start with http, got: %s", url)
+	}
+
+	method, err := req.Method()
+	if err != nil {
+		t.Fatalf("Error getting method: %v", err)
+	}
+	if method != "POST" {
+		t.Errorf("Expected POST method, got: %s", method)
+	}
+}
+
 // Helper functions
 func getMapKeys(m map[string]interface{}) []string {
 	keys := make([]string, 0, len(m))

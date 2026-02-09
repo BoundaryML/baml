@@ -201,6 +201,25 @@ pub unsafe fn call_function_parse_from_c(
     })
 }
 
+/// Build an HTTP request for a BAML function without executing it.
+///
+/// Returns a Buffer containing the InvocationResponse protobuf.
+/// The caller is responsible for decoding the buffer and freeing it.
+///
+/// # Safety
+/// All pointers must be valid.
+#[allow(unsafe_code)]
+pub unsafe fn build_request_from_c(
+    runtime: *const c_void,
+    function_name: *const c_char,
+    encoded_args: *const c_char,
+    length: size_t,
+    id: u32,
+) -> Result<Buffer> {
+    let symbols = get_symbols()?;
+    Ok(unsafe { (symbols.build_request_from_c)(runtime, function_name, encoded_args, length, id) })
+}
+
 /// Cancel a function call.
 ///
 /// Returns a Buffer containing the InvocationResponse protobuf.

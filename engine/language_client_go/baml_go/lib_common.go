@@ -200,6 +200,7 @@ func (l *library) registerFunctions() error {
 		l.registerFn("call_function_from_c")
 		l.registerFn("call_function_stream_from_c")
 		l.registerFn("call_function_parse_from_c")
+		l.registerFn("build_request_from_c")
 		l.registerFn("cancel_function_call")
 		l.registerFn("call_object_constructor")
 		l.registerFn("call_object_method")
@@ -231,6 +232,8 @@ func (l *library) registerFn(fnName string) error {
 		C.SetCallFunctionStreamFromCFn(fnPtr)
 	case "call_function_parse_from_c":
 		C.SetCallFunctionParseFromCFn(fnPtr)
+	case "build_request_from_c":
+		C.SetBuildRequestFromCFn(fnPtr)
 	case "cancel_function_call":
 		C.SetCancelFunctionCallFn(fnPtr)
 	case "call_object_constructor":

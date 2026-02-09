@@ -4,7 +4,13 @@ use baml_runtime::{
 };
 use once_cell::sync::OnceCell;
 
-use crate::ctypes::{EncodeMeta, EncodeToBuffer};
+use crate::{
+    ctypes::{
+        object_response_encode::{BamlObjectResponseSuccess, BamlObjectResponseWrapper},
+        EncodeMeta, EncodeToBuffer,
+    },
+    raw_ptr_wrapper::RawPtrType,
+};
 
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 pub type OnTickCallbackFn = extern "C" fn(call_id: u32);
@@ -118,6 +124,52 @@ pub fn send_error_to_callback(id: u32, error: &anyhow::Error) {
     tokio::task::block_in_place(|| {
         error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
     });
+}
+
+/// Send an object handle (e.g. HTTPRequest) back to the caller via the result callback.
+/// Encodes the object as an InvocationResponse { success { object: BamlObjectHandle } }.
+pub fn send_object_to_callback(id: u32, object: RawPtrType) {
+    let callback_fn = RESULT_CALLBACK_FN
+        .get()
+        .expect("expected callback function to be set. Did you call register_callbacks?");
+
+    let error_callback_fn = ERROR_CALLBACK_FN
+        .get()
+        .expect("expected error callback function to be set. Did you call register_callbacks?");
+
+    struct BasicLookup;
+    impl baml_types::baml_value::TypeLookups for BasicLookup {
+        fn expand_recursive_type(&self, _: &str) -> anyhow::Result<&baml_types::TypeIR> {
+            anyhow::bail!("Not implemented");
+        }
+    }
+
+    let buf_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let response: BamlObjectResponseWrapper =
+            BamlObjectResponseWrapper(Ok(BamlObjectResponseSuccess::Object(object)));
+        response.encode_to_c_buffer(&BasicLookup, baml_types::StreamingMode::NonStreaming)
+    }));
+
+    match buf_result {
+        Ok(buf) => {
+            tokio::task::block_in_place(|| {
+                callback_fn(id, 1, buf.as_ptr() as *const i8, buf.len());
+            });
+        }
+        Err(panic_info) => {
+            let error_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                format!("Object encoding panicked: {s}")
+            } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                format!("Object encoding panicked: {s}")
+            } else {
+                "Object encoding panicked with unknown error".to_string()
+            };
+
+            tokio::task::block_in_place(|| {
+                error_callback_fn(id, 1, error_msg.as_ptr() as *const i8, error_msg.len());
+            });
+        }
+    }
 }
 
 pub fn safe_trigger_callback(

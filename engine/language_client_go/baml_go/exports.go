@@ -54,7 +54,7 @@ func InvokeRuntimeCli(args []string) (int, error) {
 	for i, arg := range args {
 		arg_c_strings[i] = C.CString(arg)
 	}
-	
+
 	defer func() {
 		for i := 0; i < len(args); i++ {
 			C.free(unsafe.Pointer(arg_c_strings[i]))
@@ -127,6 +127,17 @@ func CallFunctionParseFromC(runtime unsafe.Pointer, functionName string, encoded
 	cEncodedArgs := (*C.char)(unsafe.Pointer(&encodedArgs[0]))
 
 	result := C.WrapCallFunctionParseFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id))
+
+	return decodeAsyncResponse(result)
+}
+
+func BuildRequestFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) error {
+	cFunctionName := C.CString(functionName)
+	defer C.free(unsafe.Pointer(cFunctionName))
+
+	cEncodedArgs := (*C.char)(unsafe.Pointer(&encodedArgs[0]))
+
+	result := C.WrapBuildRequestFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id))
 
 	return decodeAsyncResponse(result)
 }

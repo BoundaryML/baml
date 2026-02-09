@@ -25,6 +25,7 @@ DEFINE_WRAPPER_FUNCTIONS(void, RegisterCallbacks, (CallbackFn callback_fn, Callb
 DEFINE_WRAPPER_FUNCTIONS(Buffer, CallFunctionFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), zero_buffer)
 DEFINE_WRAPPER_FUNCTIONS(Buffer, CallFunctionStreamFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), zero_buffer)
 DEFINE_WRAPPER_FUNCTIONS(Buffer, CallFunctionParseFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), zero_buffer)
+DEFINE_WRAPPER_FUNCTIONS(Buffer, BuildRequestFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), zero_buffer)
 DEFINE_WRAPPER_FUNCTIONS(Buffer, CancelFunctionCall, (uint32_t id), (id), zero_buffer)
 DEFINE_WRAPPER_FUNCTIONS(Buffer, CallObjectMethodFunction, (const void *runtime, const char *encoded_args, uintptr_t length), (runtime, encoded_args, length), zero_buffer)
 DEFINE_WRAPPER_FUNCTIONS(Buffer, CallObjectConstructor, (const char *encoded_args, uintptr_t length), (encoded_args, length), zero_buffer)

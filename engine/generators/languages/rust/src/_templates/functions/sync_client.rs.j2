@@ -89,6 +89,20 @@ macro_rules! baml_function_sync {
             pub fn parse_stream(&self, response: &str) -> Result<$stream_ret, BamlError> {
                 get_runtime().parse(stringify!($name), response, true)
             }
+
+            pub fn build_request(&self, $($param: $ptype),*) -> Result<baml::HTTPRequest, BamlError> {
+                let args = self.options.to_baml_args()
+                    $(.arg(stringify!($param), $param.baml_encode()))*
+                    .arg("stream", false);
+                get_runtime().build_request(stringify!($name), &args)
+            }
+
+            pub fn build_request_stream(&self, $($param: $ptype),*) -> Result<baml::HTTPRequest, BamlError> {
+                let args = self.options.to_baml_args()
+                    $(.arg(stringify!($param), $param.baml_encode()))*
+                    .arg("stream", true);
+                get_runtime().build_request_stream(stringify!($name), &args)
+            }
         }
 
         // Builder convenience methods (separate impl block via macro)

@@ -9,7 +9,11 @@ use prost::Message;
 use super::*;
 use crate::{
     baml::cffi::{invocation_response::Response as CResponse, InvocationResponse},
-    ffi::callbacks::{safe_trigger_callback, send_error_to_callback, send_result_to_callback},
+    ffi::callbacks::{
+        safe_trigger_callback, send_error_to_callback, send_object_to_callback,
+        send_result_to_callback,
+    },
+    raw_ptr_wrapper::{RawPtrType, RawPtrWrapper},
 };
 
 /// Encode a success response (task spawned successfully, no return value)
@@ -323,6 +327,100 @@ fn on_tick(id: u32) {
 
 fn on_event(id: u32, result: FunctionResult, runtime: &BamlRuntime) {
     safe_trigger_callback(id, false, Ok(result), runtime);
+}
+
+/// Extern "C" function that returns immediately, scheduling the async build_request call.
+/// Once the asynchronous function completes, the provided callback is invoked with an
+/// InvocationResponse containing a BamlObjectHandle (http_request pointer).
+/// Returns Buffer with InvocationResponse (empty on success, error message on failure).
+/// Caller must free with free_buffer().
+#[no_mangle]
+pub extern "C" fn build_request_from_c(
+    runtime: *const libc::c_void,
+    function_name: *const c_char,
+    encoded_args: *const libc::c_char,
+    length: usize,
+    id: u32,
+) -> Buffer {
+    match build_request_from_c_inner(runtime, function_name, encoded_args, length, id) {
+        Ok(_) => encode_success_response(),
+        Err(e) => encode_error_response(e),
+    }
+}
+
+fn build_request_from_c_inner(
+    runtime: *const libc::c_void,
+    function_name: *const c_char,
+    encoded_args: *const libc::c_char,
+    length: usize,
+    id: u32,
+) -> Result<()> {
+    // Safety: assume that the pointers provided are valid.
+    let runtime = unsafe { &*(runtime as *const BamlRuntime) };
+
+    // Convert the function name.
+    let func_name = match unsafe { CStr::from_ptr(function_name) }.to_str() {
+        Ok(s) => s.to_owned(),
+        Err(_) => {
+            return Err(anyhow::anyhow!("Failed to convert function name to string"));
+        }
+    };
+
+    // Convert keyword arguments.
+    let BamlFunctionArguments {
+        mut kwargs,
+        client_registry,
+        env_vars,
+        collectors: _,
+        type_builder,
+        tags: _,
+    } = BamlFunctionArguments::from_c_buffer(encoded_args, length)?;
+
+    // Extract `stream` boolean from kwargs (same pattern as call_function_parse_from_c).
+    let stream = match kwargs.get("stream") {
+        Some(s) => match s.as_bool() {
+            Some(b) => b,
+            None => {
+                return Err(anyhow::anyhow!("stream is not a boolean"));
+            }
+        },
+        None => false,
+    };
+    // Remove `stream` from kwargs so it's not passed as a function argument.
+    kwargs.remove("stream");
+
+    let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
+
+    // Spawn an async task to await the future and call the callback when done.
+    let rt = RUNTIME.clone();
+    rt.spawn(async move {
+        // TODO: There's a race condition bug here. Technically we should COPY the type builder, not just clone it.
+        let type_builder = type_builder.map(|t| t.type_builder.as_ref().clone());
+        let result = runtime
+            .build_request(
+                func_name,
+                &kwargs,
+                &ctx,
+                type_builder.as_ref(),
+                client_registry.as_ref(),
+                env_vars,
+                stream,
+            )
+            .await;
+
+        match result {
+            Ok(http_request) => {
+                let wrapper = RawPtrWrapper::from_object(http_request);
+                let raw_ptr = RawPtrType::HTTPRequest(wrapper);
+                send_object_to_callback(id, raw_ptr);
+            }
+            Err(e) => {
+                send_error_to_callback(id, &e);
+            }
+        }
+    });
+
+    Ok(())
 }
 
 /// Cancel a function call by its ID
