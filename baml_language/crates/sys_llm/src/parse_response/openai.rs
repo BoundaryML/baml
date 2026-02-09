@@ -10,7 +10,20 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
         serde_json::from_str(body).map_err(|e| ParseResponseError::Deserialize {
             provider: "openai",
             source: e,
+            content: body.to_string(),
         })?;
+
+    let response = match response {
+        ChatCompletionResponse::Success(success) => success,
+        ChatCompletionResponse::Error(error) => {
+            return Err(ParseResponseError::ApiError {
+                provider: "openai",
+                message: error.message,
+                code: error.code,
+                param: error.param,
+            });
+        }
+    };
 
     if response.choices.is_empty() {
         return Err(ParseResponseError::NoContent {

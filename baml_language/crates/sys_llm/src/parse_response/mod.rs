@@ -10,11 +10,20 @@ use crate::LlmProvider;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum ParseResponseError {
-    #[error("failed to deserialize {provider} response: {source}")]
+    #[error("failed to deserialize {provider} response: {source}. Body:\n{content}")]
     Deserialize {
         provider: &'static str,
         #[source]
         source: serde_json::Error,
+        content: String,
+    },
+
+    #[error("API error from {provider}: {message}. Code: {code:?}. Param: {param:?}")]
+    ApiError {
+        provider: &'static str,
+        message: String,
+        code: Option<String>,
+        param: Option<String>,
     },
 
     #[error("{provider} response has no content: {detail}")]

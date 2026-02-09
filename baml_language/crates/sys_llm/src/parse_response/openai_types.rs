@@ -1,6 +1,21 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
-pub(super) type ChatCompletionResponse = ChatCompletionGeneric<ChatCompletionChoice>;
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub(super) enum ChatCompletionResponse {
+    #[serde(rename = "chat.completion")]
+    Success(ChatCompletionGeneric<ChatCompletionChoice>),
+    #[serde(rename = "error")]
+    Error(OpenAiErrorResponse),
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub(super) struct OpenAiErrorResponse {
+    pub message: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub param: Option<String>,
+    pub code: Option<String>,
+}
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub(super) struct ChatCompletionGeneric<C> {
@@ -115,6 +130,9 @@ mod tests {
         }"#;
 
         let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
+        let ChatCompletionResponse::Success(response) = response else {
+            panic!("expected success");
+        };
         assert_eq!(response.id, Some("chatcmpl-123".to_string()));
         assert_eq!(response.model, "gpt-3.5-turbo-0125");
         assert_eq!(response.choices.len(), 1);
@@ -143,6 +161,9 @@ mod tests {
         }"#;
 
         let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
+        let ChatCompletionResponse::Success(response) = response else {
+            panic!("expected success");
+        };
         assert_eq!(response.created, Some(1_677_652_288));
     }
 
@@ -160,6 +181,9 @@ mod tests {
         }"#;
 
         let response: ChatCompletionResponse = serde_json::from_str(json).unwrap();
+        let ChatCompletionResponse::Success(response) = response else {
+            panic!("expected success");
+        };
         assert!(response.id.is_none());
         assert!(response.created.is_none());
         assert!(response.usage.is_none());

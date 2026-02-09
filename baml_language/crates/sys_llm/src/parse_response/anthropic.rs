@@ -12,6 +12,7 @@ pub(super) fn parse_anthropic_response(
         serde_json::from_str(body).map_err(|e| ParseResponseError::Deserialize {
             provider: "anthropic",
             source: e,
+            content: body.to_string(),
         })?;
 
     if response.content.len() > 1 {

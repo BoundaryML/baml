@@ -94,6 +94,9 @@ pub enum OpErrorKind {
 
     #[error("Not implemented: {message}")]
     NotImplemented { message: String },
+
+    #[error("LLLM client error: {message}")]
+    LlmClientError { message: String },
 }
 
 impl From<sys_llm::LlmOpError> for OpErrorKind {
@@ -104,6 +107,9 @@ impl From<sys_llm::LlmOpError> for OpErrorKind {
             }
             sys_llm::LlmOpError::RenderPrompt(msg) => OpErrorKind::RenderPrompt(msg),
             sys_llm::LlmOpError::Other(msg) => OpErrorKind::Other(msg),
+            sys_llm::LlmOpError::ParseResponseError(e) => {
+                OpErrorKind::LlmClientError { message: e }
+            }
             sys_llm::LlmOpError::NotImplemented { message } => {
                 OpErrorKind::NotImplemented { message }
             }

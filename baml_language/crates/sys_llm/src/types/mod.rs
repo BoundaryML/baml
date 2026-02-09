@@ -18,6 +18,9 @@ pub enum LlmOpError {
     RenderPrompt(String),
 
     #[error("{0}")]
+    ParseResponseError(String),
+
+    #[error("{0}")]
     Other(String),
 
     #[error("Not implemented: {message}")]
