@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9f21a61bc2024ec1/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -21,7 +21,7 @@ fn Foo() -> null {
 fn GPT4.resolve() -> null {
     // Locals:
     let _0: null // return
-    let _1: (string, string, string, string[], map<string, unknown>) -> primitive_client
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "GPT4"
     let _3: "unknown"
     let _4: "user"

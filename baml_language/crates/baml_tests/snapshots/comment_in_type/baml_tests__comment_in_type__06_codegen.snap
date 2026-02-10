@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 6
-Objects: 67
+Objects: 68
 Globals: 52
 
 Function CommentAfterArrow (arity: 0, kind: Bytecode):

@@ -1,7 +1,7 @@
 ---
-source: target/debug/build/baml_tests-9f21a61bc2024ec1/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === TYPE INFERENCE ===
   Function OpenRouterMistralSmall3_1_24b.resolve:
-    Return: PrimitiveClient
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })

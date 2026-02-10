@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 5
-Objects: 61
+Objects: 62
 Globals: 51
 
 Function BadParam (arity: 1, kind: Bytecode):

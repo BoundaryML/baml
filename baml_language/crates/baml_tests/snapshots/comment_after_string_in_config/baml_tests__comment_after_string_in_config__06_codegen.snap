@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 4
-Objects: 69
+Objects: 70
 Globals: 50
 
 Function OpenRouterMistralSmall3_1_24b.resolve (arity: 0, kind: Bytecode):

@@ -199,9 +199,6 @@ impl OutputFormatContent {
             // Runtime-only variants that shouldn't appear in LLM prompts
             Ty::Resource => Err(RenderError::UnsupportedType("resource".to_string())),
             Ty::PromptAst => Err(RenderError::UnsupportedType("prompt_ast".to_string())),
-            Ty::PrimitiveClient => {
-                Err(RenderError::UnsupportedType("primitive_client".to_string()))
-            }
 
             // Compiler-only variants should never reach runtime
             Ty::TypeAlias(_)

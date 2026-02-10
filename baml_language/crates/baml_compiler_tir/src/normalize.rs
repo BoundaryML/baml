@@ -65,8 +65,6 @@ enum StructuralTy {
     Error,
     Void,
     Resource,
-    PromptAst,
-    PrimitiveClient,
     /// Internal-only type for builtins - any type is assignable to it.
     BuiltinUnknown,
     WatchAccessor(Box<StructuralTy>),
@@ -285,8 +283,6 @@ fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
             StructuralTy::Unknown => false,
             StructuralTy::Void => false,
             StructuralTy::Resource => false,
-            StructuralTy::PromptAst => false,
-            StructuralTy::PrimitiveClient => false,
             StructuralTy::BuiltinUnknown => false,
             StructuralTy::WatchAccessor(_) => false,
         }
@@ -363,8 +359,6 @@ fn normalize_impl(
         Ty::Error => StructuralTy::Error,
         Ty::Void => StructuralTy::Void,
         Ty::Resource => StructuralTy::Resource,
-        Ty::PromptAst => StructuralTy::PromptAst,
-        Ty::PrimitiveClient => StructuralTy::PrimitiveClient,
         Ty::BuiltinUnknown => StructuralTy::BuiltinUnknown,
         Ty::Literal(lit) => StructuralTy::Literal(lit.clone()),
         Ty::Class(fqn) => StructuralTy::Class(fqn.name.clone()),

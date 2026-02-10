@@ -1522,6 +1522,17 @@ impl<'a> Parser<'a> {
             // Note: true/false are Word tokens, and they become BoolLiteral types
             self.bump();
 
+            // Consume dot-separated path segments (e.g., baml.http.Request)
+            while self.at(TokenKind::Dot) {
+                self.bump(); // dot
+                if self.at(TokenKind::Word) {
+                    self.bump(); // next segment
+                } else {
+                    self.error_unexpected_token("type name segment after '.'".to_string());
+                    break;
+                }
+            }
+
             // Check for generic arguments: map<K, V>
             if self.at(TokenKind::Less) {
                 self.type_args_depth += 1;
@@ -1594,12 +1605,7 @@ impl<'a> Parser<'a> {
         // Error recovery: if we're not at ')' yet, skip tokens until we find ')' or reach a recovery point
         if !self.at(TokenKind::RParen) {
             if let Some(token) = self.current() {
-                let message = if token.kind == TokenKind::Dot {
-                    "Path identifiers (e.g., 'a.b') are not supported in type expressions"
-                        .to_string()
-                } else {
-                    format!("Unexpected '{}' in type expression", token.text)
-                };
+                let message = format!("Unexpected '{}' in type expression", token.text);
                 self.error(message, token.span);
             }
             self.skip_to_balanced_paren();

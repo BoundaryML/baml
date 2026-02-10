@@ -126,10 +126,17 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                 })
                 .collect();
 
+            let runtime_kind = if td.has_dedicated_heap_variant {
+                quote!(RuntimeKind::PromptAst)
+            } else {
+                quote!(RuntimeKind::Instance)
+            };
+
             quote! {
                 BuiltinTypeDefinition {
                     path: #path,
                     fields: vec![#(#field_defs),*],
+                    runtime_kind: #runtime_kind,
                 }
             }
         })

@@ -600,18 +600,12 @@ impl BexVm {
     }
 
     /// Bootstraps the VM preparing the given function to run.
-    #[allow(clippy::print_stderr)] // intentional debug warning for developer feedback
     pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
         debug_assert!(
             matches!(self.get_object(function), Object::Function(_)),
             "expect function as entry point, got {:?}",
             self.get_object(function)
         );
-
-        // TODO: Run collect_garbage in codegen after each function call.
-        if self.heap.len() != self.runtime_allocs_offset.into_raw() {
-            eprintln!("WARNING: garbage collection did not run before setting a new entry point");
-        }
 
         self.stack.push(Value::Object(function));
         self.stack.extend(args.iter().copied());

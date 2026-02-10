@@ -41,6 +41,8 @@ pub(crate) struct BuiltinTypeDef {
     pub path: String,
     /// Field definitions.
     pub fields: Vec<BuiltinFieldDef>,
+    /// Whether this type has a dedicated VM heap variant (vs `Object::Instance`).
+    pub has_dedicated_heap_variant: bool,
 }
 
 /// A field in a builtin type.
@@ -340,12 +342,16 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             }
         }
 
-        if !fields.is_empty() {
-            ctx.type_defs.push(BuiltinTypeDef {
-                path: struct_path.clone(),
-                fields,
-            });
-        }
+        // Always register the type, even if it has no fields (e.g., PromptAst).
+        // This ensures the type is in class_names for type resolution.
+        // PromptAst has a dedicated Object variant in the VM heap (wraps an opaque
+        // Rust ADT). All other builtin structs use Object::Instance.
+        let has_dedicated_heap_variant = struct_name == "PromptAst";
+        ctx.type_defs.push(BuiltinTypeDef {
+            path: struct_path.clone(),
+            fields,
+            has_dedicated_heap_variant,
+        });
     }
 
     // Also collect accessor type data for all builtin structs.

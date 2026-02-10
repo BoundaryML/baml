@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 8
-Objects: 62
+Objects: 63
 Globals: 54
 
 Function Bar (arity: 0, kind: Bytecode):
@@ -16,7 +16,7 @@ Function Baz (arity: 0, kind: Bytecode):
      1   RETURN         
 
 Function EchoJSON (arity: 1, kind: Bytecode):
-     0   ALLOC_INSTANCE 5   (<class NotJSON>)
+     0   ALLOC_INSTANCE 6   (<class NotJSON>)
      1   COPY 0             
      2   LOAD_CONST 0       ("Whoops")
      3   STORE_FIELD 0      

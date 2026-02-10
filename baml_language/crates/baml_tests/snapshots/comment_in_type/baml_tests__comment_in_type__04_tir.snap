@@ -8,4 +8,4 @@ expression: output
   Function FunctionWithComments:
     Return: String
   Function TestClient.resolve:
-    Return: PrimitiveClient
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })

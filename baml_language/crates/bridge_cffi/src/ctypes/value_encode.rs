@@ -165,7 +165,7 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
             Some(FieldType::AnyType(CffiFieldTypeAny {}))
         }
         // Runtime-only variants shouldn't appear in user-defined types
-        Ty::Resource | Ty::PromptAst | Ty::PrimitiveClient => {
+        Ty::Resource | Ty::PromptAst => {
             unreachable!("runtime-only variant should not reach FFI type encoding")
         }
         // Compiler-only variants should never reach FFI

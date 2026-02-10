@@ -90,10 +90,18 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
             ret: Box::new(substitute_with_fallback(ret, bindings)),
         },
         TypePattern::Resource => Ty::Resource,
-        TypePattern::PromptAst => Ty::PromptAst,
-        TypePattern::PrimitiveClient => Ty::PrimitiveClient,
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
     }
+}
+
+/// Check if a `QualifiedName` refers to a builtin type with a dedicated VM heap variant
+/// (i.e., `Object::PromptAst` rather than `Object::Instance`).
+///
+/// Used by `baml_type::convert` to decide whether `Ty::Class(fqn)` should become
+/// `baml_type::Ty::PromptAst` instead of `baml_type::Ty::Class(TypeName)`.
+pub fn is_prompt_ast_class(fqn: &QualifiedName) -> bool {
+    baml_builtins::find_builtin_type(&fqn.display())
+        .is_some_and(|td| matches!(td.runtime_kind, baml_builtins::RuntimeKind::PromptAst))
 }
 
 // ============================================================================

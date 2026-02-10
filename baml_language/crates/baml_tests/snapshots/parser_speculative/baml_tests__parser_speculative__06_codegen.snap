@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 11
-Objects: 80
+Objects: 81
 Globals: 57
 
 Function Ambiguous (arity: 1, kind: Bytecode):

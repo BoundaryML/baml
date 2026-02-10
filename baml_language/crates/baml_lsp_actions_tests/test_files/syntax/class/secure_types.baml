@@ -28,15 +28,6 @@ class ComplexTypes {
 
 //----
 //- diagnostics
-// Error: Path identifiers (e.g., 'a.b') are not supported in type expressions
-//    ╭─[ class_secure_types.baml:4:65 ]
-//    │
-//  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
-//    │                                                                 ┬  
-//    │                                                                 ╰── Path identifiers (e.g., 'a.b') are not supported in type expressions
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
 // Error: Unknown type `apple_pie`
 //    ╭─[ class_secure_types.baml:3:4 ]
 //    │
@@ -55,12 +46,12 @@ class ComplexTypes {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: Unknown type `long_word_123`
+// Error: Unknown type `long_word_123.foobar`
 //    ╭─[ class_secure_types.baml:4:4 ]
 //    │
 //  4 │   b (int, map<bool, string?>, (char | float)[][] | long_word_123.foobar[])
 //    │    ───────────────────────────────────┬───────────────────────────────────  
-//    │                                       ╰───────────────────────────────────── Unknown type `long_word_123`
+//    │                                       ╰───────────────────────────────────── Unknown type `long_word_123.foobar`
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯

@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 4
-Objects: 57
+Objects: 58
 Globals: 50
 
 Function GetUser (arity: 0, kind: Bytecode):

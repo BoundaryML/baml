@@ -138,9 +138,11 @@ impl ProjectDatabase {
         self
     }
 
-    /// Get all source files in the database.
+    /// Get all source files in the database, sorted by `FileId` for deterministic ordering.
     pub fn get_source_files(&self) -> Vec<SourceFile> {
-        self.file_map.values().copied().collect()
+        let mut files: Vec<SourceFile> = self.file_map.values().copied().collect();
+        files.sort_by_key(|f| f.file_id(self).as_u32());
+        files
     }
 
     /// Get the file path for a `FileId`.
@@ -281,13 +283,12 @@ impl ProjectDatabase {
             let file = self.add_file_internal(&path, builtin_source.source.to_string());
             let file_id = file.file_id(self);
 
-            // Register in file_id_to_path for diagnostic filename display.
-            // NOTE: We intentionally do NOT add to file_map because:
-            // 1. file_map is used by files() which feeds into check() diagnostics
-            // 2. Builtin files reference internal types (PromptAst, Request) that
-            //    aren't defined as BAML types - they're compiler primitives
-            // 3. Including builtins in check() would cause spurious "unknown type" errors
-            self.file_id_to_path.insert(file_id, path);
+            // Register in file_id_to_path for diagnostic filename display
+            // and in file_map so builtins are included in check() diagnostics.
+            // Builtin signatures use fully qualified type names (e.g., baml.http.Request)
+            // which resolve through the builtin class_names registry.
+            self.file_id_to_path.insert(file_id, path.clone());
+            self.file_map.insert(path, file);
 
             builtin_files.push(file);
         }

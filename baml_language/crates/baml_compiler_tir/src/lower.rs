@@ -100,6 +100,11 @@ impl<'a> TypeLoweringContextResolved<'a> {
 
         // First check user-defined types (they shadow prelude)
         if self.class_names.contains(name) {
+            // Builtin types (e.g., "baml.http.Request") need Builtin namespace
+            // so they match structurally with types returned by builtin method calls.
+            if baml_builtins::find_builtin_type(name.as_str()).is_some() {
+                return Some(Ty::Class(QualifiedName::from_builtin_path(name.as_str())));
+            }
             return Some(Ty::Class(QualifiedName::local(name.clone())));
         }
         if self.enum_names.contains(name) {
@@ -272,7 +277,17 @@ fn lower_path_type_resolved_with_ctx(
                 .collect::<Vec<_>>()
                 .join(".");
             let name = Name::new(&full_path);
-            if !is_simple_type_name(&full_path) || ctx.is_type_alias_name(&name) {
+
+            if !is_simple_type_name(&full_path) {
+                return Ty::TypeAlias(QualifiedName::local(name));
+            }
+
+            // Resolve as class/enum (builtin types like "baml.http.Request" are in class_names)
+            if let Some(resolved) = ctx.resolve_name(&name) {
+                return resolved;
+            }
+
+            if ctx.is_type_alias_name(&name) {
                 Ty::TypeAlias(QualifiedName::local(name))
             } else {
                 ctx.unknown_type_error(&name)

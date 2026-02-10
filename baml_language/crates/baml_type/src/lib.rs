@@ -99,8 +99,6 @@ pub enum Ty {
     Resource,
     /// Opaque structured prompt tree for LLM calls.
     PromptAst,
-    /// Opaque resolved LLM client.
-    PrimitiveClient,
 
     // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
     /// Only recursive aliases survive lower_ty; non-recursive are expanded.
@@ -263,8 +261,7 @@ impl Ty {
             | Ty::Class(_)
             | Ty::Enum(_)
             | Ty::Resource
-            | Ty::PromptAst
-            | Ty::PrimitiveClient => Ok(()),
+            | Ty::PromptAst => Ok(()),
         }
     }
 }
@@ -288,7 +285,6 @@ impl fmt::Display for Ty {
             Ty::Enum(tn) => write!(f, "{tn}"),
             Ty::Resource => write!(f, "resource"),
             Ty::PromptAst => write!(f, "prompt_ast"),
-            Ty::PrimitiveClient => write!(f, "primitive_client"),
             Ty::TypeAlias(tn) => write!(f, "{tn}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
@@ -401,14 +397,12 @@ mod tests {
     fn test_validate_runtime_accepts_opaque_types() {
         assert!(Ty::Resource.validate_runtime().is_ok());
         assert!(Ty::PromptAst.validate_runtime().is_ok());
-        assert!(Ty::PrimitiveClient.validate_runtime().is_ok());
     }
 
     #[test]
     fn test_display_opaque_types() {
         assert_eq!(Ty::Resource.to_string(), "resource");
         assert_eq!(Ty::PromptAst.to_string(), "prompt_ast");
-        assert_eq!(Ty::PrimitiveClient.to_string(), "primitive_client");
     }
 
     #[test]

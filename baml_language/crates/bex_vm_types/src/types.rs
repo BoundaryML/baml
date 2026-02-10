@@ -591,7 +591,6 @@ pub enum ObjectType {
     Future(FutureType),
     Resource,
     PromptAst,
-    PrimitiveClient,
 }
 
 impl ObjectType {
@@ -644,7 +643,6 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
-            ObjectType::PrimitiveClient => write!(f, "primitive_client"),
         }
     }
 }

@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-559b93cee7ace4c8/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 3
-Objects: 60
+Objects: 61
 Globals: 49
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):

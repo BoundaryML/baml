@@ -16,7 +16,7 @@
 /// @param function_name The name of the LLM function to render
 /// @param args The arguments to pass to the template
 /// @return The rendered and specialized prompt AST
-function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst {
+function render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     let jinja_string = baml.llm.get_jinja_template(function_name);
 
     let resolve_client_fn = baml.llm.get_client_function(function_name);
@@ -34,7 +34,7 @@ function render_prompt(function_name: string, args: map<string, unknown>) -> Pro
 /// @param function_name The name of the LLM function
 /// @param args The arguments to pass to the template
 /// @return The HTTP request ready to be sent
-function build_request(function_name: string, args: map<string, unknown>) -> Request {
+function build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
     let jinja_string = baml.llm.get_jinja_template(function_name);
 
     let resolve_client_fn = baml.llm.get_client_function(function_name);

@@ -265,7 +265,7 @@ impl TypeRef {
         }
 
         // Check for map type with type args
-        if let Some(name) = type_expr.base_name() {
+        if let Some(name) = type_expr.dotted_name() {
             if name == "map" {
                 let args = type_expr.type_arg_exprs();
                 if args.len() == 2 {
@@ -324,8 +324,8 @@ impl TypeRef {
             return Self::apply_modifiers_from_parts(base, parts);
         }
 
-        // Check for named/primitive type or map type (e.g., `int`, `User`, `map<K,V>`)
-        if let Some(name) = parts.first_word() {
+        // Check for named/primitive type or map type (e.g., `int`, `User`, `map<K,V>`, `baml.http.Request`)
+        if let Some(name) = parts.dotted_name() {
             // Check for map type with TYPE_ARGS
             if name == "map" {
                 if let Some(type_args_node) = parts.type_args() {
@@ -348,10 +348,10 @@ impl TypeRef {
             }
 
             // Check for boolean literals
-            let base = match name {
+            let base = match name.as_str() {
                 "true" => TypeRef::BoolLiteral(true),
                 "false" => TypeRef::BoolLiteral(false),
-                _ => Self::from_type_name(name),
+                _ => Self::from_type_name(&name),
             };
             return Self::apply_modifiers_from_parts(base, parts);
         }
@@ -397,7 +397,14 @@ impl TypeRef {
             "audio" => TypeRef::Media(baml_base::MediaKind::Audio),
             "video" => TypeRef::Media(baml_base::MediaKind::Video),
             "pdf" => TypeRef::Media(baml_base::MediaKind::Pdf),
-            _ => TypeRef::Path(Path::single(Name::new(name))),
+            _ => {
+                if name.contains('.') {
+                    let segments: Vec<Name> = name.split('.').map(Name::new).collect();
+                    TypeRef::Path(Path::new(segments))
+                } else {
+                    TypeRef::Path(Path::single(Name::new(name)))
+                }
+            }
         }
     }
 }

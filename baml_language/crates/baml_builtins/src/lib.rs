@@ -46,16 +46,26 @@ pub enum TypePattern {
     },
     /// Opaque resource handle (file, socket, HTTP response body).
     Resource,
-    /// Opaque structured prompt tree for LLM calls.
-    PromptAst,
-    /// Opaque resolved LLM client.
-    PrimitiveClient,
     /// Builtin unknown type - accepts any value during type checking.
     /// Used for builtins that need to accept heterogeneous values
     /// (e.g., `build_primitive_client`'s options map).
     /// Maps to `Ty::BuiltinUnknown` in TIR.
     /// In builtin definitions, use the `Unknown` type annotation.
     BuiltinUnknown,
+}
+
+/// How a builtin type is represented at runtime on the VM heap.
+///
+/// Most builtin types are stored as `Object::Instance` (same as user-defined classes).
+/// Some have dedicated `Object` variants for efficiency or because they wrap
+/// opaque Rust ADTs that can't be represented as field-based instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeKind {
+    /// Stored as `Object::Instance` at runtime.
+    /// Used by: Request, Response, File, Socket, `PrimitiveClient`.
+    Instance,
+    /// Stored as `Object::PromptAst` at runtime — wraps an opaque Rust ADT.
+    PromptAst,
 }
 
 /// A field in a builtin type definition.
@@ -80,6 +90,8 @@ pub struct BuiltinTypeDefinition {
     pub path: &'static str,
     /// All fields (public and private) in runtime order.
     pub fields: Vec<BuiltinField>,
+    /// How this type is represented on the VM heap.
+    pub runtime_kind: RuntimeKind,
 }
 
 impl TypePattern {

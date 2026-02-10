@@ -78,7 +78,15 @@ pub fn convert_tir_ty(
 
         baml_compiler_tir::Ty::Literal(lit) => Ok(Ty::Literal(convert_literal(lit))),
 
-        baml_compiler_tir::Ty::Class(fqn) => Ok(Ty::Class(fqn_to_type_name(fqn))),
+        baml_compiler_tir::Ty::Class(fqn) => {
+            // Check if this builtin type has a dedicated VM heap variant.
+            // Most builtins are Object::Instance, but PromptAst wraps an opaque
+            // Rust ADT and has its own Object variant.
+            if baml_compiler_tir::is_prompt_ast_class(fqn) {
+                return Ok(Ty::PromptAst);
+            }
+            Ok(Ty::Class(fqn_to_type_name(fqn)))
+        }
         baml_compiler_tir::Ty::Enum(fqn) => Ok(Ty::Enum(fqn_to_type_name(fqn))),
 
         baml_compiler_tir::Ty::TypeAlias(fqn) => {
@@ -136,8 +144,6 @@ pub fn convert_tir_ty(
         baml_compiler_tir::Ty::Error => Ok(Ty::Null),
         baml_compiler_tir::Ty::Void => Ok(Ty::Void),
         baml_compiler_tir::Ty::Resource => Ok(Ty::Resource),
-        baml_compiler_tir::Ty::PromptAst => Ok(Ty::PromptAst),
-        baml_compiler_tir::Ty::PrimitiveClient => Ok(Ty::PrimitiveClient),
         // BuiltinUnknown is preserved for VIR type checking at call sites.
         baml_compiler_tir::Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
 

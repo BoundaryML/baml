@@ -84,7 +84,7 @@ fn GetRole() -> "admin" | "user" | "guest" {
 fn GPT4.resolve() -> null {
     // Locals:
     let _0: null // return
-    let _1: (string, string, string, string[], map<string, unknown>) -> primitive_client
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "GPT4"
     let _3: "unknown"
     let _4: "user"

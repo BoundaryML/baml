@@ -269,7 +269,7 @@ impl ProjectDatabase {
             };
         };
 
-        let source_files: Vec<SourceFile> = self.files().collect();
+        let source_files: Vec<SourceFile> = self.get_source_files();
         let mut sources: HashMap<FileId, String> = HashMap::new();
         let mut file_paths: HashMap<FileId, PathBuf> = HashMap::new();
 

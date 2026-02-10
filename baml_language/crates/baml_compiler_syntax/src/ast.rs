@@ -115,6 +115,45 @@ impl UnionMemberParts {
             .map(rowan::SyntaxToken::text)
     }
 
+    /// Get the full dotted name (all WORD tokens joined by DOTs).
+    ///
+    /// For `baml.http.Request` returns `Some("baml.http.Request")`.
+    /// For `MyClass` returns `Some("MyClass")`.
+    pub fn dotted_name(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        let mut iter = self.tokens.iter();
+
+        // Find first WORD
+        let first = loop {
+            match iter.next() {
+                Some(t) if t.kind() == SyntaxKind::WORD => break t,
+                Some(_) => continue,
+                None => return None,
+            }
+        };
+        parts.push(first.text().to_string());
+
+        // Consume alternating DOT + WORD
+        loop {
+            match iter.next() {
+                Some(t) if t.kind() == SyntaxKind::DOT => {
+                    if let Some(word) = iter.next() {
+                        if word.kind() == SyntaxKind::WORD {
+                            parts.push(word.text().to_string());
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        }
+
+        Some(parts.join("."))
+    }
+
     /// Check if this member has a trailing `?` (optional modifier).
     pub fn is_optional(&self) -> bool {
         self.tokens
@@ -381,6 +420,52 @@ impl TypeExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|t| t.kind() == SyntaxKind::WORD)
             .map(|t| t.text().to_string())
+    }
+
+    /// Get the full dotted type name (all WORD tokens joined by DOTs).
+    ///
+    /// For `baml.http.Request` returns `Some("baml.http.Request")`.
+    /// For `int` returns `Some("int")`.
+    /// For `"user"` returns `None`.
+    pub fn dotted_name(&self) -> Option<String> {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .collect();
+
+        let mut parts = Vec::new();
+        let mut iter = tokens.iter();
+
+        // Find first WORD
+        let first = loop {
+            match iter.next() {
+                Some(t) if t.kind() == SyntaxKind::WORD => break t,
+                Some(_) => continue,
+                None => return None,
+            }
+        };
+        parts.push(first.text().to_string());
+
+        // Consume alternating DOT + WORD
+        loop {
+            match iter.next() {
+                Some(t) if t.kind() == SyntaxKind::DOT => {
+                    if let Some(word) = iter.next() {
+                        if word.kind() == SyntaxKind::WORD {
+                            parts.push(word.text().to_string());
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        }
+
+        Some(parts.join("."))
     }
 
     /// Check if this is a string literal type like `"user"`.

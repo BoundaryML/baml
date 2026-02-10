@@ -623,13 +623,15 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
 
             #file_loaders
 
-            // db.add_file already adds each file to root.files() via add_or_update_file,
-            // so no need to call set_files - builtins + source_files are already there.
+            // Collect diagnostics for ALL files (user + builtins) so that type
+            // errors inside builtin function bodies are caught.  We use
+            // db.get_source_files() which returns a Vec (deterministic order
+            // within a given run) instead of db.check() which iterates a HashMap.
+            let all_files = db.get_source_files();
+            let diagnostics = collect_diagnostics(&db, root, &all_files);
 
-            // Collect all diagnostics using the unified collect_diagnostics function
-            let diagnostics = collect_diagnostics(&db, root, &source_files);
-
-            // Build sources and file_paths maps for rendering
+            // Build sources and file_paths maps for rendering (user files only,
+            // so we don't spam snapshots with builtin internals).
             let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();
             let mut file_paths: HashMap<baml_db::FileId, PathBuf> = HashMap::new();
             for source_file in &source_files {

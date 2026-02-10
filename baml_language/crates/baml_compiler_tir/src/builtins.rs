@@ -117,8 +117,6 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
 
         // Opaque runtime types match their corresponding patterns
         (TypePattern::Resource, Ty::Resource) => true,
-        (TypePattern::PromptAst, Ty::PromptAst) => true,
-        (TypePattern::PrimitiveClient, Ty::PrimitiveClient) => true,
 
         // Unknown in Ty matches any pattern (for error recovery)
         (_, Ty::Unknown) => true,
@@ -182,8 +180,6 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
             ret: Box::new(substitute(ret, bindings)),
         },
         TypePattern::Resource => Ty::Resource,
-        TypePattern::PromptAst => Ty::PromptAst,
-        TypePattern::PrimitiveClient => Ty::PrimitiveClient,
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
     }
 }
@@ -216,8 +212,6 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
             ret: Box::new(substitute_unknown(ret)),
         },
         TypePattern::Resource => Ty::Resource,
-        TypePattern::PromptAst => Ty::PromptAst,
-        TypePattern::PrimitiveClient => Ty::PrimitiveClient,
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
     }
 }
@@ -416,36 +410,19 @@ mod tests {
     #[test]
     fn test_match_opaque_types() {
         assert!(match_pattern(&TypePattern::Resource, &Ty::Resource).is_some());
-        assert!(match_pattern(&TypePattern::PromptAst, &Ty::PromptAst).is_some());
-        assert!(match_pattern(&TypePattern::PrimitiveClient, &Ty::PrimitiveClient).is_some());
 
-        // Opaque types should not match each other
-        assert!(match_pattern(&TypePattern::Resource, &Ty::PromptAst).is_none());
-        assert!(match_pattern(&TypePattern::PromptAst, &Ty::PrimitiveClient).is_none());
-        assert!(match_pattern(&TypePattern::PrimitiveClient, &Ty::Resource).is_none());
+        // Resource should not match other types
+        assert!(match_pattern(&TypePattern::Resource, &Ty::Int).is_none());
     }
 
     #[test]
     fn test_substitute_opaque_types() {
         let bindings = HashMap::new();
         assert_eq!(substitute(&TypePattern::Resource, &bindings), Ty::Resource);
-        assert_eq!(
-            substitute(&TypePattern::PromptAst, &bindings),
-            Ty::PromptAst
-        );
-        assert_eq!(
-            substitute(&TypePattern::PrimitiveClient, &bindings),
-            Ty::PrimitiveClient
-        );
     }
 
     #[test]
     fn test_substitute_unknown_opaque_types() {
         assert_eq!(substitute_unknown(&TypePattern::Resource), Ty::Resource);
-        assert_eq!(substitute_unknown(&TypePattern::PromptAst), Ty::PromptAst);
-        assert_eq!(
-            substitute_unknown(&TypePattern::PrimitiveClient),
-            Ty::PrimitiveClient
-        );
     }
 }

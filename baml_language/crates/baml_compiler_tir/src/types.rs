@@ -96,10 +96,6 @@ pub enum Ty {
 
     /// Opaque resource handle (file, socket, HTTP response body).
     Resource,
-    /// Opaque structured prompt tree for LLM calls.
-    PromptAst,
-    /// Opaque resolved LLM client.
-    PrimitiveClient,
     /// Internal-only type for builtin functions that accept any argument.
     ///
     /// Similar to TypeScript's `unknown` - any value can be passed where
@@ -273,8 +269,6 @@ impl fmt::Display for Ty {
             Ty::Error => write!(f, "error"),
             Ty::Void => write!(f, "void"),
             Ty::Resource => write!(f, "resource"),
-            Ty::PromptAst => write!(f, "prompt_ast"),
-            Ty::PrimitiveClient => write!(f, "primitive_client"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
         }
