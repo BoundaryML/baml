@@ -85,6 +85,34 @@ impl<'a> Printer<'a> {
         self.output.push_str(&other.output);
         self.warnings.extend(other.warnings);
     }
+
+    pub fn new_empty_copy(&'a self) -> Printer<'a> {
+        Printer {
+            input: self.input,
+            config: self.config,
+            output: String::new(),
+            trivia: self.trivia,
+            warnings: Vec::new(),
+        }
+    }
+
+    /// The current line length of the current line.
+    /// Includes indentation.
+    pub fn current_line_len(&self) -> usize {
+        // TODO: we can probably sometimes cache this
+
+        match self.output.rfind('\n') {
+            Some(i) => self.output.len() - (i + 1),
+            None => self.output.len(),
+        }
+    }
+
+    /// The remaining width of the current line.
+    ///
+    /// Equivalent to `self.config.line_width - self.current_line_len()`.
+    pub fn current_line_remaining_width(&self) -> usize {
+        self.config.line_width - self.current_line_len()
+    }
 }
 
 /// Information about the data that was just printed out.
@@ -112,12 +140,19 @@ pub trait Printable {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo;
 }
 
+pub trait PrintMultiLine {
+    /// Prints the element, does not try to single-line it.
+    ///
+    /// However, if it does turn out to be single-lined anyway, should return as such in the info.
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo;
+}
+
 #[derive(Debug, Clone)]
 pub enum PrinterWarning {}
 
 #[derive(Debug, Clone)]
 pub struct Shape {
-    /// The maximum width of the printed code, not including base indentation.
+    /// The maximum width of the printed code if single-lined, not including base indentation.
     pub width: usize,
     /// The number of spaces that should be added before every line printed,
     /// except for the first line.
@@ -125,4 +160,17 @@ pub struct Shape {
     /// This number is the column offset of the first line printed.
     /// It should be subtracted from the available width when printing the first line.
     pub first_line_offset: usize,
+}
+
+impl Shape {
+    /// A shape that has no width limit and no indentation.
+    ///
+    /// Useful for trying to print single-lined with no chance that we will use the output if it is multi-lined
+    pub const fn unlimited_single_line() -> Self {
+        Shape {
+            width: usize::MAX,
+            indent: 0,
+            first_line_offset: 0,
+        }
+    }
 }

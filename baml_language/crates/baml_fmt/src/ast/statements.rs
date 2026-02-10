@@ -384,17 +384,72 @@ pub struct ForCStyleArgs {
     pub close_paren: t::RParen,
 }
 
+impl PrintMultiLine for ForCStyleArgs {
+    /// Multi-line layout: each section (init, condition, update) on its own
+    /// indented line. Parens wrap the entire construct.
+    ///
+    /// ```baml
+    /// (
+    ///     let i = 0;
+    ///     i < some_long_expression;
+    ///     i = i + 1
+    /// )
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.open_paren);
+        printer.print_newline();
+
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&*self.init, inner_shape.clone());
+        printer.print_newline();
+
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&self.condition, inner_shape.clone());
+        printer.print_raw_token(&self.semicolon);
+        printer.print_newline();
+
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&*self.update, inner_shape);
+        printer.print_newline();
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
+    }
+}
+
 impl Printable for ForCStyleArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.open_paren);
-        printer.print(&*self.init, shape.clone());
-        printer.print_str(" ");
-        printer.print(&self.condition, shape.clone());
-        printer.print_raw_token(&self.semicolon);
-        printer.print_str(" ");
-        printer.print(&*self.update, shape);
-        printer.print_raw_token(&self.close_paren);
-        PrintInfo::default_single_line()
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let mut multi_lined = false;
+        single_line_printer.print_raw_token(&self.open_paren);
+        multi_lined |= single_line_printer
+            .print(&*self.init, Shape::unlimited_single_line())
+            .multi_lined;
+        single_line_printer.print_str(" ");
+        multi_lined |= single_line_printer
+            .print(&self.condition, Shape::unlimited_single_line())
+            .multi_lined;
+        single_line_printer.print_raw_token(&self.semicolon);
+        single_line_printer.print_str(" ");
+        multi_lined |= single_line_printer
+            .print(&*self.update, Shape::unlimited_single_line())
+            .multi_lined;
+        single_line_printer.print_raw_token(&self.close_paren);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
@@ -407,18 +462,57 @@ pub struct ForIteratorArgs {
     pub close_paren: t::RParen,
 }
 
-impl Printable for ForIteratorArgs {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl PrintMultiLine for ForIteratorArgs {
+    /// Multi-line layout: the iterator expression wraps to an indented new line
+    /// after the `in` keyword.
+    ///
+    /// ```baml
+    /// (let variable in
+    ///     some_long_iterator_expression)
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
         printer.print_raw_token(&self.open_paren);
         printer.print_raw_token(&self.let_stmt.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.let_stmt.name);
         printer.print_str(" ");
         printer.print_raw_token(&self.in_keyword);
-        printer.print_str(" ");
-        printer.print(&self.expression, shape);
+        printer.print_newline();
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&self.expression, inner_shape);
         printer.print_raw_token(&self.close_paren);
-        PrintInfo::default_single_line()
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for ForIteratorArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        single_line_printer.print_raw_token(&self.open_paren);
+        single_line_printer.print_raw_token(&self.let_stmt.keyword);
+        single_line_printer.print_str(" ");
+        single_line_printer.print_raw_token(&self.let_stmt.name);
+        single_line_printer.print_str(" ");
+        single_line_printer.print_raw_token(&self.in_keyword);
+        single_line_printer.print_str(" ");
+        let multi_lined = single_line_printer
+            .print(&self.expression, Shape::unlimited_single_line())
+            .multi_lined;
+        single_line_printer.print_raw_token(&self.close_paren);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
     }
 }
 

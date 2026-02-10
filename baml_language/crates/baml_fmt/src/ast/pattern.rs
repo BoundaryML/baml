@@ -167,16 +167,51 @@ pub struct UnionPattern {
     pub rest: Vec<(t::Pipe, UnionPatternMember)>,
 }
 
-impl Printable for UnionPattern {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.first, shape.clone());
-
+impl PrintMultiLine for UnionPattern {
+    /// Multi-line layout: first member stays on the current line, each subsequent
+    /// member starts with `|` on its own indented line. Same layout as [`super::UnionType`].
+    ///
+    /// ```baml
+    /// FirstPattern
+    ///     | SecondPattern
+    ///     | ThirdPattern
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut info = printer.print(&*self.first, shape.clone());
         for (pipe, pattern) in &self.rest {
-            printer.print_str(" ");
+            info.multi_lined = true;
+            printer.print_newline();
+            printer.print_spaces(shape.indent + printer.config.indent_width);
             printer.print_raw_token(pipe);
             printer.print_str(" ");
             printer.print(pattern, shape.clone());
         }
+        info
+    }
+}
+
+impl Printable for UnionPattern {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let mut multi_lined = false;
+        multi_lined |= single_line_printer
+            .print(&*self.first, shape.clone())
+            .multi_lined;
+        for (pipe, pattern) in &self.rest {
+            if multi_lined || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(self, shape, printer);
+            }
+            single_line_printer.print_str(" ");
+            single_line_printer.print_raw_token(pipe);
+            single_line_printer.print_str(" ");
+            multi_lined |= single_line_printer.print(pattern, shape.clone()).multi_lined;
+        }
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            return Self::print_multi_line(self, shape, printer);
+        }
+
+        printer.append_from_printer(single_line_printer);
         PrintInfo::default_single_line()
     }
 }

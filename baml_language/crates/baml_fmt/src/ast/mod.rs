@@ -294,6 +294,16 @@ impl SyntaxNodeIter {
 
     /// Peeks at the next element and:
     /// - If there is no next element, returns `None`.
+    /// - If the kind matches, returns the element.
+    /// - Otherwise, returns `None`.
+    ///
+    /// This is a convenience method equivalent to [`SyntaxNodeIter::next_if`] with `elem.kind() == kind`.
+    pub fn next_if_kind(&mut self, kind: SyntaxKind) -> Option<SyntaxElement> {
+        self.next_if(|elem| elem.kind() == kind)
+    }
+
+    /// Peeks at the next element and:
+    /// - If there is no next element, returns `None`.
     /// - Calls the given function with the next element, if it returns `Some(t)` then the element is consumed and `Some(t)` is returned.
     /// - Otherwise, the next element is not consumed and `None` is returned.
     pub fn next_if_and_map<T, F: FnOnce(&SyntaxElement) -> Option<T>>(

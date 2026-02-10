@@ -7,7 +7,7 @@ use crate::{
     ast::{
         BinaryOp, FromCST, MatchPattern, Statement, StrongAstError, SyntaxNodeIter, Token, UnaryOp,
     },
-    printer::{PrintInfo, Printable, Printer, Shape},
+    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
 };
 
 use super::tokens as t;
@@ -47,9 +47,18 @@ impl Expression {
 impl FromCST for Expression {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let expr = match elem.kind() {
-            SyntaxKind::STRING_LITERAL => Expression::Literal(Literal::String(t::QuotedString {
-                token_span: elem.text_range(),
-            })),
+            SyntaxKind::STRING_LITERAL => {
+                let node = StrongAstError::assert_is_node(elem)?;
+                let open_quote = node
+                    .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::QUOTE)
+                    .ok_or(StrongAstError::missing(
+                        SyntaxKind::QUOTE,
+                        node.text_range(),
+                    ))?;
+                Expression::Literal(Literal::String(t::QuotedString::new_from_span(
+                    TextRange::new(open_quote.text_range().start(), node.text_range().end()),
+                )))
+            }
             SyntaxKind::INTEGER_LITERAL => {
                 Expression::Literal(Literal::Integer(t::IntegerLiteral {
                     token_span: elem.text_range(),
@@ -173,6 +182,28 @@ impl FromCST for PathExpr {
     }
 }
 
+impl PrintMultiLine for PathExpr {
+    /// Multi-line layout: splits at dots, each subsequent segment on
+    /// an indented new line. Used for chained method calls.
+    ///
+    /// ```baml
+    /// baml
+    ///     .fs
+    ///     .open("some_long_file_name.txt")
+    ///     .read()
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.first);
+        for (dot, word) in &self.rest {
+            printer.print_newline();
+            printer.print_spaces(shape.indent + printer.config.indent_width);
+            printer.print_raw_token(dot);
+            printer.print_raw_token(word);
+        }
+        PrintInfo::default_multi_lined()
+    }
+}
+
 impl Printable for PathExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let single_line_len = usize::from(self.first.span().len())
@@ -230,6 +261,32 @@ impl FromCST for ParenExpr {
             expr: Box::new(expr),
             close_paren: t::RParen::new_from_span(close_paren.text_range()),
         })
+    }
+}
+
+impl PrintMultiLine for ParenExpr {
+    /// Multi-line layout: inner expression wraps to an indented new line,
+    /// closing paren aligns with the opening context.
+    ///
+    /// ```baml
+    /// (
+    ///     some_long_expression
+    /// )
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+        printer.print_raw_token(&self.open_paren);
+        printer.print_newline();
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&*self.expr, inner_shape);
+        printer.print_newline();
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
     }
 }
 
@@ -300,17 +357,161 @@ impl FromCST for BinaryExpr {
     }
 }
 
+impl BinaryExpr {
+    /// Recursively lifts binary expressions in the same chaining group to the top level.
+    /// For ops that are not in any chaining groups, return will be the same as the original.
+    ///
+    /// The vec will never be empty.
+    fn get_chaining_members<'s>(&'s self) -> (&'s Expression, Vec<(&'s BinaryOp, &'s Expression)>) {
+        let mut members = Vec::new();
+        let Some(chaining_group) = BinaryOpChainingGroup::group_for_op(&self.op) else {
+            members.push((&self.op, &self.sides.1));
+            return (&self.sides.0, members);
+        };
+
+        match &*self.sides {
+            (Expression::Binary(left), Expression::Binary(right))
+                if BinaryOpChainingGroup::group_for_op(&left.op) == Some(chaining_group)
+                    && BinaryOpChainingGroup::group_for_op(&right.op) == Some(chaining_group) =>
+            {
+                let (left_first, left_rest) = left.get_chaining_members();
+                let (right_first, right_rest) = right.get_chaining_members();
+
+                members.extend(left_rest);
+                members.push((&self.op, right_first));
+                members.extend(right_rest);
+
+                (left_first, members)
+            }
+            (Expression::Binary(left), right)
+                if BinaryOpChainingGroup::group_for_op(&left.op) == Some(chaining_group) =>
+            {
+                let (first, left_rest) = left.get_chaining_members();
+
+                members.extend(left_rest);
+                members.push((&self.op, right));
+                (first, members)
+            }
+            (left, Expression::Binary(right))
+                if BinaryOpChainingGroup::group_for_op(&right.op) == Some(chaining_group) =>
+            {
+                let (right_first, right_rest) = right.get_chaining_members();
+
+                members.push((&self.op, right_first));
+                members.extend(right_rest);
+                (left, members)
+            }
+            (left, right) => {
+                members.push((&self.op, right));
+                (left, members)
+            }
+        }
+    }
+}
+
+impl PrintMultiLine for BinaryExpr {
+    /// Multi-line layout: splits at the operator. The operator and right-hand
+    /// side wrap to an indented new line.
+    ///
+    /// ```baml
+    /// left_expression
+    ///     + right_expression
+    /// ```
+    ///
+    /// For chainable operators, contained binary ops (of the same group) should be printed at the same indentation.
+    /// Groups:
+    ///     - Add/Subtract
+    ///     - Multiply/Divide/Modulo
+    ///     - Bitwise And/Or/Xor
+    ///     - Logical And/Or
+    ///
+    /// ```baml
+    /// a
+    ///     + b
+    ///     + c
+    ///     - d * e
+    /// ```
+    /// 
+    /// ```baml
+    /// // precedence matters:
+    /// aaaaaaaaa
+    ///     + bbbbbbbbb
+    ///         * cccccccc
+    ///         / dddddddd
+    ///     - eeeeeee
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
+        let (first, chain_members) = self.get_chaining_members();
+        printer.print(first, shape.clone());
+        for (op, right) in chain_members {
+            printer.print_newline();
+            printer.print_spaces(inner_indent);
+            printer.print(op, Shape::unlimited_single_line());
+            printer.print_str(" ");
+            let inner_shape = Shape {
+                width: printer
+                    .config
+                    .line_width
+                    .saturating_sub(inner_indent + usize::from(op.span().len()) + 1),
+                indent: inner_indent,
+                first_line_offset: usize::from(op.span().len()) + 1,
+            };
+            printer.print(right, inner_shape.clone());
+        }
+        PrintInfo::default_multi_lined()
+    }
+}
+
 impl Printable for BinaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let (left, right) = &*self.sides;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
         let mut multi_lined = false;
-        multi_lined |= printer.print(left, shape.clone()).multi_lined;
-        printer.print_str(" ");
-        multi_lined |= printer.print(&self.op, shape.clone()).multi_lined;
-        printer.print_str(" ");
-        multi_lined |= printer.print(right, shape).multi_lined;
+        multi_lined |= single_line_printer
+            .print(left, Shape::unlimited_single_line())
+            .multi_lined;
+        single_line_printer.print_str(" ");
+        multi_lined |= single_line_printer
+            .print(&self.op, Shape::unlimited_single_line())
+            .multi_lined;
+        single_line_printer.print_str(" ");
+        multi_lined |= single_line_printer
+            .print(right, Shape::unlimited_single_line())
+            .multi_lined;
 
-        PrintInfo { multi_lined }
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BinaryOpChainingGroup {
+    AddSubtract,
+    MultiplyDivide,
+    Bitwise,
+    Logical,
+}
+impl BinaryOpChainingGroup {
+    fn group_for_op(op: &BinaryOp) -> Option<Self> {
+        match op {
+            BinaryOp::Plus(_) => Some(Self::AddSubtract),
+            BinaryOp::Minus(_) => Some(Self::AddSubtract),
+            BinaryOp::Star(_) => Some(Self::MultiplyDivide),
+            BinaryOp::Slash(_) => Some(Self::MultiplyDivide),
+            BinaryOp::Percent(_) => Some(Self::MultiplyDivide),
+            BinaryOp::And(_) => Some(Self::Bitwise),
+            BinaryOp::Pipe(_) => Some(Self::Bitwise),
+            BinaryOp::Caret(_) => Some(Self::Bitwise),
+            BinaryOp::AndAnd(_) => Some(Self::Logical),
+            BinaryOp::OrOr(_) => Some(Self::Logical),
+            _ => None,
+        }
     }
 }
 
@@ -627,21 +828,61 @@ impl FromCST for MatchArm {
     }
 }
 
-impl Printable for MatchArm {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl PrintMultiLine for MatchArm {
+    /// Multi-line layout: the body is made into a block expression
+    /// (if it is not already a block expression).
+    /// The if guard (if present) is on its own indented line.
+    ///
+    /// ```baml
+    /// pattern => {
+    ///     some_long_body_expression
+    /// }
+    /// ```
+    ///
+    /// ```baml
+    /// binding: pattern
+    ///     | more_pattern
+    ///     | yet_more_pattern
+    ///     if some_long_guard_expression => {
+    ///     some_long_body_expression
+    /// }
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
         printer.print(&self.pattern, shape.clone());
 
         if let Some((if_kw, guard)) = &self.guard {
-            printer.print_str(" ");
+            printer.print_newline();
+            printer.print_spaces(inner_shape.indent);
             printer.print_raw_token(if_kw);
             printer.print_str(" ");
-            printer.print(&**guard, shape.clone());
+            printer.print(&**guard, inner_shape.clone());
         }
 
         printer.print_str(" ");
         printer.print_raw_token(&self.fat_arrow);
         printer.print_str(" ");
-        printer.print(&*self.body, shape);
+
+        // If body is already a block, print it directly; otherwise wrap it in a block
+        match &*self.body {
+            Expression::Block(block) => {
+                printer.print(block, shape.clone());
+            }
+            _ => {
+                printer.print_str("{");
+                printer.print_newline();
+                printer.print_spaces(inner_shape.indent);
+                printer.print(&*self.body, inner_shape);
+                printer.print_newline();
+                printer.print_spaces(shape.indent);
+                printer.print_str("}");
+            }
+        }
 
         if let Some(comma) = &self.comma {
             printer.print_raw_token(comma);
@@ -649,7 +890,47 @@ impl Printable for MatchArm {
             printer.print_str(",");
         }
 
-        PrintInfo::default_single_line()
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for MatchArm {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let mut multi_lined = false;
+        multi_lined |= single_line_printer
+            .print(&self.pattern, Shape::unlimited_single_line())
+            .multi_lined;
+
+        if let Some((if_kw, guard)) = &self.guard {
+            single_line_printer.print_str(" ");
+            single_line_printer.print_raw_token(if_kw);
+            single_line_printer.print_str(" ");
+            multi_lined |= single_line_printer
+                .print(&**guard, Shape::unlimited_single_line())
+                .multi_lined;
+        }
+
+        single_line_printer.print_str(" ");
+        single_line_printer.print_raw_token(&self.fat_arrow);
+        single_line_printer.print_str(" ");
+        multi_lined |= single_line_printer
+            .print(&*self.body, Shape::unlimited_single_line())
+            .multi_lined;
+
+        if let Some(comma) = &self.comma {
+            single_line_printer.print_raw_token(comma);
+        } else {
+            single_line_printer.print_str(",");
+        }
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
@@ -657,9 +938,7 @@ impl Printable for MatchArm {
 #[derive(Debug)]
 pub struct CallExpr {
     pub callee: Box<Expression>,
-    pub open_paren: t::LParen,
-    pub args: Vec<Expression>,
-    pub close_paren: t::RParen,
+    pub args: CallArgs,
 }
 
 impl FromCST for CallExpr {
@@ -674,78 +953,19 @@ impl FromCST for CallExpr {
         let callee = Box::new(Expression::from_cst(callee_node)?);
 
         // CALL_ARGS
-        let args_node = it.expect_node_of_kind(SyntaxKind::CALL_ARGS)?;
-        let mut args_it = SyntaxNodeIter::new(args_node);
+        let args = it.expect_node_of_kind(SyntaxKind::CALL_ARGS)?;
+        let args = CallArgs::from_cst(SyntaxElement::Node(args))?;
 
-        // L_PAREN
-        let open_paren = args_it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
-
-        // Collect arguments
-        let mut args = Vec::new();
-        while let Some(elem) = args_it.next() {
-            if elem.kind() == SyntaxKind::R_PAREN {
-                let token = StrongAstError::assert_is_token(elem)?;
-                args_it.expect_end()?;
-                it.expect_end()?;
-
-                return Ok(CallExpr {
-                    callee,
-                    open_paren: t::LParen::new_from_span(open_paren.text_range()),
-                    args,
-                    close_paren: t::RParen::new_from_span(token.text_range()),
-                });
-            }
-
-            let arg_node = StrongAstError::assert_is_node(elem)?;
-            args.push(Expression::from_cst(SyntaxElement::Node(arg_node))?);
-
-            // Check for comma or closing paren
-            if let Some(next) = args_it.next() {
-                if next.kind() == SyntaxKind::COMMA {
-                    // Continue to next argument
-                    continue;
-                } else if next.kind() == SyntaxKind::R_PAREN {
-                    let token = StrongAstError::assert_is_token(next)?;
-                    args_it.expect_end()?;
-                    it.expect_end()?;
-
-                    return Ok(CallExpr {
-                        callee,
-                        open_paren: t::LParen::new_from_span(open_paren.text_range()),
-                        args,
-                        close_paren: t::RParen::new_from_span(token.text_range()),
-                    });
-                } else {
-                    return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "COMMA or R_PAREN".into(),
-                        found: next.kind(),
-                        at: next.text_range(),
-                    });
-                }
-            }
-        }
-
-        Err(StrongAstError::missing(
-            SyntaxKind::R_PAREN,
-            open_paren.text_range(),
-        ))
+        Ok(CallExpr { callee, args })
     }
 }
 
 impl Printable for CallExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.callee, shape.clone());
-        printer.print_raw_token(&self.open_paren);
-
-        for (i, arg) in self.args.iter().enumerate() {
-            if i > 0 {
-                printer.print_str(", ");
-            }
-            printer.print(arg, shape.clone());
-        }
-
-        printer.print_raw_token(&self.close_paren);
-        PrintInfo::default_single_line()
+        let mut multi_lined = false;
+        multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
+        multi_lined |= printer.print(&self.args, shape).multi_lined;
+        PrintInfo { multi_lined }
     }
 }
 
@@ -806,6 +1026,66 @@ impl FromCST for CallArgs {
     }
 }
 
+impl PrintMultiLine for CallArgs {
+    /// Always multi-lined, even if there are no arguments it would still be `(\n<indent>)`
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        printer.print_newline();
+
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+        for (arg, comma) in self.args.iter() {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(arg, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_newline();
+        }
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for CallArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        single_line_printer.print_raw_token(&self.open_paren);
+        for (i, (arg, comma)) in self.args.iter().enumerate() {
+            multi_lined |= single_line_printer
+                .print(arg, Shape::unlimited_single_line())
+                .multi_lined;
+            if let Some(comma) = comma {
+                single_line_printer.print_raw_token(comma);
+                single_line_printer.print_spaces(1);
+            } else if i + 1 < self.args.len() {
+                single_line_printer.print_str(", ");
+            }
+
+            if multi_lined || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(self, shape, printer);
+            }
+        }
+        single_line_printer.print_raw_token(&self.close_paren);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct IndexExpr {
     pub base: Box<Expression>,
@@ -848,11 +1128,35 @@ impl FromCST for IndexExpr {
 
 impl Printable for IndexExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.base, shape.clone());
-        printer.print_raw_token(&self.open_bracket);
-        printer.print(&*self.index, shape);
-        printer.print_raw_token(&self.close_bracket);
-        PrintInfo::default_single_line()
+        let multi_lined = printer.print(&*self.base, shape.clone()).multi_lined;
+
+        let mut index_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let index_info = index_printer.print(&*self.index, Shape::unlimited_single_line());
+
+        if index_info.multi_lined
+            || index_printer.output.len() + 2 > printer.current_line_remaining_width()
+        {
+            // We do not fit, switch to multi-line
+            printer.print_raw_token(&self.open_bracket);
+            printer.print_newline();
+            let inner_indent = shape.indent + printer.config.indent_width;
+            let inner_shape = Shape {
+                width: shape.width.saturating_sub(inner_indent),
+                indent: inner_indent,
+                first_line_offset: 0,
+            };
+            printer.print_spaces(inner_shape.indent);
+            printer.print(&*self.index, inner_shape);
+            printer.print_newline();
+            printer.print_spaces(shape.indent);
+            printer.print_raw_token(&self.close_bracket);
+            PrintInfo::default_multi_lined()
+        } else {
+            printer.print_raw_token(&self.open_bracket);
+            printer.append_from_printer(index_printer);
+            printer.print_raw_token(&self.close_bracket);
+            PrintInfo { multi_lined }
+        }
     }
 }
 
@@ -885,19 +1189,49 @@ impl FromCST for FieldAccessExpr {
         Ok(FieldAccessExpr {
             base,
             dot: t::Dot::new_from_span(dot.text_range()),
-            field: t::Word {
-                token_span: field.text_range(),
-            },
+            field: t::Word::new_from_span(field.text_range()),
         })
+    }
+}
+
+impl PrintMultiLine for FieldAccessExpr {
+    /// Multi-line layout:
+    ///
+    /// ```baml
+    /// some_multi_line_expression(
+    ///     long_arg,
+    /// ).field
+    /// ```
+    ///
+    /// ```baml
+    /// not_a_chain
+    ///     .because_it_is_an_expression()
+    ///     .field
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.base, shape);
+        printer.print_raw_token(&self.dot);
+        printer.print_raw_token(&self.field);
+        PrintInfo::default_multi_lined()
     }
 }
 
 impl Printable for FieldAccessExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.base, shape);
-        printer.print_raw_token(&self.dot);
-        printer.print_raw_token(&self.field);
-        PrintInfo::default_single_line()
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let multi_lined = single_line_printer
+            .print(&*self.base, Shape::unlimited_single_line())
+            .multi_lined;
+        single_line_printer.print_raw_token(&self.dot);
+        single_line_printer.print_raw_token(&self.field);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
@@ -1054,19 +1388,74 @@ impl FromCST for ArrayInitializer {
     }
 }
 
-impl Printable for ArrayInitializer {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.open_bracket);
+impl PrintMultiLine for ArrayInitializer {
+    /// Multi-line layout: each element on its own indented line with trailing comma.
+    /// Closing bracket on its own line.
+    ///
+    /// ```baml
+    /// [
+    ///     element1,
+    ///     element2,
+    ///     element3,
+    /// ]
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
 
-        for (i, (elem, _comma)) in self.elements.iter().enumerate() {
-            if i > 0 {
-                printer.print_str(", ");
+        printer.print_raw_token(&self.open_bracket);
+        printer.print_newline();
+
+        for (elem, comma) in &self.elements {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(elem, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+            } else {
+                printer.print_str(",");
             }
-            printer.print(elem, shape.clone());
+            printer.print_newline();
         }
 
+        printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_bracket);
-        PrintInfo::default_single_line()
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for ArrayInitializer {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        single_line_printer.print_raw_token(&self.open_bracket);
+        for (i, (elem, comma)) in self.elements.iter().enumerate() {
+            multi_lined |= single_line_printer
+                .print(elem, Shape::unlimited_single_line())
+                .multi_lined;
+            if i + 1 < self.elements.len() {
+                if let Some(comma) = comma {
+                    single_line_printer.print_raw_token(comma);
+                } else {
+                    single_line_printer.print_str(",");
+                }
+                single_line_printer.print_str(" ");
+            }
+            if multi_lined || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(self, shape, printer);
+            }
+        }
+        single_line_printer.print_raw_token(&self.close_bracket);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
@@ -1075,7 +1464,7 @@ impl Printable for ArrayInitializer {
 pub struct ObjectInitializer {
     pub name: t::Word,
     pub open_brace: t::LBrace,
-    pub fields: Vec<ObjectField>,
+    pub fields: Vec<(ObjectField, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
 }
 
@@ -1106,7 +1495,14 @@ impl FromCST for ObjectInitializer {
                 }
                 SyntaxKind::OBJECT_FIELD => {
                     let field = ObjectField::from_cst(elem)?;
-                    fields.push(field);
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(|comma| {
+                            let comma = StrongAstError::assert_is_token(comma)?;
+                            Ok(t::Comma::new_from_span(comma.text_range()))
+                        })
+                        .transpose()?;
+                    fields.push((field, comma));
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
@@ -1129,8 +1525,18 @@ impl FromCST for ObjectInitializer {
     }
 }
 
-impl Printable for ObjectInitializer {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl PrintMultiLine for ObjectInitializer {
+    /// Multi-line layout: each field on its own indented line with trailing comma.
+    /// Closing brace on its own line.
+    ///
+    ///
+    /// ```baml
+    /// Name {
+    ///     field1: value1,
+    ///     field2: value2,
+    /// }
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_shape = Shape {
             width: shape.width.saturating_sub(printer.config.indent_width),
             indent: shape.indent + printer.config.indent_width,
@@ -1142,16 +1548,57 @@ impl Printable for ObjectInitializer {
         printer.print_raw_token(&self.open_brace);
         printer.print_newline();
 
-        for field in &self.fields {
+        for (field, comma) in &self.fields {
             printer.print_spaces(inner_shape.indent);
             printer.print(field, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+            } else {
+                printer.print_str(",");
+            }
             printer.print_newline();
         }
 
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_brace);
-
         PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for ObjectInitializer {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        single_line_printer.print_raw_token(&self.name);
+        single_line_printer.print_str(" ");
+        single_line_printer.print_raw_token(&self.open_brace);
+        single_line_printer.print_str(" ");
+        for (i, (field, comma)) in self.fields.iter().enumerate() {
+            multi_lined |= single_line_printer
+                .print(field, Shape::unlimited_single_line())
+                .multi_lined;
+            if i + 1 < self.fields.len() {
+                if let Some(comma) = comma {
+                    single_line_printer.print_raw_token(comma);
+                } else {
+                    single_line_printer.print_str(",");
+                }
+                single_line_printer.print_str(" ");
+            }
+            if multi_lined || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(self, shape, printer);
+            }
+        }
+        single_line_printer.print_str(" ");
+        single_line_printer.print_raw_token(&self.close_brace);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
@@ -1159,7 +1606,7 @@ impl Printable for ObjectInitializer {
 #[derive(Debug)]
 pub struct MapLiteral {
     pub open_brace: t::LBrace,
-    pub fields: Vec<ObjectField>,
+    pub fields: Vec<(ObjectField, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
 }
 
@@ -1187,7 +1634,14 @@ impl FromCST for MapLiteral {
                 }
                 SyntaxKind::OBJECT_FIELD => {
                     let field = ObjectField::from_cst(elem)?;
-                    fields.push(field);
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(|comma| {
+                            let comma = StrongAstError::assert_is_token(comma)?;
+                            Ok(t::Comma::new_from_span(comma.text_range()))
+                        })
+                        .transpose()?;
+                    fields.push((field, comma));
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
@@ -1209,8 +1663,19 @@ impl FromCST for MapLiteral {
     }
 }
 
-impl Printable for MapLiteral {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl PrintMultiLine for MapLiteral {
+    /// Multi-line layout: each entry on its own indented line with trailing comma.
+    /// Closing brace on its own line.
+    ///
+    /// Single-line form (to be added to `Printable`): `{ key: value }`
+    ///
+    /// ```baml
+    /// {
+    ///     key1: value1,
+    ///     key2: value2,
+    /// }
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_shape = Shape {
             width: shape.width.saturating_sub(printer.config.indent_width),
             indent: shape.indent + printer.config.indent_width,
@@ -1220,16 +1685,55 @@ impl Printable for MapLiteral {
         printer.print_raw_token(&self.open_brace);
         printer.print_newline();
 
-        for field in &self.fields {
+        for (field, comma) in &self.fields {
             printer.print_spaces(inner_shape.indent);
             printer.print(field, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+            } else {
+                printer.print_str(",");
+            }
             printer.print_newline();
         }
 
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_brace);
-
         PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for MapLiteral {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        single_line_printer.print_raw_token(&self.open_brace);
+        single_line_printer.print_str(" ");
+        for (i, (field, comma)) in self.fields.iter().enumerate() {
+            multi_lined |= single_line_printer
+                .print(field, Shape::unlimited_single_line())
+                .multi_lined;
+            if i + 1 < self.fields.len() {
+                if let Some(comma) = comma {
+                    single_line_printer.print_raw_token(comma);
+                } else {
+                    single_line_printer.print_str(",");
+                }
+                single_line_printer.print_str(" ");
+            }
+            if multi_lined || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(self, shape, printer);
+            }
+        }
+        single_line_printer.print_str(" ");
+        single_line_printer.print_raw_token(&self.close_brace);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
@@ -1239,7 +1743,6 @@ pub struct ObjectField {
     pub name: t::Word,
     pub colon: t::Colon,
     pub value: Expression,
-    pub comma: Option<t::Comma>,
 }
 
 impl FromCST for ObjectField {
@@ -1256,22 +1759,12 @@ impl FromCST for ObjectField {
         let value = it.expect_next("value")?;
         let value = Expression::from_cst(value)?;
 
-        let comma = it
-            .next()
-            .map(|elem| {
-                let comma = StrongAstError::assert_is_token(elem)?;
-                StrongAstError::assert_kind_token(&comma, SyntaxKind::COMMA)?;
-                Ok(t::Comma::new_from_span(comma.text_range()))
-            })
-            .transpose()?;
-
         it.expect_end()?;
 
         Ok(ObjectField {
             name: t::Word::new_from_span(name.text_range()),
             colon: t::Colon::new_from_span(colon.text_range()),
             value,
-            comma,
         })
     }
 }
@@ -1281,12 +1774,6 @@ impl Printable for ObjectField {
         printer.print_raw_token(&self.name);
         printer.print_raw_token(&self.colon);
         printer.print_str(" ");
-        printer.print(&self.value, shape);
-
-        if self.comma.is_some() {
-            printer.print_str(",");
-        }
-
-        PrintInfo::default_single_line()
+        printer.print(&self.value, shape)
     }
 }

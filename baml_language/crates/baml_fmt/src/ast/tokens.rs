@@ -173,6 +173,7 @@ pub enum BinaryOp {
     GreaterEquals(GreaterEquals),
     AndAnd(AndAnd),
     OrOr(OrOr),
+    And(And),
     Pipe(Pipe),
     Caret(Caret),
     Instanceof(Instanceof),
@@ -196,6 +197,43 @@ pub enum BinaryOp {
     GreaterGreaterEquals(GreaterGreaterEquals),
 }
 
+impl BinaryOp {
+    pub fn span(&self) -> TextRange {
+        match self {
+            BinaryOp::EqualsEquals(t) => t.span(),
+            BinaryOp::NotEquals(t) => t.span(),
+            BinaryOp::Less(t) => t.span(),
+            BinaryOp::Greater(t) => t.span(),
+            BinaryOp::LessEquals(t) => t.span(),
+            BinaryOp::GreaterEquals(t) => t.span(),
+            BinaryOp::And(t) => t.span(),
+            BinaryOp::AndAnd(t) => t.span(),
+            BinaryOp::OrOr(t) => t.span(),
+            BinaryOp::Pipe(t) => t.span(),
+            BinaryOp::Caret(t) => t.span(),
+            BinaryOp::Instanceof(t) => t.span(),
+            BinaryOp::LessLess(t) => t.span(),
+            BinaryOp::GreaterGreater(t) => t.span(),
+            BinaryOp::Plus(t) => t.span(),
+            BinaryOp::Minus(t) => t.span(),
+            BinaryOp::Star(t) => t.span(),
+            BinaryOp::Slash(t) => t.span(),
+            BinaryOp::Percent(t) => t.span(),
+            BinaryOp::Equals(t) => t.span(),
+            BinaryOp::PlusEquals(t) => t.span(),
+            BinaryOp::MinusEquals(t) => t.span(),
+            BinaryOp::StarEquals(t) => t.span(),
+            BinaryOp::SlashEquals(t) => t.span(),
+            BinaryOp::PercentEquals(t) => t.span(),
+            BinaryOp::AndEquals(t) => t.span(),
+            BinaryOp::PipeEquals(t) => t.span(),
+            BinaryOp::CaretEquals(t) => t.span(),
+            BinaryOp::LessLessEquals(t) => t.span(),
+            BinaryOp::GreaterGreaterEquals(t) => t.span(),
+        }
+    }
+}
+
 impl FromCST for BinaryOp {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;
@@ -217,6 +255,7 @@ impl FromCST for BinaryOp {
             SyntaxKind::GREATER_EQUALS => Ok(BinaryOp::GreaterEquals(
                 GreaterEquals::new_from_span(token.text_range()),
             )),
+            SyntaxKind::AND => Ok(BinaryOp::And(And::new_from_span(token.text_range()))),
             SyntaxKind::AND_AND => Ok(BinaryOp::AndAnd(AndAnd::new_from_span(token.text_range()))),
             SyntaxKind::OR_OR => Ok(BinaryOp::OrOr(OrOr::new_from_span(token.text_range()))),
             SyntaxKind::PIPE => Ok(BinaryOp::Pipe(Pipe::new_from_span(token.text_range()))),
@@ -401,6 +440,7 @@ impl Printable for BinaryOp {
             BinaryOp::GreaterEquals(t) => printer.print_raw_token(t),
             BinaryOp::AndAnd(t) => printer.print_raw_token(t),
             BinaryOp::OrOr(t) => printer.print_raw_token(t),
+            BinaryOp::And(t) => printer.print_raw_token(t),
             BinaryOp::Pipe(t) => printer.print_raw_token(t),
             BinaryOp::Caret(t) => printer.print_raw_token(t),
             BinaryOp::Instanceof(t) => printer.print_raw_token(t),

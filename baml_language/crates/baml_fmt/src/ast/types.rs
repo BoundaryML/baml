@@ -5,12 +5,13 @@
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
 use super::{FromCST, StrongAstError, tokens as t};
-use crate::printer::*;
+use crate::{ast::SyntaxNodeIter, printer::*};
 use rowan::TextRange;
 
 /// Corresponds to a [`SyntaxKind::TYPE_EXPR`] node.
 #[derive(Debug)]
 pub enum Type {
+    Paren(ParenType),
     Path(PathType),
     String(StringType),
     Union(UnionType),
@@ -31,25 +32,32 @@ impl FromCST for Type {
         // TYPE_EXPR contains tokens and nodes directly in a flat structure
         // We need to parse them into the appropriate Type variant
 
-        // For now, implement a simplified version that handles common cases
-        // and returns Unknown for complex cases
-        let children: Vec<SyntaxElement> = node
-            .children_with_tokens()
-            .by_kind(|kind| !kind.is_trivia())
-            .collect();
+        let mut it = SyntaxNodeIter::new(node);
 
-        if children.is_empty() {
-            return Ok(Type::Unknown(node.text_range()));
+        let first = UnionTypeMember::take(&mut it)?;
+
+        let mut rest = Vec::new();
+        while let Some(pipe) = it.next_if_kind(SyntaxKind::PIPE) {
+            let pipe = StrongAstError::assert_is_token(pipe)?;
+            let next = UnionTypeMember::take(&mut it)?;
+            rest.push((t::Pipe::new_from_span(pipe.text_range()), next));
         }
 
-        // Try to parse the type expression
-        parse_type_from_elements(&children, node.text_range())
+        if rest.is_empty() {
+            Ok(first.into())
+        } else {
+            Ok(Type::Union(UnionType {
+                first: Box::new(first),
+                rest,
+            }))
+        }
     }
 }
 
 impl Printable for Type {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
+            Type::Paren(paren) => paren.print(shape, printer),
             Type::Path(path) => path.print(shape, printer),
             Type::String(string) => string.print(shape, printer),
             Type::Union(union) => union.print(shape, printer),
@@ -66,16 +74,93 @@ impl Printable for Type {
 }
 
 #[derive(Debug)]
+pub struct ParenType {
+    pub open_paren: t::LParen,
+    /// Will have a [`SyntaxKind::FUNCTION_TYPE_PARAM`] with a [`SyntaxKind::TYPE_EXPR`] inside for some reason
+    pub ty: Box<Type>,
+    pub close_paren: t::RParen,
+}
+
+impl PrintMultiLine for ParenType {
+    /// Multi-line layout: inner type wraps to an indented new line,
+    /// closing paren aligns with the opening context.
+    ///
+    /// ```baml
+    /// (
+    ///     SomeLongInnerType
+    /// )
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+        printer.print_raw_token(&self.open_paren);
+        printer.print_newline();
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&*self.ty, inner_shape);
+        printer.print_newline();
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for ParenType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // Calculate max width for inner type
+        let single_lined_max_width = shape.width.saturating_sub(2);
+        let multi_lined_max_width = printer
+            .config
+            .line_width
+            .saturating_sub(shape.indent + printer.config.indent_width);
+
+        let mut inner_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let inner_shape = Shape {
+            width: single_lined_max_width,
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+        let info = inner_printer.print(&*self.ty, inner_shape);
+
+        if info.multi_lined || inner_printer.output.len() > single_lined_max_width {
+            // We do not fit, switch to multi-line
+            let inner_shape = Shape {
+                width: multi_lined_max_width,
+                indent: shape.indent + printer.config.indent_width,
+                first_line_offset: 0,
+            };
+            printer.print_raw_token(&self.open_paren);
+            printer.print_newline();
+            printer.print_spaces(inner_shape.indent);
+            printer.print(&*self.ty, inner_shape);
+            printer.print_newline();
+            printer.print_spaces(shape.indent);
+            printer.print_raw_token(&self.close_paren);
+            PrintInfo::default_multi_lined()
+        } else {
+            // We fit, print single-line
+            printer.print_raw_token(&self.open_paren);
+            printer.append_from_printer(inner_printer);
+            printer.print_raw_token(&self.close_paren);
+            PrintInfo::default_single_line()
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct PathType {
     pub first: t::Word,
-    pub rest: Vec<(t::Dot, t::Word)>,
+    pub rest: Vec<(t::DoubleColon, t::Word)>,
 }
 
 impl Printable for PathType {
+    /// Always prints as a single line.
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.first);
-        for (dot, word) in &self.rest {
-            printer.print_raw_token(dot);
+        for (double_colon, word) in &self.rest {
+            printer.print_raw_token(double_colon);
             printer.print_raw_token(word);
         }
         PrintInfo::default_single_line()
@@ -94,20 +179,258 @@ impl Printable for StringType {
 
 #[derive(Debug)]
 pub struct UnionType {
-    pub first: Box<Type>,
-    pub rest: Vec<(t::Pipe, Box<Type>)>,
+    pub first: Box<UnionTypeMember>,
+    pub rest: Vec<(t::Pipe, UnionTypeMember)>,
+}
+
+impl PrintMultiLine for UnionType {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut info = printer.print(&*self.first, shape.clone());
+        for (pipe, ty) in &self.rest {
+            info.multi_lined = true;
+            printer.print_newline();
+            printer.print_spaces(shape.indent + printer.config.indent_width);
+            printer.print_raw_token(pipe);
+            printer.print_str(" ");
+            printer.print(ty, shape.clone());
+        }
+        info
+    }
 }
 
 impl Printable for UnionType {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.first, shape.clone());
+        // try printing single-line first, then multi-line if it doesn't fit
+
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let mut multi_line = false;
+        multi_line |= single_line_printer
+            .print(&*self.first, shape.clone())
+            .multi_lined;
         for (pipe, ty) in &self.rest {
-            printer.print_str(" ");
-            printer.print_raw_token(pipe);
-            printer.print_str(" ");
-            printer.print(&**ty, shape.clone());
+            if multi_line || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(&self, shape, printer);
+            }
+            single_line_printer.print_str(" ");
+            single_line_printer.print_raw_token(pipe);
+            single_line_printer.print_str(" ");
+            multi_line |= single_line_printer.print(ty, shape.clone()).multi_lined;
         }
+        if multi_line || single_line_printer.output.len() > shape.width {
+            return Self::print_multi_line(&self, shape, printer);
+        }
+
+        printer.append_from_printer(single_line_printer);
         PrintInfo::default_single_line()
+    }
+}
+
+#[derive(Debug)]
+pub enum UnionTypeMember {
+    Paren(ParenType),
+    Path(PathType),
+    String(StringType),
+    Optional(OptionalType),
+    Array(ArrayType),
+    Generic(GenericType),
+    Function(FunctionType),
+    /// Types constrained by attributes.
+    Constrained(TextRange), // TODO
+    Unknown(TextRange),
+}
+
+impl UnionTypeMember {
+    /// Take a base type (no postfix operators).
+    /// If there are postix operators, they will remain in the iterator.
+    ///
+    /// So Paren, Path, String, or Function.
+    fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
+        let first = it.expect_next("a type")?;
+        match first.kind() {
+            SyntaxKind::L_PAREN => {
+                // Either a parenthesized type or a function type
+                let open_paren = StrongAstError::assert_is_token(first)?;
+                let mut items = Vec::new();
+                let end_paren = loop {
+                    let Some(elem) = it.next() else {
+                        return Err(StrongAstError::missing(
+                            SyntaxKind::R_PAREN,
+                            open_paren.text_range(),
+                        ));
+                    };
+                    match elem.kind() {
+                        SyntaxKind::R_PAREN => {
+                            let token = StrongAstError::assert_is_token(elem)?;
+                            break token;
+                        }
+                        SyntaxKind::FUNCTION_TYPE_PARAM => {
+                            let param = FunctionTypeParam::from_cst(elem)?;
+                            let comma = it
+                                .next_if(|elem| elem.kind() == SyntaxKind::COMMA)
+                                .map(|comma| {
+                                    let comma = StrongAstError::assert_is_token(comma)?;
+                                    Ok(t::Comma::new_from_span(comma.text_range()))
+                                })
+                                .transpose()?;
+                            items.push((param, comma));
+                        }
+                        _ => {
+                            return Err(StrongAstError::UnexpectedKindDesc {
+                                expected_desc: "FUNCTION_TYPE_PARAM or R_PAREN".into(),
+                                found: elem.kind(),
+                                at: elem.text_range(),
+                            });
+                        }
+                    }
+                };
+                let must_be_func_type = items.len() != 1
+                    || items
+                        .iter()
+                        .any(|item| item.0.name.is_some() || item.1.is_some());
+                if must_be_func_type {
+                    let arrow = it.expect_token_of_kind(SyntaxKind::ARROW)?;
+                    let return_ty = it.expect_next("a type")?;
+                    let return_ty = Type::from_cst(return_ty)?;
+
+                    Ok(UnionTypeMember::Function(FunctionType {
+                        open_paren: t::LParen::new_from_span(open_paren.text_range()),
+                        params: items,
+                        close_paren: t::RParen::new_from_span(end_paren.text_range()),
+                        arrow: t::Arrow::new_from_span(arrow.text_range()),
+                        return_type: Box::new(return_ty),
+                    }))
+                } else {
+                    let (inner, _) = items
+                        .pop()
+                        .unwrap_or_else(|| unreachable!("we checked it has length 1"));
+                    Ok(UnionTypeMember::Paren(ParenType {
+                        open_paren: t::LParen::new_from_span(open_paren.text_range()),
+                        ty: inner.ty,
+                        close_paren: t::RParen::new_from_span(end_paren.text_range()),
+                    }))
+                }
+            }
+            SyntaxKind::WORD => {
+                let first = StrongAstError::assert_is_token(first)?;
+                let mut rest = Vec::new();
+                while let Some(double_colon) =
+                    it.next_if(|elem| elem.kind() == SyntaxKind::DOUBLE_COLON)
+                {
+                    let double_colon = StrongAstError::assert_is_token(double_colon)?;
+                    let word = it.expect_token_of_kind(SyntaxKind::WORD)?;
+                    rest.push((
+                        t::DoubleColon::new_from_span(double_colon.text_range()),
+                        t::Word::new_from_span(word.text_range()),
+                    ));
+                }
+                Ok(UnionTypeMember::Path(PathType {
+                    first: t::Word::new_from_span(first.text_range()),
+                    rest,
+                }))
+            }
+            SyntaxKind::STRING_LITERAL => {
+                let node = StrongAstError::assert_is_node(first)?;
+
+                // there might be some preceding trivia
+                let Some(open_quote) =
+                    node.first_child_or_token_by_kind(&|kind| kind == SyntaxKind::QUOTE)
+                else {
+                    return Err(StrongAstError::missing(SyntaxKind::QUOTE, it.parent));
+                };
+                let range =
+                    TextRange::new(open_quote.text_range().start(), node.text_range().end());
+                Ok(UnionTypeMember::String(StringType(
+                    t::QuotedString::new_from_span(range),
+                )))
+            }
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "L_PAREN, WORD, or STRING_LITERAL".into(),
+                found,
+                at: first.text_range(),
+            }),
+        }
+    }
+    pub fn take(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
+        let mut ty = Self::take_base_type(it)?;
+
+        // Handle non-union postfix operators: `[][][][]...`, `?`, `<...>`
+        loop {
+            if it
+                .peek()
+                .is_some_and(|elem| elem.kind() == SyntaxKind::L_BRACKET)
+            {
+                // Array type
+                let mut brackets = Vec::new();
+                while let Some(open_bracket) = it.next_if_kind(SyntaxKind::L_BRACKET) {
+                    let open_bracket = StrongAstError::assert_is_token(open_bracket)?;
+                    let close_bracket = it.expect_token_of_kind(SyntaxKind::R_BRACKET)?;
+                    let open_bracket = t::LBracket::new_from_span(open_bracket.text_range());
+                    let close_bracket = t::RBracket::new_from_span(close_bracket.text_range());
+                    brackets.push((open_bracket, close_bracket));
+                }
+                ty = UnionTypeMember::Array(ArrayType {
+                    ty: Box::new(ty.into()),
+                    brackets,
+                });
+                continue;
+            } else if let Some(question) = it.next_if_kind(SyntaxKind::QUESTION) {
+                // Optional type
+                let question = t::Question::new_from_span(question.text_range());
+                ty = UnionTypeMember::Optional(OptionalType {
+                    ty: Box::new(ty.into()),
+                    question,
+                });
+                continue;
+            } else if let Some(type_args) = it.next_if_kind(SyntaxKind::TYPE_ARGS) {
+                // Generic type
+                let type_args = TypeArgs::from_cst(type_args)?;
+                ty = UnionTypeMember::Generic(GenericType {
+                    base: Box::new(ty.into()),
+                    args: type_args,
+                });
+                continue;
+            }
+            // Done with postfix operators
+            break;
+        }
+
+        Ok(ty)
+    }
+}
+
+impl From<UnionTypeMember> for Type {
+    fn from(member: UnionTypeMember) -> Self {
+        match member {
+            UnionTypeMember::Paren(paren) => Type::Paren(paren),
+            UnionTypeMember::Path(path) => Type::Path(path),
+            UnionTypeMember::String(string) => Type::String(string),
+            UnionTypeMember::Optional(optional) => Type::Optional(optional),
+            UnionTypeMember::Array(array) => Type::Array(array),
+            UnionTypeMember::Generic(generic) => Type::Generic(generic),
+            UnionTypeMember::Function(function) => Type::Function(function),
+            UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => {
+                Type::Unknown(range)
+            }
+        }
+    }
+}
+
+impl Printable for UnionTypeMember {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            UnionTypeMember::Paren(paren) => paren.print(shape, printer),
+            UnionTypeMember::Path(path) => path.print(shape, printer),
+            UnionTypeMember::String(string) => string.print(shape, printer),
+            UnionTypeMember::Optional(optional) => optional.print(shape, printer),
+            UnionTypeMember::Array(array) => array.print(shape, printer),
+            UnionTypeMember::Generic(generic) => generic.print(shape, printer),
+            UnionTypeMember::Function(function) => function.print(shape, printer),
+            UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => {
+                printer.print_input_range(*range);
+                PrintInfo::default_single_line()
+            }
+        }
     }
 }
 
@@ -119,9 +442,9 @@ pub struct OptionalType {
 
 impl Printable for OptionalType {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.ty, shape);
+        let info = printer.print(&*self.ty, shape);
         printer.print_raw_token(&self.question);
-        PrintInfo::default_single_line()
+        info
     }
 }
 
@@ -133,65 +456,283 @@ pub struct ArrayType {
 
 impl Printable for ArrayType {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.ty, shape);
+        let info = printer.print(&*self.ty, shape);
         for (open, close) in &self.brackets {
             printer.print_raw_token(open);
             printer.print_raw_token(close);
         }
-        PrintInfo::default_single_line()
+        info
     }
 }
 
 #[derive(Debug)]
 pub struct GenericType {
     pub base: Box<Type>,
-    pub open_angle: t::Less,
-    pub params: TextRange, // TODO
-    pub close_angle: t::Greater,
+    pub args: TypeArgs,
 }
 
 impl Printable for GenericType {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.base, shape);
+        let mut multi_lined = false;
+        multi_lined |= printer.print(&*self.base, shape.clone()).multi_lined;
+        multi_lined |= printer.print(&self.args, shape).multi_lined;
+        PrintInfo { multi_lined }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::TYPE_ARGS`] node.
+#[derive(Debug)]
+pub struct TypeArgs {
+    pub open_angle: t::Less,
+    pub first: Box<Type>,
+    pub rest: Vec<(t::Comma, Type)>,
+    pub close_angle: t::Greater,
+}
+
+impl FromCST for TypeArgs {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_ARGS)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let open_angle = it.expect_token_of_kind(SyntaxKind::LESS)?;
+
+        let first = it.expect_next("a type")?;
+        let first = Type::from_cst(first)?;
+
+        let mut rest = Vec::new();
+        let close_angle = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(
+                    SyntaxKind::GREATER,
+                    open_angle.text_range(),
+                ));
+            };
+            match elem.kind() {
+                SyntaxKind::COMMA => {
+                    let comma = StrongAstError::assert_is_token(elem)?;
+                    let comma = t::Comma::new_from_span(comma.text_range());
+                    let next = it.expect_next("a type")?;
+                    let next = Type::from_cst(next)?;
+                    rest.push((comma, next));
+                }
+                SyntaxKind::GREATER => {
+                    let token = StrongAstError::assert_is_token(elem)?;
+                    let close_angle = t::Greater::new_from_span(token.text_range());
+                    break close_angle;
+                }
+                _ => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "COMMA or GREATER".into(),
+                        found: elem.kind(),
+                        at: elem.text_range(),
+                    });
+                }
+            }
+        };
+
+        it.expect_end()?;
+
+        Ok(TypeArgs {
+            open_angle: t::Less::new_from_span(open_angle.text_range()),
+            first: Box::new(first),
+            rest,
+            close_angle,
+        })
+    }
+}
+
+impl PrintMultiLine for TypeArgs {
+    /// Multi-line layout: each type argument on its own indented line
+    /// with trailing comma. Closing `>` on its own line.
+    ///
+    /// ```baml
+    /// <
+    ///     SomeLongType,
+    ///     AnotherType,
+    /// >
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
         printer.print_raw_token(&self.open_angle);
-        printer.print_input_range(self.params);
+        printer.print_newline();
+
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&*self.first, inner_shape.clone());
+        printer.print_str(",");
+        printer.print_newline();
+
+        for (_comma, ty) in &self.rest {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(ty, inner_shape.clone());
+            printer.print_str(",");
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_angle);
-        PrintInfo::default_single_line()
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for TypeArgs {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        single_line_printer.print_raw_token(&self.open_angle);
+        multi_lined |= single_line_printer
+            .print(&*self.first, Shape::unlimited_single_line())
+            .multi_lined;
+        for (comma, ty) in &self.rest {
+            single_line_printer.print_raw_token(comma);
+            single_line_printer.print_str(" ");
+            multi_lined |= single_line_printer
+                .print(ty, Shape::unlimited_single_line())
+                .multi_lined;
+        }
+        single_line_printer.print_raw_token(&self.close_angle);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
     }
 }
 
 #[derive(Debug)]
 pub struct FunctionType {
     pub open_paren: t::LParen,
-    pub params: Vec<FunctionTypeParam>,
+    pub params: Vec<(FunctionTypeParam, Option<t::Comma>)>,
     pub close_paren: t::RParen,
     pub arrow: t::Arrow,
     pub return_type: Box<Type>,
 }
 
-impl Printable for FunctionType {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl PrintMultiLine for FunctionType {
+    /// Multi-line layout: each parameter on its own indented line
+    /// with trailing comma. Arrow and return type follow the closing paren.
+    ///
+    /// ```baml
+    /// (
+    ///     SomeLongTypeThatForcesMultilining,
+    ///     can_have_names: AnotherLongType,
+    /// ) -> ReturnType
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
         printer.print_raw_token(&self.open_paren);
-        for (i, param) in self.params.iter().enumerate() {
-            if i > 0 {
-                printer.print_str(", ");
+        printer.print_newline();
+
+        for (param, comma) in &self.params {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(param, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+            } else {
+                printer.print_str(",");
             }
-            printer.print(param, shape.clone());
+            printer.print_newline();
         }
+
+        printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_paren);
         printer.print_str(" ");
         printer.print_raw_token(&self.arrow);
         printer.print_str(" ");
         printer.print(&*self.return_type, shape);
-        PrintInfo::default_single_line()
+        PrintInfo::default_multi_lined()
     }
 }
 
+impl Printable for FunctionType {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        single_line_printer.print_raw_token(&self.open_paren);
+        for (i, (param, comma)) in self.params.iter().enumerate() {
+            multi_lined |= single_line_printer
+                .print(param, Shape::unlimited_single_line())
+                .multi_lined;
+            if i + 1 < self.params.len() {
+                if let Some(comma) = comma {
+                    single_line_printer.print_raw_token(comma);
+                } else {
+                    single_line_printer.print_str(",");
+                }
+                single_line_printer.print_str(" ");
+            }
+        }
+        single_line_printer.print_raw_token(&self.close_paren);
+        single_line_printer.print_str(" ");
+        single_line_printer.print_raw_token(&self.arrow);
+        single_line_printer.print_str(" ");
+        multi_lined |= single_line_printer
+            .print(&*self.return_type, Shape::unlimited_single_line())
+            .multi_lined;
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::FUNCTION_TYPE_PARAM`] node.
+///
+/// Exists in [`FunctionType`] but also in [`ParenType`] for some reason.
 #[derive(Debug)]
 pub struct FunctionTypeParam {
     pub name: Option<(t::Word, Option<t::Colon>)>,
     pub ty: Box<Type>,
-    pub comma: Option<t::Comma>,
+}
+
+impl FromCST for FunctionTypeParam {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let name = if let Some(name) = it.next_if(|elem| elem.kind() == SyntaxKind::WORD) {
+            let name = t::Word::new_from_span(name.text_range());
+            let colon = it
+                .next_if(|elem| elem.kind() == SyntaxKind::COLON)
+                .map(|elem| {
+                    let colon = StrongAstError::assert_is_token(elem)?;
+                    Ok(t::Colon::new_from_span(colon.text_range()))
+                })
+                .transpose()?;
+            Some((name, colon))
+        } else {
+            None
+        };
+
+        let ty = it.expect_next("a type")?;
+        let ty = Type::from_cst(ty)?;
+
+        it.expect_end()?;
+
+        Ok(FunctionTypeParam {
+            name,
+            ty: Box::new(ty),
+        })
+    }
 }
 
 impl Printable for FunctionTypeParam {
@@ -208,193 +749,4 @@ impl Printable for FunctionTypeParam {
         printer.print(&*self.ty, shape);
         PrintInfo::default_single_line()
     }
-}
-
-fn parse_type_from_elements(
-    elements: &[SyntaxElement],
-    full_range: TextRange,
-) -> Result<Type, StrongAstError> {
-    if elements.is_empty() {
-        return Ok(Type::Unknown(full_range));
-    }
-
-    // First, handle function types (start with L_PAREN)
-    if elements.first().map(|e| e.kind()) == Some(SyntaxKind::L_PAREN) {
-        return parse_function_type(elements, full_range);
-    }
-
-    // Parse base type (could be Path, String, Integer, etc.)
-    let (base_type, rest) = parse_base_type(elements, full_range)?;
-
-    // Handle postfix operators: [], ?, |
-    parse_postfix_type(base_type, rest, full_range)
-}
-
-fn parse_base_type(
-    elements: &[SyntaxElement],
-    full_range: TextRange,
-) -> Result<(Type, &[SyntaxElement]), StrongAstError> {
-    if elements.is_empty() {
-        return Ok((Type::Unknown(full_range), elements));
-    }
-
-    let first = &elements[0];
-
-    match first.kind() {
-        SyntaxKind::WORD => {
-            // Could be a simple path like "string" or dotted path like "User.Name"
-            let mut path_parts = vec![t::Word {
-                token_span: first.text_range(),
-            }];
-            let mut idx = 1;
-            let mut dots = Vec::new();
-
-            while idx + 1 < elements.len() {
-                if elements[idx].kind() == SyntaxKind::DOT
-                    && elements[idx + 1].kind() == SyntaxKind::WORD
-                {
-                    dots.push(t::Dot::new_from_span(elements[idx].text_range()));
-                    path_parts.push(t::Word {
-                        token_span: elements[idx + 1].text_range(),
-                    });
-                    idx += 2;
-                } else {
-                    break;
-                }
-            }
-
-            if dots.is_empty() {
-                Ok((
-                    Type::Path(PathType {
-                        first: path_parts[0].clone(),
-                        rest: Vec::new(),
-                    }),
-                    &elements[idx..],
-                ))
-            } else {
-                let first = path_parts.remove(0);
-                let rest = dots.into_iter().zip(path_parts).collect();
-                Ok((Type::Path(PathType { first, rest }), &elements[idx..]))
-            }
-        }
-        SyntaxKind::STRING_LITERAL => {
-            let token = StrongAstError::assert_is_token(first.clone())?;
-            Ok((
-                Type::String(StringType(t::QuotedString {
-                    token_span: token.text_range(),
-                })),
-                &elements[1..],
-            ))
-        }
-        SyntaxKind::INTEGER_LITERAL => {
-            // Integer literals in types (like "200" for status codes)
-            // Treat as a path for now
-            Ok((
-                Type::Path(PathType {
-                    first: t::Word {
-                        token_span: first.text_range(),
-                    },
-                    rest: Vec::new(),
-                }),
-                &elements[1..],
-            ))
-        }
-        _ => Ok((Type::Unknown(full_range), elements)),
-    }
-}
-
-fn parse_postfix_type(
-    mut base: Type,
-    mut rest: &[SyntaxElement],
-    full_range: TextRange,
-) -> Result<Type, StrongAstError> {
-    loop {
-        if rest.is_empty() {
-            return Ok(base);
-        }
-
-        match rest[0].kind() {
-            SyntaxKind::L_BRACKET => {
-                // Array type
-                if rest.len() >= 2 && rest[1].kind() == SyntaxKind::R_BRACKET {
-                    base = Type::Array(ArrayType {
-                        ty: Box::new(base),
-                        brackets: vec![(
-                            t::LBracket::new_from_span(rest[0].text_range()),
-                            t::RBracket::new_from_span(rest[1].text_range()),
-                        )],
-                    });
-                    rest = &rest[2..];
-                } else {
-                    return Ok(Type::Unknown(full_range));
-                }
-            }
-            SyntaxKind::QUESTION => {
-                // Optional type
-                base = Type::Optional(OptionalType {
-                    ty: Box::new(base),
-                    question: t::Question::new_from_span(rest[0].text_range()),
-                });
-                rest = &rest[1..];
-            }
-            SyntaxKind::PIPE => {
-                // Union type
-                let pipe = t::Pipe::new_from_span(rest[0].text_range());
-                rest = &rest[1..];
-
-                let (next_type, remaining) = parse_base_type(rest, full_range)?;
-                let next_type = parse_postfix_type(next_type, remaining, full_range)?;
-
-                // Convert to union
-                match base {
-                    Type::Union(UnionType {
-                        first,
-                        rest: mut union_rest,
-                    }) => {
-                        union_rest.push((pipe, Box::new(next_type)));
-                        base = Type::Union(UnionType {
-                            first,
-                            rest: union_rest,
-                        });
-                    }
-                    _ => {
-                        base = Type::Union(UnionType {
-                            first: Box::new(base),
-                            rest: vec![(pipe, Box::new(next_type))],
-                        });
-                    }
-                }
-                rest = &[];
-            }
-            SyntaxKind::LESS => {
-                // Generic type
-                if let Some(close_idx) = rest.iter().position(|e| e.kind() == SyntaxKind::GREATER) {
-                    let params_start = rest[0].text_range().end();
-                    let params_end = rest[close_idx].text_range().start();
-                    base = Type::Generic(GenericType {
-                        base: Box::new(base),
-                        open_angle: t::Less::new_from_span(rest[0].text_range()),
-                        params: TextRange::new(params_start, params_end), // TODO: parse params properly
-                        close_angle: t::Greater::new_from_span(rest[close_idx].text_range()),
-                    });
-                    rest = &rest[close_idx + 1..];
-                } else {
-                    return Ok(Type::Unknown(full_range));
-                }
-            }
-            _ => {
-                // Unknown postfix, stop parsing
-                return Ok(base);
-            }
-        }
-    }
-}
-
-fn parse_function_type(
-    elements: &[SyntaxElement],
-    full_range: TextRange,
-) -> Result<Type, StrongAstError> {
-    // For now, return Unknown for function types
-    // TODO: Implement full function type parsing
-    Ok(Type::Unknown(full_range))
 }
