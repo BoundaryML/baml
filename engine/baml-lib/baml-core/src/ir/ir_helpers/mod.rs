@@ -22,6 +22,7 @@ use super::{repr, ExprFunctionNode};
 use crate::{
     error_not_found,
     ir::{
+        jinja_helpers::get_env,
         repr::{IntermediateRepr, Walker},
         Class, Client, Enum, EnumValue, Field, FunctionNode, RetryPolicy, TemplateString, TestCase,
         TypeAlias,
@@ -2051,10 +2052,10 @@ impl TemplateStringRenderer for IntermediateRepr {
             args_map.insert(param.name.clone(), arg.clone());
         }
 
-        // Collect all template_strings as Jinja macro definitions.
-        // This allows nested template_string calls to work (e.g., Outer() calling Inner()).
-        // This matches how the prompt renderer handles template_strings.
-        let macro_defs: String = self
+        // Collect all template_strings as Jinja macro definitions, then chain
+        // the target template at the end. This matches how the prompt renderer
+        // in jinja-runtime injects macros.
+        let full_template = self
             .walk_template_strings()
             .map(|t| {
                 let args_str = t
@@ -2064,19 +2065,19 @@ impl TemplateStringRenderer for IntermediateRepr {
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "{{% macro {}({}) %}}{}{{% endmacro %}}\n",
-                    t.name(),
-                    args_str,
-                    t.template()
+                    "{{% macro {name}({args}) %}}{template}{{% endmacro %}}",
+                    name = t.name(),
+                    args = args_str,
+                    template = t.template(),
                 )
             })
-            .collect();
+            .chain(std::iter::once(template_content.to_string()))
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        // Prepend macro definitions to the template content
-        let full_template = format!("{}{}", macro_defs, template_content);
-
-        // Create a minijinja environment and render the template
-        let mut env = minijinja::Environment::new();
+        // Use the shared environment (trim_blocks, lstrip_blocks, debug,
+        // null formatter, regex_match/sum filters) to match the prompt renderer.
+        let mut env = get_env();
         env.add_template("__template__", &full_template)
             .map_err(|e| anyhow::anyhow!("Failed to parse template '{}': {}", name, e))?;
 
@@ -2090,5 +2091,123 @@ impl TemplateStringRenderer for IntermediateRepr {
             .map_err(|e| anyhow::anyhow!("Failed to render template '{}': {}", name, e))?;
 
         Ok(rendered)
+    }
+}
+
+#[cfg(test)]
+mod render_template_tests {
+    use baml_types::TemplateStringRenderer;
+    use repr::make_test_ir;
+
+    use super::*;
+
+    #[test]
+    fn render_basic_template() {
+        let ir = make_test_ir(
+            r##"
+            template_string Greet(name: string) #"
+                Hello, {{ name }}!
+            "#
+            "##,
+        )
+        .unwrap();
+        let result = ir
+            .render_template("Greet", &[serde_json::json!("world")])
+            .unwrap();
+        assert_eq!(result.trim(), "Hello, world!");
+    }
+
+    #[test]
+    fn render_null_as_null_string() {
+        let ir = make_test_ir(
+            r##"
+            template_string ShowVal(val: string?) #"
+                Value is {{ val }}
+            "#
+            "##,
+        )
+        .unwrap();
+        let result = ir
+            .render_template("ShowVal", &[serde_json::json!(null)])
+            .unwrap();
+        assert_eq!(result.trim(), "Value is null");
+    }
+
+    #[test]
+    fn render_trim_blocks() {
+        // With trim_blocks + lstrip_blocks, the {% if %} / {% endif %} control
+        // lines should not introduce extra blank lines.
+        let ir = make_test_ir(
+            r##"
+            template_string Cond(flag: bool) #"
+            {% if flag %}
+            yes
+            {% endif %}
+            "#
+            "##,
+        )
+        .unwrap();
+        let result = ir
+            .render_template("Cond", &[serde_json::json!(true)])
+            .unwrap();
+        assert_eq!(result.trim(), "yes");
+    }
+
+    #[test]
+    fn render_nested_template_string() {
+        let ir = make_test_ir(
+            r##"
+            template_string Inner() #"
+                INNER
+            "#
+
+            template_string Outer() #"
+                before {{ Inner() }} after
+            "#
+            "##,
+        )
+        .unwrap();
+        let result = ir.render_template("Outer", &[]).unwrap();
+        // Inner() should be expanded inline.
+        assert!(result.contains("INNER"), "rendered: {result}");
+        assert!(result.contains("before"), "rendered: {result}");
+        assert!(result.contains("after"), "rendered: {result}");
+    }
+
+    #[test]
+    fn render_regex_match_filter() {
+        let ir = make_test_ir(
+            r##"
+            template_string CheckRegex(text: string) #"
+                {{ text | regex_match("^hello") }}
+            "#
+            "##,
+        )
+        .unwrap();
+        let yes = ir
+            .render_template("CheckRegex", &[serde_json::json!("hello world")])
+            .unwrap();
+        assert_eq!(yes.trim(), "true");
+
+        let no = ir
+            .render_template("CheckRegex", &[serde_json::json!("world hello")])
+            .unwrap();
+        assert_eq!(no.trim(), "false");
+    }
+
+    #[test]
+    fn render_sum_filter() {
+        let ir = make_test_ir(
+            r##"
+            template_string Total(nums: int[]) #"
+                {{ nums | sum }}
+            "#
+            "##,
+        )
+        .unwrap();
+        let result = ir
+            .render_template("Total", &[serde_json::json!([1, 2, 3])])
+            .unwrap();
+        assert_eq!(result.trim(), "6");
     }
 }
