@@ -733,8 +733,8 @@ fn match_mixed_literal_typed_guard() -> anyhow::Result<()> {
 fn match_guard_on_typed_pattern() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            class Success { data: string }
-            class Failure { reason: string }
+            class Success { data string }
+            class Failure { reason string }
 
             function classify(result Success | Failure) -> string {
                 match (result) {
@@ -780,8 +780,8 @@ fn match_guard_on_typed_pattern() -> anyhow::Result<()> {
 fn match_multiple_typed_patterns_with_guards() -> anyhow::Result<()> {
     assert_compiles(Program {
         source: r#"
-            class Success { code: int }
-            class Failure { code: int }
+            class Success { code int }
+            class Failure { code int }
 
             function classify(result Success | Failure, strict bool) -> string {
                 match (result) {

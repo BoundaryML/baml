@@ -2723,9 +2723,8 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                 // Check field types against the expected class fields
                 for (field_name, value_expr) in fields {
                     // Clone the field type to avoid borrow issues
-                    let expected_field_ty = ctx
-                        .lookup_class_field(&expected_fqn.name, field_name)
-                        .cloned();
+                    let class_key = expected_fqn.display_name();
+                    let expected_field_ty = ctx.lookup_class_field(&class_key, field_name).cloned();
                     if let Some(field_ty) = expected_field_ty {
                         check_expr(ctx, *value_expr, body, &field_ty);
                     } else {
@@ -2745,10 +2744,9 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
             } else if let Ty::TypeAlias(expected_fqn) = expected {
                 use baml_compiler_hir::QualifiedName;
                 // Similar handling for TypeAlias types
+                let alias_key = expected_fqn.display_name();
                 for (field_name, value_expr) in fields {
-                    let expected_field_ty = ctx
-                        .lookup_class_field(&expected_fqn.name, field_name)
-                        .cloned();
+                    let expected_field_ty = ctx.lookup_class_field(&alias_key, field_name).cloned();
                     if let Some(field_ty) = expected_field_ty {
                         check_expr(ctx, *value_expr, body, &field_ty);
                     } else {
@@ -3073,20 +3071,42 @@ fn infer_binary_op(
 
     use crate::types::LiteralValue;
 
+    // Helpers check base type and literal types, including unions of the same kind.
+    // e.g., `20 | 0` is int-like because all members are int literals.
+    fn is_int_like(ty: &Ty) -> bool {
+        match ty {
+            Ty::Int | Ty::Literal(LiteralValue::Int(_)) => true,
+            Ty::Union(members) => members.iter().all(is_int_like),
+            _ => false,
+        }
+    }
+    fn is_float_like(ty: &Ty) -> bool {
+        match ty {
+            Ty::Float | Ty::Literal(LiteralValue::Float(_)) => true,
+            Ty::Union(members) => members.iter().all(is_float_like),
+            _ => false,
+        }
+    }
+    fn is_string_like(ty: &Ty) -> bool {
+        match ty {
+            Ty::String | Ty::Literal(LiteralValue::String(_)) => true,
+            Ty::Union(members) => members.iter().all(is_string_like),
+            _ => false,
+        }
+    }
+    fn is_bool_like(ty: &Ty) -> bool {
+        match ty {
+            Ty::Bool | Ty::Literal(LiteralValue::Bool(_)) => true,
+            Ty::Union(members) => members.iter().all(is_bool_like),
+            _ => false,
+        }
+    }
+
     // Don't emit errors for operations involving unknown or error types - the root cause
     // (e.g., unknown variable) has already been reported
     if lhs.is_unknown() || lhs.is_error() || rhs.is_unknown() || rhs.is_error() {
         return Ty::Unknown;
     }
-
-    // Helper to check if a type is int-like (Int or Int literal)
-    let is_int_like = |ty: &Ty| matches!(ty, Ty::Int | Ty::Literal(LiteralValue::Int(_)));
-    // Helper to check if a type is float-like (Float or Float literal)
-    let is_float_like = |ty: &Ty| matches!(ty, Ty::Float | Ty::Literal(LiteralValue::Float(_)));
-    // Helper to check if a type is string-like (String or String literal)
-    let is_string_like = |ty: &Ty| matches!(ty, Ty::String | Ty::Literal(LiteralValue::String(_)));
-    // Helper to check if a type is bool-like (Bool or Bool literal)
-    let is_bool_like = |ty: &Ty| matches!(ty, Ty::Bool | Ty::Literal(LiteralValue::Bool(_)));
 
     match op {
         // Arithmetic operations (and string concatenation for Add)
@@ -3134,7 +3154,7 @@ fn infer_binary_op(
         Lt | Le | Gt | Ge => {
             let numeric_lhs = is_int_like(lhs) || is_float_like(lhs);
             let numeric_rhs = is_int_like(rhs) || is_float_like(rhs);
-            if numeric_lhs && numeric_rhs {
+            if (numeric_lhs && numeric_rhs) || (is_string_like(lhs) && is_string_like(rhs)) {
                 Ty::Bool
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
@@ -3249,15 +3269,15 @@ fn infer_field_access(
     }
 
     // Special case: methods on WatchAccessor type
-    if let Ty::WatchAccessor(inner_ty) = base {
+    if let Ty::WatchAccessor(_inner_ty) = base {
         match field.as_str() {
             "options" => {
                 // $watch.options(filter) - filter can be a function, "manual", or "never"
                 // Returns null (void operation)
                 return Ty::Function {
-                    // First param is receiver (the watched value), second is filter
+                    // First param is receiver (the WatchAccessor), second is filter
                     params: vec![
-                        (None, *inner_ty.clone()),
+                        (None, base.clone()),
                         (Some(Name::new("filter")), Ty::Unknown),
                     ], // Filter type is flexible
                     ret: Box::new(Ty::Null),
@@ -3267,7 +3287,7 @@ fn infer_field_access(
                 // $watch.notify() - manually trigger notification
                 // Returns null (void operation)
                 return Ty::Function {
-                    params: vec![(None, *inner_ty.clone())], // Just the receiver
+                    params: vec![(None, base.clone())], // Just the receiver
                     ret: Box::new(Ty::Null),
                 };
             }
@@ -3284,10 +3304,12 @@ fn infer_field_access(
 
     // First, try class field lookup for named types
     let found_field = match base {
-        Ty::TypeAlias(fqn) => ctx
-            .lookup(field)
-            .or(ctx.lookup_class_field(&fqn.name, field))
-            .cloned(),
+        Ty::TypeAlias(fqn) => {
+            let key = fqn.display_name();
+            ctx.lookup(field)
+                .or(ctx.lookup_class_field(&key, field))
+                .cloned()
+        }
         Ty::Class(fqn) => {
             // First try to find a method using qualified name (ClassName.methodName)
             let method_qn = QualifiedName::local_method(&fqn.name, field);
@@ -3298,8 +3320,11 @@ fn infer_field_access(
                 }
                 return method_ty;
             }
-            // Check the context's class_fields for this class name
-            ctx.lookup_class_field(&fqn.name, field).cloned()
+            // Check the context's class_fields for this class name.
+            // Use display_name() to get the full qualified path for builtins
+            // (e.g., "baml.http.Response") while keeping simple names for locals.
+            let key = fqn.display_name();
+            ctx.lookup_class_field(&key, field).cloned()
         }
         Ty::Unknown => return Ty::Unknown,
         _ => None,

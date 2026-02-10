@@ -150,10 +150,16 @@ impl StructuralTy {
             }
 
             // Map covariance in value, invariant in key
+            // (with error-recovery: Unknown keys are compatible with any key type)
             (
                 StructuralTy::Map { key: k1, value: v1 },
                 StructuralTy::Map { key: k2, value: v2 },
-            ) => k1 == k2 && v1.is_subtype_of(v2, assumptions),
+            ) => {
+                let keys_compatible = k1 == k2
+                    || matches!(k1.as_ref(), StructuralTy::Unknown | StructuralTy::Error)
+                    || matches!(k2.as_ref(), StructuralTy::Unknown | StructuralTy::Error);
+                keys_compatible && v1.is_subtype_of(v2, assumptions)
+            }
 
             // Int <: Float
             (StructuralTy::Int, StructuralTy::Float) => true,

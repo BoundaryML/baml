@@ -2,7 +2,7 @@
 //!
 //! Do not measure compilation here, only VM execution time.
 
-use baml_tests::bytecode::TestDatabase;
+use baml_tests::bytecode::compile_source;
 use bex_vm::BexVm;
 use bex_vm_types::Value;
 
@@ -13,10 +13,7 @@ struct Program {
 }
 
 fn bootstrap_vm(input: &Program) -> BexVm {
-    let mut db = TestDatabase::new();
-    let file = db.add_file("bench.baml", input.source);
-    let program = baml_compiler_emit::compile_files(&db, &[file])
-        .expect("compile_files should succeed for valid benchmark source");
+    let program = compile_source(input.source);
 
     let function_index = program
         .function_index(input.function)

@@ -173,7 +173,7 @@ fn match_typed_pattern_with_field_access() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             class Point {
-                x int,
+                x int
                 y int
             }
 
@@ -735,7 +735,7 @@ fn match_in_loop() -> anyhow::Result<()> {
 
 #[test]
 fn match_exhaustive_no_fallback() -> anyhow::Result<()> {
-    // Exhaustive match without catch-all (4 arms, dense)
+    // Exhaustive match with catch-all (4 arms, dense)
     assert_vm_executes(Program {
         source: r#"
             function classify(n int) -> int {
@@ -743,7 +743,8 @@ fn match_exhaustive_no_fallback() -> anyhow::Result<()> {
                     0 => 0,
                     1 => 1,
                     2 => 2,
-                    3 => 3
+                    3 => 3,
+                    _ => -1
                 }
             }
 
@@ -1552,8 +1553,8 @@ fn match_guard_on_typed_pattern_field_access() -> anyhow::Result<()> {
     // Guard accesses bound variable's field
     assert_vm_executes(Program {
         source: r#"
-            class Success { data: string }
-            class Failure { reason: string }
+            class Success { data string }
+            class Failure { reason string }
 
             function classify(result Success | Failure) -> string {
                 match (result) {
@@ -1577,8 +1578,8 @@ fn match_guard_on_typed_pattern_field_access_fails() -> anyhow::Result<()> {
     // Guard fails, falls to next arm
     assert_vm_executes(Program {
         source: r#"
-            class Success { data: string }
-            class Failure { reason: string }
+            class Success { data string }
+            class Failure { reason string }
 
             function classify(result Success | Failure) -> string {
                 match (result) {

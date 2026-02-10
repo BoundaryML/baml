@@ -380,7 +380,7 @@ function Greet(name: string) -> string {
     "#
 }
 
-function test_call_llm() -> string {
+function test_call_llm() -> unknown {
     let args = { "name": "World" };
     baml.llm.call_llm_function("Greet", args)
 }
@@ -513,7 +513,7 @@ function Greet(name: string) -> map<string, int> {
     "#
 }
 
-function test_call_llm() -> string {
+function test_call_llm() -> unknown {
     let args = { "name": "World" };
     baml.llm.call_llm_function("Greet", args)
 }

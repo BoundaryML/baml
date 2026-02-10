@@ -5,7 +5,7 @@
 //!
 //! # Contents
 //!
-//! - [`TestDatabase`]: A minimal salsa database for compilation.
+//! - [`ProjectDatabase`] (re-exported): The database used for compilation.
 //! - [`compile_source`]: Compiles BAML source to a VM program.
 //! - [`assert_vm_executes`], [`assert_vm_fails`]: Test assertion helpers.
 //! - [`Program`], [`FailingProgram`]: Test input types.
@@ -24,12 +24,9 @@
 
 #![allow(clippy::needless_pass_by_value)] // Test utilities intentionally take ownership
 
-use std::{
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicU32},
-};
+use std::path::Path;
 
-use baml_base::{FileId, SourceFile};
+pub use baml_project::ProjectDatabase;
 // Re-export BexProgram for engine tests
 pub use bex_program::BexProgram;
 use bex_vm::{BexVm, VmExecState};
@@ -40,126 +37,78 @@ pub use crate::vm::{
     BlockEvent, ExecState, Instance, Instruction, Notification, Object, Value, Variant,
 };
 
-//
-// ──────────────────────────────────────────────────────── TEST DATABASE ─────
-//
-
-/// Minimal test database for compilation tests.
-///
-/// This is a stripped-down version of `baml_db::RootDatabase` that implements
-/// just enough to run `compile_files`. This avoids a dependency cycle between
-/// `baml_compiler_emit` and `baml_db`.
-#[salsa::db]
-#[derive(Clone)]
-pub struct TestDatabase {
-    storage: salsa::Storage<Self>,
-    next_file_id: Arc<AtomicU32>,
-    project: Option<baml_workspace::Project>,
-}
-
-#[salsa::db]
-impl salsa::Database for TestDatabase {}
-
-#[salsa::db]
-impl baml_workspace::Db for TestDatabase {
-    fn project(&self) -> baml_workspace::Project {
-        self.project.expect("project must be set before querying")
-    }
-}
-
-#[salsa::db]
-impl baml_compiler_hir::Db for TestDatabase {}
-
-#[salsa::db]
-impl baml_compiler_tir::Db for TestDatabase {}
-
-#[salsa::db]
-impl baml_compiler_vir::Db for TestDatabase {}
-
-#[salsa::db]
-impl baml_compiler_mir::Db for TestDatabase {}
-
-impl Default for TestDatabase {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TestDatabase {
-    /// Create a new empty test database.
-    pub fn new() -> Self {
-        Self {
-            storage: salsa::Storage::default(),
-            next_file_id: Arc::new(AtomicU32::new(0)),
-            project: None,
-        }
-    }
-
-    /// Add a source file to the database.
-    pub fn add_file(&mut self, path: impl Into<PathBuf>, text: impl Into<String>) -> SourceFile {
-        let file_id = FileId::new(
-            self.next_file_id
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        );
-        SourceFile::new(self, text.into(), path.into(), file_id)
-    }
-
-    /// Load builtin BAML source files (like llm.baml) into the database.
-    fn load_builtin_files(&mut self) -> Vec<SourceFile> {
-        baml_builtins::baml_sources()
-            .map(|src| self.add_file(src.path, src.source))
-            .collect()
-    }
-
-    /// Set the project with the given files, including builtin BAML files.
-    ///
-    /// Builtin files are added after user files to match the order used in
-    /// production (user files first, builtins appended).
-    pub fn set_project(&mut self, user_files: Vec<SourceFile>) {
-        // User files first, then builtin files (matches production order)
-        let builtin_files = self.load_builtin_files();
-        let mut all_files = user_files;
-        all_files.extend(builtin_files);
-        let project = baml_workspace::Project::new(self, PathBuf::new(), all_files);
-        self.project = Some(project);
-    }
-}
+/// Backwards-compatible alias for code that still references `TestDatabase`.
+pub type TestDatabase = ProjectDatabase;
 
 //
 // ────────────────────────────────────────────────────────── COMPILATION ─────
 //
 
-/// Compile BAML source code into a VM program.
-pub fn compile_source(source: &str) -> VmProgram {
-    use baml_workspace::Db as _;
+/// Set up a test database from BAML source code.
+///
+/// Creates a `ProjectDatabase`, sets a project root, and adds the source as
+/// `test.baml`. Builtins are loaded automatically via `set_project_root()`.
+pub fn setup_test_db(source: &str) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(Path::new("."));
+    db.add_file("test.baml", source);
+    db
+}
 
-    let mut db = TestDatabase::new();
-    let file = db.add_file("test.baml", source);
-    db.set_project(vec![file]);
-    // Pass all project files (user + builtin) to compile_files
-    baml_compiler_emit::compile_files(&db, db.project().files(&db))
+/// Assert that a `ProjectDatabase` has no diagnostic errors.
+///
+/// Panics with a descriptive message if any error-level diagnostics are found.
+/// Warnings and info-level diagnostics are ignored.
+pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
+    use baml_compiler_diagnostics::Severity;
+
+    let project = db.get_project().expect("project must be set");
+    let all_files = db.get_source_files();
+    let diagnostics = baml_project::collect_diagnostics(db, project, &all_files);
+    let errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| matches!(d.severity, Severity::Error))
+        .collect();
+    if !errors.is_empty() {
+        let mut msg = String::from("Compilation produced diagnostic errors:\n");
+        for (i, err) in errors.iter().enumerate() {
+            msg.push_str(&format!("  {}. [{}] {}\n", i + 1, err.code(), err.message));
+        }
+        panic!("{msg}");
+    }
+}
+
+/// Compile BAML source code into a VM program.
+///
+/// Also checks for diagnostic errors and panics if any are found.
+pub fn compile_source(source: &str) -> VmProgram {
+    let db = setup_test_db(source);
+    assert_no_diagnostic_errors(&db);
+
+    let project = db.get_project().unwrap();
+    let all_files = project.files(&db).clone();
+    baml_compiler_emit::compile_files(&db, &all_files)
         .expect("compile_files should succeed for valid test source")
 }
 
 /// Compile BAML source code into a `BexProgram` with schema populated.
 ///
-/// This function uses VIR schema to populate the BexProgram schema types
-/// for engine tests.
+/// This function uses VIR schema to populate the `BexProgram` schema types
+/// for engine tests. Also checks for diagnostic errors.
 pub fn compile_source_with_schema(source: &str) -> BexProgram {
     use std::collections::HashMap;
 
-    use baml_workspace::Db as _;
+    let db = setup_test_db(source);
+    assert_no_diagnostic_errors(&db);
 
-    let mut db = TestDatabase::new();
-    let file = db.add_file("test.baml", source);
-    db.set_project(vec![file]);
+    let project = db.get_project().unwrap();
+    let all_files = project.files(&db).clone();
 
-    // Compile to bytecode - pass all project files (user + builtin)
-    let bytecode = baml_compiler_emit::compile_files(&db, db.project().files(&db))
+    // Compile to bytecode
+    let bytecode = baml_compiler_emit::compile_files(&db, &all_files)
         .expect("compile_files should succeed for valid test source");
 
     // Get VIR schema
-    let project = db.project();
     let schema = baml_compiler_vir::project_schema(&db, project);
 
     // VIR schema and bex_program share the same types from baml_type — just clone.

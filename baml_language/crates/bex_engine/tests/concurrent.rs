@@ -26,8 +26,8 @@ async fn test_concurrent_calls_no_race() {
     // Create a simple BAML program with a function that does some allocation
     let source = r#"
         function test_function() -> int {
-            let a = 10 + 1
-            let b = a * 2
+            let a = 10 + 1;
+            let b = a * 2;
             b
         }
     "#;
@@ -64,7 +64,7 @@ async fn test_concurrent_allocations_no_overlap() {
     // Create a BAML program that allocates many objects
     let source = r#"
         function allocate_many() -> string[] {
-            let items = ["a", "b", "c", "d", "e"]
+            let items = ["a", "b", "c", "d", "e"];
             items
         }
     "#;

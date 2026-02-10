@@ -739,7 +739,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "baml_base",
- "baml_builtins",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_compiler_hir",

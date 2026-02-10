@@ -366,6 +366,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
         #[test]
         fn test_03_hir() {
             let mut db = ProjectDatabase::new();
+            db.set_project_root(std::path::Path::new("."));
             let mut output = String::new();
             writeln!(output, "=== HIR ITEMS ===").unwrap();
 

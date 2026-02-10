@@ -42,7 +42,7 @@ async fn test_handle_prevents_gc_collection() {
 async fn test_array_preserved_through_gc() {
     let source = r#"
         function return_array() -> string[] {
-            let items = ["a", "b", "c", "d", "e"]
+            let items = ["a", "b", "c", "d", "e"];
             items
         }
     "#;
@@ -81,10 +81,10 @@ async fn test_array_preserved_through_gc() {
 async fn test_gc_updates_forwarding_pointers() {
     let source = r#"
         function create_objects() -> string[] {
-            let a = "first"
-            let b = "second"
-            let c = "third"
-            let arr = [a, b, c]
+            let a = "first";
+            let b = "second";
+            let c = "third";
+            let arr = [a, b, c];
             arr
         }
     "#;
