@@ -47,7 +47,6 @@ pub fn recursive_fib<const N: i64>(bencher: divan::Bencher) {
 }
 
 #[divan::bench(consts = [1000, 2000, 3000])]
-#[ignore = "loop codegen causes infinite loop"]
 pub fn iterative_fib<const N: i64>(bencher: divan::Bencher) {
     bencher
         .with_inputs(|| {
