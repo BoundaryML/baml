@@ -13,7 +13,7 @@ use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::ErrorContext;
 use rowan::TextRange;
 
-use crate::{ExprId, MatchArmId, MatchArmSpans, PatId, StmtId, TypeId};
+use crate::{CatchArmId, CatchArmSpans, ExprId, MatchArmId, MatchArmSpans, PatId, StmtId, TypeId};
 
 // ============================================================================
 // Span Resolution Context
@@ -229,6 +229,9 @@ pub struct HirSourceMap {
     /// Match arm spans
     match_arm_spans: HashMap<MatchArmId, MatchArmSpans>,
 
+    /// Catch arm spans
+    catch_arm_spans: HashMap<CatchArmId, CatchArmSpans>,
+
     /// Type annotation spans
     type_spans: HashMap<TypeId, Span>,
 }
@@ -293,6 +296,20 @@ impl HirSourceMap {
     /// Get the spans for a match arm.
     pub fn match_arm_spans(&self, id: MatchArmId) -> Option<MatchArmSpans> {
         self.match_arm_spans.get(&id).copied()
+    }
+
+    // ========================================================================
+    // Catch arm mappings
+    // ========================================================================
+
+    /// Insert catch arm spans.
+    pub fn insert_catch_arm(&mut self, id: CatchArmId, spans: CatchArmSpans) {
+        self.catch_arm_spans.insert(id, spans);
+    }
+
+    /// Get the spans for a catch arm.
+    pub fn catch_arm_spans(&self, id: CatchArmId) -> Option<CatchArmSpans> {
+        self.catch_arm_spans.get(&id).copied()
     }
 
     // ========================================================================

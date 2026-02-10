@@ -1128,7 +1128,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
                                 &default_role,
                                 &allowed_roles,
                             );
-                        return Arc::new(FunctionBody::Expr(body, source_map));
+                        return Arc::new(FunctionBody::Expr(body, source_map, None));
                     }
                 }
             }
@@ -1141,7 +1141,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
                 &default_role,
                 &allowed_roles,
             );
-            return Arc::new(FunctionBody::Expr(body, source_map));
+            return Arc::new(FunctionBody::Expr(body, source_map, None));
         }
     }
 
@@ -1155,7 +1155,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
         let param_names: Vec<Name> = sig.params.iter().map(|p| p.name.clone()).collect();
         let (expr_body, source_map) =
             body::lower_llm_to_call_llm_function(func_name.as_str(), &param_names);
-        return Arc::new(FunctionBody::Expr(expr_body, source_map));
+        return Arc::new(FunctionBody::Expr(expr_body, source_map, None));
     }
 
     // Regular function - find it in the source file

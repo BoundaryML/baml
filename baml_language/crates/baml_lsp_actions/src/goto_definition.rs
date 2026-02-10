@@ -102,7 +102,7 @@ pub fn goto_definition(
 
     // Find the expression at this position
     let (expr_body, source_map) = match &*body {
-        baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) => {
+        baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map, _) => {
             (expr_body, source_map)
         }
         _other => return None, // Can't find expressions in missing or error bodies

@@ -82,7 +82,8 @@ fn find_symbol_at_position(
     if let Some(function_loc) = find_function_at_position(db, file_id, position) {
         // Get the function body
         let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
-        let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) = &*body else {
+        let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map, _) = &*body
+        else {
             return None;
         };
 
@@ -194,7 +195,7 @@ fn find_local_definition_at_position(
 
     // Check let statements in the function body
     let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
-    if let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) = &*body {
+    if let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map, _) = &*body {
         for (stmt_id, stmt) in expr_body.stmts.iter() {
             if let baml_db::baml_compiler_hir::Stmt::Let { pattern, .. } = stmt {
                 // Get the pattern name
@@ -305,7 +306,8 @@ fn find_references_to_symbol(db: &ProjectDatabase, target: &ResolvedValue) -> Ve
             if let baml_db::baml_compiler_hir::ItemId::Function(func_loc) = item_id {
                 // Get the function body
                 let body = baml_db::baml_compiler_hir::function_body(db, *func_loc);
-                let baml_db::baml_compiler_hir::FunctionBody::Expr(_expr_body, source_map) = &*body
+                let baml_db::baml_compiler_hir::FunctionBody::Expr(_expr_body, source_map, _) =
+                    &*body
                 else {
                     continue;
                 };

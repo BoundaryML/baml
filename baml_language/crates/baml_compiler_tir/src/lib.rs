@@ -942,7 +942,7 @@ pub fn infer_function_body<'db>(
 
     // Extract source map from body if available
     let hir_source_map = match body {
-        FunctionBody::Expr(_, source_map) => Some(source_map.clone()),
+        FunctionBody::Expr(_, source_map, _) => Some(source_map.clone()),
         _ => None,
     };
 
@@ -967,7 +967,7 @@ pub fn infer_function_body<'db>(
 
     // Type check the body against the expected return type (checking mode for bidirectional typing)
     let (trailing_expr_type, body_location) = match body {
-        FunctionBody::Expr(expr_body, _source_map) => {
+        FunctionBody::Expr(expr_body, _source_map, _) => {
             if let Some(root_expr) = expr_body.root_expr {
                 // Use check_expr for bidirectional typing - check body against expected return type
                 let ty = check_expr(&mut ctx, root_expr, expr_body, expected_return);
@@ -979,7 +979,7 @@ pub fn infer_function_body<'db>(
                 )
             }
         }
-        FunctionBody::Llm(llm_body) => {
+        FunctionBody::Llm(llm_body, _) => {
             // Validate Jinja templates in the prompt
             validate_llm_prompt(&mut ctx, &llm_body.prompt, &param_types);
 
@@ -1420,7 +1420,7 @@ pub fn function_type_inference<'db>(
     // type-checking. TIR validates the Jinja template and returns the
     // declared return type.
     let body = if let Some(llm_meta) = baml_compiler_hir::llm_function_meta(db, function) {
-        Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone()))
+        Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone(), None))
     } else if baml_compiler_hir::is_llm_function(db, function) {
         // Malformed LLM function - skip type-checking
         Arc::new(baml_compiler_hir::FunctionBody::Missing)
@@ -2583,6 +2583,26 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 } else {
                     Ty::Union(arm_types)
                 }
+            }
+        }
+
+        Expr::Catch { expr, arms } => {
+            // The type of a catch expression is the union of the caught expression's type
+            // and all arm body types
+            let expr_ty = infer_expr(ctx, *expr, body);
+            let mut result_types = vec![expr_ty];
+            for arm_id in arms {
+                let arm = &body.catch_arms[*arm_id];
+                let arm_ty = infer_expr(ctx, arm.body, body);
+                result_types.push(arm_ty);
+            }
+            // Deduplicate and flatten
+            result_types.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+            result_types.dedup();
+            if result_types.len() == 1 {
+                result_types.into_iter().next().unwrap()
+            } else {
+                Ty::Union(result_types)
             }
         }
 

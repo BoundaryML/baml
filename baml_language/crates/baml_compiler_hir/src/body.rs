@@ -68,6 +68,7 @@ pub fn empty_primitive_client_body(
         stmts: Arena::new(),
         patterns: Arena::new(),
         match_arms: Arena::new(),
+        catch_arms: Arena::new(),
         types: Arena::new(),
         root_expr: Some(call_expr),
         diagnostics: Vec::new(),
@@ -130,6 +131,7 @@ pub fn lower_llm_to_call_llm_function(
         stmts: Arena::new(),
         patterns: Arena::new(),
         match_arms: Arena::new(),
+        catch_arms: Arena::new(),
         types: Arena::new(),
         root_expr: Some(call_expr),
         diagnostics: Vec::new(),
@@ -154,11 +156,13 @@ pub fn strip_string_delimiters(text: &str) -> &str {
 #[allow(clippy::large_enum_variant)]
 pub enum FunctionBody {
     /// LLM function: has `LLM_FUNCTION_BODY` in CST.
-    Llm(LlmBody),
+    /// Optional catch handler for error recovery.
+    Llm(LlmBody, Option<CatchHandler>),
 
     /// Expression function: has `EXPR_FUNCTION_BODY` in CST.
     /// Contains both the position-independent body and the source map for spans.
-    Expr(ExprBody, HirSourceMap),
+    /// Optional catch handler for error recovery.
+    Expr(ExprBody, HirSourceMap, Option<CatchHandler>),
 
     /// Function has no body (error recovery)
     Missing,
@@ -303,6 +307,9 @@ pub struct ExprBody {
     /// Match arm arena
     pub match_arms: Arena<MatchArm>,
 
+    /// Catch arm arena
+    pub catch_arms: Arena<CatchHandlerArm>,
+
     /// Type annotation arena (for let bindings, etc.)
     pub types: Arena<crate::type_ref::TypeRef>,
 
@@ -412,6 +419,15 @@ pub enum Expr {
 
     /// Index access: `array[0]`, `map[key]`
     Index { base: ExprId, index: ExprId },
+
+    /// Catch expression: `expr catch { arms... }`
+    ///
+    /// Wraps an expression with error-handler arms. The arms match error types
+    /// and provide fallback expressions.
+    Catch {
+        expr: ExprId,
+        arms: Vec<CatchArmId>,
+    },
 
     /// Missing/error expression
     Missing,
@@ -541,6 +557,36 @@ pub enum Pattern {
     Union(Vec<PatId>),
 }
 
+/// A catch handler attached to a function or expression.
+///
+/// Contains a list of arms that match error types and provide fallback expressions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatchHandler {
+    pub arms: Vec<CatchArmId>,
+}
+
+/// A single arm in a catch block.
+///
+/// Grammar: `pattern '=>' body`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatchHandlerArm {
+    /// The pattern to match against (e.g., `e: TimeoutError` or `e`)
+    pub pattern: PatId,
+    /// The fallback body expression
+    pub body: ExprId,
+}
+
+pub type CatchArmId = Idx<CatchHandlerArm>;
+
+/// Span information for a single catch arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CatchArmSpans {
+    /// Span of the entire arm (pattern + body)
+    pub arm_span: Span,
+    /// Span of just the pattern
+    pub pattern_span: Span,
+}
+
 /// A single arm in a match expression.
 ///
 /// Grammar: `pattern guard? '=>' arm_body`
@@ -626,18 +672,36 @@ impl FunctionBody {
             })
             .unwrap_or_default();
 
+        // Lower optional catch block
+        let catch_handler = func_node.catch_block().map(|catch_block| {
+            let mut ctx = LoweringContext::new(file_id);
+            let mut arm_ids = Vec::new();
+            for arm in catch_block.arms() {
+                let (arm_data, spans) = ctx.lower_catch_arm(arm.syntax());
+                let arm_id = ctx.alloc_catch_arm(arm_data, spans);
+                arm_ids.push(arm_id);
+            }
+            // Note: the catch arms are stored in the ExprBody arena, but for
+            // function-level catch on LLM bodies we need a separate approach.
+            // For now, just collect the handler metadata.
+            CatchHandler { arms: arm_ids }
+        });
+
         // Check which body type we have
         if let Some(llm_body) = func_node.llm_body() {
-            Arc::new(Self::lower_llm_body(&llm_body))
+            Arc::new(Self::lower_llm_body(&llm_body, catch_handler))
         } else if let Some(expr_body) = func_node.expr_body() {
             let (body, source_map) = Self::lower_expr_body(&expr_body, file_id, &param_names);
-            Arc::new(FunctionBody::Expr(body, source_map))
+            Arc::new(FunctionBody::Expr(body, source_map, catch_handler))
         } else {
             Arc::new(FunctionBody::Missing)
         }
     }
 
-    fn lower_llm_body(llm_body: &baml_compiler_syntax::ast::LlmFunctionBody) -> FunctionBody {
+    fn lower_llm_body(
+        llm_body: &baml_compiler_syntax::ast::LlmFunctionBody,
+        catch_handler: Option<CatchHandler>,
+    ) -> FunctionBody {
         // Extract client name using AST accessor
         // Use value() to handle both identifier (`client Foo`) and string (`client "openai/gpt-4o"`) forms
         let client = llm_body
@@ -652,7 +716,7 @@ impl FunctionBody {
             .map(|raw_str| Self::parse_prompt(&raw_str));
 
         if let (Some(client), Some(prompt)) = (client, prompt) {
-            FunctionBody::Llm(LlmBody { client, prompt })
+            FunctionBody::Llm(LlmBody { client, prompt }, catch_handler)
         } else {
             // TODO: Better would be to error here, with a new FunctionBody::Invalid
             // that has errors in it.
@@ -767,6 +831,7 @@ struct LoweringContext {
     stmts: Arena<Stmt>,
     patterns: Arena<Pattern>,
     match_arms: Arena<MatchArm>,
+    catch_arms: Arena<CatchHandlerArm>,
     types: Arena<crate::type_ref::TypeRef>,
     /// File ID for creating spans
     file_id: FileId,
@@ -801,6 +866,7 @@ impl LoweringContext {
             stmts: Arena::new(),
             patterns: Arena::new(),
             match_arms: Arena::new(),
+            catch_arms: Arena::new(),
             types: Arena::new(),
             file_id,
             names_in_scope: std::collections::HashSet::new(),
@@ -875,6 +941,12 @@ impl LoweringContext {
         id
     }
 
+    fn alloc_catch_arm(&mut self, arm: CatchHandlerArm, spans: CatchArmSpans) -> CatchArmId {
+        let id = self.catch_arms.alloc(arm);
+        self.source_map.insert_catch_arm(id, spans);
+        id
+    }
+
     fn alloc_type(&mut self, type_ref: crate::type_ref::TypeRef, range: TextRange) -> TypeId {
         let id = self.types.alloc(type_ref);
         self.source_map.insert_type(id, self.span_from_range(range));
@@ -887,6 +959,7 @@ impl LoweringContext {
             stmts: self.stmts,
             patterns: self.patterns,
             match_arms: self.match_arms,
+            catch_arms: self.catch_arms,
             types: self.types,
             root_expr,
             diagnostics: self.diagnostics,
@@ -1057,6 +1130,7 @@ impl LoweringContext {
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
+            SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
             SyntaxKind::BLOCK_EXPR => {
                 if let Some(block) = baml_compiler_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
@@ -1506,6 +1580,127 @@ impl LoweringContext {
         self.source_map.insert_expr(expr_id, match_span);
 
         expr_id
+    }
+
+    /// Lower a catch expression from CST to HIR.
+    ///
+    /// `CATCH_EXPR` structure: `<expr> CATCH_BLOCK`
+    fn lower_catch_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
+        let catch_span = self.span_from_node(node);
+        let mut inner_expr = None;
+        let mut arm_ids = Vec::new();
+
+        for child in node.children() {
+            match child.kind() {
+                SyntaxKind::CATCH_BLOCK => {
+                    // Lower the catch block's arms
+                    for arm_node in child.children() {
+                        if arm_node.kind() == SyntaxKind::CATCH_ARM {
+                            let (arm, spans) = self.lower_catch_arm(&arm_node);
+                            let arm_id = self.alloc_catch_arm(arm, spans);
+                            arm_ids.push(arm_id);
+                        }
+                    }
+                }
+                _ => {
+                    // The inner expression being caught
+                    if inner_expr.is_none() {
+                        inner_expr = Some(self.lower_expr(&child));
+                    }
+                }
+            }
+        }
+
+        let inner = inner_expr
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
+
+        let expr_id = self.exprs.alloc(Expr::Catch {
+            expr: inner,
+            arms: arm_ids,
+        });
+        self.source_map.insert_expr(expr_id, catch_span);
+        expr_id
+    }
+
+    /// Lower a single catch arm from CST to HIR.
+    ///
+    /// `CATCH_ARM` structure: `MATCH_PATTERN FAT_ARROW body`
+    fn lower_catch_arm(
+        &mut self,
+        node: &baml_compiler_syntax::SyntaxNode,
+    ) -> (CatchHandlerArm, CatchArmSpans) {
+        use baml_compiler_syntax::SyntaxKind;
+        let arm_span = self.span_from_node_skip_trivia(node);
+        let mut pattern = None;
+        let mut pattern_span = arm_span;
+        let mut body = None;
+        let mut found_fat_arrow = false;
+
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    if child.kind() == SyntaxKind::MATCH_PATTERN && !found_fat_arrow {
+                        pattern_span = self.span_from_node_skip_trivia(&child);
+                        pattern = Some(self.lower_match_pattern(&child));
+                    } else if found_fat_arrow && body.is_none() {
+                        body = Some(self.lower_expr(&child));
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::FAT_ARROW {
+                        found_fat_arrow = true;
+                    } else if found_fat_arrow && body.is_none() {
+                        // Handle simple token bodies (literals, identifiers)
+                        if let Some(expr) = self.try_lower_token_as_expr(&token) {
+                            body = Some(expr);
+                        }
+                    }
+                }
+            }
+        }
+
+        let pat_id = pattern
+            .unwrap_or_else(|| self.alloc_pattern(Pattern::Binding(Name::new("_")), TextRange::default()));
+        let body_id = body
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
+
+        let arm = CatchHandlerArm {
+            pattern: pat_id,
+            body: body_id,
+        };
+        let spans = CatchArmSpans {
+            arm_span,
+            pattern_span,
+        };
+        (arm, spans)
+    }
+
+    /// Try to lower a token directly to an expression (for simple arm bodies).
+    fn try_lower_token_as_expr(&mut self, token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>) -> Option<ExprId> {
+        use baml_compiler_syntax::SyntaxKind;
+        let range = token.text_range();
+        match token.kind() {
+            SyntaxKind::INTEGER_LITERAL => {
+                let value = token.text().parse::<i64>().unwrap_or(0);
+                Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), range))
+            }
+            SyntaxKind::FLOAT_LITERAL => {
+                let text = token.text().to_string();
+                Some(self.alloc_expr(Expr::Literal(Literal::Float(text)), range))
+            }
+            SyntaxKind::WORD => {
+                let text = token.text();
+                let expr = match text {
+                    "true" => Expr::Literal(Literal::Bool(true)),
+                    "false" => Expr::Literal(Literal::Bool(false)),
+                    "null" => Expr::Literal(Literal::Null),
+                    _ => Expr::Path(vec![Name::new(text)]),
+                };
+                Some(self.alloc_expr(expr, range))
+            }
+            _ => None,
+        }
     }
 
     /// Lower a single match arm from CST to HIR.

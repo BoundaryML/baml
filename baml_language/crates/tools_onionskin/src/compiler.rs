@@ -665,7 +665,7 @@ impl CompilerRunner {
 
                             // Print body based on type
                             match &*body {
-                                baml_compiler_hir::FunctionBody::Expr(expr_body, _source_map) => {
+                                baml_compiler_hir::FunctionBody::Expr(expr_body, _source_map, _) => {
                                     let body_code = baml_compiler_hir::body_to_code(expr_body);
                                     // Combine header with body, putting { on same line
                                     let header = format!(
@@ -692,7 +692,7 @@ impl CompilerRunner {
                                     writeln!(output, "{closing}").ok();
                                     output_annotated.push((closing, status));
                                 }
-                                baml_compiler_hir::FunctionBody::Llm(_) => {
+                                baml_compiler_hir::FunctionBody::Llm(_, _) => {
                                     let header = format!(
                                         "function {}({}) -> {}",
                                         func.name,
@@ -973,7 +973,7 @@ impl CompilerRunner {
                     let body = function_body(&self.db, *func_id);
 
                     // Skip non-expression bodies
-                    let baml_compiler_hir::FunctionBody::Expr(_, _) = &*body else {
+                    let baml_compiler_hir::FunctionBody::Expr(..) = &*body else {
                         continue;
                     };
 

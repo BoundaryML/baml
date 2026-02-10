@@ -118,7 +118,7 @@ fn format_hir_file(
 
                 // Show body
                 match body.as_ref() {
-                    baml_db::baml_compiler_hir::FunctionBody::Llm(llm) => {
+                    baml_db::baml_compiler_hir::FunctionBody::Llm(llm, _) => {
                         // Show LLM function body as inline config
                         writeln!(result, "  client {}", llm.client).unwrap();
                         // Show prompt as template string
@@ -128,7 +128,7 @@ fn format_hir_file(
                         }
                         writeln!(result, "  \"#").unwrap();
                     }
-                    baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, _source_map) => {
+                    baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, _source_map, _) => {
                         // Print as code for readability
                         let code = baml_compiler_hir::body_to_code(expr_body);
                         // Indent the code (skip the outer braces since we already have them)

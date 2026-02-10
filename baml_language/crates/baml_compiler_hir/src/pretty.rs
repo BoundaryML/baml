@@ -219,6 +219,22 @@ impl<'a> CodePrinter<'a> {
                 self.write_indent();
                 self.output.push('}');
             }
+            Expr::Catch { expr, arms } => {
+                self.print_expr(*expr);
+                self.output.push_str(" catch {\n");
+                self.indent += 1;
+                for arm_id in arms {
+                    let arm = &self.body.catch_arms[*arm_id];
+                    self.write_indent();
+                    self.print_pattern(arm.pattern);
+                    self.output.push_str(" => ");
+                    self.print_expr(arm.body);
+                    self.output.push_str(",\n");
+                }
+                self.indent -= 1;
+                self.write_indent();
+                self.output.push('}');
+            }
         }
     }
 

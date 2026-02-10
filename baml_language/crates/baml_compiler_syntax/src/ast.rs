@@ -693,6 +693,9 @@ ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
 ast_node!(MatchPattern, MATCH_PATTERN);
 ast_node!(MatchGuard, MATCH_GUARD);
+ast_node!(CatchExpr, CATCH_EXPR);
+ast_node!(CatchBlock, CATCH_BLOCK);
+ast_node!(CatchArm, CATCH_ARM);
 
 // Implement accessor methods
 impl SourceFile {
@@ -747,6 +750,11 @@ impl FunctionDef {
     /// Check if this is an expression function.
     pub fn is_expr_function(&self) -> bool {
         self.expr_body().is_some()
+    }
+
+    /// Get the catch block if this function has one.
+    pub fn catch_block(&self) -> Option<CatchBlock> {
+        self.syntax.children().find_map(CatchBlock::cast)
     }
 }
 
@@ -2583,6 +2591,51 @@ impl MatchGuard {
     /// For `if condition`, returns the condition expression.
     pub fn condition(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
+    }
+}
+
+impl CatchExpr {
+    /// Get the catch block.
+    pub fn catch_block(&self) -> Option<CatchBlock> {
+        self.syntax.children().find_map(CatchBlock::cast)
+    }
+}
+
+impl CatchBlock {
+    /// Iterate over all catch arms.
+    pub fn arms(&self) -> impl Iterator<Item = CatchArm> + '_ {
+        self.syntax.children().filter_map(CatchArm::cast)
+    }
+}
+
+impl CatchArm {
+    /// Get the pattern for this arm.
+    ///
+    /// Uses the same `MatchPattern` node as match arms.
+    pub fn pattern(&self) -> Option<MatchPattern> {
+        self.syntax.children().find_map(MatchPattern::cast)
+    }
+
+    /// Get the body expression of this arm.
+    ///
+    /// The body is the expression after `=>`.
+    pub fn body(&self) -> Option<SyntaxNode> {
+        let mut found_fat_arrow = false;
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::FAT_ARROW {
+                        found_fat_arrow = true;
+                    }
+                }
+                rowan::NodeOrToken::Node(node) => {
+                    if found_fat_arrow {
+                        return Some(node);
+                    }
+                }
+            }
+        }
+        None
     }
 }
 

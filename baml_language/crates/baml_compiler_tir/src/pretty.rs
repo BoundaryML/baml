@@ -137,12 +137,12 @@ impl<'a> TreeRenderer<'a> {
 
     fn render_body(&mut self, body: &FunctionBody, result: &InferenceResult) {
         match body {
-            FunctionBody::Expr(expr_body, _source_map) => {
+            FunctionBody::Expr(expr_body, _source_map, _) => {
                 if let Some(root_expr) = expr_body.root_expr {
                     self.render_expr(root_expr, expr_body, result, true);
                 }
             }
-            FunctionBody::Llm(llm_body) => {
+            FunctionBody::Llm(llm_body, _) => {
                 self.render_llm_body(llm_body);
             }
             FunctionBody::Missing => {
@@ -231,6 +231,9 @@ impl<'a> TreeRenderer<'a> {
             }
             Expr::Match { arms, .. } => {
                 format!("Match({} arms): {}", arms.len(), ty)
+            }
+            Expr::Catch { arms, .. } => {
+                format!("Catch({} arms): {}", arms.len(), ty)
             }
             Expr::Missing => format!("<missing>: {ty}"),
         }
@@ -354,6 +357,25 @@ impl<'a> TreeRenderer<'a> {
                     writeln!(self.output, "{arm_prefix}arm[{i}]:").ok();
                     self.push_continuation(!is_last_arm);
                     // Render arm body
+                    self.render_expr(arm.body, body, result, true);
+                    self.pop_continuation();
+                }
+            }
+            Expr::Catch { expr, arms } => {
+                // Render the caught expression
+                let expr_prefix = self.make_prefix(arms.is_empty());
+                writeln!(self.output, "{expr_prefix}expr:").ok();
+                self.push_continuation(!arms.is_empty());
+                self.render_expr(*expr, body, result, true);
+                self.pop_continuation();
+
+                // Render each catch arm
+                for (i, arm_id) in arms.iter().enumerate() {
+                    let arm = &body.catch_arms[*arm_id];
+                    let is_last_arm = i == arms.len() - 1;
+                    let arm_prefix = self.make_prefix(is_last_arm);
+                    writeln!(self.output, "{arm_prefix}catch_arm[{i}]:").ok();
+                    self.push_continuation(!is_last_arm);
                     self.render_expr(arm.body, body, result, true);
                     self.pop_continuation();
                 }
@@ -584,6 +606,7 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
         Expr::Block { .. } => "{ ... }".to_string(),
         Expr::If { .. } => "if ... { ... }".to_string(),
         Expr::Match { arms, .. } => format!("match {{ {} arms }}", arms.len()),
+        Expr::Catch { arms, .. } => format!("catch {{ {} arms }}", arms.len()),
         Expr::Missing => "<missing>".to_string(),
     }
 }

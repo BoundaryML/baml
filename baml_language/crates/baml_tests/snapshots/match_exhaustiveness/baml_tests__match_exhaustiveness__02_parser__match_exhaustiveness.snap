@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-9883c2f66a70d854/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -51,7 +51,7 @@ SOURCE_FILE
             FAT_ARROW "=>"
             STRING_LITERAL "catch all"
               QUOTE """
-              WORD "catch"
+              KW_CATCH "catch"
               WORD "all"
               QUOTE """
             COMMA ","
@@ -98,7 +98,7 @@ SOURCE_FILE
             FAT_ARROW "=>"
             STRING_LITERAL "catch all"
               QUOTE """
-              WORD "catch"
+              KW_CATCH "catch"
               WORD "all"
               QUOTE """
             COMMA ","

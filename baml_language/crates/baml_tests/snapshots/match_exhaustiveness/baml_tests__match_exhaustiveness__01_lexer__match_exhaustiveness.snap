@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-a56cff903b8232b2/out/generated_tests.rs
+source: target/debug/build/baml_tests-9883c2f66a70d854/out/generated_tests.rs
 expression: output
 ---
 Slash "/"
@@ -150,7 +150,7 @@ LBrace "{"
 Word "_"
 FatArrow "=>"
 Quote "\""
-Word "catch"
+Catch "catch"
 Word "all"
 Quote "\""
 Comma ","
@@ -191,7 +191,7 @@ LBrace "{"
 Word "_"
 FatArrow "=>"
 Quote "\""
-Word "catch"
+Catch "catch"
 Word "all"
 Quote "\""
 Comma ","

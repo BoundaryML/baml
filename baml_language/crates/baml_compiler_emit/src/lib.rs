@@ -397,7 +397,7 @@ pub fn compile_files(
 
                 // Handle different function body types
                 let mut compiled_fn = match &*body {
-                    baml_compiler_hir::FunctionBody::Llm(_) => {
+                    baml_compiler_hir::FunctionBody::Llm(..) => {
                         // LLM functions are now lowered to synthetic Expr bodies
                         // during HIR lowering. This branch should be unreachable.
                         unreachable!(
@@ -430,7 +430,7 @@ pub fn compile_files(
                             trace: false,
                         }
                     }
-                    baml_compiler_hir::FunctionBody::Expr(_, _) => {
+                    baml_compiler_hir::FunctionBody::Expr(..) => {
                         // Run type inference
                         // Note: type_aliases is not passed here, so exhaustiveness
                         // checking for type aliases won't work. This is acceptable

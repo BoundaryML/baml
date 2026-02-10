@@ -150,7 +150,7 @@ pub fn lower_from_hir(
     recursive_aliases: &std::collections::HashSet<baml_base::Name>,
 ) -> Result<ExprBody, LoweringError> {
     match body {
-        FunctionBody::Expr(hir_body, source_map) => {
+        FunctionBody::Expr(hir_body, source_map, _) => {
             let ctx = LoweringContext::new(
                 inference,
                 resolution_ctx,
@@ -160,7 +160,7 @@ pub fn lower_from_hir(
             );
             ctx.lower_expr_body(hir_body)
         }
-        FunctionBody::Llm(_) => {
+        FunctionBody::Llm(..) => {
             // LLM bodies don't have expression trees - they're handled specially
             Err(LoweringError::LlmFunction)
         }
@@ -553,6 +553,12 @@ impl<'a> LoweringContext<'a> {
                     },
                     ty,
                 ))
+            }
+
+            HirExpr::Catch { .. } => {
+                // TODO: Lower catch expressions to VIR once backend support is added.
+                // For now, catch is only represented in HIR/TIR.
+                todo!("catch expression lowering to VIR is not yet implemented")
             }
         }
     }

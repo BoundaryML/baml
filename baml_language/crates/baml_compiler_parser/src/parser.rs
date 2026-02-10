@@ -51,6 +51,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Assert => SyntaxKind::KW_ASSERT,
+        TokenKind::Catch => SyntaxKind::KW_CATCH,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -1924,6 +1925,11 @@ impl<'a> Parser<'a> {
             } else {
                 p.error_unexpected_token("function body".to_string());
             }
+
+            // Optional catch block after function body
+            if p.at(TokenKind::Catch) {
+                p.parse_catch_block();
+            }
         });
     }
 
@@ -2500,6 +2506,57 @@ impl<'a> Parser<'a> {
         });
     }
 
+    // ============ Catch Block Parsing ============
+
+    /// Parse a catch block: `catch { arm1, arm2, ... }`
+    ///
+    /// Used after function bodies and as part of catch expressions.
+    fn parse_catch_block(&mut self) {
+        self.with_node(SyntaxKind::CATCH_BLOCK, |p| {
+            p.expect(TokenKind::Catch);
+            p.expect(TokenKind::LBrace);
+
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                if p.at_top_level_keyword() {
+                    break;
+                }
+                p.parse_catch_arm();
+            }
+
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse a single catch arm: `pattern => body`
+    ///
+    /// Reuses match pattern syntax for the pattern (supports `e`, `e: ErrorType`, etc.)
+    fn parse_catch_arm(&mut self) {
+        self.with_node(SyntaxKind::CATCH_ARM, |p| {
+            // Parse the pattern (reuse match pattern parsing)
+            p.parse_match_pattern();
+
+            // Expect fat arrow
+            if p.at(TokenKind::FatArrow) {
+                p.bump(); // =>
+            } else {
+                p.error_unexpected_token("'=>' after pattern".to_string());
+            }
+
+            // Arm body: expression or block
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.parse_expr();
+            }
+
+            // Optional trailing comma or semicolon
+            if !p.eat(TokenKind::Comma) {
+                p.eat(TokenKind::Semicolon);
+            }
+        });
+    }
+
     fn parse_while_stmt(&mut self) {
         self.with_node(SyntaxKind::WHILE_STMT, |p| {
             p.expect(TokenKind::While);
@@ -2777,6 +2834,16 @@ impl<'a> Parser<'a> {
 
                 // Wrap everything from lhs_start in a BINARY_EXPR
                 self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
+                self.finish_node();
+            } else if op == TokenKind::Catch {
+                // catch is the loosest-binding postfix operator.
+                // Effective left binding power = 1 (lower than all infix operators).
+                if 1 < min_bp {
+                    break;
+                }
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                self.wrap_events_in_node(lhs_start, SyntaxKind::CATCH_EXPR);
+                self.parse_catch_block();
                 self.finish_node();
             } else {
                 break;
