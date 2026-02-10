@@ -45,16 +45,15 @@ mod types;
 
 // Re-export HIR types that are part of TIR's public API (used in Ty variants).
 pub use baml_compiler_hir::{Namespace, QualifiedName};
-pub use builtins::{
-    Bindings, lookup_function, lookup_method, match_pattern, method_param_types,
-    method_return_type, parse_builtin_path, substitute,
-};
+// Crate-internal imports (used within this file but not re-exported)
+use builtins::Bindings;
 pub use cycles::{validate_class_cycles, validate_type_alias_cycles};
-pub use exhaustiveness::{ExhaustivenessChecker, ExhaustivenessResult, ValueSet};
-pub use lower::lower_type_ref;
-pub use normalize::{find_invalid_map_keys, find_recursive_aliases};
-pub use pretty::{expr_to_string, render_body_tree, render_function_tree};
-pub use resolve::{ResolutionMap, ResolvedMethod, ResolvedValue, resolve_method};
+use exhaustiveness::ExhaustivenessChecker;
+use lower::lower_type_ref;
+pub use normalize::find_recursive_aliases;
+pub use pretty::render_function_tree;
+use resolve::ResolutionMap;
+pub use resolve::{ResolvedMethod, ResolvedValue};
 use text_size::TextRange;
 pub use types::*;
 

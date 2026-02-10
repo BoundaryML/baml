@@ -98,7 +98,7 @@ name_exceptions = { "tools_stow" = "cargo-stow" }
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
-link_crates = ["baml_builtins", "baml_type"]
+link_crates = ["baml_builtins", "baml_type", "sys_types"]
 
 # lsp namespace configuration
 [[namespaces]]

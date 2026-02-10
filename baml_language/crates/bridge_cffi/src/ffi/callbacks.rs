@@ -1,6 +1,6 @@
 //! Callback registration and invocation.
 
-use bex_external_types::BexExternalValue;
+use bex_runtime::BexExternalValue;
 use once_cell::sync::OnceCell;
 use prost::Message;
 

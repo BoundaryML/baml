@@ -3,7 +3,7 @@
 //! Converts `HostValue` (from the C bridge) to the engine's `BexExternalValue` representation
 //! so the BEX engine can use them as function arguments.
 
-use bex_external_types::{BexExternalValue, Ty};
+use bex_runtime::{BexExternalValue, Ty};
 use indexmap::IndexMap;
 
 use crate::{

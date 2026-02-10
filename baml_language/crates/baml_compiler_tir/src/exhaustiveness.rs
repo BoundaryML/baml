@@ -35,7 +35,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{Name, Span};
 use baml_compiler_hir::{ExprBody, Literal, MatchArmId, Pattern};
 
-use crate::{LiteralValue, Ty, lower_type_ref};
+use crate::{LiteralValue, Ty, lower::lower_type_ref};
 
 // ============================================================================
 // ValueSet: The Core Abstraction
@@ -60,7 +60,7 @@ use crate::{LiteralValue, Ty, lower_type_ref};
 /// `x: int if x > 0`    -> Empty (guards don't guarantee coverage)
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ValueSet {
+pub(crate) enum ValueSet {
     /// Matches ALL possible values.
     ///
     /// This is the catch-all case: patterns like `_`, `other`, or any
@@ -153,7 +153,7 @@ impl std::fmt::Display for ValueSet {
 ///
 /// This struct holds the context needed to expand types into their
 /// constituent values and check coverage.
-pub struct ExhaustivenessChecker<'a> {
+pub(crate) struct ExhaustivenessChecker<'a> {
     /// Enum definitions: `enum_name` -> [`variant_names`]
     enum_variants: &'a HashMap<Name, Vec<Name>>,
 
@@ -172,20 +172,20 @@ pub struct ExhaustivenessChecker<'a> {
 
 /// Result of exhaustiveness checking.
 #[derive(Debug)]
-pub struct ExhaustivenessResult {
+pub(crate) struct ExhaustivenessResult {
     /// Whether all cases are covered
-    pub is_exhaustive: bool,
+    pub(crate) is_exhaustive: bool,
 
     /// Value sets that are not covered (empty if exhaustive)
-    pub uncovered: Vec<ValueSet>,
+    pub(crate) uncovered: Vec<ValueSet>,
 
     /// Indices (0-based) into the `arms` slice of unreachable arms (arms that can never match).
-    pub unreachable_arms: Vec<usize>,
+    pub(crate) unreachable_arms: Vec<usize>,
 }
 
 impl<'a> ExhaustivenessChecker<'a> {
     /// Create a new exhaustiveness checker.
-    pub fn new(
+    pub(crate) fn new(
         enum_variants: &'a HashMap<Name, Vec<Name>>,
         type_aliases: &'a HashMap<Name, Ty>,
         class_names: &'a HashSet<Name>,
@@ -210,7 +210,7 @@ impl<'a> ExhaustivenessChecker<'a> {
     ///
     /// # Returns
     /// An `ExhaustivenessResult` with coverage info and any issues found.
-    pub fn check(
+    pub(crate) fn check(
         &self,
         scrutinee_ty: &Ty,
         arm_ids: &[MatchArmId],

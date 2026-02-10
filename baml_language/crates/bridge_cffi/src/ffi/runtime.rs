@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, ffi::CStr};
 
-use crate::{Buffer, engine::initialize_engine, panic::ffi_safe_ptr};
+use crate::{Buffer, engine::initialize_runtime, panic::ffi_safe_ptr};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -56,7 +56,7 @@ pub extern "C" fn create_baml_runtime(
             .map_err(|e| format!("Failed to parse env_vars JSON: {e}"))?;
 
         // Initialize global engine
-        initialize_engine(root_path_str, src_files, env_vars)
+        initialize_runtime(root_path_str, src_files, env_vars)
             .map_err(|e| format!("Failed to initialize engine: {e}"))?;
 
         // Return non-null pointer to indicate success

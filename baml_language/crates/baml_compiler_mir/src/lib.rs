@@ -48,7 +48,6 @@ mod ir;
 mod lower;
 pub mod pretty;
 
-pub use builder::MirBuilder;
 pub use ir::*;
 pub use lower::lower;
 

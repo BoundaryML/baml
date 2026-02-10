@@ -280,7 +280,7 @@ mod tests {
     fn test_tlab_canary_panics_on_clobber() {
         use std::panic::{AssertUnwindSafe, catch_unwind};
 
-        use crate::{HeapDebuggerConfig, HeapVerifyMode};
+        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let debug = HeapDebuggerConfig {
             enabled: true,

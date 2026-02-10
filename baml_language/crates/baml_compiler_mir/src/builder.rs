@@ -36,7 +36,7 @@ use crate::{
 };
 
 /// Builder for constructing MIR functions.
-pub struct MirBuilder {
+pub(crate) struct MirBuilder {
     name: Name,
     arity: usize,
     blocks: Vec<BasicBlock>,
@@ -46,9 +46,10 @@ pub struct MirBuilder {
     viz_nodes: Vec<VizNode>,
 }
 
+#[allow(dead_code)]
 impl MirBuilder {
     /// Create a new MIR builder for a function.
-    pub fn new(name: Name, arity: usize) -> Self {
+    pub(crate) fn new(name: Name, arity: usize) -> Self {
         Self {
             name,
             arity,
@@ -61,7 +62,7 @@ impl MirBuilder {
     }
 
     /// Set the source span for the function.
-    pub fn set_span(&mut self, span: TextRange) {
+    pub(crate) fn set_span(&mut self, span: TextRange) {
         self.span = Some(span);
     }
 
@@ -75,7 +76,7 @@ impl MirBuilder {
     /// - `_0` is the return place
     /// - `_1..=_n` are parameters (where n = arity)
     /// - `_n+1...` are user locals and temporaries
-    pub fn declare_local(
+    pub(crate) fn declare_local(
         &mut self,
         name: Option<Name>,
         ty: Ty,
@@ -93,12 +94,12 @@ impl MirBuilder {
     }
 
     /// Allocate a temporary (unnamed local).
-    pub fn temp(&mut self, ty: Ty) -> Local {
+    pub(crate) fn temp(&mut self, ty: Ty) -> Local {
         self.declare_local(None, ty, None, false)
     }
 
     /// Get the number of locals declared so far.
-    pub fn num_locals(&self) -> usize {
+    pub(crate) fn num_locals(&self) -> usize {
         self.locals.len()
     }
 
@@ -107,36 +108,36 @@ impl MirBuilder {
     // ========================================================================
 
     /// Create a new basic block and return its ID.
-    pub fn create_block(&mut self) -> BlockId {
+    pub(crate) fn create_block(&mut self) -> BlockId {
         let id = BlockId(self.blocks.len());
         self.blocks.push(BasicBlock::new(id));
         id
     }
 
     /// Set the current block for emitting statements and terminators.
-    pub fn set_current_block(&mut self, block: BlockId) {
+    pub(crate) fn set_current_block(&mut self, block: BlockId) {
         self.current_block = Some(block);
     }
 
     /// Get the current block ID, panics if none is set.
-    pub fn current_block(&self) -> BlockId {
+    pub(crate) fn current_block(&self) -> BlockId {
         self.current_block.expect("no current block set")
     }
 
     /// Check if the current block has been terminated.
-    pub fn is_current_terminated(&self) -> bool {
+    pub(crate) fn is_current_terminated(&self) -> bool {
         self.current_block
             .map(|id| self.blocks[id.0].is_terminated())
             .unwrap_or(true)
     }
 
     /// Get a reference to a block.
-    pub fn get_block(&self, id: BlockId) -> &BasicBlock {
+    pub(crate) fn get_block(&self, id: BlockId) -> &BasicBlock {
         &self.blocks[id.0]
     }
 
     /// Get a mutable reference to a block.
-    pub fn get_block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
+    pub(crate) fn get_block_mut(&mut self, id: BlockId) -> &mut BasicBlock {
         &mut self.blocks[id.0]
     }
 
@@ -150,7 +151,7 @@ impl MirBuilder {
     }
 
     /// Push a statement to the current block.
-    pub fn push_statement(&mut self, kind: StatementKind, span: Option<TextRange>) {
+    pub(crate) fn push_statement(&mut self, kind: StatementKind, span: Option<TextRange>) {
         let block = self.current_block_mut();
         assert!(
             block.terminator.is_none(),
@@ -160,42 +161,42 @@ impl MirBuilder {
     }
 
     /// Emit an assignment: `dest = value`
-    pub fn assign(&mut self, destination: Place, value: Rvalue) {
+    pub(crate) fn assign(&mut self, destination: Place, value: Rvalue) {
         self.push_statement(StatementKind::Assign { destination, value }, None);
     }
 
     /// Emit an assignment with span.
-    pub fn assign_with_span(&mut self, destination: Place, value: Rvalue, span: TextRange) {
+    pub(crate) fn assign_with_span(&mut self, destination: Place, value: Rvalue, span: TextRange) {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
     /// Emit a drop statement.
-    pub fn drop(&mut self, place: Place) {
+    pub(crate) fn drop(&mut self, place: Place) {
         self.push_statement(StatementKind::Drop(place), None);
     }
 
     /// Emit a nop statement.
-    pub fn nop(&mut self) {
+    pub(crate) fn nop(&mut self) {
         self.push_statement(StatementKind::Nop, None);
     }
 
     /// Emit an unwatch statement for a watched local going out of scope.
-    pub fn unwatch(&mut self, local: Local) {
+    pub(crate) fn unwatch(&mut self, local: Local) {
         self.push_statement(StatementKind::Unwatch(local), None);
     }
 
     /// Emit a `watch_options` statement to update the filter for a watched local.
-    pub fn watch_options(&mut self, local: Local, filter: Operand) {
+    pub(crate) fn watch_options(&mut self, local: Local, filter: Operand) {
         self.push_statement(StatementKind::WatchOptions { local, filter }, None);
     }
 
     /// Emit a `watch_notify` statement to manually trigger notification for a watched local.
-    pub fn watch_notify(&mut self, local: Local) {
+    pub(crate) fn watch_notify(&mut self, local: Local) {
         self.push_statement(StatementKind::WatchNotify(local), None);
     }
 
     /// Emit an assert statement.
-    pub fn assert(&mut self, condition: Operand) {
+    pub(crate) fn assert(&mut self, condition: Operand) {
         self.push_statement(StatementKind::Assert(condition), None);
     }
 
@@ -210,12 +211,12 @@ impl MirBuilder {
     }
 
     /// Emit an unconditional goto.
-    pub fn goto(&mut self, target: BlockId) {
+    pub(crate) fn goto(&mut self, target: BlockId) {
         self.set_terminator(Terminator::Goto { target });
     }
 
     /// Emit a conditional branch.
-    pub fn branch(&mut self, condition: Operand, then_block: BlockId, else_block: BlockId) {
+    pub(crate) fn branch(&mut self, condition: Operand, then_block: BlockId, else_block: BlockId) {
         self.set_terminator(Terminator::Branch {
             condition,
             then_block,
@@ -227,7 +228,7 @@ impl MirBuilder {
     ///
     /// If `exhaustive` is true, the switch covers all possible discriminant values,
     /// allowing the last arm's comparison to be skipped during codegen.
-    pub fn switch(
+    pub(crate) fn switch(
         &mut self,
         discriminant: Operand,
         arms: Vec<(i64, BlockId)>,
@@ -243,12 +244,12 @@ impl MirBuilder {
     }
 
     /// Emit a return.
-    pub fn return_(&mut self) {
+    pub(crate) fn return_(&mut self) {
         self.set_terminator(Terminator::Return);
     }
 
     /// Emit a function call.
-    pub fn call(
+    pub(crate) fn call(
         &mut self,
         callee: Operand,
         args: Vec<Operand>,
@@ -266,12 +267,12 @@ impl MirBuilder {
     }
 
     /// Emit an unreachable terminator.
-    pub fn unreachable(&mut self) {
+    pub(crate) fn unreachable(&mut self) {
         self.set_terminator(Terminator::Unreachable);
     }
 
     /// Emit a dispatch future (for LLM calls).
-    pub fn dispatch_future(
+    pub(crate) fn dispatch_future(
         &mut self,
         callee: Operand,
         args: Vec<Operand>,
@@ -287,7 +288,7 @@ impl MirBuilder {
     }
 
     /// Emit an await.
-    pub fn await_(
+    pub(crate) fn await_(
         &mut self,
         future: Place,
         destination: Place,
@@ -307,27 +308,27 @@ impl MirBuilder {
     // ========================================================================
 
     /// Assign a constant to a place.
-    pub fn assign_const(&mut self, dest: Place, constant: Constant) {
+    pub(crate) fn assign_const(&mut self, dest: Place, constant: Constant) {
         self.assign(dest, Rvalue::Use(Operand::Constant(constant)));
     }
 
     /// Assign an integer constant to a local.
-    pub fn assign_int(&mut self, dest: Local, value: i64) {
+    pub(crate) fn assign_int(&mut self, dest: Local, value: i64) {
         self.assign_const(Place::local(dest), Constant::Int(value));
     }
 
     /// Assign a boolean constant to a local.
-    pub fn assign_bool(&mut self, dest: Local, value: bool) {
+    pub(crate) fn assign_bool(&mut self, dest: Local, value: bool) {
         self.assign_const(Place::local(dest), Constant::Bool(value));
     }
 
     /// Assign a string constant to a local.
-    pub fn assign_string(&mut self, dest: Local, value: impl Into<String>) {
+    pub(crate) fn assign_string(&mut self, dest: Local, value: impl Into<String>) {
         self.assign_const(Place::local(dest), Constant::String(value.into()));
     }
 
     /// Copy one local to another.
-    pub fn copy_local(&mut self, dest: Local, src: Local) {
+    pub(crate) fn copy_local(&mut self, dest: Local, src: Local) {
         self.assign(Place::local(dest), Rvalue::Use(Operand::copy_local(src)));
     }
 
@@ -340,7 +341,7 @@ impl MirBuilder {
     /// Panics if:
     /// - No blocks were created
     /// - Any block is unterminated
-    pub fn build(self) -> MirFunction {
+    pub(crate) fn build(self) -> MirFunction {
         assert!(!self.blocks.is_empty(), "function has no blocks");
 
         // Verify all blocks are terminated
@@ -360,7 +361,7 @@ impl MirBuilder {
     }
 
     /// Build without checking termination (for incremental construction).
-    pub fn build_unchecked(self) -> MirFunction {
+    pub(crate) fn build_unchecked(self) -> MirFunction {
         MirFunction {
             name: self.name,
             arity: self.arity,
@@ -377,19 +378,19 @@ impl MirBuilder {
     // ========================================================================
 
     /// Add a visualization node and return its index.
-    pub fn add_viz_node(&mut self, node: VizNode) -> usize {
+    pub(crate) fn add_viz_node(&mut self, node: VizNode) -> usize {
         let idx = self.viz_nodes.len();
         self.viz_nodes.push(node);
         idx
     }
 
     /// Emit a `VizEnter` statement for the given node index.
-    pub fn viz_enter(&mut self, node_idx: usize) {
+    pub(crate) fn viz_enter(&mut self, node_idx: usize) {
         self.push_statement(StatementKind::VizEnter(node_idx), None);
     }
 
     /// Emit a `VizExit` statement for the given node index.
-    pub fn viz_exit(&mut self, node_idx: usize) {
+    pub(crate) fn viz_exit(&mut self, node_idx: usize) {
         self.push_statement(StatementKind::VizExit(node_idx), None);
     }
 }

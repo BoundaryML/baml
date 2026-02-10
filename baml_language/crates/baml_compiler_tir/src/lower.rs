@@ -26,7 +26,7 @@ use crate::{LiteralValue, TirTypeError, Ty};
 /// - An `ErrorLocation` for position-independent error locations (used by cached queries)
 ///
 /// Returns the lowered type and any errors encountered.
-pub fn lower_type_ref(
+pub(crate) fn lower_type_ref(
     type_ref: &TypeRef,
     type_alias_names: &HashSet<Name>,
     class_names: &HashSet<Name>,

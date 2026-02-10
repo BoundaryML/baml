@@ -557,7 +557,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    let Some(native_function) = crate::get_native_fn(function.name.as_str()) else {
+                    let Some(native_function) =
+                        crate::builtins::get_native_fn(function.name.as_str())
+                    else {
                         return Err(VmError::RuntimeError(RuntimeError::Other(format!(
                             "Native function '{}' not found",
                             function.name

@@ -26,6 +26,7 @@ pub mod builtins;
 mod epoch_guard;
 mod handle;
 
+pub use baml_type::MediaKind;
 pub use bex_external_value::{
     AsBexExternalValue, BexExternalAdt, BexExternalValue, Ty, TypeName, UnionMetadata,
 };

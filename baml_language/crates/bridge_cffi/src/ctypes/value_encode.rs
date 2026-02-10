@@ -1,6 +1,6 @@
 //! BexExternalValue -> CffiValueHolder conversion.
 
-use bex_external_types::{BexExternalAdt, BexExternalValue, Ty};
+use bex_runtime::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 
 use crate::{
     baml::cffi::{
@@ -100,11 +100,11 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
             // Media is stored as a handle - return a placeholder string for now
             // TODO: Properly serialize media content when needed
             let kind_str = match media.kind {
-                baml_base::MediaKind::Image => "image",
-                baml_base::MediaKind::Audio => "audio",
-                baml_base::MediaKind::Video => "video",
-                baml_base::MediaKind::Pdf => "pdf",
-                baml_base::MediaKind::Generic => "media",
+                MediaKind::Image => "image",
+                MediaKind::Audio => "audio",
+                MediaKind::Video => "video",
+                MediaKind::Pdf => "pdf",
+                MediaKind::Generic => "media",
             };
             Some(CffiValueVariant::StringValue(format!(
                 "[{}:handle]",

@@ -11,7 +11,7 @@ use crate::{
         HostFunctionArguments, InvocationResponse, invocation_response::Response as CResponse,
     },
     ctypes::{DecodeFromBuffer, kwargs_to_bex_values},
-    engine::{get_engine, get_runtime},
+    engine::{get_runtime, get_tokio_runtime},
     error::BridgeError,
     ffi::callbacks::{send_error_to_callback, send_result_to_callback},
 };
@@ -56,8 +56,8 @@ fn call_function_inner(
     length: usize,
     id: u32,
 ) -> Result<(), BridgeError> {
-    // Get engine (must be initialized)
-    let engine = get_engine()?.clone();
+    // Get runtime (must be initialized)
+    let runtime = get_runtime()?;
 
     // Check for null function name pointer
     if function_name.is_null() {
@@ -85,7 +85,7 @@ fn call_function_inner(
 
     // Look up function parameters to get parameter order
     let params =
-        engine
+        runtime
             .function_params(&func_name)
             .ok_or_else(|| BridgeError::FunctionNotFound {
                 name: func_name.clone(),
@@ -94,7 +94,7 @@ fn call_function_inner(
     // Reorder kwargs to match function parameter declaration order.
     // This ensures arguments are passed correctly even if the client sends
     // them in a different order than the function expects.
-    let bex_args: Vec<bex_external_types::BexExternalValue> = params
+    let bex_args: Vec<bex_runtime::BexExternalValue> = params
         .iter()
         .map(|(param_name, _param_type)| {
             kwargs
@@ -108,10 +108,10 @@ fn call_function_inner(
         .collect::<Result<Vec<_>, _>>()?;
 
     // Spawn async task with panic catching
-    let rt = get_runtime().clone();
-    rt.spawn(async move {
+    let tokio_rt = get_tokio_runtime().clone();
+    tokio_rt.spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
-        let result = AssertUnwindSafe(async { engine.call_function(&func_name, bex_args).await })
+        let result = AssertUnwindSafe(async { runtime.call_function(&func_name, bex_args).await })
             .catch_unwind()
             .await;
 

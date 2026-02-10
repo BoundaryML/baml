@@ -70,6 +70,5 @@ pub use accessor::{AccessError, BexValue, GcProtectedHeap, builtin_types};
 pub use bex_external_types::{BexExternalValue, Handle};
 pub use gc::GcStats;
 pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, HeapStats};
-pub(crate) use heap_debugger::HeapDebuggerState;
-pub use heap_debugger::{HeapDebuggerConfig, HeapVerifyMode};
-pub use tlab::{Tlab, TlabChunk};
+pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
+pub use tlab::Tlab;

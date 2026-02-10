@@ -28,6 +28,5 @@ baml_compiler_syntax = { workspace = true }
 baml_compiler_tir = { workspace = true }
 baml_compiler_vir = { workspace = true }
 baml_workspace = { workspace = true }
-rowan = { workspace = true }
 salsa = { workspace = true }
 

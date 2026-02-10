@@ -27,9 +27,10 @@ use bex_vm_types::{
 use indexmap::IndexMap;
 
 use crate::{
-    NativeFunction, StackTrace,
+    StackTrace,
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, EvalStackTrait},
+    native::NativeFunction,
     types::ObjectTrait,
     watch::{self, NodeId, RootState, Watch, WatchFilter},
 };

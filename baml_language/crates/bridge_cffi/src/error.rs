@@ -14,11 +14,8 @@ pub enum BridgeError {
     #[error("Engine lock poisoned")]
     LockPoisoned,
 
-    #[error("Compilation error: {message}")]
-    Compilation { message: String },
-
-    #[error("Engine error: {0}")]
-    Engine(#[from] bex_engine::EngineError),
+    #[error("{0}")]
+    Runtime(#[from] bex_runtime::RuntimeError),
 
     #[error("Protobuf decode error: {0}")]
     ProtobufDecode(#[from] prost::DecodeError),

@@ -982,7 +982,7 @@ mod tests {
     use text_size::TextRange;
 
     use super::*;
-    use crate::{SpanContext, diagnostic::DiagnosticPhase};
+    use crate::{diagnostic::DiagnosticPhase, errors::SpanContext};
 
     fn test_span() -> Span {
         Span {

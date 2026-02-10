@@ -18,7 +18,6 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
-baml_compiler_diagnostics = { workspace = true }
 baml_compiler_hir = { workspace = true }
 baml_compiler_tir = { workspace = true }
 baml_type = { workspace = true }
@@ -26,8 +25,6 @@ baml_workspace = { workspace = true }
 la-arena = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
-smol_str = { workspace = true }
-text-size = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

@@ -19,10 +19,6 @@ pub mod types;
 pub mod vm;
 pub mod watch;
 
-// Re-export lookup functions from baml_builtins for convenience.
-pub use baml_builtins::{find_builtin_by_path, find_function, find_method};
-pub use builtins::{BuiltinSignature, TypePattern, functions, get_native_fn};
 pub use errors::{InternalError, RuntimeError, StackTrace};
 pub use indexable::EvalStack;
-pub use native::NativeFunction;
 pub use vm::{BexVm, BytecodeProgram, Frame, VmExecState, convert_program};
