@@ -76,6 +76,68 @@ pub fn empty_primitive_client_body(
     (body, source_map)
 }
 
+/// Create a synthetic body for LLM functions that calls `baml.llm.call_llm_function`.
+///
+/// For an LLM function like:
+/// ```baml
+/// function Greet(name: string) -> string {
+///     client TestClient
+///     prompt #"Hello, {{ name }}!"#
+/// }
+/// ```
+///
+/// Generates a body equivalent to:
+/// ```baml
+/// baml.llm.call_llm_function("Greet", {"name": name})
+/// ```
+pub fn lower_llm_to_call_llm_function(
+    function_name: &str,
+    param_names: &[Name],
+) -> (ExprBody, HirSourceMap) {
+    use crate::Name;
+    let mut exprs: Arena<Expr> = Arena::new();
+    let source_map = HirSourceMap::new();
+
+    // Create the args map: {"param1": param1, "param2": param2, ...}
+    let entries: Vec<(ExprId, ExprId)> = param_names
+        .iter()
+        .map(|name| {
+            let key = exprs.alloc(Expr::Literal(Literal::String(name.to_string())));
+            let value = exprs.alloc(Expr::Path(vec![name.clone()]));
+            (key, value)
+        })
+        .collect();
+    let args_map = exprs.alloc(Expr::Map { entries });
+
+    // Create function name literal
+    let fn_name_expr = exprs.alloc(Expr::Literal(Literal::String(function_name.to_string())));
+
+    // Create the function call path: baml.llm.call_llm_function
+    let callee_expr = exprs.alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("call_llm_function"),
+    ]));
+
+    // Create the call expression
+    let call_expr = exprs.alloc(Expr::Call {
+        callee: callee_expr,
+        args: vec![fn_name_expr, args_map],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        types: Arena::new(),
+        root_expr: Some(call_expr),
+        diagnostics: Vec::new(),
+    };
+
+    (body, source_map)
+}
+
 pub fn strip_string_delimiters(text: &str) -> &str {
     let text = text.trim();
     if text.starts_with("#\"") && text.ends_with("\"#") {

@@ -396,38 +396,76 @@ pub fn compile_files(
                 // Handle different function body types
                 let mut compiled_fn = match &*body {
                     baml_compiler_hir::FunctionBody::Llm(llm_body) => {
-                        // LLM functions are external operations dispatched by the engine.
-                        // TODO: Eventually these should compile to bytecode that calls
-                        // `baml.llm.render_prompt` orchestrator.
-                        let params: Vec<baml_base::Name> =
-                            signature.params.iter().map(|p| p.name.clone()).collect();
+                        // LLM functions compile to bytecode that calls
+                        // `baml.llm.call_llm_function(function_name, args_map)`.
+                        // The orchestrator handles prompt rendering, HTTP, and parsing.
 
-                        // Extract prompt template and client from LLM body
+                        // Extract prompt template and client for engine metadata
                         let prompt_template = llm_body.prompt.text.clone();
                         let client = llm_body.client.to_string();
 
-                        Function {
-                            name: signature.name.to_string(),
-                            arity: params.len(),
-                            bytecode: Bytecode::new(),
-                            kind: FunctionKind::SysOp(SysOp::BamlLlmPrimitiveClientRenderPrompt),
-                            locals_in_scope: vec![
-                                params
-                                    .iter()
-                                    .map(std::string::ToString::to_string)
-                                    .collect(),
-                            ],
-                            span: baml_base::Span::fake(),
-                            block_notifications: Vec::new(),
-                            viz_nodes: Vec::new(),
-                            return_type: baml_type::Ty::Null,
-                            param_names: Vec::new(),
-                            param_types: Vec::new(),
-                            body_meta: Some(bex_vm_types::FunctionMeta::Llm {
-                                prompt_template,
-                                client,
-                            }),
-                        }
+                        // Create synthetic body: baml.llm.call_llm_function("FnName", {args})
+                        let param_names: Vec<baml_base::Name> =
+                            signature.params.iter().map(|p| p.name.clone()).collect();
+                        let (expr_body, synth_source_map) =
+                            baml_compiler_hir::lower_llm_to_call_llm_function(
+                                &func_name,
+                                &param_names,
+                            );
+                        let synthetic_body = std::sync::Arc::new(
+                            baml_compiler_hir::FunctionBody::Expr(expr_body, synth_source_map),
+                        );
+
+                        // Run through the normal compilation pipeline
+                        let inference = baml_compiler_tir::infer_function(
+                            db,
+                            &signature,
+                            Some(&sig_source_map),
+                            &synthetic_body,
+                            Some(typing_context.clone()),
+                            Some(class_field_types.clone()),
+                            None,
+                            Some(enum_variant_names.clone()),
+                            *func_loc,
+                        );
+
+                        let vir = baml_compiler_vir::lower_from_hir(
+                            &synthetic_body,
+                            &inference,
+                            &resolution_ctx,
+                            &type_aliases,
+                            &recursive_aliases,
+                        )
+                        .map_err(|e| e.in_function(signature.name.to_string()))?;
+                        let mir = baml_compiler_mir::lower(
+                            &signature,
+                            &vir,
+                            db,
+                            &classes,
+                            &enum_variants,
+                            &class_type_tags,
+                            &resolution_ctx,
+                            &type_aliases,
+                            &recursive_aliases,
+                        );
+
+                        let ctx = MirCodegenContext {
+                            globals: &globals,
+                            classes: &classes,
+                            class_object_indices: &class_object_indices,
+                            enum_object_indices: &enum_object_indices,
+                            enum_variants: &enum_variants,
+                            objects: &mut program.objects,
+                        };
+                        let mut compiled = compile_mir_function(&mir, ctx);
+
+                        // Attach LLM metadata (used by engine for prompt template & client lookup)
+                        compiled.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
+                            prompt_template,
+                            client,
+                        });
+
+                        compiled
                     }
                     baml_compiler_hir::FunctionBody::Missing => {
                         // Missing body - placeholder function

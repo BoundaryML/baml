@@ -202,7 +202,7 @@ impl Config {
         // Sort namespaces by name length descending so more-specific prefixes
         // are matched first (e.g., "baml_lsp" before "baml")
         self.namespaces
-            .sort_by(|a, b| b.name.len().cmp(&a.name.len()));
+            .sort_by_key(|b| std::cmp::Reverse(b.name.len()));
         self
     }
 

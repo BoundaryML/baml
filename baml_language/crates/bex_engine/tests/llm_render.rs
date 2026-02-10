@@ -426,6 +426,72 @@ function test_call_llm() -> string {
 }
 
 #[tokio::test]
+async fn test_direct_llm_call() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+function Greet(name: string) -> string {
+    client TestClient
+    prompt #"
+        Hello, {{ name }}!
+    "#
+}
+
+function test_call_llm() -> string {
+    Greet("World")
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    // build_request now succeeds; this should panic at the next unimplemented
+    // step: "LlmParseResponse SysOp not yet implemented"
+    let result = engine.call_function("test_call_llm", vec![]).await;
+
+    match result {
+        Ok(value) => {
+            // Verify we got an error response without asserting exact upstream message
+            if let BexExternalValue::String(s) = &value {
+                assert!(s.contains("error"), "Expected error response, got: {s}");
+                assert!(
+                    s.contains("invalid_request_error") || s.contains("API key"),
+                    "Expected API key error, got: {s}"
+                );
+            } else {
+                panic!("Expected String result, got {value:?}");
+            }
+        }
+        Err(EngineError::ExternalOpFailed(OpError {
+            fn_name: SysOp::BamlHttpSend,
+            kind: OpErrorKind::Other(message),
+        })) if message.contains("HTTP request failed for") => {
+            // network failed
+        }
+        Err(EngineError::ExternalOpFailed(OpError {
+            fn_name: SysOp::BamlLlmPrimitiveClientParse,
+            kind: OpErrorKind::LlmClientError { message },
+        })) if message.contains("You didn't provide an API key.") => {
+            // this is ok, we had an API Error due to invalid API keys
+        }
+        Err(e) => {
+            panic!("test_call_llm failed: {e:?}");
+        }
+    }
+}
+
+#[tokio::test]
 async fn test_call_llm_function_non_string_returns_error() {
     use std::collections::HashMap;
 

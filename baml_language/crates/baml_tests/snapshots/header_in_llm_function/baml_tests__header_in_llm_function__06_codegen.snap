@@ -1,14 +1,20 @@
 ---
-source: target/debug/build/baml_tests-15cf2be5bc9d87e9/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 5
-Objects: 65
+Objects: 67
 Globals: 51
 
-Function FetchDatax (arity: 1, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
-  (no bytecode)
+Function FetchDatax (arity: 1, kind: Bytecode):
+     0   LOAD_GLOBAL 48   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("FetchDatax")
+     2   LOAD_VAR 1       (user_id)
+     3   LOAD_CONST 1     ("user_id")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function VertexGCP.resolve (arity: 0, kind: Bytecode):
      0    LOAD_GLOBAL 43      (<fn baml.llm.build_primitive_client>)

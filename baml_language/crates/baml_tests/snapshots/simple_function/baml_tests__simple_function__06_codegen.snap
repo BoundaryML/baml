@@ -1,14 +1,20 @@
 ---
-source: target/debug/build/baml_tests-15cf2be5bc9d87e9/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 4
-Objects: 56
+Objects: 58
 Globals: 50
 
-Function HelloWorld (arity: 1, kind: SysOp(BamlLlmPrimitiveClientRenderPrompt)):
-  (no bytecode)
+Function HelloWorld (arity: 1, kind: Bytecode):
+     0   LOAD_GLOBAL 48   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("HelloWorld")
+     2   LOAD_VAR 1       (name)
+     3   LOAD_CONST 1     ("name")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):
      0    LOAD_CONST 0        (null)
