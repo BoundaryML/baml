@@ -40,6 +40,10 @@ pub struct Program {
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
+
+    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
+    /// Prepended to function prompt templates by `get_jinja_template`.
+    pub template_strings_macros: String,
 }
 
 impl Program {

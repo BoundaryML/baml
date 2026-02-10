@@ -242,6 +242,10 @@ pub struct SysOpContext {
     /// Maps function names to their global indices in the VM.
     /// Used by `get_client_function` to return `FunctionRef` values.
     pub function_global_indices: std::collections::HashMap<String, usize>,
+
+    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
+    /// Prepended to templates by `get_jinja_template`.
+    pub template_strings_macros: String,
 }
 
 /// Pre-extracted metadata for an LLM function.
@@ -263,6 +267,7 @@ impl SysOpContext {
         Self {
             llm_functions: std::collections::HashMap::new(),
             function_global_indices: std::collections::HashMap::new(),
+            template_strings_macros: String::new(),
         }
     }
 }
@@ -439,7 +444,13 @@ impl<T> SysOpLlm for T {
                 "LLM function not found: {function_name}"
             )));
         };
-        SysOpOutput::ok(info.prompt_template.clone())
+        let dedented = sys_llm::preprocess_template(&info.prompt_template);
+        let template = if ctx.template_strings_macros.is_empty() {
+            dedented
+        } else {
+            format!("{}\n{}", ctx.template_strings_macros, dedented)
+        };
+        SysOpOutput::ok(template)
     }
 
     fn baml_llm_build_primitive_client(

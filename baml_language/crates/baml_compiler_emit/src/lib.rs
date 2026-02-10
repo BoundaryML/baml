@@ -49,7 +49,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{
     self, ItemId, function_body, function_qualified_name, function_signature,
-    function_signature_source_map,
+    function_signature_source_map, template_string_body, template_string_signature,
 };
 use baml_compiler_tir::TypeResolutionContext;
 pub use baml_compiler_vir::LoweringError;
@@ -528,6 +528,30 @@ pub fn compile_files(
             }
         }
     }
+
+    // --- Pass: Format template_string macros ---
+    let mut template_macros = Vec::new();
+    for file in files {
+        let items_struct = baml_compiler_hir::file_items(db, *file);
+        for item in items_struct.items(db) {
+            if let ItemId::TemplateString(ts_loc) = item {
+                let signature = template_string_signature(db, *ts_loc);
+                let body = template_string_body(db, *ts_loc);
+                let args = signature
+                    .params
+                    .iter()
+                    .map(|p| p.name.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                template_macros.push(format!(
+                    "{{% macro {name}({args}) %}}{body}{{% endmacro %}}",
+                    name = signature.name,
+                    body = body.text,
+                ));
+            }
+        }
+    }
+    program.template_strings_macros = template_macros.join("\n");
 
     Ok(program)
 }

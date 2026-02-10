@@ -328,6 +328,7 @@ impl BexEngine {
         let sys_op_ctx = sys_types::SysOpContext {
             llm_functions,
             function_global_indices: bytecode.function_global_indices,
+            template_strings_macros: bytecode.template_strings_macros,
         };
 
         Ok(Self {

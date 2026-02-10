@@ -14,7 +14,8 @@ mod value_conversion;
 
 pub use error::RenderPromptError;
 pub use render::{
-    RenderContext, RenderContextClient, RenderEnum, RenderEnumVariant, render_prompt,
+    RenderContext, RenderContextClient, RenderEnum, RenderEnumVariant, preprocess_template,
+    render_prompt,
 };
 
 pub use crate::types::OutputFormatContent;

@@ -22,7 +22,7 @@ use bex_heap::builtin_types;
 // Used by bex_engine tests
 pub use jinja::{
     OutputFormatContent, RenderContext, RenderContextClient, RenderEnum, RenderEnumVariant,
-    RenderPromptError, render_prompt,
+    RenderPromptError, preprocess_template, render_prompt,
 };
 // --- Crate-internal re-exports (used by submodules via `crate::`) ---
 pub(crate) use model_features::{AllowedMetadata, ModelFeatures};

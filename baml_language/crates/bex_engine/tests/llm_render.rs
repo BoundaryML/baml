@@ -557,3 +557,185 @@ function test_call_llm() -> unknown {
         }
     }
 }
+
+// ============================================================================
+// Template String Tests
+// ============================================================================
+
+/// Build a `BexExternalValue` wrapping a simple string `PromptAst`.
+fn prompt_ast_string(s: &str) -> BexExternalValue {
+    BexExternalValue::Adt(BexExternalAdt::PromptAst(std::sync::Arc::new(
+        BuiltinPromptAst::Simple(std::sync::Arc::new(s.to_string().into())),
+    )))
+}
+
+/// Test that a `template_string` is expanded as a Jinja macro in `render_prompt`.
+#[tokio::test]
+async fn test_template_string_in_prompt() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+template_string Greet(name: string) #"Hello, {{ name }}!"#
+
+function TestFunc(name: string) -> string {
+    client TestClient
+    prompt #"
+        {{ Greet(name) }}
+    "#
+}
+
+function get_prompt() -> PromptAst {
+    let args = { "name": "Alice" };
+    baml.llm.render_prompt("TestFunc", args)
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    let result = engine
+        .call_function("get_prompt", vec![])
+        .await
+        .expect("failed to render prompt that calls template_string Greet(name)");
+    assert_eq!(result, prompt_ast_string("Hello, Alice!"));
+}
+
+/// Test that nested `template_strings` expand correctly.
+#[tokio::test]
+async fn test_nested_template_strings() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+template_string Inner() #"INNER"#
+template_string Outer() #"before {{ Inner() }} after"#
+
+function TestFunc() -> string {
+    client TestClient
+    prompt #"{{ Outer() }}"#
+}
+
+function get_prompt() -> PromptAst {
+    let args = {};
+    baml.llm.render_prompt("TestFunc", args)
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    let result = engine
+        .call_function("get_prompt", vec![])
+        .await
+        .expect("failed to render prompt with nested template_strings Outer() -> Inner()");
+    assert_eq!(result, prompt_ast_string("before INNER after"));
+}
+
+/// Test a `template_string` with two args, one of which is a class (struct).
+#[tokio::test]
+async fn test_template_string_with_struct_arg() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+class Person {
+    name string
+    age int
+}
+
+template_string Describe(label: string, person: Person) #"{{ label }}: {{ person.name }} (age {{ person.age }})"#
+
+function TestFunc(label: string, person: Person) -> string {
+    client TestClient
+    prompt #"
+        {{ Describe(label, person) }}
+    "#
+}
+
+function get_prompt() -> PromptAst {
+    let args = { "label": "User", "person": { "name": "Bob", "age": 42 } };
+    baml.llm.render_prompt("TestFunc", args)
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    let result = engine
+        .call_function("get_prompt", vec![])
+        .await
+        .expect("failed to render prompt with 2-arg template_string Describe(label, person)");
+    assert_eq!(result, prompt_ast_string("User: Bob (age 42)"));
+}
+
+/// Test that parameterless `template_strings` work.
+#[tokio::test]
+async fn test_parameterless_template_string() {
+    use std::collections::HashMap;
+
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+template_string Header() #"=== HEADER ==="#
+
+function TestFunc() -> string {
+    client TestClient
+    prompt #"{{ Header() }}
+Content here"#
+}
+
+function get_prompt() -> PromptAst {
+    let args = {};
+    baml.llm.render_prompt("TestFunc", args)
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
+        .expect("Failed to create engine");
+
+    let result = engine
+        .call_function("get_prompt", vec![])
+        .await
+        .expect("failed to render prompt that calls parameterless template_string Header()");
+    assert_eq!(result, prompt_ast_string("=== HEADER ===\nContent here"));
+}

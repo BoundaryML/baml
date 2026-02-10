@@ -60,9 +60,7 @@ pub fn render_prompt(
 ) -> Result<PromptAst, super::RenderPromptError> {
     let mut env = create_environment();
 
-    // Preprocess template
-    let processed_template = preprocess_template(template);
-    env.add_template("prompt", &processed_template)?;
+    env.add_template("prompt", template)?;
 
     let mut media_handles = HashMap::new();
     // Add globals (tags may contain media; share media_handles so parse_rendered_output can resolve them)
@@ -113,7 +111,7 @@ fn create_environment() -> Environment<'static> {
 /// Preprocess template: dedent and trim.
 ///
 /// Dedenting logic ported from engine/baml-lib/jinja-runtime/src/lib.rs:266-277
-fn preprocess_template(template: &str) -> String {
+pub fn preprocess_template(template: &str) -> String {
     // Dedent: find minimum whitespace and remove from all lines
     let lines: Vec<&str> = template.lines().collect();
 
@@ -448,10 +446,8 @@ mod tests {
             Hello,
             World!
         "#;
-        let args = IndexMap::new();
-        let result = render_prompt(template, &args, &test_ctx()).unwrap();
-
-        assert_eq!(result, "Hello,\nWorld!".to_string().into());
+        let result = preprocess_template(template);
+        assert_eq!(result, "Hello,\nWorld!");
     }
 
     #[test]

@@ -281,6 +281,8 @@ pub struct BytecodeProgram {
     /// Maps function names to their global indices.
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
+    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
+    pub template_strings_macros: String,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -324,6 +326,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         resolved_class_names,
         resolved_enums_names,
         function_global_indices: program.function_global_indices,
+        template_strings_macros: program.template_strings_macros,
     })
 }
 
