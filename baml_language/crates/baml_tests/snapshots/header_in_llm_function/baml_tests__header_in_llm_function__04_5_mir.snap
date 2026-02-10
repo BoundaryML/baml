@@ -32,9 +32,9 @@ fn FetchDatax(user_id: string) -> Hi {
 
 }
 
-fn VertexGCP.resolve() -> null {
+fn VertexGCP.resolve() -> baml.llm.PrimitiveClient {
     // Locals:
-    let _0: null // return
+    let _0: baml.llm.PrimitiveClient // return
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "VertexGCP"
     let _3: "vertex-ai"

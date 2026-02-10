@@ -61,9 +61,9 @@ fn FunctionWithComments(a: string, b: int) -> string {
 
 }
 
-fn TestClient.resolve() -> null {
+fn TestClient.resolve() -> baml.llm.PrimitiveClient {
     // Locals:
-    let _0: null // return
+    let _0: baml.llm.PrimitiveClient // return
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TestClient"
     let _3: "baml-openai-chat"

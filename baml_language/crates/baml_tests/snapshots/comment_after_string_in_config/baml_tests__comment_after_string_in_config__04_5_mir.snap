@@ -3,9 +3,9 @@ source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn OpenRouterMistralSmall3_1_24b.resolve() -> null {
+fn OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
     // Locals:
-    let _0: null // return
+    let _0: baml.llm.PrimitiveClient // return
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "OpenRouterMistralSmall3_1_24b"
     let _3: "unknown"

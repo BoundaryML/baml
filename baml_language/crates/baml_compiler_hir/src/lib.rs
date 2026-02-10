@@ -379,8 +379,7 @@ fn function_signature_with_source_map<'db>(
     let func = &item_tree[function.id(db)];
     let func_name = func.name.clone();
 
-    // Client resolve functions have synthetic signatures (no params, Unknown return)
-    // because they contain heterogeneous values from the options block.
+    // Client resolve functions have synthetic signatures: no params, returns PrimitiveClient.
     // LLM functions fall through to read their real signature from the CST.
     if matches!(
         &func.compiler_generated,
@@ -390,7 +389,11 @@ fn function_signature_with_source_map<'db>(
             Arc::new(FunctionSignature {
                 name: func_name,
                 params: vec![],
-                return_type: TypeRef::Unknown,
+                return_type: TypeRef::Path(path::Path::new(vec![
+                    Name::new("baml"),
+                    Name::new("llm"),
+                    Name::new("PrimitiveClient"),
+                ])),
             }),
             SignatureSourceMap::default(),
         );

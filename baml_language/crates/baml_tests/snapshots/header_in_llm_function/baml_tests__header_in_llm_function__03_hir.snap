@@ -7,7 +7,7 @@ function FetchDatax(user_id: string) -> Hi {
     baml.llm.call_llm_function("FetchDatax", { "user_id": user_id })
 }
 
-function VertexGCP.resolve() -> <unknown> {
+function VertexGCP.resolve() -> baml.llm.PrimitiveClient {
     baml.llm.build_primitive_client("VertexGCP", "vertex-ai", "user", ["user", "assistant", "system"], { "model": "gemini-2" })
 }
 

@@ -11,7 +11,7 @@ function FunctionWithComments(a: string, b: int) -> string {
     baml.llm.call_llm_function("FunctionWithComments", { "a": a, "b": b })
 }
 
-function TestClient.resolve() -> <unknown> {
+function TestClient.resolve() -> baml.llm.PrimitiveClient {
     baml.llm.build_primitive_client("TestClient", "baml-openai-chat", "user", ["user", "assistant", "system"], {  })
 }
 
