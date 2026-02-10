@@ -188,13 +188,20 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
 
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
-    let strong_ast_tests: TokenStream = project.files.iter().map(generate_strong_ast_test).collect();
+    let strong_ast_tests: TokenStream =
+        project.files.iter().map(generate_strong_ast_test).collect();
 
     let hir_test = generate_hir_test(project);
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
     let diagnostics_test = generate_diagnostics_test(project);
     let codegen_test = generate_codegen_test(project);
+
+    let formatter_idempotency_tests: TokenStream = project
+        .files
+        .iter()
+        .map(generate_formatter_idempotency_test)
+        .collect();
 
     let parser_specific_tests = if project.name.starts_with("parser_") {
         let incremental_tests: TokenStream = project
@@ -251,6 +258,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
             #mir_test
             #diagnostics_test
             #codegen_test
+            #formatter_idempotency_tests
             #parser_specific_tests
         }
     }
@@ -879,6 +887,61 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
         fn test_09_tree_lossless() {
             // Verify parse trees can reconstruct original source
             #file_checks
+        }
+    }
+}
+
+fn generate_formatter_idempotency_test(baml_file: &BamlFile) -> TokenStream {
+    let test_name = format_ident!("test_10_formatter_idempotency_{}", baml_file.name);
+    // TODO: uncomment when snapshots are enabled
+    // let snapshot_name = format!("10_formatter_idempotency__{}", baml_file.name);
+    let full_path = baml_file.full_path.display().to_string();
+    let relative_path = baml_file.relative_path.display().to_string();
+    let include_content = make_include_str(&full_path);
+
+    quote! {
+        #[test]
+        fn #test_name() {
+            let content = #include_content;
+            // Normalize line endings for cross-platform compatibility
+            let content = content.replace("\r\n", "\n");
+            let options = baml_fmt::FormatOptions::default();
+
+            let first = match baml_fmt::format(&content, &options) {
+                Ok(formatted) => formatted,
+                Err(_e) => {
+                    // TODO: Snapshot the error so we can track formatter progress
+                    // let output = format!("=== FORMATTER ERROR ===\n{}", e);
+                    // with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                    //     assert_snapshot!(#snapshot_name, output);
+                    // });
+                    return;
+                }
+            };
+
+            // Format a second time – the output must be identical (idempotency).
+            let second = match baml_fmt::format(&first, &options) {
+                Ok(formatted) => formatted,
+                Err(e) => {
+                    panic!(
+                        "Formatter succeeded on the original input ({}) but failed on its own output:\n{}",
+                        #relative_path, e
+                    );
+                }
+            };
+
+            assert_eq!(
+                first, second,
+                "Formatter is not idempotent for {}.\n\
+                 === first pass ===\n{}\n\
+                 === second pass ===\n{}",
+                #relative_path, first, second
+            );
+
+            // TODO: Snapshot the formatted output
+            // with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            //     assert_snapshot!(#snapshot_name, first);
+            // });
         }
     }
 }
