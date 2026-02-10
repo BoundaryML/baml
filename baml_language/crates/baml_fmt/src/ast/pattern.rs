@@ -29,7 +29,7 @@ impl FromCST for MatchPattern {
 
         let binding = if it.peek().is_none() {
             return Ok(first_elem.into());
-        } else if let Some(colon) = it.next_if(|elem| elem.kind() == SyntaxKind::COLON) {
+        } else if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
             let colon = StrongAstError::assert_is_token(colon)?;
             let UnionPatternMember::Word(binding_name) = first_elem else {
                 return Err(StrongAstError::UnexpectedKindDesc {
@@ -205,7 +205,9 @@ impl Printable for UnionPattern {
             single_line_printer.print_str(" ");
             single_line_printer.print_raw_token(pipe);
             single_line_printer.print_str(" ");
-            multi_lined |= single_line_printer.print(pattern, shape.clone()).multi_lined;
+            multi_lined |= single_line_printer
+                .print(pattern, shape.clone())
+                .multi_lined;
         }
         if multi_lined || single_line_printer.output.len() > shape.width {
             return Self::print_multi_line(self, shape, printer);
@@ -257,13 +259,13 @@ impl UnionPatternMember {
             }
         };
 
-        if let Some(dot) = it.next_if(|elem| elem.kind() == SyntaxKind::DOT) {
-            let dot = StrongAstError::assert_is_token(dot)?;
-            let word = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        if let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
+            let dot = t::Dot::from_cst(dot)?;
+            let variant_name = it.expect_token_of_kind()?;
             Ok(UnionPatternMember::EnumVariant(EnumVariantPattern {
                 enum_name: first,
-                dot: t::Dot::new_from_span(dot.text_range()),
-                variant_name: t::Word::new_from_span(word.text_range()),
+                dot,
+                variant_name,
             }))
         } else {
             Ok(UnionPatternMember::Word(first))

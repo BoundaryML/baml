@@ -250,30 +250,23 @@ impl UnionTypeMember {
         match first.kind() {
             SyntaxKind::L_PAREN => {
                 // Either a parenthesized type or a function type
-                let open_paren = StrongAstError::assert_is_token(first)?;
-                let mut items = Vec::new();
-                let end_paren = loop {
+                let open_paren = t::LParen::from_cst(first)?;
+                let mut params = Vec::new();
+                let close_paren = loop {
                     let Some(elem) = it.next() else {
-                        return Err(StrongAstError::missing(
-                            SyntaxKind::R_PAREN,
-                            open_paren.text_range(),
-                        ));
+                        return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
                     };
                     match elem.kind() {
                         SyntaxKind::R_PAREN => {
-                            let token = StrongAstError::assert_is_token(elem)?;
-                            break token;
+                            break t::RParen::from_cst(elem)?;
                         }
                         SyntaxKind::FUNCTION_TYPE_PARAM => {
                             let param = FunctionTypeParam::from_cst(elem)?;
                             let comma = it
-                                .next_if(|elem| elem.kind() == SyntaxKind::COMMA)
-                                .map(|comma| {
-                                    let comma = StrongAstError::assert_is_token(comma)?;
-                                    Ok(t::Comma::new_from_span(comma.text_range()))
-                                })
+                                .next_if_kind(SyntaxKind::COMMA)
+                                .map(t::Comma::from_cst)
                                 .transpose()?;
-                            items.push((param, comma));
+                            params.push((param, comma));
                         }
                         _ => {
                             return Err(StrongAstError::UnexpectedKindDesc {
@@ -284,65 +277,46 @@ impl UnionTypeMember {
                         }
                     }
                 };
-                let must_be_func_type = items.len() != 1
-                    || items
+                let must_be_func_type = params.len() != 1
+                    || params
                         .iter()
                         .any(|item| item.0.name.is_some() || item.1.is_some());
                 if must_be_func_type {
-                    let arrow = it.expect_token_of_kind(SyntaxKind::ARROW)?;
+                    let arrow = it.expect_token_of_kind()?;
                     let return_ty = it.expect_next("a type")?;
                     let return_ty = Type::from_cst(return_ty)?;
 
                     Ok(UnionTypeMember::Function(FunctionType {
-                        open_paren: t::LParen::new_from_span(open_paren.text_range()),
-                        params: items,
-                        close_paren: t::RParen::new_from_span(end_paren.text_range()),
-                        arrow: t::Arrow::new_from_span(arrow.text_range()),
+                        open_paren,
+                        params,
+                        close_paren,
+                        arrow,
                         return_type: Box::new(return_ty),
                     }))
                 } else {
-                    let (inner, _) = items
+                    let (inner, _) = params
                         .pop()
                         .unwrap_or_else(|| unreachable!("we checked it has length 1"));
                     Ok(UnionTypeMember::Paren(ParenType {
-                        open_paren: t::LParen::new_from_span(open_paren.text_range()),
+                        open_paren,
                         ty: inner.ty,
-                        close_paren: t::RParen::new_from_span(end_paren.text_range()),
+                        close_paren,
                     }))
                 }
             }
             SyntaxKind::WORD => {
-                let first = StrongAstError::assert_is_token(first)?;
+                let first = t::Word::from_cst(first)?;
                 let mut rest = Vec::new();
-                while let Some(double_colon) =
-                    it.next_if(|elem| elem.kind() == SyntaxKind::DOUBLE_COLON)
-                {
-                    let double_colon = StrongAstError::assert_is_token(double_colon)?;
-                    let word = it.expect_token_of_kind(SyntaxKind::WORD)?;
-                    rest.push((
-                        t::DoubleColon::new_from_span(double_colon.text_range()),
-                        t::Word::new_from_span(word.text_range()),
-                    ));
+                while let Some(double_colon) = it.next_if_kind(SyntaxKind::DOUBLE_COLON) {
+                    let double_colon = t::DoubleColon::from_cst(double_colon)?;
+                    let word = it.expect_token_of_kind()?;
+                    rest.push((double_colon, word));
                 }
-                Ok(UnionTypeMember::Path(PathType {
-                    first: t::Word::new_from_span(first.text_range()),
-                    rest,
-                }))
+                Ok(UnionTypeMember::Path(PathType { first, rest }))
             }
             SyntaxKind::STRING_LITERAL => {
-                let node = StrongAstError::assert_is_node(first)?;
-
-                // there might be some preceding trivia
-                let Some(open_quote) =
-                    node.first_child_or_token_by_kind(&|kind| kind == SyntaxKind::QUOTE)
-                else {
-                    return Err(StrongAstError::missing(SyntaxKind::QUOTE, it.parent));
-                };
-                let range =
-                    TextRange::new(open_quote.text_range().start(), node.text_range().end());
-                Ok(UnionTypeMember::String(StringType(
-                    t::QuotedString::new_from_span(range),
-                )))
+                let string = t::QuotedString::from_cst(first)?;
+                Ok(UnionTypeMember::String(StringType(string)))
             }
             found => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc: "L_PAREN, WORD, or STRING_LITERAL".into(),
@@ -363,10 +337,8 @@ impl UnionTypeMember {
                 // Array type
                 let mut brackets = Vec::new();
                 while let Some(open_bracket) = it.next_if_kind(SyntaxKind::L_BRACKET) {
-                    let open_bracket = StrongAstError::assert_is_token(open_bracket)?;
-                    let close_bracket = it.expect_token_of_kind(SyntaxKind::R_BRACKET)?;
-                    let open_bracket = t::LBracket::new_from_span(open_bracket.text_range());
-                    let close_bracket = t::RBracket::new_from_span(close_bracket.text_range());
+                    let open_bracket = t::LBracket::from_cst(open_bracket)?;
+                    let close_bracket: t::RBracket = it.expect_token_of_kind()?;
                     brackets.push((open_bracket, close_bracket));
                 }
                 ty = UnionTypeMember::Array(ArrayType {
@@ -376,7 +348,7 @@ impl UnionTypeMember {
                 continue;
             } else if let Some(question) = it.next_if_kind(SyntaxKind::QUESTION) {
                 // Optional type
-                let question = t::Question::new_from_span(question.text_range());
+                let question = t::Question::from_cst(question)?;
                 ty = UnionTypeMember::Optional(OptionalType {
                     ty: Box::new(ty.into()),
                     question,
@@ -496,7 +468,7 @@ impl FromCST for TypeArgs {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_angle = it.expect_token_of_kind(SyntaxKind::LESS)?;
+        let open_angle: t::Less = it.expect_token_of_kind()?;
 
         let first = it.expect_next("a type")?;
         let first = Type::from_cst(first)?;
@@ -504,10 +476,7 @@ impl FromCST for TypeArgs {
         let mut rest = Vec::new();
         let close_angle = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::GREATER,
-                    open_angle.text_range(),
-                ));
+                return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
             };
             match elem.kind() {
                 SyntaxKind::COMMA => {
@@ -535,7 +504,7 @@ impl FromCST for TypeArgs {
         it.expect_end()?;
 
         Ok(TypeArgs {
-            open_angle: t::Less::new_from_span(open_angle.text_range()),
+            open_angle,
             first: Box::new(first),
             rest,
             close_angle,
@@ -709,10 +678,10 @@ impl FromCST for FunctionTypeParam {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = if let Some(name) = it.next_if(|elem| elem.kind() == SyntaxKind::WORD) {
+        let name = if let Some(name) = it.next_if_kind(SyntaxKind::WORD) {
             let name = t::Word::new_from_span(name.text_range());
             let colon = it
-                .next_if(|elem| elem.kind() == SyntaxKind::COLON)
+                .next_if_kind(SyntaxKind::COLON)
                 .map(|elem| {
                     let colon = StrongAstError::assert_is_token(elem)?;
                     Ok(t::Colon::new_from_span(colon.text_range()))

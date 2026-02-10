@@ -14,8 +14,8 @@ pub enum TopLevelDeclaration {
     Enum(EnumDecl),
     Client(ClientDecl),
     Test(TestDecl),
-    RetryPolicy(TextRange),    // TODO
-    TemplateString(TextRange), // TODO
+    RetryPolicy(TextRange), // TODO
+    TemplateString(TemplateStringDecl),
     TypeAlias(TypeAliasDecl),
     Unknown(TextRange),
 }
@@ -34,7 +34,7 @@ impl FromCST for TopLevelDeclaration {
                 TopLevelDeclaration::RetryPolicy(elem.text_range()) // TODO
             }
             SyntaxKind::TEMPLATE_STRING_DEF => {
-                TopLevelDeclaration::TemplateString(elem.text_range()) // TODO
+                TopLevelDeclaration::TemplateString(TemplateStringDecl::from_cst(elem)?)
             }
             SyntaxKind::TYPE_ALIAS_DEF => {
                 TopLevelDeclaration::TypeAlias(TypeAliasDecl::from_cst(elem)?)
@@ -57,9 +57,8 @@ impl Printable for TopLevelDeclaration {
                 printer.print_input_range(*range);
                 PrintInfo::default_multi_lined()
             }
-            TopLevelDeclaration::TemplateString(range) => {
-                printer.print_input_range(*range);
-                PrintInfo::default_multi_lined()
+            TopLevelDeclaration::TemplateString(template_string) => {
+                template_string.print(shape, printer)
             }
             TopLevelDeclaration::TypeAlias(type_alias_decl) => {
                 type_alias_decl.print(shape, printer)
@@ -88,14 +87,14 @@ impl FromCST for FunctionDecl {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_FUNCTION)?;
+        let keyword = it.expect_token_of_kind()?;
 
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         let param_list = it.expect_node_of_kind(SyntaxKind::PARAMETER_LIST)?;
         let params = FunctionParamList::from_cst(SyntaxElement::Node(param_list))?;
 
-        let arrow = it.expect_token_of_kind(SyntaxKind::ARROW)?;
+        let arrow = it.expect_token_of_kind()?;
 
         let return_type = it.expect_node_of_kind(SyntaxKind::TYPE_EXPR)?;
         let return_type = Type::from_cst(SyntaxElement::Node(return_type))?;
@@ -106,12 +105,10 @@ impl FromCST for FunctionDecl {
         it.expect_end()?;
 
         Ok(FunctionDecl {
-            keyword: t::Function::new_from_span(keyword.text_range()),
-            name: t::Word {
-                token_span: name.text_range(),
-            },
+            keyword,
+            name,
             params,
-            arrow: t::Arrow::new_from_span(arrow.text_range()),
+            arrow,
             return_type,
             body,
         })
@@ -147,39 +144,29 @@ impl FromCST for FunctionParamList {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
+        let open_paren = it.expect_token_of_kind()?;
 
         let mut params = Vec::new();
 
         let close_paren = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::R_PAREN,
-                    open_paren.text_range(),
-                ));
+                return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
             };
             match elem.kind() {
                 SyntaxKind::PARAMETER => {
-                    let param_node = StrongAstError::assert_is_node(elem)?;
+                    let param = FunctionParam::from_cst(elem)?;
                     let comma = it
-                        .next_if(|next| next.kind() == SyntaxKind::COMMA)
-                        .map(|comma| {
-                            let comma = StrongAstError::assert_is_token(comma)?;
-                            Ok(t::Comma::new_from_span(comma.text_range()))
-                        })
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
                         .transpose()?;
-                    params.push((
-                        FunctionParam::from_cst(SyntaxElement::Node(param_node))?,
-                        comma,
-                    ));
+                    params.push((param, comma));
                 }
                 SyntaxKind::R_PAREN => {
-                    let token = StrongAstError::assert_is_token(elem)?;
-                    break t::RParen::new_from_span(token.text_range());
+                    break t::RParen::from_cst(elem)?;
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: open_paren.text_range(),
+                        parent: it.parent,
                         at: elem.text_range(),
                     });
                 }
@@ -189,7 +176,7 @@ impl FromCST for FunctionParamList {
         it.expect_end()?;
 
         Ok(FunctionParamList {
-            open_paren: t::LParen::new_from_span(open_paren.text_range()),
+            open_paren,
             params,
             close_paren,
         })
@@ -279,14 +266,11 @@ impl FromCST for FunctionParam {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         let colon = it
-            .next_if(|next| next.kind() == SyntaxKind::COLON)
-            .map(|colon| {
-                let colon = StrongAstError::assert_is_token(colon)?;
-                Ok(t::Colon::new_from_span(colon.text_range()))
-            })
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
             .transpose()?;
 
         let ty = if let Some(colon) = colon {
@@ -295,7 +279,7 @@ impl FromCST for FunctionParam {
             Some((Some(colon), Type::from_cst(ty)?))
         } else {
             // If there is no colon, type is optional (e.g. `self` lacks a type)
-            it.next()
+            it.next_if_kind(SyntaxKind::TYPE_EXPR)
                 .map(Type::from_cst)
                 .transpose()?
                 .map(|ty| (None, ty))
@@ -303,10 +287,7 @@ impl FromCST for FunctionParam {
 
         it.expect_end()?;
 
-        Ok(FunctionParam {
-            name: t::Word::new_from_span(name.text_range()),
-            ty,
-        })
+        Ok(FunctionParam { name, ty })
     }
 }
 
@@ -401,35 +382,29 @@ impl FromCST for ClassDecl {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_CLASS)?;
+        let keyword = it.expect_token_of_kind()?;
 
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
-        let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
+        let open_brace = it.expect_token_of_kind()?;
 
         // collect class items (fields, functions, block attributes)
         let mut items = Vec::new();
 
         let close_brace = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::R_BRACE,
-                    open_brace.text_range(),
-                ));
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
             };
             match elem.kind() {
                 SyntaxKind::FIELD | SyntaxKind::FUNCTION_DEF | SyntaxKind::BLOCK_ATTRIBUTE => {
-                    let item_node = StrongAstError::assert_is_node(elem)?;
-                    items.push(ClassItem::from_cst(SyntaxElement::Node(item_node))?);
+                    items.push(ClassItem::from_cst(elem)?);
                 }
                 SyntaxKind::R_BRACE => {
-                    let token = StrongAstError::assert_is_token(elem)?;
-                    let close_brace = t::RBrace::new_from_span(token.text_range());
-                    break close_brace;
+                    break t::RBrace::from_cst(elem)?;
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedAdditionalElement {
-                        parent: open_brace.text_range(),
+                        parent: it.parent,
                         at: elem.text_range(),
                     });
                 }
@@ -439,11 +414,9 @@ impl FromCST for ClassDecl {
         it.expect_end()?;
 
         Ok(ClassDecl {
-            keyword: t::Class::new_from_span(keyword.text_range()),
-            name: t::Word {
-                token_span: name.text_range(),
-            },
-            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            keyword,
+            name,
+            open_brace,
             items,
             close_brace,
         })
@@ -494,16 +467,12 @@ impl FromCST for ClassField {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        // name
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         // optional colon (fields can be defined without colons in BAML)
         let colon = it
-            .next_if(|elem| elem.kind() == SyntaxKind::COLON)
-            .map(|elem| {
-                let colon = StrongAstError::assert_is_token(elem)?;
-                Ok(t::Colon::new_from_span(colon.text_range()))
-            })
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
             .transpose()?;
 
         // type expression
@@ -518,12 +487,10 @@ impl FromCST for ClassField {
             };
             match elem.kind() {
                 SyntaxKind::ATTRIBUTE => {
-                    let attr_node = StrongAstError::assert_is_node(elem)?;
-                    attributes.push(Attribute::from_cst(SyntaxElement::Node(attr_node))?);
+                    attributes.push(Attribute::from_cst(elem)?);
                 }
                 SyntaxKind::COMMA => {
-                    let comma = StrongAstError::assert_is_token(elem)?;
-                    break Some(t::Comma::new_from_span(comma.text_range()));
+                    break Some(t::Comma::from_cst(elem)?);
                 }
                 found => {
                     return Err(StrongAstError::UnexpectedKindDesc {
@@ -536,7 +503,7 @@ impl FromCST for ClassField {
         };
 
         Ok(ClassField {
-            name: t::Word::new_from_span(name.text_range()),
+            name,
             colon,
             ty,
             attributes,
@@ -609,20 +576,17 @@ pub enum ClassItem {
 
 impl FromCST for ClassItem {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        let node = StrongAstError::assert_is_node(elem)?;
-        let item = match node.kind() {
-            SyntaxKind::FIELD => ClassItem::Field(ClassField::from_cst(SyntaxElement::Node(node))?),
-            SyntaxKind::FUNCTION_DEF => {
-                ClassItem::Function(FunctionDecl::from_cst(SyntaxElement::Node(node))?)
-            }
+        let item = match elem.kind() {
+            SyntaxKind::FIELD => ClassItem::Field(ClassField::from_cst(elem)?),
+            SyntaxKind::FUNCTION_DEF => ClassItem::Function(FunctionDecl::from_cst(elem)?),
             SyntaxKind::BLOCK_ATTRIBUTE => {
-                ClassItem::BlockAttribute(BlockAttribute::from_cst(SyntaxElement::Node(node))?)
+                ClassItem::BlockAttribute(BlockAttribute::from_cst(elem)?)
             }
             found => {
                 return Err(StrongAstError::UnexpectedKindDesc {
                     expected_desc: "FIELD, FUNCTION_DEF, or BLOCK_ATTRIBUTE".into(),
                     found,
-                    at: node.text_range(),
+                    at: elem.text_range(),
                 });
             }
         };
@@ -658,13 +622,13 @@ impl FromCST for EnumDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "enum"
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_ENUM)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // name
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         // open brace
-        let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
+        let open_brace = it.expect_token_of_kind()?;
 
         let mut items = Vec::new();
         let close_brace = loop {
@@ -680,24 +644,18 @@ impl FromCST for EnumDecl {
                     let variant = EnumVariant::from_cst(SyntaxElement::Node(variant))?;
 
                     let comma = it
-                        .next_if(|elem| elem.kind() == SyntaxKind::COMMA)
-                        .map(|comma| {
-                            let comma = StrongAstError::assert_is_token(comma)?;
-                            Ok(t::Comma::new_from_span(comma.text_range()))
-                        })
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
                         .transpose()?;
 
                     items.push(EnumItem::Variant(variant, comma));
                 }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
-                    let attr_node = StrongAstError::assert_is_node(elem)?;
-                    let attr = BlockAttribute::from_cst(SyntaxElement::Node(attr_node))?;
+                    let attr = BlockAttribute::from_cst(elem)?;
                     items.push(EnumItem::BlockAttribute(attr));
                 }
                 SyntaxKind::R_BRACE => {
-                    let close_brace = StrongAstError::assert_is_token(elem)?;
-                    let close_brace = t::RBrace::new_from_span(close_brace.text_range());
-                    break close_brace;
+                    break t::RBrace::from_cst(elem)?;
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
@@ -712,11 +670,9 @@ impl FromCST for EnumDecl {
         it.expect_end()?;
 
         Ok(EnumDecl {
-            keyword: t::Enum::new_from_span(keyword.text_range()),
-            name: t::Word {
-                token_span: name.text_range(),
-            },
-            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            keyword,
+            name,
+            open_brace,
             items,
             close_brace,
         })
@@ -787,14 +743,11 @@ impl FromCST for EnumVariant {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         let attributes = it.map(Attribute::from_cst).collect::<Result<_, _>>()?;
 
-        Ok(EnumVariant {
-            name: t::Word::new_from_span(name.text_range()),
-            attributes,
-        })
+        Ok(EnumVariant { name, attributes })
     }
 }
 
@@ -865,7 +818,7 @@ impl FromCST for ClientDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "client"
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_CLIENT)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // client type: <llm>
         let client_type_node = it.expect_node_of_kind(SyntaxKind::CLIENT_TYPE)?;
@@ -873,13 +826,13 @@ impl FromCST for ClientDecl {
         // Parse client type to get <, generic, >
         let mut ct_visitor = SyntaxNodeIter::new(client_type_node.clone());
 
-        let rangle = ct_visitor.expect_token_of_kind(SyntaxKind::LESS)?;
-        let generic = ct_visitor.expect_token_of_kind(SyntaxKind::WORD)?;
-        let langle = ct_visitor.expect_token_of_kind(SyntaxKind::GREATER)?;
+        let rangle = ct_visitor.expect_token_of_kind()?;
+        let generic = ct_visitor.expect_token_of_kind()?;
+        let langle = ct_visitor.expect_token_of_kind()?;
         ct_visitor.expect_end()?;
 
         // name
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         // config block
         let config_block = it.expect_node_of_kind(SyntaxKind::CONFIG_BLOCK)?;
@@ -888,15 +841,11 @@ impl FromCST for ClientDecl {
         it.expect_end()?;
 
         Ok(ClientDecl {
-            keyword: t::Client::new_from_span(keyword.text_range()),
-            rangle: t::Less::new_from_span(rangle.text_range()),
-            generic: t::Word {
-                token_span: generic.text_range(),
-            },
-            langle: t::Greater::new_from_span(langle.text_range()),
-            name: t::Word {
-                token_span: name.text_range(),
-            },
+            keyword,
+            rangle,
+            generic,
+            langle,
+            name,
             config_block,
         })
     }
@@ -931,29 +880,25 @@ impl FromCST for ConfigBlock {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
+        let open_brace = it.expect_token_of_kind()?;
 
         let mut items = Vec::new();
         let close_brace = loop {
             let elem = it.expect_next("CONFIG_ITEM or R_BRACE")?;
             if elem.kind() == SyntaxKind::R_BRACE {
-                let token = StrongAstError::assert_is_token(elem)?;
-                break t::RBrace::new_from_span(token.text_range());
+                break t::RBrace::from_cst(elem)?;
             }
 
             let item = ConfigItem::from_cst(elem)?;
             let comma = it
-                .next_if(|elem| elem.kind() == SyntaxKind::COMMA)
-                .map(|comma| {
-                    let comma = StrongAstError::assert_is_token(comma)?;
-                    Ok(t::Comma::new_from_span(comma.text_range()))
-                })
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
                 .transpose()?;
 
             items.push((item, comma));
         };
         Ok(ConfigBlock {
-            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            open_brace,
             items,
             close_brace,
         })
@@ -1000,10 +945,10 @@ impl FromCST for ConfigItem {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let key = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let key = it.expect_token_of_kind()?;
 
         // let colon = it
-        //     .next_if(|elem| elem.kind() == SyntaxKind::COLON)
+        //     .next_if_kind(SyntaxKind::COLON)
         //     .map(|elem| {
         //         let colon = StrongAstError::assert_is_token(elem)?;
         //         Ok(t::Colon::new_from_span(colon.text_range()))
@@ -1016,7 +961,7 @@ impl FromCST for ConfigItem {
         it.expect_end()?;
 
         Ok(ConfigItem {
-            key: t::Word::new_from_span(key.text_range()),
+            key,
             // colon,
             value,
         })
@@ -1084,10 +1029,10 @@ impl FromCST for TestDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "test"
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_TEST)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // name
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         // config block
         let config_block_node = it.expect_node_of_kind(SyntaxKind::CONFIG_BLOCK)?;
@@ -1096,8 +1041,8 @@ impl FromCST for TestDecl {
         it.expect_end()?;
 
         Ok(TestDecl {
-            keyword: t::Test::new_from_span(keyword.text_range()),
-            name: t::Word::new_from_span(name.text_range()),
+            keyword,
+            name,
             config_block,
         })
     }
@@ -1118,9 +1063,7 @@ impl Printable for TestDecl {
 pub struct RetryPolicyDecl {
     pub keyword: t::RetryPolicy,
     pub name: t::Word,
-    pub open_brace: t::LBrace,
-    pub config_block: TextRange, // TODO
-    pub close_brace: t::RBrace,
+    pub config_block: ConfigBlock,
 }
 
 impl FromCST for RetryPolicyDecl {
@@ -1131,53 +1074,81 @@ impl FromCST for RetryPolicyDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "retry_policy"
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_RETRY_POLICY)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // name
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         // config block
-        let config_block_node = it.expect_node_of_kind(SyntaxKind::CONFIG_BLOCK)?;
-
-        // Parse config block to get braces
-        let mut cb_visitor = SyntaxNodeIter::new(config_block_node.clone());
-
-        let open_brace = cb_visitor.expect_token_of_kind(SyntaxKind::L_BRACE)?;
-
-        // Find the closing brace by scanning to the end
-        let mut close_brace_token = None;
-        while let Some(elem) = cb_visitor.next() {
-            if elem.kind() == SyntaxKind::R_BRACE {
-                close_brace_token = Some(StrongAstError::assert_is_token(elem)?);
-            }
-        }
-
-        let close_brace = close_brace_token.ok_or_else(|| {
-            StrongAstError::missing(SyntaxKind::R_BRACE, config_block_node.text_range())
-        })?;
+        let config_block = it.expect_node_of_kind(SyntaxKind::CONFIG_BLOCK)?;
+        let config_block = ConfigBlock::from_cst(SyntaxElement::Node(config_block))?;
 
         it.expect_end()?;
 
         Ok(RetryPolicyDecl {
-            keyword: t::RetryPolicy::new_from_span(keyword.text_range()),
-            name: t::Word {
-                token_span: name.text_range(),
-            },
-            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
-            config_block: config_block_node.text_range(), // TODO: Parse the actual config
-            close_brace: t::RBrace::new_from_span(close_brace.text_range()),
+            keyword,
+            name,
+            config_block,
         })
     }
 }
 
-// pub struct TemplateStringDecl {
-//     pub keyword: t::TemplateString,
-//     pub name: t::Word,
-//     pub open_brace: t::LBrace,
-//     pub template_string: (),
-//     pub close_brace: t::RBrace,
-// }
-// impl Declaration for TemplateStringDecl {}
+#[derive(Debug)]
+pub struct TemplateStringDecl {
+    pub keyword: t::TemplateString,
+    pub name: t::Word,
+    pub args: FunctionParamList,
+    pub raw_string: t::RawString,
+}
+
+impl FromCST for TemplateStringDecl {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TEMPLATE_STRING_DEF)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        // keyword: "template_string"
+        let keyword = it.expect_token_of_kind()?;
+
+        // name
+        let name = it.expect_token_of_kind()?;
+
+        // args
+        let args = it.expect_node_of_kind(SyntaxKind::PARAMETER_LIST)?;
+        let args = FunctionParamList::from_cst(SyntaxElement::Node(args))?;
+
+        // raw string
+        let raw_string = it.expect_node_of_kind(SyntaxKind::RAW_STRING_LITERAL)?;
+        let raw_string = t::RawString::from_cst(SyntaxElement::Node(raw_string))?;
+
+        it.expect_end()?;
+
+        Ok(TemplateStringDecl {
+            keyword,
+            name,
+            args,
+            raw_string,
+        })
+    }
+}
+
+impl Printable for TemplateStringDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        multi_lined |= printer.print(&self.args, shape.clone()).multi_lined;
+        printer.print_str(" ");
+        multi_lined |= printer
+            .print(&self.raw_string, Shape::unlimited_single_line())
+            .multi_lined;
+        PrintInfo { multi_lined }
+    }
+}
 
 #[derive(Debug)]
 pub struct TypeAliasDecl {
@@ -1197,36 +1168,27 @@ impl FromCST for TypeAliasDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "type" (it's actually just a WORD, not a keyword)
-        let keyword = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // name
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
         // equals
-        let equals = it.expect_token_of_kind(SyntaxKind::EQUALS)?;
+        let equals = it.expect_token_of_kind()?;
 
         // type expression
         let type_expr = it.expect_node_of_kind(SyntaxKind::TYPE_EXPR)?;
         let type_expr = Type::from_cst(SyntaxElement::Node(type_expr))?;
 
         // optional semicolon
-        let semicolon = it.next().and_then(|elem| {
-            if elem.kind() == SyntaxKind::SEMICOLON {
-                elem.as_token()
-                    .map(|t| t::Semicolon::new_from_span(t.text_range()))
-            } else {
-                None
-            }
-        });
+        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
+
+        it.expect_end()?;
 
         Ok(TypeAliasDecl {
-            keyword: t::Word {
-                token_span: keyword.text_range(),
-            },
-            name: t::Word {
-                token_span: name.text_range(),
-            },
-            equals: t::Equals::new_from_span(equals.text_range()),
+            keyword,
+            name,
+            equals,
             type_expr,
             semicolon,
         })

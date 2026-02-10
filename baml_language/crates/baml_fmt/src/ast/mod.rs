@@ -224,33 +224,14 @@ impl SyntaxNodeIter {
 
     /// Consumes the next element and checks it:
     /// - If there are no more elements, returns [`StrongAstError::MissingExpectedElement`].
-    /// - If the element is not a token, returns [`StrongAstError::ShouldBeToken`].
-    /// - If the element is a token but not of the expected kind, returns [`StrongAstError::UnexpectedKind`].
-    /// - Otherwise, returns the token.
+    /// - Otherwise, the token will parse as the given token type.
     ///
     /// Consumes an element even if it returns an error.
-    pub fn expect_token_of_kind(
-        &mut self,
-        kind: SyntaxKind,
-    ) -> Result<SyntaxToken, StrongAstError> {
+    pub fn expect_token_of_kind<T: Token + FromCST>(&mut self) -> Result<T, StrongAstError> {
         let Some(elem) = self.next() else {
-            return Err(StrongAstError::missing(kind, self.parent));
+            return Err(StrongAstError::missing(T::syntax_kind(), self.parent));
         };
-        let SyntaxElement::Token(token) = elem else {
-            return Err(StrongAstError::ShouldBeToken {
-                at: elem.text_range(),
-            });
-        };
-
-        if token.kind() == kind {
-            Ok(token)
-        } else {
-            Err(StrongAstError::UnexpectedKind {
-                expected: kind,
-                found: token.kind(),
-                at: token.text_range(),
-            })
-        }
+        T::from_cst(elem)
     }
 
     /// Checks that there are no more elements left.

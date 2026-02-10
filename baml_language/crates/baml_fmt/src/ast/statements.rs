@@ -34,24 +34,16 @@ pub enum Statement {
 impl FromCST for Statement {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::LET_STMT => Ok(Statement::Let(LetStmt::from_cst(elem)?)),
-            SyntaxKind::RETURN_STMT => Ok(Statement::Return(ReturnStmt::from_cst(elem)?)),
-            SyntaxKind::WHILE_STMT => Ok(Statement::While(WhileStmt::from_cst(elem)?)),
-            SyntaxKind::FOR_EXPR => Ok(Statement::For(ForStmt::from_cst(elem)?)),
-            SyntaxKind::BREAK_STMT => Ok(Statement::Break(BreakStmt::from_cst(elem)?)),
-            SyntaxKind::CONTINUE_STMT => Ok(Statement::Continue(ContinueStmt::from_cst(elem)?)),
-            SyntaxKind::ASSERT_STMT => Ok(Statement::Assert(AssertStmt::from_cst(elem)?)),
-            SyntaxKind::SEMICOLON => {
-                let token = StrongAstError::assert_is_token(elem)?;
-                Ok(Statement::EmptySemicolon(t::Semicolon::new_from_span(
-                    token.text_range(),
-                )))
-            }
+            SyntaxKind::LET_STMT => LetStmt::from_cst(elem).map(Statement::Let),
+            SyntaxKind::RETURN_STMT => ReturnStmt::from_cst(elem).map(Statement::Return),
+            SyntaxKind::WHILE_STMT => WhileStmt::from_cst(elem).map(Statement::While),
+            SyntaxKind::FOR_EXPR => ForStmt::from_cst(elem).map(Statement::For),
+            SyntaxKind::BREAK_STMT => BreakStmt::from_cst(elem).map(Statement::Break),
+            SyntaxKind::CONTINUE_STMT => ContinueStmt::from_cst(elem).map(Statement::Continue),
+            SyntaxKind::ASSERT_STMT => AssertStmt::from_cst(elem).map(Statement::Assert),
+            SyntaxKind::SEMICOLON => t::Semicolon::from_cst(elem).map(Statement::EmptySemicolon),
             SyntaxKind::HEADER_COMMENT => {
-                let token = StrongAstError::assert_is_token(elem)?;
-                Ok(Statement::HeaderComment(t::HeaderComment::new_from_span(
-                    token.text_range(),
-                )))
+                t::HeaderComment::from_cst(elem).map(Statement::HeaderComment)
             }
             _ => ExpressionStmt::from_cst(elem).map(Statement::Expr),
         }
@@ -140,41 +132,33 @@ impl FromCST for LetStmt {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        // KW_LET
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_LET)?;
+        let keyword = it.expect_token_of_kind()?;
 
-        // Variable name
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
-        let type_annotation =
-            if let Some(colon) = it.next_if(|next| next.kind() == SyntaxKind::COLON) {
-                let ty = it.expect_next("a type")?;
-                Some((
-                    t::Colon::new_from_span(colon.text_range()),
-                    Type::from_cst(ty)?,
-                ))
-            } else {
-                None
-            };
-
-        let initializer = if let Some(equals) = it.next_if(|next| next.kind() == SyntaxKind::EQUALS)
-        {
-            let value = it.expect_next("an expression")?;
-            let value = Expression::from_cst(value)?;
-            Some((t::Equals::new_from_span(equals.text_range()), value))
+        let type_annotation = if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
+            let ty = it.expect_next("a type")?;
+            Some((t::Colon::from_cst(colon)?, Type::from_cst(ty)?))
         } else {
             None
         };
 
-        let semicolon = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
+        let initializer = if let Some(equals) = it.next_if_kind(SyntaxKind::EQUALS) {
+            let value = it.expect_next("an expression")?;
+            Some((t::Equals::from_cst(equals)?, Expression::from_cst(value)?))
+        } else {
+            None
+        };
+
+        let semicolon: t::Semicolon = it.expect_token_of_kind()?;
         it.expect_end()?;
 
         Ok(LetStmt {
-            keyword: t::Let::new_from_span(keyword.text_range()),
-            name: t::Word::new_from_span(name.text_range()),
+            keyword,
+            name,
             type_annotation,
             initializer,
-            semicolon: t::Semicolon::new_from_span(semicolon.text_range()),
+            semicolon,
         })
     }
 }
@@ -221,7 +205,7 @@ impl FromCST for WhileStmt {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_WHILE
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_WHILE)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // L_PAREN
         let condition = it.expect_node_of_kind(SyntaxKind::PAREN_EXPR)?;
@@ -234,7 +218,7 @@ impl FromCST for WhileStmt {
         it.expect_end()?;
 
         Ok(WhileStmt {
-            keyword: t::While::new_from_span(keyword.text_range()),
+            keyword,
             condition,
             body,
         })
@@ -281,56 +265,56 @@ impl FromCST for ForStmt {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_FOR
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_FOR)?;
+        let keyword = it.expect_token_of_kind()?;
 
-        let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
+        let open_paren = it.expect_token_of_kind()?;
 
         let args_first = it.expect_next("a statement")?;
         let mut args_first = Statement::from_cst(args_first)?;
 
-        let args = if let Some(kw_in) = it.next_if(|elem| elem.kind() == SyntaxKind::KW_IN)
+        let args = if let Some(kw_in) = it.next_if_kind(SyntaxKind::KW_IN)
             && let Statement::Let(let_stmt) = args_first
         {
             // for-in
             let expr = it.expect_next("iterator expression")?;
             let expression = Expression::from_cst(expr)?;
 
-            let close_paren = it.expect_token_of_kind(SyntaxKind::R_PAREN)?;
+            let close_paren = it.expect_token_of_kind()?;
 
             ForArgs::Iterator(ForIteratorArgs {
-                open_paren: t::LParen::new_from_span(open_paren.text_range()),
+                open_paren,
                 let_stmt,
-                in_keyword: t::In::new_from_span(kw_in.text_range()),
+                in_keyword: t::In::from_cst(kw_in)?,
                 expression,
-                close_paren: t::RParen::new_from_span(close_paren.text_range()),
+                close_paren,
             })
         } else {
             // C-style
             if let Statement::Expr(expr_first) = args_first {
-                let semicolon = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
+                let semicolon = it.expect_token_of_kind()?;
                 args_first = Statement::Expr(ExpressionStmt {
                     expr: expr_first.expr,
-                    semicolon: Some(t::Semicolon::new_from_span(semicolon.text_range())),
+                    semicolon: Some(semicolon),
                 });
             }
 
             let condition = it.expect_next("an expression")?;
             let condition = Expression::from_cst(condition)?;
 
-            let semicolon = it.expect_token_of_kind(SyntaxKind::SEMICOLON)?;
+            let semicolon = it.expect_token_of_kind()?;
 
             let update = it.expect_next("a statement")?;
             let update = Statement::from_cst(update)?;
 
-            let close_paren = it.expect_token_of_kind(SyntaxKind::R_PAREN)?;
+            let close_paren = it.expect_token_of_kind()?;
 
             ForArgs::CStyle(ForCStyleArgs {
-                open_paren: t::LParen::new_from_span(open_paren.text_range()),
+                open_paren,
                 init: Box::new(args_first),
                 condition,
-                semicolon: t::Semicolon::new_from_span(semicolon.text_range()),
+                semicolon,
                 update: Box::new(update),
-                close_paren: t::RParen::new_from_span(close_paren.text_range()),
+                close_paren,
             })
         };
 
@@ -341,7 +325,7 @@ impl FromCST for ForStmt {
         it.expect_end()?;
 
         Ok(ForStmt {
-            keyword: t::For::new_from_span(keyword.text_range()),
+            keyword,
             args,
             body,
         })
@@ -531,7 +515,7 @@ impl FromCST for ReturnStmt {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_RETURN
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_RETURN)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // Optional return value
         let value = it
@@ -552,7 +536,7 @@ impl FromCST for ReturnStmt {
         it.expect_end()?;
 
         Ok(ReturnStmt {
-            keyword: t::Return::new_from_span(keyword.text_range()),
+            keyword,
             value,
             semicolon,
         })
@@ -592,7 +576,7 @@ impl FromCST for BreakStmt {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_BREAK)?;
+        let keyword = it.expect_token_of_kind()?;
 
         let semicolon = it
             .next()
@@ -605,10 +589,7 @@ impl FromCST for BreakStmt {
 
         it.expect_end()?;
 
-        Ok(BreakStmt {
-            keyword: t::Break::new_from_span(keyword.text_range()),
-            semicolon,
-        })
+        Ok(BreakStmt { keyword, semicolon })
     }
 }
 
@@ -640,7 +621,7 @@ impl FromCST for ContinueStmt {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_CONTINUE)?;
+        let keyword = it.expect_token_of_kind()?;
 
         let semicolon = it
             .next()
@@ -653,10 +634,7 @@ impl FromCST for ContinueStmt {
 
         it.expect_end()?;
 
-        Ok(ContinueStmt {
-            keyword: t::Continue::new_from_span(keyword.text_range()),
-            semicolon,
-        })
+        Ok(ContinueStmt { keyword, semicolon })
     }
 }
 
@@ -687,7 +665,7 @@ impl FromCST for AssertStmt {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_ASSERT)?;
+        let keyword = it.expect_token_of_kind()?;
 
         let condition = it.expect_next("some expression")?;
         let condition = Expression::from_cst(condition)?;
@@ -704,7 +682,7 @@ impl FromCST for AssertStmt {
         it.expect_end()?;
 
         Ok(AssertStmt {
-            keyword: t::Assert::new_from_span(keyword.text_range()),
+            keyword,
             condition,
             semicolon,
         })

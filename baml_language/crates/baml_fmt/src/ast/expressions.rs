@@ -47,48 +47,39 @@ impl Expression {
 impl FromCST for Expression {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let expr = match elem.kind() {
-            SyntaxKind::STRING_LITERAL => {
-                let node = StrongAstError::assert_is_node(elem)?;
-                let open_quote = node
-                    .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::QUOTE)
-                    .ok_or(StrongAstError::missing(
-                        SyntaxKind::QUOTE,
-                        node.text_range(),
-                    ))?;
-                Expression::Literal(Literal::String(t::QuotedString::new_from_span(
-                    TextRange::new(open_quote.text_range().start(), node.text_range().end()),
-                )))
-            }
-            SyntaxKind::INTEGER_LITERAL => {
-                Expression::Literal(Literal::Integer(t::IntegerLiteral {
-                    token_span: elem.text_range(),
-                }))
-            }
-            SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(t::FloatLiteral {
-                token_span: elem.text_range(),
-            })),
-            SyntaxKind::PATH_EXPR => Expression::Path(PathExpr::from_cst(elem)?),
-            SyntaxKind::PAREN_EXPR => Expression::Paren(ParenExpr::from_cst(elem)?),
-            SyntaxKind::BINARY_EXPR => Expression::Binary(BinaryExpr::from_cst(elem)?),
-            SyntaxKind::UNARY_EXPR => Expression::Unary(UnaryExpr::from_cst(elem)?),
-            SyntaxKind::IF_EXPR => Expression::If(IfExpr::from_cst(elem)?),
-            SyntaxKind::MATCH_EXPR => Expression::Match(MatchExpr::from_cst(elem)?),
-            SyntaxKind::CALL_EXPR => Expression::Call(CallExpr::from_cst(elem)?),
-            SyntaxKind::INDEX_EXPR => Expression::Index(IndexExpr::from_cst(elem)?),
+            SyntaxKind::STRING_LITERAL => t::QuotedString::from_cst(elem)
+                .map(Literal::String)
+                .map(Expression::Literal)?,
+            SyntaxKind::INTEGER_LITERAL => Expression::Literal(Literal::Integer(
+                t::IntegerLiteral::new_from_span(elem.text_range()),
+            )),
+            SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
+                t::FloatLiteral::new_from_span(elem.text_range()),
+            )),
+            SyntaxKind::PATH_EXPR => PathExpr::from_cst(elem).map(Expression::Path)?,
+            SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
+            SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,
+            SyntaxKind::UNARY_EXPR => UnaryExpr::from_cst(elem).map(Expression::Unary)?,
+            SyntaxKind::IF_EXPR => IfExpr::from_cst(elem).map(Expression::If)?,
+            SyntaxKind::MATCH_EXPR => MatchExpr::from_cst(elem).map(Expression::Match)?,
+            SyntaxKind::CALL_EXPR => CallExpr::from_cst(elem).map(Expression::Call)?,
+            SyntaxKind::INDEX_EXPR => IndexExpr::from_cst(elem).map(Expression::Index)?,
             SyntaxKind::FIELD_ACCESS_EXPR => {
-                Expression::FieldAccess(FieldAccessExpr::from_cst(elem)?)
+                FieldAccessExpr::from_cst(elem).map(Expression::FieldAccess)?
             }
-            SyntaxKind::BLOCK_EXPR => Expression::Block(BlockExpr::from_cst(elem)?),
+            SyntaxKind::BLOCK_EXPR => BlockExpr::from_cst(elem).map(Expression::Block)?,
             SyntaxKind::ARRAY_LITERAL => {
-                Expression::ArrayInitializer(ArrayInitializer::from_cst(elem)?)
+                ArrayInitializer::from_cst(elem).map(Expression::ArrayInitializer)?
             }
-            SyntaxKind::MAP_LITERAL => Expression::MapInitializer(MapLiteral::from_cst(elem)?),
+            SyntaxKind::MAP_LITERAL => {
+                MapLiteral::from_cst(elem).map(Expression::MapInitializer)?
+            }
             SyntaxKind::OBJECT_LITERAL => {
-                Expression::ObjectInitializer(ObjectInitializer::from_cst(elem)?)
+                ObjectInitializer::from_cst(elem).map(Expression::ObjectInitializer)?
             }
-            SyntaxKind::RAW_STRING_LITERAL => Expression::RawString(t::RawString {
-                token_span: elem.text_range(),
-            }),
+            SyntaxKind::RAW_STRING_LITERAL => {
+                t::RawString::from_cst(elem).map(Expression::RawString)?
+            }
             _ => Expression::Unknown(elem.text_range()),
         };
         Ok(expr)
@@ -153,32 +144,26 @@ impl FromCST for PathExpr {
         let mut it = SyntaxNodeIter::new(node);
 
         // First WORD
-        let first = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let first = it.expect_token_of_kind()?;
 
         let mut rest = Vec::new();
 
         // Collect DOT WORD pairs
         while let Some(elem) = it.next() {
             if elem.kind() == SyntaxKind::DOT {
-                let dot_token = StrongAstError::assert_is_token(elem)?;
-                let word = it.expect_token_of_kind(SyntaxKind::WORD)?;
+                let dot = t::Dot::from_cst(elem)?;
+                let word = it.expect_token_of_kind()?;
 
-                rest.push((
-                    t::Dot::new_from_span(dot_token.text_range()),
-                    t::Word::new_from_span(word.text_range()),
-                ));
+                rest.push((dot, word));
             } else {
                 return Err(StrongAstError::UnexpectedAdditionalElement {
-                    parent: first.text_range(),
+                    parent: it.parent,
                     at: elem.text_range(),
                 });
             }
         }
 
-        Ok(PathExpr {
-            first: t::Word::new_from_span(first.text_range()),
-            rest,
-        })
+        Ok(PathExpr { first, rest })
     }
 }
 
@@ -247,19 +232,19 @@ impl FromCST for ParenExpr {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
+        let open_paren = it.expect_token_of_kind()?;
 
         let expr = it.expect_next("an expression")?;
         let expr = Expression::from_cst(expr)?;
 
-        let close_paren = it.expect_token_of_kind(SyntaxKind::R_PAREN)?;
+        let close_paren = it.expect_token_of_kind()?;
 
         it.expect_end()?;
 
         Ok(ParenExpr {
-            open_paren: t::LParen::new_from_span(open_paren.text_range()),
+            open_paren,
             expr: Box::new(expr),
-            close_paren: t::RParen::new_from_span(close_paren.text_range()),
+            close_paren,
         })
     }
 }
@@ -431,7 +416,7 @@ impl PrintMultiLine for BinaryExpr {
     ///     + c
     ///     - d * e
     /// ```
-    /// 
+    ///
     /// ```baml
     /// // precedence matters:
     /// aaaaaaaaa
@@ -572,7 +557,7 @@ impl FromCST for IfExpr {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_IF
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_IF)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // PAREN_EXPR
         let condition = it.expect_node_of_kind(SyntaxKind::PAREN_EXPR)?;
@@ -584,8 +569,7 @@ impl FromCST for IfExpr {
 
         // Optional else branch
         let else_branch = if let Some(elem) = it.next() {
-            let else_token = StrongAstError::assert_is_token(elem)?;
-            StrongAstError::assert_kind_token(&else_token, SyntaxKind::KW_ELSE)?;
+            let else_token = t::Else::from_cst(elem)?;
 
             let else_body_node = it.expect_node("else body (if or block)")?;
             let else_body = match else_body_node.kind() {
@@ -604,7 +588,7 @@ impl FromCST for IfExpr {
                 }
             };
 
-            Some((t::Else::new_from_span(else_token.text_range()), else_body))
+            Some((else_token, else_body))
         } else {
             None
         };
@@ -612,7 +596,7 @@ impl FromCST for IfExpr {
         it.expect_end()?;
 
         Ok(IfExpr {
-            keyword: t::If::new_from_span(keyword.text_range()),
+            keyword,
             condition,
             block,
             else_branch,
@@ -676,40 +660,33 @@ impl FromCST for MatchExpr {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_MATCH
-        let keyword = it.expect_token_of_kind(SyntaxKind::KW_MATCH)?;
+        let keyword = it.expect_token_of_kind()?;
 
         // L_PAREN
-        let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
+        let open_paren = it.expect_token_of_kind()?;
 
         // Scrutinee expression (can be any node that represents an expression)
         let scrutinee_node = it.expect_next("scrutinee expression")?;
         let scrutinee = Box::new(Expression::from_cst(scrutinee_node)?);
 
         // R_PAREN
-        let close_paren = it.expect_token_of_kind(SyntaxKind::R_PAREN)?;
+        let close_paren = it.expect_token_of_kind()?;
 
         // L_BRACE
-        let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
+        let open_brace = it.expect_token_of_kind()?;
 
         // Collect match arms
         let mut arms = Vec::new();
         let close_brace = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::R_BRACE,
-                    open_brace.text_range(),
-                ));
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
             };
             match elem.kind() {
                 SyntaxKind::R_BRACE => {
-                    let token = StrongAstError::assert_is_token(elem)?;
-                    let close_brace = t::RBrace::new_from_span(token.text_range());
-                    it.expect_end()?;
-                    break close_brace;
+                    break t::RBrace::from_cst(elem)?;
                 }
                 SyntaxKind::MATCH_ARM => {
-                    let arm_node = StrongAstError::assert_is_node(elem)?;
-                    let arm = MatchArm::from_cst(SyntaxElement::Node(arm_node))?;
+                    let arm = MatchArm::from_cst(elem)?;
                     arms.push(arm);
                 }
                 _ => {
@@ -725,11 +702,11 @@ impl FromCST for MatchExpr {
         it.expect_end()?;
 
         Ok(MatchExpr {
-            keyword: t::Match::new_from_span(keyword.text_range()),
-            open_paren: t::LParen::new_from_span(open_paren.text_range()),
+            keyword,
+            open_paren,
             scrutinee,
-            close_paren: t::RParen::new_from_span(close_paren.text_range()),
-            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            close_paren,
+            open_brace,
             arms,
             close_brace,
         })
@@ -788,7 +765,7 @@ impl FromCST for MatchArm {
         let pattern = MatchPattern::from_cst(SyntaxElement::Node(pattern_node))?;
 
         // Check for optional guard (if condition)
-        let guard = if let Some(elem) = it.next_if(|next| next.kind() == SyntaxKind::KW_IF) {
+        let guard = if let Some(elem) = it.next_if_kind(SyntaxKind::KW_IF) {
             let if_token = StrongAstError::assert_is_token(elem)?;
             let guard_expr_node = it.expect_next("guard expression")?;
             let guard_expr = Expression::from_cst(guard_expr_node)?;
@@ -801,27 +778,20 @@ impl FromCST for MatchArm {
         };
 
         // FAT_ARROW
-        let fat_arrow = it.expect_token_of_kind(SyntaxKind::FAT_ARROW)?;
+        let fat_arrow = it.expect_token_of_kind()?;
 
         // Body expression
         let body_node = it.expect_next("match arm body")?;
         let body = Expression::from_cst(body_node)?;
 
-        let comma = it
-            .next()
-            .map(|comma| {
-                let comma = StrongAstError::assert_is_token(comma)?;
-                StrongAstError::assert_kind_token(&comma, SyntaxKind::COMMA)?;
-                Ok(t::Comma::new_from_span(comma.text_range()))
-            })
-            .transpose()?;
+        let comma = it.next().map(t::Comma::from_cst).transpose()?;
 
         it.expect_end()?;
 
         Ok(MatchArm {
             pattern,
             guard,
-            fat_arrow: t::FatArrow::new_from_span(fat_arrow.text_range()),
+            fat_arrow,
             body: Box::new(body),
             comma,
         })
@@ -983,34 +953,23 @@ impl FromCST for CallArgs {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_paren = it.expect_token_of_kind(SyntaxKind::L_PAREN)?;
+        let open_paren = it.expect_token_of_kind()?;
 
         let mut args = Vec::new();
-        let mut peek = None;
-        let end_paren = loop {
-            let Some(elem) = peek.take().or_else(|| it.next()) else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::R_PAREN,
-                    open_paren.text_range(),
-                ));
+        let close_paren = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
             };
             match elem.kind() {
                 SyntaxKind::R_PAREN => {
-                    let token = StrongAstError::assert_is_token(elem)?;
-                    break token;
+                    break t::RParen::from_cst(elem)?;
                 }
                 _ => {
                     let expr = Expression::from_cst(elem)?;
-                    let comma = match it.next() {
-                        Some(elem) if elem.kind() == SyntaxKind::COMMA => {
-                            let comma = StrongAstError::assert_is_token(elem)?;
-                            Some(t::Comma::new_from_span(comma.text_range()))
-                        }
-                        otherwise => {
-                            peek = otherwise;
-                            None
-                        }
-                    };
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
+                        .transpose()?;
                     args.push((expr, comma));
                 }
             }
@@ -1019,9 +978,9 @@ impl FromCST for CallArgs {
         it.expect_end()?;
 
         Ok(CallArgs {
-            open_paren: t::LParen::new_from_span(open_paren.text_range()),
+            open_paren,
             args,
-            close_paren: t::RParen::new_from_span(end_paren.text_range()),
+            close_paren,
         })
     }
 }
@@ -1106,22 +1065,22 @@ impl FromCST for IndexExpr {
         let base = Box::new(Expression::from_cst(base_node)?);
 
         // L_BRACKET
-        let open_bracket = it.expect_token_of_kind(SyntaxKind::L_BRACKET)?;
+        let open_bracket = it.expect_token_of_kind()?;
 
         // Index expression
         let index_node = it.expect_next("index expression")?;
         let index = Box::new(Expression::from_cst(index_node)?);
 
         // R_BRACKET
-        let close_bracket = it.expect_token_of_kind(SyntaxKind::R_BRACKET)?;
+        let close_bracket = it.expect_token_of_kind()?;
 
         it.expect_end()?;
 
         Ok(IndexExpr {
             base,
-            open_bracket: t::LBracket::new_from_span(open_bracket.text_range()),
+            open_bracket,
             index,
-            close_bracket: t::RBracket::new_from_span(close_bracket.text_range()),
+            close_bracket,
         })
     }
 }
@@ -1179,18 +1138,14 @@ impl FromCST for FieldAccessExpr {
         let base = Box::new(Expression::from_cst(base_node)?);
 
         // DOT
-        let dot = it.expect_token_of_kind(SyntaxKind::DOT)?;
+        let dot = it.expect_token_of_kind()?;
 
         // WORD (field name)
-        let field = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let field = it.expect_token_of_kind()?;
 
         it.expect_end()?;
 
-        Ok(FieldAccessExpr {
-            base,
-            dot: t::Dot::new_from_span(dot.text_range()),
-            field: t::Word::new_from_span(field.text_range()),
-        })
+        Ok(FieldAccessExpr { base, dot, field })
     }
 }
 
@@ -1253,20 +1208,16 @@ impl FromCST for BlockExpr {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
+        let open_brace = it.expect_token_of_kind()?;
 
         // Collect all statements and optional final expression
         let mut stmts = Vec::new();
         let close_brace = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::R_BRACE,
-                    open_brace.text_range(),
-                ));
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
             };
             if elem.kind() == SyntaxKind::R_BRACE {
-                let close_brace = StrongAstError::assert_is_token(elem)?;
-                break close_brace;
+                break t::RBrace::from_cst(elem)?;
             }
 
             let stmt = Statement::from_cst(elem)?;
@@ -1294,10 +1245,10 @@ impl FromCST for BlockExpr {
         it.expect_end()?;
 
         Ok(BlockExpr {
-            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            open_brace,
             stmts,
             expr: expr.map(Box::new),
-            close_brace: t::RBrace::new_from_span(close_brace.text_range()),
+            close_brace,
         })
     }
 }
@@ -1348,31 +1299,23 @@ impl FromCST for ArrayInitializer {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        // L_BRACKET
-        let open_bracket = it.expect_token_of_kind(SyntaxKind::L_BRACKET)?;
+        let open_bracket = it.expect_token_of_kind()?;
 
         let mut elements: Vec<(Expression, Option<t::Comma>)> = Vec::new();
 
         let close_bracket = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::R_BRACKET,
-                    open_bracket.text_range(),
-                ));
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACKET, it.parent));
             };
             match elem.kind() {
                 SyntaxKind::R_BRACKET => {
-                    let token = StrongAstError::assert_is_token(elem)?;
-                    break token;
+                    break t::RBracket::from_cst(elem)?;
                 }
                 _ => {
                     let expr = Expression::from_cst(elem)?;
                     let comma = it
-                        .next_if(|elem| elem.kind() == SyntaxKind::COMMA)
-                        .map(|comma| {
-                            let comma = StrongAstError::assert_is_token(comma)?;
-                            Ok(t::Comma::new_from_span(comma.text_range()))
-                        })
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
                         .transpose()?;
 
                     elements.push((expr, comma));
@@ -1381,9 +1324,9 @@ impl FromCST for ArrayInitializer {
         };
 
         return Ok(ArrayInitializer {
-            open_bracket: t::LBracket::new_from_span(open_bracket.text_range()),
+            open_bracket,
             elements,
-            close_bracket: t::RBracket::new_from_span(close_bracket.text_range()),
+            close_bracket,
         });
     }
 }
@@ -1476,31 +1419,24 @@ impl FromCST for ObjectInitializer {
         let mut it = SyntaxNodeIter::new(node);
 
         // WORD (object type name)
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
-        let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
+        let open_brace = it.expect_token_of_kind()?;
 
         let mut fields = Vec::new();
         let close_brace = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::R_BRACE,
-                    open_brace.text_range(),
-                ));
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
             };
             match elem.kind() {
                 SyntaxKind::R_BRACE => {
-                    let token = StrongAstError::assert_is_token(elem)?;
-                    break token;
+                    break t::RBrace::from_cst(elem)?;
                 }
                 SyntaxKind::OBJECT_FIELD => {
                     let field = ObjectField::from_cst(elem)?;
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
-                        .map(|comma| {
-                            let comma = StrongAstError::assert_is_token(comma)?;
-                            Ok(t::Comma::new_from_span(comma.text_range()))
-                        })
+                        .map(t::Comma::from_cst)
                         .transpose()?;
                     fields.push((field, comma));
                 }
@@ -1517,10 +1453,10 @@ impl FromCST for ObjectInitializer {
         it.expect_end()?;
 
         Ok(ObjectInitializer {
-            name: t::Word::new_from_span(name.text_range()),
-            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            name,
+            open_brace,
             fields,
-            close_brace: t::RBrace::new_from_span(close_brace.text_range()),
+            close_brace,
         })
     }
 }
@@ -1617,29 +1553,22 @@ impl FromCST for MapLiteral {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_brace = it.expect_token_of_kind(SyntaxKind::L_BRACE)?;
+        let open_brace = it.expect_token_of_kind()?;
 
         let mut fields = Vec::new();
         let close_brace = loop {
             let Some(elem) = it.next() else {
-                return Err(StrongAstError::missing(
-                    SyntaxKind::R_BRACE,
-                    open_brace.text_range(),
-                ));
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACE, it.parent));
             };
             match elem.kind() {
                 SyntaxKind::R_BRACE => {
-                    let token = StrongAstError::assert_is_token(elem)?;
-                    break token;
+                    break t::RBrace::from_cst(elem)?;
                 }
                 SyntaxKind::OBJECT_FIELD => {
                     let field = ObjectField::from_cst(elem)?;
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
-                        .map(|comma| {
-                            let comma = StrongAstError::assert_is_token(comma)?;
-                            Ok(t::Comma::new_from_span(comma.text_range()))
-                        })
+                        .map(t::Comma::from_cst)
                         .transpose()?;
                     fields.push((field, comma));
                 }
@@ -1656,9 +1585,9 @@ impl FromCST for MapLiteral {
         it.expect_end()?;
 
         Ok(MapLiteral {
-            open_brace: t::LBrace::new_from_span(open_brace.text_range()),
+            open_brace,
             fields,
-            close_brace: t::RBrace::new_from_span(close_brace.text_range()),
+            close_brace,
         })
     }
 }
@@ -1666,8 +1595,6 @@ impl FromCST for MapLiteral {
 impl PrintMultiLine for MapLiteral {
     /// Multi-line layout: each entry on its own indented line with trailing comma.
     /// Closing brace on its own line.
-    ///
-    /// Single-line form (to be added to `Printable`): `{ key: value }`
     ///
     /// ```baml
     /// {
@@ -1752,20 +1679,16 @@ impl FromCST for ObjectField {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = it.expect_token_of_kind(SyntaxKind::WORD)?;
+        let name = it.expect_token_of_kind()?;
 
-        let colon = it.expect_token_of_kind(SyntaxKind::COLON)?;
+        let colon = it.expect_token_of_kind()?;
 
         let value = it.expect_next("value")?;
         let value = Expression::from_cst(value)?;
 
         it.expect_end()?;
 
-        Ok(ObjectField {
-            name: t::Word::new_from_span(name.text_range()),
-            colon: t::Colon::new_from_span(colon.text_range()),
-            value,
-        })
+        Ok(ObjectField { name, colon, value })
     }
 }
 

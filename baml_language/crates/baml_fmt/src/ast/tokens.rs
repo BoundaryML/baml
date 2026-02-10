@@ -2,16 +2,17 @@ use crate::{
     ast::{FromCST, StrongAstError},
     printer::*,
 };
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
 use rowan::TextRange;
 
 pub trait Token {
     fn span(&self) -> TextRange;
+    fn syntax_kind() -> SyntaxKind;
 }
 
 pub trait KeywordToken: Token {}
 macro_rules! define_keyword_tokens {
-    ($($keyword:literal => $name:ident;)*) => {
+    ($($keyword:literal => SyntaxKind::$syntax_kind:ident => $name:ident;)*) => {
         $(
             #[derive(Debug, Clone, PartialEq, Eq, Hash)]
             pub struct $name {
@@ -27,6 +28,17 @@ macro_rules! define_keyword_tokens {
                 fn span(&self) -> TextRange {
                     self.token_span
                 }
+                fn syntax_kind() -> SyntaxKind {
+                    SyntaxKind::$syntax_kind
+                }
+            }
+            impl FromCST for $name {
+                #[inline]
+                fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+                    let token = StrongAstError::assert_is_token(elem)?;
+                    StrongAstError::assert_kind_token(&token, SyntaxKind::$syntax_kind)?;
+                    Ok(Self::new_from_span(token.text_range()))
+                }
             }
             impl KeywordToken for $name {}
             impl std::fmt::Display for $name {
@@ -39,35 +51,35 @@ macro_rules! define_keyword_tokens {
 }
 
 define_keyword_tokens! {
-    "class" => Class;
-    "enum" => Enum;
-    "function" => Function;
-    "client" => Client;
-    "generator" => Generator;
-    "test" => Test;
-    "retry_policy" => RetryPolicy;
-    "template_string" => TemplateString;
-    "type_builder" => TypeBuilder;
-    "if" => If;
-    "else" => Else;
-    "for" => For;
-    "while" => While;
-    "let" => Let;
-    "in" => In;
-    "break" => Break;
-    "continue" => Continue;
-    "return" => Return;
-    "match" => Match;
-    "assert" => Assert;
-    "watch" => Watch;
-    "instanceof" => Instanceof;
-    "env" => Env;
-    "dynamic" => Dynamic;
+    "class" => SyntaxKind::KW_CLASS => Class;
+    "enum" => SyntaxKind::KW_ENUM => Enum;
+    "function" => SyntaxKind::KW_FUNCTION => Function;
+    "client" => SyntaxKind::KW_CLIENT => Client;
+    "generator" => SyntaxKind::KW_GENERATOR => Generator;
+    "test" => SyntaxKind::KW_TEST => Test;
+    "retry_policy" => SyntaxKind::KW_RETRY_POLICY => RetryPolicy;
+    "template_string" => SyntaxKind::KW_TEMPLATE_STRING => TemplateString;
+    "type_builder" => SyntaxKind::KW_TYPE_BUILDER => TypeBuilder;
+    "if" => SyntaxKind::KW_IF => If;
+    "else" => SyntaxKind::KW_ELSE => Else;
+    "for" => SyntaxKind::KW_FOR => For;
+    "while" => SyntaxKind::KW_WHILE => While;
+    "let" => SyntaxKind::KW_LET => Let;
+    "in" => SyntaxKind::KW_IN => In;
+    "break" => SyntaxKind::KW_BREAK => Break;
+    "continue" => SyntaxKind::KW_CONTINUE => Continue;
+    "return" => SyntaxKind::KW_RETURN => Return;
+    "match" => SyntaxKind::KW_MATCH => Match;
+    "assert" => SyntaxKind::KW_ASSERT => Assert;
+    "watch" => SyntaxKind::KW_WATCH => Watch;
+    "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
+    "env" => SyntaxKind::KW_ENV => Env;
+    "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
 }
 
 pub trait PunctuationToken: Token {}
 macro_rules! define_punctuation_tokens {
-    ($($punct:literal => $name:ident;)*) => {
+    ($($punct:literal => SyntaxKind::$syntax_kind:ident => $name:ident;)*) => {
         $(
             #[derive(Debug, Clone, PartialEq, Eq, Hash)]
             pub struct $name {
@@ -83,6 +95,17 @@ macro_rules! define_punctuation_tokens {
                 fn span(&self) -> TextRange {
                     self.token_span
                 }
+                fn syntax_kind() -> SyntaxKind {
+                    SyntaxKind::$syntax_kind
+                }
+            }
+            impl FromCST for $name {
+                #[inline]
+                fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+                    let token = StrongAstError::assert_is_token(elem)?;
+                    StrongAstError::assert_kind_token(&token, SyntaxKind::$syntax_kind)?;
+                    Ok(Self::new_from_span(token.text_range()))
+                }
             }
             impl PunctuationToken for $name {}
             impl std::fmt::Display for $name {
@@ -95,57 +118,57 @@ macro_rules! define_punctuation_tokens {
 }
 
 define_punctuation_tokens! {
-    "{" => LBrace;
-    "}" => RBrace;
-    "(" => LParen;
-    ")" => RParen;
-    "[" => LBracket;
-    "]" => RBracket;
-    ":" => Colon;
-    "::" => DoubleColon;
-    "," => Comma;
-    ";" => Semicolon;
-    "..." => DotDotDot;
-    "." => Dot;
-    "$" => Dollar;
-    "->" => Arrow;
-    "=" => Equals;
-    "+=" => PlusEquals;
-    "-=" => MinusEquals;
-    "*=" => StarEquals;
-    "/=" => SlashEquals;
-    "%=" => PercentEquals;
-    "&=" => AndEquals;
-    "|=" => PipeEquals;
-    "^=" => CaretEquals;
-    "<<=" => LessLessEquals;
-    ">>=" => GreaterGreaterEquals;
-    "=>" => FatArrow;
-    "@@" => AtAt;
-    "@" => At;
-    "|" => Pipe;
-    "?" => Question;
-    "==" => EqualsEquals;
-    "!=" => NotEquals;
-    "<=" => LessEquals;
-    ">=" => GreaterEquals;
-    "<<" => LessLess;
-    ">>" => GreaterGreater;
-    "<" => Less;
-    ">" => Greater;
-    "&&" => AndAnd;
-    "||" => OrOr;
-    "!" => Not;
-    "&" => And;
-    "^" => Caret;
-    "~" => Tilde;
-    "++" => PlusPlus;
-    "--" => MinusMinus;
-    "+" => Plus;
-    "-" => Minus;
-    "*" => Star;
-    "/" => Slash;
-    "%" => Percent;
+    "{" => SyntaxKind::L_BRACE => LBrace;
+    "}" => SyntaxKind::R_BRACE => RBrace;
+    "(" => SyntaxKind::L_PAREN => LParen;
+    ")" => SyntaxKind::R_PAREN => RParen;
+    "[" => SyntaxKind::L_BRACKET => LBracket;
+    "]" => SyntaxKind::R_BRACKET => RBracket;
+    ":" => SyntaxKind::COLON => Colon;
+    "::" => SyntaxKind::DOUBLE_COLON => DoubleColon;
+    "," => SyntaxKind::COMMA => Comma;
+    ";" => SyntaxKind::SEMICOLON => Semicolon;
+    "..." => SyntaxKind::DOT_DOT_DOT => DotDotDot;
+    "." => SyntaxKind::DOT => Dot;
+    "$" => SyntaxKind::DOLLAR => Dollar;
+    "->" => SyntaxKind::ARROW => Arrow;
+    "=" => SyntaxKind::EQUALS => Equals;
+    "+=" => SyntaxKind::PLUS_EQUALS => PlusEquals;
+    "-=" => SyntaxKind::MINUS_EQUALS => MinusEquals;
+    "*=" => SyntaxKind::STAR_EQUALS => StarEquals;
+    "/=" => SyntaxKind::SLASH_EQUALS => SlashEquals;
+    "%=" => SyntaxKind::PERCENT_EQUALS => PercentEquals;
+    "&=" => SyntaxKind::AND_EQUALS => AndEquals;
+    "|=" => SyntaxKind::PIPE_EQUALS => PipeEquals;
+    "^=" => SyntaxKind::CARET_EQUALS => CaretEquals;
+    "<<=" => SyntaxKind::LESS_LESS_EQUALS => LessLessEquals;
+    ">>=" => SyntaxKind::GREATER_GREATER_EQUALS => GreaterGreaterEquals;
+    "=>" => SyntaxKind::FAT_ARROW => FatArrow;
+    "@@" => SyntaxKind::AT_AT => AtAt;
+    "@" => SyntaxKind::AT => At;
+    "|" => SyntaxKind::PIPE => Pipe;
+    "?" => SyntaxKind::QUESTION => Question;
+    "==" => SyntaxKind::EQUALS_EQUALS => EqualsEquals;
+    "!=" => SyntaxKind::NOT_EQUALS => NotEquals;
+    "<=" => SyntaxKind::LESS_EQUALS => LessEquals;
+    ">=" => SyntaxKind::GREATER_EQUALS => GreaterEquals;
+    "<<" => SyntaxKind::LESS_LESS => LessLess;
+    ">>" => SyntaxKind::GREATER_GREATER => GreaterGreater;
+    "<" => SyntaxKind::LESS => Less;
+    ">" => SyntaxKind::GREATER => Greater;
+    "&&" => SyntaxKind::AND_AND => AndAnd;
+    "||" => SyntaxKind::OR_OR => OrOr;
+    "!" => SyntaxKind::NOT => Not;
+    "&" => SyntaxKind::AND => And;
+    "^" => SyntaxKind::CARET => Caret;
+    "~" => SyntaxKind::TILDE => Tilde;
+    "++" => SyntaxKind::PLUS_PLUS => PlusPlus;
+    "--" => SyntaxKind::MINUS_MINUS => MinusMinus;
+    "+" => SyntaxKind::PLUS => Plus;
+    "-" => SyntaxKind::MINUS => Minus;
+    "*" => SyntaxKind::STAR => Star;
+    "/" => SyntaxKind::SLASH => Slash;
+    "%" => SyntaxKind::PERCENT => Percent;
 }
 
 #[derive(Debug)]
@@ -351,9 +374,19 @@ impl IntegerLiteral {
         Self { token_span }
     }
 }
+impl FromCST for IntegerLiteral {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::INTEGER_LITERAL)?;
+        Ok(Self::new_from_span(token.text_range()))
+    }
+}
 impl Token for IntegerLiteral {
     fn span(&self) -> TextRange {
         self.token_span
+    }
+    fn syntax_kind() -> SyntaxKind {
+        SyntaxKind::INTEGER_LITERAL
     }
 }
 
@@ -367,9 +400,19 @@ impl FloatLiteral {
         Self { token_span }
     }
 }
+impl FromCST for FloatLiteral {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::FLOAT_LITERAL)?;
+        Ok(Self::new_from_span(token.text_range()))
+    }
+}
 impl Token for FloatLiteral {
     fn span(&self) -> TextRange {
         self.token_span
+    }
+    fn syntax_kind() -> SyntaxKind {
+        SyntaxKind::FLOAT_LITERAL
     }
 }
 
@@ -383,9 +426,19 @@ impl Word {
         Self { token_span }
     }
 }
+impl FromCST for Word {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::WORD)?;
+        Ok(Self::new_from_span(token.text_range()))
+    }
+}
 impl Token for Word {
     fn span(&self) -> TextRange {
         self.token_span
+    }
+    fn syntax_kind() -> SyntaxKind {
+        SyntaxKind::WORD
     }
 }
 
@@ -399,9 +452,28 @@ impl QuotedString {
         Self { token_span }
     }
 }
+impl FromCST for QuotedString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::STRING_LITERAL)?;
+
+        // Find the opening quote
+        let start = node
+            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::QUOTE)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::QUOTE, node.text_range()))?;
+
+        Ok(Self::new_from_span(TextRange::new(
+            start.text_range().start(),
+            node.text_range().end(),
+        )))
+    }
+}
 impl Token for QuotedString {
     fn span(&self) -> TextRange {
         self.token_span
+    }
+    fn syntax_kind() -> SyntaxKind {
+        SyntaxKind::STRING_LITERAL
     }
 }
 
@@ -409,15 +481,27 @@ impl Token for QuotedString {
 pub struct RawString {
     pub token_span: TextRange,
 }
-impl RawString {
-    /// Does not verify that the span is actually a raw string token.
-    pub fn new_from_span(token_span: TextRange) -> Self {
-        Self { token_span }
+impl FromCST for RawString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::RAW_STRING_LITERAL)?;
+
+        // Find the opening hash token to strip preceding trivia
+        let start = node
+            .first_child_token_of_kind(SyntaxKind::HASH)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::HASH, node.text_range()))?;
+
+        Ok(RawString {
+            token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+        })
     }
 }
 impl Token for RawString {
     fn span(&self) -> TextRange {
         self.token_span
+    }
+    fn syntax_kind() -> SyntaxKind {
+        SyntaxKind::RAW_STRING_LITERAL
     }
 }
 impl Printable for RawString {
@@ -487,22 +571,27 @@ impl HeaderComment {
         Self { token_span }
     }
 }
+impl FromCST for HeaderComment {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::HEADER_COMMENT)?;
+
+        // find the first non-trivia token
+        let first = node
+            .first_child_token_of_kind(SyntaxKind::SLASH)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::SLASH, node.text_range()))?;
+
+        Ok(Self::new_from_span(TextRange::new(
+            first.text_range().start(),
+            node.text_range().end(),
+        )))
+    }
+}
 impl Token for HeaderComment {
     fn span(&self) -> TextRange {
         self.token_span
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum MaybeQuotedString {
-    Quoted(QuotedString),
-    Unquoted(Word),
-}
-impl Token for MaybeQuotedString {
-    fn span(&self) -> TextRange {
-        match self {
-            MaybeQuotedString::Quoted(qs) => qs.span(),
-            MaybeQuotedString::Unquoted(w) => w.span(),
-        }
+    fn syntax_kind() -> SyntaxKind {
+        SyntaxKind::HEADER_COMMENT
     }
 }

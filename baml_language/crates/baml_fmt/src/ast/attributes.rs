@@ -20,18 +20,14 @@ impl FromCST for BlockAttribute {
         let mut it = SyntaxNodeIter::new(node);
 
         // @@
-        let atat = it.expect_token_of_kind(SyntaxKind::AT_AT)?;
+        let atat = it.expect_token_of_kind()?;
 
         // name (can have dots like @stream.done)
         let name = AttributeName::take(&mut it)?;
 
         let args = it.next().map(AttributeArgs::from_cst).transpose()?;
 
-        Ok(BlockAttribute {
-            atat: t::AtAt::new_from_span(atat.text_range()),
-            name,
-            args,
-        })
+        Ok(BlockAttribute { atat, name, args })
     }
 }
 
@@ -63,7 +59,7 @@ impl FromCST for Attribute {
         let mut it = SyntaxNodeIter::new(node);
 
         // @
-        let at = it.expect_token_of_kind(SyntaxKind::AT)?;
+        let at = it.expect_token_of_kind()?;
 
         // name (can have dots like @stream.done)
         let name_first = it.expect_next("attribute name part")?;
@@ -99,11 +95,7 @@ impl FromCST for Attribute {
             rest: name_rest,
         };
 
-        Ok(Attribute {
-            at: t::At::new_from_span(at.text_range()),
-            name,
-            args,
-        })
+        Ok(Attribute { at, name, args })
     }
 }
 
@@ -165,7 +157,7 @@ impl AttributeName {
         let first = AttributeNamePart::from_cst(SyntaxElement::Token(first))?;
 
         let mut rest = Vec::new();
-        while let Some(dot) = it.next_if(|elem| elem.kind() == SyntaxKind::DOT) {
+        while let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
             let dot_token = StrongAstError::assert_is_token(dot)?;
             let part = it.expect_token("attribute name part")?;
             let part = AttributeNamePart::from_cst(SyntaxElement::Token(part))?;
