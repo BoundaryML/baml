@@ -63,6 +63,8 @@ pub(crate) struct StructItem {
     pub(crate) members: Vec<StructMember>,
     /// Whether this struct is marked with #[builtin] (builtin type).
     pub(crate) is_builtin: bool,
+    /// Whether this struct is marked with #[opaque] (dedicated heap variant, not Instance).
+    pub(crate) is_opaque: bool,
 }
 
 /// A function or method declaration.
@@ -145,6 +147,7 @@ impl Parse for ModuleItem {
 impl StructItem {
     pub(crate) fn parse_with_attrs(input: ParseStream, attrs: &[Attribute]) -> Result<Self> {
         let is_builtin = attrs.iter().any(|attr| attr.path().is_ident("builtin"));
+        let is_opaque = attrs.iter().any(|attr| attr.path().is_ident("opaque"));
 
         input.parse::<Token![struct]>()?;
         let name: Ident = input.parse()?;
@@ -194,6 +197,7 @@ impl StructItem {
             generics,
             members,
             is_builtin,
+            is_opaque,
         })
     }
 }

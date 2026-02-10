@@ -300,7 +300,9 @@ macro_rules! with_builtins {
                 // =====================================================================
                 mod llm {
                     /// Prompt AST - a structured prompt for LLM calls.
+                    /// Opaque: stored as a dedicated heap variant, not as Instance.
                     #[builtin]
+                    #[opaque]
                     struct PromptAst {}
 
 

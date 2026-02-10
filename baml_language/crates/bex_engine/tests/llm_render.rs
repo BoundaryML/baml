@@ -486,7 +486,7 @@ function test_call_llm() -> string {
             // this is ok, we had an API Error due to invalid API keys
         }
         Err(e) => {
-            panic!("test_call_llm failed: {e:?}");
+            panic!("test_direct_llm_call failed: {e:?}");
         }
     }
 }

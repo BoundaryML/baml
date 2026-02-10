@@ -9,7 +9,7 @@ use crate::{SyntaxKind, SyntaxNode, SyntaxToken};
 /// Finds the first WORD token, then consumes alternating DOT + WORD pairs.
 fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Option<String> {
     let mut parts = Vec::new();
-    let mut iter = tokens;
+    let mut iter = tokens.filter(|t| !t.kind().is_trivia());
 
     // Find first WORD
     let first = loop {

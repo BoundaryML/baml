@@ -344,9 +344,9 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
 
         // Always register the type, even if it has no fields (e.g., PromptAst).
         // This ensures the type is in class_names for type resolution.
-        // PromptAst has a dedicated Object variant in the VM heap (wraps an opaque
-        // Rust ADT). All other builtin structs use Object::Instance.
-        let has_dedicated_heap_variant = struct_name == "PromptAst";
+        // Types marked #[opaque] have a dedicated Object variant in the VM heap
+        // (wraps an opaque Rust ADT). All other builtin structs use Object::Instance.
+        let has_dedicated_heap_variant = s.is_opaque;
         ctx.type_defs.push(BuiltinTypeDef {
             path: struct_path.clone(),
             fields,
