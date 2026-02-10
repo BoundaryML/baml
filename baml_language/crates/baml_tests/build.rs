@@ -631,11 +631,11 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             let all_files = db.get_source_files();
             let diagnostics = collect_diagnostics(&db, root, &all_files);
 
-            // Build sources and file_paths maps for rendering (user files only,
-            // so we don't spam snapshots with builtin internals).
+            // Build sources and file_paths maps for rendering (all files including
+            // builtins, so diagnostics from builtin files render properly).
             let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();
             let mut file_paths: HashMap<baml_db::FileId, PathBuf> = HashMap::new();
-            for source_file in &source_files {
+            for source_file in &all_files {
                 let file_id = source_file.file_id(&db);
                 sources.insert(file_id, source_file.text(&db).to_string());
                 file_paths.insert(file_id, source_file.path(&db));
