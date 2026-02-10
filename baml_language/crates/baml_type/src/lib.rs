@@ -14,8 +14,10 @@ use std::{
 pub use baml_base::{Literal, MediaKind, Name, Span};
 
 mod convert;
+mod defs;
 pub mod typetag;
 pub use convert::{convert_tir_ty, fqn_to_type_name, sanitize_for_runtime};
+pub use defs::*;
 
 /// A lightweight name type for class/enum/type-alias references.
 ///

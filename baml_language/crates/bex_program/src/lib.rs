@@ -16,78 +16,14 @@ pub use baml_base::{Literal as LiteralValue, MediaKind};
 /// The unified type representation from `baml_type`.
 pub use baml_type::Ty;
 pub use baml_type::TypeName;
+// ============================================================================
+// Type Definitions (re-exported from baml_type)
+// ============================================================================
+pub use baml_type::{
+    ClassDef, EnumDef, EnumVariantDef, FieldDef, FunctionBodyKind as FunctionBody, FunctionDef,
+    ParamDef, TypeAliasDef,
+};
 pub use bex_vm_types::Program;
-
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-/// A class definition.
-#[derive(Clone, Debug)]
-pub struct ClassDef {
-    pub name: String,
-    pub fields: Vec<FieldDef>,
-    pub description: Option<String>,
-}
-
-/// A field within a class.
-#[derive(Clone, Debug)]
-pub struct FieldDef {
-    pub name: String,
-    pub field_type: Ty,
-    pub description: Option<String>,
-    pub alias: Option<String>,
-}
-
-/// An enum definition.
-#[derive(Clone, Debug)]
-pub struct EnumDef {
-    pub name: String,
-    pub variants: Vec<EnumVariantDef>,
-    pub description: Option<String>,
-}
-
-/// A variant within an enum.
-#[derive(Clone, Debug)]
-pub struct EnumVariantDef {
-    pub name: String,
-    pub description: Option<String>,
-    pub alias: Option<String>,
-    /// @skip — whether this variant should be excluded from serialization
-    pub skip: bool,
-}
-
-// ============================================================================
-// Function Definitions
-// ============================================================================
-
-/// A function definition.
-#[derive(Clone, Debug)]
-pub struct FunctionDef {
-    pub name: String,
-    pub params: Vec<ParamDef>,
-    pub return_type: Ty,
-    pub body: FunctionBody,
-}
-
-/// A function parameter.
-#[derive(Clone, Debug)]
-pub struct ParamDef {
-    pub name: String,
-    pub param_type: Ty,
-}
-
-/// The body of a function - either LLM or expression.
-#[derive(Clone, Debug)]
-pub enum FunctionBody {
-    /// Declarative LLM function - prompt template + client config.
-    Llm {
-        prompt_template: String,
-        client: String,
-    },
-    /// Imperative expression function - compiled to bytecode.
-    Expr,
-}
 
 // ============================================================================
 // Infrastructure Definitions
@@ -174,7 +110,7 @@ impl BexProgram {
         for (class_name, class_def) in &self.classes {
             for field in &class_def.fields {
                 field
-                    .field_type
+                    .ty
                     .validate_runtime()
                     .map_err(|e| format!("Class '{class_name}' field '{}': {e}", field.name))?;
             }
@@ -186,7 +122,7 @@ impl BexProgram {
                 .map_err(|e| format!("Function '{fn_name}' return type: {e}"))?;
             for param in &fn_def.params {
                 param
-                    .param_type
+                    .ty
                     .validate_runtime()
                     .map_err(|e| format!("Function '{fn_name}' param '{}': {e}", param.name))?;
             }

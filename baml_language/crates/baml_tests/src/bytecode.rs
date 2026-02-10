@@ -162,95 +162,21 @@ pub fn compile_source_with_schema(source: &str) -> BexProgram {
     let project = db.project();
     let schema = baml_compiler_vir::project_schema(&db, project);
 
-    // Map VIR schema to bex_program types (inline mapping since we can't depend on bridge)
+    // VIR schema and bex_program share the same types from baml_type — just clone.
     let classes = schema
         .classes
         .iter()
-        .map(|c| {
-            let fields = c
-                .fields
-                .iter()
-                .filter(|f| !f.skip) // Filter out @skip fields
-                .map(|f| bex_program::FieldDef {
-                    name: f.name.to_string(),
-                    field_type: f.ty.clone(),
-                    description: f.description.clone(),
-                    alias: f.alias.clone(),
-                })
-                .collect();
-            (
-                c.name.to_string(),
-                bex_program::ClassDef {
-                    name: c.name.to_string(),
-                    fields,
-                    description: c.description.clone(),
-                },
-            )
-        })
+        .map(|c| (c.name.to_string(), c.clone()))
         .collect();
-
     let enums = schema
         .enums
         .iter()
-        .map(|e| {
-            let variants = e
-                .variants
-                .iter()
-                .map(|v| bex_program::EnumVariantDef {
-                    name: v.name.to_string(),
-                    description: v.description.clone(),
-                    alias: v.alias.clone(),
-                    skip: v.skip,
-                })
-                .collect();
-            (
-                e.name.to_string(),
-                bex_program::EnumDef {
-                    name: e.name.to_string(),
-                    variants,
-                    description: e.description.clone(),
-                },
-            )
-        })
+        .map(|e| (e.name.to_string(), e.clone()))
         .collect();
-
     let functions = schema
         .functions
         .iter()
-        .map(|f| {
-            let params = f
-                .params
-                .iter()
-                .map(|p| bex_program::ParamDef {
-                    name: p.name.to_string(),
-                    param_type: p.ty.clone(),
-                })
-                .collect();
-
-            let body = match &f.body_kind {
-                baml_compiler_vir::VirFunctionBodyKind::Llm {
-                    prompt_template,
-                    client,
-                } => bex_program::FunctionBody::Llm {
-                    prompt_template: prompt_template.clone(),
-                    client: client.clone(),
-                },
-                baml_compiler_vir::VirFunctionBodyKind::Expr
-                | baml_compiler_vir::VirFunctionBodyKind::Missing => {
-                    bex_program::FunctionBody::Expr
-                }
-            };
-
-            (
-                f.name.to_string(),
-                bex_program::FunctionDef {
-                    name: f.name.to_string(),
-                    params,
-                    return_type: f.return_type.clone(),
-                    body,
-                },
-            )
-        })
+        .map(|f| (f.name.to_string(), f.clone()))
         .collect();
 
     BexProgram {

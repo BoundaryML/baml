@@ -12,7 +12,7 @@ use baml_type::Ty;
 
 use crate::schema::{
     VirClass, VirEnum, VirEnumVariant, VirField, VirFunction, VirFunctionBodyKind, VirParam,
-    VirSchema,
+    VirSchema, VirTypeAlias,
 };
 
 /// Lower all HIR items in the given project to VIR schema.
@@ -68,10 +68,19 @@ pub(crate) fn lower_schema(
         }
     }
 
+    let type_alias_defs: Vec<VirTypeAlias> = type_aliases
+        .iter()
+        .map(|(name, tir_ty)| VirTypeAlias {
+            name: name.clone(),
+            resolves_to: convert_ty(tir_ty, type_aliases, recursive_aliases),
+        })
+        .collect();
+
     VirSchema {
         classes,
         enums,
         functions,
+        type_aliases: type_alias_defs,
     }
 }
 
