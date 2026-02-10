@@ -68,13 +68,14 @@ pub(crate) fn lower_schema(
         }
     }
 
-    let type_alias_defs: Vec<VirTypeAlias> = type_aliases
+    let mut type_alias_defs: Vec<VirTypeAlias> = type_aliases
         .iter()
         .map(|(name, tir_ty)| VirTypeAlias {
             name: name.clone(),
             resolves_to: convert_ty(tir_ty, type_aliases, recursive_aliases),
         })
         .collect();
+    type_alias_defs.sort_by_key(|alias| alias.name.clone());
 
     VirSchema {
         classes,
