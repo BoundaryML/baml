@@ -388,4 +388,318 @@ function TestEnumJinjaSyntax(status: Status, priority: Priority, nullable_status
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:20:12 ]
+//     │
+//  20 │         {% if status == "Active" %}
+//     │            ──────────┬──────────  
+//     │                      ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:24:12 ]
+//     │
+//  24 │         {% if status == "Pending" %}
+//     │            ───────────┬──────────  
+//     │                       ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:29:12 ]
+//     │
+//  29 │         {% if "Inactive" == status %}
+//     │            ───────────┬───────────  
+//     │                       ╰───────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:34:12 ]
+//     │
+//  34 │         {% if status != "Active" %}
+//     │            ──────────┬──────────  
+//     │                      ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:41:12 ]
+//     │
+//  41 │         {% if status == "active" %}
+//     │            ──────────┬──────────  
+//     │                      ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:45:12 ]
+//     │
+//  45 │         {% if priority == "urgent" %}
+//     │            ───────────┬───────────  
+//     │                       ╰───────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:52:12 ]
+//     │
+//  52 │         {% if status == "ACTIVE" %}
+//     │            ──────────┬──────────  
+//     │                      ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:56:12 ]
+//     │
+//  56 │         {% if priority == "high" %}
+//     │            ──────────┬──────────  
+//     │                      ╰──────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:63:12 ]
+//     │
+//  63 │         {% if status == "Active" or status == "Pending" %}
+//     │            ──────────┬──────────  
+//     │                      ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:63:34 ]
+//     │
+//  63 │         {% if status == "Active" or status == "Pending" %}
+//     │                                  ───────────┬──────────  
+//     │                                             ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:68:15 ]
+//     │
+//  68 │         {% if (status == "Active" or priority == "High") and nullable_status != "Inactive" %}
+//     │               ─────────┬─────────  
+//     │                        ╰─────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:68:35 ]
+//     │
+//  68 │         {% if (status == "Active" or priority == "High") and nullable_status != "Inactive" %}
+//     │                                   ──────────┬──────────  
+//     │                                             ╰──────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:68:58 ]
+//     │
+//  68 │         {% if (status == "Active" or priority == "High") and nullable_status != "Inactive" %}
+//     │                                                          ────────────────┬────────────────  
+//     │                                                                          ╰────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:73:19 ]
+//     │
+//  73 │         {% if not (status == "Inactive") %}
+//     │                   ──────────┬──────────  
+//     │                             ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:80:12 ]
+//     │
+//  80 │         {% if status == "Active" %}
+//     │            ──────────┬──────────  
+//     │                      ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:82:12 ]
+//     │
+//  82 │         {% elif status == "Pending" %}
+//     │            ────────────┬───────────  
+//     │                        ╰───────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:84:12 ]
+//     │
+//  84 │         {% elif status == "Inactive" %}
+//     │            ────────────┬────────────  
+//     │                        ╰────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:91:36 ]
+//     │
+//  91 │         Result: {{ "High Priority" if priority == "High" else "Normal Priority" }}
+//     │                                    ──────────┬──────────  
+//     │                                              ╰──────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:92:29 ]
+//     │
+//  92 │         Status: {{ "Active" if status == "Active" else "Not Active" }}
+//     │                             ──────────┬──────────  
+//     │                                       ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ enum_enums_in_jinja.baml:97:12 ]
+//     │
+//  97 │         {% if status < "ZZZ" %}
+//     │            ────────┬────────  
+//     │                    ╰────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:102:12 ]
+//      │
+//  102 │         {% if priority > "AAA" %}
+//      │            ─────────┬─────────  
+//      │                     ╰─────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:107:12 ]
+//      │
+//  107 │         {% if status >= "Active" and priority <= "Medium" %}
+//      │            ──────────┬──────────  
+//      │                      ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:107:34 ]
+//      │
+//  107 │         {% if status >= "Active" and priority <= "Medium" %}
+//      │                                  ────────────┬───────────  
+//      │                                              ╰───────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:115:16 ]
+//      │
+//  115 │             {% if status == s %}
+//      │                ───────┬──────  
+//      │                       ╰──────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:122:16 ]
+//      │
+//  122 │             {% if priority == p %}
+//      │                ────────┬───────  
+//      │                        ╰───────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:130:12 ]
+//      │
+//  130 │         {% if status == priority %}
+//      │            ──────────┬──────────  
+//      │                      ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:144:12 ]
+//      │
+//  144 │         {% if status == "Activ" %}
+//      │            ──────────┬─────────  
+//      │                      ╰─────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:148:12 ]
+//      │
+//  148 │         {% if priority == "Hgh" %}
+//      │            ──────────┬─────────  
+//      │                      ╰─────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:153:12 ]
+//      │
+//  153 │         {% if status == "Unknown" %}
+//      │            ───────────┬──────────  
+//      │                       ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:158:12 ]
+//      │
+//  158 │         {% if status == "" %}
+//      │            ───────┬───────  
+//      │                   ╰───────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:165:15 ]
+//      │
+//  165 │         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
+//      │               ─────────┬─────────  
+//      │                        ╰─────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:165:35 ]
+//      │
+//  165 │         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
+//      │                                   ───────────┬──────────  
+//      │                                              ╰──────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:165:62 ]
+//      │
+//  165 │         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
+//      │                                                              ──────────┬─────────  
+//      │                                                                        ╰─────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:165:83 ]
+//      │
+//  165 │         {% if (status == "Active" and priority == "High") or (status == "Pending" and priority != "Low") %}
+//      │                                                                                   ──────────┬──────────  
+//      │                                                                                             ╰──────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ enum_enums_in_jinja.baml:171:16 ]
+//      │
+//  171 │             {% if status == "Active" and item == "test" %}
+//      │                ──────────┬──────────  
+//      │                          ╰──────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯

@@ -278,7 +278,7 @@ fn extract_enum_from_nullable_union(types: &[JinjaType]) -> Option<&str> {
 
     for t in types {
         match t {
-            JinjaType::EnumValueRef(name) => {
+            JinjaType::EnumValueRef(name) | JinjaType::EnumRef(name) => {
                 if enum_name.is_some() {
                     // Multiple different enums - not a simple nullable enum
                     return None;
@@ -354,10 +354,13 @@ fn handle_enum_binary_op(
         }
     }
 
-    // Handle direct EnumValueRef operations
+    // Handle direct enum operations (both EnumValueRef and EnumRef)
     match (lhs, rhs) {
-        // Both are EnumValueRef - only allow comparison between same enum
-        (JinjaType::EnumValueRef(e1), JinjaType::EnumValueRef(e2)) => {
+        // Both are enum types - only allow comparison between same enum
+        (
+            JinjaType::EnumValueRef(e1) | JinjaType::EnumRef(e1),
+            JinjaType::EnumValueRef(e2) | JinjaType::EnumRef(e2),
+        ) => {
             if is_comparison_op(&bin_expr.op) {
                 if e1 == e2 {
                     Some(JinjaType::Bool)
@@ -380,9 +383,9 @@ fn handle_enum_binary_op(
             }
         }
 
-        // EnumValueRef with generic string
-        (JinjaType::EnumValueRef(enum_name), JinjaType::String)
-        | (JinjaType::String, JinjaType::EnumValueRef(enum_name)) => {
+        // Enum with generic string
+        (JinjaType::EnumValueRef(enum_name) | JinjaType::EnumRef(enum_name), JinjaType::String)
+        | (JinjaType::String, JinjaType::EnumValueRef(enum_name) | JinjaType::EnumRef(enum_name)) => {
             if is_comparison_op(&bin_expr.op) {
                 errors.push(TypeError::enum_string_comparison_deprecated(
                     expr,
@@ -400,8 +403,9 @@ fn handle_enum_binary_op(
             }
         }
 
-        // Any other combination with EnumValueRef is invalid
-        (JinjaType::EnumValueRef(enum_name), _) | (_, JinjaType::EnumValueRef(enum_name)) => {
+        // Any other combination with enum types is invalid
+        (JinjaType::EnumValueRef(enum_name) | JinjaType::EnumRef(enum_name), _)
+        | (_, JinjaType::EnumValueRef(enum_name) | JinjaType::EnumRef(enum_name)) => {
             errors.push(TypeError::enum_string_comparison_deprecated(
                 expr,
                 enum_name,
