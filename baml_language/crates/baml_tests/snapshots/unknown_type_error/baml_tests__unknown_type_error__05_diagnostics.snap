@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
-assertion_line: 17096
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===

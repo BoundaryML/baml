@@ -61,9 +61,8 @@ function build_request(function_name: string, args: map<string, unknown>) -> Req
 ///
 /// @param function_name The name of the LLM function to call
 /// @param args The arguments to pass to the template
-/// @return The parsed response value
-// Note: Return type is a placeholder - should be the function's actual return type.
-function call_llm_function(function_name: string, args: map<string, unknown>) -> string {
+/// @return The parsed response value (type is `unknown` so callers get their declared return type)
+function call_llm_function(function_name: string, args: map<string, unknown>) -> unknown {
     let jinja_string = baml.llm.get_jinja_template(function_name);
 
     let resolve_client_fn = baml.llm.get_client_function(function_name);

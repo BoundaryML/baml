@@ -414,8 +414,8 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
 
             #file_loaders
 
-            // Update project root with the list of files for proper Salsa tracking
-            root.set_files(&mut db).to(source_files.clone());
+            // db.add_file already adds each file to root.files() via add_or_update_file,
+            // so no need to call set_files - builtins + source_files are already there.
 
             let mut output = String::new();
             writeln!(output, "=== TYPE INFERENCE ===").unwrap();
@@ -435,7 +435,15 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
                     if let baml_compiler_hir::ItemId::Function(func_id) = item {
                         let signature = function_signature(&db, *func_id);
                         let sig_source_map = function_signature_source_map(&db, *func_id);
-                        let body = function_body(&db, *func_id);
+                        // For LLM functions, use FunctionBody::Llm for type inference
+                        // (Jinja validation + declared return type).
+                        let body = if let Some(llm_meta) = baml_compiler_hir::llm_function_meta(&db, *func_id) {
+                            std::sync::Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone()))
+                        } else if baml_compiler_hir::is_llm_function(&db, *func_id) {
+                            std::sync::Arc::new(baml_compiler_hir::FunctionBody::Missing)
+                        } else {
+                            function_body(&db, *func_id)
+                        };
                         let result = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
 
                         writeln!(output, "  Function {}:", signature.name).unwrap();
@@ -489,8 +497,8 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
 
             #file_loaders
 
-            // Update project root with the list of files for proper Salsa tracking
-            root.set_files(&mut db).to(source_files.clone());
+            // db.add_file already adds each file to root.files() via add_or_update_file,
+            // so no need to call set_files - builtins + source_files are already there.
 
             let mut output = String::new();
             writeln!(output, "=== MIR ===").unwrap();
@@ -615,8 +623,8 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
 
             #file_loaders
 
-            // Update project root with the list of files for proper Salsa tracking
-            root.set_files(&mut db).to(source_files.clone());
+            // db.add_file already adds each file to root.files() via add_or_update_file,
+            // so no need to call set_files - builtins + source_files are already there.
 
             // Collect all diagnostics using the unified collect_diagnostics function
             let diagnostics = collect_diagnostics(&db, root, &source_files);
@@ -685,18 +693,15 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
             let mut db = ProjectDatabase::new();
             let root = db.set_project_root(std::path::Path::new("."));
 
-            // Get the existing files (includes builtins loaded by set_project_root)
-            let mut all_files: Vec<_> = root.files(&db).clone();
-
             // Declare source_files Vec for file_loaders to populate
             let mut source_files = Vec::new();
 
             // Add user source files
+            // db.add_file already adds each file to root.files() via add_or_update_file
             #file_loaders
 
-            // Extend the project files with user files
-            all_files.extend(source_files);
-            root.set_files(&mut db).to(all_files.clone());
+            // All files (builtins + user) are already in root.files()
+            let all_files: Vec<_> = root.files(&db).clone();
 
             let mut output = String::new();
 

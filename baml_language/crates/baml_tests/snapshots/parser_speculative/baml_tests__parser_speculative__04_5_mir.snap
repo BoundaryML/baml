@@ -1,13 +1,65 @@
 ---
-source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn AnotherLLM:
-  (no MIR due to errors: function body is missing)
+fn AnotherLLM(input: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // input // param
+    let _2: null
+    let _3: "AnotherLLM"
+    let _4: map<string, unknown>
+    let _5: "input"
+    let _6: string
 
-fn Ambiguous:
-  (no MIR due to errors: function body is missing)
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "AnotherLLM";
+        _5 = const "input";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}
+
+fn Ambiguous(input: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // input // param
+    let _2: null
+    let _3: "Ambiguous"
+    let _4: map<string, unknown>
+    let _5: "input"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "Ambiguous";
+        _5 = const "input";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}
 
 fn ProcessData(data: JsonData) -> string {
     // Locals:
@@ -66,8 +118,34 @@ fn ProcessData(data: JsonData) -> string {
 
 }
 
-fn ExtractData:
-  (LLM function - no MIR)
+fn ExtractData(text: string) -> JsonData {
+    // Locals:
+    let _0: JsonData // return
+    let _1: string // text // param
+    let _2: null
+    let _3: "ExtractData"
+    let _4: map<string, unknown>
+    let _5: "text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "ExtractData";
+        _5 = const "text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}
 
 fn SimpleCalc(a: int, b: int) -> int {
     // Locals:
@@ -220,8 +298,60 @@ fn ProcessAnalysis(analysis: Analysis) -> string {
 
 }
 
-fn LLMAnalyze:
-  (LLM function - no MIR)
+fn LLMAnalyze(text: string) -> Analysis {
+    // Locals:
+    let _0: Analysis // return
+    let _1: string // text // param
+    let _2: null
+    let _3: "LLMAnalyze"
+    let _4: map<string, unknown>
+    let _5: "text"
+    let _6: string
 
-fn ChainedProcess:
-  (LLM function - no MIR)
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "LLMAnalyze";
+        _5 = const "text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}
+
+fn ChainedProcess(input: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // input // param
+    let _2: null
+    let _3: "ChainedProcess"
+    let _4: map<string, unknown>
+    let _5: "input"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "ChainedProcess";
+        _5 = const "input";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}

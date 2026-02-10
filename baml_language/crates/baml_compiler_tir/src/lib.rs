@@ -1406,7 +1406,19 @@ pub fn function_type_inference<'db>(
     // The trade-off is that type mismatch errors won't point to the return
     // type annotation, but they'll still point to the offending expression.
     let signature = baml_compiler_hir::function_signature(db, function);
-    let body = baml_compiler_hir::function_body(db, function);
+
+    // For LLM functions, use the original LlmBody for type inference.
+    // The synthetic Expr body (call_llm_function) is for compilation, not
+    // type-checking. TIR validates the Jinja template and returns the
+    // declared return type.
+    let body = if let Some(llm_meta) = baml_compiler_hir::llm_function_meta(db, function) {
+        Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone()))
+    } else if baml_compiler_hir::is_llm_function(db, function) {
+        // Malformed LLM function - skip type-checking
+        Arc::new(baml_compiler_hir::FunctionBody::Missing)
+    } else {
+        baml_compiler_hir::function_body(db, function)
+    };
 
     // Get the project context
     let project = db.project();
@@ -2172,6 +2184,34 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 baml_base::QualifiedName::from_builtin_path(def.path),
                             ),
                         );
+                        (callee_ty, arg_types_with_spans)
+                    } else if ctx.lookup(&Name::new(&full_path)).is_some() {
+                        // BAML-defined function in a namespace (e.g., baml.llm.call_llm_function).
+                        // These are stored in globals with their qualified name.
+                        // Treat as a regular function call (no implicit receiver).
+                        let callee_ty = infer_expr(ctx, *callee, body);
+
+                        // Use bidirectional typing: check args against expected param types
+                        // so empty maps/arrays pick up their expected types.
+                        let param_types: Vec<Ty> = match &callee_ty {
+                            Ty::Function { params, .. } => {
+                                params.iter().map(|(_, ty)| ty.clone()).collect()
+                            }
+                            _ => Vec::new(),
+                        };
+                        let arg_types_with_spans: Vec<(Ty, Option<ErrorLocation>)> = args
+                            .iter()
+                            .enumerate()
+                            .map(|(i, arg)| {
+                                let ty = if let Some(expected) = param_types.get(i) {
+                                    check_expr(ctx, *arg, body, expected)
+                                } else {
+                                    infer_expr(ctx, *arg, body)
+                                };
+                                let arg_location = Some(ErrorLocation::Expr(*arg));
+                                (ty, arg_location)
+                            })
+                            .collect();
                         (callee_ty, arg_types_with_spans)
                     } else {
                         // Method call via Path: `receiver.method(args)`

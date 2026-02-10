@@ -1,10 +1,57 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn BadReturnType:
-  (LLM function - no MIR)
+fn BadReturnType() -> map<string, int> {
+    // Locals:
+    let _0: map<string, int> // return
+    let _1: null
+    let _2: "BadReturnType"
+    let _3: map<string, unknown>
 
-fn BadParam:
-  (LLM function - no MIR)
+    bb0: {
+        _1 = const fn baml.llm.call_llm_function;
+        _2 = const "BadReturnType";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}
+
+fn BadParam(x: map<string, int>) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: map<string, int> // x // param
+    let _2: null
+    let _3: "BadParam"
+    let _4: map<string, unknown>
+    let _5: "x"
+    let _6: map<string, int>
+
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "BadParam";
+        _5 = const "x";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}

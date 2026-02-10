@@ -188,6 +188,11 @@ pub enum CompilerGenerated {
     /// Client resolve function - evaluates options and returns `PrimitiveClient`.
     /// Contains the client name (e.g., "GPT4" for "GPT4.resolve").
     ClientResolve { client_name: Name },
+    /// LLM function - its body is synthetically generated to call
+    /// `baml.llm.call_llm_function(name, args)`.
+    /// This is a marker only; metadata (prompt, client) is in a separate query
+    /// to preserve `ItemTree` early cutoff on body changes.
+    LlmFunction,
 }
 
 /// A function definition in the `ItemTree`.

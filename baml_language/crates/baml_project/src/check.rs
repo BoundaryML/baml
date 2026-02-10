@@ -12,14 +12,14 @@
 //! }
 //! ```
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
     self, FunctionBody, HirSourceMap, ItemId, SpanResolutionContext, file_items, file_lowering,
-    function_body, function_signature, function_signature_source_map, llm_function_file_offset,
-    project_class_field_type_spans, project_type_alias_type_spans, project_type_item_spans,
-    template_string_file_offset,
+    function_body, function_signature, function_signature_source_map, is_llm_function,
+    llm_function_file_offset, llm_function_meta, project_class_field_type_spans,
+    project_type_alias_type_spans, project_type_item_spans, template_string_file_offset,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
@@ -181,7 +181,18 @@ pub fn collect_diagnostics(
             if let ItemId::Function(func_loc) = item {
                 let signature = function_signature(db, *func_loc);
                 let sig_source_map = function_signature_source_map(db, *func_loc);
-                let body = function_body(db, *func_loc);
+                // For LLM functions, use the original LlmBody for type inference
+                // (Jinja validation + declared return type) instead of the synthetic
+                // Expr body which is for compilation only.
+                let body = if let Some(llm_meta) = llm_function_meta(db, *func_loc) {
+                    Arc::new(FunctionBody::Llm((*llm_meta).clone()))
+                } else if is_llm_function(db, *func_loc) {
+                    // Malformed LLM function (parse errors prevented metadata extraction).
+                    // Use Missing to skip type-checking the synthetic body.
+                    Arc::new(FunctionBody::Missing)
+                } else {
+                    function_body(db, *func_loc)
+                };
 
                 // Collect body lowering diagnostics (e.g., missing semicolons)
                 if let FunctionBody::Expr(expr_body, _) = &*body {

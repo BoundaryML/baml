@@ -202,7 +202,9 @@ function Test(x: string) -> string {
     // After body change:
     // - lex/parse/file_lowering must re-run (input changed, CST changed)
     // - file_items is cached (early cutoff: ItemTree equal, same function name)
-    // - function_body must re-execute (body content changed)
+    // - function_body is cached for LLM functions because the synthetic body
+    //   (call_llm_function) only depends on name + params, not the prompt.
+    //   Prompt changes are tracked by a separate llm_function_meta query.
     test_db.assert_executed(
         |db| query_all_function_bodies(db, file),
         &[
@@ -210,7 +212,7 @@ function Test(x: string) -> string {
             ("parse_result", 1),
             ("file_lowering", 1),
             ("file_items", 0),    // Early cutoff: ItemTree equal
-            ("function_body", 1), // Must re-execute: body changed
+            ("function_body", 0), // Cached: LLM synthetic body depends on name+params, not prompt
         ],
     );
 }
@@ -647,7 +649,8 @@ function Greet(name: string) -> string {
 "##
     .to_string());
 
-    // Body changes MUST invalidate type inference
+    // Prompt changes invalidate type inference because function_type_inference
+    // reads llm_function_meta for Jinja template validation.
     test_db.assert_executed(
         |db| query_all_type_inference(db, file),
         &[("function_type_inference", 1)],
@@ -731,20 +734,11 @@ function Bar(y: int) -> int {
 "##
     .to_string());
 
-    // Ideally only Foo's type inference would re-run, but currently
-    // both may re-run due to CST dependency. This test documents
-    // current behavior - improvement would be to achieve (1, 1) or (1, 0).
-    let (_, executed) = test_db.log_executed(|db| query_all_type_inference(db, file));
-    let inference_count = executed
-        .iter()
-        .filter(|s| s.contains("function_type_inference"))
-        .count();
-
-    // At minimum, we expect at least one re-execution (for Foo)
-    assert!(
-        inference_count >= 1,
-        "Expected at least 1 type inference to re-run, got {}",
-        inference_count
+    // Only Foo's prompt changed, so only Foo's type inference re-runs.
+    // Bar's llm_function_meta is unchanged, so Bar's type inference is cached.
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 1)],
     );
 }
 

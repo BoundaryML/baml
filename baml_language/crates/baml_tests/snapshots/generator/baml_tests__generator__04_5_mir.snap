@@ -1,7 +1,28 @@
 ---
-source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn GetUser:
-  (no MIR due to errors: function body is missing)
+fn GetUser() -> MyClass {
+    // Locals:
+    let _0: MyClass // return
+    let _1: null
+    let _2: "GetUser"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.call_llm_function;
+        _2 = const "GetUser";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}

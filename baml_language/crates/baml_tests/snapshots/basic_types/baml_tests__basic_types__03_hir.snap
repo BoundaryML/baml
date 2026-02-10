@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -19,31 +19,19 @@ class ClassAttributes {
 }
 
 function GetMixedMap() -> map<string, int | string> {
-  client GPT4
-  prompt #"
-    Get mixed map
-  "#
+    baml.llm.call_llm_function("GetMixedMap", {  })
 }
 
 function GetMixedList() -> (int | string)[] {
-  client GPT4
-  prompt #"
-    Get mixed list
-  "#
+    baml.llm.call_llm_function("GetMixedList", {  })
 }
 
 function GetStatus() -> Status {
-  client GPT4
-  prompt #"
-    Get status
-  "#
+    baml.llm.call_llm_function("GetStatus", {  })
 }
 
 function GetUser(id: int) -> User {
-  client GPT4
-  prompt #"
-    Get user {{id}}
-  "#
+    baml.llm.call_llm_function("GetUser", { "id": id })
 }
 
 class User {

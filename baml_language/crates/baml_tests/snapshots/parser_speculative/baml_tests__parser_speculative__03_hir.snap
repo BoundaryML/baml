@@ -1,14 +1,14 @@
 ---
-source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
 function AnotherLLM(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("AnotherLLM", { "input": input })
 }
 
 function Ambiguous(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Ambiguous", { "input": input })
 }
 
 function ProcessData(data: JsonData) -> string {
@@ -25,12 +25,7 @@ class JsonData {
 }
 
 function ExtractData(text: string) -> JsonData {
-  client GPT4
-  prompt #"
-    
-        Extract structured data from: {{ text }}
-        Return as JSON.
-  "#
+    baml.llm.call_llm_function("ExtractData", { "text": text })
 }
 
 function SimpleCalc(a: int, b: int) -> int {
@@ -51,25 +46,11 @@ function ProcessAnalysis(analysis: Analysis) -> string {
 }
 
 function LLMAnalyze(text: string) -> Analysis {
-  client GPT4
-  prompt #"
-    
-        Analyze the following text:
-        {{ text }}
-        
-        Return an Analysis object with sentiment and keywords.
-  "#
+    baml.llm.call_llm_function("LLMAnalyze", { "text": text })
 }
 
 function ChainedProcess(input: string) -> string {
-  client GPT4
-  prompt #"
-    
-        Process this through multiple steps:
-        1. {{ input }}
-        2. Transform it
-        3. Return result
-  "#
+    baml.llm.call_llm_function("ChainedProcess", { "input": input })
 }
 
 class Analysis {

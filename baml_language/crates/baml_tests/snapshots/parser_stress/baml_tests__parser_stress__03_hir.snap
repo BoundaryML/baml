@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ab45227c1b6a6957/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -42,403 +42,403 @@ class Level3 {
 }
 
 function Process22(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process22", { "input": input })
 }
 
 function Process54(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process54", { "input": input })
 }
 
 function Process95(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process95", { "input": input })
 }
 
 function Process60(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process60", { "input": input })
 }
 
 function Process68(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process68", { "input": input })
 }
 
 function Process14(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process14", { "input": input })
 }
 
 function Process79(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process79", { "input": input })
 }
 
 function Process84(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process84", { "input": input })
 }
 
 function Process33(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process33", { "input": input })
 }
 
 function Process12(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process12", { "input": input })
 }
 
 function Process74(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process74", { "input": input })
 }
 
 function Process99(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process99", { "input": input })
 }
 
 function Process64(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process64", { "input": input })
 }
 
 function Process52(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process52", { "input": input })
 }
 
 function Process7(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process7", { "input": input })
 }
 
 function Process80(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process80", { "input": input })
 }
 
 function Process58(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process58", { "input": input })
 }
 
 function Process97(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process97", { "input": input })
 }
 
 function Process36(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process36", { "input": input })
 }
 
 function Process63(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process63", { "input": input })
 }
 
 function Process19(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process19", { "input": input })
 }
 
 function Process83(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process83", { "input": input })
 }
 
 function Process18(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process18", { "input": input })
 }
 
 function Process26(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process26", { "input": input })
 }
 
 function Process43(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process43", { "input": input })
 }
 
 function Process46(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process46", { "input": input })
 }
 
 function Process62(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process62", { "input": input })
 }
 
 function Process87(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process87", { "input": input })
 }
 
 function Process44(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process44", { "input": input })
 }
 
 function Process47(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process47", { "input": input })
 }
 
 function Process35(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process35", { "input": input })
 }
 
 function Process38(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process38", { "input": input })
 }
 
 function Process41(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process41", { "input": input })
 }
 
 function Process28(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process28", { "input": input })
 }
 
 function Process65(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process65", { "input": input })
 }
 
 function Process6(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process6", { "input": input })
 }
 
 function Process32(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process32", { "input": input })
 }
 
 function Process92(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process92", { "input": input })
 }
 
 function Process55(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process55", { "input": input })
 }
 
 function Process66(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process66", { "input": input })
 }
 
 function Process56(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process56", { "input": input })
 }
 
 function Process67(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process67", { "input": input })
 }
 
 function Process3(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process3", { "input": input })
 }
 
 function Process75(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process75", { "input": input })
 }
 
 function Process48(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process48", { "input": input })
 }
 
 function Process49(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process49", { "input": input })
 }
 
 function Process61(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process61", { "input": input })
 }
 
 function Process96(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process96", { "input": input })
 }
 
 function Process34(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process34", { "input": input })
 }
 
 function Process59(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process59", { "input": input })
 }
 
 function Process89(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process89", { "input": input })
 }
 
 function Process45(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process45", { "input": input })
 }
 
 function Process86(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process86", { "input": input })
 }
 
 function Process16(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process16", { "input": input })
 }
 
 function Process39(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process39", { "input": input })
 }
 
 function Process82(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process82", { "input": input })
 }
 
 function Process2(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process2", { "input": input })
 }
 
 function Process27(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process27", { "input": input })
 }
 
 function Process53(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process53", { "input": input })
 }
 
 function Process23(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process23", { "input": input })
 }
 
 function Process9(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process9", { "input": input })
 }
 
 function Process72(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process72", { "input": input })
 }
 
 function Process77(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process77", { "input": input })
 }
 
 function Process40(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process40", { "input": input })
 }
 
 function Process30(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process30", { "input": input })
 }
 
 function Process8(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process8", { "input": input })
 }
 
 function Process11(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process11", { "input": input })
 }
 
 function Process37(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process37", { "input": input })
 }
 
 function Process4(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process4", { "input": input })
 }
 
 function Process91(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process91", { "input": input })
 }
 
 function Process31(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process31", { "input": input })
 }
 
 function Process50(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process50", { "input": input })
 }
 
 function Process20(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process20", { "input": input })
 }
 
 function Process98(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process98", { "input": input })
 }
 
 function Process85(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process85", { "input": input })
 }
 
 function Process78(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process78", { "input": input })
 }
 
 function Process1(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process1", { "input": input })
 }
 
 function Process90(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process90", { "input": input })
 }
 
 function Process17(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process17", { "input": input })
 }
 
 function Process81(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process81", { "input": input })
 }
 
 function Process71(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process71", { "input": input })
 }
 
 function Process15(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process15", { "input": input })
 }
 
 function Process42(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process42", { "input": input })
 }
 
 function Process51(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process51", { "input": input })
 }
 
 function Process5(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process5", { "input": input })
 }
 
 function Process13(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process13", { "input": input })
 }
 
 function Process29(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process29", { "input": input })
 }
 
 function Process93(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process93", { "input": input })
 }
 
 function Process70(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process70", { "input": input })
 }
 
 function Process76(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process76", { "input": input })
 }
 
 function Process10(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process10", { "input": input })
 }
 
 function Process21(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process21", { "input": input })
 }
 
 function Process100(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process100", { "input": input })
 }
 
 function Process94(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process94", { "input": input })
 }
 
 function Process25(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process25", { "input": input })
 }
 
 function Process69(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process69", { "input": input })
 }
 
 function Process24(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process24", { "input": input })
 }
 
 function Process88(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process88", { "input": input })
 }
 
 function Process73(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process73", { "input": input })
 }
 
 function Process57(input: string) -> string {
-    // missing body
+    baml.llm.call_llm_function("Process57", { "input": input })
 }
 
 class User260 {

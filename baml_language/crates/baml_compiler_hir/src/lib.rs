@@ -379,10 +379,13 @@ fn function_signature_with_source_map<'db>(
     let func = &item_tree[function.id(db)];
     let func_name = func.name.clone();
 
-    // Check if this is a compiler-generated function (e.g., client resolve)
-    if func.compiler_generated.is_some() {
-        // Return a synthetic signature with Unknown return type to skip type checking.
-        // Compiler-generated functions may contain heterogeneous values.
+    // Client resolve functions have synthetic signatures (no params, Unknown return)
+    // because they contain heterogeneous values from the options block.
+    // LLM functions fall through to read their real signature from the CST.
+    if matches!(
+        &func.compiler_generated,
+        Some(item_tree::CompilerGenerated::ClientResolve { .. })
+    ) {
         return (
             Arc::new(FunctionSignature {
                 name: func_name,
@@ -1139,6 +1142,19 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
         }
     }
 
+    // Check if this is a compiler-generated LLM function
+    if matches!(
+        &func.compiler_generated,
+        Some(item_tree::CompilerGenerated::LlmFunction)
+    ) {
+        // Create synthetic body: baml.llm.call_llm_function("FnName", {args})
+        let sig = function_signature(db, function);
+        let param_names: Vec<Name> = sig.params.iter().map(|p| p.name.clone()).collect();
+        let (expr_body, source_map) =
+            body::lower_llm_to_call_llm_function(func_name.as_str(), &param_names);
+        return Arc::new(FunctionBody::Expr(expr_body, source_map));
+    }
+
     // Regular function - find it in the source file
     let tree = syntax_tree(db, file);
     let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
@@ -1175,6 +1191,66 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
     let file_id = file.file_id(db);
     function_def.map_or(Arc::new(FunctionBody::Missing), |f| {
         FunctionBody::lower(&f, file_id)
+    })
+}
+
+/// Returns `true` if this function is an LLM function (has `CompilerGenerated::LlmFunction` marker).
+///
+/// This is a cheap check that only reads the `ItemTree`.
+pub fn is_llm_function(db: &dyn Db, function: FunctionLoc<'_>) -> bool {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func = &item_tree[function.id(db)];
+    matches!(
+        &func.compiler_generated,
+        Some(item_tree::CompilerGenerated::LlmFunction)
+    )
+}
+
+/// Returns the LLM metadata (prompt template + client) for an LLM function.
+///
+/// Returns `None` for non-LLM functions or malformed LLM functions where the
+/// client/prompt can't be extracted from the CST. This is a separate query from
+/// `function_body` so that prompt/client changes don't affect the `ItemTree`
+/// (preserving early cutoff on body-only changes).
+#[salsa::tracked]
+pub fn llm_function_meta<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Option<Arc<LlmBody>> {
+    let file = function.file(db);
+    let item_tree = file_item_tree(db, file);
+    let func = &item_tree[function.id(db)];
+
+    if !matches!(
+        &func.compiler_generated,
+        Some(item_tree::CompilerGenerated::LlmFunction)
+    ) {
+        return None;
+    }
+
+    // Go back to the CST to extract prompt template and client
+    let func_name = func.name.clone();
+    let tree = syntax_tree(db, file);
+    let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
+
+    source_file.items().find_map(|item| {
+        if let baml_compiler_syntax::ast::Item::Function(func_node) = item {
+            if func_node.name().as_ref().map(SyntaxToken::text) == Some(&func_name) {
+                if let Some(llm_body_node) = func_node.llm_body() {
+                    let client = llm_body_node
+                        .client_field()
+                        .and_then(|cf| cf.value())
+                        .map(|v| Name::new(&v));
+                    let prompt = llm_body_node
+                        .prompt_field()
+                        .and_then(|pf| pf.raw_string())
+                        .map(|raw_str| body::PromptTemplate::from_raw_string(&raw_str));
+
+                    if let (Some(client), Some(prompt)) = (client, prompt) {
+                        return Some(Arc::new(LlmBody { client, prompt }));
+                    }
+                }
+            }
+        }
+        None
     })
 }
 
@@ -1958,9 +2034,17 @@ fn lower_function(node: &SyntaxNode) -> Option<Function> {
     let func = FunctionDef::cast(node.clone())?;
     let name = func.name()?.text().into();
 
+    // Check if this is an LLM function (marker only — no metadata stored here
+    // to preserve ItemTree early cutoff on body changes)
+    let compiler_generated = if func.llm_body().is_some() {
+        Some(item_tree::CompilerGenerated::LlmFunction)
+    } else {
+        None
+    };
+
     Some(Function {
         name,
-        compiler_generated: None,
+        compiler_generated,
     })
 }
 

@@ -1,7 +1,33 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
+source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
-fn HelloWorld:
-  (LLM function - no MIR)
+fn HelloWorld(name: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // name // param
+    let _2: null
+    let _3: "HelloWorld"
+    let _4: map<string, unknown>
+    let _5: "name"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "HelloWorld";
+        _5 = const "name";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}
