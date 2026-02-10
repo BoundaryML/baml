@@ -75,7 +75,7 @@ pub(crate) fn lower_schema(
             resolves_to: convert_ty(tir_ty, type_aliases, recursive_aliases),
         })
         .collect();
-    type_alias_defs.sort_by_key(|alias| alias.name.clone());
+    type_alias_defs.sort_by(|a, b| a.name.cmp(&b.name));
 
     VirSchema {
         classes,
