@@ -734,8 +734,8 @@ fn match_in_loop() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_exhaustive_no_fallback() -> anyhow::Result<()> {
-    // Exhaustive match with catch-all (4 arms, dense)
+fn match_dense_with_catch_all() -> anyhow::Result<()> {
+    // Dense match with catch-all (4 explicit arms + wildcard)
     assert_vm_executes(Program {
         source: r#"
             function classify(n int) -> int {

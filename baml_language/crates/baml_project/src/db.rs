@@ -261,8 +261,9 @@ impl ProjectDatabase {
     /// compilation pipeline from the start.
     ///
     /// Builtin files use the normal `FileId` allocation just like user files.
-    /// They are registered in `file_id_to_path` for proper diagnostic filename
-    /// display, but NOT in `file_map` to avoid being included in `files()` iteration.
+    /// They are registered in both `file_id_to_path` (for diagnostic filename
+    /// display) and `file_map` (so builtins are included in `files()` iteration
+    /// and `check()` diagnostics).
     ///
     /// ## Note on goto-definition
     ///
