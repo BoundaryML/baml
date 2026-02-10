@@ -1,8 +1,7 @@
 //! Schema items for VIR.
 //!
 //! VIR schema captures classes, enums, functions, and type aliases with resolved
-//! types and propagated HIR attributes. Types are re-exported from `baml_type::defs`
-//! — the canonical definitions shared with `bex_program`.
+//! types and propagated HIR attributes. Types are re-exported from `baml_type::defs`.
 
 pub use baml_type::{
     ClassDef as VirClass, EnumDef as VirEnum, EnumVariantDef as VirEnumVariant,

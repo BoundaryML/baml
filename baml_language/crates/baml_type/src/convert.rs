@@ -153,7 +153,7 @@ pub fn convert_tir_ty(
     }
 }
 
-/// Sanitize a `baml_type::Ty` for runtime use in BexProgram.
+/// Sanitize a `baml_type::Ty` for runtime use.
 ///
 /// Converts compiler-only variants to safe runtime equivalents,
 /// matching the behavior of the old `convert_tir_ty_to_program_ty`.

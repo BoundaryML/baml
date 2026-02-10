@@ -27,8 +27,6 @@
 use std::path::Path;
 
 pub use baml_project::ProjectDatabase;
-// Re-export BexProgram for engine tests
-pub use bex_program::BexProgram;
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{ConstValue, ObjectIndex, Program as VmProgram};
 
@@ -89,53 +87,6 @@ pub fn compile_source(source: &str) -> VmProgram {
     let all_files = project.files(&db).clone();
     baml_compiler_emit::compile_files(&db, &all_files)
         .expect("compile_files should succeed for valid test source")
-}
-
-/// Compile BAML source code into a `BexProgram` with schema populated.
-///
-/// This function uses VIR schema to populate the `BexProgram` schema types
-/// for engine tests. Also checks for diagnostic errors.
-pub fn compile_source_with_schema(source: &str) -> BexProgram {
-    use std::collections::HashMap;
-
-    let db = setup_test_db(source);
-    assert_no_diagnostic_errors(&db);
-
-    let project = db.get_project().unwrap();
-    let all_files = project.files(&db).clone();
-
-    // Compile to bytecode
-    let bytecode = baml_compiler_emit::compile_files(&db, &all_files)
-        .expect("compile_files should succeed for valid test source");
-
-    // Get VIR schema
-    let schema = baml_compiler_vir::project_schema(&db, project);
-
-    // VIR schema and bex_program share the same types from baml_type — just clone.
-    let classes = schema
-        .classes
-        .iter()
-        .map(|c| (c.name.to_string(), c.clone()))
-        .collect();
-    let enums = schema
-        .enums
-        .iter()
-        .map(|e| (e.name.to_string(), e.clone()))
-        .collect();
-    let functions = schema
-        .functions
-        .iter()
-        .map(|f| (f.name.to_string(), f.clone()))
-        .collect();
-
-    BexProgram {
-        classes,
-        enums,
-        functions,
-        clients: HashMap::new(),
-        retry_policies: HashMap::new(),
-        bytecode,
-    }
 }
 
 //

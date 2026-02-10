@@ -33,7 +33,6 @@ baml_compiler_parser = { path = "crates/baml_compiler_parser" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_compiler_vir = { path = "crates/baml_compiler_vir" }
-bex_program = { path = "crates/bex_program" }
 bex_engine = { path = "crates/bex_engine" }
 sys_llm = { path = "crates/sys_llm" }
 sys_types = { path = "crates/sys_types" }

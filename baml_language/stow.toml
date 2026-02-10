@@ -53,8 +53,7 @@ baml_builtins = ["baml_builtins_macros"]
 baml_project = ["baml_db"]
 baml_type = ["baml_base", "baml_builtins"]
 bex_heap = ["bex_external_types"]
-bex_external_types = ["bex_program"]
-bex_program = ["bex_vm_types"]
+bex_external_types = ["bex_vm_types"]
 bex_vm_types = ["bex_resource_types"]
 
 # Global dependency rules (apply to ALL crate namespaces)
@@ -113,7 +112,7 @@ name = "bridge"
 # sys namespace configuration
 [[namespaces]]
 name = "sys"
-link_crates = ["baml_type",  "bex_heap", "bex_program", "bex_vm_types"]
+link_crates = ["baml_type",  "bex_heap", "bex_vm_types"]
 
 [[namespaces]]
 name = "surface"

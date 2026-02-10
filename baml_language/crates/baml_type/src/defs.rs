@@ -1,8 +1,7 @@
-//! Canonical schema-level type definitions shared by VIR and BexProgram.
+//! Canonical schema-level type definitions shared across the compiler pipeline.
 //!
 //! These types represent classes, enums, functions, and type aliases as they
-//! appear in the compiled schema. Both `baml_compiler_vir` (which produces them)
-//! and `bex_program` (which consumes them at runtime) re-export these types.
+//! appear in the compiled schema.
 
 use baml_base::Name;
 

@@ -749,7 +749,6 @@ dependencies = [
  "baml_project",
  "baml_type",
  "baml_workspace",
- "bex_program",
  "bex_vm",
  "bex_vm_types",
  "codspeed-divan-compat",
@@ -838,7 +837,6 @@ name = "bex_external_types"
 version = "0.0.0"
 dependencies = [
  "baml_type",
- "bex_program",
  "bex_resource_types",
  "bex_vm_types",
  "indexmap 2.13.0",
@@ -859,15 +857,6 @@ dependencies = [
  "indexmap 2.13.0",
  "sharded-slab",
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "bex_program"
-version = "0.0.0"
-dependencies = [
- "baml_base",
- "baml_type",
- "bex_vm_types",
 ]
 
 [[package]]
@@ -4572,7 +4561,6 @@ dependencies = [
  "baml_type",
  "bex_external_types",
  "bex_heap",
- "bex_program",
  "bex_vm_types",
  "indexmap 2.13.0",
  "minijinja",

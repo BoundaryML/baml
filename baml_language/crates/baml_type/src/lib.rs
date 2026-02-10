@@ -21,7 +21,7 @@ pub use defs::*;
 
 /// A lightweight name type for class/enum/type-alias references.
 ///
-/// Replaces both `QualifiedName` (VIR+) and plain `String` (bex_program).
+/// Replaces both `QualifiedName` (VIR+) and plain `String` keys.
 /// `display_name` is pre-computed from the source FQN and does NOT participate
 /// in equality/hashing — it's a cache for display purposes.
 #[derive(Debug, Clone)]
@@ -73,7 +73,7 @@ impl fmt::Display for TypeName {
 ///
 /// Contains both core runtime variants and compiler-only variants.
 /// Runtime code should use `unreachable!()` for compiler-only variants.
-/// `BexProgram::validate()` catches any compiler-only variants that leak to runtime.
+/// Runtime code should call `validate_runtime()` to catch any that leak.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
     // --- Core: used by all VIR+ stages ---
@@ -221,7 +221,7 @@ impl Ty {
     }
 
     /// Recursively walk this type tree and return an error if any compiler-only
-    /// variants are found. Used by `BexProgram::validate()`.
+    /// variants are found.
     pub fn validate_runtime(&self) -> Result<(), String> {
         match self {
             Ty::TypeAlias(tn) => Err(format!(
