@@ -8,7 +8,7 @@
     "dist"
   ],
   "scripts": {
-    "build:wasm": "wasm-pack build ../../baml_language/crates/baml_playground_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release",
+    "build:wasm": "wasm-pack build ../../baml_language/crates/bridge_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit"
   },
@@ -24,7 +24,7 @@
     "react-dom": "^18.3.1"
   },
   "dependencies": {
-    "@b/baml-playground-wasm": "link:wasm",
+    "@b/bridge_wasm": "link:wasm",
     "jotai": "^2.15.1"
   }
 }

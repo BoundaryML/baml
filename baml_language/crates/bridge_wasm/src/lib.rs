@@ -35,15 +35,17 @@
 mod error;
 mod registry;
 mod send_wrapper;
+mod state;
 mod wasm_http;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use bex_factory::BexFactory;
+use bex_factory::Bex;
 pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
+pub use state::BamlWasmState;
 use sys_types::SysOpsBuilder;
 use wasm_bindgen::prelude::*;
 
@@ -60,13 +62,21 @@ pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// Returns a test string for hot-reload testing (see app-vscode-webview hot-reload.hmr.test.ts).
+#[wasm_bindgen(js_name = hotReloadTestString)]
+pub fn hot_reload_test_string() -> String {
+    // BEGIN_VITE_HOT_RELOAD_TEST
+    "injected for hot reload test, see hot-reload.hmr.test.ts".to_string()
+    // END_VITE_HOT_RELOAD_TEST
+}
+
 /// A BAML runtime for WASM environments.
 ///
 /// Each instance compiles BAML source files and can execute functions.
 /// HTTP requests are performed via a JS callback provided at creation time.
 #[wasm_bindgen]
 pub struct BamlWasmRuntime {
-    factory: BexFactory,
+    bex: Arc<dyn Bex>,
 }
 
 #[wasm_bindgen]
@@ -107,11 +117,11 @@ impl BamlWasmRuntime {
             .with_http::<wasm_http::WasmHttp>()
             .build();
 
-        // Create the factory
-        let factory = BexFactory::new(root_path, &src_files, env_vars, sys_ops)
+        // Create the engine via factory
+        let bex = bex_factory::new(root_path, &src_files, env_vars, sys_ops)
             .map_err(|e| JsError::new(&format!("Failed to create runtime: {e}")))?;
 
-        Ok(BamlWasmRuntime { factory })
+        Ok(BamlWasmRuntime { bex })
     }
 
     /// Call a BAML function.
@@ -136,7 +146,7 @@ impl BamlWasmRuntime {
 
         // Look up function parameters to get parameter order
         let params = self
-            .factory
+            .bex
             .function_params(name)
             .ok_or_else(|| JsError::new(&format!("Function not found: {name}")))?;
 
@@ -152,9 +162,9 @@ impl BamlWasmRuntime {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // Call the function
-        let result = self
-            .factory
+        // Call the function (Bex trait)
+        let result: bex_factory::BexExternalValue = self
+            .bex
             .call_function(name, bex_args)
             .await
             .map_err(|e| JsError::new(&format!("Function call failed: {e}")))?;
@@ -177,8 +187,8 @@ impl BamlWasmRuntime {
     /// JSON array of parameter names, or `null` if function not found.
     #[wasm_bindgen(js_name = functionParams)]
     pub fn function_params(&self, name: &str) -> Option<String> {
-        let params = self.factory.function_params(name)?;
-        let names: Vec<&str> = params.iter().map(|(name, _)| *name).collect();
+        let params = self.bex.function_params(name)?;
+        let names: Vec<&str> = params.iter().map(|(n, _)| *n).collect();
         serde_json::to_string(&names).ok()
     }
 }

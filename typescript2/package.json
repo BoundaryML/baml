@@ -4,7 +4,7 @@
   "private": true,
   "description": "BAML Playground v2 - VSCode extension and web app",
   "scripts": {
-    "build:wasm": "wasm-pack build ../baml_language/crates/baml_playground_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release",
+    "build:wasm": "wasm-pack build ../baml_language/crates/bridge_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release --scope b",
     "dev:wasm": "npx nodemon --watch ../baml_language --ext rs,toml --exec \"pnpm build:wasm\"",
     "dev:webview": "pnpm --filter app-vscode-webview dev",
     "dev:vscode": "pnpm --filter app-vscode-ext dev",

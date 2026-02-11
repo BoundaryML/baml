@@ -742,6 +742,7 @@ dependencies = [
 name = "bex_factory"
 version = "0.0.0"
 dependencies = [
+ "async-trait",
  "baml_base",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
@@ -890,6 +891,7 @@ dependencies = [
 name = "bridge_wasm"
 version = "0.1.0"
 dependencies = [
+ "baml_project",
  "bex_factory",
  "bridge_ctypes",
  "console_error_panic_hook",

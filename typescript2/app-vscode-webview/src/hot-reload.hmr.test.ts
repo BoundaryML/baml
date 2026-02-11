@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 const projectRoot = dirname(fileURLToPath(import.meta.url)).replace('/src', '')
 const playgroundDir = resolve(projectRoot, '../pkg-playground')
 const wasmSourceDir = resolve(projectRoot, '../../baml_language')
-const hotReloadSourcePath = resolve(wasmSourceDir, 'crates/baml_playground_wasm/src/hot_reload_testdata.rs')
+const hotReloadSourcePath = resolve(wasmSourceDir, 'crates/bridge_wasm/src/lib.rs')
 
 // Test strings
 const KNOWN_GOOD_STRING = 'injected for hot reload test, see hot-reload.hmr.test.ts'

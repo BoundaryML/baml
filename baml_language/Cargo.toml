@@ -70,6 +70,7 @@ baml_workspace = { path = "crates/baml_workspace" }
 anyhow = { version = "1" }
 arboard = "3.4"
 ariadne = { version = "0.6" }
+async-trait = "0.1"
 askama = { version = "0.14.0" }
 axum = { version = "0.8.4", features = [ "ws" ] }
 cargo_metadata = { version = "0.23.1" }

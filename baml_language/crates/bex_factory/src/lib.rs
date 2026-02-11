@@ -1,104 +1,146 @@
 //! Reusable compile-and-run runtime for BAML programs.
 //!
-//! `BexFactory` wraps the compile + engine pipeline into an opaque facade
-//! that any consumer (CFFI, WASM, tests, CLI) can use without reimplementing
-//! the compile-and-run flow.
+//! Two traits define the API:
+//! - **`Bex`**: core run API (`call_function`, `function_params`). Implemented by `Arc<BexEngine>`.
+//! - **`BexIncrementalRuntime`**: holds DB, `add_source`/`set_source`, `function_names`, `engine_is_current`, plus `call_function`/`function_params`.
+//!
+//! Two public constructors:
+//! - [`new`] — compile source files and return `Arc<dyn Bex>`.
+//! - [`new_incremental`] — return a `BexIncrementalRuntime` (holds DB, `env`/`sys_ops` once).
 
 mod error;
+#[cfg(feature = "incremental")]
+mod incremental;
 
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
-use baml_base::FileId;
+use async_trait::async_trait;
 use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
 use baml_compiler_emit::LoweringError;
 use baml_project::ProjectDatabase;
-use bex_engine::BexEngine;
-pub use bex_engine::EngineError;
+pub use bex_engine::{BexEngine, EngineError};
 pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 use bex_heap::BexValue;
 pub use bex_heap::builtin_types;
 pub use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 pub use error::RuntimeError;
+#[cfg(feature = "incremental")]
+pub use incremental::{AddSourceResult, BexIncremental, BexIncrementalRuntime};
 pub use sys_types::SysOps;
 
-/// An opaque runtime that compiles BAML source files and executes functions.
-#[derive(Clone)]
-pub struct BexFactory {
-    engine: Arc<BexEngine>,
+// ---------------------------------------------------------------------------
+// Bex trait
+// ---------------------------------------------------------------------------
+
+/// Core runtime API: call functions and introspect parameters.
+///
+/// Implemented for `Arc<BexEngine>` (Send, for use from `bridge_cffi`/tokio).
+/// `BexIncrementalRuntime` has equivalent inherent methods for WASM/single-thread use.
+#[async_trait]
+pub trait Bex: Send + Sync {
+    /// Execute a function by name. Returns a fully owned value (no Handle variants).
+    async fn call_function(
+        &self,
+        function_name: &str,
+        args: Vec<BexExternalValue>,
+    ) -> Result<BexExternalValue, RuntimeError>;
+
+    /// Parameter names and types for a function (e.g. for CFFI kwargs reordering).
+    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>>;
 }
 
-impl BexFactory {
-    /// Compile source files and create an engine.
-    ///
-    /// # Arguments
-    /// * `root_path` - Root path for BAML files
-    /// * `src_files` - Map of filename to content
-    /// * `env_vars` - Environment variables
-    /// * `sys_ops` - System operations provider
-    pub fn new(
-        root_path: &str,
-        src_files: &HashMap<String, String>,
-        env_vars: HashMap<String, String>,
-        sys_ops: SysOps,
-    ) -> Result<Self, RuntimeError> {
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new(root_path));
-
-        for (filename, content) in src_files {
-            db.add_or_update_file(&PathBuf::from(filename), content);
-        }
-
-        let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
-            .map_err(|e| render_lowering_error(&db, &e))?;
-
-        let engine = BexEngine::new(bytecode, env_vars, sys_ops)?;
-
-        Ok(Self {
-            engine: Arc::new(engine),
-        })
-    }
-
-    /// Execute a function by name.
-    ///
-    /// Calls `BexEngine::call_function`, then converts the result to a fully
-    /// owned `BexExternalValue` with no heap references.
-    pub async fn call_function(
+#[async_trait]
+impl Bex for BexEngine {
+    async fn call_function(
         &self,
         function_name: &str,
         args: Vec<BexExternalValue>,
     ) -> Result<BexExternalValue, RuntimeError> {
-        let result = self.engine.call_function(function_name, args).await?;
-
-        // Ensure the returned value is fully owned (no Handle variants).
-        self.engine
-            .heap()
+        let result = BexEngine::call_function(self, function_name, args).await?;
+        self.heap()
             .with_gc_protection(|protected| {
                 BexValue::ExternalValue(&result).as_owned_but_very_slow(&protected)
             })
             .map_err(RuntimeError::from)
     }
 
-    /// Get parameter names and types for a function.
-    pub fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
-        self.engine.function_params(name)
+    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
+        BexEngine::function_params(self, name)
     }
+}
+
+#[async_trait]
+impl Bex for Arc<BexEngine> {
+    async fn call_function(
+        &self,
+        function_name: &str,
+        args: Vec<BexExternalValue>,
+    ) -> Result<BexExternalValue, RuntimeError> {
+        Bex::call_function(self.as_ref(), function_name, args).await
+    }
+
+    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
+        Bex::function_params(self.as_ref(), name)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Public constructors
+// ---------------------------------------------------------------------------
+
+/// Compile source files and create a Bex runtime. Returns [`Arc<dyn Bex>`] for use from any consumer.
+///
+/// # Arguments
+/// * `root_path` - Root path for BAML files
+/// * `src_files` - Map of filename to content
+/// * `env_vars` - Environment variables
+/// * `sys_ops` - System operations provider
+pub fn new(
+    root_path: &str,
+    src_files: &HashMap<String, String>,
+    env_vars: HashMap<String, String>,
+    sys_ops: SysOps,
+) -> Result<Arc<dyn Bex>, RuntimeError> {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(Path::new(root_path));
+
+    for (filename, content) in src_files {
+        db.add_or_update_file(&std::path::PathBuf::from(filename), content);
+    }
+
+    let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
+        .map_err(|e| render_lowering_error(&db, &e))?;
+
+    let engine = BexEngine::new(bytecode, env_vars, sys_ops)?;
+
+    Ok(Arc::new(engine))
+}
+
+/// Create an incremental runtime that holds the project DB.
+///
+/// Env and `sys_ops` are stored once. Use `add_source`/`set_source` to update the DB and swap the engine;
+/// on compile failure, diagnostics are returned and the engine is left unchanged.
+///
+/// Requires the `incremental` feature.
+#[cfg(feature = "incremental")]
+pub fn new_incremental(
+    root_path: &str,
+    env_vars: HashMap<String, String>,
+    sys_ops: SysOps,
+) -> Box<dyn BexIncremental> {
+    Box::new(BexIncrementalRuntime::new(root_path, env_vars, sys_ops))
 }
 
 // ---------------------------------------------------------------------------
 // Error rendering helpers
 // ---------------------------------------------------------------------------
 
-/// Render a `LoweringError` using the standard diagnostics infrastructure.
-fn render_lowering_error(db: &ProjectDatabase, error: &LoweringError) -> RuntimeError {
+pub(crate) fn render_lowering_error(db: &ProjectDatabase, error: &LoweringError) -> RuntimeError {
     let diagnostic = error.to_diagnostic();
 
     let source_files = db.get_source_files();
-    let mut sources: HashMap<FileId, String> = HashMap::new();
-    let mut file_paths: HashMap<FileId, PathBuf> = HashMap::new();
+    let mut sources = HashMap::new();
+    let mut file_paths = HashMap::new();
 
     for source_file in &source_files {
         let file_id = source_file.file_id(db);

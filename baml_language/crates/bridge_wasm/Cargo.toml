@@ -9,7 +9,8 @@ license.workspace = true
 crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
-bex_factory = { workspace = true }
+baml_project = { workspace = true }
+bex_factory = { workspace = true, features = [ "incremental" ] }
 bridge_ctypes = { workspace = true }
 sys_types = { workspace = true }
 console_error_panic_hook = { workspace = true, optional = true }

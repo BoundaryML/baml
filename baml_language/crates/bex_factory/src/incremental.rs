@@ -1,0 +1,194 @@
+//! Incremental Bex runtime: holds the project DB and can update source, swap engine, and return diagnostics.
+
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+use async_trait::async_trait;
+use baml_project::{ProjectDatabase, list_functions};
+use bex_engine::BexEngine;
+use bex_external_types::{BexExternalValue, Ty};
+
+use crate::{Bex, RuntimeError, SysOps, render_lowering_error};
+
+/// Result of `add_source` / `set_source`: whether the engine was updated and any diagnostics.
+#[derive(Debug, Clone)]
+pub struct AddSourceResult {
+    /// True if the project compiled and the engine was swapped.
+    pub engine_updated: bool,
+    /// Rendered diagnostic message(s). Empty on success.
+    pub diagnostics: String,
+}
+
+/// Trait for the incremental runtime API (DB, `add_source`, `set_source`, `function_names`, `engine_is_current`, `call_function`, `function_params`).
+///
+/// Implemented by [`BexIncrementalRuntime`]. Use [`crate::new_incremental`] to get a `Box<dyn BexIncremental>`.
+#[async_trait(?Send)]
+pub trait BexIncremental {
+    /// Add or update a source file. Recompiles and swaps the engine on success; returns diagnostics on failure.
+    fn add_source(&mut self, path: &str, content: &str) -> AddSourceResult;
+
+    /// Set the main file content (convenience for single-file). Path is "main.baml" under root.
+    fn set_source(&mut self, content: &str) -> AddSourceResult;
+
+    /// Names of all functions in the current project (from DB, no full compile).
+    fn function_names(&self) -> Vec<String>;
+
+    /// True iff the last `add_source`/`set_source` compiled successfully.
+    fn engine_is_current(&self) -> bool;
+
+    /// Call a BAML function (delegates to current engine).
+    async fn call_function(
+        &self,
+        function_name: &str,
+        args: Vec<BexExternalValue>,
+    ) -> Result<BexExternalValue, RuntimeError>;
+
+    /// Parameter names and types for a function.
+    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>>;
+}
+
+/// Incremental runtime: holds the DB, implements [`BexIncremental`].
+pub struct BexIncrementalRuntime {
+    db: ProjectDatabase,
+    root_path: PathBuf,
+    env_vars: HashMap<String, String>,
+    sys_ops: SysOps,
+    /// Current engine, if the last compile succeeded.
+    engine: Option<Arc<BexEngine>>,
+    /// True iff the last `add_source`/`set_source` compiled successfully (engine matches current DB).
+    engine_is_current: bool,
+}
+
+impl BexIncrementalRuntime {
+    pub fn new(root_path: &str, env_vars: HashMap<String, String>, sys_ops: SysOps) -> Self {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(Path::new(root_path));
+
+        Self {
+            db,
+            root_path: PathBuf::from(root_path),
+            env_vars,
+            sys_ops,
+            engine: None,
+            engine_is_current: false,
+        }
+    }
+
+    /// Add or update a source file. Recompiles and swaps the engine on success; returns diagnostics on failure.
+    pub fn add_source(&mut self, path: &str, content: &str) -> AddSourceResult {
+        let full_path = self.root_path.join(path);
+        self.db.add_or_update_file(&full_path, content);
+
+        match baml_compiler_emit::generate_project_bytecode(&self.db) {
+            Ok(bytecode) => {
+                match BexEngine::new(bytecode, self.env_vars.clone(), self.sys_ops.clone()) {
+                    Ok(engine) => {
+                        self.engine = Some(Arc::new(engine));
+                        self.engine_is_current = true;
+                        AddSourceResult {
+                            engine_updated: true,
+                            diagnostics: String::new(),
+                        }
+                    }
+                    Err(e) => {
+                        self.engine_is_current = false;
+                        AddSourceResult {
+                            engine_updated: false,
+                            diagnostics: format!("Engine error: {e}"),
+                        }
+                    }
+                }
+            }
+            Err(lowering_error) => {
+                self.engine_is_current = false;
+                let runtime_error = render_lowering_error(&self.db, &lowering_error);
+                let diagnostics = match &runtime_error {
+                    RuntimeError::Compilation { message } => message.clone(),
+                    _ => format!("{runtime_error}"),
+                };
+                AddSourceResult {
+                    engine_updated: false,
+                    diagnostics,
+                }
+            }
+        }
+    }
+
+    /// Set the main file content (convenience for single-file). Path is "main.baml" under root.
+    pub fn set_source(&mut self, content: &str) -> AddSourceResult {
+        self.add_source("main.baml", content)
+    }
+
+    /// Names of all functions in the current project (from DB, no full compile).
+    pub fn function_names(&self) -> Vec<String> {
+        let Some(project) = self.db.get_project() else {
+            return vec![];
+        };
+        list_functions(&self.db, project)
+            .into_iter()
+            .map(|s| s.name)
+            .collect()
+    }
+
+    /// True iff the last `add_source`/`set_source` compiled successfully.
+    pub fn engine_is_current(&self) -> bool {
+        self.engine_is_current
+    }
+
+    /// Call a BAML function (delegates to current engine).
+    pub async fn call_function(
+        &self,
+        function_name: &str,
+        args: Vec<BexExternalValue>,
+    ) -> Result<BexExternalValue, RuntimeError> {
+        let engine = self
+            .engine
+            .as_ref()
+            .ok_or_else(|| RuntimeError::Compilation {
+                message: "No engine: compile failed or no source yet. Fix errors and try again."
+                    .to_string(),
+            })?;
+        Bex::call_function(engine, function_name, args).await
+    }
+
+    /// Parameter names and types for a function.
+    pub fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
+        self.engine
+            .as_ref()
+            .and_then(|e| e.as_ref().function_params(name))
+    }
+}
+
+#[async_trait(?Send)]
+impl BexIncremental for BexIncrementalRuntime {
+    fn add_source(&mut self, path: &str, content: &str) -> AddSourceResult {
+        BexIncrementalRuntime::add_source(self, path, content)
+    }
+
+    fn set_source(&mut self, content: &str) -> AddSourceResult {
+        BexIncrementalRuntime::set_source(self, content)
+    }
+
+    fn function_names(&self) -> Vec<String> {
+        BexIncrementalRuntime::function_names(self)
+    }
+
+    fn engine_is_current(&self) -> bool {
+        BexIncrementalRuntime::engine_is_current(self)
+    }
+
+    async fn call_function(
+        &self,
+        function_name: &str,
+        args: Vec<BexExternalValue>,
+    ) -> Result<BexExternalValue, RuntimeError> {
+        BexIncrementalRuntime::call_function(self, function_name, args).await
+    }
+
+    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
+        BexIncrementalRuntime::function_params(self, name)
+    }
+}

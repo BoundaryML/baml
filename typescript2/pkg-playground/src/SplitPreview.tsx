@@ -1,6 +1,6 @@
 import type { ChangeEvent, CSSProperties, FC } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import initWasm, { BamlProject, version, hot_reload_test_string } from '@b/baml-playground-wasm';
+import initWasm, { BamlWasmState, version, hotReloadTestString } from '@b/bridge_wasm';
 import { usePlayground } from './PlaygroundProvider';
 
 const containerStyles: CSSProperties = {
@@ -65,7 +65,7 @@ const emptyFunctionsStyles: CSSProperties = {
 
 export const SplitPreview: FC = () => {
   const { code, setCode } = usePlayground();
-  const projectRef = useRef<BamlProject | null>(null);
+  const stateRef = useRef<BamlWasmState | null>(null);
   const latestCodeRef = useRef<string>(code);
   const [functionNames, setFunctionNames] = useState<string[]>([]);
   const [isReady, setReady] = useState<boolean>(false);
@@ -88,7 +88,7 @@ export const SplitPreview: FC = () => {
           console.error('Failed to get WASM version:', e);
         }
         try {
-          setHotReloadTestStr(hot_reload_test_string());
+          setHotReloadTestStr(hotReloadTestString());
         } catch (e) {
           console.error('Failed to get hot reload test string:', e);
         }
@@ -107,15 +107,14 @@ export const SplitPreview: FC = () => {
   useEffect(() => {
     latestCodeRef.current = code;
 
-    if (!isReady || !projectRef.current) {
+    if (!isReady || !stateRef.current) {
       return;
     }
 
-    projectRef.current.set_source(code);
+    stateRef.current.setSource(code);
 
-    // Get function names from the Salsa-backed query
     try {
-      const names = projectRef.current.function_names();
+      const names = stateRef.current.functionNames();
       setFunctionNames(names);
     } catch (e) {
       console.error('Failed to get function names:', e);
@@ -132,12 +131,12 @@ export const SplitPreview: FC = () => {
           return;
         }
 
-        const project = new BamlProject(latestCodeRef.current);
-        projectRef.current = project;
+        const state = new BamlWasmState();
+        state.setSource(latestCodeRef.current);
+        stateRef.current = state;
 
-        // Get initial function names
         try {
-          const names = project.function_names();
+          const names = state.functionNames();
           setFunctionNames(names);
         } catch (e) {
           console.error('Failed to get function names:', e);
@@ -155,8 +154,8 @@ export const SplitPreview: FC = () => {
 
     return () => {
       cancelled = true;
-      projectRef.current?.free();
-      projectRef.current = null;
+      stateRef.current?.free();
+      stateRef.current = null;
     };
   }, []);
 
