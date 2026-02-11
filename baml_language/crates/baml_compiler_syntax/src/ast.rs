@@ -696,6 +696,7 @@ ast_node!(MatchGuard, MATCH_GUARD);
 ast_node!(CatchExpr, CATCH_EXPR);
 ast_node!(CatchBlock, CATCH_BLOCK);
 ast_node!(CatchArm, CATCH_ARM);
+ast_node!(ThrowExpr, THROW_EXPR);
 
 // Implement accessor methods
 impl SourceFile {
@@ -2332,7 +2333,9 @@ impl BlockExpr {
                         | SyntaxKind::OBJECT_LITERAL
                         | SyntaxKind::MAP_LITERAL
                         | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL => Some(BlockElement::ExprNode(n)),
+                        | SyntaxKind::RAW_STRING_LITERAL
+                        | SyntaxKind::CATCH_EXPR
+                        | SyntaxKind::THROW_EXPR => Some(BlockElement::ExprNode(n)),
                         _ => None,
                     }
                 }
@@ -2605,6 +2608,21 @@ impl CatchBlock {
     /// Iterate over all catch arms.
     pub fn arms(&self) -> impl Iterator<Item = CatchArm> + '_ {
         self.syntax.children().filter_map(CatchArm::cast)
+    }
+
+    /// Check if this is a `catch_all` block (vs a `catch` block).
+    pub fn is_catch_all(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|t| t.kind() == SyntaxKind::KW_CATCH_ALL)
+    }
+}
+
+impl ThrowExpr {
+    /// Get the thrown expression.
+    pub fn expr(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
     }
 }
 

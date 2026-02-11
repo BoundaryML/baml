@@ -429,6 +429,11 @@ pub enum Expr {
         arms: Vec<CatchArmId>,
     },
 
+    /// Throw expression: `throw expr`
+    ///
+    /// Throws an exception. Has type `Never` (bottom type) since it diverges.
+    Throw { expr: ExprId },
+
     /// Missing/error expression
     Missing,
 }
@@ -672,7 +677,7 @@ impl FunctionBody {
             })
             .unwrap_or_default();
 
-        // Lower optional catch block
+        // Lower optional catch/catch_all block
         let catch_handler = func_node.catch_block().map(|catch_block| {
             let mut ctx = LoweringContext::new(file_id);
             let mut arm_ids = Vec::new();
@@ -681,9 +686,11 @@ impl FunctionBody {
                 let arm_id = ctx.alloc_catch_arm(arm_data, spans);
                 arm_ids.push(arm_id);
             }
-            // Note: the catch arms are stored in the ExprBody arena, but for
-            // function-level catch on LLM bodies we need a separate approach.
-            // For now, just collect the handler metadata.
+            // Desugar `catch` → `catch_all`: append wildcard rethrow arm
+            if !catch_block.is_catch_all() {
+                let span = ctx.span_from_node(catch_block.syntax());
+                ctx.append_wildcard_rethrow_arm(&mut arm_ids, span);
+            }
             CatchHandler { arms: arm_ids }
         });
 
@@ -1131,6 +1138,7 @@ impl LoweringContext {
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
             SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
+            SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
             SyntaxKind::BLOCK_EXPR => {
                 if let Some(block) = baml_compiler_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
@@ -1582,18 +1590,43 @@ impl LoweringContext {
         expr_id
     }
 
+    /// Lower a throw expression from CST to HIR.
+    ///
+    /// `THROW_EXPR` structure: `throw <expr>`
+    fn lower_throw_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        let span = self.span_from_node(node);
+        let inner = node
+            .children()
+            .next()
+            .map(|child| self.lower_expr(&child))
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
+        let expr_id = self.exprs.alloc(Expr::Throw { expr: inner });
+        self.source_map.insert_expr(expr_id, span);
+        expr_id
+    }
+
     /// Lower a catch expression from CST to HIR.
     ///
     /// `CATCH_EXPR` structure: `<expr> CATCH_BLOCK`
+    ///
+    /// If the keyword is `catch` (not `catch_all`), a wildcard rethrow arm
+    /// `e => throw e` is appended to desugar into exhaustive form.
     fn lower_catch_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
         use baml_compiler_syntax::SyntaxKind;
         let catch_span = self.span_from_node(node);
         let mut inner_expr = None;
         let mut arm_ids = Vec::new();
+        let mut is_catch_all = false;
 
         for child in node.children() {
             match child.kind() {
                 SyntaxKind::CATCH_BLOCK => {
+                    // Check if this is catch_all via the keyword token
+                    is_catch_all = child
+                        .children_with_tokens()
+                        .filter_map(rowan::NodeOrToken::into_token)
+                        .any(|t| t.kind() == SyntaxKind::KW_CATCH_ALL);
+
                     // Lower the catch block's arms
                     for arm_node in child.children() {
                         if arm_node.kind() == SyntaxKind::CATCH_ARM {
@@ -1612,6 +1645,11 @@ impl LoweringContext {
             }
         }
 
+        // Desugar `catch` → `catch_all`: append wildcard rethrow arm `e => throw e`
+        if !is_catch_all {
+            self.append_wildcard_rethrow_arm(&mut arm_ids, catch_span);
+        }
+
         let inner = inner_expr
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
 
@@ -1621,6 +1659,28 @@ impl LoweringContext {
         });
         self.source_map.insert_expr(expr_id, catch_span);
         expr_id
+    }
+
+    /// Append a synthetic wildcard rethrow arm: `_e => throw _e`
+    ///
+    /// Used to desugar `catch` into `catch_all` form.
+    fn append_wildcard_rethrow_arm(&mut self, arm_ids: &mut Vec<CatchArmId>, span: Span) {
+        let binding_name = self.gensym("e");
+        let pat_id = self.patterns.alloc(Pattern::Binding(binding_name.clone()));
+        self.source_map.insert_pattern(pat_id, span);
+        let var_expr = self.exprs.alloc(Expr::Path(vec![binding_name]));
+        self.source_map.insert_expr(var_expr, span);
+        let throw_expr = self.exprs.alloc(Expr::Throw { expr: var_expr });
+        self.source_map.insert_expr(throw_expr, span);
+        let arm = CatchHandlerArm {
+            pattern: pat_id,
+            body: throw_expr,
+        };
+        let spans = CatchArmSpans {
+            arm_span: span,
+            pattern_span: span,
+        };
+        arm_ids.push(self.alloc_catch_arm(arm, spans));
     }
 
     /// Lower a single catch arm from CST to HIR.

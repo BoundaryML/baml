@@ -32,6 +32,8 @@ pub enum SyntaxKind {
     KW_MATCH,
     KW_ASSERT,
     KW_CATCH,
+    KW_CATCH_ALL,
+    KW_THROW,
 
     // Other keywords
     KW_WATCH,
@@ -235,6 +237,7 @@ pub enum SyntaxKind {
     CATCH_EXPR,   // expression-level: `expr catch { arms... }`
     CATCH_BLOCK,  // the `catch { ... }` container (used in both forms)
     CATCH_ARM,    // one `pattern => body` arm
+    THROW_EXPR,   // throw expression: `throw expr`
     WHILE_STMT,
     FOR_EXPR,
     LET_STMT,

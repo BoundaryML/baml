@@ -2588,13 +2588,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
         Expr::Catch { expr, arms } => {
             // The type of a catch expression is the union of the caught expression's type
-            // and all arm body types
+            // and all arm body types (excluding Never, which is the type of `throw`)
             let expr_ty = infer_expr(ctx, *expr, body);
             let mut result_types = vec![expr_ty];
             for arm_id in arms {
                 let arm = &body.catch_arms[*arm_id];
                 let arm_ty = infer_expr(ctx, arm.body, body);
-                result_types.push(arm_ty);
+                if !arm_ty.is_never() {
+                    result_types.push(arm_ty);
+                }
             }
             // Deduplicate and flatten
             result_types.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
@@ -2604,6 +2606,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             } else {
                 Ty::Union(result_types)
             }
+        }
+
+        Expr::Throw { expr } => {
+            // Infer the thrown expression's type (for validation), but throw diverges
+            infer_expr(ctx, *expr, body);
+            Ty::NoReturn
         }
 
         Expr::Missing => Ty::Unknown,

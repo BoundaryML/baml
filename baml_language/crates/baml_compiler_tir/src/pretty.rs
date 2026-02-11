@@ -235,6 +235,7 @@ impl<'a> TreeRenderer<'a> {
             Expr::Catch { arms, .. } => {
                 format!("Catch({} arms): {}", arms.len(), ty)
             }
+            Expr::Throw { .. } => format!("Throw: {ty}"),
             Expr::Missing => format!("<missing>: {ty}"),
         }
     }
@@ -379,6 +380,9 @@ impl<'a> TreeRenderer<'a> {
                     self.render_expr(arm.body, body, result, true);
                     self.pop_continuation();
                 }
+            }
+            Expr::Throw { expr, .. } => {
+                self.render_expr(*expr, body, result, true);
             }
             Expr::Literal(_) | Expr::Path(_) | Expr::Missing => {
                 // Leaf nodes, no children
@@ -607,6 +611,7 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
         Expr::If { .. } => "if ... { ... }".to_string(),
         Expr::Match { arms, .. } => format!("match {{ {} arms }}", arms.len()),
         Expr::Catch { arms, .. } => format!("catch {{ {} arms }}", arms.len()),
+        Expr::Throw { expr } => format!("throw {}", expr_to_string(*expr, body)),
         Expr::Missing => "<missing>".to_string(),
     }
 }

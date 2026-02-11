@@ -93,6 +93,9 @@ pub enum Ty {
     Error,
     /// The void/unit type for functions that return nothing.
     Void,
+    /// Bottom type for diverging expressions (throw, unreachable).
+    /// NoReturn is a subtype of every type: `T | NoReturn = T`.
+    NoReturn,
 
     /// Opaque resource handle (file, socket, HTTP response body).
     Resource,
@@ -153,6 +156,10 @@ impl Ty {
         matches!(self, Ty::Void)
     }
 
+    pub fn is_never(&self) -> bool {
+        matches!(self, Ty::NoReturn)
+    }
+
     /// Check if this type is uninhabited (has no possible values).
     ///
     /// An empty match on an uninhabited type is actually correct and exhaustive—there are
@@ -172,7 +179,7 @@ impl Ty {
     pub fn is_uninhabited(&self) -> bool {
         match self {
             // Error recovery: don't emit additional errors when type inference failed
-            Ty::Unknown | Ty::Error => true,
+            Ty::Unknown | Ty::Error | Ty::NoReturn => true,
             // Empty union has no members, therefore no possible values
             Ty::Union(types) => types.is_empty(),
             // All other types are inhabited
@@ -272,6 +279,7 @@ impl fmt::Display for Ty {
             Ty::Unknown => write!(f, "unknown"),
             Ty::Error => write!(f, "error"),
             Ty::Void => write!(f, "void"),
+            Ty::NoReturn => write!(f, "no_return"),
             Ty::Resource => write!(f, "resource"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),

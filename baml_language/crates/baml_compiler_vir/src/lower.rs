@@ -560,6 +560,11 @@ impl<'a> LoweringContext<'a> {
                 // For now, catch is only represented in HIR/TIR.
                 todo!("catch expression lowering to VIR is not yet implemented")
             }
+
+            HirExpr::Throw { .. } => {
+                // TODO: Lower throw expressions to VIR once backend support is added.
+                todo!("throw expression lowering to VIR is not yet implemented")
+            }
         }
     }
 

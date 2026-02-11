@@ -52,6 +52,8 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Assert => SyntaxKind::KW_ASSERT,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
+        TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
+        TokenKind::Throw => SyntaxKind::KW_THROW,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -1926,8 +1928,8 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("function body".to_string());
             }
 
-            // Optional catch block after function body
-            if p.at(TokenKind::Catch) {
+            // Optional catch/catch_all block after function body
+            if p.at(TokenKind::Catch) || p.at(TokenKind::CatchAll) {
                 p.parse_catch_block();
             }
         });
@@ -2513,7 +2515,12 @@ impl<'a> Parser<'a> {
     /// Used after function bodies and as part of catch expressions.
     fn parse_catch_block(&mut self) {
         self.with_node(SyntaxKind::CATCH_BLOCK, |p| {
-            p.expect(TokenKind::Catch);
+            // Accept both `catch` and `catch_all` keywords
+            if p.at(TokenKind::CatchAll) {
+                p.bump();
+            } else {
+                p.expect(TokenKind::Catch);
+            }
             p.expect(TokenKind::LBrace);
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
@@ -2835,8 +2842,8 @@ impl<'a> Parser<'a> {
                 // Wrap everything from lhs_start in a BINARY_EXPR
                 self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
                 self.finish_node();
-            } else if op == TokenKind::Catch {
-                // catch is the loosest-binding postfix operator.
+            } else if op == TokenKind::Catch || op == TokenKind::CatchAll {
+                // catch/catch_all is the loosest-binding postfix operator.
                 // Effective left binding power = 1 (lower than all infix operators).
                 if 1 < min_bp {
                     break;
@@ -2936,8 +2943,9 @@ impl<'a> Parser<'a> {
 
     /// Parse prefix expression (primary or unary operator)
     fn parse_prefix(&mut self) {
-        // Check for unary operators
-        if self.at(TokenKind::Minus)
+        if self.at(TokenKind::Throw) {
+            self.parse_throw_expr();
+        } else if self.at(TokenKind::Minus)
             || self.at(TokenKind::Not)
             || self.at(TokenKind::Tilde)
             || self.at(TokenKind::PlusPlus)
@@ -2950,6 +2958,14 @@ impl<'a> Parser<'a> {
         } else {
             self.parse_primary_expr();
         }
+    }
+
+    /// Parse a throw expression: `throw expr`
+    fn parse_throw_expr(&mut self) {
+        self.with_node(SyntaxKind::THROW_EXPR, |p| {
+            p.expect(TokenKind::Throw);
+            p.parse_expr();
+        });
     }
 
     /// Parse primary expression (literals, identifiers, parentheses)

@@ -235,6 +235,10 @@ impl<'a> CodePrinter<'a> {
                 self.write_indent();
                 self.output.push('}');
             }
+            Expr::Throw { expr } => {
+                self.output.push_str("throw ");
+                self.print_expr(*expr);
+            }
         }
     }
 

@@ -137,11 +137,12 @@ pub fn convert_tir_ty(
             })
         }
 
-        // Unknown and Error are TIR-only error recovery types.
+        // Unknown, Error, and Never are TIR-only types.
         // All real type checking happens in TIR; by the time we convert to
         // baml_type, these just mean "no meaningful type" → map to Null.
         baml_compiler_tir::Ty::Unknown => Ok(Ty::Null),
         baml_compiler_tir::Ty::Error => Ok(Ty::Null),
+        baml_compiler_tir::Ty::NoReturn => Ok(Ty::Null),
         baml_compiler_tir::Ty::Void => Ok(Ty::Void),
         baml_compiler_tir::Ty::Resource => Ok(Ty::Resource),
         // BuiltinUnknown is preserved for VIR type checking at call sites.
