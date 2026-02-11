@@ -1,4 +1,4 @@
-//! Error types for bridge_wasm.
+//! Error types for `bridge_wasm`.
 
 use thiserror::Error;
 use wasm_bindgen::JsCast;
@@ -41,7 +41,7 @@ impl From<wasm_bindgen::JsValue> for BridgeError {
         } else if let Some(err) = e.dyn_ref::<js_sys::Error>() {
             String::from(err.message())
         } else {
-            format!("{:?}", e)
+            format!("{e:?}")
         };
         BridgeError::JsError(msg)
     }

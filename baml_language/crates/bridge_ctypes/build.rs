@@ -5,6 +5,7 @@ fn main() -> std::io::Result<()> {
     println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_object_methods.proto");
     println!("cargo:rerun-if-changed=build.rs");
 
+    #[allow(unsafe_code)]
     unsafe {
         std::env::set_var(
             "PROTOC",

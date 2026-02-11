@@ -860,18 +860,29 @@ name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
  "bex_factory",
+ "bridge_ctypes",
  "cbindgen",
  "futures",
  "indexmap",
  "libc",
  "once_cell",
  "prost",
- "prost-build",
- "protoc-bin-vendored",
  "serde_json",
  "sys_native",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "bridge_ctypes"
+version = "0.1.0"
+dependencies = [
+ "bex_factory",
+ "indexmap",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -881,12 +892,11 @@ dependencies = [
  "bex_factory",
  "bex_heap",
  "bex_resource_types",
+ "bridge_ctypes",
  "console_error_panic_hook",
  "indexmap",
  "js-sys",
  "prost",
- "prost-build",
- "protoc-bin-vendored",
  "serde_json",
  "sys_types",
  "thiserror 2.0.18",

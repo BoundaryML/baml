@@ -2,6 +2,7 @@
 
 use std::{ffi::CStr, panic::AssertUnwindSafe};
 
+use bridge_ctypes::{DecodeFromBuffer, kwargs_to_bex_values};
 use futures::future::FutureExt;
 use prost::Message;
 
@@ -10,7 +11,6 @@ use crate::{
     baml::cffi::{
         HostFunctionArguments, InvocationResponse, invocation_response::Response as CResponse,
     },
-    ctypes::{DecodeFromBuffer, kwargs_to_bex_values},
     engine::{get_runtime, get_tokio_runtime},
     error::BridgeError,
     ffi::callbacks::{send_error_to_callback, send_result_to_callback},

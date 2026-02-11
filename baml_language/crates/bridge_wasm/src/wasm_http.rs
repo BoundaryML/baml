@@ -88,7 +88,7 @@ impl SysOpHttp for WasmHttp {
                     let msg = if let Some(s) = e.as_string() {
                         s
                     } else {
-                        format!("{:?}", e)
+                        format!("{e:?}")
                     };
                     OpErrorKind::Other(format!("Failed to call fetch function: {msg}"))
                 })?;
@@ -104,7 +104,7 @@ impl SysOpHttp for WasmHttp {
                 } else if let Some(err) = e.dyn_ref::<js_sys::Error>() {
                     String::from(err.message())
                 } else {
-                    format!("{:?}", e)
+                    format!("{e:?}")
                 };
                 OpErrorKind::Other(format!("HTTP request failed: {msg}"))
             })?;
@@ -114,6 +114,7 @@ impl SysOpHttp for WasmHttp {
                 .dyn_into()
                 .map_err(|_| OpErrorKind::Other("Fetch response is not an object".into()))?;
 
+            #[allow(clippy::cast_possible_truncation)]
             let status = Reflect::get(&obj, &"status".into())
                 .map_err(|_| OpErrorKind::Other("Response missing 'status' field".into()))?
                 .as_f64()

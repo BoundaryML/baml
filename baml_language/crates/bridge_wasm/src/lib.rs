@@ -1,4 +1,4 @@
-//! bridge_wasm - WASM bindings for BAML using bex_engine.
+//! `bridge_wasm` - WASM bindings for BAML using `bex_engine`.
 //!
 //! This crate provides WebAssembly bindings for BAML, allowing it to run in
 //! browsers and Node.js. It uses the same protobuf protocol as `bridge_cffi`
@@ -32,7 +32,6 @@
 //! const result = await runtime.callFunction('Greet', argsProtoBytes);
 //! ```
 
-mod ctypes;
 mod error;
 mod registry;
 mod send_wrapper;
@@ -41,20 +40,12 @@ mod wasm_http;
 use std::collections::HashMap;
 
 use bex_factory::BexFactory;
+pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
 use sys_types::SysOpsBuilder;
 use wasm_bindgen::prelude::*;
-
-use crate::ctypes::{external_to_cffi_value, kwargs_to_bex_values};
-
-// Generated protobuf module
-pub mod baml {
-    pub mod cffi {
-        include!(concat!(env!("OUT_DIR"), "/baml.cffi.v1.rs"));
-    }
-}
 
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
 #[wasm_bindgen(start)]
@@ -63,7 +54,7 @@ pub fn start() {
     console_error_panic_hook::set_once();
 }
 
-/// Get the version of the bridge_wasm crate.
+/// Get the version of the `bridge_wasm` crate.
 #[wasm_bindgen]
 pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
@@ -101,15 +92,15 @@ impl BamlWasmRuntime {
     ) -> Result<BamlWasmRuntime, JsError> {
         // Initialize HTTP provider
         wasm_http::init_http_provider(fetch_fn)
-            .map_err(|e| JsError::new(&format!("Failed to init HTTP provider: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Failed to init HTTP provider: {e}")))?;
 
         // Parse source files
         let src_files: HashMap<String, String> = serde_json::from_str(src_files_json)
-            .map_err(|e| JsError::new(&format!("Failed to parse src_files_json: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Failed to parse src_files_json: {e}")))?;
 
         // Parse environment variables
         let env_vars: HashMap<String, String> = serde_json::from_str(env_vars_json)
-            .map_err(|e| JsError::new(&format!("Failed to parse env_vars_json: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Failed to parse env_vars_json: {e}")))?;
 
         // Build SysOps with WASM HTTP implementation
         let sys_ops = SysOpsBuilder::new()
@@ -118,7 +109,7 @@ impl BamlWasmRuntime {
 
         // Create the factory
         let factory = BexFactory::new(root_path, &src_files, env_vars, sys_ops)
-            .map_err(|e| JsError::new(&format!("Failed to create runtime: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Failed to create runtime: {e}")))?;
 
         Ok(BamlWasmRuntime { factory })
     }
@@ -137,17 +128,17 @@ impl BamlWasmRuntime {
     pub async fn call_function(&self, name: &str, args_proto: &[u8]) -> Result<Vec<u8>, JsError> {
         // Decode protobuf arguments
         let args = baml::cffi::HostFunctionArguments::decode(args_proto)
-            .map_err(|e| JsError::new(&format!("Failed to decode arguments: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Failed to decode arguments: {e}")))?;
 
         // Convert kwargs to BexExternalValue
         let kwargs = kwargs_to_bex_values(args.kwargs)
-            .map_err(|e| JsError::new(&format!("Failed to convert arguments: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
 
         // Look up function parameters to get parameter order
         let params = self
             .factory
             .function_params(name)
-            .ok_or_else(|| JsError::new(&format!("Function not found: {}", name)))?;
+            .ok_or_else(|| JsError::new(&format!("Function not found: {name}")))?;
 
         // Reorder kwargs to match function parameter declaration order
         let bex_args: Vec<bex_factory::BexExternalValue> = params
@@ -155,8 +146,7 @@ impl BamlWasmRuntime {
             .map(|(param_name, _param_type)| {
                 kwargs.get(*param_name).cloned().ok_or_else(|| {
                     JsError::new(&format!(
-                        "Missing argument '{}' for function '{}'",
-                        param_name, name
+                        "Missing argument '{param_name}' for function '{name}'"
                     ))
                 })
             })
@@ -167,11 +157,11 @@ impl BamlWasmRuntime {
             .factory
             .call_function(name, bex_args)
             .await
-            .map_err(|e| JsError::new(&format!("Function call failed: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Function call failed: {e}")))?;
 
         // Encode result as protobuf
         let cffi_value = external_to_cffi_value(&result)
-            .map_err(|e| JsError::new(&format!("Failed to encode result: {}", e)))?;
+            .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
 
         Ok(cffi_value.encode_to_vec())
     }

@@ -1,8 +1,9 @@
-//! SendFuture and SendWrapper for WASM async compatibility.
+//! `SendFuture` and `SendWrapper` for WASM async compatibility.
 //!
 //! `SysOpFn` requires `Send + Sync` and `OpFuture` requires `Send`. But
 //! `js_sys::Function` and `JsFuture` are `!Send`. On wasm32-unknown-unknown
 //! (single-threaded), this is safe to bypass.
+#![allow(unsafe_code)]
 
 use std::{
     future::Future,
@@ -44,7 +45,7 @@ unsafe impl<T> Send for SendWrapper<T> {}
 unsafe impl<T> Sync for SendWrapper<T> {}
 
 impl<T> SendWrapper<T> {
-    /// Create a new SendWrapper.
+    /// Create a new `SendWrapper`.
     pub(crate) fn new(value: T) -> Self {
         Self(value)
     }

@@ -5,6 +5,8 @@ use thiserror::Error;
 /// Errors that can occur during bridge operations.
 #[derive(Debug, Error)]
 pub enum BridgeError {
+    #[error(transparent)]
+    Ctypes(#[from] bridge_ctypes::CtypesError),
     #[error("Engine not initialized. Call create_baml_runtime first.")]
     NotInitialized,
 
@@ -17,23 +19,11 @@ pub enum BridgeError {
     #[error("{0}")]
     Runtime(#[from] bex_factory::RuntimeError),
 
-    #[error("Protobuf decode error: {0}")]
-    ProtobufDecode(#[from] prost::DecodeError),
-
-    #[error("Null buffer pointer")]
-    NullBuffer,
-
     #[error("Null function name pointer")]
     NullFunctionName,
 
     #[error("Invalid UTF-8 in function name: {0}")]
     InvalidFunctionName(#[from] std::str::Utf8Error),
-
-    #[error("Handle values not supported")]
-    HandleNotSupported,
-
-    #[error("Map entry missing key")]
-    MapEntryMissingKey,
 
     #[error("Function not found: {name}")]
     FunctionNotFound { name: String },

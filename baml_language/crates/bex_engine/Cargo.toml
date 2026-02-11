@@ -15,7 +15,6 @@ bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
-# tokio::sync works on WASM (pure sync primitives, no runtime needed)
 tokio = { workspace = true, features = [ "sync" ] }
 tracing = { workspace = true }
 

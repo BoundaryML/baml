@@ -6,32 +6,29 @@ authors.workspace = true
 license.workspace = true
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
 bex_factory = { workspace = true }
-bex_resource_types = { workspace = true }
-sys_types = { workspace = true }
 bex_heap = { workspace = true }
+bex_resource_types = { workspace = true }
+bridge_ctypes = { workspace = true }
+sys_types = { workspace = true }
+console_error_panic_hook = { workspace = true, optional = true }
 indexmap = { workspace = true }
+js-sys = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
-js-sys = { workspace = true }
-console_error_panic_hook = { workspace = true, optional = true }
-
-[build-dependencies]
-prost-build = { workspace = true }
-protoc-bin-vendored = { workspace = true }
 
 [dev-dependencies]
 wasm-bindgen-test = { workspace = true }
 
 [features]
-default = ["console_error_panic"]
-console_error_panic = ["console_error_panic_hook"]
+default = [ "console_error_panic" ]
+console_error_panic = [ "console_error_panic_hook" ]
 
 [lints]
 workspace = true

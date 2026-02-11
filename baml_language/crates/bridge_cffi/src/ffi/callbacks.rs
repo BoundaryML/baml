@@ -1,10 +1,9 @@
 //! Callback registration and invocation.
 
 use bex_factory::BexExternalValue;
+use bridge_ctypes::external_to_cffi_value;
 use once_cell::sync::OnceCell;
 use prost::Message;
-
-use crate::ctypes::external_to_cffi_value;
 
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 pub type OnTickCallbackFn = extern "C" fn(call_id: u32);

@@ -1,4 +1,4 @@
-//! BexExternalValue -> CffiValueHolder conversion.
+//! `BexExternalValue` -> `CffiValueHolder` conversion.
 
 use bex_factory::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 
@@ -11,13 +11,13 @@ use crate::{
         CffiValueList, CffiValueMap, CffiValueUnionVariant,
         cffi_field_type_holder::Type as FieldType, cffi_value_holder::Value as CffiValueVariant,
     },
-    error::BridgeError,
+    error::CtypesError,
 };
 
-/// Convert BexExternalValue to CffiValueHolder for FFI return.
-pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolder, BridgeError> {
+/// Convert `BexExternalValue` to `CffiValueHolder` for FFI return.
+pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolder, CtypesError> {
     let variant = match value {
-        &BexExternalValue::Handle(_) => return Err(BridgeError::HandleNotSupported),
+        &BexExternalValue::Handle(_) => return Err(CtypesError::HandleNotSupported),
         BexExternalValue::Null => None,
         BexExternalValue::Int(i) => Some(CffiValueVariant::IntValue(*i)),
         BexExternalValue::Float(f) => Some(CffiValueVariant::FloatValue(*f)),
@@ -27,7 +27,7 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
             items,
             element_type,
         } => {
-            let values: Result<Vec<CffiValueHolder>, BridgeError> =
+            let values: Result<Vec<CffiValueHolder>, CtypesError> =
                 items.iter().map(external_to_cffi_value).collect();
             Some(CffiValueVariant::ListValue(CffiValueList {
                 item_type: Some(ty_to_field_type(element_type)),
@@ -80,7 +80,6 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
             is_dynamic: false,
         })),
         BexExternalValue::Union { value, metadata } => {
-            // Unwrap the union and include variant info
             let inner = external_to_cffi_value(value)?;
             Some(CffiValueVariant::UnionVariantValue(Box::new(
                 CffiValueUnionVariant {
@@ -97,8 +96,6 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
             )))
         }
         BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
-            // Media is stored as a handle - return a placeholder string for now
-            // TODO: Properly serialize media content when needed
             let kind_str = match media.kind {
                 MediaKind::Image => "image",
                 MediaKind::Audio => "audio",
@@ -107,25 +104,17 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
                 MediaKind::Generic => "media",
             };
             Some(CffiValueVariant::StringValue(format!(
-                "[{}:handle]",
-                kind_str
+                "[{kind_str}:handle]"
             )))
         }
-        BexExternalValue::Resource(_handle) => {
-            // Resources cannot be serialized across FFI - return null
-            None
-        }
+        BexExternalValue::Resource(_handle) => None,
         BexExternalValue::Adt(BexExternalAdt::PromptAst(_))
-        | BexExternalValue::FunctionRef { .. } => {
-            // Internal types cannot be serialized across FFI - return null
-            None
-        }
+        | BexExternalValue::FunctionRef { .. } => None,
     };
 
     Ok(CffiValueHolder { value: variant })
 }
 
-/// Convert Ty to CffiFieldTypeHolder.
 fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
     let field_type = match ty {
         Ty::Null => Some(FieldType::NullType(CffiFieldTypeNull {})),
@@ -151,31 +140,21 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
         Ty::Enum(tn) => Some(FieldType::EnumType(crate::baml::cffi::CffiFieldTypeEnum {
             name: tn.display_name.to_string(),
         })),
-        Ty::Union(_) => {
-            // For union types, use the UnionVariantType
-            Some(FieldType::UnionVariantType(CffiFieldTypeUnionVariant {
-                name: None, // Could be set if we have a named union type
-            }))
-        }
+        Ty::Union(_) => Some(FieldType::UnionVariantType(CffiFieldTypeUnionVariant {
+            name: None,
+        })),
         Ty::Optional(inner) => Some(FieldType::OptionalType(Box::new(CffiFieldTypeOptional {
             value: Some(Box::new(ty_to_field_type(inner))),
         }))),
-        Ty::Media(_) | Ty::Literal(_) => {
-            // Fallback for unsupported types
-            Some(FieldType::AnyType(CffiFieldTypeAny {}))
-        }
-        // Runtime-only variants shouldn't appear in user-defined types
+        Ty::Media(_) | Ty::Literal(_) => Some(FieldType::AnyType(CffiFieldTypeAny {})),
         Ty::Resource | Ty::PromptAst => {
             unreachable!("runtime-only variant should not reach FFI type encoding")
         }
-        // Compiler-only variants should never reach FFI
         Ty::TypeAlias(_)
         | Ty::Function { .. }
         | Ty::Void
         | Ty::WatchAccessor(_)
-        | Ty::BuiltinUnknown => {
-            unreachable!("compiler-only variant should not reach FFI")
-        }
+        | Ty::BuiltinUnknown => unreachable!("compiler-only variant should not reach FFI"),
     };
 
     CffiFieldTypeHolder { r#type: field_type }

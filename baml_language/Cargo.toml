@@ -48,6 +48,7 @@ bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
+bridge_ctypes = { path = "crates/bridge_ctypes" }
 bridge_cffi = { path = "crates/bridge_cffi" }
 bridge_wasm = { path = "crates/bridge_wasm" }
 bex_resource_types = { path = "crates/bex_resource_types" }

@@ -12,6 +12,7 @@ crate-type = [ "cdylib" ]
 
 [dependencies]
 bex_factory = { workspace = true }
+bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
@@ -24,8 +25,6 @@ tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
 [build-dependencies]
 cbindgen = { workspace = true }
-prost-build = { workspace = true }
-protoc-bin-vendored = { workspace = true }
 
 [package.metadata.ci]
 wasm_support = false

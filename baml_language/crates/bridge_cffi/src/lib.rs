@@ -3,14 +3,13 @@
 //! This crate provides the same FFI interface as `engine/language_client_cffi/`
 //! but powered by `bex_engine` instead of `baml-runtime`.
 
-mod ctypes;
 mod engine;
 mod error;
 mod ffi;
 mod panic;
 
+pub use bridge_ctypes::baml;
 pub use error::BridgeError;
-// Re-export FFI functions
 pub use ffi::{
     callbacks::{CallbackFn, OnTickCallbackFn, register_callbacks},
     functions::{
@@ -20,13 +19,6 @@ pub use ffi::{
     objects::{call_object_constructor, call_object_method, free_buffer},
     runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
 };
-
-// Generated protobuf module
-pub mod baml {
-    pub mod cffi {
-        include!(concat!(env!("OUT_DIR"), "/baml.cffi.v1.rs"));
-    }
-}
 
 /// Buffer type for returning data across FFI boundary.
 /// Caller must free with `free_buffer()`.

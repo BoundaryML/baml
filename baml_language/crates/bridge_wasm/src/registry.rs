@@ -2,7 +2,7 @@
 //!
 //! In `sys_native`, response bodies live in a registry as `reqwest::Response`
 //! and are consumed lazily. For WASM, the JS side returns the full body eagerly.
-//! We store it in a simple HashMap keyed by handle ID.
+//! We store it in a simple `HashMap` keyed by handle ID.
 
 use std::{
     collections::HashMap,
