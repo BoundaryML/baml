@@ -562,59 +562,59 @@
 <path fill="none" stroke="#3e971a" stroke-width="1.5" stroke-dasharray="5,2" d="M1111.47,-974C1145.12,-974 1181.62,-974 1181.62,-974 1181.62,-974 1181.62,-813.98 1181.62,-813.98"/>
 <polygon fill="#3e971a" stroke="#3e971a" stroke-width="1.5" points="1184.08,-813.98 1181.63,-806.98 1179.18,-813.98 1184.08,-813.98"/>
 </g>
-<!-- bex_heap -->
+<!-- bex_factory -->
 <g id="node33" class="node">
+<title>bex_factory</title>
+<polygon fill="#d3e4cd" stroke="#3e971a" stroke-width="2" points="1209.75,-1650 1138.25,-1650 1138.25,-1614 1209.75,-1614 1209.75,-1650"/>
+<text xml:space="preserve" text-anchor="middle" x="1174" y="-1627.55" font-family="Helvetica,sans-Serif" font-size="11.00">bex_factory</text>
+</g>
+<!-- bex_factory&#45;&gt;baml_compiler_emit -->
+<g id="edge42" class="edge">
+<title>bex_factory&#45;&gt;baml_compiler_emit</title>
+<path fill="none" stroke="#3e971a" stroke-width="1.5" stroke-dasharray="5,2" d="M1210.59,-1626C1372.81,-1626 2019.17,-1626 2019.17,-1626 2019.17,-1626 2019.17,-1002.08 2019.17,-1002.08"/>
+<polygon fill="#3e971a" stroke="#3e971a" stroke-width="1.5" points="2021.62,-1002.08 2019.17,-995.08 2016.72,-1002.08 2021.62,-1002.08"/>
+</g>
+<!-- bex_factory&#45;&gt;baml_project -->
+<g id="edge43" class="edge">
+<title>bex_factory&#45;&gt;baml_project</title>
+<path fill="none" stroke="#3e971a" stroke-width="1.5" stroke-dasharray="5,2" d="M1210.56,-1638C1379.68,-1638 2078,-1638 2078,-1638 2078,-1638 2078,-1190.22 2078,-1190.22"/>
+<polygon fill="#3e971a" stroke="#3e971a" stroke-width="1.5" points="2080.45,-1190.22 2078,-1183.22 2075.55,-1190.22 2080.45,-1190.22"/>
+</g>
+<!-- bex_factory&#45;&gt;bex_engine -->
+<g id="edge44" class="edge">
+<title>bex_factory&#45;&gt;bex_engine</title>
+<path fill="none" stroke="#444444" d="M1174,-1613.43C1174,-1613.43 1174,-1565.37 1174,-1565.37"/>
+<polygon fill="#444444" stroke="#444444" points="1176.45,-1565.37 1174,-1558.37 1171.55,-1565.37 1176.45,-1565.37"/>
+</g>
+<!-- bex_factory&#45;&gt;proxy_bex_sys_types -->
+<g id="edge45" class="edge">
+<title>bex_factory&#45;&gt;proxy_bex_sys_types</title>
+<path fill="none" stroke="#3e971a" stroke-width="1.5" stroke-dasharray="5,2" d="M1137.26,-1626C1062.45,-1626 899.46,-1626 899.46,-1626 899.46,-1626 899.46,-1472.06 899.46,-1472.06"/>
+<polygon fill="#3e971a" stroke="#3e971a" stroke-width="1.5" points="901.91,-1472.06 899.46,-1465.06 897.01,-1472.06 901.91,-1472.06"/>
+</g>
+<!-- bex_heap -->
+<g id="node34" class="node">
 <title>bex_heap</title>
 <polygon fill="#d3e4cd" stroke="#3e971a" stroke-width="2" points="1129.62,-1086 1066.38,-1086 1066.38,-1050 1129.62,-1050 1129.62,-1086"/>
 <text xml:space="preserve" text-anchor="middle" x="1098" y="-1063.55" font-family="Helvetica,sans-Serif" font-size="11.00">bex_heap</text>
 </g>
 <!-- bex_heap&#45;&gt;bex_external_types -->
-<g id="edge43" class="edge">
+<g id="edge47" class="edge">
 <title>bex_heap&#45;&gt;bex_external_types</title>
 <path fill="none" stroke="#444444" d="M1088.44,-1049.43C1088.44,-1049.43 1088.44,-1001.37 1088.44,-1001.37"/>
 <polygon fill="#444444" stroke="#444444" points="1090.89,-1001.37 1088.44,-994.37 1085.99,-1001.37 1090.89,-1001.37"/>
 </g>
 <!-- bex_heap&#45;&gt;proxy_bex_baml_type -->
-<g id="edge42" class="edge">
+<g id="edge46" class="edge">
 <title>bex_heap&#45;&gt;proxy_bex_baml_type</title>
 <path fill="none" stroke="#3e971a" stroke-width="1.5" stroke-dasharray="5,2" d="M1120.06,-1049.06C1120.06,-985.83 1120.06,-786 1120.06,-786 1120.06,-786 1154.21,-786 1154.21,-786"/>
 <polygon fill="#3e971a" stroke="#3e971a" stroke-width="1.5" points="1154.21,-788.45 1161.21,-786 1154.21,-783.55 1154.21,-788.45"/>
 </g>
 <!-- bex_resource_types -->
-<g id="node34" class="node">
+<g id="node35" class="node">
 <title>bex_resource_types</title>
 <polygon fill="#d09fdf" stroke="#3e971a" stroke-width="2" points="990.38,-804 877.62,-804 877.62,-768 990.38,-768 990.38,-804"/>
 <text xml:space="preserve" text-anchor="middle" x="934" y="-781.55" font-family="Helvetica,sans-Serif" font-size="11.00">bex_resource_types</text>
-</g>
-<!-- bex_runtime -->
-<g id="node35" class="node">
-<title>bex_runtime</title>
-<polygon fill="#d3e4cd" stroke="#3e971a" stroke-width="2" points="1211.62,-1650 1136.38,-1650 1136.38,-1614 1211.62,-1614 1211.62,-1650"/>
-<text xml:space="preserve" text-anchor="middle" x="1174" y="-1627.55" font-family="Helvetica,sans-Serif" font-size="11.00">bex_runtime</text>
-</g>
-<!-- bex_runtime&#45;&gt;baml_compiler_emit -->
-<g id="edge44" class="edge">
-<title>bex_runtime&#45;&gt;baml_compiler_emit</title>
-<path fill="none" stroke="#3e971a" stroke-width="1.5" stroke-dasharray="5,2" d="M1212.51,-1626C1377.85,-1626 2019.17,-1626 2019.17,-1626 2019.17,-1626 2019.17,-1002.08 2019.17,-1002.08"/>
-<polygon fill="#3e971a" stroke="#3e971a" stroke-width="1.5" points="2021.62,-1002.08 2019.17,-995.08 2016.72,-1002.08 2021.62,-1002.08"/>
-</g>
-<!-- bex_runtime&#45;&gt;baml_project -->
-<g id="edge45" class="edge">
-<title>bex_runtime&#45;&gt;baml_project</title>
-<path fill="none" stroke="#3e971a" stroke-width="1.5" stroke-dasharray="5,2" d="M1212.55,-1638C1385.1,-1638 2078,-1638 2078,-1638 2078,-1638 2078,-1190.22 2078,-1190.22"/>
-<polygon fill="#3e971a" stroke="#3e971a" stroke-width="1.5" points="2080.45,-1190.22 2078,-1183.22 2075.55,-1190.22 2080.45,-1190.22"/>
-</g>
-<!-- bex_runtime&#45;&gt;bex_engine -->
-<g id="edge46" class="edge">
-<title>bex_runtime&#45;&gt;bex_engine</title>
-<path fill="none" stroke="#444444" d="M1174,-1613.43C1174,-1613.43 1174,-1565.37 1174,-1565.37"/>
-<polygon fill="#444444" stroke="#444444" points="1176.45,-1565.37 1174,-1558.37 1171.55,-1565.37 1176.45,-1565.37"/>
-</g>
-<!-- bex_runtime&#45;&gt;proxy_bex_sys_types -->
-<g id="edge47" class="edge">
-<title>bex_runtime&#45;&gt;proxy_bex_sys_types</title>
-<path fill="none" stroke="#3e971a" stroke-width="1.5" stroke-dasharray="5,2" d="M1135.54,-1626C1059.98,-1626 899.46,-1626 899.46,-1626 899.46,-1626 899.46,-1472.06 899.46,-1472.06"/>
-<polygon fill="#3e971a" stroke="#3e971a" stroke-width="1.5" points="901.91,-1472.06 899.46,-1465.06 897.01,-1472.06 901.91,-1472.06"/>
 </g>
 <!-- bex_vm&#45;&gt;bex_heap -->
 <g id="edge49" class="edge">
@@ -664,11 +664,11 @@
 <polygon fill="#cde4da" stroke="#1a9762" stroke-width="2" points="349.75,-1744 284.25,-1744 284.25,-1708 349.75,-1708 349.75,-1744"/>
 <text xml:space="preserve" text-anchor="middle" x="317" y="-1721.55" font-family="Helvetica,sans-Serif" font-size="11.00">bridge_cffi</text>
 </g>
-<!-- bridge_cffi&#45;&gt;bex_runtime -->
+<!-- bridge_cffi&#45;&gt;bex_factory -->
 <g id="edge52" class="edge">
-<title>bridge_cffi&#45;&gt;bex_runtime</title>
-<path fill="none" stroke="#1a9762" stroke-width="1.5" stroke-dasharray="5,2" d="M350.73,-1726C390.74,-1726 452.06,-1726 452.06,-1726 452.06,-1726 452.06,-1638 452.06,-1638 452.06,-1638 1126.17,-1638 1126.17,-1638"/>
-<polygon fill="#1a9762" stroke="#1a9762" stroke-width="1.5" points="1126.17,-1640.45 1133.17,-1638 1126.17,-1635.55 1126.17,-1640.45"/>
+<title>bridge_cffi&#45;&gt;bex_factory</title>
+<path fill="none" stroke="#1a9762" stroke-width="1.5" stroke-dasharray="5,2" d="M350.73,-1726C390.74,-1726 452.06,-1726 452.06,-1726 452.06,-1726 452.06,-1638 452.06,-1638 452.06,-1638 1128.43,-1638 1128.43,-1638"/>
+<polygon fill="#1a9762" stroke="#1a9762" stroke-width="1.5" points="1128.43,-1640.45 1135.43,-1638 1128.43,-1635.55 1128.43,-1640.45"/>
 </g>
 <!-- bridge_serde_json -->
 <g id="node42" class="node">
@@ -869,8 +869,8 @@
 <!-- proxy_sys_bex_heap&#45;&gt;bex_heap -->
 <g id="edge90" class="edge">
 <title>proxy_sys_bex_heap&#45;&gt;bex_heap</title>
-<path fill="none" stroke="#3e1a97" stroke-width="1.5" stroke-dasharray="5,2" d="M359,-1143.43C359,-1116.03 359,-1068 359,-1068 359,-1068 1056.5,-1068 1056.5,-1068"/>
-<polygon fill="#3e1a97" stroke="#3e1a97" stroke-width="1.5" points="1056.5,-1070.45 1063.5,-1068 1056.5,-1065.55 1056.5,-1070.45"/>
+<path fill="none" stroke="#3e1a97" stroke-width="1.5" stroke-dasharray="5,2" d="M391.23,-1162C533.47,-1162 1098,-1162 1098,-1162 1098,-1162 1098,-1095.84 1098,-1095.84"/>
+<polygon fill="#3e1a97" stroke="#3e1a97" stroke-width="1.5" points="1100.45,-1095.84 1098,-1088.84 1095.55,-1095.84 1100.45,-1095.84"/>
 </g>
 <!-- cargo_stow -->
 <g id="node56" class="node">
@@ -1006,19 +1006,19 @@
 <polygon fill="#3e971a" stroke="#3e971a" points="1091.54,-1538.00 1096.54,-1534.50 1096.54,-1541.50"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="1026.48,-1538.00 1031.48,-1534.50 1031.48,-1541.50"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="1181.62,-891.49 1185.12,-896.49 1178.12,-896.49"/>
-<polygon fill="#3e971a" stroke="#3e971a" points="1120.06,-993.95 1123.56,-998.95 1116.56,-998.95"/>
-<polygon fill="#3e971a" stroke="#3e971a" points="1120.06,-915.03 1123.56,-920.03 1116.56,-920.03"/>
-<polygon fill="#3e971a" stroke="#3e971a" points="1376.34,-1626.00 1371.34,-1629.50 1371.34,-1622.50"/>
-<polygon fill="#3e971a" stroke="#3e971a" points="1618.34,-1626.00 1613.34,-1629.50 1613.34,-1622.50"/>
+<polygon fill="#3e971a" stroke="#3e971a" points="1374.81,-1626.00 1369.81,-1629.50 1369.81,-1622.50"/>
+<polygon fill="#3e971a" stroke="#3e971a" points="1617.38,-1626.00 1612.38,-1629.50 1612.38,-1622.50"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="2019.17,-1498.72 2022.67,-1503.72 2015.67,-1503.72"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="2019.17,-1311.54 2022.67,-1316.54 2015.67,-1316.54"/>
-<polygon fill="#3e971a" stroke="#3e971a" points="1388.14,-1638.00 1383.14,-1641.50 1383.14,-1634.50"/>
-<polygon fill="#3e971a" stroke="#3e971a" points="1647.78,-1638.00 1642.78,-1641.50 1642.78,-1634.50"/>
+<polygon fill="#3e971a" stroke="#3e971a" points="1386.55,-1638.00 1381.55,-1641.50 1381.55,-1634.50"/>
+<polygon fill="#3e971a" stroke="#3e971a" points="1646.78,-1638.00 1641.78,-1641.50 1641.78,-1634.50"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="2078.00,-1545.94 2081.50,-1550.94 2074.50,-1550.94"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="2078.00,-1411.61 2081.50,-1416.61 2074.50,-1416.61"/>
-<polygon fill="#3e971a" stroke="#3e971a" points="1085.82,-1626.00 1090.82,-1622.50 1090.82,-1629.50"/>
-<polygon fill="#3e971a" stroke="#3e971a" points="1015.00,-1626.00 1020.00,-1622.50 1020.00,-1629.50"/>
+<polygon fill="#3e971a" stroke="#3e971a" points="1087.20,-1626.00 1092.20,-1622.50 1092.20,-1629.50"/>
+<polygon fill="#3e971a" stroke="#3e971a" points="1015.86,-1626.00 1020.86,-1622.50 1020.86,-1629.50"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="899.46,-1546.53 902.96,-1551.53 895.96,-1551.53"/>
+<polygon fill="#3e971a" stroke="#3e971a" points="1120.06,-993.95 1123.56,-998.95 1116.56,-998.95"/>
+<polygon fill="#3e971a" stroke="#3e971a" points="1120.06,-915.03 1123.56,-920.03 1116.56,-920.03"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="1190.31,-1074.78 1193.81,-1079.78 1186.81,-1079.78"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="1190.31,-976.04 1193.81,-981.04 1186.81,-981.04"/>
 <polygon fill="#3e971a" stroke="#3e971a" points="1114.64,-874.00 1109.64,-877.50 1109.64,-870.50"/>
@@ -1027,8 +1027,8 @@
 <polygon fill="#3e971a" stroke="#3e971a" points="607.08,-1456.00 612.08,-1452.50 612.08,-1459.50"/>
 <polygon fill="#1a9762" stroke="#1a9762" points="403.89,-1726.00 398.89,-1729.50 398.89,-1722.50"/>
 <polygon fill="#1a9762" stroke="#1a9762" points="452.06,-1679.50 455.56,-1684.50 448.56,-1684.50"/>
-<polygon fill="#1a9762" stroke="#1a9762" points="589.38,-1638.00 584.38,-1641.50 584.38,-1634.50"/>
-<polygon fill="#1a9762" stroke="#1a9762" points="791.62,-1638.00 786.62,-1641.50 786.62,-1634.50"/>
+<polygon fill="#1a9762" stroke="#1a9762" points="589.83,-1638.00 584.83,-1641.50 584.83,-1634.50"/>
+<polygon fill="#1a9762" stroke="#1a9762" points="792.75,-1638.00 787.75,-1641.50 787.75,-1634.50"/>
 <polygon fill="#1a9762" stroke="#1a9762" points="324.47,-1653.12 327.97,-1658.12 320.97,-1658.12"/>
 <polygon fill="#1a9762" stroke="#1a9762" points="324.47,-1576.01 327.97,-1581.01 320.97,-1581.01"/>
 <polygon fill="#1a9762" stroke="#1a9762" points="243.38,-1450.00 248.38,-1446.50 248.38,-1453.50"/>
@@ -1057,8 +1057,8 @@
 <polygon fill="#3e1a97" stroke="#3e1a97" points="49.00,-915.14 52.50,-920.14 45.50,-920.14"/>
 <polygon fill="#3e1a97" stroke="#3e1a97" points="314.73,-692.00 309.73,-695.50 309.73,-688.50"/>
 <polygon fill="#3e1a97" stroke="#3e1a97" points="709.57,-692.00 704.57,-695.50 704.57,-688.50"/>
-<polygon fill="#3e1a97" stroke="#3e1a97" points="501.00,-1068.00 496.00,-1071.50 496.00,-1064.50"/>
-<polygon fill="#3e1a97" stroke="#3e1a97" points="710.25,-1068.00 705.25,-1071.50 705.25,-1064.50"/>
+<polygon fill="#3e1a97" stroke="#3e1a97" points="535.08,-1162.00 530.08,-1165.50 530.08,-1158.50"/>
+<polygon fill="#3e1a97" stroke="#3e1a97" points="747.12,-1162.00 742.12,-1165.50 742.12,-1158.50"/>
 <polygon fill="#971a85" stroke="#971a85" points="964.84,-1359.00 959.84,-1362.50 959.84,-1355.50"/>
 <polygon fill="#971a85" stroke="#971a85" points="1126.71,-1359.00 1121.71,-1362.50 1121.71,-1355.50"/>
 <polygon fill="#971a85" stroke="#971a85" points="917.74,-1350.00 912.74,-1353.50 912.74,-1346.50"/>

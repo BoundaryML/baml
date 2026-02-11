@@ -1,6 +1,6 @@
 //! BexExternalValue -> CffiValueHolder conversion.
 
-use bex_runtime::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
+use bex_factory::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 
 use crate::{
     baml::cffi::{

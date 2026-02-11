@@ -11,7 +11,7 @@ name = "baml_cffi"
 crate-type = [ "cdylib" ]
 
 [dependencies]
-bex_runtime = { workspace = true }
+bex_factory = { workspace = true }
 sys_native = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }

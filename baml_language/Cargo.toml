@@ -50,7 +50,7 @@ bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 bridge_cffi = { path = "crates/bridge_cffi" }
 bex_resource_types = { path = "crates/bex_resource_types" }
-bex_runtime = { path = "crates/bex_runtime" }
+bex_factory = { path = "crates/bex_factory" }
 
 # External dependency for sys_llm jinja module
 minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "main", default-features = false, features = [

@@ -1,4 +1,4 @@
-//! Error types for `bex_runtime`.
+//! Error types for `bex_factory`.
 
 use thiserror::Error;
 

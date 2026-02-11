@@ -1,6 +1,6 @@
 //! Reusable compile-and-run runtime for BAML programs.
 //!
-//! `BexRuntime` wraps the compile + engine pipeline into an opaque facade
+//! `BexFactory` wraps the compile + engine pipeline into an opaque facade
 //! that any consumer (CFFI, WASM, tests, CLI) can use without reimplementing
 //! the compile-and-run flow.
 
@@ -24,11 +24,11 @@ pub use sys_types::SysOps;
 
 /// An opaque runtime that compiles BAML source files and executes functions.
 #[derive(Clone)]
-pub struct BexRuntime {
+pub struct BexFactory {
     engine: Arc<BexEngine>,
 }
 
-impl BexRuntime {
+impl BexFactory {
     /// Compile source files and create an engine.
     ///
     /// # Arguments

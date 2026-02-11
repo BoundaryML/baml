@@ -1,16 +1,16 @@
-//! Global BexRuntime management.
+//! Global BexFactory management.
 
 use std::{collections::HashMap, sync::RwLock};
 
-use bex_runtime::BexRuntime;
+use bex_factory::BexFactory;
 use once_cell::sync::OnceCell;
 use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
 
 use crate::error::BridgeError;
 
-/// Global BexRuntime instance. Uses RwLock to allow replacing the runtime.
-static RUNTIME_INSTANCE: RwLock<Option<BexRuntime>> = RwLock::new(None);
+/// Global BexFactory instance. Uses RwLock to allow replacing the runtime.
+static RUNTIME_INSTANCE: RwLock<Option<BexFactory>> = RwLock::new(None);
 
 /// Global Tokio runtime for async execution.
 static TOKIO_RUNTIME: OnceCell<std::sync::Arc<Runtime>> = OnceCell::new();
@@ -22,8 +22,8 @@ pub fn get_tokio_runtime() -> &'static std::sync::Arc<Runtime> {
     })
 }
 
-/// Get a clone of the global BexRuntime, or error if not initialized.
-pub fn get_runtime() -> Result<BexRuntime, BridgeError> {
+/// Get a clone of the global BexFactory, or error if not initialized.
+pub fn get_runtime() -> Result<BexFactory, BridgeError> {
     RUNTIME_INSTANCE
         .read()
         .map_err(|_| BridgeError::LockPoisoned)?
@@ -31,7 +31,7 @@ pub fn get_runtime() -> Result<BexRuntime, BridgeError> {
         .ok_or(BridgeError::NotInitialized)
 }
 
-/// Initialize the global BexRuntime from BAML source files.
+/// Initialize the global BexFactory from BAML source files.
 ///
 /// If a runtime is already initialized, it will be replaced with the new one.
 ///
@@ -44,11 +44,11 @@ pub fn initialize_runtime(
     src_files: HashMap<String, String>,
     env_vars: HashMap<String, String>,
 ) -> Result<(), BridgeError> {
-    let rt = BexRuntime::new(
+    let rt = BexFactory::new(
         root_path,
         &src_files,
         env_vars,
-        bex_runtime::SysOps::native(),
+        bex_factory::SysOps::native(),
     )?;
 
     let mut guard = RUNTIME_INSTANCE

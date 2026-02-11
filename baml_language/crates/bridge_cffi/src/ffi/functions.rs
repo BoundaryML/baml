@@ -94,7 +94,7 @@ fn call_function_inner(
     // Reorder kwargs to match function parameter declaration order.
     // This ensures arguments are passed correctly even if the client sends
     // them in a different order than the function expects.
-    let bex_args: Vec<bex_runtime::BexExternalValue> = params
+    let bex_args: Vec<bex_factory::BexExternalValue> = params
         .iter()
         .map(|(param_name, _param_type)| {
             kwargs

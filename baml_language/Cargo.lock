@@ -737,6 +737,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bex_factory"
+version = "0.0.0"
+dependencies = [
+ "baml_compiler_emit",
+ "baml_project",
+ "bex_engine",
+ "bex_external_types",
+ "bex_heap",
+ "sys_types",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "bex_heap"
 version = "0.0.0"
 dependencies = [
@@ -753,19 +766,6 @@ dependencies = [
 [[package]]
 name = "bex_resource_types"
 version = "0.0.0"
-
-[[package]]
-name = "bex_runtime"
-version = "0.0.0"
-dependencies = [
- "baml_compiler_emit",
- "baml_project",
- "bex_engine",
- "bex_external_types",
- "bex_heap",
- "sys_types",
- "thiserror 2.0.18",
-]
 
 [[package]]
 name = "bex_vm"
@@ -855,7 +855,7 @@ checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
- "bex_runtime",
+ "bex_factory",
  "cbindgen",
  "futures",
  "indexmap",

@@ -15,7 +15,7 @@ pub enum BridgeError {
     LockPoisoned,
 
     #[error("{0}")]
-    Runtime(#[from] bex_runtime::RuntimeError),
+    Runtime(#[from] bex_factory::RuntimeError),
 
     #[error("Protobuf decode error: {0}")]
     ProtobufDecode(#[from] prost::DecodeError),
