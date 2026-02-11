@@ -202,8 +202,6 @@ mod common;
 /// 3. Verifies the call succeeds (`PromptAst` is an internal type, can't return it directly)
 #[tokio::test]
 async fn test_render_prompt_e2e() {
-    use std::collections::HashMap;
-
     use bex_engine::{BexEngine, BexExternalValue};
     use sys_native::SysOpsExt;
 
@@ -235,8 +233,8 @@ function test_render() -> int {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine.call_function("test_render", vec![]).await;
 
@@ -256,8 +254,6 @@ function test_render() -> int {
 /// containing the expected rendered content.
 #[tokio::test]
 async fn test_render_prompt_returns_prompt_ast() {
-    use std::collections::HashMap;
-
     use bex_engine::{BexEngine, BexExternalValue};
     use sys_native::SysOpsExt;
 
@@ -285,8 +281,8 @@ function get_prompt() -> PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine.call_function("get_prompt", vec![]).await;
 
@@ -323,8 +319,6 @@ function get_prompt() -> PromptAst {
 /// and the underlying `LlmBuildRequest` `SysOp` is implemented.
 #[tokio::test]
 async fn test_build_request_returns() {
-    use std::collections::HashMap;
-
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -351,8 +345,8 @@ function test_build_request() -> int {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine.call_function("test_build_request", vec![]).await;
     assert!(result.is_ok(), "build_request should succeed: {result:?}");
@@ -360,8 +354,6 @@ function test_build_request() -> int {
 
 #[tokio::test]
 async fn test_call_llm_function_string() {
-    use std::collections::HashMap;
-
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -387,8 +379,8 @@ function test_call_llm() -> unknown {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
@@ -427,8 +419,6 @@ function test_call_llm() -> unknown {
 
 #[tokio::test]
 async fn test_direct_llm_call() {
-    use std::collections::HashMap;
-
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -453,8 +443,8 @@ function test_call_llm() -> string {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
@@ -493,8 +483,6 @@ function test_call_llm() -> string {
 
 #[tokio::test]
 async fn test_call_llm_function_non_string_returns_error() {
-    use std::collections::HashMap;
-
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -520,8 +508,8 @@ function test_call_llm() -> unknown {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
@@ -572,8 +560,6 @@ fn prompt_ast_string(s: &str) -> BexExternalValue {
 /// Test that a `template_string` is expanded as a Jinja macro in `render_prompt`.
 #[tokio::test]
 async fn test_template_string_in_prompt() {
-    use std::collections::HashMap;
-
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -601,8 +587,8 @@ function get_prompt() -> PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
         .call_function("get_prompt", vec![])
@@ -614,8 +600,6 @@ function get_prompt() -> PromptAst {
 /// Test that nested `template_strings` expand correctly.
 #[tokio::test]
 async fn test_nested_template_strings() {
-    use std::collections::HashMap;
-
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -642,8 +626,8 @@ function get_prompt() -> PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
         .call_function("get_prompt", vec![])
@@ -655,8 +639,6 @@ function get_prompt() -> PromptAst {
 /// Test a `template_string` with two args, one of which is a class (struct).
 #[tokio::test]
 async fn test_template_string_with_struct_arg() {
-    use std::collections::HashMap;
-
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -689,8 +671,8 @@ function get_prompt() -> PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
         .call_function("get_prompt", vec![])
@@ -702,8 +684,6 @@ function get_prompt() -> PromptAst {
 /// Test that parameterless `template_strings` work.
 #[tokio::test]
 async fn test_parameterless_template_string() {
-    use std::collections::HashMap;
-
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -730,8 +710,8 @@ function get_prompt() -> PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
         .call_function("get_prompt", vec![])

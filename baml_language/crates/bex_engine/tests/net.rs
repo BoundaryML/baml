@@ -2,8 +2,6 @@
 
 mod common;
 
-use std::collections::HashMap;
-
 use bex_engine::{BexEngine, BexExternalValue};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -33,7 +31,7 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
     );
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())?;
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
     let result = engine.call_function("main", vec![]).await?;
 
     // Wait for server to finish
@@ -61,7 +59,7 @@ async fn net_connect_failure() -> anyhow::Result<()> {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())?;
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
     let result = engine.call_function("main", vec![]).await;
 
     assert!(result.is_err());
@@ -102,7 +100,7 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
     );
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())?;
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
     let result = engine.call_function("main", vec![]).await?;
 
     server.await?;

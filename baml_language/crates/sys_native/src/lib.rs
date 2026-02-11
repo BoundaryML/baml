@@ -9,7 +9,7 @@
 //! use sys_native::SysOpsExt;
 //! use bex_engine::BexEngine;
 //!
-//! let engine = BexEngine::new(program, env_vars, SysOps::native())?;
+//! let engine = BexEngine::new(program, SysOps::native())?;
 //! ```
 
 mod ops;
@@ -18,8 +18,8 @@ pub mod registry;
 // Re-export types from sys_types for convenience
 use bex_heap::builtin_types;
 pub use sys_types::{
-    CompletionHandle, OpError, SysOp, SysOpContext, SysOpFn, SysOpFs, SysOpHttp, SysOpLlm,
-    SysOpNet, SysOpResult, SysOpSys, SysOps,
+    CompletionHandle, OpError, SysOp, SysOpContext, SysOpEnv, SysOpFn, SysOpFs, SysOpHttp,
+    SysOpLlm, SysOpNet, SysOpResult, SysOpSys, SysOps,
 };
 use sys_types::{OpErrorKind, SysOpOutput};
 
@@ -28,6 +28,34 @@ use sys_types::{OpErrorKind, SysOpOutput};
 /// Implements per-module traits (`SysOpFs`, `SysOpHttp`, etc.) with clean
 /// typed signatures. The generated glue handles arg extraction and error wrapping.
 pub struct NativeSysOps;
+
+// ============================================================================
+// Environment
+// ============================================================================
+
+impl SysOpEnv for NativeSysOps {
+    fn env_get(key: String) -> SysOpOutput<Option<String>> {
+        match std::env::var(&key) {
+            Ok(val) => SysOpOutput::ok(Some(val)),
+            Err(std::env::VarError::NotPresent) => SysOpOutput::ok(None),
+            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(OpErrorKind::Other(
+                format!("Environment variable '{key}' is not valid UTF-8"),
+            )),
+        }
+    }
+
+    fn env_get_or_panic(key: String) -> SysOpOutput<String> {
+        match std::env::var(&key) {
+            Ok(val) => SysOpOutput::ok(val),
+            Err(std::env::VarError::NotPresent) => SysOpOutput::err(OpErrorKind::Other(format!(
+                "Environment variable '{key}' not found",
+            ))),
+            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(OpErrorKind::Other(
+                format!("Environment variable '{key}' is not valid UTF-8"),
+            )),
+        }
+    }
+}
 
 // ============================================================================
 // File System

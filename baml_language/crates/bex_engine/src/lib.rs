@@ -189,7 +189,7 @@ pub enum EngineError {
 /// ```ignore
 /// use std::sync::Arc;
 ///
-/// let engine = Arc::new(BexEngine::new(bytecode, env_vars, sys_ops)?);
+/// let engine = Arc::new(BexEngine::new(bytecode, sys_ops)?);
 ///
 /// // Concurrent calls are safe - each gets its own VM and TLAB
 /// let (result1, result2) = tokio::join!(
@@ -232,8 +232,6 @@ pub struct BexEngine {
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
     /// Resolved class names for instance allocation
     resolved_class_names: HashMap<String, HeapPtr>,
-    /// Environment variables passed to VM.
-    env_vars: HashMap<String, String>,
     /// System operations provider.
     sys_ops: sys_types::SysOps,
     /// Context passed to `sys_ops` that need engine-level information.
@@ -265,11 +263,9 @@ impl BexEngine {
     /// # Arguments
     ///
     /// * `bytecode_program` - The compiled BAML program bytecode
-    /// * `env_vars` - Environment variables accessible to the program
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
     pub fn new(
         bytecode_program: bex_vm_types::Program,
-        env_vars: HashMap<String, String>,
         sys_ops: sys_types::SysOps,
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
@@ -336,7 +332,6 @@ impl BexEngine {
             globals,
             resolved_function_names,
             resolved_class_names,
-            env_vars,
             sys_ops,
             sys_op_ctx,
             // Initialize epoch tracking
@@ -563,11 +558,7 @@ impl BexEngine {
         let guard = unsafe { EpochGuard::new() };
 
         // Create VM with shared heap (each VM gets its own TLAB)
-        let mut vm = BexVm::new(
-            Arc::clone(&self.heap),
-            self.globals.clone(),
-            self.env_vars.clone(),
-        );
+        let mut vm = BexVm::new(Arc::clone(&self.heap), self.globals.clone());
 
         // Convert ExternalValue args to Value, allocating BexExternalValue data on the heap
         let vm_args: Vec<Value> = args

@@ -203,4 +203,120 @@ function TestEnumInExpressions(color: Color) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ functions_v2_valid.baml:71:8 ]
+//     │
+//  71 │     {% if color == "RED" %}
+//     │        ────────┬────────  
+//     │                ╰────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ functions_v2_valid.baml:75:8 ]
+//     │
+//  75 │     {% if "BLUE" == color %}
+//     │        ─────────┬────────  
+//     │                 ╰────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ functions_v2_valid.baml:79:8 ]
+//     │
+//  79 │     {% if color != "GREEN" %}
+//     │        ─────────┬─────────  
+//     │                 ╰─────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ functions_v2_valid.baml:84:8 ]
+//     │
+//  84 │     {% if color < "YELLOW" %}
+//     │        ─────────┬─────────  
+//     │                 ╰─────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     ╭─[ functions_v2_valid.baml:88:8 ]
+//     │
+//  88 │     {% if color >= "BLUE" %}
+//     │        ─────────┬────────  
+//     │                 ╰────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//     │ 
+//     │ Note: Error code: E0076
+// ────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ functions_v2_valid.baml:101:23 ]
+//      │
+//  101 │     {% set is_primary = color == "RED" or color == "BLUE" %}
+//      │                       ────────┬───────  
+//      │                               ╰───────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ functions_v2_valid.baml:101:40 ]
+//      │
+//  101 │     {% set is_primary = color == "RED" or color == "BLUE" %}
+//      │                                        ─────────┬────────  
+//      │                                                 ╰────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ functions_v2_valid.baml:107:26 ]
+//      │
+//  107 │     Result: {{ "Primary" if color == "RED" or color == "BLUE" else "Secondary" }}
+//      │                          ────────┬────────  
+//      │                                  ╰────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ functions_v2_valid.baml:107:44 ]
+//      │
+//  107 │     Result: {{ "Primary" if color == "RED" or color == "BLUE" else "Secondary" }}
+//      │                                            ─────────┬────────  
+//      │                                                     ╰────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ functions_v2_valid.baml:110:8 ]
+//      │
+//  110 │     {% if color == "RED" and true %}
+//      │        ────────┬────────  
+//      │                ╰────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ functions_v2_valid.baml:115:8 ]
+//      │
+//  115 │     {% if color != "GREEN" %}
+//      │        ─────────┬─────────  
+//      │                 ╰─────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ functions_v2_valid.baml:116:10 ]
+//      │
+//  116 │       {% if color == "RED" %}
+//      │          ────────┬────────  
+//      │                  ╰────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯
+// Warning: Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      ╭─[ functions_v2_valid.baml:118:10 ]
+//      │
+//  118 │       {% elif color == "BLUE" %}
+//      │          ──────────┬─────────  
+//      │                    ╰─────────── Comparing enum Color to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//      │ 
+//      │ Note: Error code: E0076
+// ─────╯

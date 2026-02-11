@@ -38,9 +38,9 @@ mod send_wrapper;
 mod state;
 mod wasm_http;
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
-use bex_factory::Bex;
+use bex_factory::BexIncremental;
 pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
@@ -76,7 +76,7 @@ pub fn hot_reload_test_string() -> String {
 /// HTTP requests are performed via a JS callback provided at creation time.
 #[wasm_bindgen]
 pub struct BamlWasmRuntime {
-    bex: Arc<dyn Bex>,
+    bex: Box<dyn BexIncremental>,
 }
 
 #[wasm_bindgen]
@@ -88,8 +88,6 @@ impl BamlWasmRuntime {
     /// * `root_path` - Root path for BAML files (e.g., "/project")
     /// * `src_files_json` - JSON object mapping filenames to content
     ///   e.g., `{"main.baml": "function Greet(name: string) -> string { ... }"}`
-    /// * `env_vars_json` - JSON object of environment variables
-    ///   e.g., `{"OPENAI_API_KEY": "sk-..."}`
     /// * `fetch_fn` - JS function for HTTP requests with signature:
     ///   `(method: string, url: string, headersJson: string, body: string)
     ///    => Promise<{status: number, headers: string, url: string, body: string}>`
@@ -97,7 +95,6 @@ impl BamlWasmRuntime {
     pub fn create(
         root_path: &str,
         src_files_json: &str,
-        env_vars_json: &str,
         fetch_fn: Function,
     ) -> Result<BamlWasmRuntime, JsError> {
         // Initialize HTTP provider
@@ -108,18 +105,13 @@ impl BamlWasmRuntime {
         let src_files: HashMap<String, String> = serde_json::from_str(src_files_json)
             .map_err(|e| JsError::new(&format!("Failed to parse src_files_json: {e}")))?;
 
-        // Parse environment variables
-        let env_vars: HashMap<String, String> = serde_json::from_str(env_vars_json)
-            .map_err(|e| JsError::new(&format!("Failed to parse env_vars_json: {e}")))?;
-
         // Build SysOps with WASM HTTP implementation
         let sys_ops = SysOpsBuilder::new()
             .with_http::<wasm_http::WasmHttp>()
             .build();
 
         // Create the engine via factory
-        let bex = bex_factory::new(root_path, &src_files, env_vars, sys_ops)
-            .map_err(|e| JsError::new(&format!("Failed to create runtime: {e}")))?;
+        let bex = bex_factory::new_incremental(root_path, &src_files, sys_ops);
 
         Ok(BamlWasmRuntime { bex })
     }
@@ -190,5 +182,21 @@ impl BamlWasmRuntime {
         let params = self.bex.function_params(name)?;
         let names: Vec<&str> = params.iter().map(|(n, _)| *n).collect();
         serde_json::to_string(&names).ok()
+    }
+
+    /// Add a source file to the runtime.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the source file
+    /// * `content` - The content of the source file
+    #[wasm_bindgen(js_name = addSource)]
+    pub fn add_source(&mut self, path: &str, content: &str) -> Result<(), JsError> {
+        let result = self.bex.add_source(path, content);
+        if result.engine_updated {
+            Ok(())
+        } else {
+            Err(JsError::new(&result.diagnostics))
+        }
     }
 }

@@ -95,12 +95,10 @@ impl Bex for Arc<BexEngine> {
 /// # Arguments
 /// * `root_path` - Root path for BAML files
 /// * `src_files` - Map of filename to content
-/// * `env_vars` - Environment variables
 /// * `sys_ops` - System operations provider
 pub fn new(
     root_path: &str,
     src_files: &HashMap<String, String>,
-    env_vars: HashMap<String, String>,
     sys_ops: SysOps,
 ) -> Result<Arc<dyn Bex>, RuntimeError> {
     let mut db = ProjectDatabase::new();
@@ -113,7 +111,7 @@ pub fn new(
     let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
         .map_err(|e| render_lowering_error(&db, &e))?;
 
-    let engine = BexEngine::new(bytecode, env_vars, sys_ops)?;
+    let engine = BexEngine::new(bytecode, sys_ops)?;
 
     Ok(Arc::new(engine))
 }
@@ -127,10 +125,10 @@ pub fn new(
 #[cfg(feature = "incremental")]
 pub fn new_incremental(
     root_path: &str,
-    env_vars: HashMap<String, String>,
+    src_files: &HashMap<String, String>,
     sys_ops: SysOps,
 ) -> Box<dyn BexIncremental> {
-    Box::new(BexIncrementalRuntime::new(root_path, env_vars, sys_ops))
+    Box::new(BexIncrementalRuntime::new(root_path, src_files, sys_ops))
 }
 
 // ---------------------------------------------------------------------------

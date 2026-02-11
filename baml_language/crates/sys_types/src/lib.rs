@@ -326,7 +326,7 @@ impl<T> FunctionRef<T> {
 /// ```ignore
 /// // Using the native Tokio provider
 /// let sys_ops = sys_types_native::SysOps::native();
-/// let engine = BexEngine::new(program, env_vars, sys_ops)?;
+/// let engine = BexEngine::new(program, sys_ops)?;
 /// ```
 macro_rules! define_sys_ops_struct {
     ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr })*) => {
@@ -399,6 +399,7 @@ impl SysOpFs for DefaultOps {}
 impl SysOpSys for DefaultOps {}
 impl SysOpNet for DefaultOps {}
 impl SysOpHttp for DefaultOps {}
+impl SysOpEnv for DefaultOps {}
 
 impl SysOpsBuilder {
     /// Create a new builder with all operations defaulting to `Unsupported`,

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0a6cb66c091c7c00/out/generated_tests.rs
+source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -43,10 +43,11 @@ SOURCE_FILE
                 QUOTE """
           CONFIG_ITEM
             WORD "api_key"
-            CONFIG_VALUE "env.OPENROUTER_API_KEY"
-              KW_ENV "env"
-              DOT "."
-              WORD "OPENROUTER_API_KEY"
+            CONFIG_VALUE
+              ENV_ACCESS_EXPR "env.OPENROUTER_API_KEY"
+                KW_ENV "env"
+                DOT "."
+                WORD "OPENROUTER_API_KEY"
           CONFIG_ITEM
             WORD "model"
             CONFIG_VALUE

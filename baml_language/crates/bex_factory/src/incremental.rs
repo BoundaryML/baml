@@ -54,7 +54,6 @@ pub trait BexIncremental {
 pub(crate) struct BexIncrementalRuntime {
     db: ProjectDatabase,
     root_path: PathBuf,
-    env_vars: HashMap<String, String>,
     sys_ops: SysOps,
     /// Current engine, if the last compile succeeded.
     engine: Option<Arc<BexEngine>>,
@@ -62,18 +61,36 @@ pub(crate) struct BexIncrementalRuntime {
     engine_is_current: bool,
 }
 
+fn make_engine(db: &ProjectDatabase, sys_ops: SysOps) -> Result<Arc<BexEngine>, RuntimeError> {
+    let bytecode = baml_compiler_emit::generate_project_bytecode(db)
+        .map_err(|e| render_lowering_error(db, &e))?;
+
+    BexEngine::new(bytecode, sys_ops)
+        .map_err(std::convert::Into::into)
+        .map(Arc::new)
+}
+
 impl BexIncrementalRuntime {
-    pub(crate) fn new(root_path: &str, env_vars: HashMap<String, String>, sys_ops: SysOps) -> Self {
+    pub(crate) fn new(
+        root_path: &str,
+        src_files: &HashMap<String, String>,
+        sys_ops: SysOps,
+    ) -> Self {
         let mut db = ProjectDatabase::new();
         db.set_project_root(Path::new(root_path));
 
+        for (filename, content) in src_files {
+            db.add_or_update_file(&std::path::PathBuf::from(filename), content);
+        }
+
+        let engine = make_engine(&db, sys_ops.clone()).ok();
+
         Self {
-            db,
+            engine_is_current: engine.is_some(),
             root_path: PathBuf::from(root_path),
-            env_vars,
+            engine,
             sys_ops,
-            engine: None,
-            engine_is_current: false,
+            db,
         }
     }
 
@@ -82,36 +99,22 @@ impl BexIncrementalRuntime {
         let full_path = self.root_path.join(path);
         self.db.add_or_update_file(&full_path, content);
 
-        match baml_compiler_emit::generate_project_bytecode(&self.db) {
-            Ok(bytecode) => {
-                match BexEngine::new(bytecode, self.env_vars.clone(), self.sys_ops.clone()) {
-                    Ok(engine) => {
-                        self.engine = Some(Arc::new(engine));
-                        self.engine_is_current = true;
-                        AddSourceResult {
-                            engine_updated: true,
-                            diagnostics: String::new(),
-                        }
-                    }
-                    Err(e) => {
-                        self.engine_is_current = false;
-                        AddSourceResult {
-                            engine_updated: false,
-                            diagnostics: format!("Engine error: {e}"),
-                        }
-                    }
+        let engine = make_engine(&self.db, self.sys_ops.clone());
+
+        match engine {
+            Ok(engine) => {
+                self.engine = Some(engine);
+                self.engine_is_current = true;
+                AddSourceResult {
+                    engine_updated: true,
+                    diagnostics: String::new(),
                 }
             }
-            Err(lowering_error) => {
+            Err(e) => {
                 self.engine_is_current = false;
-                let runtime_error = render_lowering_error(&self.db, &lowering_error);
-                let diagnostics = match &runtime_error {
-                    RuntimeError::Compilation { message } => message.clone(),
-                    _ => format!("{runtime_error}"),
-                };
                 AddSourceResult {
                     engine_updated: false,
-                    diagnostics,
+                    diagnostics: format!("Engine error: {e}"),
                 }
             }
         }

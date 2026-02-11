@@ -90,20 +90,20 @@ impl BamlWasmState {
     #[wasm_bindgen(js_name = createRuntime)]
     pub fn create_runtime(
         &mut self,
-        env_vars_json: &str,
+        src_files_json: &str,
         fetch_fn: Function,
     ) -> Result<(), JsError> {
+        let src_files: HashMap<String, String> = serde_json::from_str(src_files_json)
+            .map_err(|e| JsError::new(&format!("Failed to parse src_files_json: {e}")))?;
+
         wasm_http::init_http_provider(fetch_fn)
             .map_err(|e| JsError::new(&format!("Failed to init HTTP provider: {e}")))?;
-
-        let env_vars: HashMap<String, String> = serde_json::from_str(env_vars_json)
-            .map_err(|e| JsError::new(&format!("Failed to parse env_vars_json: {e}")))?;
 
         let sys_ops = sys_types::SysOpsBuilder::new()
             .with_http::<wasm_http::WasmHttp>()
             .build();
 
-        let mut rt = new_incremental(ROOT_PATH, env_vars, sys_ops);
+        let mut rt = new_incremental(ROOT_PATH, &src_files, sys_ops);
         for (name, text) in Self::db_to_src_files(&self.db) {
             rt.add_source(&name, &text);
         }

@@ -39,18 +39,11 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 /// # Arguments
 /// * `root_path` - Root path for BAML files
 /// * `src_files` - Map of filename to content
-/// * `env_vars` - Environment variables
 pub fn initialize_runtime(
     root_path: &str,
     src_files: HashMap<String, String>,
-    env_vars: HashMap<String, String>,
 ) -> Result<(), BridgeError> {
-    let rt = bex_factory::new(
-        root_path,
-        &src_files,
-        env_vars,
-        bex_factory::SysOps::native(),
-    )?;
+    let rt = bex_factory::new(root_path, &src_files, bex_factory::SysOps::native())?;
 
     let mut guard = RUNTIME_INSTANCE
         .write()

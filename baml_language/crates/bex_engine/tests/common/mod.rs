@@ -6,7 +6,7 @@
 // Allow dead code since not all test files use all utilities
 #![allow(dead_code)]
 
-use std::{collections::HashMap, io::Write};
+use std::io::Write;
 
 use baml_tests::bytecode::compile_source;
 use bex_engine::{BexEngine, BexExternalValue};
@@ -70,8 +70,8 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     let source = input.source.replace("{ROOT}", &root_path);
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine.call_function(input.entry, input.inputs).await;
 
