@@ -125,14 +125,14 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
         .map(|d| {
             let fn_name = &d.fn_name;
             let glue_fn_name = format_ident!("__{}", fn_name);
-            quote! { #fn_name: T::#glue_fn_name, }
+            quote! { #fn_name: ::std::sync::Arc::new(T::#glue_fn_name), }
         })
         .collect();
 
     let from_impl_method = quote! {
         impl SysOps {
             /// Build a `SysOps` table from a type that implements the per-module traits.
-            pub fn from_impl<T: #(#trait_names)+*>() -> Self {
+            pub fn from_impl<T: #(#trait_names)+* + 'static>() -> Self {
                 Self {
                     #(#field_assignments)*
                 }

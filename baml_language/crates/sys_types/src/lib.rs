@@ -220,8 +220,11 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 ///
 /// The context reference provides engine-level information (e.g., function metadata)
 /// that some `sys_ops` need. Ops that don't need it simply ignore the parameter.
-pub type SysOpFn =
-    fn(heap: &Arc<BexHeap>, args: Vec<bex_heap::BexValue<'_>>, ctx: &SysOpContext) -> SysOpResult;
+pub type SysOpFn = Arc<
+    dyn for<'a> Fn(&Arc<BexHeap>, Vec<bex_heap::BexValue<'a>>, &SysOpContext) -> SysOpResult
+        + Send
+        + Sync,
+>;
 
 // ============================================================================
 // Engine Context for Sys Ops
@@ -328,10 +331,10 @@ macro_rules! define_sys_ops_struct {
         }
 
         impl SysOps {
-            /// Look up the function pointer for a given `SysOp`.
-            pub fn get(&self, op: SysOp) -> SysOpFn {
+            /// Look up the function for a given `SysOp`.
+            pub fn get(&self, op: SysOp) -> &SysOpFn {
                 match op {
-                    $( SysOp::$Variant => self.$snake, )*
+                    $( SysOp::$Variant => &self.$snake, )*
                 }
             }
 
@@ -340,7 +343,7 @@ macro_rules! define_sys_ops_struct {
             /// Useful for providers that don't support certain operations.
             pub fn unsupported(operation: SysOp) -> SysOpFn {
                 match operation {
-                    $( SysOp::$Variant => |_, _, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::$Variant))), )*
+                    $( SysOp::$Variant => Arc::new(|_, _, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::$Variant)))), )*
                 }
             }
 
