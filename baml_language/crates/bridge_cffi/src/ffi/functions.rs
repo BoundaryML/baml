@@ -108,8 +108,7 @@ fn call_function_inner(
         .collect::<Result<Vec<_>, _>>()?;
 
     // Spawn async task with panic catching
-    let tokio_rt = get_tokio_runtime().clone();
-    tokio_rt.spawn(async move {
+    get_tokio_runtime().spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
         let result = AssertUnwindSafe(async { runtime.call_function(&func_name, bex_args).await })
             .catch_unwind()

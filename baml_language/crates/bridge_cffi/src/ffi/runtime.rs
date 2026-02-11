@@ -55,9 +55,9 @@ pub extern "C" fn create_baml_runtime(
         let env_vars: HashMap<String, String> = serde_json::from_str(env_vars_str)
             .map_err(|e| format!("Failed to parse env_vars JSON: {e}"))?;
 
-        // Initialize global engine
+        // Initialize global runtime
         initialize_runtime(root_path_str, src_files, env_vars)
-            .map_err(|e| format!("Failed to initialize engine: {e}"))?;
+            .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
         // Return non-null pointer to indicate success
         // The actual value doesn't matter since we use global engine

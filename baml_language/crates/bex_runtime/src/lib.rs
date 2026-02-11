@@ -153,7 +153,7 @@ fn extract_source_context(content: &str, start: usize, end: usize) -> (usize, us
     for (i, &byte) in bytes.iter().enumerate().skip(line_start) {
         if byte == b'\n' || i == bytes.len() - 1 {
             let line_end = if byte == b'\n' { i } else { i + 1 };
-            let line_content = &content[current_line_start..line_end];
+            let line_content = content.get(current_line_start..line_end).unwrap_or("");
 
             // Check if this line overlaps with the error span
             let line_overlaps = current_line_start < end && line_end > start;
