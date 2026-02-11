@@ -530,6 +530,7 @@ mod tests {
             DiagnosticId::UnexpectedEof,
             DiagnosticId::UnexpectedToken,
             DiagnosticId::DuplicateName,
+            DiagnosticId::LoweringError,
         ];
 
         for id in ids {
