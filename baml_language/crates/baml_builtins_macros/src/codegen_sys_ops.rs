@@ -176,8 +176,9 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                 }
             };
 
-            // For HTTP only: add with_http_instance(Arc<dyn SysOpHttp>).
-            if module_name.as_str() == "http" {
+            // For HTTP: add with_http_instance(Arc<dyn SysOpHttp>).
+            // For env: add with_env_instance(Arc<dyn SysOpEnv>).
+            let with_instance = if module_name.as_str() == "http" {
                 let http_assignments: Vec<_> = ops
                     .iter()
                     .map(|d| {
@@ -191,7 +192,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                         }
                     })
                     .collect();
-                let with_http_instance = quote! {
+                quote! {
                     /// Override the HTTP module with an existing instance (e.g. when the type has no `Default`).
                     pub fn with_http_instance(
                         mut self,
@@ -200,8 +201,36 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                         #(#http_assignments)*
                         self
                     }
-                };
-                vec![with_module, with_http_instance]
+                }
+            } else if module_name.as_str() == "env" {
+                let env_assignments: Vec<_> = ops
+                    .iter()
+                    .map(|d| {
+                        let fn_name = &d.fn_name;
+                        let glue_fn_name = format_ident!("__{}", fn_name);
+                        quote! {
+                            self.inner.#fn_name = {
+                                let __instance = ::std::sync::Arc::clone(&instance);
+                                ::std::sync::Arc::new(move |heap, args, ctx| __instance.#glue_fn_name(heap, args, ctx))
+                            };
+                        }
+                    })
+                    .collect();
+                quote! {
+                    /// Override the env module with an existing instance (e.g. when the type has no `Default`).
+                    pub fn with_env_instance(
+                        mut self,
+                        instance: ::std::sync::Arc<dyn SysOpEnv + Send + Sync + 'static>,
+                    ) -> Self {
+                        #(#env_assignments)*
+                        self
+                    }
+                }
+            } else {
+                quote! {}
+            };
+            if module_name.as_str() == "http" || module_name.as_str() == "env" {
+                vec![with_module, with_instance]
             } else {
                 vec![with_module]
             }

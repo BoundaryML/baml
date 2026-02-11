@@ -31,7 +31,12 @@ describe('BamlWasmRuntime', () => {
         bodyPromise: Promise.resolve('response body'),
       });
 
-      const runtime = BamlWasmRuntime.create(ROOT_PATH, srcFilesJson, fetchCallback);
+      const runtime = BamlWasmRuntime.create(
+        ROOT_PATH,
+        srcFilesJson,
+        fetchCallback,
+        (_var: string) => undefined
+      );
 
       expect(runtime).toBeDefined();
       const names = runtime.functionNames();
@@ -59,7 +64,12 @@ describe('BamlWasmRuntime', () => {
         }),
       });
 
-      const runtime = BamlWasmRuntime.create(ROOT_PATH, srcFilesJson, fetchCallback);
+      const runtime = BamlWasmRuntime.create(
+        ROOT_PATH,
+        srcFilesJson,
+        fetchCallback,
+        (_var: string) => undefined
+      );
       expect(runtime).toBeDefined();
       // Runtime was created without awaiting bodyPromise; body is read only when .text() is called in BAML
       expect(bodyPromiseResolved).toBe(false);
