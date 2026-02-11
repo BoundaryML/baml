@@ -25,7 +25,7 @@ pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
 }
 
-/// This AST node corresponds 1:1 with a [`SyntaxKind`].
+/// This AST node only ever has exactly one [`SyntaxKind`].
 pub trait KnownKind {
     /// Should be constant, but we can't use `const` because it's a trait.
     fn kind() -> SyntaxKind;

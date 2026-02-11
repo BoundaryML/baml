@@ -24,6 +24,28 @@ pub enum Type {
     Unknown(TextRange),
 }
 
+impl Type {
+    /// Check if, when multi-line printed the last line is indented.
+    ///
+    /// For example, multi-lined paths and unions are indented,
+    /// while generics and parenthesized types are not.
+    /// Optional types and array types follow their inner type.
+    pub const fn multi_line_is_indented(&self) -> bool {
+        match self {
+            Type::Paren(_) => false,
+            Type::Path(_) => true,
+            Type::String(_) => false,
+            Type::Union(_) => true,
+            Type::Optional(inner) => inner.ty.multi_line_is_indented(),
+            Type::Array(inner) => inner.ty.multi_line_is_indented(),
+            Type::Generic(_) => false,
+            Type::Function(_) => true,
+            Type::Constrained(_) => true,
+            Type::Unknown(_) => true, // to be safe
+        }
+    }
+}
+
 impl FromCST for Type {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -298,7 +320,19 @@ impl UnionTypeMember {
                         arrow,
                         return_type: Box::new(return_ty),
                     }))
+                } else if let Some(arrow) = it.next_if_kind(SyntaxKind::ARROW) {
+                    let arrow = t::Arrow::from_cst(arrow)?;
+                    let return_ty: Type = it.expect_parse()?;
+
+                    Ok(UnionTypeMember::Function(FunctionType {
+                        open_paren,
+                        params,
+                        close_paren,
+                        arrow,
+                        return_type: Box::new(return_ty),
+                    }))
                 } else {
+                    // Really a paren type
                     let (inner, _) = params
                         .pop()
                         .unwrap_or_else(|| unreachable!("we checked it has length 1"));

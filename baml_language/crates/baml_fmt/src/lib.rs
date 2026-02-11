@@ -6,7 +6,6 @@ use baml_compiler_diagnostics::ParseError;
 use baml_compiler_syntax::{SyntaxElement, SyntaxNode};
 use baml_project::ProjectDatabase;
 
-use rowan::ast::AstNode;
 pub use trivia_classifier::{EmittableTrivia, classify_trivia};
 
 use crate::{

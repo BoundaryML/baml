@@ -3,7 +3,7 @@ use rowan::TextRange;
 
 use crate::ast::{
     Attribute, BlockAttribute, BlockExpr, Expression, FromCST, KnownKind, PathExpr, StrongAstError,
-    SyntaxNodeIter, Type, tokens as t,
+    SyntaxNodeIter, Token, Type, tokens as t,
 };
 use crate::printer::*;
 
@@ -125,14 +125,65 @@ impl Printable for FunctionDecl {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
-        printer.print(&self.params, shape.clone());
-        printer.print_str(" ");
-        printer.print_raw_token(&self.arrow);
-        printer.print_str(" ");
-        printer.print(&self.return_type, shape.clone());
-        printer.print_str(" ");
-        printer.print(&self.body, shape);
-        PrintInfo::default_multi_lined()
+
+        let mut param_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let param_info = param_printer.print(&self.params, Shape::unlimited_single_line());
+
+        let mut return_type_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let return_type_info =
+            return_type_printer.print(&self.return_type, Shape::unlimited_single_line());
+
+        let single_line_size = printer.current_line_len()
+            + param_printer.output.len()
+            + const { " -> ".len() + " {".len() }
+            + return_type_printer.output.len();
+        if single_line_size <= printer.config.line_width
+            && !param_info.multi_lined
+            && !return_type_info.multi_lined
+        {
+            // It fits in single line!
+            printer.append_from_printer(param_printer);
+            printer.print_spaces(1);
+            printer.print_raw_token(&self.arrow);
+            printer.print_spaces(1);
+            printer.append_from_printer(return_type_printer);
+            printer.print_spaces(1);
+            printer.print(&self.body, shape)
+        } else {
+            let params_shape = Shape {
+                width: 0, // never single-line
+                indent: shape.indent,
+                first_line_offset: 0, // not important in function args
+            };
+            let _ = self.params.print_multi_line(params_shape, printer);
+
+            printer.print_spaces(1);
+            printer.print_raw_token(&self.arrow);
+            printer.print_spaces(1);
+
+            let curr_line_len = printer.current_line_len();
+            let return_type_shape = Shape {
+                width: printer
+                    .config
+                    .line_width
+                    .saturating_sub(curr_line_len + const { " {".len() }),
+                indent: shape.indent,
+                first_line_offset: curr_line_len.saturating_sub(shape.indent),
+            };
+
+            let return_info = self.return_type.print(return_type_shape, printer);
+            if return_info.multi_lined && self.return_type.multi_line_is_indented() {
+                // `{` goes on its own line after the type ends
+                printer.print_newline();
+            } else {
+                printer.print_str(" ");
+            }
+
+            printer.print(&self.body, shape);
+
+            PrintInfo::default_multi_lined()
+        }
     }
 }
 
@@ -1131,19 +1182,32 @@ impl KnownKind for ConfigBlock {
 }
 
 impl Printable for ConfigBlock {
+    /// [`ConfigBlock`] prints multi-line unless empty.
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        if self.items.is_empty() {
+            printer.print_raw_token(&self.open_brace);
+            printer.print_raw_token(&self.close_brace);
+            return PrintInfo::default_single_line();
+        }
+
+        let inner_indent = shape.indent + printer.config.indent_width;
         let inner_shape = Shape {
-            width: shape.width.saturating_sub(printer.config.indent_width),
-            indent: shape.indent + printer.config.indent_width,
+            width: printer.config.line_width.saturating_sub(inner_indent),
+            indent: inner_indent,
             first_line_offset: 0,
         };
 
         printer.print_raw_token(&self.open_brace);
         printer.print_newline();
 
-        for (item, _comma) in &self.items {
+        for (item, comma) in &self.items {
             printer.print_spaces(inner_shape.indent);
             printer.print(item, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+            } else {
+                printer.print_str(",");
+            }
             printer.print_newline();
         }
 
@@ -1203,8 +1267,17 @@ impl Printable for ConfigItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.key);
         printer.print_str(" ");
-        printer.print(&self.value, shape);
-        PrintInfo::default_single_line()
+        let first_line_offset =
+            shape.first_line_offset + usize::from(self.key.span().len()) + const { " ".len() };
+        let value_shape = Shape {
+            width: printer
+                .config
+                .line_width
+                .saturating_sub(shape.indent + first_line_offset + const { ",".len() }),
+            indent: shape.indent,
+            first_line_offset,
+        };
+        printer.print(&self.value, value_shape)
     }
 }
 
@@ -1212,7 +1285,8 @@ impl Printable for ConfigItem {
 #[derive(Debug)]
 pub enum ConfigItemValue {
     Value(Expression),
-    NestedBlock(ConfigBlock),
+    ConfigArray(ConfigArray),
+    ConfigBlock(ConfigBlock),
 }
 
 impl FromCST for ConfigItemValue {
@@ -1220,15 +1294,24 @@ impl FromCST for ConfigItemValue {
         let node = StrongAstError::assert_is_node(elem)?;
         match node.kind() {
             SyntaxKind::CONFIG_VALUE => {
-                let value = Expression::from_cst(SyntaxElement::Node(node))?;
-                Ok(ConfigItemValue::Value(value))
+                let mut it = SyntaxNodeIter::new(node);
+                let expr = it.expect_next("an expression")?;
+                if expr.kind() == SyntaxKind::ARRAY_LITERAL {
+                    let array = ConfigArray::from_cst(expr)?;
+                    it.expect_end()?;
+                    Ok(ConfigItemValue::ConfigArray(array))
+                } else {
+                    let value = Expression::from_cst(expr)?;
+                    it.expect_end()?; // multi-word unquoted strings are not valid in the new engine
+                    Ok(ConfigItemValue::Value(value))
+                }
             }
             SyntaxKind::CONFIG_BLOCK => {
                 let block = ConfigBlock::from_cst(SyntaxElement::Node(node))?;
-                Ok(ConfigItemValue::NestedBlock(block))
+                Ok(ConfigItemValue::ConfigBlock(block))
             }
-            _ => Err(StrongAstError::UnexpectedKind {
-                expected: SyntaxKind::CONFIG_VALUE,
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "CONFIG_VALUE or CONFIG_BLOCK".into(),
                 found: node.kind(),
                 at: node.text_range(),
             }),
@@ -1240,7 +1323,126 @@ impl Printable for ConfigItemValue {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
             ConfigItemValue::Value(expr) => expr.print(shape, printer),
-            ConfigItemValue::NestedBlock(block) => block.print(shape, printer),
+            ConfigItemValue::ConfigBlock(block) => block.print(shape, printer),
+            ConfigItemValue::ConfigArray(array) => array.print(shape, printer),
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::ARRAY_LITERAL`] node, when inside a [`ConfigBlock`].
+/// This is a special case because all elements will be [`ConfigItemValue`]s.
+#[derive(Debug)]
+pub struct ConfigArray {
+    pub open_bracket: t::LBracket,
+    pub elements: Vec<(ConfigItemValue, Option<t::Comma>)>,
+    pub close_bracket: t::RBracket,
+}
+
+impl FromCST for ConfigArray {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::ARRAY_LITERAL)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let open_bracket = it.expect_parse()?;
+
+        let mut elements = Vec::new();
+        let close_bracket = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_BRACKET, it.parent));
+            };
+            match elem.kind() {
+                SyntaxKind::R_BRACKET => {
+                    break t::RBracket::from_cst(elem)?;
+                }
+                _ => {
+                    let next = ConfigItemValue::from_cst(elem)?;
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
+                        .transpose()?;
+                    elements.push((next, comma));
+                }
+            }
+        };
+
+        it.expect_end()?;
+
+        Ok(ConfigArray {
+            open_bracket,
+            elements,
+            close_bracket,
+        })
+    }
+}
+
+impl PrintMultiLine for ConfigArray {
+    /// Multi-line layout: each element on its own indented line with trailing comma.
+    /// Brackets wrap the entire construct.
+    ///
+    /// ```baml
+    /// [
+    ///     some_long_expression,
+    ///     another_expression,
+    /// ]
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.open_bracket);
+        printer.print_newline();
+
+        for (elem, comma) in &self.elements {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(elem, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_bracket);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for ConfigArray {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        single_line_printer.print_raw_token(&self.open_bracket);
+        for (i, (elem, comma)) in self.elements.iter().enumerate() {
+            multi_lined |= single_line_printer
+                .print(elem, Shape::unlimited_single_line())
+                .multi_lined;
+            if i + 1 < self.elements.len() {
+                if let Some(comma) = comma {
+                    single_line_printer.print_raw_token(comma);
+                } else {
+                    single_line_printer.print_str(",");
+                }
+                single_line_printer.print_str(" ");
+            }
+            if multi_lined || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(self, shape, printer);
+            }
+        }
+        single_line_printer.print_raw_token(&self.close_bracket);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
         }
     }
 }

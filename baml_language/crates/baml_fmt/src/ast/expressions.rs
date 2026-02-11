@@ -57,7 +57,9 @@ impl FromCST for Expression {
             SyntaxKind::FLOAT_LITERAL => Expression::Literal(Literal::Float(
                 t::FloatLiteral::new_from_span(elem.text_range()),
             )),
-            SyntaxKind::PATH_EXPR => PathExpr::from_cst(elem).map(Expression::Path)?,
+            SyntaxKind::PATH_EXPR | SyntaxKind::WORD => {
+                PathExpr::from_cst(elem).map(Expression::Path)?
+            }
             SyntaxKind::PAREN_EXPR => ParenExpr::from_cst(elem).map(Expression::Paren)?,
             SyntaxKind::BINARY_EXPR => BinaryExpr::from_cst(elem).map(Expression::Binary)?,
             SyntaxKind::UNARY_EXPR => UnaryExpr::from_cst(elem).map(Expression::Unary)?,
@@ -131,6 +133,7 @@ impl Printable for Literal {
     }
 }
 
+/// Corresponds to either a [`SyntaxKind::PATH_EXPR`] node or single [`SyntaxKind::WORD`] token.
 #[derive(Debug)]
 pub struct PathExpr {
     pub first: t::Word,
@@ -139,6 +142,13 @@ pub struct PathExpr {
 
 impl FromCST for PathExpr {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        if elem.kind() == SyntaxKind::WORD {
+            let first = t::Word::from_cst(elem)?;
+            return Ok(PathExpr {
+                first,
+                rest: Vec::new(),
+            });
+        }
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
 
@@ -198,22 +208,18 @@ impl PrintMultiLine for PathExpr {
 
 impl Printable for PathExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let single_line_len = usize::from(self.first.span().len())
+        if self.rest.is_empty() {
+            printer.print_raw_token(&self.first);
+            return PrintInfo::default_single_line();
+        }
+        let single_line_width = usize::from(self.first.span().len())
             + self
                 .rest
                 .iter()
                 .map(|(dot, word)| usize::from(dot.span().len() + word.span().len()))
                 .sum::<usize>();
-        let multi_line = single_line_len + shape.first_line_offset > shape.width;
-        if multi_line {
-            printer.print_raw_token(&self.first);
-            for (dot, word) in &self.rest {
-                printer.print_newline();
-                printer.print_spaces(shape.indent + printer.config.indent_width);
-                printer.print_raw_token(dot);
-                printer.print_raw_token(word);
-            }
-            PrintInfo::default_multi_lined()
+        if single_line_width > shape.width {
+            self.print_multi_line(shape, printer)
         } else {
             printer.print_raw_token(&self.first);
             for (dot, word) in &self.rest {
