@@ -19,7 +19,8 @@ use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
     ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
-    MatchArmId, PatId, Pattern, PromptTemplate, SignatureSourceMap, StmtId, TirContext, TypeId,
+    MatchArm, MatchArmId, PatId, Pattern, PromptTemplate, SignatureSourceMap, StmtId, TirContext,
+    TypeId,
 };
 use baml_workspace::Project;
 
@@ -2532,8 +2533,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 }
                 Ty::Unknown
             } else {
+                let arms_and_patterns: Vec<(MatchArmId, PatId)> = arms
+                    .iter()
+                    .map(|arm_id| (arm_id.clone(), body.match_arms[*arm_id].pattern.clone()))
+                    .collect();
                 // Perform exhaustiveness checking and unreachable arm detection
-                check_match_exhaustiveness(ctx, &scrutinee_ty, arms, body, expr_id);
+                check_match_exhaustiveness(ctx, &scrutinee_ty, &arms_and_patterns, body, expr_id);
 
                 // Collect result types from all arms
                 let arm_types: Vec<Ty> = arms
@@ -2548,6 +2553,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let pattern = &body.patterns[arm.pattern];
                         let (binding_name, narrowed_ty) =
                             extract_pattern_binding(ctx, pattern, arm.pattern, &scrutinee_ty, body);
+
+                        if !ctx.is_subtype_of(&narrowed_ty, &scrutinee_ty) {
+                            ctx.push_error(TypeError::TypeMismatch {
+                                expected: scrutinee_ty.clone(),
+                                found: narrowed_ty.clone(),
+                                location: ErrorLocation::Pattern(arm.pattern),
+                                info_location: Some(ErrorLocation::Expr(*scrutinee)),
+                            })
+                        }
 
                         // Bind the pattern variable with the narrowed type
                         if let Some(name) = binding_name {
@@ -2915,7 +2929,7 @@ fn extract_pattern_binding(
 fn check_match_exhaustiveness(
     ctx: &mut TypeContext<'_>,
     scrutinee_ty: &Ty,
-    arm_ids: &[MatchArmId],
+    arms_and_patterns: &[(MatchArmId, PatId)],
     body: &ExprBody,
     match_expr_id: ExprId,
 ) {
@@ -2933,13 +2947,17 @@ fn check_match_exhaustiveness(
         &ctx.type_alias_names,
     );
 
-    let result = checker.check(scrutinee_ty, arm_ids, body);
+    let arms = arms_and_patterns
+        .iter()
+        .map(|(arm, _)| arm.clone())
+        .collect::<Vec<_>>();
+    let result = checker.check(scrutinee_ty, &arms, body);
 
     // Report unreachable arms using position-independent MatchArmId
     for arm_idx in result.unreachable_arms {
-        let arm_id = arm_ids[arm_idx];
+        let pat_id = arms_and_patterns[arm_idx].1;
         ctx.push_error(TypeError::UnreachableArm {
-            location: ErrorLocation::MatchArm(arm_id),
+            location: ErrorLocation::Pattern(pat_id),
         });
     }
 
