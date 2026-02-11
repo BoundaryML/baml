@@ -140,9 +140,47 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
         }
     };
 
+    // Generate SysOpsBuilder::with_<module> methods for each non-LLM module.
+    let builder_methods: Vec<_> = module_order
+        .iter()
+        .filter(|m| m.as_str() != "llm")
+        .map(|module_name| {
+            let ops = &module_ops[module_name];
+            let trait_name = format_ident!("SysOp{}", to_pascal_case(module_name));
+            let method_name = format_ident!("with_{}", module_name);
+
+            let assignments: Vec<_> = ops
+                .iter()
+                .map(|d| {
+                    let fn_name = &d.fn_name;
+                    let glue_fn_name = format_ident!("__{}", fn_name);
+                    quote! { self.inner.#fn_name = ::std::sync::Arc::new(T::#glue_fn_name); }
+                })
+                .collect();
+
+            let doc = format!(
+                "Override the `{module_name}` module operations with the given implementation."
+            );
+            quote! {
+                #[doc = #doc]
+                pub fn #method_name<T: #trait_name + 'static>(mut self) -> Self {
+                    #(#assignments)*
+                    self
+                }
+            }
+        })
+        .collect();
+
+    let builder_impl = quote! {
+        impl SysOpsBuilder {
+            #(#builder_methods)*
+        }
+    };
+
     quote! {
         #(#trait_defs)*
         #from_impl_method
+        #builder_impl
     }
 }
 

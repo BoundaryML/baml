@@ -375,6 +375,53 @@ baml_builtins::for_all_sys_ops!(define_sys_ops_struct);
 baml_builtins::with_builtins!(baml_builtins_macros::generate_sys_op_traits);
 
 // ============================================================================
+// SysOpsBuilder — Compose a SysOps table by overriding modules independently
+// ============================================================================
+
+/// Builder for composing a [`SysOps`] table by overriding individual modules.
+///
+/// Starts with all operations returning `Unsupported` (except LLM, which uses
+/// the blanket implementation), and allows selectively overriding modules:
+///
+/// ```ignore
+/// let ops = SysOpsBuilder::new()
+///     .with_http::<WasmHttp>()
+///     .build();
+/// ```
+pub struct SysOpsBuilder {
+    inner: SysOps,
+}
+
+/// Default provider — all trait methods return `Unsupported` via defaults.
+/// `SysOpLlm` is provided by the blanket `impl<T> SysOpLlm for T`.
+struct DefaultOps;
+impl SysOpFs for DefaultOps {}
+impl SysOpSys for DefaultOps {}
+impl SysOpNet for DefaultOps {}
+impl SysOpHttp for DefaultOps {}
+
+impl SysOpsBuilder {
+    /// Create a new builder with all operations defaulting to `Unsupported`,
+    /// except LLM ops which use the real blanket implementation.
+    pub fn new() -> Self {
+        Self {
+            inner: SysOps::from_impl::<DefaultOps>(),
+        }
+    }
+
+    /// Consume the builder and return the composed [`SysOps`] table.
+    pub fn build(self) -> SysOps {
+        self.inner
+    }
+}
+
+impl Default for SysOpsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
 // Blanket SysOpLlm implementation (delegates to sys_llm)
 // ============================================================================
 
