@@ -723,6 +723,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "wasm-bindgen-futures",
  "wiremock",
 ]
 
@@ -871,6 +872,27 @@ dependencies = [
  "sys_native",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "bridge_wasm"
+version = "0.1.0"
+dependencies = [
+ "bex_factory",
+ "bex_heap",
+ "bex_resource_types",
+ "console_error_panic_hook",
+ "indexmap",
+ "js-sys",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "serde_json",
+ "sys_types",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]

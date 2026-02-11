@@ -49,6 +49,7 @@ bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 bridge_cffi = { path = "crates/bridge_cffi" }
+bridge_wasm = { path = "crates/bridge_wasm" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 bex_factory = { path = "crates/bex_factory" }
 
@@ -145,7 +146,9 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 url = "2.5.2"
 walkdir = { version = "2.4" }
 wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
+js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
 wee_alloc = "0.4"

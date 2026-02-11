@@ -738,7 +738,16 @@ impl BexEngine {
                         SysOpResult::Async(fut) => {
                             // Async operation - spawn task
                             let pending_futures = pending_futures.clone();
+                            #[cfg(not(target_arch = "wasm32"))]
                             tokio::spawn(async move {
+                                let result = fut.await;
+                                let _ = pending_futures.send(FutureResult {
+                                    id,
+                                    result: result.map_err(EngineError::from),
+                                });
+                            });
+                            #[cfg(target_arch = "wasm32")]
+                            wasm_bindgen_futures::spawn_local(async move {
                                 let result = fut.await;
                                 let _ = pending_futures.send(FutureResult {
                                     id,
