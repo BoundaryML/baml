@@ -502,6 +502,7 @@ name = "baml_compiler_vir"
 version = "0.0.0"
 dependencies = [
  "baml_base",
+ "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_tir",
  "baml_type",
@@ -740,6 +741,8 @@ dependencies = [
 name = "bex_factory"
 version = "0.0.0"
 dependencies = [
+ "baml_base",
+ "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_project",
  "bex_engine",

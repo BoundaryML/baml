@@ -152,6 +152,9 @@ pub enum DiagnosticId {
     JinjaUnsupportedFeature,
     JinjaInvalidSyntax,
     JinjaInvalidTest,
+
+    // VIR lowering errors (E0089)
+    LoweringError,
 }
 
 impl DiagnosticId {
@@ -263,6 +266,9 @@ impl DiagnosticId {
             DiagnosticId::JinjaUnsupportedFeature => "E0085",
             DiagnosticId::JinjaInvalidSyntax => "E0086",
             DiagnosticId::JinjaInvalidTest => "E0087",
+
+            // VIR lowering errors
+            DiagnosticId::LoweringError => "E0089",
         }
     }
 }

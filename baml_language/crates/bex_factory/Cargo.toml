@@ -18,6 +18,8 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_base = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
 baml_compiler_emit = { workspace = true }
 baml_project = { workspace = true }
 bex_engine = { workspace = true }
