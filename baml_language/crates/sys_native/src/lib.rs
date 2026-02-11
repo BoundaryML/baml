@@ -35,15 +35,24 @@ pub struct NativeSysOps;
 
 impl SysOpEnv for NativeSysOps {
     fn env_get(key: String) -> SysOpOutput<Option<String>> {
-        SysOpOutput::ok(std::env::var(&key).ok())
+        match std::env::var(&key) {
+            Ok(val) => SysOpOutput::ok(Some(val)),
+            Err(std::env::VarError::NotPresent) => SysOpOutput::ok(None),
+            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(OpErrorKind::Other(
+                format!("Environment variable '{key}' is not valid UTF-8"),
+            )),
+        }
     }
 
     fn env_get_or_panic(key: String) -> SysOpOutput<String> {
         match std::env::var(&key) {
             Ok(val) => SysOpOutput::ok(val),
-            Err(_) => SysOpOutput::err(OpErrorKind::Other(format!(
+            Err(std::env::VarError::NotPresent) => SysOpOutput::err(OpErrorKind::Other(format!(
                 "Environment variable '{key}' not found",
             ))),
+            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(OpErrorKind::Other(
+                format!("Environment variable '{key}' is not valid UTF-8"),
+            )),
         }
     }
 }

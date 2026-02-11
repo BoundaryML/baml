@@ -1939,15 +1939,14 @@ impl LoweringContext {
                 // Don't use lower_expr which would desugar to get_or_panic
                 use baml_compiler_syntax::ast::EnvAccessExpr;
                 use rowan::ast::AstNode;
-                let env_access = EnvAccessExpr::cast(n.clone());
-                let field = env_access
-                    .and_then(|e| e.field())
-                    .map(|t| t.text().to_string())
-                    .unwrap_or_default();
-                self.alloc_expr(
-                    Expr::Path(vec![Name::new("env"), Name::new(&field)]),
-                    n.text_range(),
-                )
+                if let Some(field_token) = EnvAccessExpr::cast(n.clone()).and_then(|e| e.field()) {
+                    self.alloc_expr(
+                        Expr::Path(vec![Name::new("env"), Name::new(field_token.text())]),
+                        n.text_range(),
+                    )
+                } else {
+                    self.alloc_expr(Expr::Missing, n.text_range())
+                }
             } else {
                 self.lower_expr(&n)
             }
@@ -2124,11 +2123,10 @@ impl LoweringContext {
         use baml_compiler_syntax::ast::EnvAccessExpr;
         use rowan::ast::AstNode;
 
-        let env_access = EnvAccessExpr::cast(node.clone());
-        let field_name = env_access
-            .and_then(|e| e.field())
-            .map(|t| t.text().to_string())
-            .unwrap_or_default();
+        let Some(field_token) = EnvAccessExpr::cast(node.clone()).and_then(|e| e.field()) else {
+            return self.alloc_expr(Expr::Missing, node.text_range());
+        };
+        let field_name = field_token.text().to_string();
 
         // Synthesize: env.get_or_panic("FIELD_NAME")
         let callee = self.alloc_expr(
