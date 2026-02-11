@@ -2,8 +2,8 @@ use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use crate::ast::{
-    Attribute, BlockAttribute, BlockExpr, Expression, FromCST, StrongAstError, SyntaxNodeIter,
-    Type, tokens as t,
+    Attribute, BlockAttribute, BlockExpr, Expression, FromCST, KnownKind, PathExpr, StrongAstError,
+    SyntaxNodeIter, Type, tokens as t,
 };
 use crate::printer::*;
 
@@ -14,7 +14,7 @@ pub enum TopLevelDeclaration {
     Enum(EnumDecl),
     Client(ClientDecl),
     Test(TestDecl),
-    RetryPolicy(TextRange), // TODO
+    RetryPolicy(RetryPolicyDecl),
     TemplateString(TemplateStringDecl),
     TypeAlias(TypeAliasDecl),
     Unknown(TextRange),
@@ -31,7 +31,7 @@ impl FromCST for TopLevelDeclaration {
             SyntaxKind::CLIENT_DEF => TopLevelDeclaration::Client(ClientDecl::from_cst(elem)?),
             SyntaxKind::TEST_DEF => TopLevelDeclaration::Test(TestDecl::from_cst(elem)?),
             SyntaxKind::RETRY_POLICY_DEF => {
-                TopLevelDeclaration::RetryPolicy(elem.text_range()) // TODO
+                TopLevelDeclaration::RetryPolicy(RetryPolicyDecl::from_cst(elem)?)
             }
             SyntaxKind::TEMPLATE_STRING_DEF => {
                 TopLevelDeclaration::TemplateString(TemplateStringDecl::from_cst(elem)?)
@@ -53,9 +53,8 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::Enum(enum_decl) => enum_decl.print(shape, printer),
             TopLevelDeclaration::Client(client_decl) => client_decl.print(shape, printer),
             TopLevelDeclaration::Test(test_decl) => test_decl.print(shape, printer),
-            TopLevelDeclaration::RetryPolicy(range) => {
-                printer.print_input_range(*range);
-                PrintInfo::default_multi_lined()
+            TopLevelDeclaration::RetryPolicy(retry_policy_decl) => {
+                retry_policy_decl.print(shape, printer)
             }
             TopLevelDeclaration::TemplateString(template_string) => {
                 template_string.print(shape, printer)
@@ -64,6 +63,8 @@ impl Printable for TopLevelDeclaration {
                 type_alias_decl.print(shape, printer)
             }
             TopLevelDeclaration::Unknown(range) => {
+                // May not be idempotent due to whitespace changes, but that's okay because we shouldn't
+                // have unknown stuff anyway.
                 printer.print_input_range(*range);
                 PrintInfo::default_multi_lined()
             }
@@ -87,17 +88,15 @@ impl FromCST for FunctionDecl {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
-        let param_list = it.expect_node_of_kind(SyntaxKind::PARAMETER_LIST)?;
-        let params = FunctionParamList::from_cst(SyntaxElement::Node(param_list))?;
+        let params: FunctionParamList = it.expect_parse()?;
 
-        let arrow = it.expect_token_of_kind()?;
+        let arrow = it.expect_parse()?;
 
-        let return_type = it.expect_node_of_kind(SyntaxKind::TYPE_EXPR)?;
-        let return_type = Type::from_cst(SyntaxElement::Node(return_type))?;
+        let return_type: Type = it.expect_parse()?;
 
         let body = it.expect_node("of kind LLM_FUNCTION_BODY or EXPR_FUNCTION_BODY")?;
         let body = FunctionDeclBody::from_cst(SyntaxElement::Node(body))?;
@@ -112,6 +111,12 @@ impl FromCST for FunctionDecl {
             return_type,
             body,
         })
+    }
+}
+
+impl KnownKind for FunctionDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::FUNCTION_DEF
     }
 }
 
@@ -144,7 +149,7 @@ impl FromCST for FunctionParamList {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_paren = it.expect_token_of_kind()?;
+        let open_paren = it.expect_parse()?;
 
         let mut params = Vec::new();
 
@@ -180,6 +185,12 @@ impl FromCST for FunctionParamList {
             params,
             close_paren,
         })
+    }
+}
+
+impl KnownKind for FunctionParamList {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::PARAMETER_LIST
     }
 }
 
@@ -266,7 +277,7 @@ impl FromCST for FunctionParam {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         let colon = it
             .next_if_kind(SyntaxKind::COLON)
@@ -275,8 +286,7 @@ impl FromCST for FunctionParam {
 
         let ty = if let Some(colon) = colon {
             // If there is a colon, there MUST be a type
-            let ty = it.expect_next("a type")?;
-            Some((Some(colon), Type::from_cst(ty)?))
+            Some((Some(colon), it.expect_parse()?))
         } else {
             // If there is no colon, type is optional (e.g. `self` lacks a type)
             it.next_if_kind(SyntaxKind::TYPE_EXPR)
@@ -288,6 +298,12 @@ impl FromCST for FunctionParam {
         it.expect_end()?;
 
         Ok(FunctionParam { name, ty })
+    }
+}
+
+impl KnownKind for FunctionParam {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::PARAMETER
     }
 }
 
@@ -321,8 +337,7 @@ impl FromCST for FunctionDeclBody {
             )?)),
             SyntaxKind::EXPR_FUNCTION_BODY => {
                 let mut visitor = SyntaxNodeIter::new(node);
-                let block = visitor.expect_node_of_kind(SyntaxKind::BLOCK_EXPR)?;
-                let block = BlockExpr::from_cst(SyntaxElement::Node(block))?;
+                let block: BlockExpr = visitor.expect_parse()?;
                 visitor.expect_end()?;
                 Ok(FunctionDeclBody::Block(block))
             }
@@ -344,25 +359,201 @@ impl Printable for FunctionDeclBody {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::LLM_FUNCTION_BODY`] node.
 #[derive(Debug)]
 pub struct LlmFunctionBody {
-    pub todo: TextRange, // TODO
+    pub open_brace: t::LBrace,
+    /// Not guaranteed that client is before prompt in the input.
+    pub client: ClientField,
+    /// Not guaranteed that client is before prompt in the input.
+    pub prompt: PromptField,
+    pub close_brace: t::RBrace,
 }
 impl FromCST for LlmFunctionBody {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::LLM_FUNCTION_BODY)?;
 
+        let mut it = SyntaxNodeIter::new(node);
+
+        let open_brace = it.expect_parse()?;
+
+        let first = it.expect_node("CLIENT_FIELD or PROMPT_FIELD")?;
+        let (client, prompt) = match first.kind() {
+            SyntaxKind::CLIENT_FIELD => {
+                let client = ClientField::from_cst(SyntaxElement::Node(first))?;
+                let prompt: PromptField = it.expect_parse()?;
+                (client, prompt)
+            }
+            SyntaxKind::PROMPT_FIELD => {
+                let prompt = PromptField::from_cst(SyntaxElement::Node(first))?;
+                let client: ClientField = it.expect_parse()?;
+                (client, prompt)
+            }
+            found => {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "CLIENT_FIELD or PROMPT_FIELD".into(),
+                    found,
+                    at: first.text_range(),
+                });
+            }
+        };
+
+        let close_brace = it.expect_parse()?;
+
+        it.expect_end()?;
+
         return Ok(LlmFunctionBody {
-            todo: node.text_range(),
+            open_brace,
+            client,
+            prompt,
+            close_brace,
         });
     }
 }
 
+impl KnownKind for LlmFunctionBody {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::LLM_FUNCTION_BODY
+    }
+}
+
 impl Printable for LlmFunctionBody {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_input_range(self.todo);
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+
+        let inner_indent = shape.indent + printer.config.indent_width;
+        let inner_shape = Shape {
+            width: printer.config.line_width.saturating_sub(inner_indent),
+            indent: inner_indent,
+            first_line_offset: 0,
+        };
+        printer.print_spaces(inner_indent);
+        printer.print(&self.client, inner_shape.clone());
+        printer.print_newline();
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&self.prompt, inner_shape);
+
+        printer.print_newline();
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
         PrintInfo::default_multi_lined()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CLIENT_FIELD`] node.
+#[derive(Debug)]
+pub struct ClientField {
+    pub keyword: t::Client,
+    // not currently allowed
+    // pub colon: Option<t::Colon>,
+    pub name: ClientName,
+}
+
+impl FromCST for ClientField {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_FIELD)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let keyword = it.expect_parse()?;
+
+        let name = it.expect_next("STRING_LITERAL, WORD, or PATH_EXPR")?;
+        let name = match name.kind() {
+            SyntaxKind::STRING_LITERAL => ClientName::String(t::QuotedString::from_cst(name)?),
+            SyntaxKind::WORD => {
+                // Not actually a PATH_EXPR, but we'll treat it as one since the CST currently doesn't handle this.
+                let first = t::Word::from_cst(name)?;
+                let mut rest = Vec::new();
+                while let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
+                    let dot = t::Dot::from_cst(dot)?;
+                    let word = it.expect_parse()?;
+                    rest.push((dot, word));
+                }
+                ClientName::Path(PathExpr { first, rest })
+            }
+            SyntaxKind::PATH_EXPR => ClientName::Path(PathExpr::from_cst(name)?),
+            found => {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "STRING_LITERAL, WORD, or PATH_EXPR".into(),
+                    found: found,
+                    at: name.text_range(),
+                });
+            }
+        };
+
+        it.expect_end()?;
+
+        Ok(ClientField { keyword, name })
+    }
+}
+
+impl KnownKind for ClientField {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CLIENT_FIELD
+    }
+}
+
+impl Printable for ClientField {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print(&self.name, shape)
+    }
+}
+
+#[derive(Debug)]
+pub enum ClientName {
+    Path(PathExpr),
+    String(t::QuotedString),
+}
+
+impl Printable for ClientName {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ClientName::Path(path) => printer.print(path, shape),
+            ClientName::String(string) => printer.print(string, shape),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct PromptField {
+    pub prompt: t::Word,
+    pub raw_string: t::RawString,
+}
+
+impl FromCST for PromptField {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::PROMPT_FIELD)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        // It's a word, but we should never be in a `PROMPT_FIELD` context if it's not a prompt
+        let prompt = it.expect_parse()?;
+
+        let raw_string: t::RawString = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(PromptField { prompt, raw_string })
+    }
+}
+
+impl KnownKind for PromptField {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::PROMPT_FIELD
+    }
+}
+
+impl Printable for PromptField {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.prompt);
+        printer.print_str(" ");
+        printer.print(&self.raw_string, shape)
     }
 }
 
@@ -382,11 +573,11 @@ impl FromCST for ClassDecl {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
-        let open_brace = it.expect_token_of_kind()?;
+        let open_brace = it.expect_parse()?;
 
         // collect class items (fields, functions, block attributes)
         let mut items = Vec::new();
@@ -420,6 +611,12 @@ impl FromCST for ClassDecl {
             items,
             close_brace,
         })
+    }
+}
+
+impl KnownKind for ClassDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CLASS_DEF
     }
 }
 
@@ -467,7 +664,7 @@ impl FromCST for ClassField {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         // optional colon (fields can be defined without colons in BAML)
         let colon = it
@@ -476,8 +673,7 @@ impl FromCST for ClassField {
             .transpose()?;
 
         // type expression
-        let ty = it.expect_next("a type")?;
-        let ty = Type::from_cst(ty)?;
+        let ty: Type = it.expect_parse()?;
 
         // collect attributes
         let mut attributes = Vec::new();
@@ -509,6 +705,12 @@ impl FromCST for ClassField {
             attributes,
             comma,
         })
+    }
+}
+
+impl KnownKind for ClassField {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::FIELD
     }
 }
 
@@ -622,13 +824,13 @@ impl FromCST for EnumDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "enum"
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // name
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         // open brace
-        let open_brace = it.expect_token_of_kind()?;
+        let open_brace = it.expect_parse()?;
 
         let mut items = Vec::new();
         let close_brace = loop {
@@ -676,6 +878,12 @@ impl FromCST for EnumDecl {
             items,
             close_brace,
         })
+    }
+}
+
+impl KnownKind for EnumDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::ENUM_DEF
     }
 }
 
@@ -743,11 +951,17 @@ impl FromCST for EnumVariant {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         let attributes = it.map(Attribute::from_cst).collect::<Result<_, _>>()?;
 
         Ok(EnumVariant { name, attributes })
+    }
+}
+
+impl KnownKind for EnumVariant {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::ENUM_VARIANT
     }
 }
 
@@ -818,7 +1032,7 @@ impl FromCST for ClientDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "client"
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // client type: <llm>
         let client_type_node = it.expect_node_of_kind(SyntaxKind::CLIENT_TYPE)?;
@@ -826,17 +1040,16 @@ impl FromCST for ClientDecl {
         // Parse client type to get <, generic, >
         let mut ct_visitor = SyntaxNodeIter::new(client_type_node.clone());
 
-        let rangle = ct_visitor.expect_token_of_kind()?;
-        let generic = ct_visitor.expect_token_of_kind()?;
-        let langle = ct_visitor.expect_token_of_kind()?;
+        let rangle = ct_visitor.expect_parse()?;
+        let generic = ct_visitor.expect_parse()?;
+        let langle = ct_visitor.expect_parse()?;
         ct_visitor.expect_end()?;
 
         // name
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         // config block
-        let config_block = it.expect_node_of_kind(SyntaxKind::CONFIG_BLOCK)?;
-        let config_block = ConfigBlock::from_cst(SyntaxElement::Node(config_block))?;
+        let config_block: ConfigBlock = it.expect_parse()?;
 
         it.expect_end()?;
 
@@ -848,6 +1061,12 @@ impl FromCST for ClientDecl {
             name,
             config_block,
         })
+    }
+}
+
+impl KnownKind for ClientDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CLIENT_DEF
     }
 }
 
@@ -880,7 +1099,7 @@ impl FromCST for ConfigBlock {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_brace = it.expect_token_of_kind()?;
+        let open_brace = it.expect_parse()?;
 
         let mut items = Vec::new();
         let close_brace = loop {
@@ -902,6 +1121,12 @@ impl FromCST for ConfigBlock {
             items,
             close_brace,
         })
+    }
+}
+
+impl KnownKind for ConfigBlock {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CONFIG_BLOCK
     }
 }
 
@@ -945,7 +1170,7 @@ impl FromCST for ConfigItem {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let key = it.expect_token_of_kind()?;
+        let key = it.expect_parse()?;
 
         // let colon = it
         //     .next_if_kind(SyntaxKind::COLON)
@@ -965,6 +1190,12 @@ impl FromCST for ConfigItem {
             // colon,
             value,
         })
+    }
+}
+
+impl KnownKind for ConfigItem {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CONFIG_ITEM
     }
 }
 
@@ -1029,14 +1260,13 @@ impl FromCST for TestDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "test"
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // name
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         // config block
-        let config_block_node = it.expect_node_of_kind(SyntaxKind::CONFIG_BLOCK)?;
-        let config_block = ConfigBlock::from_cst(SyntaxElement::Node(config_block_node))?;
+        let config_block: ConfigBlock = it.expect_parse()?;
 
         it.expect_end()?;
 
@@ -1045,6 +1275,12 @@ impl FromCST for TestDecl {
             name,
             config_block,
         })
+    }
+}
+
+impl KnownKind for TestDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TEST_DEF
     }
 }
 
@@ -1074,14 +1310,13 @@ impl FromCST for RetryPolicyDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "retry_policy"
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // name
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         // config block
-        let config_block = it.expect_node_of_kind(SyntaxKind::CONFIG_BLOCK)?;
-        let config_block = ConfigBlock::from_cst(SyntaxElement::Node(config_block))?;
+        let config_block: ConfigBlock = it.expect_parse()?;
 
         it.expect_end()?;
 
@@ -1090,6 +1325,22 @@ impl FromCST for RetryPolicyDecl {
             name,
             config_block,
         })
+    }
+}
+
+impl KnownKind for RetryPolicyDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::RETRY_POLICY_DEF
+    }
+}
+
+impl Printable for RetryPolicyDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print(&self.config_block, shape)
     }
 }
 
@@ -1109,18 +1360,16 @@ impl FromCST for TemplateStringDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "template_string"
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // name
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         // args
-        let args = it.expect_node_of_kind(SyntaxKind::PARAMETER_LIST)?;
-        let args = FunctionParamList::from_cst(SyntaxElement::Node(args))?;
+        let args: FunctionParamList = it.expect_parse()?;
 
         // raw string
-        let raw_string = it.expect_node_of_kind(SyntaxKind::RAW_STRING_LITERAL)?;
-        let raw_string = t::RawString::from_cst(SyntaxElement::Node(raw_string))?;
+        let raw_string: t::RawString = it.expect_parse()?;
 
         it.expect_end()?;
 
@@ -1130,6 +1379,12 @@ impl FromCST for TemplateStringDecl {
             args,
             raw_string,
         })
+    }
+}
+
+impl KnownKind for TemplateStringDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TEMPLATE_STRING_DEF
     }
 }
 
@@ -1168,17 +1423,16 @@ impl FromCST for TypeAliasDecl {
         let mut it = SyntaxNodeIter::new(node);
 
         // keyword: "type" (it's actually just a WORD, not a keyword)
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // name
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         // equals
-        let equals = it.expect_token_of_kind()?;
+        let equals = it.expect_parse()?;
 
         // type expression
-        let type_expr = it.expect_node_of_kind(SyntaxKind::TYPE_EXPR)?;
-        let type_expr = Type::from_cst(SyntaxElement::Node(type_expr))?;
+        let type_expr: Type = it.expect_parse()?;
 
         // optional semicolon
         let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
@@ -1192,6 +1446,12 @@ impl FromCST for TypeAliasDecl {
             type_expr,
             semicolon,
         })
+    }
+}
+
+impl KnownKind for TypeAliasDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TYPE_ALIAS_DEF
     }
 }
 

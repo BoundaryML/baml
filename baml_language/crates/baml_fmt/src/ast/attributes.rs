@@ -1,7 +1,7 @@
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
 use rowan::TextRange;
 
-use crate::ast::{FromCST, StrongAstError, SyntaxNodeIter, tokens as t};
+use crate::ast::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, tokens as t};
 use crate::printer::*;
 
 /// Corresponds to a [`SyntaxKind::BLOCK_ATTRIBUTE`] node.
@@ -20,7 +20,7 @@ impl FromCST for BlockAttribute {
         let mut it = SyntaxNodeIter::new(node);
 
         // @@
-        let atat = it.expect_token_of_kind()?;
+        let atat = it.expect_parse()?;
 
         // name (can have dots like @stream.done)
         let name = AttributeName::take(&mut it)?;
@@ -28,6 +28,12 @@ impl FromCST for BlockAttribute {
         let args = it.next().map(AttributeArgs::from_cst).transpose()?;
 
         Ok(BlockAttribute { atat, name, args })
+    }
+}
+
+impl KnownKind for BlockAttribute {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BLOCK_ATTRIBUTE
     }
 }
 
@@ -59,7 +65,7 @@ impl FromCST for Attribute {
         let mut it = SyntaxNodeIter::new(node);
 
         // @
-        let at = it.expect_token_of_kind()?;
+        let at = it.expect_parse()?;
 
         // name (can have dots like @stream.done)
         let name_first = it.expect_next("attribute name part")?;
@@ -96,6 +102,12 @@ impl FromCST for Attribute {
         };
 
         Ok(Attribute { at, name, args })
+    }
+}
+
+impl KnownKind for Attribute {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::ATTRIBUTE
     }
 }
 
@@ -182,22 +194,200 @@ impl Printable for AttributeName {
 /// Corresponds to a [`SyntaxKind::ATTRIBUTE_ARGS`] node.
 #[derive(Debug)]
 pub struct AttributeArgs {
-    pub todo: TextRange, // TODO
+    pub open_paren: t::LParen,
+    pub args: Vec<(AttributeArg, Option<t::Comma>)>,
+    pub close_paren: t::RParen,
 }
 impl FromCST for AttributeArgs {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::ATTRIBUTE_ARGS)?;
 
-        let todo = node.text_range();
+        let mut it = SyntaxNodeIter::new(node);
 
-        Ok(AttributeArgs { todo })
+        let open_paren = it.expect_parse()?;
+
+        let mut args = Vec::new();
+        let close_paren = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
+            };
+            match elem.kind() {
+                SyntaxKind::R_PAREN => {
+                    break it.expect_parse()?;
+                }
+                _ => {
+                    let next = it.expect_next("attribute argument")?;
+                    let next = AttributeArg::from_cst(next)?;
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
+                        .transpose()?;
+                    args.push((next, comma));
+                }
+            }
+        };
+
+        it.expect_end()?;
+
+        Ok(AttributeArgs {
+            open_paren,
+            args,
+            close_paren,
+        })
+    }
+}
+
+impl KnownKind for AttributeArgs {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::ATTRIBUTE_ARGS
+    }
+}
+
+impl PrintMultiLine for AttributeArgs {
+    /// Multi-line layout: each argument on its own indented line with trailing comma.
+    /// Closing paren on its own line.
+    ///
+    /// ```baml
+    /// (
+    ///     "quoted string",
+    ///     {{ this > 0 }},
+    ///     #"raw string"#,
+    /// )
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
+        let inner_shape = Shape {
+            width: printer.config.line_width.saturating_sub(inner_indent),
+            indent: inner_indent,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.open_paren);
+        printer.print_newline();
+
+        for (arg, comma) in &self.args {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(arg, inner_shape.clone());
+            if let Some(comma) = comma {
+                printer.print_raw_token(comma);
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
     }
 }
 
 impl Printable for AttributeArgs {
-    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_input_range(self.todo);
-        PrintInfo::default_single_line()
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+
+        single_line_printer.print_raw_token(&self.open_paren);
+        for (i, (arg, comma)) in self.args.iter().enumerate() {
+            multi_lined |= single_line_printer
+                .print(arg, Shape::unlimited_single_line())
+                .multi_lined;
+            if i + 1 < self.args.len() {
+                if let Some(comma) = comma {
+                    single_line_printer.print_raw_token(comma);
+                } else {
+                    single_line_printer.print_str(",");
+                }
+                single_line_printer.print_str(" ");
+            }
+            if multi_lined || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(self, shape, printer);
+            }
+        }
+        single_line_printer.print_raw_token(&self.close_paren);
+
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum AttributeArg {
+    QuotedString(t::QuotedString),
+    RawString(t::RawString),
+    /// Something like `{{ this > 0 }}`
+    ///
+    /// TODO: the [`SyntaxKind::EXPR`] node currently just contains unstructured tokens
+    AttrExpr(TextRange),
+    /// Unquoted strings are single words.
+    ///
+    /// Historically, multi-word unquoted strings were allowed. This is now an error.
+    UnquotedString(t::Word),
+}
+
+impl FromCST for AttributeArg {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::STRING_LITERAL => {
+                let string = t::QuotedString::from_cst(elem)?;
+                Ok(AttributeArg::QuotedString(string))
+            }
+            SyntaxKind::RAW_STRING_LITERAL => {
+                let string = t::RawString::from_cst(elem)?;
+                Ok(AttributeArg::RawString(string))
+            }
+            SyntaxKind::EXPR => {
+                let node = StrongAstError::assert_is_node(elem)?;
+                let start = node
+                    .first_child_token_of_kind(SyntaxKind::L_BRACE)
+                    .ok_or_else(|| {
+                        StrongAstError::missing(SyntaxKind::L_BRACE, node.text_range())
+                    })?;
+
+                Ok(AttributeArg::AttrExpr(TextRange::new(
+                    start.text_range().start(),
+                    node.text_range().end(),
+                )))
+            }
+            SyntaxKind::UNQUOTED_STRING => {
+                let node = StrongAstError::assert_is_node(elem)?;
+                let mut it = SyntaxNodeIter::new(node);
+                let word = it.expect_parse()?;
+                it.expect_end()?; // multi-word unquoted strings are not valid in the new engine
+
+                Ok(AttributeArg::UnquotedString(word))
+            }
+            found => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "STRING_LITERAL, RAW_STRING_LITERAL, EXPR, or UNQUOTED_STRING"
+                    .into(),
+                found,
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for AttributeArg {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            AttributeArg::QuotedString(s) => printer.print(s, shape),
+            AttributeArg::RawString(s) => printer.print(s, shape),
+            AttributeArg::AttrExpr(range) => {
+                printer.print_input_range(*range);
+                PrintInfo {
+                    multi_lined: printer.input[*range].contains('\n'),
+                }
+            }
+            AttributeArg::UnquotedString(s) => {
+                printer.print_raw_token(s);
+                PrintInfo::default_single_line()
+            }
+        }
     }
 }

@@ -2,7 +2,7 @@
 
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
-use crate::ast::{FromCST, Literal, StrongAstError, SyntaxNodeIter, tokens as t};
+use crate::ast::{FromCST, KnownKind, Literal, StrongAstError, SyntaxNodeIter, tokens as t};
 use crate::printer::*;
 
 /// Corresponds to a [`SyntaxKind::MATCH_PATTERN`] node.
@@ -77,6 +77,12 @@ impl FromCST for MatchPattern {
         } else {
             Ok(ty.into())
         }
+    }
+}
+
+impl KnownKind for MatchPattern {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::MATCH_PATTERN
     }
 }
 
@@ -261,7 +267,7 @@ impl UnionPatternMember {
 
         if let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
             let dot = t::Dot::from_cst(dot)?;
-            let variant_name = it.expect_token_of_kind()?;
+            let variant_name = it.expect_parse()?;
             Ok(UnionPatternMember::EnumVariant(EnumVariantPattern {
                 enum_name: first,
                 dot,

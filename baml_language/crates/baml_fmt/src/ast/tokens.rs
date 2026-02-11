@@ -1,5 +1,5 @@
 use crate::{
-    ast::{FromCST, StrongAstError},
+    ast::{FromCST, KnownKind, StrongAstError},
     printer::*,
 };
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
@@ -7,7 +7,6 @@ use rowan::TextRange;
 
 pub trait Token {
     fn span(&self) -> TextRange;
-    fn syntax_kind() -> SyntaxKind;
 }
 
 pub trait KeywordToken: Token {}
@@ -28,7 +27,9 @@ macro_rules! define_keyword_tokens {
                 fn span(&self) -> TextRange {
                     self.token_span
                 }
-                fn syntax_kind() -> SyntaxKind {
+            }
+            impl KnownKind for $name {
+                fn kind() -> SyntaxKind {
                     SyntaxKind::$syntax_kind
                 }
             }
@@ -95,7 +96,9 @@ macro_rules! define_punctuation_tokens {
                 fn span(&self) -> TextRange {
                     self.token_span
                 }
-                fn syntax_kind() -> SyntaxKind {
+            }
+            impl KnownKind for $name {
+                fn kind() -> SyntaxKind {
                     SyntaxKind::$syntax_kind
                 }
             }
@@ -385,7 +388,9 @@ impl Token for IntegerLiteral {
     fn span(&self) -> TextRange {
         self.token_span
     }
-    fn syntax_kind() -> SyntaxKind {
+}
+impl KnownKind for IntegerLiteral {
+    fn kind() -> SyntaxKind {
         SyntaxKind::INTEGER_LITERAL
     }
 }
@@ -411,7 +416,9 @@ impl Token for FloatLiteral {
     fn span(&self) -> TextRange {
         self.token_span
     }
-    fn syntax_kind() -> SyntaxKind {
+}
+impl KnownKind for FloatLiteral {
+    fn kind() -> SyntaxKind {
         SyntaxKind::FLOAT_LITERAL
     }
 }
@@ -437,7 +444,9 @@ impl Token for Word {
     fn span(&self) -> TextRange {
         self.token_span
     }
-    fn syntax_kind() -> SyntaxKind {
+}
+impl KnownKind for Word {
+    fn kind() -> SyntaxKind {
         SyntaxKind::WORD
     }
 }
@@ -472,8 +481,18 @@ impl Token for QuotedString {
     fn span(&self) -> TextRange {
         self.token_span
     }
-    fn syntax_kind() -> SyntaxKind {
+}
+impl KnownKind for QuotedString {
+    fn kind() -> SyntaxKind {
         SyntaxKind::STRING_LITERAL
+    }
+}
+impl Printable for QuotedString {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(self);
+        PrintInfo {
+            multi_lined: printer.input[self.span()].contains('\n'),
+        }
     }
 }
 
@@ -500,7 +519,9 @@ impl Token for RawString {
     fn span(&self) -> TextRange {
         self.token_span
     }
-    fn syntax_kind() -> SyntaxKind {
+}
+impl KnownKind for RawString {
+    fn kind() -> SyntaxKind {
         SyntaxKind::RAW_STRING_LITERAL
     }
 }
@@ -591,7 +612,9 @@ impl Token for HeaderComment {
     fn span(&self) -> TextRange {
         self.token_span
     }
-    fn syntax_kind() -> SyntaxKind {
+}
+impl KnownKind for HeaderComment {
+    fn kind() -> SyntaxKind {
         SyntaxKind::HEADER_COMMENT
     }
 }

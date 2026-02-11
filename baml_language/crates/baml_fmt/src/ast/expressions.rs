@@ -5,7 +5,8 @@ use rowan::TextRange;
 
 use crate::{
     ast::{
-        BinaryOp, FromCST, MatchPattern, Statement, StrongAstError, SyntaxNodeIter, Token, UnaryOp,
+        BinaryOp, FromCST, KnownKind, MatchPattern, Statement, StrongAstError, SyntaxNodeIter,
+        Token, UnaryOp,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
 };
@@ -144,7 +145,7 @@ impl FromCST for PathExpr {
         let mut it = SyntaxNodeIter::new(node);
 
         // First WORD
-        let first = it.expect_token_of_kind()?;
+        let first = it.expect_parse()?;
 
         let mut rest = Vec::new();
 
@@ -152,7 +153,7 @@ impl FromCST for PathExpr {
         while let Some(elem) = it.next() {
             if elem.kind() == SyntaxKind::DOT {
                 let dot = t::Dot::from_cst(elem)?;
-                let word = it.expect_token_of_kind()?;
+                let word = it.expect_parse()?;
 
                 rest.push((dot, word));
             } else {
@@ -164,6 +165,12 @@ impl FromCST for PathExpr {
         }
 
         Ok(PathExpr { first, rest })
+    }
+}
+
+impl KnownKind for PathExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::PATH_EXPR
     }
 }
 
@@ -232,12 +239,12 @@ impl FromCST for ParenExpr {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_paren = it.expect_token_of_kind()?;
+        let open_paren = it.expect_parse()?;
 
         let expr = it.expect_next("an expression")?;
         let expr = Expression::from_cst(expr)?;
 
-        let close_paren = it.expect_token_of_kind()?;
+        let close_paren = it.expect_parse()?;
 
         it.expect_end()?;
 
@@ -246,6 +253,12 @@ impl FromCST for ParenExpr {
             expr: Box::new(expr),
             close_paren,
         })
+    }
+}
+
+impl KnownKind for ParenExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::PAREN_EXPR
     }
 }
 
@@ -339,6 +352,12 @@ impl FromCST for BinaryExpr {
             op,
             sides: Box::new((left_expr, right_expr)),
         })
+    }
+}
+
+impl KnownKind for BinaryExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BINARY_EXPR
     }
 }
 
@@ -530,6 +549,12 @@ impl FromCST for UnaryExpr {
     }
 }
 
+impl KnownKind for UnaryExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::UNARY_EXPR
+    }
+}
+
 impl Printable for UnaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
@@ -557,15 +582,13 @@ impl FromCST for IfExpr {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_IF
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // PAREN_EXPR
-        let condition = it.expect_node_of_kind(SyntaxKind::PAREN_EXPR)?;
-        let condition = ParenExpr::from_cst(SyntaxElement::Node(condition))?;
+        let condition: ParenExpr = it.expect_parse()?;
 
         // BLOCK_EXPR
-        let block_node = it.expect_node_of_kind(SyntaxKind::BLOCK_EXPR)?;
-        let block = BlockExpr::from_cst(SyntaxElement::Node(block_node))?;
+        let block: BlockExpr = it.expect_parse()?;
 
         // Optional else branch
         let else_branch = if let Some(elem) = it.next() {
@@ -601,6 +624,12 @@ impl FromCST for IfExpr {
             block,
             else_branch,
         })
+    }
+}
+
+impl KnownKind for IfExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::IF_EXPR
     }
 }
 
@@ -660,20 +689,20 @@ impl FromCST for MatchExpr {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_MATCH
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // L_PAREN
-        let open_paren = it.expect_token_of_kind()?;
+        let open_paren = it.expect_parse()?;
 
         // Scrutinee expression (can be any node that represents an expression)
         let scrutinee_node = it.expect_next("scrutinee expression")?;
         let scrutinee = Box::new(Expression::from_cst(scrutinee_node)?);
 
         // R_PAREN
-        let close_paren = it.expect_token_of_kind()?;
+        let close_paren = it.expect_parse()?;
 
         // L_BRACE
-        let open_brace = it.expect_token_of_kind()?;
+        let open_brace = it.expect_parse()?;
 
         // Collect match arms
         let mut arms = Vec::new();
@@ -710,6 +739,12 @@ impl FromCST for MatchExpr {
             arms,
             close_brace,
         })
+    }
+}
+
+impl KnownKind for MatchExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::MATCH_EXPR
     }
 }
 
@@ -761,8 +796,7 @@ impl FromCST for MatchArm {
         let mut it = SyntaxNodeIter::new(node);
 
         // MATCH_PATTERN
-        let pattern_node = it.expect_node_of_kind(SyntaxKind::MATCH_PATTERN)?;
-        let pattern = MatchPattern::from_cst(SyntaxElement::Node(pattern_node))?;
+        let pattern: MatchPattern = it.expect_parse()?;
 
         // Check for optional guard (if condition)
         let guard = if let Some(elem) = it.next_if_kind(SyntaxKind::KW_IF) {
@@ -778,7 +812,7 @@ impl FromCST for MatchArm {
         };
 
         // FAT_ARROW
-        let fat_arrow = it.expect_token_of_kind()?;
+        let fat_arrow = it.expect_parse()?;
 
         // Body expression
         let body_node = it.expect_next("match arm body")?;
@@ -795,6 +829,12 @@ impl FromCST for MatchArm {
             body: Box::new(body),
             comma,
         })
+    }
+}
+
+impl KnownKind for MatchArm {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::MATCH_ARM
     }
 }
 
@@ -923,10 +963,15 @@ impl FromCST for CallExpr {
         let callee = Box::new(Expression::from_cst(callee_node)?);
 
         // CALL_ARGS
-        let args = it.expect_node_of_kind(SyntaxKind::CALL_ARGS)?;
-        let args = CallArgs::from_cst(SyntaxElement::Node(args))?;
+        let args: CallArgs = it.expect_parse()?;
 
         Ok(CallExpr { callee, args })
+    }
+}
+
+impl KnownKind for CallExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CALL_EXPR
     }
 }
 
@@ -953,7 +998,7 @@ impl FromCST for CallArgs {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_paren = it.expect_token_of_kind()?;
+        let open_paren = it.expect_parse()?;
 
         let mut args = Vec::new();
         let close_paren = loop {
@@ -982,6 +1027,12 @@ impl FromCST for CallArgs {
             args,
             close_paren,
         })
+    }
+}
+
+impl KnownKind for CallArgs {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CALL_ARGS
     }
 }
 
@@ -1065,14 +1116,14 @@ impl FromCST for IndexExpr {
         let base = Box::new(Expression::from_cst(base_node)?);
 
         // L_BRACKET
-        let open_bracket = it.expect_token_of_kind()?;
+        let open_bracket = it.expect_parse()?;
 
         // Index expression
         let index_node = it.expect_next("index expression")?;
         let index = Box::new(Expression::from_cst(index_node)?);
 
         // R_BRACKET
-        let close_bracket = it.expect_token_of_kind()?;
+        let close_bracket = it.expect_parse()?;
 
         it.expect_end()?;
 
@@ -1082,6 +1133,12 @@ impl FromCST for IndexExpr {
             index,
             close_bracket,
         })
+    }
+}
+
+impl KnownKind for IndexExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::INDEX_EXPR
     }
 }
 
@@ -1138,14 +1195,20 @@ impl FromCST for FieldAccessExpr {
         let base = Box::new(Expression::from_cst(base_node)?);
 
         // DOT
-        let dot = it.expect_token_of_kind()?;
+        let dot = it.expect_parse()?;
 
         // WORD (field name)
-        let field = it.expect_token_of_kind()?;
+        let field = it.expect_parse()?;
 
         it.expect_end()?;
 
         Ok(FieldAccessExpr { base, dot, field })
+    }
+}
+
+impl KnownKind for FieldAccessExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::FIELD_ACCESS_EXPR
     }
 }
 
@@ -1190,7 +1253,7 @@ impl Printable for FieldAccessExpr {
     }
 }
 
-/// Corresponds to a [`SyntaxKind::BLOCK_EXPR`].
+/// Corresponds to a [`SyntaxKind::BLOCK_EXPR`] node.
 #[derive(Debug)]
 pub struct BlockExpr {
     pub open_brace: t::LBrace,
@@ -1208,7 +1271,7 @@ impl FromCST for BlockExpr {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_brace = it.expect_token_of_kind()?;
+        let open_brace = it.expect_parse()?;
 
         // Collect all statements and optional final expression
         let mut stmts = Vec::new();
@@ -1250,6 +1313,12 @@ impl FromCST for BlockExpr {
             expr: expr.map(Box::new),
             close_brace,
         })
+    }
+}
+
+impl KnownKind for BlockExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BLOCK_EXPR
     }
 }
 
@@ -1299,7 +1368,7 @@ impl FromCST for ArrayInitializer {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_bracket = it.expect_token_of_kind()?;
+        let open_bracket = it.expect_parse()?;
 
         let mut elements: Vec<(Expression, Option<t::Comma>)> = Vec::new();
 
@@ -1328,6 +1397,12 @@ impl FromCST for ArrayInitializer {
             elements,
             close_bracket,
         });
+    }
+}
+
+impl KnownKind for ArrayInitializer {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::ARRAY_LITERAL
     }
 }
 
@@ -1419,9 +1494,9 @@ impl FromCST for ObjectInitializer {
         let mut it = SyntaxNodeIter::new(node);
 
         // WORD (object type name)
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
-        let open_brace = it.expect_token_of_kind()?;
+        let open_brace = it.expect_parse()?;
 
         let mut fields = Vec::new();
         let close_brace = loop {
@@ -1458,6 +1533,12 @@ impl FromCST for ObjectInitializer {
             fields,
             close_brace,
         })
+    }
+}
+
+impl KnownKind for ObjectInitializer {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::OBJECT_LITERAL
     }
 }
 
@@ -1553,7 +1634,7 @@ impl FromCST for MapLiteral {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_brace = it.expect_token_of_kind()?;
+        let open_brace = it.expect_parse()?;
 
         let mut fields = Vec::new();
         let close_brace = loop {
@@ -1589,6 +1670,12 @@ impl FromCST for MapLiteral {
             fields,
             close_brace,
         })
+    }
+}
+
+impl KnownKind for MapLiteral {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::MAP_LITERAL
     }
 }
 
@@ -1679,9 +1766,9 @@ impl FromCST for ObjectField {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
-        let colon = it.expect_token_of_kind()?;
+        let colon = it.expect_parse()?;
 
         let value = it.expect_next("value")?;
         let value = Expression::from_cst(value)?;
@@ -1689,6 +1776,12 @@ impl FromCST for ObjectField {
         it.expect_end()?;
 
         Ok(ObjectField { name, colon, value })
+    }
+}
+
+impl KnownKind for ObjectField {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::OBJECT_FIELD
     }
 }
 

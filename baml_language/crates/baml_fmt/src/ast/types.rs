@@ -4,7 +4,7 @@
 
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
-use super::{FromCST, StrongAstError, tokens as t};
+use super::{FromCST, KnownKind, StrongAstError, tokens as t};
 use crate::{ast::SyntaxNodeIter, printer::*};
 use rowan::TextRange;
 
@@ -51,6 +51,12 @@ impl FromCST for Type {
                 rest,
             }))
         }
+    }
+}
+
+impl KnownKind for Type {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TYPE_EXPR
     }
 }
 
@@ -282,9 +288,8 @@ impl UnionTypeMember {
                         .iter()
                         .any(|item| item.0.name.is_some() || item.1.is_some());
                 if must_be_func_type {
-                    let arrow = it.expect_token_of_kind()?;
-                    let return_ty = it.expect_next("a type")?;
-                    let return_ty = Type::from_cst(return_ty)?;
+                    let arrow = it.expect_parse()?;
+                    let return_ty: Type = it.expect_parse()?;
 
                     Ok(UnionTypeMember::Function(FunctionType {
                         open_paren,
@@ -309,7 +314,7 @@ impl UnionTypeMember {
                 let mut rest = Vec::new();
                 while let Some(double_colon) = it.next_if_kind(SyntaxKind::DOUBLE_COLON) {
                     let double_colon = t::DoubleColon::from_cst(double_colon)?;
-                    let word = it.expect_token_of_kind()?;
+                    let word = it.expect_parse()?;
                     rest.push((double_colon, word));
                 }
                 Ok(UnionTypeMember::Path(PathType { first, rest }))
@@ -338,7 +343,7 @@ impl UnionTypeMember {
                 let mut brackets = Vec::new();
                 while let Some(open_bracket) = it.next_if_kind(SyntaxKind::L_BRACKET) {
                     let open_bracket = t::LBracket::from_cst(open_bracket)?;
-                    let close_bracket: t::RBracket = it.expect_token_of_kind()?;
+                    let close_bracket: t::RBracket = it.expect_parse()?;
                     brackets.push((open_bracket, close_bracket));
                 }
                 ty = UnionTypeMember::Array(ArrayType {
@@ -468,10 +473,9 @@ impl FromCST for TypeArgs {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let open_angle: t::Less = it.expect_token_of_kind()?;
+        let open_angle: t::Less = it.expect_parse()?;
 
-        let first = it.expect_next("a type")?;
-        let first = Type::from_cst(first)?;
+        let first: Type = it.expect_parse()?;
 
         let mut rest = Vec::new();
         let close_angle = loop {
@@ -482,8 +486,7 @@ impl FromCST for TypeArgs {
                 SyntaxKind::COMMA => {
                     let comma = StrongAstError::assert_is_token(elem)?;
                     let comma = t::Comma::new_from_span(comma.text_range());
-                    let next = it.expect_next("a type")?;
-                    let next = Type::from_cst(next)?;
+                    let next: Type = it.expect_parse()?;
                     rest.push((comma, next));
                 }
                 SyntaxKind::GREATER => {
@@ -509,6 +512,12 @@ impl FromCST for TypeArgs {
             rest,
             close_angle,
         })
+    }
+}
+
+impl KnownKind for TypeArgs {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TYPE_ARGS
     }
 }
 
@@ -692,8 +701,7 @@ impl FromCST for FunctionTypeParam {
             None
         };
 
-        let ty = it.expect_next("a type")?;
-        let ty = Type::from_cst(ty)?;
+        let ty: Type = it.expect_parse()?;
 
         it.expect_end()?;
 

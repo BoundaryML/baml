@@ -3,8 +3,8 @@ use rowan::TextRange;
 
 use crate::{
     ast::{
-        BlockExpr, Expression, FromCST, HeaderComment, ParenExpr, StrongAstError, SyntaxNodeIter,
-        Type,
+        BlockExpr, Expression, FromCST, HeaderComment, KnownKind, ParenExpr, StrongAstError,
+        SyntaxNodeIter, Type,
     },
     printer::*,
 };
@@ -132,13 +132,12 @@ impl FromCST for LetStmt {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
-        let name = it.expect_token_of_kind()?;
+        let name = it.expect_parse()?;
 
         let type_annotation = if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
-            let ty = it.expect_next("a type")?;
-            Some((t::Colon::from_cst(colon)?, Type::from_cst(ty)?))
+            Some((t::Colon::from_cst(colon)?, it.expect_parse()?))
         } else {
             None
         };
@@ -150,7 +149,7 @@ impl FromCST for LetStmt {
             None
         };
 
-        let semicolon: t::Semicolon = it.expect_token_of_kind()?;
+        let semicolon: t::Semicolon = it.expect_parse()?;
         it.expect_end()?;
 
         Ok(LetStmt {
@@ -160,6 +159,12 @@ impl FromCST for LetStmt {
             initializer,
             semicolon,
         })
+    }
+}
+
+impl KnownKind for LetStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::LET_STMT
     }
 }
 
@@ -205,15 +210,13 @@ impl FromCST for WhileStmt {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_WHILE
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
-        // L_PAREN
-        let condition = it.expect_node_of_kind(SyntaxKind::PAREN_EXPR)?;
-        let condition = ParenExpr::from_cst(SyntaxElement::Node(condition))?;
+        // PAREN_EXPR
+        let condition: ParenExpr = it.expect_parse()?;
 
         // BLOCK_EXPR
-        let body_node = it.expect_node_of_kind(SyntaxKind::BLOCK_EXPR)?;
-        let body = BlockExpr::from_cst(SyntaxElement::Node(body_node))?;
+        let body: BlockExpr = it.expect_parse()?;
 
         it.expect_end()?;
 
@@ -222,6 +225,12 @@ impl FromCST for WhileStmt {
             condition,
             body,
         })
+    }
+}
+
+impl KnownKind for WhileStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::WHILE_STMT
     }
 }
 
@@ -265,9 +274,9 @@ impl FromCST for ForStmt {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_FOR
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
-        let open_paren = it.expect_token_of_kind()?;
+        let open_paren = it.expect_parse()?;
 
         let args_first = it.expect_next("a statement")?;
         let mut args_first = Statement::from_cst(args_first)?;
@@ -279,7 +288,7 @@ impl FromCST for ForStmt {
             let expr = it.expect_next("iterator expression")?;
             let expression = Expression::from_cst(expr)?;
 
-            let close_paren = it.expect_token_of_kind()?;
+            let close_paren = it.expect_parse()?;
 
             ForArgs::Iterator(ForIteratorArgs {
                 open_paren,
@@ -291,7 +300,7 @@ impl FromCST for ForStmt {
         } else {
             // C-style
             if let Statement::Expr(expr_first) = args_first {
-                let semicolon = it.expect_token_of_kind()?;
+                let semicolon = it.expect_parse()?;
                 args_first = Statement::Expr(ExpressionStmt {
                     expr: expr_first.expr,
                     semicolon: Some(semicolon),
@@ -301,12 +310,12 @@ impl FromCST for ForStmt {
             let condition = it.expect_next("an expression")?;
             let condition = Expression::from_cst(condition)?;
 
-            let semicolon = it.expect_token_of_kind()?;
+            let semicolon = it.expect_parse()?;
 
             let update = it.expect_next("a statement")?;
             let update = Statement::from_cst(update)?;
 
-            let close_paren = it.expect_token_of_kind()?;
+            let close_paren = it.expect_parse()?;
 
             ForArgs::CStyle(ForCStyleArgs {
                 open_paren,
@@ -319,8 +328,7 @@ impl FromCST for ForStmt {
         };
 
         // BLOCK_EXPR
-        let body_node = it.expect_node_of_kind(SyntaxKind::BLOCK_EXPR)?;
-        let body = BlockExpr::from_cst(SyntaxElement::Node(body_node))?;
+        let body: BlockExpr = it.expect_parse()?;
 
         it.expect_end()?;
 
@@ -329,6 +337,12 @@ impl FromCST for ForStmt {
             args,
             body,
         })
+    }
+}
+
+impl KnownKind for ForStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::FOR_EXPR
     }
 }
 
@@ -515,7 +529,7 @@ impl FromCST for ReturnStmt {
         let mut it = SyntaxNodeIter::new(node);
 
         // KW_RETURN
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         // Optional return value
         let value = it
@@ -540,6 +554,12 @@ impl FromCST for ReturnStmt {
             value,
             semicolon,
         })
+    }
+}
+
+impl KnownKind for ReturnStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::RETURN_STMT
     }
 }
 
@@ -576,7 +596,7 @@ impl FromCST for BreakStmt {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         let semicolon = it
             .next()
@@ -590,6 +610,12 @@ impl FromCST for BreakStmt {
         it.expect_end()?;
 
         Ok(BreakStmt { keyword, semicolon })
+    }
+}
+
+impl KnownKind for BreakStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BREAK_STMT
     }
 }
 
@@ -621,7 +647,7 @@ impl FromCST for ContinueStmt {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         let semicolon = it
             .next()
@@ -635,6 +661,12 @@ impl FromCST for ContinueStmt {
         it.expect_end()?;
 
         Ok(ContinueStmt { keyword, semicolon })
+    }
+}
+
+impl KnownKind for ContinueStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CONTINUE_STMT
     }
 }
 
@@ -665,7 +697,7 @@ impl FromCST for AssertStmt {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let keyword = it.expect_token_of_kind()?;
+        let keyword = it.expect_parse()?;
 
         let condition = it.expect_next("some expression")?;
         let condition = Expression::from_cst(condition)?;
@@ -686,6 +718,12 @@ impl FromCST for AssertStmt {
             condition,
             semicolon,
         })
+    }
+}
+
+impl KnownKind for AssertStmt {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::ASSERT_STMT
     }
 }
 

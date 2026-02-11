@@ -1,7 +1,6 @@
 mod attributes;
 mod declarations;
 mod expressions;
-mod generics;
 mod pattern;
 mod statements;
 mod tokens;
@@ -14,7 +13,6 @@ pub use attributes::*;
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use declarations::*;
 pub use expressions::*;
-pub use generics::*;
 pub use pattern::*;
 use rowan::TextRange;
 pub use statements::*;
@@ -25,6 +23,12 @@ use crate::printer::Printable;
 
 pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
+}
+
+/// This AST node corresponds 1:1 with a [`SyntaxKind`].
+pub trait KnownKind {
+    /// Should be constant, but we can't use `const` because it's a trait.
+    fn kind() -> SyntaxKind;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -224,12 +228,12 @@ impl SyntaxNodeIter {
 
     /// Consumes the next element and checks it:
     /// - If there are no more elements, returns [`StrongAstError::MissingExpectedElement`].
-    /// - Otherwise, the token will parse as the given token type.
+    /// - Otherwise, the element will parse as the given type.
     ///
     /// Consumes an element even if it returns an error.
-    pub fn expect_token_of_kind<T: Token + FromCST>(&mut self) -> Result<T, StrongAstError> {
+    pub fn expect_parse<T: KnownKind + FromCST>(&mut self) -> Result<T, StrongAstError> {
         let Some(elem) = self.next() else {
-            return Err(StrongAstError::missing(T::syntax_kind(), self.parent));
+            return Err(StrongAstError::missing(T::kind(), self.parent));
         };
         T::from_cst(elem)
     }
@@ -326,6 +330,12 @@ impl FromCST for SourceFile {
         }
 
         Ok(SourceFile { items })
+    }
+}
+
+impl KnownKind for SourceFile {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::SOURCE_FILE
     }
 }
 
