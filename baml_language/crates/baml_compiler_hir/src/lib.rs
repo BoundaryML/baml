@@ -2113,11 +2113,40 @@ pub struct HirValidationResult {
 /// - Field name matches type name validation (Python-specific)
 pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidationResult {
     let hir_diagnostics = validate_reserved_names(db, root);
+    let mut name_errors = validate_duplicate_names(db, root);
+    name_errors.extend(validate_test_functions(db, root));
 
     HirValidationResult {
         hir_diagnostics,
-        name_errors: validate_duplicate_names(db, root),
+        name_errors,
     }
+}
+
+fn validate_test_functions(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
+    let symbol_table = symbol_table::symbol_table(db, root);
+    let mut errors = Vec::new();
+
+    for file in root.files(db) {
+        let tree = syntax_tree(db, *file);
+        let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
+        let file_id = file.file_id(db);
+
+        for item in source_file.items() {
+            if let baml_compiler_syntax::ast::Item::Test(test_def) = item {
+                for func_token in test_def.function_names() {
+                    let name = Name::new(func_token.text());
+                    let fqn = QualifiedName::local(name.clone());
+                    if symbol_table.lookup_value(db, &fqn).is_none() {
+                        errors.push(NameError::UnknownFunctionInTest {
+                            function_name: name.to_string(),
+                            span: Span::new(file_id, func_token.text_range()),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    errors
 }
 
 /// Validate that there are no duplicate names in the project.

@@ -1411,20 +1411,23 @@ impl TestDef {
     /// Get all function names that this test is for.
     /// Pattern: `test <TestName> { functions [<Func1>, <Func2>, ...] ... }`
     pub fn function_names(&self) -> Vec<SyntaxToken> {
-        // Look for a ConfigItem with key "functions" and extract all function names
-        // The function names are inside a CONFIG_VALUE node: functions [Func1, Func2]
+        // Look for a ConfigItem with key "functions" and extract all function names.
+        // The function names are inside a CONFIG_VALUE child node, not in attributes.
         self.syntax
             .descendants()
             .filter_map(ConfigItem::cast)
             .find(|item| item.matches_key("functions"))
-            .map(|item| {
-                // Look for WORD tokens within the config item's descendants
-                // Skip the first one (which is the key "functions")
+            .and_then(|item| {
+                // Find the CONFIG_VALUE child (excludes attributes which are siblings)
                 item.syntax()
+                    .children()
+                    .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            })
+            .map(|config_value| {
+                config_value
                     .descendants_with_tokens()
                     .filter_map(rowan::NodeOrToken::into_token)
                     .filter(|token| token.kind() == SyntaxKind::WORD)
-                    .skip(1) // Skip "functions" key
                     .collect()
             })
             .unwrap_or_default()

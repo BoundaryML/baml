@@ -29,4 +29,9 @@ pub enum NameError {
         second: Span,
         second_path: String,
     },
+
+    /// Unknown function named in test block.
+    ///
+    /// Tests must reference functions or template strings defined in the project.
+    UnknownFunctionInTest { function_name: String, span: Span },
 }
