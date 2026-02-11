@@ -1,6 +1,6 @@
 import type { ChangeEvent, CSSProperties, FC } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import initWasm, { BamlWasmState, version, hotReloadTestString } from '@b/bridge_wasm';
+import initWasm, { BamlWasmRuntime, version, hotReloadTestString } from '@b/bridge_wasm';
 import { usePlayground } from './PlaygroundProvider';
 
 const containerStyles: CSSProperties = {
@@ -65,7 +65,7 @@ const emptyFunctionsStyles: CSSProperties = {
 
 export const SplitPreview: FC = () => {
   const { code, setCode } = usePlayground();
-  const stateRef = useRef<BamlWasmState | null>(null);
+  const runtimeRef = useRef<BamlWasmRuntime | null>(null);
   const latestCodeRef = useRef<string>(code);
   const [functionNames, setFunctionNames] = useState<string[]>([]);
   const [isReady, setReady] = useState<boolean>(false);
@@ -107,23 +107,25 @@ export const SplitPreview: FC = () => {
   useEffect(() => {
     latestCodeRef.current = code;
 
-    if (!isReady || !stateRef.current) {
+    if (!isReady || !runtimeRef.current) {
       return;
     }
 
-    stateRef.current.setSource(code);
-
     try {
-      const names = stateRef.current.functionNames();
+      runtimeRef.current.setSource(code);
+      const names = runtimeRef.current.functionNames();
       setFunctionNames(names);
+      setError(null);
     } catch (e) {
-      console.error('Failed to get function names:', e);
+      console.error('Failed to update or get function names:', e);
+      setError(e instanceof Error ? e.message : String(e));
       setFunctionNames([]);
     }
   }, [code, isReady]);
 
   useEffect(() => {
     let cancelled = false;
+    const rootPath = '/baml_src';
 
     initWasm()
       .then(() => {
@@ -131,12 +133,23 @@ export const SplitPreview: FC = () => {
           return;
         }
 
-        const state = new BamlWasmState();
-        state.setSource(latestCodeRef.current);
-        stateRef.current = state;
+        const srcFilesJson = JSON.stringify({ 'main.baml': latestCodeRef.current });
+        const noopFetch = async (
+          _method: string,
+          _url: string,
+          _headersJson: string,
+          _body: string
+        ): Promise<{ status: number; headersJson: string; url: string; bodyPromise: Promise<string> }> => ({
+          status: 500,
+          headersJson: '{}',
+          url: '',
+          bodyPromise: Promise.resolve('')
+        });
+        const runtime = BamlWasmRuntime.create(rootPath, srcFilesJson, noopFetch);
+        runtimeRef.current = runtime;
 
         try {
-          const names = state.functionNames();
+          const names = runtime.functionNames();
           setFunctionNames(names);
         } catch (e) {
           console.error('Failed to get function names:', e);
@@ -154,8 +167,8 @@ export const SplitPreview: FC = () => {
 
     return () => {
       cancelled = true;
-      stateRef.current?.free();
-      stateRef.current = null;
+      runtimeRef.current?.free();
+      runtimeRef.current = null;
     };
   }, []);
 

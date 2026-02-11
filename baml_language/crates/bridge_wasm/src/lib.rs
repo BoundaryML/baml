@@ -16,14 +16,13 @@
 //! const runtime = BamlWasmRuntime.create(
 //!     '/project',
 //!     JSON.stringify({ 'main.baml': 'function Greet(name: string) -> string { ... }' }),
-//!     JSON.stringify({ 'OPENAI_API_KEY': 'sk-...' }),
 //!     async (method, url, headers, body) => {
 //!         const response = await fetch(url, { method, headers: JSON.parse(headers), body });
 //!         return {
 //!             status: response.status,
-//!             headers: JSON.stringify(Object.fromEntries(response.headers)),
+//!             headersJson: JSON.stringify(Object.fromEntries(response.headers)),
 //!             url: response.url,
-//!             body: await response.text(),
+//!             bodyPromise: response.text(),  // body is read when .text() is called in BAML
 //!         };
 //!     }
 //! );
@@ -35,7 +34,6 @@
 mod error;
 mod registry;
 mod send_wrapper;
-mod state;
 mod wasm_http;
 
 use std::collections::HashMap;
@@ -45,8 +43,6 @@ pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
-pub use state::BamlWasmState;
-use sys_types::SysOpsBuilder;
 use wasm_bindgen::prelude::*;
 
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
@@ -70,6 +66,28 @@ pub fn hot_reload_test_string() -> String {
     // END_VITE_HOT_RELOAD_TEST
 }
 
+// ============================================================================
+// TypeScript type declarations (injected into the generated .d.ts)
+// ============================================================================
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_FETCH_TYPES: &str = r#"
+export type WasmFetchCallback = (
+  method: string,
+  url: string,
+  headersJson: string,
+  body: string,
+) => Promise<{ status: number; headersJson: string; url: string; bodyPromise: Promise<string> }>;
+"#;
+
+// Typed `create` declaration (the auto-generated one is suppressed via skip_typescript).
+#[wasm_bindgen(typescript_custom_section)]
+const TS_CREATE_METHOD: &str = r#"
+export namespace BamlWasmRuntime {
+  function create(root_path: string, src_files_json: string, fetch_fn: WasmFetchCallback): BamlWasmRuntime;
+}
+"#;
+
 /// A BAML runtime for WASM environments.
 ///
 /// Each instance compiles BAML source files and can execute functions.
@@ -88,26 +106,20 @@ impl BamlWasmRuntime {
     /// * `root_path` - Root path for BAML files (e.g., "/project")
     /// * `src_files_json` - JSON object mapping filenames to content
     ///   e.g., `{"main.baml": "function Greet(name: string) -> string { ... }"}`
-    /// * `fetch_fn` - JS function for HTTP requests with signature:
-    ///   `(method: string, url: string, headersJson: string, body: string)
-    ///    => Promise<{status: number, headers: string, url: string, body: string}>`
-    #[wasm_bindgen]
+    /// * `fetch_fn` - JS function for HTTP requests (see `WasmFetchCallback` type).
+    #[wasm_bindgen(skip_typescript)]
     pub fn create(
         root_path: &str,
         src_files_json: &str,
         fetch_fn: Function,
     ) -> Result<BamlWasmRuntime, JsError> {
-        // Initialize HTTP provider
-        wasm_http::init_http_provider(fetch_fn)
-            .map_err(|e| JsError::new(&format!("Failed to init HTTP provider: {e}")))?;
-
         // Parse source files
         let src_files: HashMap<String, String> = serde_json::from_str(src_files_json)
             .map_err(|e| JsError::new(&format!("Failed to parse src_files_json: {e}")))?;
 
-        // Build SysOps with WASM HTTP implementation
-        let sys_ops = SysOpsBuilder::new()
-            .with_http::<wasm_http::WasmHttp>()
+        // Build SysOps with WASM HTTP implementation (each runtime gets its own WasmHttp holding fetch_fn)
+        let sys_ops = sys_types::SysOpsBuilder::new()
+            .with_http_instance(std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)))
             .build();
 
         // Create the engine via factory
@@ -136,28 +148,10 @@ impl BamlWasmRuntime {
         let kwargs = kwargs_to_bex_values(args.kwargs)
             .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
 
-        // Look up function parameters to get parameter order
-        let params = self
-            .bex
-            .function_params(name)
-            .ok_or_else(|| JsError::new(&format!("Function not found: {name}")))?;
-
-        // Reorder kwargs to match function parameter declaration order
-        let bex_args: Vec<bex_factory::BexExternalValue> = params
-            .iter()
-            .map(|(param_name, _param_type)| {
-                kwargs.get(*param_name).cloned().ok_or_else(|| {
-                    JsError::new(&format!(
-                        "Missing argument '{param_name}' for function '{name}'"
-                    ))
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
         // Call the function (Bex trait)
         let result: bex_factory::BexExternalValue = self
             .bex
-            .call_function(name, bex_args)
+            .call_function(name, kwargs.into())
             .await
             .map_err(|e| JsError::new(&format!("Function call failed: {e}")))?;
 
@@ -166,22 +160,6 @@ impl BamlWasmRuntime {
             .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
 
         Ok(cffi_value.encode_to_vec())
-    }
-
-    /// Get the parameter names for a function (for introspection).
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The function name
-    ///
-    /// # Returns
-    ///
-    /// JSON array of parameter names, or `null` if function not found.
-    #[wasm_bindgen(js_name = functionParams)]
-    pub fn function_params(&self, name: &str) -> Option<String> {
-        let params = self.bex.function_params(name)?;
-        let names: Vec<&str> = params.iter().map(|(n, _)| *n).collect();
-        serde_json::to_string(&names).ok()
     }
 
     /// Add a source file to the runtime.
@@ -198,5 +176,25 @@ impl BamlWasmRuntime {
         } else {
             Err(JsError::new(&result.diagnostics))
         }
+    }
+
+    /// Set the main file content (convenience for single-file). Equivalent to `addSource("main.baml", content)`.
+    #[wasm_bindgen(js_name = setSource)]
+    pub fn set_source(&mut self, content: &str) -> Result<(), JsError> {
+        self.add_source("main.baml", content)
+    }
+
+    /// Return the names of all functions defined in the current project.
+    #[wasm_bindgen(js_name = functionNames)]
+    pub fn function_names(&self) -> Vec<String> {
+        self.bex.function_names()
+    }
+
+    /// Get parameter names for a function. Returns a JSON array of parameter names, or `undefined` if not found.
+    #[wasm_bindgen(js_name = functionParams)]
+    pub fn function_params(&self, name: &str) -> Option<String> {
+        let params = self.bex.function_params(name)?;
+        let names: Vec<&str> = params.iter().map(|(n, _)| *n).collect();
+        serde_json::to_string(&names).ok()
     }
 }

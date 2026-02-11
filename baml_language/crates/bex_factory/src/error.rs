@@ -5,6 +5,9 @@ use thiserror::Error;
 /// Errors that can occur during runtime operations.
 #[derive(Debug, Error)]
 pub enum RuntimeError {
+    #[error("Invalid argument: {name}")]
+    InvalidArgument { name: String },
+
     #[error("Compilation error: {message}")]
     Compilation { message: String },
 

@@ -395,6 +395,13 @@ pub struct SysOpsBuilder {
 /// Default provider — all trait methods return `Unsupported` via defaults.
 /// `SysOpLlm` is provided by the blanket `impl<T> SysOpLlm for T`.
 struct DefaultOps;
+
+impl Default for DefaultOps {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl SysOpFs for DefaultOps {}
 impl SysOpSys for DefaultOps {}
 impl SysOpNet for DefaultOps {}
@@ -434,6 +441,7 @@ impl Default for SysOpsBuilder {
 /// closures can be passed to the `execute_*` functions.
 impl<T> SysOpLlm for T {
     fn baml_llm_primitive_client_render_prompt(
+        &self,
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         template: String,
         args: BexExternalValue,
@@ -445,6 +453,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_primitive_client_specialize_prompt(
+        &self,
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> SysOpOutput<bex_vm_types::PromptAst> {
@@ -455,6 +464,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_primitive_client_build_request(
+        &self,
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> SysOpOutput<bex_heap::builtin_types::owned::HttpRequest> {
@@ -465,6 +475,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_primitive_client_parse(
+        &self,
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         response: String,
         function_name: String,
@@ -487,6 +498,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_get_jinja_template(
+        &self,
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
@@ -505,6 +517,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_build_primitive_client(
+        &self,
         name: String,
         provider: String,
         default_role: String,
@@ -557,7 +570,11 @@ impl<T> SysOpLlm for T {
         })
     }
 
-    fn baml_llm_get_client_function(function_name: String, ctx: &SysOpContext) -> SysOpOutput {
+    fn baml_llm_get_client_function(
+        &self,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput {
         let Some(info) = ctx.llm_functions.get(&function_name) else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "LLM function not found: {function_name}"

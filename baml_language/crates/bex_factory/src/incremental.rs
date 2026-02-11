@@ -11,7 +11,7 @@ use baml_project::{ProjectDatabase, list_functions};
 use bex_engine::BexEngine;
 use bex_external_types::{BexExternalValue, Ty};
 
-use crate::{Bex, RuntimeError, SysOps, render_lowering_error};
+use crate::{Bex, BexArgs, RuntimeError, SysOps, render_lowering_error};
 
 /// Result of `add_source` / `set_source`: whether the engine was updated and any diagnostics.
 #[derive(Debug, Clone)]
@@ -27,11 +27,15 @@ pub struct AddSourceResult {
 /// Implemented by the incremental runtime. Use [`crate::new_incremental`] to get a `Box<dyn BexIncremental>`.
 #[async_trait(?Send)]
 pub trait BexIncremental {
+    /// Call a BAML function.
+    async fn call_function(
+        &self,
+        function_name: &str,
+        args: BexArgs,
+    ) -> Result<BexExternalValue, RuntimeError>;
+
     /// Add or update a source file. Recompiles and swaps the engine on success; returns diagnostics on failure.
     fn add_source(&mut self, path: &str, content: &str) -> AddSourceResult;
-
-    /// Set the main file content (convenience for single-file). Path is "main.baml" under root.
-    fn set_source(&mut self, content: &str) -> AddSourceResult;
 
     /// Names of all functions in the current project (from DB, no full compile).
     fn function_names(&self) -> Vec<String>;
@@ -39,14 +43,7 @@ pub trait BexIncremental {
     /// True iff the last `add_source`/`set_source` compiled successfully.
     fn engine_is_current(&self) -> bool;
 
-    /// Call a BAML function (delegates to current engine).
-    async fn call_function(
-        &self,
-        function_name: &str,
-        args: Vec<BexExternalValue>,
-    ) -> Result<BexExternalValue, RuntimeError>;
-
-    /// Parameter names and types for a function.
+    /// Parameter names and types for a function (e.g. for kwargs ordering).
     fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>>;
 }
 
@@ -120,11 +117,6 @@ impl BexIncrementalRuntime {
         }
     }
 
-    /// Set the main file content (convenience for single-file). Path is "main.baml" under root.
-    pub(crate) fn set_source(&mut self, content: &str) -> AddSourceResult {
-        self.add_source("main.baml", content)
-    }
-
     /// Names of all functions in the current project (from DB, no full compile).
     pub(crate) fn function_names(&self) -> Vec<String> {
         let Some(project) = self.db.get_project() else {
@@ -145,7 +137,7 @@ impl BexIncrementalRuntime {
     pub(crate) async fn call_function(
         &self,
         function_name: &str,
-        args: Vec<BexExternalValue>,
+        args: BexArgs,
     ) -> Result<BexExternalValue, RuntimeError> {
         let engine = self
             .engine
@@ -157,11 +149,10 @@ impl BexIncrementalRuntime {
         Bex::call_function(engine, function_name, args).await
     }
 
-    /// Parameter names and types for a function.
     pub(crate) fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
         self.engine
             .as_ref()
-            .and_then(|e| e.as_ref().function_params(name))
+            .and_then(|e| e.function_params(name).ok())
     }
 }
 
@@ -169,10 +160,6 @@ impl BexIncrementalRuntime {
 impl BexIncremental for BexIncrementalRuntime {
     fn add_source(&mut self, path: &str, content: &str) -> AddSourceResult {
         BexIncrementalRuntime::add_source(self, path, content)
-    }
-
-    fn set_source(&mut self, content: &str) -> AddSourceResult {
-        BexIncrementalRuntime::set_source(self, content)
     }
 
     fn function_names(&self) -> Vec<String> {
@@ -186,7 +173,7 @@ impl BexIncremental for BexIncrementalRuntime {
     async fn call_function(
         &self,
         function_name: &str,
-        args: Vec<BexExternalValue>,
+        args: BexArgs,
     ) -> Result<BexExternalValue, RuntimeError> {
         BexIncrementalRuntime::call_function(self, function_name, args).await
     }

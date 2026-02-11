@@ -3,6 +3,8 @@
 //! Converts `HostValue` (from the C bridge) to the engine's `BexExternalValue` representation
 //! so the BEX engine can use them as function arguments.
 
+use std::collections::HashMap;
+
 use bex_factory::{BexExternalValue, Ty};
 use indexmap::IndexMap;
 
@@ -97,11 +99,11 @@ fn extract_string_key(entry: &HostMapEntry) -> Result<String, CtypesError> {
     }
 }
 
-/// Decode protobuf kwargs into an `IndexMap<String, BexExternalValue>` for engine call arguments.
+/// Decode protobuf kwargs into an `HashMap<String, BexExternalValue>` for engine call arguments.
 pub fn kwargs_to_bex_values(
     kwargs: Vec<HostMapEntry>,
-) -> Result<IndexMap<String, BexExternalValue>, CtypesError> {
-    let mut result = IndexMap::new();
+) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
+    let mut result = HashMap::new();
     for entry in kwargs {
         let key = extract_string_key(&entry)?;
         let value = entry

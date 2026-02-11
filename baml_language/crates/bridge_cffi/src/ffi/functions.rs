@@ -83,36 +83,13 @@ fn call_function_inner(
     // TODO: Support collectors when bex_engine adds support
     // TODO: Support type_builder when bex_engine adds support
 
-    // Look up function parameters to get parameter order
-    let params =
-        runtime
-            .function_params(&func_name)
-            .ok_or_else(|| BridgeError::FunctionNotFound {
-                name: func_name.clone(),
-            })?;
-
-    // Reorder kwargs to match function parameter declaration order.
-    // This ensures arguments are passed correctly even if the client sends
-    // them in a different order than the function expects.
-    let bex_args: Vec<bex_factory::BexExternalValue> = params
-        .iter()
-        .map(|(param_name, _param_type)| {
-            kwargs
-                .get(*param_name)
-                .cloned()
-                .ok_or_else(|| BridgeError::MissingArgument {
-                    function: func_name.clone(),
-                    parameter: (*param_name).to_string(),
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
     // Spawn async task with panic catching
     get_tokio_runtime().spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
-        let result = AssertUnwindSafe(async { runtime.call_function(&func_name, bex_args).await })
-            .catch_unwind()
-            .await;
+        let result =
+            AssertUnwindSafe(async { runtime.call_function(&func_name, kwargs.into()).await })
+                .catch_unwind()
+                .await;
 
         match result {
             Ok(Ok(value)) => {

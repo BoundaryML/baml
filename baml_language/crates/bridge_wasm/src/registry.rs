@@ -1,8 +1,9 @@
-//! Resource registry for WASM - stores HTTP response bodies.
+//! Resource registry for WASM - stores HTTP response body promises.
 //!
 //! In `sys_native`, response bodies live in a registry as `reqwest::Response`
-//! and are consumed lazily. For WASM, the JS side returns the full body eagerly.
-//! We store it in a simple `HashMap` keyed by handle ID.
+//! and are consumed lazily. For WASM, the JS fetch callback returns a
+//! `bodyPromise` (Promise<string>); we store that and await it only when
+//! `response_text()` is called.
 
 use std::{
     collections::HashMap,
@@ -13,11 +14,15 @@ use std::{
 };
 
 use bex_factory::{ResourceHandle, ResourceRegistryRef, ResourceType};
+use js_sys::Promise;
+
+use crate::send_wrapper::SendWrapper;
 
 /// An HTTP response stored in the WASM registry.
 struct ResponseEntry {
-    /// The response body text (already consumed from JS).
-    body: Option<String>,
+    /// Promise that resolves to the response body text (awaited when `.text()` is called).
+    /// Wrapped for Send+Sync on WASM (single-threaded).
+    body_promise: Option<SendWrapper<Promise>>,
 }
 
 /// Registry entry for a resource.
@@ -27,7 +32,7 @@ enum RegistryEntry {
 
 /// WASM resource registry.
 ///
-/// Stores HTTP response bodies and provides opaque handles.
+/// Stores HTTP response body promises and provides opaque handles.
 /// When a handle is dropped, it automatically removes the entry.
 pub(crate) struct WasmRegistry {
     next_key: AtomicUsize,
@@ -36,21 +41,25 @@ pub(crate) struct WasmRegistry {
 
 impl WasmRegistry {
     /// Create a new empty registry.
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             next_key: AtomicUsize::new(1),
             entries: RwLock::new(HashMap::new()),
         }
     }
 
-    /// Register an HTTP response body and return an opaque handle.
+    /// Register an HTTP response by storing its body promise; returns an opaque handle.
+    ///
+    /// The JS fetch callback should return an object with `bodyPromise`: a Promise that resolves to the body string.
     pub(crate) fn register_http_response(
         self: &Arc<Self>,
-        body: String,
+        body_promise: Promise,
         url: String,
     ) -> ResourceHandle {
         let key = self.next_key.fetch_add(1, Ordering::SeqCst);
-        let entry = ResponseEntry { body: Some(body) };
+        let entry = ResponseEntry {
+            body_promise: Some(SendWrapper::new(body_promise)),
+        };
 
         self.entries
             .write()
@@ -65,13 +74,15 @@ impl WasmRegistry {
         )
     }
 
-    /// Get and consume the HTTP response body.
+    /// Take the body promise for the given key (removes the entry).
     ///
     /// Returns `None` if the handle is invalid or body was already consumed.
-    pub(crate) fn consume_http_response_body(&self, key: usize) -> Option<String> {
+    pub(crate) fn take_body_promise(&self, key: usize) -> Option<Promise> {
         let mut entries = self.entries.write().unwrap();
-        match entries.get_mut(&key) {
-            Some(RegistryEntry::Response(r)) => r.body.take(),
+        match entries.remove(&key) {
+            Some(RegistryEntry::Response(r)) => r
+                .body_promise
+                .map(super::send_wrapper::SendWrapper::into_inner),
             _ => None,
         }
     }
@@ -82,7 +93,3 @@ impl ResourceRegistryRef for WasmRegistry {
         self.entries.write().unwrap().remove(&key);
     }
 }
-
-/// Global WASM resource registry instance.
-pub(crate) static REGISTRY: std::sync::LazyLock<Arc<WasmRegistry>> =
-    std::sync::LazyLock::new(|| Arc::new(WasmRegistry::new()));

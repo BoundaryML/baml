@@ -610,19 +610,25 @@ impl BexEngine {
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
-    pub fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
-        let (ptr, _kind) = self.resolved_function_names.get(name)?;
+    pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty)>, EngineError> {
+        let (ptr, _kind) =
+            self.resolved_function_names
+                .get(name)
+                .ok_or(EngineError::FunctionNotFound {
+                    name: name.to_string(),
+                })?;
         // SAFETY: ptr is from resolved_function_names, a compile-time object
         let obj = unsafe { ptr.get() };
         match obj {
-            Object::Function(func) => Some(
-                func.param_names
-                    .iter()
-                    .zip(func.param_types.iter())
-                    .map(|(name, ty)| (name.as_str(), ty))
-                    .collect(),
-            ),
-            _ => None,
+            Object::Function(func) => Ok(func
+                .param_names
+                .iter()
+                .zip(func.param_types.iter())
+                .map(|(name, ty)| (name.as_str(), ty))
+                .collect()),
+            other => Err(EngineError::TypeMismatch {
+                message: format!("Expected Function, got {other:?}"),
+            }),
         }
     }
 

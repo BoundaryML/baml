@@ -54,4 +54,9 @@ impl<T> SendWrapper<T> {
     pub(crate) fn inner(&self) -> &T {
         &self.0
     }
+
+    /// Take the inner value (for use when the wrapper is stored in a container).
+    pub(crate) fn into_inner(self) -> T {
+        self.0
+    }
 }

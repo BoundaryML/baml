@@ -20,7 +20,6 @@ use baml_compiler_emit::LoweringError;
 use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
-use bex_heap::BexValue;
 pub use bex_heap::builtin_types;
 pub use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 pub use error::RuntimeError;
@@ -34,6 +33,20 @@ pub use sys_types::SysOps;
 // Bex trait
 // ---------------------------------------------------------------------------
 
+pub struct BexArgs(HashMap<String, BexExternalValue>);
+
+impl From<HashMap<&str, BexExternalValue>> for BexArgs {
+    fn from(m: HashMap<&str, BexExternalValue>) -> Self {
+        BexArgs(m.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+    }
+}
+
+impl From<HashMap<String, BexExternalValue>> for BexArgs {
+    fn from(m: HashMap<String, BexExternalValue>) -> Self {
+        BexArgs(m)
+    }
+}
+
 /// Core runtime API: call functions and introspect parameters.
 ///
 /// Implemented for `Arc<BexEngine>` (Send, for use from `bridge_cffi`/tokio).
@@ -44,11 +57,8 @@ pub trait Bex: Send + Sync {
     async fn call_function(
         &self,
         function_name: &str,
-        args: Vec<BexExternalValue>,
+        args: BexArgs,
     ) -> Result<BexExternalValue, RuntimeError>;
-
-    /// Parameter names and types for a function (e.g. for CFFI kwargs reordering).
-    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>>;
 }
 
 #[async_trait]
@@ -56,18 +66,32 @@ impl Bex for BexEngine {
     async fn call_function(
         &self,
         function_name: &str,
-        args: Vec<BexExternalValue>,
+        BexArgs(mut args): BexArgs,
     ) -> Result<BexExternalValue, RuntimeError> {
-        let result = BexEngine::call_function(self, function_name, args).await?;
-        self.heap()
-            .with_gc_protection(|protected| {
-                BexValue::ExternalValue(&result).as_owned_but_very_slow(&protected)
-            })
-            .map_err(RuntimeError::from)
-    }
+        // gurantee function ordering.
+        let params = self
+            .function_params(function_name)
+            .map_err(RuntimeError::from)?;
 
-    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
-        BexEngine::function_params(self, name)
+        // let ordered args:
+        let ordered_args = params
+            .into_iter()
+            .map(|(name, _)| {
+                args.remove(name)
+                    .ok_or_else(|| RuntimeError::InvalidArgument {
+                        name: name.to_string(),
+                    })
+            })
+            .collect::<Result<_, _>>()?;
+        if !args.is_empty() {
+            let extra_args = args.keys().cloned().collect::<Vec<_>>().join(", ");
+            return Err(RuntimeError::InvalidArgument {
+                name: format!("extra arguments: {extra_args}"),
+            });
+        }
+
+        let result = BexEngine::call_function(self, function_name, ordered_args).await?;
+        Ok(result)
     }
 }
 
@@ -76,13 +100,9 @@ impl Bex for Arc<BexEngine> {
     async fn call_function(
         &self,
         function_name: &str,
-        args: Vec<BexExternalValue>,
+        args: BexArgs,
     ) -> Result<BexExternalValue, RuntimeError> {
         Bex::call_function(self.as_ref(), function_name, args).await
-    }
-
-    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
-        Bex::function_params(self.as_ref(), name)
     }
 }
 
@@ -118,7 +138,7 @@ pub fn new(
 
 /// Create an incremental runtime that holds the project DB.
 ///
-/// Env and `sys_ops` are stored once. Use `add_source`/`set_source` to update the DB and swap the engine;
+/// `sys_ops` is stored once. Use `add_source`/`set_source` to update the DB and swap the engine;
 /// on compile failure, diagnostics are returned and the engine is left unchanged.
 ///
 /// Requires the `incremental` feature.
