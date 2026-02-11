@@ -1,7 +1,7 @@
 //! Stateful WASM bridge: holds the project DB and optional incremental runtime.
 //!
 //! - **Parse/IDE**: `add_source` / `set_source` + `function_names()` (from DB or runtime).
-//! - **Run**: `create_runtime` builds a `BexIncrementalRuntime` and syncs the DB into it;
+//! - **Run**: `create_runtime` builds an incremental runtime and syncs the DB into it;
 //!   then `call_function` / `function_params` use it. `add_source` after that updates both DB and runtime.
 
 use std::{collections::HashMap, path::Path};

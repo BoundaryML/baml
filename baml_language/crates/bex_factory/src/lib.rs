@@ -2,11 +2,11 @@
 //!
 //! Two traits define the API:
 //! - **`Bex`**: core run API (`call_function`, `function_params`). Implemented by `Arc<BexEngine>`.
-//! - **`BexIncrementalRuntime`**: holds DB, `add_source`/`set_source`, `function_names`, `engine_is_current`, plus `call_function`/`function_params`.
+//! - **`BexIncremental`**: holds DB, `add_source`/`set_source`, `function_names`, `engine_is_current`, plus `call_function`/`function_params`.
 //!
 //! Two public constructors:
 //! - [`new`] — compile source files and return `Arc<dyn Bex>`.
-//! - [`new_incremental`] — return a `BexIncrementalRuntime` (holds DB, `env`/`sys_ops` once).
+//! - [`new_incremental`] — return a `Box<dyn BexIncremental>` (holds DB, `env`/`sys_ops` once).
 
 mod error;
 #[cfg(feature = "incremental")]
@@ -18,14 +18,16 @@ use async_trait::async_trait;
 use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
 use baml_compiler_emit::LoweringError;
 use baml_project::ProjectDatabase;
-pub use bex_engine::{BexEngine, EngineError};
+use bex_engine::BexEngine;
 pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 use bex_heap::BexValue;
 pub use bex_heap::builtin_types;
 pub use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 pub use error::RuntimeError;
 #[cfg(feature = "incremental")]
-pub use incremental::{AddSourceResult, BexIncremental, BexIncrementalRuntime};
+use incremental::BexIncrementalRuntime;
+#[cfg(feature = "incremental")]
+pub use incremental::{AddSourceResult, BexIncremental};
 pub use sys_types::SysOps;
 
 // ---------------------------------------------------------------------------
@@ -35,7 +37,7 @@ pub use sys_types::SysOps;
 /// Core runtime API: call functions and introspect parameters.
 ///
 /// Implemented for `Arc<BexEngine>` (Send, for use from `bridge_cffi`/tokio).
-/// `BexIncrementalRuntime` has equivalent inherent methods for WASM/single-thread use.
+/// The incremental runtime has equivalent methods for WASM/single-thread use.
 #[async_trait]
 pub trait Bex: Send + Sync {
     /// Execute a function by name. Returns a fully owned value (no Handle variants).

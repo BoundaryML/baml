@@ -24,7 +24,7 @@ pub struct AddSourceResult {
 
 /// Trait for the incremental runtime API (DB, `add_source`, `set_source`, `function_names`, `engine_is_current`, `call_function`, `function_params`).
 ///
-/// Implemented by [`BexIncrementalRuntime`]. Use [`crate::new_incremental`] to get a `Box<dyn BexIncremental>`.
+/// Implemented by the incremental runtime. Use [`crate::new_incremental`] to get a `Box<dyn BexIncremental>`.
 #[async_trait(?Send)]
 pub trait BexIncremental {
     /// Add or update a source file. Recompiles and swaps the engine on success; returns diagnostics on failure.
@@ -51,7 +51,7 @@ pub trait BexIncremental {
 }
 
 /// Incremental runtime: holds the DB, implements [`BexIncremental`].
-pub struct BexIncrementalRuntime {
+pub(crate) struct BexIncrementalRuntime {
     db: ProjectDatabase,
     root_path: PathBuf,
     env_vars: HashMap<String, String>,
@@ -63,7 +63,7 @@ pub struct BexIncrementalRuntime {
 }
 
 impl BexIncrementalRuntime {
-    pub fn new(root_path: &str, env_vars: HashMap<String, String>, sys_ops: SysOps) -> Self {
+    pub(crate) fn new(root_path: &str, env_vars: HashMap<String, String>, sys_ops: SysOps) -> Self {
         let mut db = ProjectDatabase::new();
         db.set_project_root(Path::new(root_path));
 
@@ -78,7 +78,7 @@ impl BexIncrementalRuntime {
     }
 
     /// Add or update a source file. Recompiles and swaps the engine on success; returns diagnostics on failure.
-    pub fn add_source(&mut self, path: &str, content: &str) -> AddSourceResult {
+    pub(crate) fn add_source(&mut self, path: &str, content: &str) -> AddSourceResult {
         let full_path = self.root_path.join(path);
         self.db.add_or_update_file(&full_path, content);
 
@@ -118,12 +118,12 @@ impl BexIncrementalRuntime {
     }
 
     /// Set the main file content (convenience for single-file). Path is "main.baml" under root.
-    pub fn set_source(&mut self, content: &str) -> AddSourceResult {
+    pub(crate) fn set_source(&mut self, content: &str) -> AddSourceResult {
         self.add_source("main.baml", content)
     }
 
     /// Names of all functions in the current project (from DB, no full compile).
-    pub fn function_names(&self) -> Vec<String> {
+    pub(crate) fn function_names(&self) -> Vec<String> {
         let Some(project) = self.db.get_project() else {
             return vec![];
         };
@@ -134,12 +134,12 @@ impl BexIncrementalRuntime {
     }
 
     /// True iff the last `add_source`/`set_source` compiled successfully.
-    pub fn engine_is_current(&self) -> bool {
+    pub(crate) fn engine_is_current(&self) -> bool {
         self.engine_is_current
     }
 
     /// Call a BAML function (delegates to current engine).
-    pub async fn call_function(
+    pub(crate) async fn call_function(
         &self,
         function_name: &str,
         args: Vec<BexExternalValue>,
@@ -155,7 +155,7 @@ impl BexIncrementalRuntime {
     }
 
     /// Parameter names and types for a function.
-    pub fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
+    pub(crate) fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
         self.engine
             .as_ref()
             .and_then(|e| e.as_ref().function_params(name))
