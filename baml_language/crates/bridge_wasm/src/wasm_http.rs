@@ -5,7 +5,7 @@
 
 use std::sync::OnceLock;
 
-use bex_heap::builtin_types;
+use bex_factory::builtin_types;
 use js_sys::{Function, Object, Promise, Reflect};
 use sys_types::{OpErrorKind, SysOpHttp, SysOpOutput};
 use wasm_bindgen::JsCast;

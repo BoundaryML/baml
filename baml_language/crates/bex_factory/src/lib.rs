@@ -20,6 +20,8 @@ use bex_engine::BexEngine;
 pub use bex_engine::EngineError;
 pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 use bex_heap::BexValue;
+pub use bex_heap::builtin_types;
+pub use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 pub use error::RuntimeError;
 pub use sys_types::SysOps;
 

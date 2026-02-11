@@ -25,5 +25,6 @@ baml_project = { workspace = true }
 bex_engine = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
+bex_resource_types = { workspace = true }
 sys_types = { workspace = true }
 thiserror = { workspace = true }

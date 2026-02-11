@@ -12,7 +12,7 @@ use std::{
     },
 };
 
-use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
+use bex_factory::{ResourceHandle, ResourceRegistryRef, ResourceType};
 
 /// An HTTP response stored in the WASM registry.
 struct ResponseEntry {

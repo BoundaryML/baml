@@ -10,8 +10,6 @@ crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
 bex_factory = { workspace = true }
-bex_heap = { workspace = true }
-bex_resource_types = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_types = { workspace = true }
 console_error_panic_hook = { workspace = true, optional = true }
