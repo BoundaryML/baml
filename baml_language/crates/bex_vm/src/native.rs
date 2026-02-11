@@ -191,18 +191,6 @@ impl NativeFunctions for VmNatives {
     fn baml_media_mime_type(media: &MediaValue) -> Option<String> {
         media.mime_type.clone()
     }
-
-    // =========================================================================
-    // Env functions
-    // =========================================================================
-
-    fn env_get(vm: &mut BexVm, key: &str) -> Result<String, VmError> {
-        vm.env_vars.get(key).cloned().ok_or_else(|| {
-            VmError::RuntimeError(RuntimeError::Other(format!(
-                "Environment variable '{key}' not found",
-            )))
-        })
-    }
 }
 
 // =============================================================================

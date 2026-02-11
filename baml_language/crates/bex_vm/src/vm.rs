@@ -200,9 +200,6 @@ pub struct BexVm {
     /// Used by GC to know which objects are compile-time vs runtime.
     pub runtime_allocs_offset: ObjectIndex,
 
-    /// Environment variables available during execution.
-    pub env_vars: HashMap<String, String>,
-
     /// Emit dependency graph.
     pub watch: Watch,
 
@@ -377,7 +374,7 @@ impl BexVm {
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
     /// for contention-free allocation.
-    pub fn new(heap: Arc<BexHeap>, globals: GlobalPool, env_vars: HashMap<String, String>) -> Self {
+    pub fn new(heap: Arc<BexHeap>, globals: GlobalPool) -> Self {
         let runtime_allocs_offset = ObjectIndex::from_raw(heap.compile_time_boundary());
         let tlab = Tlab::new(Arc::clone(&heap));
 
@@ -388,7 +385,6 @@ impl BexVm {
             tlab,
             globals,
             runtime_allocs_offset,
-            env_vars,
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
@@ -600,7 +596,7 @@ impl BexVm {
             .collect();
         let globals = GlobalPool::from_vec(globals_vec);
 
-        Ok(Self::new(heap, globals, HashMap::new()))
+        Ok(Self::new(heap, globals))
     }
 
     /// Bootstraps the VM preparing the given function to run.

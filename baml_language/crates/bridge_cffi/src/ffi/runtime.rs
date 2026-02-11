@@ -18,7 +18,6 @@ pub extern "C" fn version() -> Buffer {
 /// # Arguments
 /// * `root_path` - Root path for BAML files (C string)
 /// * `src_files_json` - JSON-encoded HashMap<String, String> of file contents
-/// * `env_vars_json` - JSON-encoded HashMap<String, String> of env vars
 ///
 /// # Returns
 /// Non-null pointer on success (value is opaque, not used), null on failure.
@@ -27,7 +26,6 @@ pub extern "C" fn version() -> Buffer {
 pub extern "C" fn create_baml_runtime(
     root_path: *const libc::c_char,
     src_files_json: *const libc::c_char,
-    env_vars_json: *const libc::c_char,
 ) -> *const libc::c_void {
     ffi_safe_ptr(|| -> Result<*const libc::c_void, String> {
         // Parse root_path
@@ -46,17 +44,8 @@ pub extern "C" fn create_baml_runtime(
         let src_files: HashMap<String, String> = serde_json::from_str(src_files_str)
             .map_err(|e| format!("Failed to parse src_files JSON: {e}"))?;
 
-        // Parse env_vars JSON
-        let env_vars_str = unsafe {
-            CStr::from_ptr(env_vars_json)
-                .to_str()
-                .map_err(|e| format!("Invalid UTF-8 in env_vars_json: {e}"))?
-        };
-        let env_vars: HashMap<String, String> = serde_json::from_str(env_vars_str)
-            .map_err(|e| format!("Failed to parse env_vars JSON: {e}"))?;
-
         // Initialize global runtime
-        initialize_runtime(root_path_str, src_files, env_vars)
+        initialize_runtime(root_path_str, src_files)
             .map_err(|e| format!("Failed to initialize runtime: {e}"))?;
 
         // Return non-null pointer to indicate success

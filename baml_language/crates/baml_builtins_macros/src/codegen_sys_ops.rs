@@ -150,11 +150,27 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
 // Helpers
 // ============================================================================
 
-/// Extract the module name (second path segment) from a `sys_op` path.
+/// Extract the module name from a `sys_op` path.
+///
+/// For 2-segment paths like `"env.get"`, the module is the first segment (`"env"`).
+/// For 3+ segment paths like `"baml.fs.open"`, the module is the second segment (`"fs"`).
 fn module_from_path(path: &str) -> &str {
-    path.split('.').nth(1).unwrap_or_else(|| {
-        panic!("sys_op path '{path}' should have at least 2 segments (e.g., baml.fs.open)")
-    })
+    let mut segments = path.split('.');
+    let first = segments
+        .next()
+        .unwrap_or_else(|| panic!("sys_op path '{path}' should have at least 2 segments"));
+    match segments.next() {
+        None => panic!("sys_op path '{path}' should have at least 2 segments"),
+        Some(second) => {
+            if segments.next().is_none() {
+                // 2-segment path: "env.get" → module is "env"
+                first
+            } else {
+                // 3+ segment path: "baml.fs.open" → module is "fs"
+                second
+            }
+        }
+    }
 }
 
 /// Map a DSL type name to the Rust type used in clean `sys_op` trait signatures.
@@ -170,6 +186,11 @@ fn sys_op_rust_type(
         "()" => Ok(quote!(())),
         "Media" => Ok(quote!(bex_vm_types::MediaValue)),
         "PromptAst" => Ok(quote!(bex_vm_types::PromptAst)),
+        t if t.starts_with("Option<") && t.ends_with('>') => {
+            let inner = &t[7..t.len() - 1];
+            let inner_type = sys_op_rust_type(inner.trim(), builtin_types)?;
+            Ok(quote!(Option<#inner_type>))
+        }
         _ if builtin_types.contains_key(type_name) => {
             let full_path = builtin_types
                 .get(type_name)

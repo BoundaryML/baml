@@ -35,12 +35,10 @@ impl BexFactory {
     /// # Arguments
     /// * `root_path` - Root path for BAML files
     /// * `src_files` - Map of filename to content
-    /// * `env_vars` - Environment variables
     /// * `sys_ops` - System operations provider
     pub fn new(
         root_path: &str,
         src_files: &HashMap<String, String>,
-        env_vars: HashMap<String, String>,
         sys_ops: SysOps,
     ) -> Result<Self, RuntimeError> {
         let mut db = ProjectDatabase::new();
@@ -53,7 +51,7 @@ impl BexFactory {
         let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
             .map_err(|e| render_lowering_error(&db, &e))?;
 
-        let engine = BexEngine::new(bytecode, env_vars, sys_ops)?;
+        let engine = BexEngine::new(bytecode, sys_ops)?;
 
         Ok(Self {
             engine: Arc::new(engine),

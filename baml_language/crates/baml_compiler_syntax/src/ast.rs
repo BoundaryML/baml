@@ -688,6 +688,7 @@ ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
+ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
 ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
 ast_node!(MatchPattern, MATCH_PATTERN);
@@ -2316,6 +2317,7 @@ impl BlockExpr {
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
@@ -2375,6 +2377,16 @@ impl FieldAccessExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| token.kind() == SyntaxKind::WORD)
             .last() // The field name is the last WORD token
+    }
+}
+
+impl EnvAccessExpr {
+    /// Get the field name (the env var name or method name after `env.`).
+    pub fn field(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
     }
 }
 
