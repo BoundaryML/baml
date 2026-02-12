@@ -145,12 +145,10 @@ export const SplitPreview: FC = () => {
           url: '',
           bodyPromise: Promise.resolve('')
         });
-        const runtime = BamlWasmRuntime.create(
-          rootPath,
-          srcFilesJson,
-          noopFetch,
-          (_var: string) => undefined
-        );
+        const runtime = BamlWasmRuntime.create(rootPath, srcFilesJson, {
+          fetch: noopFetch,
+          env: (_var: string) => undefined,
+        });
         runtimeRef.current = runtime;
 
         try {

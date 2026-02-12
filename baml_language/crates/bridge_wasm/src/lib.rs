@@ -15,20 +15,22 @@
 //! // Initialize the WASM module
 //! await init();
 //!
-//! // Create a runtime with source files, HTTP callback, and env callback
+//! // Create a runtime with source files and callbacks object
 //! const runtime = BamlWasmRuntime.create(
 //!     '/project',
 //!     JSON.stringify({ 'main.baml': 'function Greet(name: string) -> string { ... }' }),
-//!     async (method, url, headers, body) => {
-//!         const response = await fetch(url, { method, headers: JSON.parse(headers), body });
-//!         return {
-//!             status: response.status,
-//!             headersJson: JSON.stringify(Object.fromEntries(response.headers)),
-//!             url: response.url,
-//!             bodyPromise: response.text(),  // body is read when .text() is called in BAML
-//!         };
-//!     },
-//!     (var) => process.env[var]  // or (var) => undefined to disable env lookups
+//!     {
+//!         fetch: async (method, url, headers, body) => {
+//!             const response = await fetch(url, { method, headers: JSON.parse(headers), body });
+//!             return {
+//!                 status: response.status,
+//!                 headersJson: JSON.stringify(Object.fromEntries(response.headers)),
+//!                 url: response.url,
+//!                 bodyPromise: response.text(),  // body is read when .text() is called in BAML
+//!             };
+//!         },
+//!         env: (variable) => process.env[variable],  // or (variable) => undefined to disable env lookups
+//!     }
 //! );
 //!
 //! // Call a function (protobuf in/out)
@@ -46,7 +48,7 @@ use std::collections::HashMap;
 use bex_factory::BexIncremental;
 pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
-use js_sys::Function;
+use js_sys::{Function, Reflect};
 use prost::Message;
 use wasm_bindgen::prelude::*;
 
@@ -84,7 +86,12 @@ export type WasmFetchCallback = (
   body: string,
 ) => Promise<{ status: number; headersJson: string; url: string; bodyPromise: Promise<string> }>;
 
-export type WasmEnvVarsCallback = (var: string) => string | undefined;
+export type WasmEnvVarsCallback = (variable: string) => string | undefined;
+
+export interface WasmCallbacks {
+  fetch: WasmFetchCallback;
+  env: WasmEnvVarsCallback;
+}
 "#;
 
 // Typed `create` declaration (the auto-generated one is suppressed via skip_typescript).
@@ -94,8 +101,7 @@ export namespace BamlWasmRuntime {
   function create(
     root_path: string,
     src_files_json: string,
-    fetch_fn: WasmFetchCallback,
-    env_vars_fn: WasmEnvVarsCallback,
+    callbacks: WasmCallbacks,
   ): BamlWasmRuntime;
 }
 "#;
@@ -118,15 +124,28 @@ impl BamlWasmRuntime {
     /// * `root_path` - Root path for BAML files (e.g., "/project")
     /// * `src_files_json` - JSON object mapping filenames to content
     ///   e.g., `{"main.baml": "function Greet(name: string) -> string { ... }"}`
-    /// * `fetch_fn` - JS function for HTTP requests (see `WasmFetchCallback` type).
-    /// * `env_vars_fn` - JS function for env lookups (see `WasmEnvVarsCallback` type).
+    /// * `callbacks` - Object containing callback functions (see `WasmCallbacks` interface).
     #[wasm_bindgen(skip_typescript)]
     pub fn create(
         root_path: &str,
         src_files_json: &str,
-        fetch_fn: Function,
-        env_vars_fn: Function,
+        callbacks: JsValue,
     ) -> Result<BamlWasmRuntime, JsError> {
+        // Extract callbacks from the object
+        let callbacks_obj: js_sys::Object = callbacks
+            .dyn_into()
+            .map_err(|_| JsError::new("callbacks must be an object"))?;
+
+        let fetch_fn: Function = Reflect::get(&callbacks_obj, &"fetch".into())
+            .map_err(|_| JsError::new("callbacks missing 'fetch'"))?
+            .dyn_into()
+            .map_err(|_| JsError::new("callbacks.fetch must be a function"))?;
+
+        let env_vars_fn: Function = Reflect::get(&callbacks_obj, &"env".into())
+            .map_err(|_| JsError::new("callbacks missing 'env'"))?
+            .dyn_into()
+            .map_err(|_| JsError::new("callbacks.env must be a function"))?;
+
         // Parse source files
         let src_files: HashMap<String, String> = serde_json::from_str(src_files_json)
             .map_err(|e| JsError::new(&format!("Failed to parse src_files_json: {e}")))?;
