@@ -303,6 +303,15 @@ impl AsBexExternalValue for bex_vm_types::MediaValue {
     }
 }
 
+impl<T: AsBexExternalValue> AsBexExternalValue for Option<T> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        match self {
+            Some(v) => v.into_bex_external_value(),
+            None => BexExternalValue::Null,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

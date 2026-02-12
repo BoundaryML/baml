@@ -11,7 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
-      '@b/baml-playground-wasm': resolve(projectRoot, '../pkg-playground/wasm/baml_playground_wasm.js'),
+      '@b/bridge_wasm': resolve(projectRoot, '../pkg-playground/wasm/bridge_wasm.js'),
     },
   },
   define: {
@@ -55,9 +55,9 @@ export default defineConfig({
           name: 'hmr',
           globals: true,
           include: ['src/**/*.hmr.test.ts'],
-          globalTimeout: 30_000, // 30 seconds max for entire test suite
-          testTimeout: 120_000, // 2 minutes for WASM rebuilds
-          hookTimeout: 60_000, // 1 minute for setup/teardown
+          globalTimeout: 300_000, // 5 minutes max for entire test suite
+          testTimeout: 300_000, // 5 minutes for WASM rebuilds
+          hookTimeout: 120_000, // 2 minutes for setup/teardown
           // Run sequentially - these tests modify shared state (Rust source files)
           pool: 'forks',
           singleFork: true,

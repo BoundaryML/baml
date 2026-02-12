@@ -220,8 +220,11 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
 ///
 /// The context reference provides engine-level information (e.g., function metadata)
 /// that some `sys_ops` need. Ops that don't need it simply ignore the parameter.
-pub type SysOpFn =
-    fn(heap: &Arc<BexHeap>, args: Vec<bex_heap::BexValue<'_>>, ctx: &SysOpContext) -> SysOpResult;
+pub type SysOpFn = Arc<
+    dyn for<'a> Fn(&Arc<BexHeap>, Vec<bex_heap::BexValue<'a>>, &SysOpContext) -> SysOpResult
+        + Send
+        + Sync,
+>;
 
 // ============================================================================
 // Engine Context for Sys Ops
@@ -242,6 +245,10 @@ pub struct SysOpContext {
     /// Maps function names to their global indices in the VM.
     /// Used by `get_client_function` to return `FunctionRef` values.
     pub function_global_indices: std::collections::HashMap<String, usize>,
+
+    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
+    /// Prepended to templates by `get_jinja_template`.
+    pub template_strings_macros: String,
 }
 
 /// Pre-extracted metadata for an LLM function.
@@ -263,6 +270,7 @@ impl SysOpContext {
         Self {
             llm_functions: std::collections::HashMap::new(),
             function_global_indices: std::collections::HashMap::new(),
+            template_strings_macros: String::new(),
         }
     }
 }
@@ -318,7 +326,7 @@ impl<T> FunctionRef<T> {
 /// ```ignore
 /// // Using the native Tokio provider
 /// let sys_ops = sys_types_native::SysOps::native();
-/// let engine = BexEngine::new(program, env_vars, sys_ops)?;
+/// let engine = BexEngine::new(program, sys_ops)?;
 /// ```
 macro_rules! define_sys_ops_struct {
     ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr })*) => {
@@ -328,10 +336,10 @@ macro_rules! define_sys_ops_struct {
         }
 
         impl SysOps {
-            /// Look up the function pointer for a given `SysOp`.
-            pub fn get(&self, op: SysOp) -> SysOpFn {
+            /// Look up the function for a given `SysOp`.
+            pub fn get(&self, op: SysOp) -> &SysOpFn {
                 match op {
-                    $( SysOp::$Variant => self.$snake, )*
+                    $( SysOp::$Variant => &self.$snake, )*
                 }
             }
 
@@ -340,7 +348,7 @@ macro_rules! define_sys_ops_struct {
             /// Useful for providers that don't support certain operations.
             pub fn unsupported(operation: SysOp) -> SysOpFn {
                 match operation {
-                    $( SysOp::$Variant => |_, _, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::$Variant))), )*
+                    $( SysOp::$Variant => Arc::new(|_, _, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::$Variant)))), )*
                 }
             }
 
@@ -367,6 +375,62 @@ baml_builtins::for_all_sys_ops!(define_sys_ops_struct);
 baml_builtins::with_builtins!(baml_builtins_macros::generate_sys_op_traits);
 
 // ============================================================================
+// SysOpsBuilder — Compose a SysOps table by overriding modules independently
+// ============================================================================
+
+/// Builder for composing a [`SysOps`] table by overriding individual modules.
+///
+/// Starts with all operations returning `Unsupported` (except LLM, which uses
+/// the blanket implementation), and allows selectively overriding modules:
+///
+/// ```ignore
+/// // Use with_http::<T>() when T implements Default; use with_http_instance for pre-built instances.
+/// let ops = SysOpsBuilder::new()
+///     .with_http_instance(Arc::new(my_http_impl))
+///     .build();
+/// ```
+pub struct SysOpsBuilder {
+    inner: SysOps,
+}
+
+/// Default provider — all trait methods return `Unsupported` via defaults.
+/// `SysOpLlm` is provided by the blanket `impl<T> SysOpLlm for T`.
+struct DefaultOps;
+
+impl Default for DefaultOps {
+    fn default() -> Self {
+        Self
+    }
+}
+
+impl SysOpFs for DefaultOps {}
+impl SysOpSys for DefaultOps {}
+impl SysOpNet for DefaultOps {}
+impl SysOpHttp for DefaultOps {}
+impl SysOpEnv for DefaultOps {}
+
+impl SysOpsBuilder {
+    /// Create a new builder with all operations defaulting to `Unsupported`,
+    /// except LLM ops which use the real blanket implementation.
+    pub fn new() -> Self {
+        Self {
+            inner: SysOps::from_impl::<DefaultOps>(),
+        }
+    }
+
+    /// Consume the builder and return the composed [`SysOps`] table.
+    pub fn build(self) -> SysOps {
+        self.inner
+    }
+}
+
+impl Default for SysOpsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
 // Blanket SysOpLlm implementation (delegates to sys_llm)
 // ============================================================================
 
@@ -378,6 +442,7 @@ baml_builtins::with_builtins!(baml_builtins_macros::generate_sys_op_traits);
 /// closures can be passed to the `execute_*` functions.
 impl<T> SysOpLlm for T {
     fn baml_llm_primitive_client_render_prompt(
+        &self,
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         template: String,
         args: BexExternalValue,
@@ -389,6 +454,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_primitive_client_specialize_prompt(
+        &self,
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> SysOpOutput<bex_vm_types::PromptAst> {
@@ -399,6 +465,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_primitive_client_build_request(
+        &self,
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> SysOpOutput<bex_heap::builtin_types::owned::HttpRequest> {
@@ -409,6 +476,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_primitive_client_parse(
+        &self,
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         response: String,
         function_name: String,
@@ -431,6 +499,7 @@ impl<T> SysOpLlm for T {
     }
 
     fn baml_llm_get_jinja_template(
+        &self,
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
@@ -439,10 +508,17 @@ impl<T> SysOpLlm for T {
                 "LLM function not found: {function_name}"
             )));
         };
-        SysOpOutput::ok(info.prompt_template.clone())
+        let dedented = sys_llm::preprocess_template(&info.prompt_template);
+        let template = if ctx.template_strings_macros.is_empty() {
+            dedented
+        } else {
+            format!("{}\n{}", ctx.template_strings_macros, dedented)
+        };
+        SysOpOutput::ok(template)
     }
 
     fn baml_llm_build_primitive_client(
+        &self,
         name: String,
         provider: String,
         default_role: String,
@@ -495,7 +571,11 @@ impl<T> SysOpLlm for T {
         })
     }
 
-    fn baml_llm_get_client_function(function_name: String, ctx: &SysOpContext) -> SysOpOutput {
+    fn baml_llm_get_client_function(
+        &self,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput {
         let Some(info) = ctx.llm_functions.get(&function_name) else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "LLM function not found: {function_name}"

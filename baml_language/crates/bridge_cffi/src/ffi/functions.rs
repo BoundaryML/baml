@@ -2,6 +2,7 @@
 
 use std::{ffi::CStr, panic::AssertUnwindSafe};
 
+use bridge_ctypes::{DecodeFromBuffer, kwargs_to_bex_values};
 use futures::future::FutureExt;
 use prost::Message;
 
@@ -10,8 +11,7 @@ use crate::{
     baml::cffi::{
         HostFunctionArguments, InvocationResponse, invocation_response::Response as CResponse,
     },
-    ctypes::{DecodeFromBuffer, kwargs_to_bex_values},
-    engine::{get_engine, get_runtime},
+    engine::{get_runtime, get_tokio_runtime},
     error::BridgeError,
     ffi::callbacks::{send_error_to_callback, send_result_to_callback},
 };
@@ -56,8 +56,8 @@ fn call_function_inner(
     length: usize,
     id: u32,
 ) -> Result<(), BridgeError> {
-    // Get engine (must be initialized)
-    let engine = get_engine()?.clone();
+    // Get runtime (must be initialized)
+    let runtime = get_runtime()?;
 
     // Check for null function name pointer
     if function_name.is_null() {
@@ -74,7 +74,7 @@ fn call_function_inner(
     };
 
     // Decode protobuf arguments
-    let args = HostFunctionArguments::from_c_buffer(encoded_args as *const u8, length)?;
+    let args = unsafe { HostFunctionArguments::from_c_buffer(encoded_args as *const u8, length) }?;
 
     // Convert kwargs to BexValue
     let kwargs = kwargs_to_bex_values(args.kwargs)?;
@@ -83,37 +83,13 @@ fn call_function_inner(
     // TODO: Support collectors when bex_engine adds support
     // TODO: Support type_builder when bex_engine adds support
 
-    // Look up function parameters to get parameter order
-    let params =
-        engine
-            .function_params(&func_name)
-            .ok_or_else(|| BridgeError::FunctionNotFound {
-                name: func_name.clone(),
-            })?;
-
-    // Reorder kwargs to match function parameter declaration order.
-    // This ensures arguments are passed correctly even if the client sends
-    // them in a different order than the function expects.
-    let bex_args: Vec<bex_external_types::BexExternalValue> = params
-        .iter()
-        .map(|(param_name, _param_type)| {
-            kwargs
-                .get(*param_name)
-                .cloned()
-                .ok_or_else(|| BridgeError::MissingArgument {
-                    function: func_name.clone(),
-                    parameter: (*param_name).to_string(),
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
     // Spawn async task with panic catching
-    let rt = get_runtime().clone();
-    rt.spawn(async move {
+    get_tokio_runtime().spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
-        let result = AssertUnwindSafe(async { engine.call_function(&func_name, bex_args, None, &[]).await })
-            .catch_unwind()
-            .await;
+        let result =
+            AssertUnwindSafe(async { runtime.call_function(&func_name, kwargs.into()).await })
+                .catch_unwind()
+                .await;
 
         match result {
             Ok(Ok(value)) => {

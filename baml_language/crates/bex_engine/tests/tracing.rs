@@ -9,8 +9,6 @@
 
 mod common;
 
-use std::collections::HashMap;
-
 use bex_engine::{BexEngine, BexExternalValue, HostSpanContext, RuntimeEvent, SpanId};
 use bex_events::{EventKind, FunctionEvent};
 use common::compile_for_engine;
@@ -62,7 +60,7 @@ async fn trace_single_function() {
 
     let snapshot = compile_for_engine(source);
     let engine =
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
+        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -102,7 +100,7 @@ async fn trace_nested_expression_calls_no_child_spans() {
 
     let snapshot = compile_for_engine(source);
     let engine =
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
+        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -142,7 +140,7 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
 
     let snapshot = compile_for_engine(source);
     let engine =
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
+        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -176,7 +174,7 @@ async fn trace_sibling_expression_calls_no_child_spans() {
 
     let snapshot = compile_for_engine(source);
     let engine =
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
+        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -202,7 +200,7 @@ async fn trace_captures_root_args() {
 
     let snapshot = compile_for_engine(source);
     let engine =
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
+        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -239,7 +237,7 @@ async fn trace_captures_root_result() {
 
     let snapshot = compile_for_engine(source);
     let engine =
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
+        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine

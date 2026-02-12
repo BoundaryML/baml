@@ -1,0 +1,22 @@
+[package]
+name = "bridge_ctypes"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+bex_factory = { workspace = true }
+indexmap = { workspace = true }
+prost = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }
+
+[lints]
+workspace = true

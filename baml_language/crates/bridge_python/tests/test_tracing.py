@@ -383,7 +383,7 @@ class TraceFileReader:
 
 def make_runtime() -> BamlRuntime:
     """Create a BamlRuntime from test BAML source."""
-    return BamlRuntime.from_files(".", {"main.baml": BAML_SOURCE}, {})
+    return BamlRuntime.from_files(".", {"main.baml": BAML_SOURCE})
 
 
 def make_ctx(rt: BamlRuntime) -> BamlCtxManager:
@@ -1784,7 +1784,7 @@ class TestCrossBoundaryLLMTracing:
         source = LLM_BAML_TEMPLATE.replace(
             "__MOCK_URL__", f"http://127.0.0.1:{mock_server}"
         )
-        return BamlRuntime.from_files(".", {"main.baml": source}, {})
+        return BamlRuntime.from_files(".", {"main.baml": source})
 
     @pytest.fixture
     def llm_ctx(self, llm_rt):

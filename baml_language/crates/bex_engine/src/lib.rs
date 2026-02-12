@@ -235,7 +235,7 @@ pub enum EngineError {
 /// ```ignore
 /// use std::sync::Arc;
 ///
-/// let engine = Arc::new(BexEngine::new(bytecode, env_vars, sys_ops)?);
+/// let engine = Arc::new(BexEngine::new(bytecode, sys_ops)?);
 ///
 /// // Concurrent calls are safe - each gets its own VM and TLAB
 /// let (result1, result2) = tokio::join!(
@@ -278,8 +278,6 @@ pub struct BexEngine {
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
     /// Resolved class names for instance allocation
     resolved_class_names: HashMap<String, HeapPtr>,
-    /// Environment variables passed to VM.
-    env_vars: HashMap<String, String>,
     /// System operations provider.
     sys_ops: sys_types::SysOps,
     /// Context passed to `sys_ops` that need engine-level information.
@@ -311,11 +309,9 @@ impl BexEngine {
     /// # Arguments
     ///
     /// * `bytecode_program` - The compiled BAML program bytecode
-    /// * `env_vars` - Environment variables accessible to the program
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
     pub fn new(
         bytecode_program: bex_vm_types::Program,
-        env_vars: HashMap<String, String>,
         sys_ops: sys_types::SysOps,
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
@@ -374,6 +370,7 @@ impl BexEngine {
         let sys_op_ctx = sys_types::SysOpContext {
             llm_functions,
             function_global_indices: bytecode.function_global_indices,
+            template_strings_macros: bytecode.template_strings_macros,
         };
 
         Ok(Self {
@@ -381,7 +378,6 @@ impl BexEngine {
             globals,
             resolved_function_names,
             resolved_class_names,
-            env_vars,
             sys_ops,
             sys_op_ctx,
             // Initialize epoch tracking
@@ -518,6 +514,9 @@ impl BexEngine {
                 }
             }
 
+            // Update watch state (graph NodeIds, RootState values)
+            vm.watch.apply_forwarding(&forwarding);
+
             // Invalidate TLAB so next allocation gets chunk from new space
             vm.tlab.invalidate();
         }
@@ -600,11 +599,8 @@ impl BexEngine {
         // SAFETY: We just registered with the epoch above
         let guard = unsafe { EpochGuard::new() };
 
-        let mut vm = BexVm::new(
-            Arc::clone(&self.heap),
-            self.globals.clone(),
-            self.env_vars.clone(),
-        );
+        // Create VM with shared heap (each VM gets its own TLAB)
+        let mut vm = BexVm::new(Arc::clone(&self.heap), self.globals.clone());
 
         // Snapshot args for the root FunctionStart event before converting to VM values
         let args_snapshot = args.clone();
@@ -711,19 +707,25 @@ impl BexEngine {
     }
 
     /// Get parameter names and types for a function by dereferencing its heap object.
-    pub fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
-        let (ptr, _kind) = self.resolved_function_names.get(name)?;
+    pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty)>, EngineError> {
+        let (ptr, _kind) =
+            self.resolved_function_names
+                .get(name)
+                .ok_or(EngineError::FunctionNotFound {
+                    name: name.to_string(),
+                })?;
         // SAFETY: ptr is from resolved_function_names, a compile-time object
         let obj = unsafe { ptr.get() };
         match obj {
-            Object::Function(func) => Some(
-                func.param_names
-                    .iter()
-                    .zip(func.param_types.iter())
-                    .map(|(name, ty)| (name.as_str(), ty))
-                    .collect(),
-            ),
-            _ => None,
+            Object::Function(func) => Ok(func
+                .param_names
+                .iter()
+                .zip(func.param_types.iter())
+                .map(|(name, ty)| (name.as_str(), ty))
+                .collect()),
+            other => Err(EngineError::TypeMismatch {
+                message: format!("Expected Function, got {other:?}"),
+            }),
         }
     }
 
@@ -737,6 +739,9 @@ impl BexEngine {
                 roots.push(*ptr);
             }
         }
+
+        // Watch state (last_assigned/last_notified values that aren't on the stack)
+        vm.watch.collect_roots(&mut roots);
 
         // Note: Frame locals are stored in the stack at the locals_offset position,
         // so they're already included in the stack iteration above.
@@ -761,6 +766,9 @@ impl BexEngine {
                         }
                     }
                 }
+
+                // Update watch state (graph NodeIds, RootState values)
+                vm.watch.apply_forwarding(&forwarding);
 
                 // Invalidate TLAB so next allocation gets chunk from new space
                 vm.tlab.invalidate();
@@ -857,7 +865,16 @@ impl BexEngine {
                         SysOpResult::Async(fut) => {
                             // Async operation - spawn task
                             let pending_futures = pending_futures.clone();
+                            #[cfg(not(target_arch = "wasm32"))]
                             tokio::spawn(async move {
+                                let result = fut.await;
+                                let _ = pending_futures.send(FutureResult {
+                                    id,
+                                    result: result.map_err(EngineError::from),
+                                });
+                            });
+                            #[cfg(target_arch = "wasm32")]
+                            wasm_bindgen_futures::spawn_local(async move {
                                 let result = fut.await;
                                 let _ = pending_futures.send(FutureResult {
                                     id,

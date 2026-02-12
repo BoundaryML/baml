@@ -11,7 +11,7 @@ const wasmNoCachePlugin = () => ({
   name: 'wasm-no-cache',
   configureServer(server: any) {
     server.middlewares.use((req: any, res: any, next: any) => {
-      if (req.url?.includes('.wasm') || req.url?.includes('baml_playground_wasm')) {
+      if (req.url?.includes('.wasm') || req.url?.includes('bridge_wasm') || req.url?.includes('@b/bridge_wasm')) {
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         res.setHeader('Pragma', 'no-cache');
         res.setHeader('Expires', '0');
@@ -26,7 +26,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
-      '@b/baml-playground-wasm': resolve(projectRoot, '../pkg-playground/wasm/baml_playground_wasm.js'),
+      '@b/bridge_wasm': resolve(projectRoot, '../pkg-playground/wasm/bridge_wasm.js'),
     }
   },
   server: {
@@ -43,7 +43,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     // Don't pre-bundle the WASM package so changes are picked up immediately
-    exclude: ['@b/baml-playground-wasm'],
+    exclude: ['@b/bridge_wasm'],
   },
   build: {
     rollupOptions: {

@@ -302,7 +302,7 @@ fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
 ///
 /// Returns a list of the invalid key types found. The caller should create
 /// appropriate diagnostics for each.
-pub fn find_invalid_map_keys(ty: &Ty, aliases: &HashMap<Name, Ty>) -> Vec<Ty> {
+pub(crate) fn find_invalid_map_keys(ty: &Ty, aliases: &HashMap<Name, Ty>) -> Vec<Ty> {
     let mut invalid_keys = Vec::new();
     find_invalid_map_keys_recursive(ty, aliases, &mut invalid_keys);
     invalid_keys

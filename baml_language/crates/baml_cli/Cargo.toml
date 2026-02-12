@@ -19,10 +19,8 @@ workspace = true
 [dependencies]
 baml_lsp_server = { workspace = true }
 anyhow = { workspace = true }
-cfg-if = { workspace = true }
 clap = { workspace = true, features = [ "color", "env" ] }
 clap-cargo = { workspace = true }
-colored = { workspace = true }
 ctrlc = { workspace = true }
 
 [features]

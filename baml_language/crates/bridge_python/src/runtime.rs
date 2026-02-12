@@ -1,15 +1,16 @@
 //! BamlRuntime PyO3 class - wraps Arc<BexEngine>.
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use bex_engine::BexEngine;
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass, PyObject, Python,
 };
+use sys_native::SysOpsExt;
 
 use crate::{
-    errors::{bridge_error_to_py, engine_error_to_py, BamlInvalidArgumentError},
+    errors::{engine_error_to_py, BamlInvalidArgumentError},
     parse_py_type::{parse_py_kwargs, py_to_bex_value},
     pythonize_value::bex_value_to_py,
     types::{collector::Collector, FunctionResult},
@@ -28,17 +29,16 @@ impl BamlRuntime {
     /// # Arguments
     /// * `root_path` - Root path for BAML files
     /// * `files` - Map of filename to file content
-    /// * `env_vars` - Environment variables
     #[staticmethod]
     fn from_files(
         root_path: String,
-        files: HashMap<String, String>,
-        env_vars: HashMap<String, String>,
+        files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
-        baml_cffi::engine::initialize_engine(&root_path, files, env_vars)
-            .map_err(bridge_error_to_py)?;
-
-        let engine = baml_cffi::engine::get_engine().map_err(bridge_error_to_py)?;
+        let engine =
+            bex_factory::new_engine(&root_path, &files, bex_factory::SysOps::native())
+                .map_err(|e| {
+                    pyo3::PyErr::new::<BamlInvalidArgumentError, _>(e.to_string())
+                })?;
 
         Ok(BamlRuntime { engine })
     }
@@ -65,11 +65,7 @@ impl BamlRuntime {
         // Look up function params to get the correct argument order
         let params = engine
             .function_params(&function_name)
-            .ok_or_else(|| {
-                bridge_error_to_py(baml_cffi::error::BridgeError::FunctionNotFound {
-                    name: function_name.clone(),
-                })
-            })?;
+            .map_err(engine_error_to_py)?;
 
         // Convert Python args to BexExternalValue in parameter order
         let mut ordered_args = Vec::with_capacity(params.len());
@@ -132,11 +128,7 @@ impl BamlRuntime {
         // Look up function params to get the correct argument order
         let params = engine
             .function_params(&function_name)
-            .ok_or_else(|| {
-                bridge_error_to_py(baml_cffi::error::BridgeError::FunctionNotFound {
-                    name: function_name.clone(),
-                })
-            })?;
+            .map_err(engine_error_to_py)?;
 
         // Convert Python args to BexExternalValue in parameter order
         let mut ordered_args = Vec::with_capacity(params.len());
@@ -162,7 +154,7 @@ impl BamlRuntime {
             .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
             .unwrap_or_default();
 
-        let rt = baml_cffi::engine::get_runtime();
+        let rt = baml_cffi::engine::get_tokio_runtime();
 
         let result = py.allow_threads(|| {
             rt.block_on(engine.call_function(

@@ -3,7 +3,9 @@
 //! Converts `HostValue` (from the C bridge) to the engine's `BexExternalValue` representation
 //! so the BEX engine can use them as function arguments.
 
-use bex_external_types::{BexExternalValue, Ty};
+use std::collections::HashMap;
+
+use bex_factory::{BexExternalValue, Ty};
 use indexmap::IndexMap;
 
 use crate::{
@@ -11,11 +13,11 @@ use crate::{
         HostClassValue, HostEnumValue, HostListValue, HostMapEntry, HostMapValue, HostValue,
         host_value::Value as HostValueVariant,
     },
-    error::BridgeError,
+    error::CtypesError,
 };
 
 /// Decode a protobuf `HostValue` into a `BexExternalValue` for use by the BEX engine.
-pub fn host_value_to_external(value: HostValue) -> Result<BexExternalValue, BridgeError> {
+pub fn host_value_to_external(value: HostValue) -> Result<BexExternalValue, CtypesError> {
     match value.value {
         None => Ok(BexExternalValue::Null),
         Some(variant) => match variant {
@@ -26,26 +28,25 @@ pub fn host_value_to_external(value: HostValue) -> Result<BexExternalValue, Brid
             HostValueVariant::ListValue(list) => convert_list(list),
             HostValueVariant::MapValue(map) => convert_map(map),
             HostValueVariant::ClassValue(class) => convert_class(class),
-            HostValueVariant::EnumValue(e) => convert_enum(e),
-            HostValueVariant::Handle(_handle) => Err(BridgeError::HandleNotSupported),
+            HostValueVariant::EnumValue(e) => Ok(convert_enum(e)),
+            HostValueVariant::Handle(_handle) => Err(CtypesError::HandleNotSupported),
         },
     }
 }
 
-fn convert_list(list: HostListValue) -> Result<BexExternalValue, BridgeError> {
-    let items: Result<Vec<BexExternalValue>, BridgeError> = list
+fn convert_list(list: HostListValue) -> Result<BexExternalValue, CtypesError> {
+    let items: Result<Vec<BexExternalValue>, CtypesError> = list
         .values
         .into_iter()
         .map(host_value_to_external)
         .collect();
     Ok(BexExternalValue::Array {
-        // Type info not in protobuf, use Union of all possible types as fallback
         element_type: Ty::Union(vec![Ty::Int, Ty::Float, Ty::String, Ty::Bool, Ty::Null]),
         items: items?,
     })
 }
 
-fn convert_map(map: HostMapValue) -> Result<BexExternalValue, BridgeError> {
+fn convert_map(map: HostMapValue) -> Result<BexExternalValue, CtypesError> {
     let mut entries = IndexMap::new();
     for entry in map.entries {
         let key = extract_string_key(&entry)?;
@@ -58,13 +59,12 @@ fn convert_map(map: HostMapValue) -> Result<BexExternalValue, BridgeError> {
     }
     Ok(BexExternalValue::Map {
         key_type: Ty::String,
-        // Type info not in protobuf, use Union of all possible types as fallback
         value_type: Ty::Union(vec![Ty::Int, Ty::Float, Ty::String, Ty::Bool, Ty::Null]),
         entries,
     })
 }
 
-fn convert_class(class: HostClassValue) -> Result<BexExternalValue, BridgeError> {
+fn convert_class(class: HostClassValue) -> Result<BexExternalValue, CtypesError> {
     let mut fields = IndexMap::new();
     for entry in class.fields {
         let key = extract_string_key(&entry)?;
@@ -81,29 +81,29 @@ fn convert_class(class: HostClassValue) -> Result<BexExternalValue, BridgeError>
     })
 }
 
-fn convert_enum(e: HostEnumValue) -> Result<BexExternalValue, BridgeError> {
-    Ok(BexExternalValue::Variant {
+fn convert_enum(e: HostEnumValue) -> BexExternalValue {
+    BexExternalValue::Variant {
         enum_name: e.name,
         variant_name: e.value,
-    })
+    }
 }
 
-fn extract_string_key(entry: &HostMapEntry) -> Result<String, BridgeError> {
+fn extract_string_key(entry: &HostMapEntry) -> Result<String, CtypesError> {
     use crate::baml::cffi::host_map_entry::Key;
     match &entry.key {
         Some(Key::StringKey(s)) => Ok(s.clone()),
         Some(Key::IntKey(i)) => Ok(i.to_string()),
         Some(Key::BoolKey(b)) => Ok(b.to_string()),
         Some(Key::EnumKey(e)) => Ok(format!("{}::{}", e.name, e.value)),
-        None => Err(BridgeError::MapEntryMissingKey),
+        None => Err(CtypesError::MapEntryMissingKey),
     }
 }
 
-/// Decode protobuf kwargs into an `IndexMap<String, BexExternalValue>` for engine call arguments.
+/// Decode protobuf kwargs into an `HashMap<String, BexExternalValue>` for engine call arguments.
 pub fn kwargs_to_bex_values(
     kwargs: Vec<HostMapEntry>,
-) -> Result<IndexMap<String, BexExternalValue>, BridgeError> {
-    let mut result = IndexMap::new();
+) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
+    let mut result = HashMap::new();
     for entry in kwargs {
         let key = extract_string_key(&entry)?;
         let value = entry

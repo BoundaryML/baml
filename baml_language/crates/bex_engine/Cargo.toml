@@ -16,8 +16,16 @@ bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "sync", "rt" ] }
+tokio = { workspace = true, features = [ "sync" ] }
 tracing = { workspace = true }
+
+# Native-only: tokio runtime for spawning async tasks
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = [ "sync", "rt" ] }
+
+# WASM-only: wasm-bindgen-futures for spawning async tasks
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { workspace = true }
 
 [dev-dependencies]
 baml_builtins = { workspace = true }

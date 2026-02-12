@@ -9,7 +9,7 @@
 //! use sys_native::SysOpsExt;
 //! use bex_engine::BexEngine;
 //!
-//! let engine = BexEngine::new(program, env_vars, SysOps::native())?;
+//! let engine = BexEngine::new(program, SysOps::native())?;
 //! ```
 
 mod ops;
@@ -18,8 +18,8 @@ pub mod registry;
 // Re-export types from sys_types for convenience
 use bex_heap::builtin_types;
 pub use sys_types::{
-    CompletionHandle, OpError, SysOp, SysOpContext, SysOpFn, SysOpFs, SysOpHttp, SysOpLlm,
-    SysOpNet, SysOpResult, SysOpSys, SysOps,
+    CompletionHandle, OpError, SysOp, SysOpContext, SysOpEnv, SysOpFn, SysOpFs, SysOpHttp,
+    SysOpLlm, SysOpNet, SysOpResult, SysOpSys, SysOps,
 };
 use sys_types::{OpErrorKind, SysOpOutput};
 
@@ -29,12 +29,46 @@ use sys_types::{OpErrorKind, SysOpOutput};
 /// typed signatures. The generated glue handles arg extraction and error wrapping.
 pub struct NativeSysOps;
 
+impl Default for NativeSysOps {
+    fn default() -> Self {
+        Self
+    }
+}
+
+// ============================================================================
+// Environment
+// ============================================================================
+
+impl SysOpEnv for NativeSysOps {
+    fn env_get(&self, key: String) -> SysOpOutput<Option<String>> {
+        match std::env::var(&key) {
+            Ok(val) => SysOpOutput::ok(Some(val)),
+            Err(std::env::VarError::NotPresent) => SysOpOutput::ok(None),
+            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(OpErrorKind::Other(
+                format!("Environment variable '{key}' is not valid UTF-8"),
+            )),
+        }
+    }
+
+    fn env_get_or_panic(&self, key: String) -> SysOpOutput<String> {
+        match std::env::var(&key) {
+            Ok(val) => SysOpOutput::ok(val),
+            Err(std::env::VarError::NotPresent) => SysOpOutput::err(OpErrorKind::Other(format!(
+                "Environment variable '{key}' not found",
+            ))),
+            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(OpErrorKind::Other(
+                format!("Environment variable '{key}' is not valid UTF-8"),
+            )),
+        }
+    }
+}
+
 // ============================================================================
 // File System
 // ============================================================================
 
 impl SysOpFs for NativeSysOps {
-    fn baml_fs_open(path: String) -> SysOpOutput<builtin_types::owned::FsFile> {
+    fn baml_fs_open(&self, path: String) -> SysOpOutput<builtin_types::owned::FsFile> {
         SysOpOutput::async_op(async move {
             let file = tokio::fs::File::open(&path)
                 .await
@@ -45,7 +79,7 @@ impl SysOpFs for NativeSysOps {
         })
     }
 
-    fn baml_fs_file_read(file: builtin_types::owned::FsFile) -> SysOpOutput<String> {
+    fn baml_fs_file_read(&self, file: builtin_types::owned::FsFile) -> SysOpOutput<String> {
         use tokio::io::AsyncReadExt;
 
         SysOpOutput::async_op(async move {
@@ -65,7 +99,7 @@ impl SysOpFs for NativeSysOps {
         })
     }
 
-    fn baml_fs_file_close(file: builtin_types::owned::FsFile) -> SysOpOutput<()> {
+    fn baml_fs_file_close(&self, file: builtin_types::owned::FsFile) -> SysOpOutput<()> {
         drop(file);
         SysOpOutput::ok(())
     }
@@ -76,7 +110,7 @@ impl SysOpFs for NativeSysOps {
 // ============================================================================
 
 impl SysOpSys for NativeSysOps {
-    fn baml_sys_shell(command: String) -> SysOpOutput<String> {
+    fn baml_sys_shell(&self, command: String) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
             let output = tokio::process::Command::new("sh")
                 .arg("-c")
@@ -109,7 +143,7 @@ impl SysOpSys for NativeSysOps {
 // ============================================================================
 
 impl SysOpNet for NativeSysOps {
-    fn baml_net_connect(addr: String) -> SysOpOutput<builtin_types::owned::NetSocket> {
+    fn baml_net_connect(&self, addr: String) -> SysOpOutput<builtin_types::owned::NetSocket> {
         SysOpOutput::async_op(async move {
             let stream = tokio::net::TcpStream::connect(&addr)
                 .await
@@ -120,7 +154,7 @@ impl SysOpNet for NativeSysOps {
         })
     }
 
-    fn baml_net_socket_read(socket: builtin_types::owned::NetSocket) -> SysOpOutput<String> {
+    fn baml_net_socket_read(&self, socket: builtin_types::owned::NetSocket) -> SysOpOutput<String> {
         use tokio::io::AsyncReadExt;
 
         SysOpOutput::async_op(async move {
@@ -142,7 +176,7 @@ impl SysOpNet for NativeSysOps {
         })
     }
 
-    fn baml_net_socket_close(socket: builtin_types::owned::NetSocket) -> SysOpOutput<()> {
+    fn baml_net_socket_close(&self, socket: builtin_types::owned::NetSocket) -> SysOpOutput<()> {
         drop(socket);
         SysOpOutput::ok(())
     }
@@ -153,7 +187,7 @@ impl SysOpNet for NativeSysOps {
 // ============================================================================
 
 impl SysOpHttp for NativeSysOps {
-    fn baml_http_fetch(url: String) -> SysOpOutput<builtin_types::owned::HttpResponse> {
+    fn baml_http_fetch(&self, url: String) -> SysOpOutput<builtin_types::owned::HttpResponse> {
         let req = builtin_types::owned::HttpRequest {
             method: "GET".to_string(),
             url,
@@ -164,6 +198,7 @@ impl SysOpHttp for NativeSysOps {
     }
 
     fn baml_http_response_text(
+        &self,
         response: builtin_types::owned::HttpResponse,
     ) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
@@ -189,11 +224,15 @@ impl SysOpHttp for NativeSysOps {
         })
     }
 
-    fn baml_http_response_ok(response: builtin_types::owned::HttpResponse) -> SysOpOutput<bool> {
+    fn baml_http_response_ok(
+        &self,
+        response: builtin_types::owned::HttpResponse,
+    ) -> SysOpOutput<bool> {
         SysOpOutput::ok((200..300).contains(&response.status_code))
     }
 
     fn baml_http_send(
+        &self,
         request: builtin_types::owned::HttpRequest,
     ) -> SysOpOutput<builtin_types::owned::HttpResponse> {
         SysOpOutput::async_op(async move { ops::http::send_async(request).await })

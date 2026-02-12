@@ -191,18 +191,6 @@ impl NativeFunctions for VmNatives {
     fn baml_media_mime_type(media: &MediaValue) -> Option<String> {
         media.mime_type.clone()
     }
-
-    // =========================================================================
-    // Env functions
-    // =========================================================================
-
-    fn env_get(vm: &mut BexVm, key: &str) -> Result<String, VmError> {
-        vm.env_vars.get(key).cloned().ok_or_else(|| {
-            VmError::RuntimeError(RuntimeError::Other(format!(
-                "Environment variable '{key}' not found",
-            )))
-        })
-    }
 }
 
 // =============================================================================
@@ -557,7 +545,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                 bex_vm_types::FunctionKind::Bytecode => bex_vm_types::FunctionKind::Bytecode,
                 bex_vm_types::FunctionKind::SysOp(op) => bex_vm_types::FunctionKind::SysOp(op),
                 bex_vm_types::FunctionKind::NativeUnresolved => {
-                    let Some(native_function) = crate::get_native_fn(function.name.as_str()) else {
+                    let Some(native_function) =
+                        crate::builtins::get_native_fn(function.name.as_str())
+                    else {
                         return Err(VmError::RuntimeError(RuntimeError::Other(format!(
                             "Native function '{}' not found",
                             function.name

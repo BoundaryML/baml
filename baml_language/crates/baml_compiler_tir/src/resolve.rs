@@ -191,7 +191,7 @@ use baml_compiler_hir::ExprId;
 use crate::{Ty, builtins};
 
 /// Resolution map for all expressions in a function body.
-pub type ResolutionMap = HashMap<ExprId, ResolvedValue>;
+pub(crate) type ResolutionMap = HashMap<ExprId, ResolvedValue>;
 
 /// Resolve a method call on a known receiver type.
 ///
@@ -209,7 +209,8 @@ pub type ResolutionMap = HashMap<ExprId, ResolvedValue>;
 /// let arr: int[] = [1, 2, 3];
 /// arr.length(); // resolves to baml.Array.length builtin
 /// ```
-pub fn resolve_method(receiver_ty: &Ty, method_name: &str) -> ResolvedMethod {
+#[allow(dead_code)]
+pub(crate) fn resolve_method(receiver_ty: &Ty, method_name: &str) -> ResolvedMethod {
     // Try builtin methods first
     if let Some((def, _bindings)) = builtins::lookup_method(receiver_ty, method_name) {
         return ResolvedMethod::Builtin(QualifiedName::from_builtin_path(def.path));

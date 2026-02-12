@@ -6,12 +6,9 @@
 
 mod common;
 
-use std::{
-    collections::HashMap,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
 };
 
 use bex_engine::{BexEngine, BexExternalValue, Ty};
@@ -34,8 +31,7 @@ async fn test_concurrent_calls_no_race() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-            .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine"),
     );
 
     // Spawn 10 concurrent calls
@@ -71,8 +67,7 @@ async fn test_concurrent_allocations_no_overlap() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-            .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine"),
     );
 
     // Track allocations from each concurrent call
@@ -123,8 +118,7 @@ async fn test_heap_stats_during_concurrent_execution() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-            .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine"),
     );
 
     let initial_stats = engine.heap_stats();
@@ -174,8 +168,7 @@ async fn test_concurrent_string_allocations() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-            .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine"),
     );
 
     // Spawn many concurrent calls that allocate different strings
@@ -224,8 +217,7 @@ async fn test_concurrent_array_allocations() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-            .expect("Failed to create engine"),
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine"),
     );
 
     // Spawn concurrent calls with different array sizes
@@ -279,8 +271,8 @@ async fn test_call_function_with_external_args() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native())
-        .expect("Failed to create engine");
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     // Test passing strings via BexExternalValue
     let result = engine

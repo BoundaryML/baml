@@ -32,7 +32,6 @@ bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
 anyhow = { workspace = true }
 arboard = { workspace = true }
-ariadne = { workspace = true }
 clap = { workspace = true, features = [ "derive" ] }
 crossterm = { workspace = true }
 notify = { workspace = true }
@@ -41,7 +40,6 @@ regex = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
 similar = { workspace = true, features = [ "inline" ] }
-text-size = { workspace = true }
 
 [lints.clippy]
 print_stdout = "allow"

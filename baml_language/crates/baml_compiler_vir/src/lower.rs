@@ -122,6 +122,22 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
+impl baml_compiler_diagnostics::ToDiagnostic for LoweringError {
+    fn to_diagnostic(&self) -> baml_compiler_diagnostics::Diagnostic {
+        use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase};
+
+        let diag = Diagnostic::error(DiagnosticId::LoweringError, self.to_string());
+
+        let diag = if let Some(span) = self.span() {
+            diag.with_primary_span(span)
+        } else {
+            diag
+        };
+
+        diag.with_phase(DiagnosticPhase::Hir)
+    }
+}
+
 /// Lower a function body from HIR to VIR.
 ///
 /// Returns `Err` if the HIR contains any `Missing` nodes or is otherwise

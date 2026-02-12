@@ -18,15 +18,15 @@ use std::collections::HashMap;
 
 use baml_base::{Name, QualifiedName, Span};
 use baml_compiler_hir::FunctionSignature;
-use baml_compiler_tir::TypeResolutionContext;
+use baml_compiler_tir::{ResolvedValue, TypeResolutionContext};
 use baml_compiler_vir::{
-    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, ResolvedValue, UnaryOp,
+    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp,
 };
 use baml_type::{Ty, TypeName};
 
 use crate::{
-    AggregateKind, BinOp, BlockId, Constant, Local, MirBuilder, MirFunction, Operand, Place,
-    Rvalue, StatementKind, UnaryOp as MirUnaryOp, VizNode, VizNodeType,
+    AggregateKind, BinOp, BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue,
+    StatementKind, UnaryOp as MirUnaryOp, VizNode, VizNodeType, builder::MirBuilder,
 };
 
 /// Source of a field value in spread expansion.

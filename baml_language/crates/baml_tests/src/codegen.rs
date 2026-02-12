@@ -92,7 +92,6 @@ fn convert_instruction(
         bex_vm_types::Instruction::StoreField(idx) => Instruction::StoreField(*idx),
         bex_vm_types::Instruction::Pop(n) => Instruction::Pop(*n),
         bex_vm_types::Instruction::Copy(idx) => Instruction::Copy(*idx),
-        bex_vm_types::Instruction::PopReplace(n) => Instruction::PopReplace(*n),
         bex_vm_types::Instruction::Jump(offset) => Instruction::Jump(*offset),
         bex_vm_types::Instruction::PopJumpIfFalse(offset) => Instruction::PopJumpIfFalse(*offset),
         bex_vm_types::Instruction::BinOp(op) => Instruction::BinOp(*op),

@@ -2930,6 +2930,9 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Match) {
             // Match expression
             self.parse_match_expr();
+        } else if self.at(TokenKind::Env) {
+            // env.FIELD or env.method(...)
+            self.parse_env_access();
         } else {
             self.error_unexpected_token("expression".to_string());
             // Consume the unexpected token to avoid infinite loops
@@ -2937,6 +2940,25 @@ impl<'a> Parser<'a> {
                 self.bump();
             }
         }
+    }
+
+    /// Parse `env.FIELD` expressions.
+    ///
+    /// Produces an `ENV_ACCESS_EXPR` node: `KW_ENV DOT WORD`.
+    /// HIR lowering decides how to desugar based on context.
+    fn parse_env_access(&mut self) {
+        self.with_node(SyntaxKind::ENV_ACCESS_EXPR, |p| {
+            p.bump(); // consume `env` (TokenKind::Env)
+            if p.eat(TokenKind::Dot) {
+                if p.at(TokenKind::Word) {
+                    p.bump(); // consume field name
+                } else {
+                    p.error_unexpected_token("identifier after 'env.'".to_string());
+                }
+            } else {
+                p.error_unexpected_token("'.' after 'env'".to_string());
+            }
+        });
     }
 
     fn parse_call_args(&mut self) {
@@ -3640,18 +3662,18 @@ impl<'a> Parser<'a> {
         }
 
         // Check for `env.` prefix - environment variable access
+        if self.at(TokenKind::Env) {
+            if let Some(next) = self.peek(1) {
+                if next.kind == TokenKind::Dot {
+                    return true;
+                }
+            }
+        }
+
+        // Boolean literals
         if self.at(TokenKind::Word) {
             if let Some(token) = self.current() {
                 let text = token.text.as_str();
-                if text == "env" {
-                    // Check if next token is a dot
-                    if let Some(next) = self.peek(1) {
-                        if next.kind == TokenKind::Dot {
-                            return true;
-                        }
-                    }
-                }
-                // Boolean literals
                 if text == "true" || text == "false" {
                     return true;
                 }

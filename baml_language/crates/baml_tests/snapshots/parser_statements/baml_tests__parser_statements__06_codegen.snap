@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
+source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 24
-Objects: 80
-Globals: 70
+Objects: 81
+Globals: 71
 
 Function ConditionalLogic (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (age)
@@ -65,18 +65,18 @@ Function baml.llm.build_request (arity: 2, kind: Bytecode):
      1    LOAD_CONST 0        (null)
      2    LOAD_CONST 0        (null)
      3    LOAD_CONST 0        (null)
-     4    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     4    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      5    LOAD_VAR 1          (function_name)
      6    DISPATCH_FUTURE 1   
      7    AWAIT               
      8    STORE_VAR 3         (jinja_string)
-     9    LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     9    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      10   LOAD_VAR 1          (function_name)
      11   DISPATCH_FUTURE 1   
      12   AWAIT               
      13   CALL 0              
      14   STORE_VAR 4         (primitive_client)
-     15   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     15   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      16   LOAD_VAR 4          (primitive_client)
      17   LOAD_VAR 3          (jinja_string)
      18   LOAD_VAR 2          (args)
@@ -104,18 +104,18 @@ Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
      4    LOAD_CONST 0        (null)
      5    LOAD_CONST 0        (null)
      6    LOAD_CONST 0        (null)
-     7    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     7    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      8    LOAD_VAR 1          (function_name)
      9    DISPATCH_FUTURE 1   
      10   AWAIT               
      11   STORE_VAR 3         (jinja_string)
-     12   LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     12   LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      13   LOAD_VAR 1          (function_name)
      14   DISPATCH_FUTURE 1   
      15   AWAIT               
      16   CALL 0              
      17   STORE_VAR 4         (primitive_client)
-     18   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     18   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      19   LOAD_VAR 4          (primitive_client)
      20   LOAD_VAR 3          (jinja_string)
      21   LOAD_VAR 2          (args)
@@ -156,18 +156,18 @@ Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
      0    LOAD_CONST 0        (null)
      1    LOAD_CONST 0        (null)
      2    LOAD_CONST 0        (null)
-     3    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      4    LOAD_VAR 1          (function_name)
      5    DISPATCH_FUTURE 1   
      6    AWAIT               
      7    STORE_VAR 3         (jinja_string)
-     8    LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     8    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      9    LOAD_VAR 1          (function_name)
      10   DISPATCH_FUTURE 1   
      11   AWAIT               
      12   CALL 0              
      13   STORE_VAR 4         (primitive_client)
-     14   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      15   LOAD_VAR 4          (primitive_client)
      16   LOAD_VAR 3          (jinja_string)
      17   LOAD_VAR 2          (args)

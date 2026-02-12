@@ -69,7 +69,7 @@ function ReturnFloat(f: float) -> float {
 
 def make_runtime(baml_source: str) -> BamlRuntime:
     """Create a BamlRuntime from a single BAML source string."""
-    return BamlRuntime.from_files(".", {"main.baml": baml_source}, {})
+    return BamlRuntime.from_files(".", {"main.baml": baml_source})
 
 
 # ============================================================================
@@ -96,11 +96,11 @@ class TestBasics:
         """from_files raises on invalid BAML source (type error)."""
         bad_baml = 'function Bad() -> int { "not an int" }'
         with pytest.raises(Exception):
-            BamlRuntime.from_files(".", {"bad.baml": bad_baml}, {})
+            BamlRuntime.from_files(".", {"bad.baml": bad_baml})
 
     def test_from_files_empty(self):
         """from_files succeeds with empty source (no functions)."""
-        rt = BamlRuntime.from_files(".", {"empty.baml": ""}, {})
+        rt = BamlRuntime.from_files(".", {"empty.baml": ""})
         assert rt is not None
 
 

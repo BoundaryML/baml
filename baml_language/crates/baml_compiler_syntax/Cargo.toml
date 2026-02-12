@@ -17,6 +17,5 @@ doctest = false
 workspace = true
 
 [dependencies]
-baml_base = { workspace = true }
 rowan = { workspace = true }
 

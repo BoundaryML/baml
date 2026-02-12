@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
+source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -18,14 +18,17 @@ fn OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
     let _10: "base_url"
     let _11: "https://openrouter.ai/api/v1"
     let _12: "api_key"
-    let _13: "OPENROUTER_API_KEY"
-    let _14: "model"
-    let _15: "mistralai/mistral-small-3.1-24b-instruct"
-    let _16: "temperature"
-    let _17: 0.1
-    let _18: "headers"
-    let _19: map<null, null>
-    let _20: null
+    let _13: string
+    let _14: (string) -> string
+    let _15: "OPENROUTER_API_KEY"
+    let _16: null
+    let _17: "model"
+    let _18: "mistralai/mistral-small-3.1-24b-instruct"
+    let _19: "temperature"
+    let _20: 0.1
+    let _21: "headers"
+    let _22: map<null, null>
+    let _23: null
 
     bb0: {
         _1 = const fn baml.llm.build_primitive_client;
@@ -39,15 +42,9 @@ fn OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
         _10 = const "base_url";
         _11 = const "https://openrouter.ai/api/v1";
         _12 = const "api_key";
-        _13 = const "OPENROUTER_API_KEY";
-        _14 = const "model";
-        _15 = const "mistralai/mistral-small-3.1-24b-instruct";
-        _16 = const "temperature";
-        _17 = const 0.1_f64;
-        _18 = const "headers";
-        _19 = {  };
-        _9 = { copy _10: copy _11, copy _12: copy _13, copy _14: copy _15, copy _16: copy _17, copy _18: copy _19 };
-        _20 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+        _14 = const fn env.get_or_panic;
+        _15 = const "OPENROUTER_API_KEY";
+        _16 = dispatch_future copy _14(copy _15) -> bb2;
     }
 
     bb1: {
@@ -55,10 +52,25 @@ fn OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
     }
 
     bb2: {
-        _0 = await _20 -> [bb3];
+        _13 = await _16 -> [bb3];
     }
 
     bb3: {
+        _17 = const "model";
+        _18 = const "mistralai/mistral-small-3.1-24b-instruct";
+        _19 = const "temperature";
+        _20 = const 0.1_f64;
+        _21 = const "headers";
+        _22 = {  };
+        _9 = { copy _10: copy _11, copy _12: copy _13, copy _17: copy _18, copy _19: copy _20, copy _21: copy _22 };
+        _23 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb4;
+    }
+
+    bb4: {
+        _0 = await _23 -> [bb5];
+    }
+
+    bb5: {
         goto -> bb1;
     }
 

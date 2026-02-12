@@ -206,8 +206,7 @@ pub enum Path {
 ///
 /// - [`Watch::register_root`]
 /// - [`Watch::unregister_root`]
-/// - `Watch::add_edge`
-/// - [`Watch::link_edge`]
+/// - [`track_watch_dependencies`] (free function — tracks an object's dependencies)
 /// - [`Watch::unlink_edge`]
 /// - [`Watch::copy_roots_reaching`]
 ///
@@ -219,6 +218,12 @@ pub struct Watch {
     children: HashMap<NodeId, HashSet<(Path, NodeId)>>,
 
     /// Reverse edges: `child -> [(parent, path)]`
+    ///
+    /// Currently unused for any algorithmic purpose — all traversal uses
+    /// `children` (forward) and `roots_reaching_node` (inverse index).
+    /// Maintained for future use: reconstructing the full path from a
+    /// modified node back to its watch root, e.g. for debug logging like
+    /// "watch triggered from `obj` through `obj.inner.more_inner[5].x`".
     parents: HashMap<NodeId, HashSet<(NodeId, Path)>>,
 
     /// For each root, which nodes it can reach.
@@ -263,6 +268,22 @@ impl Watch {
             .entry(child)
             .or_default()
             .insert((parent, path));
+    }
+
+    /// Marks `node` as reachable from `root`. Returns `true` if newly reachable.
+    fn mark_reachable(&mut self, node: NodeId, root: NodeId) -> bool {
+        let reachable = self.reachable_from_root.entry(root).or_default();
+
+        if !reachable.insert(node) {
+            return false;
+        }
+
+        self.roots_reaching_node
+            .entry(node)
+            .or_default()
+            .insert(root);
+
+        true
     }
 
     /// Computes all nodes reachable from a starting node using BFS.
@@ -328,46 +349,6 @@ impl Watch {
         }
     }
 
-    /// Links parent.path -> child in the graph.
-    ///
-    /// Updates reachability incrementally for all affected roots.
-    ///
-    /// Note: Caller should call `track_dependencies` separately before this
-    /// if the child is a `HeapObject` that needs dependency tracking.
-    pub fn link_edge(&mut self, parent: NodeId, path: Path, child: NodeId) {
-        self.add_edge(parent, path, child);
-
-        // For each root that reaches parent, update reachability to include
-        // child and its descendants.
-        for root in self.copy_roots_reaching(parent) {
-            let mut queue = VecDeque::new();
-            queue.push_back(child);
-
-            // Set of nodes reachable from `root`. Also acts as a set of visited
-            // nodes. If a node is already reachable, that means we already indexed
-            // all its descendants, so no need to traverse that path again.
-            let reachable = self.reachable_from_root.entry(root).or_default();
-
-            while let Some(node) = queue.pop_front() {
-                // Skip already reachable nodes
-                if reachable.insert(node) {
-                    // Add to inverse index
-                    self.roots_reaching_node
-                        .entry(node)
-                        .or_default()
-                        .insert(root);
-
-                    // Queue children
-                    if let Some(edges) = self.children.get(&node) {
-                        for (_, child) in edges {
-                            queue.push_back(*child);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     /// Unlinks parent.path -> child from the graph.
     ///
     /// Updates reachability incrementally for all affected roots.
@@ -393,28 +374,25 @@ impl Watch {
         for root in roots_reaching {
             let still_reachable = self.breadth_first_search_from(root);
 
-            // Get the old reachable set
+            // Swap in the new reachable set, taking ownership of the old one
+            // without cloning.
             let old_reachable = self
                 .reachable_from_root
-                .get(&root)
-                .cloned()
+                .insert(root, still_reachable)
                 .unwrap_or_default();
 
-            // Find nodes that are no longer reachable
-            let no_longer_reachable: Vec<NodeId> = old_reachable
-                .difference(&still_reachable)
-                .copied()
-                .collect();
+            let still_reachable = &self.reachable_from_root[&root];
 
-            // Update forward index
-            self.reachable_from_root.insert(root, still_reachable);
-
-            // Update inverse index: remove root from nodes no longer reachable
-            for node in no_longer_reachable {
-                if let Some(roots) = self.roots_reaching_node.get_mut(&node) {
+            // Update inverse index: remove root from nodes no longer reachable.
+            // If a node becomes unreachable from ALL roots, prune its graph
+            // edges to avoid stale entries (and dangling HeapPtrs after GC).
+            for node in old_reachable.difference(still_reachable) {
+                if let Some(roots) = self.roots_reaching_node.get_mut(node) {
                     roots.remove(&root);
                     if roots.is_empty() {
-                        self.roots_reaching_node.remove(&node);
+                        self.roots_reaching_node.remove(node);
+                        self.children.remove(node);
+                        self.parents.remove(node);
                     }
                 }
             }
@@ -452,83 +430,205 @@ impl Watch {
     }
 }
 
-/// Helper function to traverse an object graph and build emit edges.
+/// Tracks an object's watch dependencies by walking the heap and propagating
+/// root reachability in a single traversal.
 ///
-/// This is used when an object is marked as @watch to establish all the
-/// dependency edges. It does not declare any root, call `Watch::register_root` separately.
+/// Adds the edge `parent --path--> child_ptr`, then BFS-walks the object
+/// graph from `child_ptr`, building edges and marking all discovered nodes
+/// as reachable from the same roots that reach `parent`.
 ///
-/// This is a free function to avoid borrow checker issues when calling from `BexVm`.
-pub fn track_watch_dependencies(watch: &mut Watch, value: Value) {
-    let mut stack = vec![value];
+/// Free function to avoid borrow checker issues when calling from `BexVm`.
+pub fn track_watch_dependencies(watch: &mut Watch, parent: NodeId, path: Path, child_ptr: HeapPtr) {
+    let child = NodeId::HeapObject(child_ptr);
+
+    // Add the top-level edge (e.g. root --Binding--> object).
+    watch.add_edge(parent, path, child);
+
+    // Collect roots reaching parent so we can propagate reachability.
+    let roots = watch.copy_roots_reaching(parent);
+
+    // Walk the heap from child, building edges and propagating reachability.
+    let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
+    queue.push_back(child_ptr);
+    visited.insert(child_ptr);
 
-    while let Some(v) = stack.pop() {
-        let Value::Object(ptr) = v else {
-            continue;
-        };
-
-        if !visited.insert(ptr) {
-            continue;
-        }
-
+    while let Some(ptr) = queue.pop_front() {
         let node = NodeId::HeapObject(ptr);
 
-        // Now traverse the object's contents
-        // SAFETY: We access the heap directly using unsafe code here to avoid
-        // borrow checker issues. This is safe because we're only reading immutably.
+        // Propagate reachability for this node.
+        for &root in &roots {
+            watch.mark_reachable(node, root);
+        }
+
+        // SAFETY: Read-only heap access during single-threaded VM execution.
         let obj = unsafe { ptr.get() };
-        match obj {
-            Object::Instance(instance) => {
-                // For each field in the instance, build edges
-                for (field_idx, field_value) in instance.fields.iter().enumerate() {
-                    if let Value::Object(child_ptr) = field_value {
-                        watch.add_edge(
-                            node,
-                            Path::InstanceField(field_idx),
-                            NodeId::HeapObject(*child_ptr),
-                        );
 
-                        stack.push(*field_value);
-                    }
+        // Discover child edges from this object.
+        let edges: Vec<(Path, HeapPtr)> = match obj {
+            Object::Instance(instance) => instance
+                .fields
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, v)| match v {
+                    Value::Object(p) => Some((Path::InstanceField(idx), *p)),
+                    _ => None,
+                })
+                .collect(),
+
+            Object::Array(array) => array
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, v)| match v {
+                    Value::Object(p) => Some((Path::ArrayIndex(idx), *p)),
+                    _ => None,
+                })
+                .collect(),
+
+            Object::Map(map) => map
+                .iter()
+                .filter_map(|(key, v)| match v {
+                    Value::Object(p) => Some((Path::MapKey(key.clone()), *p)),
+                    _ => None,
+                })
+                .collect(),
+
+            _ => vec![],
+        };
+
+        for (edge_path, edge_child_ptr) in edges {
+            let edge_child = NodeId::HeapObject(edge_child_ptr);
+
+            // Build graph structure.
+            watch.add_edge(node, edge_path, edge_child);
+
+            // Continue traversal into unvisited nodes.
+            if visited.insert(edge_child_ptr) {
+                queue.push_back(edge_child_ptr);
+            }
+        }
+    }
+}
+
+// --- Garbage Collection ---
+
+/// Forward a `Value::Object` pointer if present in the forwarding map.
+fn forward_value(value: &mut Value, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    if let Value::Object(ptr) = value {
+        if let Some(&new_ptr) = forwarding.get(ptr) {
+            *ptr = new_ptr;
+        }
+    }
+}
+
+/// Remap a `NodeId` using the GC forwarding map.
+///
+/// Not all pointers are in the forwarding map — only objects that were actually
+/// relocated by the copying GC have entries. Compile-time objects (permanent
+/// space) and objects that weren't moved keep their original pointer.
+fn remap_node(node: NodeId, forwarding: &HashMap<HeapPtr, HeapPtr>) -> NodeId {
+    match node {
+        NodeId::HeapObject(ptr) => NodeId::HeapObject(*forwarding.get(&ptr).unwrap_or(&ptr)),
+        NodeId::LocalVar(_) => node,
+    }
+}
+
+/// Remap all keys and values in a `NodeId -> HashSet<NodeId>` map.
+fn remap_node_set(
+    map: &mut HashMap<NodeId, HashSet<NodeId>>,
+    forwarding: &HashMap<HeapPtr, HeapPtr>,
+) {
+    let old = std::mem::take(map);
+    for (key, values) in old {
+        let new_values: HashSet<_> = values
+            .into_iter()
+            .map(|v| remap_node(v, forwarding))
+            .collect();
+        map.insert(remap_node(key, forwarding), new_values);
+    }
+}
+
+impl Watch {
+    /// Collects GC roots from Watch state.
+    ///
+    /// Only `last_assigned` and `last_notified` need to be roots — `value`
+    /// is always a copy of the stack slot (already a root), and graph `NodeId`s
+    /// point to objects transitively reachable from stack values.
+    pub fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        for state in self.roots.values() {
+            if let Some(Value::Object(ptr)) = state.last_assigned {
+                roots.push(ptr);
+            }
+            if let Some(Value::Object(ptr)) = state.last_notified {
+                roots.push(ptr);
+            }
+        }
+    }
+
+    /// Applies GC forwarding pointers to all `HeapPtr`s in Watch state.
+    ///
+    /// After a copying GC, all heap objects may have moved. This updates
+    /// `RootState` values and rebuilds the graph maps with new pointers.
+    pub fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if forwarding.is_empty() || self.roots.is_empty() {
+            return;
+        }
+
+        // Patch RootState values.
+        for state in self.roots.values_mut() {
+            forward_value(&mut state.value, forwarding);
+            if let Some(ref mut val) = state.last_assigned {
+                forward_value(val, forwarding);
+            }
+            if let Some(ref mut val) = state.last_notified {
+                forward_value(val, forwarding);
+            }
+            if let WatchFilter::Function(ref mut ptr) = state.filter {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
                 }
             }
+        }
 
-            Object::Array(array) => {
-                // For each element in the array, build edges
-                for (idx, elem_value) in array.iter().enumerate() {
-                    if let Value::Object(child_ptr) = elem_value {
-                        watch.add_edge(node, Path::ArrayIndex(idx), NodeId::HeapObject(*child_ptr));
+        // Remap all HeapObject NodeIds in the graph maps.
 
-                        stack.push(*elem_value);
-                    }
-                }
-            }
+        // children: parent -> {(path, child)}
+        let old_children = std::mem::take(&mut self.children);
+        for (parent, edges) in old_children {
+            let new_edges: HashSet<_> = edges
+                .into_iter()
+                .map(|(path, child)| (path, remap_node(child, forwarding)))
+                .collect();
+            self.children
+                .insert(remap_node(parent, forwarding), new_edges);
+        }
 
-            Object::Map(map) => {
-                // For each entry in the map, build edges
-                for (key, map_value) in map {
-                    if let Value::Object(child_ptr) = map_value {
-                        watch.add_edge(
-                            node,
-                            Path::MapKey(key.clone()),
-                            NodeId::HeapObject(*child_ptr),
-                        );
+        // parents: child -> {(parent, path)}
+        let old_parents = std::mem::take(&mut self.parents);
+        for (child, edges) in old_parents {
+            let new_edges: HashSet<_> = edges
+                .into_iter()
+                .map(|(parent, path)| (remap_node(parent, forwarding), path))
+                .collect();
+            self.parents
+                .insert(remap_node(child, forwarding), new_edges);
+        }
 
-                        stack.push(*map_value);
-                    }
-                }
-            }
+        remap_node_set(&mut self.reachable_from_root, forwarding);
+        remap_node_set(&mut self.roots_reaching_node, forwarding);
 
-            _ => {
-                // Other object types (strings, functions, etc.) don't have
-                // nested structure
-            }
+        // roots: NodeId -> RootState
+        let old_roots = std::mem::take(&mut self.roots);
+        for (key, value) in old_roots {
+            self.roots.insert(remap_node(key, forwarding), value);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use bex_vm_types::types::Instance;
+
     use super::*;
 
     fn test_root_state() -> RootState {
@@ -541,149 +641,164 @@ mod tests {
         }
     }
 
-    /// Creates a fake `HeapPtr` for testing graph structure.
-    /// These pointers should never be dereferenced - they're just unique identifiers.
-    fn fake_heap_ptr(id: usize) -> HeapPtr {
-        // SAFETY: We're creating a fake pointer that will never be dereferenced.
-        // The tests only check graph connectivity, not object contents.
+    /// Allocates an `Object` on the heap via `Box` and returns a `HeapPtr`.
+    /// Leaked intentionally — tests are short-lived.
+    fn heap_alloc(obj: Object) -> HeapPtr {
+        let ptr = Box::into_raw(Box::new(obj));
         #[cfg(feature = "heap_debug")]
         unsafe {
-            HeapPtr::from_ptr(id as *mut Object, 0)
+            HeapPtr::from_ptr(ptr, 0)
         }
         #[cfg(not(feature = "heap_debug"))]
         unsafe {
-            HeapPtr::from_ptr(id as *mut Object)
+            HeapPtr::from_ptr(ptr)
         }
+    }
+
+    /// Allocates a leaf object (string) on the heap.
+    fn leaf() -> HeapPtr {
+        heap_alloc(Object::String(String::from("test leaf object")))
+    }
+
+    /// Allocates an instance whose fields point to the given objects.
+    fn instance(class: HeapPtr, fields: Vec<Value>) -> HeapPtr {
+        heap_alloc(Object::Instance(Instance { class, fields }))
     }
 
     #[test]
     fn test_basic_notify_registration() {
-        let mut emit = Watch::new();
+        let mut watch = Watch::new();
 
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
-        emit.register_root(var, test_root_state());
+        watch.register_root(var, test_root_state());
 
-        // Root should be registered
-        assert!(emit.roots.contains_key(&var));
-
-        // Variable should be covered by the root
-        let covering: Vec<NodeId> = emit.copy_roots_reaching(var);
-        assert_eq!(covering.len(), 1);
+        assert!(watch.roots.contains_key(&var));
+        assert_eq!(watch.copy_roots_reaching(var).len(), 1);
     }
 
     #[test]
-    fn test_link_unlink_edge() {
-        let mut emit = Watch::new();
+    fn test_track_and_unlink() {
+        let mut watch = Watch::new();
 
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
-        let obj = NodeId::HeapObject(fake_heap_ptr(0));
+        let obj_ptr = leaf();
 
-        // Register root at var
-        emit.register_root(var, test_root_state());
-
-        // Link var -> obj
-        emit.link_edge(var, Path::Binding, obj);
+        watch.register_root(var, test_root_state());
+        track_watch_dependencies(&mut watch, var, Path::Binding, obj_ptr);
 
         // Both should be covered
-        assert_eq!(emit.copy_roots_reaching(var).len(), 1);
-        assert_eq!(emit.copy_roots_reaching(obj).len(), 1);
+        assert_eq!(watch.copy_roots_reaching(var).len(), 1);
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(obj_ptr)).len(),
+            1
+        );
 
         // Unlink var -> obj
-        emit.unlink_edge(var, Path::Binding, obj);
+        watch.unlink_edge(var, Path::Binding, NodeId::HeapObject(obj_ptr));
 
-        // Only var should be covered now
-        assert_eq!(emit.copy_roots_reaching(var).len(), 1);
-        assert_eq!(emit.copy_roots_reaching(obj).len(), 0);
+        assert_eq!(watch.copy_roots_reaching(var).len(), 1);
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(obj_ptr)).len(),
+            0
+        );
     }
 
     #[test]
     fn test_cycle_handling() {
-        let mut emit = Watch::new();
+        let mut watch = Watch::new();
+        let root_var = NodeId::LocalVar(StackIndex::from_raw(0));
+        let class_ptr = leaf();
 
-        let a = NodeId::HeapObject(fake_heap_ptr(0));
-        let b = NodeId::HeapObject(fake_heap_ptr(1));
-        let root_node = NodeId::LocalVar(StackIndex::from_raw(0));
+        // Build cycle: A -> B -> A
+        let a = instance(class_ptr, vec![Value::Null]); // placeholder
+        let b = instance(class_ptr, vec![Value::Object(a)]);
+        // Close the cycle: mutate A's field to point to B.
+        unsafe {
+            if let Object::Instance(inst) = a.get_mut() {
+                inst.fields[0] = Value::Object(b);
+            }
+        }
 
-        // Create cycle: A -> B -> A
-        emit.link_edge(a, Path::InstanceField(0), b);
-        emit.link_edge(b, Path::InstanceField(0), a);
-
-        // Register root at root_node
-        emit.register_root(root_node, test_root_state());
-
-        // Link root -> A (brings cycle into reachability)
-        emit.link_edge(root_node, Path::Binding, a);
+        watch.register_root(root_var, test_root_state());
+        track_watch_dependencies(&mut watch, root_var, Path::Binding, a);
 
         // Both A and B should be covered
-        assert_eq!(emit.copy_roots_reaching(a).len(), 1);
-        assert_eq!(emit.copy_roots_reaching(b).len(), 1);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(a)).len(), 1);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(b)).len(), 1);
 
-        // Unlink root -> A (disconnects cycle)
-        emit.unlink_edge(root_node, Path::Binding, a);
+        // Disconnect root -> A
+        watch.unlink_edge(root_var, Path::Binding, NodeId::HeapObject(a));
 
-        // Neither A nor B should be covered
-        assert_eq!(emit.copy_roots_reaching(a).len(), 0);
-        assert_eq!(emit.copy_roots_reaching(b).len(), 0);
-    }
-
-    #[test]
-    fn test_multiple_roots() {
-        let mut emit = Watch::new();
-
-        let var1 = NodeId::LocalVar(StackIndex::from_raw(0));
-        let var2 = NodeId::LocalVar(StackIndex::from_raw(1));
-        let obj = NodeId::HeapObject(fake_heap_ptr(0));
-
-        // Register two roots
-        emit.register_root(var1, test_root_state());
-        emit.register_root(var2, test_root_state());
-
-        // Link both to the same object
-        emit.link_edge(var1, Path::Binding, obj);
-        emit.link_edge(var2, Path::Binding, obj);
-
-        // Object should be covered by both roots
-        assert_eq!(emit.copy_roots_reaching(obj).len(), 2);
-
-        // Unlink one
-        emit.unlink_edge(var1, Path::Binding, obj);
-
-        // Object should still be covered by root2
-        assert_eq!(emit.copy_roots_reaching(obj).len(), 1);
-
-        // Unregister root2
-        emit.unregister_root(var2);
-
-        // Object should not be covered anymore
-        assert_eq!(emit.copy_roots_reaching(obj).len(), 0);
+        // Neither should be covered
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(a)).len(), 0);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(b)).len(), 0);
     }
 
     #[test]
     fn test_deep_object_graph() {
-        let mut emit = Watch::new();
-
+        let mut watch = Watch::new();
         let var = NodeId::LocalVar(StackIndex::from_raw(0));
-        let obj1 = NodeId::HeapObject(fake_heap_ptr(0));
-        let obj2 = NodeId::HeapObject(fake_heap_ptr(1));
-        let obj3 = NodeId::HeapObject(fake_heap_ptr(2));
 
-        // Create chain: var -> obj1 -> obj2 -> obj3
-        emit.register_root(var, test_root_state());
-        emit.link_edge(var, Path::Binding, obj1);
-        emit.link_edge(obj1, Path::InstanceField(0), obj2);
-        emit.link_edge(obj2, Path::InstanceField(0), obj3);
+        // Build chain: obj3 (leaf), obj2 -> obj3, obj1 -> obj2
+        // Class ptr is a dummy leaf — Instance only needs it for display.
+        let class_ptr = leaf();
+        let obj3 = leaf();
+        let obj2 = instance(class_ptr, vec![Value::Object(obj3)]);
+        let obj1 = instance(class_ptr, vec![Value::Object(obj2)]);
+
+        watch.register_root(var, test_root_state());
+        track_watch_dependencies(&mut watch, var, Path::Binding, obj1);
 
         // All should be covered
-        assert_eq!(emit.copy_roots_reaching(obj1).len(), 1);
-        assert_eq!(emit.copy_roots_reaching(obj2).len(), 1);
-        assert_eq!(emit.copy_roots_reaching(obj3).len(), 1);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj1)).len(), 1);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj2)).len(), 1);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj3)).len(), 1);
 
         // Break the chain in the middle
-        emit.unlink_edge(obj1, Path::InstanceField(0), obj2);
+        watch.unlink_edge(
+            NodeId::HeapObject(obj1),
+            Path::InstanceField(0),
+            NodeId::HeapObject(obj2),
+        );
 
         // obj1 still covered, obj2 and obj3 not
-        assert_eq!(emit.copy_roots_reaching(obj1).len(), 1);
-        assert_eq!(emit.copy_roots_reaching(obj2).len(), 0);
-        assert_eq!(emit.copy_roots_reaching(obj3).len(), 0);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj1)).len(), 1);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj2)).len(), 0);
+        assert_eq!(watch.copy_roots_reaching(NodeId::HeapObject(obj3)).len(), 0);
+    }
+
+    #[test]
+    fn test_multiple_roots() {
+        let mut watch = Watch::new();
+
+        let var1 = NodeId::LocalVar(StackIndex::from_raw(0));
+        let var2 = NodeId::LocalVar(StackIndex::from_raw(1));
+        let obj_ptr = leaf();
+
+        watch.register_root(var1, test_root_state());
+        watch.register_root(var2, test_root_state());
+
+        track_watch_dependencies(&mut watch, var1, Path::Binding, obj_ptr);
+        track_watch_dependencies(&mut watch, var2, Path::Binding, obj_ptr);
+
+        // Object should be covered by both roots
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(obj_ptr)).len(),
+            2
+        );
+
+        // Unlink one
+        watch.unlink_edge(var1, Path::Binding, NodeId::HeapObject(obj_ptr));
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(obj_ptr)).len(),
+            1
+        );
+
+        // Unregister the other
+        watch.unregister_root(var2);
+        assert_eq!(
+            watch.copy_roots_reaching(NodeId::HeapObject(obj_ptr)).len(),
+            0
+        );
     }
 }

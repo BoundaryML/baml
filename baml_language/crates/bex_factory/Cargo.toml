@@ -1,0 +1,35 @@
+[package]
+name = "bex_factory"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Reusable compile-and-run runtime for BAML programs"
+
+[lib]
+doctest = false
+
+[features]
+# Incremental runtime (DB, add_source/set_source, engine swap). Enable for bridge_wasm/playground; leave off for minimal CFFI/native builds.
+incremental = [  ]
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
+baml_compiler_emit = { workspace = true }
+baml_project = { workspace = true }
+bex_engine = { workspace = true }
+bex_external_types = { workspace = true }
+bex_heap = { workspace = true }
+bex_resource_types = { workspace = true }
+sys_types = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }

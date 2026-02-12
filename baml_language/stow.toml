@@ -98,7 +98,7 @@ name_exceptions = { "tools_stow" = "cargo-stow" }
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
-link_crates = ["baml_builtins", "baml_type"]
+link_crates = ["baml_builtins", "baml_type", "sys_types"]
 
 # lsp namespace configuration
 [[namespaces]]
@@ -108,6 +108,14 @@ link_crates = ["baml_db", "baml_project"]
 # bridge namespace configuration
 [[namespaces]]
 name = "bridge"
+link_crates = ["bex_factory", "sys_native", "sys_types"]
+
+# Bridge crates may only depend on bex_factory from the bex namespace (no bex_heap, bex_resource_types, etc.).
+[[namespaces.dependency_rules]]
+pattern.select = "bex_*"
+pattern.exclude = ["bex_factory"]
+allowed_crates = []
+reason = "Bridge crates may only depend on bex_factory from the bex namespace."
 
 # sys namespace configuration
 [[namespaces]]

@@ -216,6 +216,14 @@ pub enum SyntaxKind {
     /// For field access on complex expressions (like `f().field` or `arr[0].field`),
     /// use `FIELD_ACCESS_EXPR` instead.
     PATH_EXPR,
+    /// `env.FIELD` expression (e.g., `env.API_KEY`).
+    ///
+    /// Structure: `KW_ENV DOT WORD`
+    ///
+    /// Desugared during HIR lowering:
+    /// - In non-call position: `env.FOO` → `env.get_or_panic("FOO")`
+    /// - In call position: `env.get(...)` → call to `env.get` module function
+    ENV_ACCESS_EXPR,
     PAREN_EXPR,
     BLOCK_EXPR,
     IF_EXPR,

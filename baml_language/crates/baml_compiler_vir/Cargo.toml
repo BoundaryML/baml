@@ -26,8 +26,6 @@ baml_workspace = { workspace = true }
 la-arena = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
-smol_str = { workspace = true }
-text-size = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

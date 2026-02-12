@@ -128,7 +128,7 @@ importers:
 
   pkg-playground:
     dependencies:
-      '@b/baml-playground-wasm':
+      '@b/bridge_wasm':
         specifier: link:wasm
         version: link:wasm
       jotai:

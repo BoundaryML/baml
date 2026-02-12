@@ -688,6 +688,7 @@ ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
 ast_node!(PathExpr, PATH_EXPR);
 ast_node!(FieldAccessExpr, FIELD_ACCESS_EXPR);
+ast_node!(EnvAccessExpr, ENV_ACCESS_EXPR);
 ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
 ast_node!(MatchPattern, MATCH_PATTERN);
@@ -1411,20 +1412,23 @@ impl TestDef {
     /// Get all function names that this test is for.
     /// Pattern: `test <TestName> { functions [<Func1>, <Func2>, ...] ... }`
     pub fn function_names(&self) -> Vec<SyntaxToken> {
-        // Look for a ConfigItem with key "functions" and extract all function names
-        // The function names are inside a CONFIG_VALUE node: functions [Func1, Func2]
+        // Look for a ConfigItem with key "functions" and extract all function names.
+        // The function names are inside a CONFIG_VALUE child node, not in attributes.
         self.syntax
             .descendants()
             .filter_map(ConfigItem::cast)
             .find(|item| item.matches_key("functions"))
-            .map(|item| {
-                // Look for WORD tokens within the config item's descendants
-                // Skip the first one (which is the key "functions")
+            .and_then(|item| {
+                // Find the CONFIG_VALUE child (excludes attributes which are siblings)
                 item.syntax()
+                    .children()
+                    .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+            })
+            .map(|config_value| {
+                config_value
                     .descendants_with_tokens()
                     .filter_map(rowan::NodeOrToken::into_token)
                     .filter(|token| token.kind() == SyntaxKind::WORD)
-                    .skip(1) // Skip "functions" key
                     .collect()
             })
             .unwrap_or_default()
@@ -2313,6 +2317,7 @@ impl BlockExpr {
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
@@ -2372,6 +2377,16 @@ impl FieldAccessExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| token.kind() == SyntaxKind::WORD)
             .last() // The field name is the last WORD token
+    }
+}
+
+impl EnvAccessExpr {
+    /// Get the field name (the env var name or method name after `env.`).
+    pub fn field(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
     }
 }
 

@@ -506,6 +506,15 @@ impl ToDiagnostic for NameError {
                 *first,
                 format!("test `{test_name}` for `{function_name}` first defined in {first_path}"),
             ),
+
+            NameError::UnknownFunctionInTest {
+                function_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownFunctionInTest,
+                format!("Unknown function `{function_name}` in test block"),
+            )
+            .with_primary(*span, format!("no function named `{function_name}` exists")),
         };
         diag.with_phase(DiagnosticPhase::Validation)
     }
@@ -982,7 +991,7 @@ mod tests {
     use text_size::TextRange;
 
     use super::*;
-    use crate::{SpanContext, diagnostic::DiagnosticPhase};
+    use crate::{diagnostic::DiagnosticPhase, errors::SpanContext};
 
     fn test_span() -> Span {
         Span {

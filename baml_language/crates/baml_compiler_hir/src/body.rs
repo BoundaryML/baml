@@ -1066,6 +1066,7 @@ impl LoweringContext {
             }
             SyntaxKind::PATH_EXPR => self.lower_path_expr(node),
             SyntaxKind::FIELD_ACCESS_EXPR => self.lower_field_access_expr(node),
+            SyntaxKind::ENV_ACCESS_EXPR => self.lower_env_access_expr(node),
             SyntaxKind::INDEX_EXPR => self.lower_index_expr(node),
             SyntaxKind::PAREN_EXPR => {
                 // Unwrap parentheses - just lower the inner expression
@@ -1933,7 +1934,22 @@ impl LoweringContext {
             .find(|n| !matches!(n.kind(), SyntaxKind::CALL_ARGS));
 
         let callee = if let Some(n) = callee_node {
-            self.lower_expr(&n)
+            if n.kind() == SyntaxKind::ENV_ACCESS_EXPR {
+                // env.method(...) → Path(["env", method])
+                // Don't use lower_expr which would desugar to get_or_panic
+                use baml_compiler_syntax::ast::EnvAccessExpr;
+                use rowan::ast::AstNode;
+                if let Some(field_token) = EnvAccessExpr::cast(n.clone()).and_then(|e| e.field()) {
+                    self.alloc_expr(
+                        Expr::Path(vec![Name::new("env"), Name::new(field_token.text())]),
+                        n.text_range(),
+                    )
+                } else {
+                    self.alloc_expr(Expr::Missing, n.text_range())
+                }
+            } else {
+                self.lower_expr(&n)
+            }
         } else {
             // No callee node - check for a WORD token (simple function name)
             let word_token = node
@@ -1970,6 +1986,7 @@ impl LoweringContext {
                                     | SyntaxKind::CALL_EXPR
                                     | SyntaxKind::PATH_EXPR
                                     | SyntaxKind::FIELD_ACCESS_EXPR
+                                    | SyntaxKind::ENV_ACCESS_EXPR
                                     | SyntaxKind::INDEX_EXPR
                                     | SyntaxKind::IF_EXPR
                                     | SyntaxKind::BLOCK_EXPR
@@ -2092,6 +2109,41 @@ impl LoweringContext {
             .unwrap_or_else(|| Name::new(""));
 
         self.alloc_expr(Expr::FieldAccess { base, field }, node.text_range())
+    }
+
+    /// Lower an `ENV_ACCESS_EXPR` to a desugared call.
+    ///
+    /// In non-call position (standalone `env.FOO`), desugars to:
+    ///   `env.get_or_panic("FOO")`
+    ///
+    /// When used as a callee in a `CALL_EXPR` (e.g. `env.get(...)`), the
+    /// `lower_call_expr` method handles it specially — converting the
+    /// `ENV_ACCESS_EXPR` callee into a path into the env module.
+    fn lower_env_access_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::ast::EnvAccessExpr;
+        use rowan::ast::AstNode;
+
+        let Some(field_token) = EnvAccessExpr::cast(node.clone()).and_then(|e| e.field()) else {
+            return self.alloc_expr(Expr::Missing, node.text_range());
+        };
+        let field_name = field_token.text().to_string();
+
+        // Synthesize: env.get_or_panic("FIELD_NAME")
+        let callee = self.alloc_expr(
+            Expr::Path(vec![Name::new("env"), Name::new("get_or_panic")]),
+            node.text_range(),
+        );
+        let arg = self.alloc_expr(
+            Expr::Literal(Literal::String(field_name)),
+            node.text_range(),
+        );
+        self.alloc_expr(
+            Expr::Call {
+                callee,
+                args: vec![arg],
+            },
+            node.text_range(),
+        )
     }
 
     fn lower_index_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
@@ -2409,6 +2461,7 @@ impl LoweringContext {
                                     | SyntaxKind::MAP_LITERAL
                                     | SyntaxKind::INDEX_EXPR
                                     | SyntaxKind::FIELD_ACCESS_EXPR
+                                    | SyntaxKind::ENV_ACCESS_EXPR
                             )
                         })
                         .map(|n| self.lower_expr(&n))
@@ -2632,6 +2685,7 @@ impl LoweringContext {
                     | SyntaxKind::CALL_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::ENV_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
                     | SyntaxKind::BLOCK_EXPR
@@ -2706,6 +2760,7 @@ impl LoweringContext {
                         | SyntaxKind::CALL_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR
                         | SyntaxKind::IF_EXPR
                         | SyntaxKind::BLOCK_EXPR
@@ -3238,6 +3293,7 @@ impl LoweringContext {
                 | SyntaxKind::RAW_STRING_LITERAL
                 | SyntaxKind::BINARY_EXPR
                 | SyntaxKind::PATH_EXPR
+                | SyntaxKind::ENV_ACCESS_EXPR
                 | SyntaxKind::CALL_EXPR
                 | SyntaxKind::MAP_LITERAL => {
                     return self.lower_expr(&child);

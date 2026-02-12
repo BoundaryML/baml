@@ -364,8 +364,10 @@ macro_rules! with_builtins {
             }
 
             mod env {
-                #[uses(vm)]
-                fn get(key: String) -> Result<String>;
+                #[sys_op]
+                fn get(key: String) -> Option<String>;
+                #[sys_op]
+                fn get_or_panic(key: String) -> String;
             }
         }
     };
@@ -533,6 +535,12 @@ mod tests {
 
         let env_get = builtins().iter().find(|d| d.path == "env.get").unwrap();
         assert_eq!(env_get.method_name(), None);
+
+        let env_get_or_panic = builtins()
+            .iter()
+            .find(|d| d.path == "env.get_or_panic")
+            .unwrap();
+        assert_eq!(env_get_or_panic.method_name(), None);
     }
 
     #[test]
@@ -551,6 +559,12 @@ mod tests {
 
         let env_get = builtins().iter().find(|d| d.path == "env.get").unwrap();
         assert_eq!(env_get.arity(), 1); // key only
+
+        let env_get_or_panic = builtins()
+            .iter()
+            .find(|d| d.path == "env.get_or_panic")
+            .unwrap();
+        assert_eq!(env_get_or_panic.arity(), 1); // key only
     }
 
     #[test]
@@ -560,16 +574,40 @@ mod tests {
     }
 
     #[test]
+    fn test_env_builtins() {
+        // env.get is a sys_op returning optional string
+        let env_get = find_function("env.get").unwrap();
+        assert!(env_get.is_sys_op, "env.get should be a sys_op");
+        assert!(
+            env_get.receiver.is_none(),
+            "env.get should be a free function"
+        );
+
+        // env.get_or_panic is a sys_op returning string
+        let env_gop = find_function("env.get_or_panic").unwrap();
+        assert!(env_gop.is_sys_op, "env.get_or_panic should be a sys_op");
+        assert!(
+            env_gop.receiver.is_none(),
+            "env.get_or_panic should be a free function"
+        );
+    }
+
+    #[test]
     fn test_find_function() {
         let env_get = find_function("env.get");
         assert!(env_get.is_some());
         assert_eq!(env_get.unwrap().path, "env.get");
+
+        let env_get_or_panic = find_function("env.get_or_panic");
+        assert!(env_get_or_panic.is_some());
+        assert_eq!(env_get_or_panic.unwrap().path, "env.get_or_panic");
     }
 
     #[test]
     fn test_find_builtin_by_path() {
         assert!(find_builtin_by_path("baml.Array.length").is_some());
         assert!(find_builtin_by_path("env.get").is_some());
+        assert!(find_builtin_by_path("env.get_or_panic").is_some());
         assert!(find_builtin_by_path("nonexistent").is_none());
     }
 
@@ -579,6 +617,7 @@ mod tests {
         assert_eq!(paths::BAML_ARRAY_LENGTH, "baml.Array.length");
         assert_eq!(paths::BAML_STRING_TO_LOWER_CASE, "baml.String.toLowerCase");
         assert_eq!(paths::ENV_GET, "env.get");
+        assert_eq!(paths::ENV_GET_OR_PANIC, "env.get_or_panic");
         assert_eq!(paths::BAML_DEEP_COPY, "baml.deep_copy");
         assert_eq!(paths::BAML_UNSTABLE_STRING, "baml.unstable.string");
     }

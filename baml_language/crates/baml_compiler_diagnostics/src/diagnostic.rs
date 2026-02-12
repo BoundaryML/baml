@@ -117,10 +117,11 @@ pub enum DiagnosticId {
     // Map type errors (E0039)
     InvalidMapArity,
 
-    // Test diagnostics (E0034-E0036)
+    // Test diagnostics (E0034-E0036, E0088)
     UnknownTestProperty,
     MissingTestProperty,
     TestFieldAttribute,
+    UnknownFunctionInTest,
 
     // Type builder diagnostics (E0040-E0043)
     TypeBuilderInNonTestContext,
@@ -151,6 +152,9 @@ pub enum DiagnosticId {
     JinjaUnsupportedFeature,
     JinjaInvalidSyntax,
     JinjaInvalidTest,
+
+    // VIR lowering errors (E0089)
+    LoweringError,
 }
 
 impl DiagnosticId {
@@ -231,6 +235,7 @@ impl DiagnosticId {
             DiagnosticId::UnknownTestProperty => "E0034",
             DiagnosticId::MissingTestProperty => "E0035",
             DiagnosticId::TestFieldAttribute => "E0036",
+            DiagnosticId::UnknownFunctionInTest => "E0088",
 
             // Type builder diagnostics
             DiagnosticId::TypeBuilderInNonTestContext => "E0040",
@@ -261,6 +266,9 @@ impl DiagnosticId {
             DiagnosticId::JinjaUnsupportedFeature => "E0085",
             DiagnosticId::JinjaInvalidSyntax => "E0086",
             DiagnosticId::JinjaInvalidTest => "E0087",
+
+            // VIR lowering errors
+            DiagnosticId::LoweringError => "E0089",
         }
     }
 }
@@ -522,6 +530,7 @@ mod tests {
             DiagnosticId::UnexpectedEof,
             DiagnosticId::UnexpectedToken,
             DiagnosticId::DuplicateName,
+            DiagnosticId::LoweringError,
         ];
 
         for id in ids {

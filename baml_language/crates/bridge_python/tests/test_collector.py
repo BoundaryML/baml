@@ -153,7 +153,7 @@ class MockLLMHandler(http.server.BaseHTTPRequestHandler):
 @pytest.fixture
 def rt():
     """Fresh BamlRuntime with expression functions for each test."""
-    return BamlRuntime.from_files(".", {"main.baml": BAML_SOURCE}, {})
+    return BamlRuntime.from_files(".", {"main.baml": BAML_SOURCE})
 
 
 @pytest.fixture
@@ -181,7 +181,7 @@ def mock_server():
 def llm_rt(mock_server):
     """BamlRuntime with a single LLM function (TestLLM) pointing to mock server."""
     source = SINGLE_LLM_TEMPLATE.format(mock_url=mock_server)
-    return BamlRuntime.from_files(".", {"main.baml": source}, {})
+    return BamlRuntime.from_files(".", {"main.baml": source})
 
 
 @pytest.fixture
@@ -197,7 +197,7 @@ def llm_ctx(llm_rt):
 def pipeline_rt(mock_server):
     """BamlRuntime with pipeline LLM functions pointing to mock server."""
     source = PIPELINE_LLM_TEMPLATE.format(mock_url=mock_server)
-    return BamlRuntime.from_files(".", {"main.baml": source}, {})
+    return BamlRuntime.from_files(".", {"main.baml": source})
 
 
 @pytest.fixture
