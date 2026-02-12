@@ -83,6 +83,7 @@ crossbeam = { version = "0.8.4", features = [ "crossbeam-channel" ] }
 crossterm = "0.28"
 ctrlc = "3.4"
 divan = { package = "codspeed-divan-compat", version = "*" }
+flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 indexmap = { version = "2.1.0", features = [ "serde" ] }

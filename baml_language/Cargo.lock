@@ -960,6 +960,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-size-gate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "flate2",
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "cargo-stow"
 version = "0.1.0"
 dependencies = [

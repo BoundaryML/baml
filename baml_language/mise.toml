@@ -34,3 +34,11 @@ sources = ["**/*.rs", "**/Cargo.toml"]
 description = "Run cargo stow"
 run = "cargo run -p cargo-stow -- stow --fix"
 sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.size-gate]
+description = "Check artifact sizes against baseline"
+run = "cargo run -p cargo-size-gate -- size-gate check"
+
+[tasks.size-gate-record]
+description = "Record new size baseline"
+run = "cargo run -p cargo-size-gate -- size-gate record"
