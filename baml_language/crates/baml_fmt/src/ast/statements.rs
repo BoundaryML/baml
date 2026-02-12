@@ -124,8 +124,8 @@ pub struct LetStmt {
     pub name: t::Word,
     pub type_annotation: Option<(t::Colon, Type)>,
     pub initializer: Option<(t::Equals, Expression)>,
-    /// Unlike lots of other nodes, semicolon is not optional.
-    pub semicolon: t::Semicolon,
+    /// Not required in some contexts like for-let loops
+    pub semicolon: Option<t::Semicolon>,
 }
 
 impl FromCST for LetStmt {
@@ -164,7 +164,7 @@ impl FromCST for LetStmt {
             None
         };
 
-        let semicolon: t::Semicolon = it.expect_parse()?;
+        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
         it.expect_end()?;
 
         Ok(LetStmt {
@@ -209,7 +209,10 @@ impl Printable for LetStmt {
             multi_lined |= printer.print(expr, shape).multi_lined;
         }
 
-        printer.print_raw_token(&self.semicolon);
+        if let Some(semicolon) = &self.semicolon {
+            // Don't automatically insert here, since we could be in a for-let loop
+            printer.print_raw_token(semicolon);
+        }
         PrintInfo { multi_lined }
     }
 }
