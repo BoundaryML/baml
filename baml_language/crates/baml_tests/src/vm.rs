@@ -329,7 +329,6 @@ pub enum Instruction {
     StoreField(usize),
     Pop(usize),
     Copy(usize),
-    PopReplace(usize),
     Jump(isize),
     PopJumpIfFalse(isize),
     BinOp(BinOp),

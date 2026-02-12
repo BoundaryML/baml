@@ -36,8 +36,8 @@ pub enum InternalError {
     #[error("array index is negative: {0}")]
     ArrayIndexIsNegative(i64),
 
-    #[error("negative instruction pointer: {0}")]
-    NegativeInstructionPtr(isize),
+    #[error("jump offset overflowed instruction pointer")]
+    InvalidJump,
 }
 
 /// Errors that can happen at runtime.

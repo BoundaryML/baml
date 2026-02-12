@@ -3,7 +3,7 @@ name = "zed_baml"
 edition = "2024"
 # Both Cargo.toml and extension.toml's version strings
 # are consumed by the Zed extension publishing logic
-version = "0.218.1"
+version = "0.219.0"
 description = "BAML language support for Zed"
 
 [lib]

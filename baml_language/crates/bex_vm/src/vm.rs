@@ -22,7 +22,7 @@ use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
-    types::{FunctionType, Future, FutureType, Instance, PendingFuture, Type},
+    types::{Function, FunctionType, Future, FutureType, Instance, PendingFuture, Type},
 };
 use indexmap::IndexMap;
 
@@ -46,22 +46,17 @@ pub const MAX_FRAMES: usize = 256;
 /// functions) but instead use references to index into [`BexVm::heap`]. Should
 /// be [`Copy`].
 #[derive(Clone, Copy, Debug)]
-pub struct Frame {
+pub(crate) struct Frame {
     /// Pointer to the running function object.
-    pub function: HeapPtr,
+    pub(crate) function: HeapPtr,
 
     /// Instruction pointer (IP) or program counter (PC).
     ///
-    /// Points to the next instruction that the VM will execute. It is of type
-    /// [`isize`] because some jumps can create negative offsets (for loops)
-    /// and it's easier to operate on an [`isize`] and cast it to [`usize`]
-    /// only once (when we index into [`bex_vm_types::Bytecode::instructions`]). However,
-    /// this number should never be negative, otherwise indexing into the
-    /// instruction vec will throw [`InternalError::NegativeInstructionPtr`].
-    pub instruction_ptr: isize,
+    /// Points to the next instruction that the VM will execute.
+    pub(crate) instruction_ptr: usize,
 
     /// Local variables offset in the eval stack.
-    pub locals_offset: StackIndex,
+    pub(crate) locals_offset: StackIndex,
 }
 
 /// The beast.
@@ -177,7 +172,7 @@ pub struct BexVm {
     /// On each function call we create a new [`Frame`] and push it on this
     /// stack. On each return, we destroy the frame and pop it from the stack
     /// to resume the execution of the previous frame.
-    pub frames: Vec<Frame>,
+    pub(crate) frames: Vec<Frame>,
 
     /// Evaluation stack.
     ///
@@ -195,18 +190,13 @@ pub struct BexVm {
     /// This stores the functions and globally declared variables.
     pub globals: GlobalPool,
 
-    /// Offset of the first runtime allocated object.
-    ///
-    /// Used by GC to know which objects are compile-time vs runtime.
-    pub runtime_allocs_offset: ObjectIndex,
-
     /// Emit dependency graph.
     pub watch: Watch,
 
     /// Tracks which local variables are watched (have @watch).
-    pub watched_vars: HashMap<StackIndex, (String, String)>,
+    pub(crate) watched_vars: HashMap<StackIndex, (String, String)>,
 
-    pub interrupt_frame: Option<usize>,
+    pub(crate) interrupt_frame: Option<usize>,
 }
 
 /// VM execution state.
@@ -375,7 +365,6 @@ impl BexVm {
     /// The heap is shared across all VMs. Each VM gets its own TLAB
     /// for contention-free allocation.
     pub fn new(heap: Arc<BexHeap>, globals: GlobalPool) -> Self {
-        let runtime_allocs_offset = ObjectIndex::from_raw(heap.compile_time_boundary());
         let tlab = Tlab::new(Arc::clone(&heap));
 
         Self {
@@ -384,7 +373,6 @@ impl BexVm {
             heap,
             tlab,
             globals,
-            runtime_allocs_offset,
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
@@ -761,7 +749,7 @@ impl BexVm {
             .frames
             .iter()
             .map(|frame| {
-                let function = self.get_object(frame.function).as_function()?.clone();
+                let function = self.get_object(frame.function).as_function()?;
 
                 // VM increments instruction pointer as soon as it reads the
                 // instruction. So in reality the error ocurred on the previous
@@ -769,11 +757,10 @@ impl BexVm {
                 // a bug somewhere.
                 let last_executed_instruction = frame.instruction_ptr.saturating_sub(1);
 
-                #[allow(clippy::cast_sign_loss)] // instruction_ptr is always non-negative
                 Ok(ErrorLocation {
                     function_name: function.name.clone(),
                     function_span: function.span,
-                    error_line: function.bytecode.source_lines[last_executed_instruction as usize],
+                    error_line: function.bytecode.source_lines[last_executed_instruction],
                 })
             })
             .collect::<Result<Vec<_>, VmError>>()
@@ -912,36 +899,51 @@ impl BexVm {
         }
 
         if let Value::Object(new) = new_value {
-            // Track dependencies first (using closure to avoid borrow conflicts)
-            watch::track_watch_dependencies(&mut self.watch, Value::Object(new));
-            // Then link the edge
-            self.watch
-                .link_edge(watched_node, path, NodeId::HeapObject(new));
+            watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
         }
 
-        // Copy previous values.
-        let mut old_roots_copies = vec![];
+        // Deep-copy previous root values so the notification filter can diff
+        // old vs new. Two-pass because `baml_deep_copy` needs `&mut self`,
+        // which conflicts with borrowing `self.watch` for root_state.
+        let roots = self.watch.copy_roots_reaching(watched_node);
+        let mut old_roots_copies = Vec::with_capacity(roots.len());
 
-        for root in self.watch.copy_roots_reaching(watched_node) {
+        for &root in &roots {
             if let Some(state) = self.watch.root_state(root) {
                 let deep_copy = crate::native::baml_deep_copy(self, &[state.value])?;
                 old_roots_copies.push(deep_copy);
             }
         }
 
-        for (root, old_value) in self
-            .watch
-            .copy_roots_reaching(watched_node)
-            .iter()
-            .zip(old_roots_copies)
-        {
-            if let Some(state) = self.watch.root_state_mut(*root) {
+        for (&root, old_value) in roots.iter().zip(old_roots_copies) {
+            if let Some(state) = self.watch.root_state_mut(root) {
                 state.last_assigned = Some(old_value);
-                // current value has not really changes, top level object is the same.
             }
         }
 
         Ok(())
+    }
+
+    /// Load the function object for the given frame.
+    ///
+    /// # Safety
+    ///
+    /// Function objects are compiled ahead of time and live in the compile-time
+    /// heap, which is never garbage collected. The returned `'static` reference
+    /// is valid for the lifetime of the program.
+    ///
+    /// TODO: When we add lambdas that capture variables, their function objects
+    /// will be allocated at runtime on the TLAB and *can* be garbage collected.
+    /// At that point `'static` becomes unsound. Options:
+    ///   1. Pin closures in a non-GC'd region so they remain `'static`.
+    ///   2. Drop `'static` and re-deref after each GC safepoint (cheap re-deref,
+    ///      still no clone).
+    #[inline]
+    unsafe fn load_function(&self, frame_idx: usize) -> Result<&'static Function, VmError> {
+        let ptr = self.frames[frame_idx].function;
+        // SAFETY: See doc comment above.
+        let obj: &'static Object = unsafe { ptr.get() };
+        obj.as_function()
     }
 
     /// Main VM execution loop.
@@ -967,12 +969,8 @@ impl BexVm {
         // pushing new frames during function calls.
         let mut frame_idx = self.frames.len() - 1;
 
-        // Clone the function object to avoid borrow checker issues with the new heap architecture.
-        // We clone because we need to access the function's bytecode throughout the loop
-        // while also mutating self (stack, frames, etc.). This is a trade-off for the
-        // unified heap architecture - the cost of cloning is acceptable for now.
-        let function_obj_idx = self.frames[frame_idx].function;
-        let mut function = self.get_object(function_obj_idx).as_function()?.clone();
+        // SAFETY: See `load_function` doc comment.
+        let mut function = unsafe { self.load_function(frame_idx)? };
 
         loop {
             // Current instruction pointer (read from frame).
@@ -982,38 +980,30 @@ impl BexVm {
             // jump offsets later.
             self.frames[frame_idx].instruction_ptr += 1;
 
-            // NOTE: `core::intrinsics::unlikely` is only available on nightly.
-            // This branch is a big annoyance for small functions (like pushing the frame)
-            // and gets smaller the bigger the function due to branch (mis)prediction.
-            if instruction_ptr < 0 {
-                return Err(InternalError::NegativeInstructionPtr(instruction_ptr).into());
+            #[cfg(debug_assertions)]
+            #[allow(clippy::print_stderr)] // intentional debug output
+            if std::env::var("BEX_VM_DEBUG").is_ok() {
+                let stack = self
+                    .stack
+                    .iter()
+                    .map(crate::debug::display_value)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let (instruction, metadata) = crate::debug::display_instruction(
+                    instruction_ptr,
+                    function,
+                    &self.stack,
+                    &self.globals,
+                    None,
+                    None,
+                );
+
+                eprintln!("[{stack}]");
+                eprintln!("{instruction} {metadata}");
             }
 
-            // Runtime debugging information.
-            // #[cfg(debug_assertions)]
-            // {
-            //     let stack = self
-            //         .stack
-            //         .iter()
-            //         .map(|v| crate::debug::display_value(v, &self.objects))
-            //         .collect::<Vec<_>>()
-            //         .join(", ");
-
-            //     eprintln!("[{stack}]");
-
-            //     let (instruction, metadata) = crate::debug::display_instruction(
-            //         instruction_ptr,
-            //         function,
-            //         &self.stack,
-            //         &self.objects,
-            //         &self.globals,
-            //     );
-
-            //     eprintln!("{instruction} {metadata}");
-            // }
-
-            #[allow(clippy::cast_sign_loss)] // instruction_ptr is validated non-negative above
-            match function.bytecode.instructions[instruction_ptr as usize] {
+            match function.bytecode.instructions[instruction_ptr] {
                 Instruction::NotifyBlock(block_index) => {
                     // Get the notification from the function's storage
                     let notification = &function.block_notifications[block_index];
@@ -1031,8 +1021,9 @@ impl BexVm {
                         full_notification,
                     )));
                 }
+
                 Instruction::VizEnter(index) | Instruction::VizExit(index) => {
-                    let instruction = &function.bytecode.instructions[instruction_ptr as usize];
+                    let instruction = &function.bytecode.instructions[instruction_ptr];
                     let delta = match instruction {
                         Instruction::VizEnter(_) => bytecode::VizExecDelta::Enter,
                         Instruction::VizExit(_) => bytecode::VizExecDelta::Exit,
@@ -1059,6 +1050,7 @@ impl BexVm {
                         event,
                     }));
                 }
+
                 Instruction::LoadConst(index) => {
                     // Use pre-resolved constants (resolved at load time)
                     let value = function.bytecode.resolved_constants[index];
@@ -1080,48 +1072,41 @@ impl BexVm {
                     // Old value being replaced.
                     let old_value = std::mem::replace(&mut self.stack[local_var_index], value);
 
-                    // Check if this binding is emittable.
+                    // If this local is watched, update the watch graph.
+                    //
+                    // A watched local is a root in the watch graph. When
+                    // reassigned (e.g. `v = new_val`), three things happen:
+                    //
+                    // 1. `update_watched_node` handles edge topology: unlinks
+                    //    the old binding (so mutations to the old object no
+                    //    longer trigger notifications), links the new one, and
+                    //    deep-copies the previous root state into
+                    //    `last_assigned` so the notification filter can diff
+                    //    old vs new.
+                    //
+                    // 2. `state.value` is updated to the new value. This is
+                    //    specific to `StoreVar` — for field/array/map stores
+                    //    the root's top-level binding hasn't changed, but here
+                    //    the root itself is being rebound.
+                    //
+                    // 3. `process_notifications` walks all roots reaching this
+                    //    node (just itself, since it IS a root) and applies
+                    //    the watch filter to decide whether to notify.
                     if self.watched_vars.contains_key(&local_var_index) {
-                        // Node ID of the local variable in the emit graph.
                         let watched_node = NodeId::LocalVar(local_var_index);
 
-                        // If we had a previous binding to an object, unlink it
-                        // so it doesn't emit anymore.
-                        if let Value::Object(old_node) = old_value {
-                            self.watch.unlink_edge(
-                                watched_node,
-                                watch::Path::Binding,
-                                NodeId::HeapObject(old_node),
-                            );
-                        }
-
-                        // If we have a new binding, link it so it emits.
-                        if let Value::Object(new_node) = value {
-                            // Track dependencies first (using closure to avoid borrow conflicts)
-                            watch::track_watch_dependencies(&mut self.watch, value);
-                            // Then link the edge
-                            self.watch.link_edge(
-                                watched_node,
-                                watch::Path::Binding,
-                                NodeId::HeapObject(new_node),
-                            );
-                        }
-
-                        let old_value_deep_copy =
-                            crate::native::baml_deep_copy(self, &[old_value])?;
+                        self.update_watched_node(
+                            watched_node,
+                            watch::Path::Binding,
+                            old_value,
+                            value,
+                        )?;
 
                         if let Some(state) = self.watch.root_state_mut(watched_node) {
-                            state.last_assigned = Some(old_value_deep_copy);
                             state.value = value;
                         }
 
                         let notifications = self.process_notifications(watched_node)?;
-
-                        // borrow checker - update frame index and function.
-                        function = self
-                            .get_object(self.frames[frame_idx].function)
-                            .as_function()?
-                            .clone();
 
                         if !notifications.is_empty() {
                             return Ok(VmExecState::Notify(WatchNotification::Variables(
@@ -1202,12 +1187,6 @@ impl BexVm {
 
                     let notifications = self.process_notifications(watched_node)?;
 
-                    // Borrow checker - update function.
-                    function = self
-                        .get_object(self.frames[frame_idx].function)
-                        .as_function()?
-                        .clone();
-
                     if !notifications.is_empty() {
                         return Ok(VmExecState::Notify(WatchNotification::Variables(
                             notifications,
@@ -1218,29 +1197,6 @@ impl BexVm {
                 Instruction::Pop(n) => {
                     let drain_start = self.stack.len() - n;
                     let drain_range = StackIndex::from_raw(drain_start)..;
-
-                    // Check if any of the popped variables are emittable and
-                    // unregister them
-                    for i in drain_start..self.stack.len() {
-                        let index = StackIndex::from_raw(i);
-                        if self.watched_vars.remove(&index).is_some() {
-                            let var_node = NodeId::LocalVar(index);
-
-                            // Unregister the root since the variable is going
-                            // out of scope.
-                            self.watch.unregister_root(var_node);
-
-                            // Also unlink any edge from this variable.
-                            if let Value::Object(obj) = self.stack[index] {
-                                self.watch.unlink_edge(
-                                    var_node,
-                                    watch::Path::Binding,
-                                    NodeId::HeapObject(obj),
-                                );
-                            }
-                        }
-                    }
-
                     self.stack.drain(drain_range);
                 }
 
@@ -1250,45 +1206,15 @@ impl BexVm {
                     self.stack.push(value);
                 }
 
-                Instruction::PopReplace(n) => {
-                    let value = self.stack.ensure_pop()?;
-
-                    // Pop the last `n` locals from the stack.
-                    let drain_start = self.stack.len() - n;
-
-                    // Clean up any emittable variables in the range being
-                    // popped.
-                    for i in drain_start..self.stack.len() {
-                        let index = StackIndex::from_raw(i);
-                        if self.watched_vars.remove(&index).is_some() {
-                            let var_node = NodeId::LocalVar(index);
-
-                            // Unregister the root since the variable is going out of scope
-                            self.watch.unregister_root(var_node);
-
-                            // Also unlink any edge from this variable
-                            if let Value::Object(obj) = self.stack[index] {
-                                self.watch.unlink_edge(
-                                    var_node,
-                                    watch::Path::Binding,
-                                    NodeId::HeapObject(obj),
-                                );
-                            }
-                        }
-                    }
-
-                    let drain_range = StackIndex::from_raw(drain_start)..;
-                    self.stack.drain(drain_range);
-
-                    // Push the value back on top of the stack.
-                    self.stack.push(value);
-                }
-
                 Instruction::Jump(offset) => {
-                    // Reassign the frame's IP to the new instruction.
-                    // Remember that offset can be negative here, so even though
-                    // we're adding it can still jump backwards.
-                    self.frames[frame_idx].instruction_ptr = instruction_ptr + offset;
+                    // Offset can be negative (backward jumps for loops).
+                    // NOTE: checked_add_signed has a branch on overflow. If this
+                    // becomes a bottleneck on hot loops, it can be replaced with
+                    // wrapping_add_signed — the array bounds check on the next
+                    // iteration will catch invalid pointers anyway.
+                    self.frames[frame_idx].instruction_ptr = instruction_ptr
+                        .checked_add_signed(offset)
+                        .ok_or(InternalError::InvalidJump)?;
                 }
 
                 Instruction::PopJumpIfFalse(offset) => {
@@ -1299,7 +1225,9 @@ impl BexVm {
                         // Reassign only if the condition is false.
                         Value::Bool(value) => {
                             if !value {
-                                self.frames[frame_idx].instruction_ptr = instruction_ptr + offset;
+                                self.frames[frame_idx].instruction_ptr = instruction_ptr
+                                    .checked_add_signed(offset)
+                                    .ok_or(InternalError::InvalidJump)?;
                             }
                         }
 
@@ -1379,15 +1307,7 @@ impl BexVm {
                             let mut concat = left.clone();
                             concat.push_str(right);
 
-                            let concat_str_object = self.alloc_string(concat);
-
-                            // Borrow check.
-                            function = self
-                                .get_object(self.frames[frame_idx].function)
-                                .as_function()?
-                                .clone();
-
-                            concat_str_object
+                            self.alloc_string(concat)
                         }
 
                         _ => {
@@ -1563,13 +1483,6 @@ impl BexVm {
 
                     // Push the array object on top of the stack.
                     self.stack.push(Value::Object(array_index));
-
-                    // objects.push() above might've reallocated the vector so
-                    // borrow checker complains. Restore the reference.
-                    function = self
-                        .get_object(self.frames[frame_idx].function)
-                        .as_function()?
-                        .clone();
                 }
 
                 Instruction::LoadArrayElement => {
@@ -1727,13 +1640,6 @@ impl BexVm {
 
                     let notifications = self.process_notifications(watched_node)?;
 
-                    // borrow checker.
-                    // No need to reassign frame since we're using frame_idx
-                    function = self
-                        .get_object(self.frames[frame_idx].function)
-                        .as_function()?
-                        .clone();
-
                     if !notifications.is_empty() {
                         return Ok(VmExecState::Notify(WatchNotification::Variables(
                             notifications,
@@ -1785,13 +1691,6 @@ impl BexVm {
 
                     let notifications = self.process_notifications(watched_node)?;
 
-                    // borrow checker.
-                    // No need to reassign frame since we're using frame_idx
-                    function = self
-                        .get_object(self.frames[frame_idx].function)
-                        .as_function()?
-                        .clone();
-
                     if !notifications.is_empty() {
                         return Ok(VmExecState::Notify(WatchNotification::Variables(
                             notifications,
@@ -1822,12 +1721,6 @@ impl BexVm {
 
                     // Push the instance object on top of the stack.
                     self.stack.push(Value::Object(instance_ptr));
-
-                    // borrow check.
-                    function = self
-                        .get_object(self.frames[frame_idx].function)
-                        .as_function()?
-                        .clone();
                 }
 
                 // TODO: Contains a lot of typechecking, we know at compile time
@@ -1880,12 +1773,6 @@ impl BexVm {
 
                     // Push the variant object on top of the stack.
                     self.stack.push(Value::Object(variant_ptr));
-
-                    // borrow check.
-                    function = self
-                        .get_object(self.frames[frame_idx].function)
-                        .as_function()?
-                        .clone();
                 }
 
                 Instruction::DispatchFuture(arg_count) => {
@@ -2020,9 +1907,8 @@ impl BexVm {
                         },
                     );
 
-                    #[allow(clippy::cast_sign_loss)] // instruction_ptr is validated non-negative
-                    let watched_var_name = &function.locals_in_scope
-                        [function.bytecode.scopes[instruction_ptr as usize]][index];
+                    let watched_var_name =
+                        &function.locals_in_scope[function.bytecode.scopes[instruction_ptr]][index];
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
                         local_var_index,
@@ -2031,15 +1917,11 @@ impl BexVm {
 
                     // If it's an object, build the entire dependency graph
                     if let Value::Object(object_index) = value {
-                        // Build the graph.
-                        // Track dependencies first (using closure to avoid borrow conflicts)
-                        watch::track_watch_dependencies(&mut self.watch, value);
-
-                        // Link the root emittable variable to the object
-                        self.watch.link_edge(
+                        watch::track_watch_dependencies(
+                            &mut self.watch,
                             var_node,
                             watch::Path::Binding,
-                            NodeId::HeapObject(object_index),
+                            object_index,
                         );
                     }
                 }
@@ -2149,13 +2031,6 @@ impl BexVm {
                             // Drop function call and place result on top.
                             self.stack.drain(locals_offset..);
                             self.stack.push(result);
-
-                            // No need to update frame_idx since we didn't push a new frame.
-                            // Just update the function reference.
-                            function = self
-                                .get_object(self.frames[frame_idx].function)
-                                .as_function()?
-                                .clone();
                         }
 
                         FunctionKind::Bytecode => {
@@ -2169,14 +2044,8 @@ impl BexVm {
                             // Update frame_idx to point to the new frame.
                             frame_idx = self.frames.len() - 1;
 
-                            // Grab function ref. We do this to avoid running this
-                            // code at the beginning of each iteration since it's
-                            // totally unnecessary. The function only changes when the
-                            // frame changes.
-                            function = self
-                                .get_object(self.frames[frame_idx].function)
-                                .as_function()?
-                                .clone();
+                            // SAFETY: See `load_function` doc comment.
+                            function = unsafe { self.load_function(frame_idx)? };
                         }
 
                         FunctionKind::SysOp(_) => {
@@ -2201,28 +2070,6 @@ impl BexVm {
                 Instruction::Return => {
                     // Pop the result from the eval stack.
                     let result = self.stack.ensure_pop()?;
-
-                    // Clean up any emittable variables in the function's scope
-                    for i in self.frames[frame_idx].locals_offset.into_raw()..self.stack.len() {
-                        let index = StackIndex::from_raw(i);
-                        if self.watched_vars.remove(&index).is_some() {
-                            let var_node = NodeId::LocalVar(index);
-
-                            // Unregister the root since the variable is going out of scope
-                            self.watch.unregister_root(var_node);
-
-                            // Also unlink any edge from this variable
-                            if i < self.stack.len() {
-                                if let Value::Object(obj) = self.stack[index] {
-                                    self.watch.unlink_edge(
-                                        var_node,
-                                        watch::Path::Binding,
-                                        NodeId::HeapObject(obj),
-                                    );
-                                }
-                            }
-                        }
-                    }
 
                     // Restore the eval stack to the state before the function
                     // was called and leave the result on top.
@@ -2254,13 +2101,8 @@ impl BexVm {
                     // Resume previous frame execution.
                     frame_idx = self.frames.len() - 1;
 
-                    // Point to the previous frame's function. Read the
-                    // implementation of `Instruction::Call` above this one for
-                    // more information about this piece.
-                    function = self
-                        .get_object(self.frames[frame_idx].function)
-                        .as_function()?
-                        .clone();
+                    // SAFETY: See `load_function` doc comment.
+                    function = unsafe { self.load_function(frame_idx)? };
                 }
 
                 Instruction::Assert => {
@@ -2318,12 +2160,6 @@ impl BexVm {
                     let obj_index = self.tlab.alloc(Object::Map(map));
 
                     self.stack.push(Value::Object(obj_index));
-
-                    // borrow check.
-                    function = self
-                        .get_object(self.frames[frame_idx].function)
-                        .as_function()?
-                        .clone();
                 }
 
                 // ============================================================
@@ -2347,7 +2183,9 @@ impl BexVm {
                     let offset = table.lookup(value).unwrap_or(default);
 
                     // Jump
-                    self.frames[frame_idx].instruction_ptr = instruction_ptr + offset;
+                    self.frames[frame_idx].instruction_ptr = instruction_ptr
+                        .checked_add_signed(offset)
+                        .ok_or(InternalError::InvalidJump)?;
                 }
 
                 Instruction::Discriminant => {

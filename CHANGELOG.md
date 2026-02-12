@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.219.0](https://github.com/boundaryml/baml/compare/0.218.1..0.219.0) - 2026-02-12
+
+### Bug Fixes
+
+- allow 'baml-cli serv' to handle big PDFs (#3046) - ([8cb8016](https://github.com/boundaryml/baml/commit/8cb8016413de3c14955b990b1556225831c654f1)) - Sam Lijin
+- fix vercel build, show last known prompt if there's errors (#3077)
+- fix template_string rendering in test data (#3091)
+- Add cancel_notify support and test for Ctrl+C in test executor (#3074) - ([065e40c](https://github.com/boundaryml/baml/commit/065e40cfe618664594f3cb2e35ed33e661096242)) - hellovai
+- Add build_request to CFFI, Go runtime/codegen, and Rust codegen (#3089) - ([a6c3995](https://github.com/boundaryml/baml/commit/a6c3995598bebc534a23f3bc326410b563cb9514)) - hellovai
+- Lint jinja templates in baml_language (#3086) - ([0728974](https://github.com/boundaryml/baml/commit/07289746eacc1571cdf905d6c849f27aa6b3d1a6)) - Greg Hale
+- Bump version to 0.219.0 - ([8fe1083](https://github.com/boundaryml/baml/commit/8fe10832b61de002293efec577a514ffe5ff7be3)) - Aaron Villalpando
+
 ## [0.218.1](https://github.com/boundaryml/baml/compare/0.218.0..0.218.1) - 2026-01-27
 
 ### Bug Fixes

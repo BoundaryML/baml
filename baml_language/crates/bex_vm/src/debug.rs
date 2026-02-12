@@ -51,16 +51,15 @@ use crate::indexable::EvalStack;
 ///
 /// If there's no relevant metadata to attach to the instruction, then this
 /// function returns an empty string.
-#[allow(clippy::cast_sign_loss)] // instruction_ptr is always non-negative in valid bytecode
 pub fn display_instruction(
-    instruction_ptr: isize,
+    instruction_ptr: usize,
     function: &Function,
     stack: &EvalStack,
     globals: &GlobalPool,
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
 ) -> (String, String) {
-    let instruction = &function.bytecode.instructions[instruction_ptr as usize];
+    let instruction = &function.bytecode.instructions[instruction_ptr];
 
     let metadata = match instruction {
         Instruction::NotifyBlock(block_index) => {
@@ -104,7 +103,7 @@ pub fn display_instruction(
                 "({})",
                 function
                     .locals_in_scope
-                    .get(function.bytecode.scopes[instruction_ptr as usize])
+                    .get(function.bytecode.scopes[instruction_ptr])
                     .and_then(|locals| locals.get(*index))
                     .unwrap_or(&"?".to_string())
             )
@@ -142,7 +141,7 @@ pub fn display_instruction(
             format!("({})", class.fields[*index].name)
         }
         Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
-            format!("(to {})", instruction_ptr + offset)
+            format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
             // Look up the class/enum from the compile-time ObjectPool if available
@@ -165,7 +164,6 @@ pub fn display_instruction(
         }
         Instruction::Pop(_)
         | Instruction::Copy(_)
-        | Instruction::PopReplace(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
         | Instruction::UnaryOp(_)
@@ -291,11 +289,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::Yellow
         }
         Instruction::Call(_) => Color::Magenta,
-        Instruction::Assert
-        | Instruction::Return
-        | Instruction::Pop(_)
-        | Instruction::Copy(_)
-        | Instruction::PopReplace(_) => Color::Red,
+        Instruction::Assert | Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) => {
+            Color::Red
+        }
         Instruction::AllocMap(_)
         | Instruction::AllocInstance(_)
         | Instruction::AllocVariant(_)
@@ -378,10 +374,9 @@ pub fn display_bytecode(
     let mut last_line: usize = 0;
 
     // Populate all the rows.
-    #[allow(clippy::cast_possible_wrap)] // instruction count is always small enough
     for instruction_ptr in 0..function.bytecode.instructions.len() {
         let (instruction, metadata) = display_instruction(
-            instruction_ptr as isize,
+            instruction_ptr,
             function,
             stack,
             globals,
