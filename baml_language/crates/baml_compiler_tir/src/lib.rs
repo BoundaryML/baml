@@ -18,8 +18,9 @@ use std::{
 use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
-    ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
-    MatchArmId, PatId, Pattern, PromptTemplate, SignatureSourceMap, StmtId, TirContext, TypeId,
+    CatchArmId, ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature,
+    HirSourceMap, MatchArmId, PatId, Pattern, PromptTemplate, SignatureSourceMap, StmtId,
+    TirContext, TypeId,
 };
 use baml_workspace::Project;
 
@@ -566,6 +567,9 @@ pub struct InferenceResult {
     /// Used by codegen to emit `unreachable` for fallthrough paths,
     /// enabling phi-like optimization for match results.
     pub exhaustive_matches: HashSet<ExprId>,
+    /// Types that each expression can throw.
+    /// Maps expression ID to the type of value it throws (if any).
+    pub expr_thrown_types: HashMap<ExprId, Ty>,
     /// Type checking errors.
     pub errors: Vec<TirTypeError>,
     /// Resolution information for IDE features (go-to-definition, find-references).
@@ -613,6 +617,9 @@ pub struct TypeContext<'db> {
     enum_variant_exprs: HashMap<ExprId, (Name, Name)>,
     /// Match expressions that are exhaustive (all cases covered).
     exhaustive_matches: HashSet<ExprId>,
+    /// Types that each expression can throw.
+    /// Maps expression ID to the type of value it throws (if any).
+    expr_thrown_types: HashMap<ExprId, Ty>,
     /// Types of all return statements encountered during inference.
     /// Used to validate that all return paths match the declared return type.
     return_types: Vec<(Ty, Span)>,
@@ -659,6 +666,7 @@ impl<'db> TypeContext<'db> {
             path_segment_resolutions: HashMap::new(),
             enum_variant_exprs: HashMap::new(),
             exhaustive_matches: HashSet::new(),
+            expr_thrown_types: HashMap::new(),
             return_types: Vec::new(),
             errors: Vec::new(),
             file_id,
@@ -806,6 +814,16 @@ impl<'db> TypeContext<'db> {
             .as_ref()
             .and_then(|sm| sm.pattern_span(id))
             .unwrap_or_default()
+    }
+
+    /// Record the thrown type of an expression.
+    pub fn set_thrown_type(&mut self, expr: ExprId, ty: Ty) {
+        self.expr_thrown_types.insert(expr, ty);
+    }
+
+    /// Get the thrown type of an expression, if any.
+    pub fn get_thrown_type(&self, expr: ExprId) -> Option<&Ty> {
+        self.expr_thrown_types.get(&expr)
     }
 
     /// Check if `sub` is a subtype of `sup`, resolving type aliases.
@@ -1047,6 +1065,7 @@ pub fn infer_function_body<'db>(
         path_segment_resolutions: ctx.path_segment_resolutions,
         enum_variant_exprs: ctx.enum_variant_exprs,
         exhaustive_matches: ctx.exhaustive_matches,
+        expr_thrown_types: ctx.expr_thrown_types,
         errors: ctx.errors,
         expr_resolutions: ctx.expr_resolutions,
     }
@@ -2023,6 +2042,20 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             } else {
                 let lhs_ty = infer_expr(ctx, *lhs, body);
                 let rhs_ty = infer_expr(ctx, *rhs, body);
+
+                // Merge thrown types from both operands
+                let lhs_thrown = ctx.get_thrown_type(*lhs).cloned();
+                let rhs_thrown = ctx.get_thrown_type(*rhs).cloned();
+                match (lhs_thrown, rhs_thrown) {
+                    (Some(l), Some(r)) => {
+                        ctx.set_thrown_type(expr_id, Ty::Union(vec![l, r]));
+                    }
+                    (Some(t), None) | (None, Some(t)) => {
+                        ctx.set_thrown_type(expr_id, t);
+                    }
+                    (None, None) => {}
+                }
+
                 infer_binary_op(ctx, *op, &lhs_ty, &rhs_ty, location)
             }
         }
@@ -2587,18 +2620,60 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         Expr::Catch { expr, arms } => {
-            // The type of a catch expression is the union of the caught expression's type
-            // and all arm body types (excluding Never, which is the type of `throw`)
+            // Infer the caught expression and get its thrown type
             let expr_ty = infer_expr(ctx, *expr, body);
+            let thrown_ty = ctx.get_thrown_type(*expr).cloned().unwrap_or(Ty::Unknown);
+
+            // Collect result types and track what escapes via rethrow
             let mut result_types = vec![expr_ty];
+            let mut escaping_thrown_types = Vec::new();
+
             for arm_id in arms {
                 let arm = &body.catch_arms[*arm_id];
+
+                // Push scope for pattern bindings
+                ctx.push_scope();
+
+                // Extract pattern binding using existing match infrastructure
+                let pattern = &body.patterns[arm.pattern];
+                let (binding_name, narrowed_ty) =
+                    extract_pattern_binding(ctx, pattern, arm.pattern, &thrown_ty, body);
+
+                // Define the binding in scope so body can see it
+                if let Some(name) = binding_name {
+                    ctx.define(name, narrowed_ty);
+                }
+
+                // Type-check the arm body
                 let arm_ty = infer_expr(ctx, arm.body, body);
+
+                // Check if this arm re-throws (has thrown type)
+                if let Some(arm_thrown) = ctx.get_thrown_type(arm.body) {
+                    escaping_thrown_types.push(arm_thrown.clone());
+                }
+
+                ctx.pop_scope();
+
+                // Collect non-diverging result types
                 if !arm_ty.is_never() {
                     result_types.push(arm_ty);
                 }
             }
-            // Deduplicate and flatten
+
+            // Perform exhaustiveness checking
+            check_catch_exhaustiveness(ctx, &thrown_ty, arms, body, expr_id);
+
+            // Set thrown type for this catch expression (union of what escapes)
+            if !escaping_thrown_types.is_empty() {
+                let combined = if escaping_thrown_types.len() == 1 {
+                    escaping_thrown_types.into_iter().next().unwrap()
+                } else {
+                    Ty::Union(escaping_thrown_types)
+                };
+                ctx.set_thrown_type(expr_id, combined);
+            }
+
+            // Compute result type
             result_types.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
             result_types.dedup();
             if result_types.len() == 1 {
@@ -2609,8 +2684,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         Expr::Throw { expr } => {
-            // Infer the thrown expression's type (for validation), but throw diverges
-            infer_expr(ctx, *expr, body);
+            // Infer the thrown expression's type and record it
+            let thrown_ty = infer_expr(ctx, *expr, body);
+            ctx.set_thrown_type(expr_id, thrown_ty);
             Ty::NoReturn
         }
 
@@ -2994,6 +3070,63 @@ fn check_match_exhaustiveness(
     } else {
         // Record that this match is exhaustive for codegen optimization
         ctx.exhaustive_matches.insert(match_expr_id);
+    }
+}
+
+/// Check catch expression exhaustiveness.
+///
+/// Validates that all possible thrown types are covered by catch arm patterns.
+/// For catch_all blocks, all thrown types must be explicitly handled or rethrown.
+///
+/// # Errors
+/// - `TypeError::NonExhaustiveCatch` if not all thrown types are covered
+/// - `TypeError::UnreachableCatchArm` if an arm can never match
+fn check_catch_exhaustiveness(
+    ctx: &mut TypeContext<'_>,
+    thrown_ty: &Ty,
+    arm_ids: &[CatchArmId],
+    body: &ExprBody,
+    catch_expr_id: ExprId,
+) {
+    // Skip exhaustiveness checking for unknown/error types
+    if thrown_ty.is_unknown() || thrown_ty.is_error() {
+        return;
+    }
+
+    // Use the value-based exhaustiveness checker
+    let checker = ExhaustivenessChecker::new(
+        &ctx.enum_variants,
+        &ctx.type_aliases,
+        &ctx.class_names,
+        &ctx.enum_names,
+        &ctx.type_alias_names,
+    );
+
+    // Adapt catch arms to the exhaustiveness checker format
+    // We need to convert CatchArmIds to the format expected by the checker
+    let result = checker.check_catch(thrown_ty, arm_ids, body);
+
+    // Report unreachable catch arms
+    for arm_idx in result.unreachable_arms {
+        let arm_id = arm_ids[arm_idx];
+        ctx.push_error(TypeError::UnreachableCatchArm {
+            location: ErrorLocation::CatchArm(arm_id),
+        });
+    }
+
+    // Report non-exhaustive catch
+    if !result.is_exhaustive {
+        let missing_cases: Vec<String> = result
+            .uncovered
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
+
+        ctx.push_error(TypeError::NonExhaustiveCatch {
+            thrown_type: thrown_ty.clone(),
+            missing_cases,
+            location: ErrorLocation::Expr(catch_expr_id),
+        });
     }
 }
 

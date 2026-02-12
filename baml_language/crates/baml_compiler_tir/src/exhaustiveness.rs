@@ -33,7 +33,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::{Name, Span};
-use baml_compiler_hir::{ExprBody, Literal, MatchArmId, Pattern};
+use baml_compiler_hir::{CatchArmId, ExprBody, Literal, MatchArmId, Pattern};
 
 use crate::{LiteralValue, Ty, lower::lower_type_ref};
 
@@ -256,6 +256,79 @@ impl<'a> ExhaustivenessChecker<'a> {
                     _ => {
                         self.add_coverage(&mut covered, &value_set);
                     }
+                }
+            }
+        }
+
+        // Find uncovered cases
+        let uncovered = if has_catch_all {
+            Vec::new()
+        } else {
+            Self::find_uncovered(&required, &covered)
+        };
+
+        ExhaustivenessResult {
+            is_exhaustive: uncovered.is_empty(),
+            uncovered,
+            unreachable_arms,
+        }
+    }
+
+    /// Check exhaustiveness of a catch expression.
+    ///
+    /// Similar to `check` but works with catch arms instead of match arms.
+    /// Catch arms don't have guards, so the logic is simpler.
+    ///
+    /// # Arguments
+    /// - `thrown_ty`: The type of the value being thrown
+    /// - `arm_ids`: The catch arm IDs to check
+    /// - `body`: The expression body (for pattern and arm lookup)
+    ///
+    /// # Returns
+    /// An `ExhaustivenessResult` with coverage info and any issues found.
+    pub fn check_catch(
+        &self,
+        thrown_ty: &Ty,
+        arm_ids: &[CatchArmId],
+        body: &ExprBody,
+    ) -> ExhaustivenessResult {
+        // Expand the thrown type into the value sets that need to be covered
+        let required = self.expand_type_to_values(thrown_ty);
+
+        // Track what's been covered and which arms are unreachable
+        let mut covered: Vec<ValueSet> = Vec::new();
+        let mut has_catch_all = false;
+        let mut unreachable_arms: Vec<usize> = Vec::new();
+
+        for (arm_idx, arm_id) in arm_ids.iter().enumerate() {
+            let arm = &body.catch_arms[*arm_id];
+            let pattern = &body.patterns[arm.pattern];
+            // Catch arms don't have guards
+            let value_set = self.pattern_to_value_set(pattern, false, body);
+
+            // Check if this arm is unreachable
+            if has_catch_all {
+                // After a catch-all, everything is unreachable
+                unreachable_arms.push(arm_idx);
+                continue;
+            }
+
+            // Check if this arm's values are already fully covered
+            if Self::is_fully_covered(&value_set, &covered) {
+                unreachable_arms.push(arm_idx);
+            }
+
+            // Update coverage
+            match &value_set {
+                ValueSet::All => {
+                    has_catch_all = true;
+                    covered.clone_from(&required); // Everything is now covered
+                }
+                ValueSet::Empty => {
+                    // This shouldn't happen for catch arms, but handle it
+                }
+                _ => {
+                    self.add_coverage(&mut covered, &value_set);
                 }
             }
         }

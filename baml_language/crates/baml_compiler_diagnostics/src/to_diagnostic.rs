@@ -165,6 +165,27 @@ impl<C: ErrorContext> TypeError<C> {
                     .with_primary_span(loc_fn(location))
             }
 
+            TypeError::NonExhaustiveCatch {
+                thrown_type,
+                missing_cases,
+                location,
+            } => {
+                let missing = missing_cases.join(", ");
+                Diagnostic::error(
+                    DiagnosticId::NonExhaustiveCatch,
+                    format!(
+                        "Non-exhaustive catch: thrown type `{}` not fully covered. Missing: {missing}",
+                        ty_fn(thrown_type)
+                    ),
+                )
+                .with_primary_span(loc_fn(location))
+            }
+
+            TypeError::UnreachableCatchArm { location } => {
+                Diagnostic::error(DiagnosticId::UnreachableCatchArm, "Unreachable catch arm")
+                    .with_primary_span(loc_fn(location))
+            }
+
             TypeError::UnknownEnumVariant {
                 enum_name,
                 variant_name,

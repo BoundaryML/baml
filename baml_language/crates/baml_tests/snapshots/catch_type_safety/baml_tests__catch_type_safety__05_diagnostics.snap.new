@@ -1,0 +1,133 @@
+---
+source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+assertion_line: 2068
+expression: output
+---
+=== DIAGNOSTICS ===
+  [parse] Error: Expected ':', found '}'
+     ╭─[ catch_type_safety.baml:132:13 ]
+     │
+ 132 │             } else {
+     │             ┬  
+     │             ╰── Expected ':', found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+  [parse] Error: Expected block after if condition, found else
+     ╭─[ catch_type_safety.baml:132:15 ]
+     │
+ 132 │             } else {
+     │               ──┬─  
+     │                 ╰─── Expected block after if condition, found else
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+  [parse] Error: Expected ':', found '}'
+    ╭─[ catch_type_safety_errors.baml:74:13 ]
+    │
+ 74 │             } else {
+    │             ┬  
+    │             ╰── Expected ':', found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected block after if condition, found else
+    ╭─[ catch_type_safety_errors.baml:74:15 ]
+    │
+ 74 │             } else {
+    │               ──┬─  
+    │                 ╰─── Expected block after if condition, found else
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [validation] Error: Duplicate class `ErrorB`
+    ╭─[ catch_type_safety.baml:67:7 ]
+    │
+ 67 │ class ErrorB { message string }
+    │       ───┬──  
+    │          ╰──── class `ErrorB` redefined here
+    │
+    ├─[ catch_type_safety_errors.baml:13:7 ]
+    │
+ 13 │ class ErrorB { message string }
+    │       ───┬──  
+    │          ╰──── `ErrorB` first defined in catch_type_safety_errors.baml
+    │ 
+    │ Note: Error code: E0011
+────╯
+
+  [validation] Error: Duplicate class `ErrorB`
+    ╭─[ catch_type_safety_errors.baml:13:7 ]
+    │
+ 13 │ class ErrorB { message string }
+    │       ───┬──  
+    │          ╰──── class `ErrorB` redefined here
+    │
+    ├─[ catch_type_safety.baml:67:7 ]
+    │
+ 67 │ class ErrorB { message string }
+    │       ───┬──  
+    │          ╰──── `ErrorB` first defined in catch_type_safety.baml
+    │ 
+    │ Note: Error code: E0011
+────╯
+
+  [validation] Error: Duplicate class `ErrorA`
+    ╭─[ catch_type_safety.baml:66:7 ]
+    │
+ 66 │ class ErrorA { code int }
+    │       ───┬──  
+    │          ╰──── class `ErrorA` redefined here
+    │
+    ├─[ catch_type_safety_errors.baml:12:7 ]
+    │
+ 12 │ class ErrorA { code int }
+    │       ───┬──  
+    │          ╰──── `ErrorA` first defined in catch_type_safety_errors.baml
+    │ 
+    │ Note: Error code: E0011
+────╯
+
+  [validation] Error: Duplicate class `ErrorA`
+    ╭─[ catch_type_safety_errors.baml:12:7 ]
+    │
+ 12 │ class ErrorA { code int }
+    │       ───┬──  
+    │          ╰──── class `ErrorA` redefined here
+    │
+    ├─[ catch_type_safety.baml:66:7 ]
+    │
+ 66 │ class ErrorA { code int }
+    │       ───┬──  
+    │          ╰──── `ErrorA` first defined in catch_type_safety.baml
+    │ 
+    │ Note: Error code: E0011
+────╯
+
+  [hir] Error: Condition in `if` statement must be wrapped in parentheses.
+     ╭─[ catch_type_safety.baml:130:16 ]
+     │
+ 130 │ ╭─▶             if x {
+     ┆ ┆   
+ 132 │ ├─▶             } else {
+     │ │                          
+     │ ╰────────────────────────── Condition in `if` statement must be wrapped in parentheses.
+     │     
+     │     Note: Error code: E0030
+─────╯
+
+  [hir] Error: Condition in `if` statement must be wrapped in parentheses.
+    ╭─[ catch_type_safety_errors.baml:72:16 ]
+    │
+ 72 │ ╭─▶             if x {
+    ┆ ┆   
+ 74 │ ├─▶             } else {
+    │ │                          
+    │ ╰────────────────────────── Condition in `if` statement must be wrapped in parentheses.
+    │     
+    │     Note: Error code: E0030
+────╯

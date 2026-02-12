@@ -1,0 +1,524 @@
+---
+source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+assertion_line: 1746
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchBindingSimple"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            INTEGER_LITERAL "42"
+            CATCH_BLOCK
+              KW_CATCH_ALL "catch_all"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN "e"
+                  WORD "e"
+                FAT_ARROW "=>"
+                WORD "e"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchBindingTyped"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            STRING_LITERAL "hello"
+              QUOTE """
+              WORD "hello"
+              QUOTE """
+            CATCH_BLOCK
+              KW_CATCH_ALL "catch_all"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "string"
+                    WORD "string"
+                FAT_ARROW "=>"
+                WORD "e"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchMultipleBindings"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            INTEGER_LITERAL "42"
+            CATCH_BLOCK
+              KW_CATCH "catch"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                FAT_ARROW "=>"
+                BINARY_EXPR "e * 2"
+                  WORD "e"
+                  STAR "*"
+                  INTEGER_LITERAL "2"
+              CATCH_ARM
+                MATCH_PATTERN "f"
+                  WORD "f"
+                FAT_ARROW "=>"
+                WORD "f"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAllExhaustiveWildcard"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            INTEGER_LITERAL "42"
+            CATCH_BLOCK
+              KW_CATCH_ALL "catch_all"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN "_"
+                  WORD "_"
+                FAT_ARROW "=>"
+                INTEGER_LITERAL "0"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAllExhaustiveNamed"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            INTEGER_LITERAL "42"
+            CATCH_BLOCK
+              KW_CATCH_ALL "catch_all"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN "e"
+                  WORD "e"
+                FAT_ARROW "=>"
+                WORD "e"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAllExhaustiveTyped"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            INTEGER_LITERAL "42"
+            CATCH_BLOCK
+              KW_CATCH_ALL "catch_all"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                FAT_ARROW "=>"
+                WORD "e"
+              R_BRACE "}"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ErrorA"
+    L_BRACE "{"
+    FIELD
+      WORD "code"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ErrorB"
+    L_BRACE "{"
+    FIELD
+      WORD "message"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAllExhaustiveUnion"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            PAREN_EXPR
+              L_PAREN "("
+              OBJECT_LITERAL
+                WORD "ErrorA"
+                L_BRACE "{"
+                OBJECT_FIELD "code: 1"
+                  WORD "code"
+                  COLON ":"
+                  INTEGER_LITERAL "1"
+                R_BRACE "}"
+              R_PAREN ")"
+            CATCH_BLOCK
+              KW_CATCH_ALL "catch_all"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "ErrorA"
+                    WORD "ErrorA"
+                FAT_ARROW "=>"
+                STRING_LITERAL "A"
+                  QUOTE """
+                  WORD "A"
+                  QUOTE """
+                COMMA ","
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "ErrorB"
+                    WORD "ErrorB"
+                FAT_ARROW "=>"
+                STRING_LITERAL "B"
+                  QUOTE """
+                  WORD "B"
+                  QUOTE """
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAlwaysExhaustive"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            INTEGER_LITERAL "42"
+            CATCH_BLOCK
+              KW_CATCH "catch"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                FAT_ARROW "=>"
+                WORD "e"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchPartialHandling"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            PAREN_EXPR
+              L_PAREN "("
+              OBJECT_LITERAL
+                WORD "ErrorA"
+                L_BRACE "{"
+                OBJECT_FIELD "code: 1"
+                  WORD "code"
+                  COLON ":"
+                  INTEGER_LITERAL "1"
+                R_BRACE "}"
+              R_PAREN ")"
+            CATCH_BLOCK
+              KW_CATCH "catch"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "ErrorA"
+                    WORD "ErrorA"
+                FAT_ARROW "=>"
+                STRING_LITERAL "handled A"
+                  QUOTE """
+                  WORD "handled"
+                  WORD "A"
+                  QUOTE """
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ThrownTypePropagation"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "x"
+          EQUALS "="
+          THROW_EXPR
+            KW_THROW "throw"
+            CATCH_EXPR
+              INTEGER_LITERAL "1"
+              CATCH_BLOCK
+                KW_CATCH_ALL "catch_all"
+                L_BRACE "{"
+                CATCH_ARM
+                  MATCH_PATTERN "e"
+                    WORD "e"
+                  FAT_ARROW "=>"
+                  WORD "e"
+                R_BRACE "}"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "y"
+          EQUALS "="
+          THROW_EXPR
+            KW_THROW "throw"
+            CATCH_EXPR
+              INTEGER_LITERAL "2"
+              CATCH_BLOCK
+                KW_CATCH_ALL "catch_all"
+                L_BRACE "{"
+                CATCH_ARM
+                  MATCH_PATTERN "e"
+                    WORD "e"
+                  FAT_ARROW "=>"
+                  WORD "e"
+                R_BRACE "}"
+          SEMICOLON ";"
+        BINARY_EXPR "x + y"
+          WORD "x"
+          PLUS "+"
+          WORD "y"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NestedCatch"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            PAREN_EXPR
+              L_PAREN "("
+              THROW_EXPR
+                KW_THROW "throw"
+                CATCH_EXPR
+                  INTEGER_LITERAL "42"
+                  CATCH_BLOCK
+                    KW_CATCH_ALL "catch_all"
+                    L_BRACE "{"
+                    CATCH_ARM
+                      MATCH_PATTERN "e"
+                        WORD "e"
+                      FAT_ARROW "=>"
+                      WORD "e"
+                    R_BRACE "}"
+              R_PAREN ")"
+            CATCH_BLOCK
+              KW_CATCH_ALL "catch_all"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN "e"
+                  WORD "e"
+                FAT_ARROW "=>"
+                WORD "e"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchRethrow"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            INTEGER_LITERAL "42"
+            CATCH_BLOCK
+              KW_CATCH "catch"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                FAT_ARROW "=>"
+                THROW_EXPR "throw e"
+                  KW_THROW "throw"
+                  WORD "e"
+              R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchConditionalRethrow"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        THROW_EXPR
+          KW_THROW "throw"
+          CATCH_EXPR
+            INTEGER_LITERAL "42"
+            CATCH_BLOCK
+              KW_CATCH "catch"
+              L_BRACE "{"
+              CATCH_ARM
+                MATCH_PATTERN
+                  WORD "e"
+                  COLON ":"
+                  TYPE_EXPR "int"
+                    WORD "int"
+                FAT_ARROW "=>"
+                BLOCK_EXPR
+                  L_BRACE "{"
+                  IF_EXPR
+                    KW_IF "if"
+                    OBJECT_LITERAL
+                      WORD "x"
+                      L_BRACE "{"
+                      OBJECT_FIELD "e"
+                        WORD "e"
+                      R_BRACE "}"
+                    KW_ELSE "else"
+                    BLOCK_EXPR
+                      L_BRACE "{"
+                      THROW_EXPR "throw e"
+                        KW_THROW "throw"
+                        WORD "e"
+                      R_BRACE "}"
+                  R_BRACE "}"
+              R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+Error: Expected ':', found '}'
+     ╭─[ catch_type_safety.baml:132:13 ]
+     │
+ 132 │             } else {
+     │             ┬  
+     │             ╰── Expected ':', found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected block after if condition, found else
+     ╭─[ catch_type_safety.baml:132:15 ]
+     │
+ 132 │             } else {
+     │               ──┬─  
+     │                 ╰─── Expected block after if condition, found else
+     │ 
+     │ Note: Error code: E0010
+─────╯

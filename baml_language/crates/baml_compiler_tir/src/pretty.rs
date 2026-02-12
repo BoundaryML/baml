@@ -674,6 +674,17 @@ pub fn short_display(error: &TirTypeError) -> String {
             format!("Non-exhaustive match on {scrutinee_type}: missing {missing}")
         }
         TypeError::UnreachableArm { .. } => "Unreachable match arm".to_string(),
+        TypeError::NonExhaustiveCatch {
+            thrown_type,
+            missing_cases,
+            ..
+        } => {
+            let missing = missing_cases.join(", ");
+            format!(
+                "Non-exhaustive catch: thrown type {thrown_type} not fully covered. Missing: {missing}"
+            )
+        }
+        TypeError::UnreachableCatchArm { .. } => "Unreachable catch arm".to_string(),
         TypeError::UnknownEnumVariant {
             enum_name,
             variant_name,

@@ -1,0 +1,155 @@
+---
+source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+assertion_line: 1823
+expression: output
+---
+=== HIR ITEMS ===
+function CatchAllExhaustiveTyped() -> int {
+      throw <missing> catch {
+          e: int => e,
+      }
+}
+
+function CatchBindingTyped() -> string {
+      throw "hello" catch {
+          e: string => e,
+      }
+}
+
+function CatchMultipleBindings() -> int {
+      throw <missing> catch {
+          e: int => e * 2,
+          f => f,
+          _e => throw _e,
+      }
+}
+
+function CatchPartialHandling() -> string {
+      throw ErrorA { code: 1 } catch {
+          e: ErrorA => "handled A",
+          _e => throw _e,
+      }
+}
+
+function CatchConditionalRethrow(x: bool) -> int {
+      throw <missing> catch {
+          e: int => {
+              if (x { e: <missing> }) {
+                  throw <missing>
+              }
+          },
+          _e => throw _e,
+      }
+}
+
+function CatchAllExhaustiveNamed() -> int {
+      throw <missing> catch {
+          e => e,
+      }
+}
+
+function CatchAllExhaustiveWildcard() -> int {
+      throw <missing> catch {
+          _ => 0,
+      }
+}
+
+function CatchAllExhaustiveUnion() -> string {
+      throw ErrorA { code: 1 } catch {
+          e: ErrorA => "A",
+          e: ErrorB => "B",
+      }
+}
+
+function CatchAlwaysExhaustive() -> int {
+      throw <missing> catch {
+          e: int => e,
+          _e => throw _e,
+      }
+}
+
+function CatchBindingSimple() -> int {
+      throw <missing> catch {
+          e => e,
+      }
+}
+
+function ThrownTypePropagation() -> int {
+      let x;
+      let y;
+      x + y
+}
+
+function CatchRethrow() -> int {
+      throw <missing> catch {
+          e: int => throw <missing>,
+          _e => throw _e,
+      }
+}
+
+function NestedCatch() -> int {
+      throw throw <missing> catch {
+          e => e,
+      } catch {
+          e => e,
+      }
+}
+
+class ErrorB {
+  message: string
+}
+
+class ErrorA {
+  code: int
+}
+
+function Error_UnreachableAfterCatchAll() -> int {
+      throw <missing> catch {
+          e => e,
+          f: int => f,
+      }
+}
+
+function Error_NonExhaustiveTypeMismatch() -> int {
+      throw <missing> catch {
+          e: string => 0,
+      }
+}
+
+function Error_PartialArmTypeMismatch(x: bool) -> string {
+      throw <missing> catch {
+          e: int => {
+              if (x {  }) {
+                  e
+              }
+          },
+      }
+}
+
+function Error_MultipleUnreachable() -> int {
+      throw <missing> catch {
+          _ => 0,
+          a => a,
+          b: int => b,
+      }
+}
+
+function Error_NonExhaustiveUnion() -> string {
+      throw ErrorA { code: 1 } catch {
+          e: ErrorA => "A",
+      }
+}
+
+function Error_CatchArmTypeMismatch() -> string {
+      throw <missing> catch {
+          e: int => e,
+      }
+}
+
+class ErrorB {
+  message: string
+}
+
+class ErrorA {
+  code: int
+}

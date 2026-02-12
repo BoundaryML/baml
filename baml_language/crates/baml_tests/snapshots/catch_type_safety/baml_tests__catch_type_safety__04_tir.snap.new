@@ -1,0 +1,44 @@
+---
+source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+assertion_line: 1887
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function CatchAllExhaustiveTyped:
+    Return: NoReturn
+  Function CatchBindingTyped:
+    Return: NoReturn
+  Function CatchMultipleBindings:
+    Return: NoReturn
+  Function CatchPartialHandling:
+    Return: NoReturn
+  Function CatchConditionalRethrow:
+    Return: NoReturn
+  Function CatchAllExhaustiveNamed:
+    Return: NoReturn
+  Function CatchAllExhaustiveWildcard:
+    Return: NoReturn
+  Function CatchAllExhaustiveUnion:
+    Return: NoReturn
+  Function CatchAlwaysExhaustive:
+    Return: NoReturn
+  Function CatchBindingSimple:
+    Return: NoReturn
+  Function ThrownTypePropagation:
+    Return: Unknown
+  Function CatchRethrow:
+    Return: NoReturn
+  Function NestedCatch:
+    Return: NoReturn
+  Function Error_UnreachableAfterCatchAll:
+    Return: NoReturn
+  Function Error_NonExhaustiveTypeMismatch:
+    Return: NoReturn
+  Function Error_PartialArmTypeMismatch:
+    Return: NoReturn
+  Function Error_MultipleUnreachable:
+    Return: NoReturn
+  Function Error_NonExhaustiveUnion:
+    Return: NoReturn
+  Function Error_CatchArmTypeMismatch:
+    Return: NoReturn

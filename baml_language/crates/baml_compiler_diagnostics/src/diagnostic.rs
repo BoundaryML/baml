@@ -92,6 +92,8 @@ pub enum DiagnosticId {
     // Pattern matching errors (E0062-E0066)
     NonExhaustiveMatch,
     UnreachableArm,
+    NonExhaustiveCatch,
+    UnreachableCatchArm,
     UnknownEnumVariant,
     WatchOnNonVariable,
     WatchOnUnwatchedVariable,
@@ -206,6 +208,8 @@ impl DiagnosticId {
             // Pattern matching errors
             DiagnosticId::NonExhaustiveMatch => "E0062",
             DiagnosticId::UnreachableArm => "E0063",
+            DiagnosticId::NonExhaustiveCatch => "E0088",
+            DiagnosticId::UnreachableCatchArm => "E0089",
             DiagnosticId::UnknownEnumVariant => "E0064",
             DiagnosticId::WatchOnNonVariable => "E0065",
             DiagnosticId::WatchOnUnwatchedVariable => "E0066",

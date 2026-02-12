@@ -65,6 +65,8 @@ pub enum ErrorLocation {
     Expr(ExprId),
     /// Error at a match arm (for unreachable arm errors).
     MatchArm(MatchArmId),
+    /// Error at a catch arm (for unreachable catch arm errors).
+    CatchArm(CatchArmId),
     /// Error at a top-level type item (type alias or class).
     ///
     /// Used for validation errors about type definitions (e.g., cycle detection).
@@ -121,6 +123,11 @@ impl ErrorLocation {
             ErrorLocation::MatchArm(id) => ctx
                 .expr_fn_source_map
                 .match_arm_spans(*id)
+                .map(|s| s.arm_span)
+                .unwrap_or_default(),
+            ErrorLocation::CatchArm(id) => ctx
+                .expr_fn_source_map
+                .catch_arm_spans(*id)
                 .map(|s| s.arm_span)
                 .unwrap_or_default(),
             ErrorLocation::TypeItem(name) => ctx
@@ -180,6 +187,12 @@ impl From<ExprId> for ErrorLocation {
 impl From<MatchArmId> for ErrorLocation {
     fn from(id: MatchArmId) -> Self {
         ErrorLocation::MatchArm(id)
+    }
+}
+
+impl From<CatchArmId> for ErrorLocation {
+    fn from(id: CatchArmId) -> Self {
+        ErrorLocation::CatchArm(id)
     }
 }
 

@@ -92,6 +92,14 @@ pub enum TypeError<C: ErrorContext> {
     },
     /// Match arm is unreachable - it can never match because previous arms cover all cases.
     UnreachableArm { location: C::Location },
+    /// Catch expression is not exhaustive - not all thrown types are covered.
+    NonExhaustiveCatch {
+        thrown_type: C::Ty,
+        missing_cases: Vec<String>,
+        location: C::Location,
+    },
+    /// Catch arm is unreachable - it can never match because previous arms cover all cases.
+    UnreachableCatchArm { location: C::Location },
     /// Reference to an unknown enum variant.
     UnknownEnumVariant {
         enum_name: String,
