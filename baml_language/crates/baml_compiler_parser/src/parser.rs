@@ -610,6 +610,10 @@ impl<'a> Parser<'a> {
             if self.pending_greaters == 0 {
                 self.pending_greater_span = None;
             }
+            self.events.push(Event::Token {
+                kind: SyntaxKind::GREATER,
+                text: ">".to_string(),
+            });
             return true;
         }
 
@@ -621,7 +625,11 @@ impl<'a> Parser<'a> {
             // - Consume the '>>' token (adds it to tree once)
             // - Track that the second '>' is pending for the outer generic
             let span = self.current().map(|t| t.span);
-            self.bump();
+            self.events.push(Event::Token {
+                kind: SyntaxKind::GREATER,
+                text: ">".to_string(),
+            });
+            self.current += 1;
             self.pending_greaters += 1;
             self.pending_greater_span = span;
             true
@@ -3047,12 +3055,12 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::Less);
 
             // Parse first type argument
-            if !p.at(TokenKind::Greater) {
+            if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
                 p.parse_type();
 
                 // Parse remaining type arguments
                 while p.eat(TokenKind::Comma) {
-                    if p.at(TokenKind::Greater) {
+                    if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
                         break; // Trailing comma
                     }
                     p.parse_type();
