@@ -34,7 +34,9 @@ pub enum Statement {
 impl FromCST for Statement {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::LET_STMT => LetStmt::from_cst(elem).map(Statement::Let),
+            SyntaxKind::LET_STMT | SyntaxKind::WATCH_LET => {
+                LetStmt::from_cst(elem).map(Statement::Let)
+            }
             SyntaxKind::RETURN_STMT => ReturnStmt::from_cst(elem).map(Statement::Return),
             SyntaxKind::WHILE_STMT => WhileStmt::from_cst(elem).map(Statement::While),
             SyntaxKind::FOR_EXPR => ForStmt::from_cst(elem).map(Statement::For),
@@ -114,9 +116,10 @@ impl Printable for ExpressionStmt {
     }
 }
 
-/// Corresponds to a [`SyntaxKind::LET_STMT`] node.
+/// Corresponds to a [`SyntaxKind::LET_STMT`] node or a [`SyntaxKind::WATCH_LET`] node.
 #[derive(Debug)]
 pub struct LetStmt {
+    pub watch: Option<t::Watch>,
     pub keyword: t::Let,
     pub name: t::Word,
     pub type_annotation: Option<(t::Colon, Type)>,
@@ -128,9 +131,21 @@ pub struct LetStmt {
 impl FromCST for LetStmt {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::LET_STMT)?;
-
+        let node_kind = node.kind();
         let mut it = SyntaxNodeIter::new(node);
+
+        let watch = if node_kind == SyntaxKind::WATCH_LET {
+            Some(it.expect_parse()?)
+        } else {
+            if node_kind != SyntaxKind::LET_STMT {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "LET_STMT or WATCH_LET".into(),
+                    found: node_kind,
+                    at: it.parent,
+                });
+            }
+            None
+        };
 
         let keyword = it.expect_parse()?;
 
@@ -153,6 +168,7 @@ impl FromCST for LetStmt {
         it.expect_end()?;
 
         Ok(LetStmt {
+            watch,
             keyword,
             name,
             type_annotation,
@@ -172,6 +188,10 @@ impl Printable for LetStmt {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
 
+        if let Some(watch) = &self.watch {
+            printer.print_raw_token(watch);
+            printer.print_str(" ");
+        }
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
