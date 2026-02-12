@@ -3,6 +3,7 @@
 //! This crate provides the same FFI interface as `engine/language_client_cffi/`
 //! but powered by `bex_engine` instead of `baml-runtime`.
 
+pub mod collector;
 mod ctypes;
 pub mod engine;
 pub mod error;

@@ -19,6 +19,7 @@ workspace = true
 
 [dependencies]
 bex_external_types = { workspace = true }
+indexmap = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 

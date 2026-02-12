@@ -138,7 +138,7 @@ impl HostSpanManager {
         self.stack.len()
     }
 
-    /// Build a `HostSpanContext` for passing to `call_function_traced`.
+    /// Build a `HostSpanContext` for passing to `call_function`.
     ///
     /// Returns `None` if there are no active host spans.
     pub fn host_span_context(&self) -> Option<bex_engine::HostSpanContext> {

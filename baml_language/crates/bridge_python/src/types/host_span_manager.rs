@@ -21,7 +21,7 @@ impl HostSpanManager {
         }
     }
 
-    /// Get the current host span context for passing to `call_function_traced`.
+    /// Get the current host span context for passing to `call_function`.
     ///
     /// Returns `None` if there are no active host spans.
     pub fn host_span_context(&self) -> Option<bex_engine::HostSpanContext> {

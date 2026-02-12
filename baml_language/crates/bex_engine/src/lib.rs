@@ -66,7 +66,7 @@ use std::{
 
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 
-// Re-export event types so callers of call_function_traced can inspect results.
+// Re-export event types for callers.
 pub use bex_events::{RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
@@ -152,19 +152,18 @@ impl EpochState {
 struct EngineSpan {
     span_id: SpanId,
     parent_span_id: Option<SpanId>,
+    /// The BAML function name this span represents.
     label: String,
     started_at: Instant,
 }
 
 /// Per-invocation span tracking state.
 ///
-/// Created as a local in `call_function_traced` and threaded through the event
+/// Created as a local in `call_function` and threaded through the event
 /// loop. NOT stored on the shared `BexEngine`.
 struct SpanState {
     /// Stack of active spans (LIFO).
     stack: Vec<EngineSpan>,
-    /// Collected runtime events.
-    events: Vec<RuntimeEvent>,
     /// Root span ID for the entire call tree.
     root_span_id: SpanId,
     /// Host-side call stack prefix (from Python @trace spans).
@@ -547,10 +546,19 @@ impl BexEngine {
         stats
     }
 
-    /// Execute a function by name.
+    /// Execute a function by name with tracing.
     ///
-    /// This method is `&self` because each call creates its own VM with a TLAB.
-    /// Concurrent calls work naturally - each gets its own VM and TLAB.
+    /// Every call emits [`RuntimeEvent`]s to the global event store for each
+    /// `CallWithTrace` span boundary the VM crosses. The entry-point function
+    /// itself gets a root span automatically.
+    ///
+    /// If `host_ctx` is provided, the engine's root span is nested under the
+    /// host's active span tree (e.g., Python `@trace` spans). The host's
+    /// call stack is prepended to the engine's call stack in events.
+    ///
+    /// To collect events for a call, use [`bex_events::event_store::track`]
+    /// before calling and [`bex_events::event_store::events_for_span`] +
+    /// [`bex_events::event_store::untrack`] after.
     ///
     /// # Arguments
     ///
@@ -559,118 +567,27 @@ impl BexEngine {
     /// - `Handle` references existing heap objects
     /// - `Adt(Media | PromptAst)` allocates new builtin ADT objects on the heap
     ///
-    /// # Returns
-    ///
-    /// Returns `BexExternalValue` - the owned result value. If the return type is a union,
-    /// the value is wrapped in `Union { value, metadata }` with information about the union.
-    ///
     /// # Example
     ///
     /// ```ignore
     /// let result = engine.call_function("get_user", vec![
     ///     "Alice".into(),
     ///     42i64.into(),
-    /// ]).await?;
-    ///
-    /// match result {
-    ///     BexExternalValue::Instance { class_name, fields } => {
-    ///         println!("Got {} with {} fields", class_name, fields.len());
-    ///     }
-    ///     BexExternalValue::Union { value, metadata } => {
-    ///         println!("Got union value, selected: {}", metadata.selected_option);
-    ///     }
-    ///     _ => {}
-    /// }
+    /// ], None).await?;
     /// ```
     pub async fn call_function(
         &self,
         function_name: &str,
         args: Vec<BexExternalValue>,
+        host_ctx: Option<HostSpanContext>,
+        collectors: &[Arc<bex_events::Collector>],
     ) -> Result<BexExternalValue, EngineError> {
         // Wait for any in-progress GC to complete.
-        // This ensures Handles in args have stable indices.
         while self.gc_in_progress.load(Ordering::Acquire) {
             self.gc_complete.notified().await;
         }
 
-        // Look up the function to verify it exists and get its return type
         let function_index = self.lookup_function(function_name)?;
-        // Get return type from function object on heap
-        let return_type = self.function_return_type(function_name).unwrap_or(Ty::Null);
-
-        // Register with current epoch
-        let my_epoch = self.current_epoch.load(Ordering::Acquire);
-        let slot = (my_epoch % 2) as usize;
-        self.epoch_states[slot]
-            .active
-            .fetch_add(1, Ordering::AcqRel);
-
-        // SAFETY: We just registered with the epoch above
-        let guard = unsafe { EpochGuard::new() };
-
-        // Create VM with shared heap (each VM gets its own TLAB)
-        let mut vm = BexVm::new(
-            Arc::clone(&self.heap),
-            self.globals.clone(),
-            self.env_vars.clone(),
-        );
-
-        // Convert ExternalValue args to Value, allocating BexExternalValue data on the heap
-        let vm_args: Vec<Value> = args
-            .into_iter()
-            .map(|arg| self.convert_external_to_vm_value(&mut vm, arg, &guard))
-            .collect();
-
-        // Set entry point with converted args
-        vm.set_entry_point(function_index, &vm_args);
-
-        // Run the event loop with epoch tracking (no span collection)
-        let mut no_spans: Option<SpanState> = None;
-        let result = self
-            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch, &mut no_spans)
-            .await;
-
-        // Unregister from epoch
-        if self.epoch_states[slot]
-            .active
-            .fetch_sub(1, Ordering::AcqRel)
-            == 1
-        {
-            // We were the last active VM in this epoch
-            self.epoch_drained.notify_one();
-        }
-
-        // Convert BexValue to BexExternalValue, wrapping in Union if return type is union
-        result
-    }
-
-    /// Execute a function by name with span tracing enabled.
-    ///
-    /// Same as [`call_function`](Self::call_function) but also collects
-    /// [`RuntimeEvent`]s for every `CallWithTrace` span boundary the VM crosses.
-    /// The entry-point function itself gets a root span automatically.
-    ///
-    /// If `host_ctx` is provided, the engine's root span is nested under the
-    /// host's active span tree (e.g., Python `@trace` spans). The host's
-    /// call stack is prepended to the engine's call stack in events.
-    ///
-    /// Returns `(result_or_error, events)` — events are always returned, even
-    /// when the call fails, so callers can inspect partial traces.
-    pub async fn call_function_traced(
-        &self,
-        function_name: &str,
-        args: Vec<BexExternalValue>,
-        host_ctx: Option<HostSpanContext>,
-    ) -> (Result<BexExternalValue, EngineError>, Vec<RuntimeEvent>) {
-        // Wait for any in-progress GC to complete.
-        while self.gc_in_progress.load(Ordering::Acquire) {
-            self.gc_complete.notified().await;
-        }
-
-        let function_index = match self.lookup_function(function_name) {
-            Ok(idx) => idx,
-            Err(e) => return (Err(e), vec![]),
-        };
         let return_type = self.function_return_type(function_name).unwrap_or(Ty::Null);
 
         // Register with current epoch
@@ -711,6 +628,18 @@ impl BexEngine {
             None => (None, engine_span_id.clone(), vec![]),
         };
 
+        // Wire up collector tracking before emitting any events.
+        // Track by engine_span_id (unique per call) so each call gets its own log,
+        // even when multiple calls share the same root under @trace.
+        //
+        // The event store routes events to buckets by matching the event's span_id
+        // or parent_span_id against tracked IDs. So the function's own events
+        // (span_id == engine_span_id) and child events like LLM calls
+        // (parent_span_id == engine_span_id) both land in the same bucket.
+        for collector in collectors {
+            collector.track(&engine_span_id);
+        }
+
         // Build the call stack: host prefix + this engine span
         let mut call_stack = host_call_stack.clone();
         call_stack.push(engine_span_id.clone());
@@ -721,7 +650,7 @@ impl BexEngine {
             root_span_id: effective_root_span_id.clone(),
         };
 
-        let root_start_event = RuntimeEvent {
+        bex_events::event_store::emit(RuntimeEvent {
             ctx: root_ctx,
             call_stack,
             timestamp: SystemTime::now(),
@@ -730,8 +659,7 @@ impl BexEngine {
                 args: args_snapshot,
                 tags: vec![],
             })),
-        };
-        bex_events::event_store::emit(root_start_event.clone());
+        });
 
         let mut span_state = Some(SpanState {
             stack: vec![EngineSpan {
@@ -740,12 +668,11 @@ impl BexEngine {
                 label: function_name.to_string(),
                 started_at: Instant::now(),
             }],
-            events: vec![root_start_event],
             root_span_id: effective_root_span_id,
             host_call_stack,
         });
 
-        // Run the event loop with span collection
+        // Run the event loop with span tracking
         let result = self
             .run_event_loop_with_epoch(return_type, &mut vm, my_epoch, &mut span_state)
             .await;
@@ -759,8 +686,7 @@ impl BexEngine {
             self.epoch_drained.notify_one();
         }
 
-        let events = span_state.map(|s| s.events).unwrap_or_default();
-        (result, events)
+        result
     }
 
     /// Look up a function by name and return its heap pointer.
@@ -888,8 +814,7 @@ impl BexEngine {
                                     duration: root_span.started_at.elapsed(),
                                 })),
                             };
-                            bex_events::event_store::emit(end_event.clone());
-                            state.events.push(end_event);
+                            bex_events::event_store::emit(end_event);
                         }
                     }
 
@@ -1069,8 +994,7 @@ impl BexEngine {
                                         },
                                     )),
                                 };
-                                bex_events::event_store::emit(enter_event.clone());
-                                state.events.push(enter_event);
+                                bex_events::event_store::emit(enter_event);
 
                                 state.stack.push(EngineSpan {
                                     span_id,
@@ -1107,8 +1031,7 @@ impl BexEngine {
                                             },
                                         )),
                                     };
-                                    bex_events::event_store::emit(exit_event.clone());
-                                    state.events.push(exit_event);
+                                    bex_events::event_store::emit(exit_event);
                                 }
                             }
                         }

@@ -4,8 +4,9 @@
 //! The publisher thread buffers events and writes JSONL to file on `flush()`
 //! (if `BAML_TRACE_FILE` is set).
 //!
-//! Collectors are separate — they track specific `root_span_id`s for
-//! in-memory querying; ref-counting manages memory cleanup.
+//! Collectors track specific engine span IDs (one per `call_function`
+//! invocation). Events are routed to the correct bucket by matching
+//! `span_id` or `parent_span_id` against tracked IDs.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -84,7 +85,11 @@ fn write_jsonl_to_file(events: &[RuntimeEvent]) {
 
 // ─────────────────────────── Collector Store ─────────────────────────────
 
-/// In-memory storage for tracked root_span_ids (collector use case).
+/// In-memory storage for tracked engine span IDs (collector use case).
+///
+/// Events are routed by matching `span_id` or `parent_span_id` against
+/// tracked keys, so each function call's events land in the right bucket
+/// even when multiple calls share the same `root_span_id` under `@trace`.
 struct CollectorStore {
     events: HashMap<SpanId, Vec<RuntimeEvent>>,
     ref_counts: HashMap<SpanId, usize>,
@@ -109,19 +114,30 @@ fn collector_store() -> &'static Mutex<CollectorStore> {
 
 /// Send an event to the publisher thread. Always succeeds (drops if channel full).
 ///
-/// Also stores the event in the collector map if the event's `root_span_id`
-/// is being tracked.
+/// Also stores the event in the collector store if the event's `span_id`
+/// or `parent_span_id` matches a tracked engine span.
 pub fn emit(event: RuntimeEvent) {
-    // Store in collector if tracked
+    // Store in collector if tracked — route by span_id or parent_span_id
     {
         let mut store = collector_store().lock().unwrap();
-        let root = &event.ctx.root_span_id;
-        if store.ref_counts.contains_key(root) {
+
+        // The function's own events have span_id == engine_span_id.
+        // Child events (LLM calls) have parent_span_id == engine_span_id.
+        let span = &event.ctx.span_id;
+        if store.ref_counts.contains_key(span) {
             store
                 .events
-                .entry(root.clone())
+                .entry(span.clone())
                 .or_default()
                 .push(event.clone());
+        } else if let Some(parent) = &event.ctx.parent_span_id {
+            if store.ref_counts.contains_key(parent) {
+                store
+                    .events
+                    .entry(parent.clone())
+                    .or_default()
+                    .push(event.clone());
+            }
         }
     }
 
@@ -141,26 +157,27 @@ pub fn flush() {
     }
 }
 
-/// Start tracking a root_span_id for in-memory querying (collector use case).
-pub fn track(root_span_id: &SpanId) {
+/// Start tracking a span ID for in-memory querying (collector use case).
+/// Typically called with the engine_span_id (unique per call_function).
+pub fn track(span_id: &SpanId) {
     let mut store = collector_store().lock().unwrap();
-    *store.ref_counts.entry(root_span_id.clone()).or_insert(0) += 1;
-    store.events.entry(root_span_id.clone()).or_default();
+    *store.ref_counts.entry(span_id.clone()).or_insert(0) += 1;
+    store.events.entry(span_id.clone()).or_default();
 }
 
-/// Stop tracking. When ref-count reaches 0, purge stored events for this root_span_id.
-pub fn untrack(root_span_id: &SpanId) {
+/// Stop tracking. When ref-count reaches 0, purge stored events for this span.
+pub fn untrack(span_id: &SpanId) {
     let mut store = collector_store().lock().unwrap();
-    if let Some(count) = store.ref_counts.get_mut(root_span_id) {
+    if let Some(count) = store.ref_counts.get_mut(span_id) {
         *count = count.saturating_sub(1);
         if *count == 0 {
-            store.ref_counts.remove(root_span_id);
-            store.events.remove(root_span_id);
+            store.ref_counts.remove(span_id);
+            store.events.remove(span_id);
         }
     }
 }
 
-/// Query events for a tracked root_span_id (collector use case).
+/// Query events for a tracked span ID (collector use case).
 pub fn events_for_span(id: &SpanId) -> Option<Vec<RuntimeEvent>> {
     let store = collector_store().lock().unwrap();
     store.events.get(id).cloned()
@@ -173,18 +190,36 @@ mod tests {
     use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};
     use std::time::SystemTime;
 
-    fn make_event(root_span_id: SpanId) -> RuntimeEvent {
-        let span_id = SpanId::new();
+    /// Create an event whose span_id matches the given ID (function's own event).
+    fn make_event(span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
             ctx: SpanContext {
-                span_id,
+                span_id: span_id.clone(),
                 parent_span_id: None,
-                root_span_id,
+                root_span_id: span_id,
             },
             call_stack: vec![],
             timestamp: SystemTime::now(),
             event: EventKind::Function(FunctionEvent::Start(FunctionStart {
                 name: "test_fn".into(),
+                args: vec![],
+                tags: vec![],
+            })),
+        }
+    }
+
+    /// Create a child event whose parent_span_id matches the given parent.
+    fn make_child_event(parent_span_id: SpanId, root_span_id: SpanId) -> RuntimeEvent {
+        RuntimeEvent {
+            ctx: SpanContext {
+                span_id: SpanId::new(),
+                parent_span_id: Some(parent_span_id),
+                root_span_id,
+            },
+            call_stack: vec![],
+            timestamp: SystemTime::now(),
+            event: EventKind::Function(FunctionEvent::Start(FunctionStart {
+                name: "child_fn".into(),
                 args: vec![],
                 tags: vec![],
             })),
@@ -201,8 +236,8 @@ mod tests {
             std::env::set_var("BAML_TRACE_FILE", trace_path.to_str().unwrap());
         }
 
-        let root = SpanId::new();
-        emit(make_event(root));
+        let span = SpanId::new();
+        emit(make_event(span));
         flush();
 
         let contents = std::fs::read_to_string(&trace_path).unwrap();
@@ -217,37 +252,55 @@ mod tests {
 
     #[test]
     fn test_track_emit_query_untrack() {
-        let root = SpanId::new();
+        let engine_span = SpanId::new();
 
-        // Track the root
-        track(&root);
+        // Track the engine span
+        track(&engine_span);
 
-        // Emit events
-        let event = make_event(root.clone());
-        emit(event);
+        // Emit event with span_id matching the tracked span
+        emit(make_event(engine_span.clone()));
 
         // Query
-        let events = events_for_span(&root).unwrap();
+        let events = events_for_span(&engine_span).unwrap();
         assert_eq!(events.len(), 1);
 
         // Untrack → purge
-        untrack(&root);
-        assert!(events_for_span(&root).is_none());
+        untrack(&engine_span);
+        assert!(events_for_span(&engine_span).is_none());
+    }
+
+    #[test]
+    fn test_child_events_routed_by_parent() {
+        let engine_span = SpanId::new();
+        let host_root = SpanId::new();
+
+        track(&engine_span);
+
+        // Emit the function's own event (span_id matches)
+        emit(make_event(engine_span.clone()));
+
+        // Emit a child event (parent_span_id matches)
+        emit(make_child_event(engine_span.clone(), host_root));
+
+        let events = events_for_span(&engine_span).unwrap();
+        assert_eq!(events.len(), 2);
+
+        untrack(&engine_span);
     }
 
     #[test]
     fn test_ref_counting() {
-        let root = SpanId::new();
+        let span = SpanId::new();
 
-        track(&root);
-        track(&root); // ref_count = 2
+        track(&span);
+        track(&span); // ref_count = 2
 
-        emit(make_event(root.clone()));
+        emit(make_event(span.clone()));
 
-        untrack(&root); // ref_count = 1 → still tracked
-        assert!(events_for_span(&root).is_some());
+        untrack(&span); // ref_count = 1 → still tracked
+        assert!(events_for_span(&span).is_some());
 
-        untrack(&root); // ref_count = 0 → purged
-        assert!(events_for_span(&root).is_none());
+        untrack(&span); // ref_count = 0 → purged
+        assert!(events_for_span(&span).is_none());
     }
 }

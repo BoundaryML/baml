@@ -111,7 +111,7 @@ fn call_function_inner(
     let rt = get_runtime().clone();
     rt.spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
-        let result = AssertUnwindSafe(async { engine.call_function(&func_name, bex_args).await })
+        let result = AssertUnwindSafe(async { engine.call_function(&func_name, bex_args, None, &[]).await })
             .catch_unwind()
             .await;
 

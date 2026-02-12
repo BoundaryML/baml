@@ -1,15 +1,17 @@
-//! End-to-end tests for span tracing via `call_function_traced`.
+//! End-to-end tests for span tracing via `call_function`.
 //!
-//! These tests verify that `call_function_traced` produces a root span for the
+//! These tests verify that `call_function` produces a root span for the
 //! entry-point function. Inner expression function calls use `Call` (not `CallWithTrace`)
 //! so they do NOT produce child spans. Only LLM function calls emit `CallWithTrace`
 //! and would appear as child spans in the trace.
+//!
+//! Events are collected via the global event store (`track` / `events_for_span` / `untrack`).
 
 mod common;
 
 use std::collections::HashMap;
 
-use bex_engine::{BexEngine, BexExternalValue, RuntimeEvent};
+use bex_engine::{BexEngine, BexExternalValue, HostSpanContext, RuntimeEvent, SpanId};
 use bex_events::{EventKind, FunctionEvent};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -30,6 +32,26 @@ fn event_names(events: &[RuntimeEvent]) -> Vec<String> {
         .collect()
 }
 
+/// Create a `HostSpanContext` with a fresh root span and start tracking it
+/// in the event store. Returns `(host_ctx, root_span_id)`.
+fn setup_tracking() -> (HostSpanContext, SpanId) {
+    let root = SpanId::new();
+    bex_events::event_store::track(&root);
+    let host_ctx = HostSpanContext {
+        root_span_id: root.clone(),
+        parent_span_id: root.clone(),
+        call_stack: vec![root.clone()],
+    };
+    (host_ctx, root)
+}
+
+/// Drain collected events for the given root span and stop tracking.
+fn collect_events(root: &SpanId) -> Vec<RuntimeEvent> {
+    let events = bex_events::event_store::events_for_span(root).unwrap_or_default();
+    bex_events::event_store::untrack(root);
+    events
+}
+
 #[tokio::test]
 async fn trace_single_function() {
     let source = r#"
@@ -42,8 +64,13 @@ async fn trace_single_function() {
     let engine =
         BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
-    let (result, events) = engine.call_function_traced("main", vec![], None).await;
-    let value = result.unwrap();
+    let (host_ctx, root) = setup_tracking();
+    let value = engine
+        .call_function("main", vec![], Some(host_ctx), &[])
+        .await
+        .unwrap();
+    let events = collect_events(&root);
+
     assert_eq!(value, BexExternalValue::Int(42));
 
     // Root function should produce start + end events
@@ -51,14 +78,8 @@ async fn trace_single_function() {
     assert_eq!(names, vec!["start:main", "end:main"]);
 
     // Both events should share the same root span ID
-    let root_id = &events[0].ctx.root_span_id;
-    assert_eq!(&events[1].ctx.root_span_id, root_id);
-
-    // Start event should have no parent (it's the root)
-    assert!(events[0].ctx.parent_span_id.is_none());
-
-    // End event should also have no parent (same root span)
-    assert!(events[1].ctx.parent_span_id.is_none());
+    assert_eq!(&events[0].ctx.root_span_id, &root);
+    assert_eq!(&events[1].ctx.root_span_id, &root);
 
     // Both should share the same span_id (same span)
     assert_eq!(events[0].ctx.span_id, events[1].ctx.span_id);
@@ -83,8 +104,13 @@ async fn trace_nested_expression_calls_no_child_spans() {
     let engine =
         BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
-    let (result, events) = engine.call_function_traced("main", vec![], None).await;
-    let value = result.unwrap();
+    let (host_ctx, root) = setup_tracking();
+    let value = engine
+        .call_function("main", vec![], Some(host_ctx), &[])
+        .await
+        .unwrap();
+    let events = collect_events(&root);
+
     assert_eq!(value, BexExternalValue::Int(11));
 
     // Only the root function (main) produces span events.
@@ -118,8 +144,13 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
     let engine =
         BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
-    let (result, events) = engine.call_function_traced("main", vec![], None).await;
-    let value = result.unwrap();
+    let (host_ctx, root) = setup_tracking();
+    let value = engine
+        .call_function("main", vec![], Some(host_ctx), &[])
+        .await
+        .unwrap();
+    let events = collect_events(&root);
+
     assert_eq!(value, BexExternalValue::Int(4));
 
     // Only the root function produces span events
@@ -147,8 +178,13 @@ async fn trace_sibling_expression_calls_no_child_spans() {
     let engine =
         BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
-    let (result, events) = engine.call_function_traced("main", vec![], None).await;
-    let value = result.unwrap();
+    let (host_ctx, root) = setup_tracking();
+    let value = engine
+        .call_function("main", vec![], Some(host_ctx), &[])
+        .await
+        .unwrap();
+    let events = collect_events(&root);
+
     assert_eq!(value, BexExternalValue::Int(3));
 
     // Only root function produces events; foo() and bar() use Call, not CallWithTrace
@@ -168,14 +204,18 @@ async fn trace_captures_root_args() {
     let engine =
         BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
-    let (result, events) = engine
-        .call_function_traced(
+    let (host_ctx, root) = setup_tracking();
+    let value = engine
+        .call_function(
             "add",
             vec![BexExternalValue::Int(3), BexExternalValue::Int(4)],
-            None,
+            Some(host_ctx),
+            &[],
         )
-        .await;
-    let value = result.unwrap();
+        .await
+        .unwrap();
+    let events = collect_events(&root);
+
     assert_eq!(value, BexExternalValue::Int(7));
 
     // Check that the root start event captured args
@@ -201,10 +241,13 @@ async fn trace_captures_root_result() {
     let engine =
         BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
 
-    let (result, events) = engine
-        .call_function_traced("double", vec![BexExternalValue::Int(5)], None)
-        .await;
-    let value = result.unwrap();
+    let (host_ctx, root) = setup_tracking();
+    let value = engine
+        .call_function("double", vec![BexExternalValue::Int(5)], Some(host_ctx), &[])
+        .await
+        .unwrap();
+    let events = collect_events(&root);
+
     assert_eq!(value, BexExternalValue::Int(10));
 
     // Check that the root end event captured the result
@@ -214,23 +257,6 @@ async fn trace_captures_root_result() {
     } else {
         panic!("Expected FunctionEnd event for 'double'");
     }
-}
-
-#[tokio::test]
-async fn call_function_without_tracing_produces_no_events() {
-    let source = r#"
-        function main() -> int {
-            42
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, HashMap::new(), sys_types::SysOps::native()).unwrap();
-
-    // Regular call_function should work fine (SpanNotify is just ignored)
-    let result = engine.call_function("main", vec![]).await.unwrap();
-    assert_eq!(result, BexExternalValue::Int(42));
 }
 
 /// Verify that LLM function calls compile to `CallWithTrace` instructions.

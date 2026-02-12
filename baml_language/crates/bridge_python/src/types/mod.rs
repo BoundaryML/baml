@@ -1,5 +1,6 @@
 //! PyO3 types for bridge_python.
 
+pub mod collector;
 mod function_result;
 mod host_span_manager;
 

@@ -12,7 +12,7 @@ use crate::{
     errors::{bridge_error_to_py, engine_error_to_py, BamlInvalidArgumentError},
     parse_py_type::{parse_py_kwargs, py_to_bex_value},
     pythonize_value::bex_value_to_py,
-    types::FunctionResult,
+    types::{collector::Collector, FunctionResult},
 };
 
 /// The main BAML runtime, wrapping a `BexEngine` instance.
@@ -48,14 +48,16 @@ impl BamlRuntime {
     /// # Arguments
     /// * `function_name` - Name of the BAML function to call
     /// * `args` - Python dict of keyword arguments
-    /// * `ctx` - Host span manager; if active spans exist, uses traced execution
-    #[pyo3(signature = (function_name, args, ctx=None))]
+    /// * `ctx` - Host span manager; if active spans exist, nests under host trace
+    /// * `collectors` - Optional list of Collector objects to track this call
+    #[pyo3(signature = (function_name, args, ctx=None, collectors=None))]
     fn call_function<'py>(
         &self,
         py: Python<'py>,
         function_name: String,
         args: PyObject,
         ctx: Option<&crate::types::HostSpanManager>,
+        collectors: Option<Vec<pyo3::PyRef<'py, Collector>>>,
     ) -> PyResult<PyObject> {
         let kwargs = parse_py_kwargs(py, &args)?;
         let engine = self.engine.clone();
@@ -88,18 +90,17 @@ impl BamlRuntime {
         // Extract host span context before releasing the GIL
         let host_ctx = ctx.and_then(|c| c.host_span_context());
 
+        // Clone Arc refs to collectors so they can cross the async boundary.
+        let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
+            .as_ref()
+            .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
+            .unwrap_or_default();
+
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let result = if let Some(host_ctx) = host_ctx {
-                let (result, _events) = engine
-                    .call_function_traced(&function_name, ordered_args, Some(host_ctx))
-                    .await;
-                result.map_err(engine_error_to_py)?
-            } else {
-                engine
-                    .call_function(&function_name, ordered_args)
-                    .await
-                    .map_err(engine_error_to_py)?
-            };
+            let result = engine
+                .call_function(&function_name, ordered_args, host_ctx, &collector_arcs)
+                .await
+                .map_err(engine_error_to_py)?;
 
             Python::with_gil(|py| {
                 let py_result = bex_value_to_py(py, result)?;
@@ -114,14 +115,16 @@ impl BamlRuntime {
     /// # Arguments
     /// * `function_name` - Name of the BAML function to call
     /// * `args` - Python dict of keyword arguments
-    /// * `ctx` - Host span manager; if active spans exist, uses traced execution
-    #[pyo3(signature = (function_name, args, ctx=None))]
+    /// * `ctx` - Host span manager; if active spans exist, nests under host trace
+    /// * `collectors` - Optional list of Collector objects to track this call
+    #[pyo3(signature = (function_name, args, ctx=None, collectors=None))]
     fn call_function_sync(
         &self,
         py: Python<'_>,
         function_name: String,
         args: PyObject,
         ctx: Option<&crate::types::HostSpanManager>,
+        collectors: Option<Vec<pyo3::PyRef<'_, Collector>>>,
     ) -> PyResult<FunctionResult> {
         let kwargs = parse_py_kwargs(py, &args)?;
         let engine = self.engine.clone();
@@ -154,17 +157,20 @@ impl BamlRuntime {
         // Extract host span context before releasing the GIL
         let host_ctx = ctx.and_then(|c| c.host_span_context());
 
+        let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
+            .as_ref()
+            .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
+            .unwrap_or_default();
+
         let rt = baml_cffi::engine::get_runtime();
 
         let result = py.allow_threads(|| {
-            if let Some(host_ctx) = host_ctx {
-                let (result, _events) = rt.block_on(
-                    engine.call_function_traced(&function_name, ordered_args, Some(host_ctx)),
-                );
-                result
-            } else {
-                rt.block_on(engine.call_function(&function_name, ordered_args))
-            }
+            rt.block_on(engine.call_function(
+                &function_name,
+                ordered_args,
+                host_ctx,
+                &collector_arcs,
+            ))
         })
         .map_err(engine_error_to_py)?;
 

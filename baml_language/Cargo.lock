@@ -838,6 +838,7 @@ name = "bex_events"
 version = "0.0.0"
 dependencies = [
  "bex_external_types",
+ "indexmap 2.13.0",
  "serde_json",
  "tempfile",
  "uuid",

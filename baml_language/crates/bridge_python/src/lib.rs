@@ -33,6 +33,11 @@ fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<runtime::BamlRuntime>()?;
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::HostSpanManager>()?;
+    m.add_class::<types::collector::Collector>()?;
+    m.add_class::<types::collector::FunctionLog>()?;
+    m.add_class::<types::collector::Timing>()?;
+    m.add_class::<types::collector::Usage>()?;
+    m.add_class::<types::collector::LLMCall>()?;
     m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_wrapped(wrap_pyfunction!(flush_events))?;
     errors::register_errors(m)?;
