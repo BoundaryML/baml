@@ -912,11 +912,7 @@ impl BexVm {
         }
 
         if let Value::Object(new) = new_value {
-            // Track dependencies first (using closure to avoid borrow conflicts)
-            watch::track_watch_dependencies(&mut self.watch, Value::Object(new));
-            // Then link the edge
-            self.watch
-                .link_edge(watched_node, path, NodeId::HeapObject(new));
+            watch::track_watch_dependencies(&mut self.watch, watched_node, path, new);
         }
 
         // Deep-copy previous root values so the notification filter can diff
@@ -1937,15 +1933,11 @@ impl BexVm {
 
                     // If it's an object, build the entire dependency graph
                     if let Value::Object(object_index) = value {
-                        // Build the graph.
-                        // Track dependencies first (using closure to avoid borrow conflicts)
-                        watch::track_watch_dependencies(&mut self.watch, value);
-
-                        // Link the root emittable variable to the object
-                        self.watch.link_edge(
+                        watch::track_watch_dependencies(
+                            &mut self.watch,
                             var_node,
                             watch::Path::Binding,
-                            NodeId::HeapObject(object_index),
+                            object_index,
                         );
                     }
                 }
