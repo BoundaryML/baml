@@ -145,24 +145,6 @@ pub enum Instruction {
     /// `COPY 1` copies the second element from the top.
     Copy(usize),
 
-    /// End a nested block and put the result value on top of the stack.
-    ///
-    /// Format: `POP_REPLACE n` where `n` is the number of locals in the block's
-    /// scope.
-    ///
-    /// This is instruction is necessary to support "blocks as expressions".
-    /// Example:
-    ///
-    /// ```ignore
-    /// fn main() {
-    ///     let a = {
-    ///         let b = 1;
-    ///         b
-    ///     };
-    /// }
-    /// ```
-    PopReplace(usize),
-
     /// Jump to another instruction.
     ///
     /// Format: `JUMP o` where `o` is the offset from the current instruction
@@ -528,7 +510,6 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
             Instruction::Copy(i) => write!(f, "COPY {i}"),
-            Instruction::PopReplace(n) => write!(f, "POP_REPLACE {n}"),
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::PopJumpIfFalse(o) => write!(f, "POP_JUMP_IF_FALSE {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
