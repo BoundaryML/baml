@@ -46,17 +46,17 @@ pub const MAX_FRAMES: usize = 256;
 /// functions) but instead use references to index into [`BexVm::heap`]. Should
 /// be [`Copy`].
 #[derive(Clone, Copy, Debug)]
-pub struct Frame {
+pub(crate) struct Frame {
     /// Pointer to the running function object.
-    pub function: HeapPtr,
+    pub(crate) function: HeapPtr,
 
     /// Instruction pointer (IP) or program counter (PC).
     ///
     /// Points to the next instruction that the VM will execute.
-    pub instruction_ptr: usize,
+    pub(crate) instruction_ptr: usize,
 
     /// Local variables offset in the eval stack.
-    pub locals_offset: StackIndex,
+    pub(crate) locals_offset: StackIndex,
 }
 
 /// The beast.
@@ -172,7 +172,7 @@ pub struct BexVm {
     /// On each function call we create a new [`Frame`] and push it on this
     /// stack. On each return, we destroy the frame and pop it from the stack
     /// to resume the execution of the previous frame.
-    pub frames: Vec<Frame>,
+    pub(crate) frames: Vec<Frame>,
 
     /// Evaluation stack.
     ///
@@ -190,18 +190,13 @@ pub struct BexVm {
     /// This stores the functions and globally declared variables.
     pub globals: GlobalPool,
 
-    /// Offset of the first runtime allocated object.
-    ///
-    /// Used by GC to know which objects are compile-time vs runtime.
-    pub runtime_allocs_offset: ObjectIndex,
-
     /// Emit dependency graph.
     pub watch: Watch,
 
     /// Tracks which local variables are watched (have @watch).
-    pub watched_vars: HashMap<StackIndex, (String, String)>,
+    pub(crate) watched_vars: HashMap<StackIndex, (String, String)>,
 
-    pub interrupt_frame: Option<usize>,
+    pub(crate) interrupt_frame: Option<usize>,
 }
 
 /// VM execution state.
@@ -370,7 +365,6 @@ impl BexVm {
     /// The heap is shared across all VMs. Each VM gets its own TLAB
     /// for contention-free allocation.
     pub fn new(heap: Arc<BexHeap>, globals: GlobalPool) -> Self {
-        let runtime_allocs_offset = ObjectIndex::from_raw(heap.compile_time_boundary());
         let tlab = Tlab::new(Arc::clone(&heap));
 
         Self {
@@ -379,7 +373,6 @@ impl BexVm {
             heap,
             tlab,
             globals,
-            runtime_allocs_offset,
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
@@ -756,7 +749,7 @@ impl BexVm {
             .frames
             .iter()
             .map(|frame| {
-                let function = self.get_object(frame.function).as_function()?.clone();
+                let function = self.get_object(frame.function).as_function()?;
 
                 // VM increments instruction pointer as soon as it reads the
                 // instruction. So in reality the error ocurred on the previous
