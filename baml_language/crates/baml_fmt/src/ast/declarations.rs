@@ -1597,6 +1597,7 @@ pub enum TypeBuilderItem {
     DynamicEnum(t::Dynamic, EnumDecl),
     Class(ClassDecl),
     Enum(EnumDecl),
+    TypeAlias(TypeAliasDecl),
 }
 
 impl FromCST for TypeBuilderItem {
@@ -1633,6 +1634,10 @@ impl FromCST for TypeBuilderItem {
                 let enum_def = EnumDecl::from_cst(elem)?;
                 Ok(TypeBuilderItem::Enum(enum_def))
             }
+            SyntaxKind::TYPE_ALIAS_DEF => {
+                let alias = TypeAliasDecl::from_cst(elem)?;
+                Ok(TypeBuilderItem::TypeAlias(alias))
+            }
             _ => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc: "DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF".into(),
                 found: elem.kind(),
@@ -1657,6 +1662,7 @@ impl Printable for TypeBuilderItem {
             }
             TypeBuilderItem::Class(class) => printer.print(class, shape),
             TypeBuilderItem::Enum(enum_def) => printer.print(enum_def, shape),
+            TypeBuilderItem::TypeAlias(alias) => printer.print(alias, shape),
         }
     }
 }
