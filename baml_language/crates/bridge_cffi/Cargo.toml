@@ -23,6 +23,10 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
+[features]
+default = [ "bundle-http" ]
+bundle-http = [ "sys_native/bundle-http" ]
+
 [build-dependencies]
 cbindgen = { workspace = true }
 

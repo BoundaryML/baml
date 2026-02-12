@@ -215,7 +215,10 @@ large_stack_arrays = "allow"
 
 [profile.release]
 lto = "fat"
-codegen-units = 16
+codegen-units = 1
+opt-level = "s"   # smallest; try "s" if perf matters
+strip = "symbols" # still keep your strip -x in packaging
+panic = "abort"
 
 # Some crates don't change as much but benefit more from
 # more expensive optimization passes, so we selectively
