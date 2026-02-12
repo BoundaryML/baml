@@ -116,6 +116,7 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
             None
         }
         BexExternalValue::Adt(BexExternalAdt::PromptAst(_))
+        | BexExternalValue::Adt(BexExternalAdt::Type(_))
         | BexExternalValue::FunctionRef { .. } => {
             // Internal types cannot be serialized across FFI - return null
             None
@@ -165,7 +166,7 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
             Some(FieldType::AnyType(CffiFieldTypeAny {}))
         }
         // Runtime-only variants shouldn't appear in user-defined types
-        Ty::Resource | Ty::PromptAst => {
+        Ty::Resource | Ty::PromptAst | Ty::Type => {
             unreachable!("runtime-only variant should not reach FFI type encoding")
         }
         // Compiler-only variants should never reach FFI

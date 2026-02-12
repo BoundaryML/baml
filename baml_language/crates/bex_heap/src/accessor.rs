@@ -515,6 +515,39 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    pub fn as_baml_type_owned(
+        self,
+        heap: &GcProtectedHeap<'_>,
+    ) -> Result<baml_type::Ty, AccessError> {
+        fn from_ptr(ptr: &HeapPtr) -> Result<baml_type::Ty, AccessError> {
+            let obj = unsafe { ptr.get() };
+            let Object::Type(ty) = obj else {
+                return Err(AccessError::TypeMismatch {
+                    expected: "type",
+                    actual: obj.to_string(),
+                });
+            };
+            Ok(ty.clone())
+        }
+
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::Type(ty))) => {
+                Ok(ty.clone())
+            }
+            BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
+                let ptr = heap
+                    .resolve_handle(handle.slab_key())
+                    .ok_or(AccessError::InvalidHandle { expected: "type" })?;
+                from_ptr(&ptr)
+            }
+            BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => from_ptr(ptr),
+            other => Err(AccessError::TypeMismatch {
+                expected: "type",
+                actual: other.type_name(),
+            }),
+        }
+    }
+
     /// Attempts to own as much as possible.
     /// If it can't be owned, it fails.
     pub fn as_owned_but_very_slow(
@@ -679,6 +712,7 @@ impl<'a> BexValue<'a> {
                     Object::PromptAst(prompt_ast) => Ok(BexExternalValue::Adt(
                         BexExternalAdt::PromptAst(prompt_ast.clone()),
                     )),
+                    Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
                     #[cfg(feature = "heap_debug")]
                     Object::Sentinel(sentinel_kind) => Err(AccessError::CannotConvertToOwned {
                         reason: format!("sentinel: {:?}", sentinel_kind),

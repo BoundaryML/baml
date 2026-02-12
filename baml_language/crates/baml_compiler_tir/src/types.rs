@@ -131,6 +131,10 @@ pub enum Ty {
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     /// Contains the inner type being watched for method resolution.
     WatchAccessor(Box<Ty>),
+
+    /// Meta-type — the type of type values at the TIR level.
+    /// Matches `TypePattern::Type` in builtin signatures.
+    Type,
 }
 
 impl Ty {
@@ -271,6 +275,7 @@ impl fmt::Display for Ty {
             Ty::Resource => write!(f, "resource"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
+            Ty::Type => write!(f, "type"),
         }
     }
 }

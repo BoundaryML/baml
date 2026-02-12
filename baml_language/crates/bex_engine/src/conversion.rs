@@ -192,6 +192,7 @@ impl BexEngine {
             Object::PromptAst(ast) => Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(
                 ast.clone(),
             ))),
+            Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -271,6 +272,7 @@ impl BexEngine {
             }
             BexExternalValue::Adt(BexExternalAdt::Media(media)) => vm.alloc_media(media),
             BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => vm.alloc_prompt_ast(ast),
+            BexExternalValue::Adt(BexExternalAdt::Type(ty)) => vm.alloc_type(ty),
             BexExternalValue::FunctionRef { global_index } => {
                 let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
                 assert!(
@@ -387,6 +389,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         }
         (BexExternalValue::Adt(BexExternalAdt::Media(_)), Ty::Media(_)) => true,
         (BexExternalValue::Adt(BexExternalAdt::PromptAst(_)), Ty::PromptAst) => true,
+        (BexExternalValue::Adt(BexExternalAdt::Type(_)), Ty::Type) => true,
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         // Handle nested unions/optionals in the type
         (value, Ty::Union(members)) => members.iter().any(|m| value_matches_type(value, m)),

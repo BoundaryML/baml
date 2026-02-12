@@ -52,6 +52,9 @@ pub enum TypePattern {
     /// Maps to `Ty::BuiltinUnknown` in TIR.
     /// In builtin definitions, use the `Unknown` type annotation.
     BuiltinUnknown,
+    /// Meta-type — the type of type values.
+    /// A value of type `Type` wraps a `baml_type::Ty` at runtime.
+    Type,
 }
 
 /// How a builtin type is represented at runtime on the VM heap.

@@ -354,6 +354,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Media(_) => type_tags::MEDIA,
                 Object::Resource(_) => type_tags::RESOURCE,
                 Object::PromptAst(_) => type_tags::PROMPT_AST,
+                Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -729,6 +730,11 @@ impl BexVm {
     /// Allocate a prompt AST object on the heap.
     pub fn alloc_prompt_ast(&mut self, ast: bex_vm_types::PromptAst) -> Value {
         Value::Object(self.tlab.alloc(Object::PromptAst(ast)))
+    }
+
+    /// Allocate a type descriptor object on the heap.
+    pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
+        Value::Object(self.tlab.alloc(Object::Type(ty)))
     }
 
     /// Get prompt AST from a Value.

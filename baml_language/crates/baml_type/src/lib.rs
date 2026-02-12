@@ -127,6 +127,10 @@ pub enum Ty {
     ///
     /// This is a compiler-only variant that should never reach runtime.
     BuiltinUnknown,
+
+    /// Meta-type — a runtime value that wraps a `Ty`.
+    /// Used by `baml.llm.parse()` to accept a type descriptor.
+    Type,
 }
 
 // NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
@@ -261,7 +265,8 @@ impl Ty {
             | Ty::Class(_)
             | Ty::Enum(_)
             | Ty::Resource
-            | Ty::PromptAst => Ok(()),
+            | Ty::PromptAst
+            | Ty::Type => Ok(()),
         }
     }
 }
@@ -304,6 +309,7 @@ impl fmt::Display for Ty {
             Ty::Void => write!(f, "void"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
+            Ty::Type => write!(f, "type"),
         }
     }
 }

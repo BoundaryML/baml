@@ -56,5 +56,8 @@ pub const PROMPT_AST: i64 = 12;
 /// Base value for class type tags (classes start at 100).
 pub const CLASS_BASE: i64 = 100;
 
+/// Type meta-type tag.
+pub const TYPE: i64 = 13;
+
 /// Unknown/invalid type tag.
 pub const UNKNOWN: i64 = -1;
