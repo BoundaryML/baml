@@ -52,13 +52,8 @@ pub struct Frame {
 
     /// Instruction pointer (IP) or program counter (PC).
     ///
-    /// Points to the next instruction that the VM will execute. It is of type
-    /// [`isize`] because some jumps can create negative offsets (for loops)
-    /// and it's easier to operate on an [`isize`] and cast it to [`usize`]
-    /// only once (when we index into [`bex_vm_types::Bytecode::instructions`]). However,
-    /// this number should never be negative, otherwise indexing into the
-    /// instruction vec will throw [`InternalError::NegativeInstructionPtr`].
-    pub instruction_ptr: isize,
+    /// Points to the next instruction that the VM will execute.
+    pub instruction_ptr: usize,
 
     /// Local variables offset in the eval stack.
     pub locals_offset: StackIndex,
@@ -769,11 +764,10 @@ impl BexVm {
                 // a bug somewhere.
                 let last_executed_instruction = frame.instruction_ptr.saturating_sub(1);
 
-                #[allow(clippy::cast_sign_loss)] // instruction_ptr is always non-negative
                 Ok(ErrorLocation {
                     function_name: function.name.clone(),
                     function_span: function.span,
-                    error_line: function.bytecode.source_lines[last_executed_instruction as usize],
+                    error_line: function.bytecode.source_lines[last_executed_instruction],
                 })
             })
             .collect::<Result<Vec<_>, VmError>>()
@@ -993,38 +987,30 @@ impl BexVm {
             // jump offsets later.
             self.frames[frame_idx].instruction_ptr += 1;
 
-            // NOTE: `core::intrinsics::unlikely` is only available on nightly.
-            // This branch is a big annoyance for small functions (like pushing the frame)
-            // and gets smaller the bigger the function due to branch (mis)prediction.
-            if instruction_ptr < 0 {
-                return Err(InternalError::NegativeInstructionPtr(instruction_ptr).into());
+            #[cfg(debug_assertions)]
+            #[allow(clippy::print_stderr)] // intentional debug output
+            if std::env::var("BEX_VM_DEBUG").is_ok() {
+                let stack = self
+                    .stack
+                    .iter()
+                    .map(crate::debug::display_value)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let (instruction, metadata) = crate::debug::display_instruction(
+                    instruction_ptr,
+                    function,
+                    &self.stack,
+                    &self.globals,
+                    None,
+                    None,
+                );
+
+                eprintln!("[{stack}]");
+                eprintln!("{instruction} {metadata}");
             }
 
-            // Runtime debugging information.
-            // #[cfg(debug_assertions)]
-            // {
-            //     let stack = self
-            //         .stack
-            //         .iter()
-            //         .map(|v| crate::debug::display_value(v, &self.objects))
-            //         .collect::<Vec<_>>()
-            //         .join(", ");
-
-            //     eprintln!("[{stack}]");
-
-            //     let (instruction, metadata) = crate::debug::display_instruction(
-            //         instruction_ptr,
-            //         function,
-            //         &self.stack,
-            //         &self.objects,
-            //         &self.globals,
-            //     );
-
-            //     eprintln!("{instruction} {metadata}");
-            // }
-
-            #[allow(clippy::cast_sign_loss)] // instruction_ptr is validated non-negative above
-            match function.bytecode.instructions[instruction_ptr as usize] {
+            match function.bytecode.instructions[instruction_ptr] {
                 Instruction::NotifyBlock(block_index) => {
                     // Get the notification from the function's storage
                     let notification = &function.block_notifications[block_index];
@@ -1044,7 +1030,7 @@ impl BexVm {
                 }
 
                 Instruction::VizEnter(index) | Instruction::VizExit(index) => {
-                    let instruction = &function.bytecode.instructions[instruction_ptr as usize];
+                    let instruction = &function.bytecode.instructions[instruction_ptr];
                     let delta = match instruction {
                         Instruction::VizEnter(_) => bytecode::VizExecDelta::Enter,
                         Instruction::VizExit(_) => bytecode::VizExecDelta::Exit,
@@ -1228,10 +1214,14 @@ impl BexVm {
                 }
 
                 Instruction::Jump(offset) => {
-                    // Reassign the frame's IP to the new instruction.
-                    // Remember that offset can be negative here, so even though
-                    // we're adding it can still jump backwards.
-                    self.frames[frame_idx].instruction_ptr = instruction_ptr + offset;
+                    // Offset can be negative (backward jumps for loops).
+                    // NOTE: checked_add_signed has a branch on overflow. If this
+                    // becomes a bottleneck on hot loops, it can be replaced with
+                    // wrapping_add_signed — the array bounds check on the next
+                    // iteration will catch invalid pointers anyway.
+                    self.frames[frame_idx].instruction_ptr = instruction_ptr
+                        .checked_add_signed(offset)
+                        .ok_or(InternalError::InvalidJump)?;
                 }
 
                 Instruction::PopJumpIfFalse(offset) => {
@@ -1242,7 +1232,9 @@ impl BexVm {
                         // Reassign only if the condition is false.
                         Value::Bool(value) => {
                             if !value {
-                                self.frames[frame_idx].instruction_ptr = instruction_ptr + offset;
+                                self.frames[frame_idx].instruction_ptr = instruction_ptr
+                                    .checked_add_signed(offset)
+                                    .ok_or(InternalError::InvalidJump)?;
                             }
                         }
 
@@ -1922,9 +1914,8 @@ impl BexVm {
                         },
                     );
 
-                    #[allow(clippy::cast_sign_loss)] // instruction_ptr is validated non-negative
-                    let watched_var_name = &function.locals_in_scope
-                        [function.bytecode.scopes[instruction_ptr as usize]][index];
+                    let watched_var_name =
+                        &function.locals_in_scope[function.bytecode.scopes[instruction_ptr]][index];
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
                         local_var_index,
@@ -2199,7 +2190,9 @@ impl BexVm {
                     let offset = table.lookup(value).unwrap_or(default);
 
                     // Jump
-                    self.frames[frame_idx].instruction_ptr = instruction_ptr + offset;
+                    self.frames[frame_idx].instruction_ptr = instruction_ptr
+                        .checked_add_signed(offset)
+                        .ok_or(InternalError::InvalidJump)?;
                 }
 
                 Instruction::Discriminant => {
