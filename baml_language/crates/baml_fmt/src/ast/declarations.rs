@@ -570,10 +570,11 @@ impl Printable for ClientName {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::PROMPT_FIELD`] node.
 #[derive(Debug)]
 pub struct PromptField {
     pub prompt: t::Word,
-    pub raw_string: t::RawString,
+    pub string: PromptValue,
 }
 
 impl FromCST for PromptField {
@@ -586,11 +587,24 @@ impl FromCST for PromptField {
         // It's a word, but we should never be in a `PROMPT_FIELD` context if it's not a prompt
         let prompt = it.expect_parse()?;
 
-        let raw_string: t::RawString = it.expect_parse()?;
+        let string = it.expect_next("a prompt string")?;
+        let string = match string.kind() {
+            SyntaxKind::RAW_STRING_LITERAL => {
+                PromptValue::RawString(t::RawString::from_cst(string)?)
+            }
+            SyntaxKind::STRING_LITERAL => PromptValue::String(t::QuotedString::from_cst(string)?),
+            _ => {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "STRING_LITERAL or RAW_STRING_LITERAL".into(),
+                    found: string.kind(),
+                    at: string.text_range(),
+                });
+            }
+        };
 
         it.expect_end()?;
 
-        Ok(PromptField { prompt, raw_string })
+        Ok(PromptField { prompt, string })
     }
 }
 
@@ -604,7 +618,22 @@ impl Printable for PromptField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.prompt);
         printer.print_str(" ");
-        printer.print(&self.raw_string, shape)
+        printer.print(&self.string, shape)
+    }
+}
+
+#[derive(Debug)]
+pub enum PromptValue {
+    RawString(t::RawString),
+    String(t::QuotedString),
+}
+
+impl Printable for PromptValue {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            PromptValue::RawString(raw_string) => printer.print(raw_string, shape),
+            PromptValue::String(string) => printer.print(string, shape),
+        }
     }
 }
 
