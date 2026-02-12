@@ -1,0 +1,21 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+class FieldAttributes {
+    money int @description("In USD")
+    currency string @alias("currency_code")
+    name string @skip
+    summary string @stream.done
+    details string? @stream.not_null
+    state string @stream.with_state
+    multiple string?
+        @description("Multiple attributes")
+        @alias("multiple_alias")
+        @stream.done
+        @stream.not_null
+}
+class ClassAttributes {
+    name string
+    @@dynamic
+}

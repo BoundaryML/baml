@@ -1,0 +1,17 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+class IndexUser {
+    name string
+    age int
+    tags string[]
+}
+function IndexAccess(users: IndexUser[]) -> string {
+    let first = users[0];
+    let idx = 1;
+    let second = users[idx];
+    let firstName = users[0].name;
+    let tag = users[0].tags[0];
+    return firstName;
+}

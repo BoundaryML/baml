@@ -1,0 +1,63 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+function simple_break() -> int {
+    while (true) {
+        break;
+    }
+    ;
+    return 42;
+}
+function simple_continue() -> int {
+    while (true) {
+        continue;
+    }
+    ;
+    return 0;
+}
+function break_in_for() -> int {
+    for (let i = 0; i < 10; i = i + 1) {
+        break;
+    }
+    ;
+    return 1;
+}
+function continue_in_for() -> int {
+    for (let i = 0; i < 10; i = i + 1) {
+        continue;
+    }
+    ;
+    return 2;
+}
+function nested_break() -> int {
+    while (true) {
+        while (true) {
+            break;
+        }
+        break;
+    }
+    return 3;
+}
+function break_with_locals() -> int {
+    while (true) {
+        let x = 1;
+        if (true) {
+            let y = 2;
+            break;
+        };
+    }
+    ;
+    return 4;
+}
+function continue_with_locals() -> int {
+    while (true) {
+        let x = 1;
+        if (true) {
+            let y = 2;
+            continue;
+        };
+    }
+    ;
+    return 5;
+}

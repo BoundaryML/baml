@@ -1,0 +1,16 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+type IntToInt = (x: int) -> int
+type BinaryOp = (a: int, b: int) -> int
+type UnnamedParams = (int, int) -> int
+type MixedParams = (x: int, int, z: string) -> bool
+type Producer = () -> string
+type Curried = (x: int) -> (y: int) -> int
+type Complex = (items: int[], lookup: map<string, int>) -> string?
+function GetTransform() -> (x: int) -> int {
+    1
+}
+type UnionParam = (value: int | string) -> bool
+type FunctionFactory = (config: string) -> (int) -> int

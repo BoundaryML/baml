@@ -1,0 +1,15 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+client<llm> TestClient {
+    provider baml-openai-chat,
+}
+function FunctionWithComments(a: string, b: int) -> string {
+    client TestClient
+    prompt #"test"#
+}
+function CommentAfterArrow() -> string {
+    client TestClient
+    prompt #"test"#
+}

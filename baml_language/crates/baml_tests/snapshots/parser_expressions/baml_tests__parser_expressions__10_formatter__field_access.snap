@@ -1,0 +1,23 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+function FieldAccess(user: User) -> string {
+    let name = user.name;
+    let bio = user.profile.bio;
+    let theme = user.profile.settings.theme;
+    let firstTag = user.tags[0];
+    return theme;
+}
+class User {
+    name string
+    profile Profile
+    tags string[]
+}
+class Profile {
+    bio string
+    settings Settings
+}
+class Settings {
+    theme string
+}

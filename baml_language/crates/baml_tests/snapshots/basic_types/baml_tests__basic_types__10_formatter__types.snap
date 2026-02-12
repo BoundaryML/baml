@@ -1,0 +1,22 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+class User {
+    id int
+    name string
+    email string
+}
+enum Status {
+    Active,
+    Inactive,
+}
+type Role = "user" | "assistant" | "system"
+type OptionalRole = "admin"?
+type RoleList = "reader"[]
+type OptionalRoleList = "writer"[]?
+type OptionalCode = 200?
+type OptionalFlag = true?
+type MixedList = (int | string)[]
+type MixedMap = map<string, int | string>
+type UnionOfArrays = int[] | string[]

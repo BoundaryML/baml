@@ -1,0 +1,13 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+function Foo() -> blah {
+    1
+}
+function Bar(x: unknown_param_type) -> int {
+    1
+}
+function Baz() -> unknown_optional? {
+    null
+}

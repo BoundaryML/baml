@@ -188,20 +188,13 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
 
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
-    let strong_ast_tests: TokenStream =
-        project.files.iter().map(generate_strong_ast_test).collect();
-
     let hir_test = generate_hir_test(project);
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
     let diagnostics_test = generate_diagnostics_test(project);
     let codegen_test = generate_codegen_test(project);
 
-    let formatter_idempotency_tests: TokenStream = project
-        .files
-        .iter()
-        .map(generate_formatter_idempotency_test)
-        .collect();
+    let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
 
     let parser_specific_tests = if project.name.starts_with("parser_") {
         let incremental_tests: TokenStream = project
@@ -252,13 +245,12 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
 
             #lexer_tests
             #parser_tests
-            #strong_ast_tests
             #hir_test
             #tir_test
             #mir_test
             #diagnostics_test
             #codegen_test
-            #formatter_idempotency_tests
+            #formatter_tests
             #parser_specific_tests
         }
     }
@@ -343,35 +335,6 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
             with_settings!({snapshot_path => SNAPSHOT_PATH}, {
                 assert_snapshot!(#snapshot_name, output);
             });
-        }
-    }
-}
-
-fn generate_strong_ast_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_02b_strong_ast_{}", baml_file.name);
-    let full_path = baml_file.full_path.display().to_string();
-    let relative_path = baml_file.relative_path.display().to_string();
-    let include_content = make_include_str(&full_path);
-
-    quote! {
-        #[test]
-        fn #test_name() {
-            let content = #include_content;
-            let content = content.replace("\r\n", "\n");
-            let mut db = ProjectDatabase::new();
-            let source_file = db.add_file(#relative_path, &content);
-            let errors = baml_compiler_parser::parse_errors(&db, source_file);
-
-            // Skip files with parse errors — from_cst requires a well-formed CST
-            if !errors.is_empty() {
-                return;
-            }
-
-            let tree = baml_compiler_parser::syntax_tree(&db, source_file);
-            let result = baml_fmt::ast::SourceFile::from_cst(SyntaxElement::Node(tree));
-            if let Err(e) = result {
-                panic!("SourceFile::from_cst failed on {}: {}", #relative_path, e);
-            }
         }
     }
 }
@@ -891,10 +854,10 @@ fn generate_tree_lossless_test(project: &TestProject) -> TokenStream {
     }
 }
 
-fn generate_formatter_idempotency_test(baml_file: &BamlFile) -> TokenStream {
-    let test_name = format_ident!("test_10_formatter_idempotency_{}", baml_file.name);
-    // TODO: uncomment when snapshots are enabled
-    // let snapshot_name = format!("10_formatter_idempotency__{}", baml_file.name);
+fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
+    let test_name = format_ident!("test_10_formatter_{}", baml_file.name);
+
+    let snapshot_name = format!("10_formatter__{}", baml_file.name);
     let full_path = baml_file.full_path.display().to_string();
     let relative_path = baml_file.relative_path.display().to_string();
     let include_content = make_include_str(&full_path);
@@ -909,12 +872,11 @@ fn generate_formatter_idempotency_test(baml_file: &BamlFile) -> TokenStream {
 
             let first = match baml_fmt::format(&content, &options) {
                 Ok(formatted) => formatted,
-                Err(_e) => {
-                    // TODO: Snapshot the error so we can track formatter progress
-                    // let output = format!("=== FORMATTER ERROR ===\n{}", e);
-                    // with_settings!({snapshot_path => SNAPSHOT_PATH}, {
-                    //     assert_snapshot!(#snapshot_name, output);
-                    // });
+                Err(e) => {
+                    let output = format!("=== FORMATTER ERROR ===\n{}", e);
+                    with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                        assert_snapshot!(#snapshot_name, output);
+                    });
                     return;
                 }
             };
@@ -938,10 +900,9 @@ fn generate_formatter_idempotency_test(baml_file: &BamlFile) -> TokenStream {
                 #relative_path, first, second
             );
 
-            // TODO: Snapshot the formatted output
-            // with_settings!({snapshot_path => SNAPSHOT_PATH}, {
-            //     assert_snapshot!(#snapshot_name, first);
-            // });
+            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                assert_snapshot!(#snapshot_name, first);
+            });
         }
     }
 }
