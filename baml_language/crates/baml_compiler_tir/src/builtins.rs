@@ -124,6 +124,10 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         // BuiltinUnknown accepts any type (for builtins that need heterogeneous values)
         (TypePattern::BuiltinUnknown, _) => true,
 
+        // Meta-type matching
+        (TypePattern::Type, Ty::Type) => true,
+        (TypePattern::Type, Ty::Error) => true,
+
         // No match
         _ => false,
     }
@@ -181,6 +185,7 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
         },
         TypePattern::Resource => Ty::Resource,
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
+        TypePattern::Type => Ty::Type,
     }
 }
 
@@ -213,6 +218,7 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
         },
         TypePattern::Resource => Ty::Resource,
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
+        TypePattern::Type => Ty::Type,
     }
 }
 

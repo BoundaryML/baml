@@ -68,6 +68,8 @@ enum StructuralTy {
     /// Internal-only type for builtins - any type is assignable to it.
     BuiltinUnknown,
     WatchAccessor(Box<StructuralTy>),
+    /// Meta-type — the type of type values.
+    Type,
 }
 
 impl StructuralTy {
@@ -291,6 +293,7 @@ fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
             StructuralTy::Resource => false,
             StructuralTy::BuiltinUnknown => false,
             StructuralTy::WatchAccessor(_) => false,
+            StructuralTy::Type => false,
         }
     }
     let recursive = find_recursive_aliases(aliases);
@@ -426,6 +429,7 @@ fn normalize_impl(
                 .collect(),
             ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
         },
+        Ty::Type => StructuralTy::Type,
     }
 }
 

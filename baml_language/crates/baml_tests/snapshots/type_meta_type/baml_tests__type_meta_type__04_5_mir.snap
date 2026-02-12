@@ -1,0 +1,100 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn TestTypeValue(response: string) -> unknown {
+    // Locals:
+    let _0: unknown // return
+    let _1: string // response // param
+    let _2: () -> baml.llm.PrimitiveClient // resolve_fn
+    let _3: (string) -> () -> baml.llm.PrimitiveClient
+    let _4: "ExtractName"
+    let _5: null
+    let _6: baml.llm.PrimitiveClient // pc
+    let _7: () -> baml.llm.PrimitiveClient
+    let _8: type // rt
+    let _9: (string) -> type
+    let _10: "ExtractName"
+    let _11: null
+    let _12: void
+    let _13: baml.llm.PrimitiveClient
+    let _14: string
+    let _15: type
+    let _16: (baml.llm.PrimitiveClient, string, type) -> null
+    let _17: null
+
+    bb0: {
+        _3 = const fn baml.llm.get_client_function;
+        _4 = const "ExtractName";
+        _5 = dispatch_future copy _3(copy _4) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _2 = await _5 -> [bb3];
+    }
+
+    bb3: {
+        _7 = copy _2;
+        _6 = call copy _7() -> [bb4];
+    }
+
+    bb4: {
+        _9 = const fn baml.llm.get_return_type;
+        _10 = const "ExtractName";
+        _11 = dispatch_future copy _9(copy _10) -> bb5;
+    }
+
+    bb5: {
+        _8 = await _11 -> [bb6];
+    }
+
+    bb6: {
+        _13 = copy _6;
+        _14 = copy _1;
+        _15 = copy _8;
+        _16 = const fn baml.llm.PrimitiveClient.parse;
+        _17 = dispatch_future copy _16(copy _13, copy _14, copy _15) -> bb7;
+    }
+
+    bb7: {
+        _0 = await _17 -> [bb8];
+    }
+
+    bb8: {
+        goto -> bb9;
+    }
+
+    bb9: {
+        return;
+    }
+
+}
+
+fn ExtractName() -> string {
+    // Locals:
+    let _0: string // return
+    let _1: null
+    let _2: "ExtractName"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.call_llm_function;
+        _2 = const "ExtractName";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+}

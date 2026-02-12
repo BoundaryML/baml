@@ -150,6 +150,7 @@ pub fn convert_tir_ty(
         baml_compiler_tir::Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(
             convert_tir_ty(inner, aliases, recursive_aliases)?,
         ))),
+        baml_compiler_tir::Ty::Type => Ok(Ty::Type),
     }
 }
 

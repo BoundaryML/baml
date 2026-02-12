@@ -99,6 +99,7 @@ pub(crate) fn type_to_pattern(
                 "bool" => quote!(TypePattern::Bool),
                 "Media" => quote!(TypePattern::Media),
                 "ResourceHandle" => quote!(TypePattern::Resource),
+                "Type" => quote!(TypePattern::Type),
                 "Unknown" => quote!(TypePattern::BuiltinUnknown),
                 "Option" => {
                     if let PathArguments::AngleBracketed(args) = &segment.arguments {

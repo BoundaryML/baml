@@ -1,0 +1,15 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function TestTypeValue(response: string) -> unknown {
+      let resolve_fn = baml.llm.get_client_function("ExtractName");
+      let pc = resolve_fn();
+      let rt = baml.llm.get_return_type("ExtractName");
+      return pc.parse(response, rt);
+}
+
+function ExtractName() -> string {
+    baml.llm.call_llm_function("ExtractName", {  })
+}

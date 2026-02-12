@@ -477,6 +477,9 @@ pub enum Object {
     /// External resource (file handle, socket, etc.).
     Resource(ResourceHandle),
 
+    /// A type descriptor value — wraps a `baml_type::Ty`.
+    Type(baml_type::Ty),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -498,6 +501,7 @@ impl std::fmt::Display for Object {
             Object::Media(media) => media.fmt(f),
             Object::Resource(r) => write!(f, "<{r}>"),
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
+            Object::Type(ty) => write!(f, "<type: {ty}>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.operation)
@@ -595,6 +599,7 @@ pub enum ObjectType {
     Future(FutureType),
     Resource,
     PromptAst,
+    Type,
 }
 
 impl ObjectType {
@@ -611,6 +616,7 @@ impl ObjectType {
             Object::Media(media) => Self::Media(media.kind),
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
+            Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -647,6 +653,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
+            ObjectType::Type => write!(f, "type"),
         }
     }
 }

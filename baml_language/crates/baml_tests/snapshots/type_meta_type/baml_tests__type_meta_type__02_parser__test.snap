@@ -1,0 +1,120 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ExtractName"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD
+        KW_CLIENT "client"
+        STRING_LITERAL "openai/gpt-4o"
+          QUOTE """
+          WORD "openai"
+          SLASH "/"
+          WORD "gpt-4o"
+          QUOTE """
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Extract the name"
+            WORD "Extract"
+            WORD "the"
+            WORD "name"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TestTypeValue"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "response"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "unknown"
+      WORD "unknown"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "resolve_fn"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.llm.get_client_function"
+              WORD "baml"
+              DOT "."
+              WORD "llm"
+              DOT "."
+              WORD "get_client_function"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "ExtractName"
+                QUOTE """
+                WORD "ExtractName"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "pc"
+          EQUALS "="
+          CALL_EXPR
+            WORD "resolve_fn"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "rt"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.llm.get_return_type"
+              WORD "baml"
+              DOT "."
+              WORD "llm"
+              DOT "."
+              WORD "get_return_type"
+            CALL_ARGS
+              L_PAREN "("
+              STRING_LITERAL "ExtractName"
+                QUOTE """
+                WORD "ExtractName"
+                QUOTE """
+              R_PAREN ")"
+          SEMICOLON ";"
+        RETURN_STMT
+          KW_RETURN "return"
+          CALL_EXPR
+            PATH_EXPR "pc.parse"
+              WORD "pc"
+              DOT "."
+              WORD "parse"
+            CALL_ARGS "(response, rt)"
+              L_PAREN "("
+              WORD "response"
+              COMMA ","
+              WORD "rt"
+              R_PAREN ")"
+          SEMICOLON ";"
+        R_BRACE "}"
+
+=== ERRORS ===
+None
