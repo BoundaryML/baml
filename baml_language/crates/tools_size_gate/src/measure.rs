@@ -102,7 +102,7 @@ fn locate_artifact(workspace_root: &Path, config: &ArtifactConfig) -> Result<Pat
     Ok(path)
 }
 
-/// Resolve the [`lib`] name for a package using cargo metadata.
+/// Resolve the lib name for a package using cargo metadata.
 fn resolve_lib_name(workspace_root: &Path, package_name: &str) -> Result<String> {
     let output = Command::new("cargo")
         .args(["metadata", "--no-deps", "--format-version", "1"])
