@@ -55,9 +55,9 @@ export default defineConfig({
           name: 'hmr',
           globals: true,
           include: ['src/**/*.hmr.test.ts'],
-          globalTimeout: 30_000, // 30 seconds max for entire test suite
-          testTimeout: 120_000, // 2 minutes for WASM rebuilds
-          hookTimeout: 60_000, // 1 minute for setup/teardown
+          globalTimeout: 300_000, // 5 minutes max for entire test suite
+          testTimeout: 300_000, // 5 minutes for WASM rebuilds
+          hookTimeout: 120_000, // 2 minutes for setup/teardown
           // Run sequentially - these tests modify shared state (Rust source files)
           pool: 'forks',
           singleFork: true,
