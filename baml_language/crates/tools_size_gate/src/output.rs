@@ -117,6 +117,73 @@ pub(crate) fn render_markdown(rows: &[ReportRow]) {
     }
 }
 
+/// Render a markdown fragment: table rows only (no header/title) for CI composition.
+///
+/// Output structure (to stdout):
+/// 1. Table rows (one per artifact, no `|---|` header — caller adds that)
+/// 2. If there are failures, a `<!-- VIOLATIONS -->` marker followed by violation details
+/// 3. If there are fix hints, a `<!-- FIX_HINTS -->` marker followed by fix hint details
+pub(crate) fn render_markdown_fragment(rows: &[ReportRow]) {
+    for row in rows {
+        let file_str = format_bytes(row.current.file_bytes);
+        let stripped_str = row
+            .current
+            .stripped_bytes
+            .map(format_bytes)
+            .unwrap_or_else(|| "-".into());
+        let gzip_str = format_bytes(row.current.gzip_bytes);
+
+        let (delta_str, delta_pct_str) = delta_strings(row);
+
+        let status = row_status_md(row);
+
+        println!(
+            "| {} | {} | {} | {} | {} | {} | {} |",
+            row.artifact, file_str, stripped_str, gzip_str, delta_str, delta_pct_str, status
+        );
+    }
+
+    let has_failure = rows.iter().any(ReportRow::has_failure);
+    if has_failure {
+        // Violations
+        let has_violations = rows.iter().any(|r| !r.violations.is_empty());
+        if has_violations {
+            println!("\n<!-- VIOLATIONS -->");
+            for row in rows {
+                for v in &row.violations {
+                    println!(
+                        "- **{}** `{}`: {} exceeds limit of {} (exceeded by {}, policy: `{}`)",
+                        row.artifact, v.metric, v.actual, v.limit, v.exceeded_by, v.policy_name
+                    );
+                }
+            }
+        }
+
+        // Missing baselines
+        let missing: Vec<_> = rows.iter().filter(|r| r.baseline.is_none()).collect();
+        if !missing.is_empty() {
+            println!("\n<!-- MISSING -->");
+            for row in &missing {
+                if row.platform_file_exists {
+                    println!(
+                        "- **{}** — artifact not found in `.ci/size-gate/{}.toml`",
+                        row.artifact, row.platform
+                    );
+                } else {
+                    println!(
+                        "- **{}** — baseline file `.ci/size-gate/{}.toml` does not exist",
+                        row.artifact, row.platform
+                    );
+                }
+            }
+        }
+
+        // Fix hints
+        println!("\n<!-- FIX_HINTS -->");
+        print_fix_hint_md(rows);
+    }
+}
+
 /// Returns true if any row has a failure (violation or missing baseline).
 pub(crate) fn has_any_failure(rows: &[ReportRow]) -> bool {
     rows.iter().any(ReportRow::has_failure)

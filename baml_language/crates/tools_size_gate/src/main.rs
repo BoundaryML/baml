@@ -23,7 +23,10 @@ use clap::{Parser, Subcommand, ValueEnum};
 use compare::check_policy;
 use config::{Config, host_triple};
 use measure::{ArtifactMeasurement, build_artifact, locate_artifact_public, measure_artifact};
-use output::{ReportRow, has_any_failure, has_missing_baseline, render_markdown, render_table};
+use output::{
+    ReportRow, has_any_failure, has_missing_baseline, render_markdown, render_markdown_fragment,
+    render_table,
+};
 
 /// Exit codes.
 const EXIT_OK: i32 = 0;
@@ -76,6 +79,9 @@ enum OutputFormat {
     Table,
     #[value(alias = "md")]
     Markdown,
+    /// Markdown fragment: table rows only (no header), for CI composition.
+    #[value(alias = "md-fragment")]
+    MarkdownFragment,
 }
 
 fn main() {
@@ -305,6 +311,7 @@ fn render_output(args: &Args, rows: &[ReportRow]) {
     match args.format {
         OutputFormat::Table => render_table(rows),
         OutputFormat::Markdown => render_markdown(rows),
+        OutputFormat::MarkdownFragment => render_markdown_fragment(rows),
     }
 }
 
