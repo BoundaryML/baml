@@ -10,9 +10,9 @@ fn main() -> std::io::Result<()> {
         std::env::set_var(
             "PROTOC",
             protoc_bin_vendored::protoc_bin_path()
-                .unwrap()
+                .expect("failed to locate vendored protoc binary")
                 .to_str()
-                .unwrap(),
+                .expect("protoc path contains invalid UTF-8"),
         );
     }
 

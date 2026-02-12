@@ -59,7 +59,7 @@ message HostMapEntry {
 
 message HostClassValue {
   string name = 1;
-  // fields with implict/default values can be omitted
+  // fields with implicit/default values can be omitted
   // this includes null values
   repeated HostMapEntry fields = 2;
 }

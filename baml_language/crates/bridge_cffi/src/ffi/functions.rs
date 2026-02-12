@@ -74,7 +74,7 @@ fn call_function_inner(
     };
 
     // Decode protobuf arguments
-    let args = HostFunctionArguments::from_c_buffer(encoded_args as *const u8, length)?;
+    let args = unsafe { HostFunctionArguments::from_c_buffer(encoded_args as *const u8, length) }?;
 
     // Convert kwargs to BexValue
     let kwargs = kwargs_to_bex_values(args.kwargs)?;

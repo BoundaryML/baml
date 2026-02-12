@@ -5,6 +5,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 bex_factory = { workspace = true }
 indexmap = { workspace = true }

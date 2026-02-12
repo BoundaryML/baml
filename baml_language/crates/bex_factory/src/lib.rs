@@ -68,7 +68,7 @@ impl Bex for BexEngine {
         function_name: &str,
         BexArgs(mut args): BexArgs,
     ) -> Result<BexExternalValue, RuntimeError> {
-        // gurantee function ordering.
+        // guarantee function ordering.
         let params = self
             .function_params(function_name)
             .map_err(RuntimeError::from)?;

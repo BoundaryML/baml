@@ -1,3 +1,5 @@
+# This crate only supports wasm32-unknown-unknown. Build with:
+#   cargo build -p bridge_wasm --target wasm32-unknown-unknown
 [package]
 name = "bridge_wasm"
 version = "0.1.0"
