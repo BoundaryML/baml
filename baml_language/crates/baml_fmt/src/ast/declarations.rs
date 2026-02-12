@@ -1139,7 +1139,7 @@ impl Printable for ClientDecl {
 #[derive(Debug)]
 pub struct ConfigBlock {
     pub open_brace: t::LBrace,
-    pub items: Vec<(ConfigItem, Option<t::Comma>)>,
+    pub items: Vec<(ConfigBlockMember, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
 }
 
@@ -1154,12 +1154,22 @@ impl FromCST for ConfigBlock {
 
         let mut items = Vec::new();
         let close_brace = loop {
-            let elem = it.expect_next("CONFIG_ITEM or R_BRACE")?;
-            if elem.kind() == SyntaxKind::R_BRACE {
-                break t::RBrace::from_cst(elem)?;
-            }
+            let elem = it.expect_next("CONFIG_ITEM, TYPE_BUILDER_BLOCK, or R_BRACE")?;
 
-            let item = ConfigItem::from_cst(elem)?;
+            let item = match elem.kind() {
+                SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
+                SyntaxKind::CONFIG_ITEM => ConfigBlockMember::Item(ConfigItem::from_cst(elem)?),
+                SyntaxKind::TYPE_BUILDER_BLOCK => {
+                    ConfigBlockMember::TypeBuilder(TypeBuilderBlock::from_cst(elem)?)
+                }
+                _ => {
+                    return Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "CONFIG_ITEM, TYPE_BUILDER_BLOCK, or R_BRACE".into(),
+                        found: elem.kind(),
+                        at: elem.text_range(),
+                    });
+                }
+            };
             let comma = it
                 .next_if_kind(SyntaxKind::COMMA)
                 .map(t::Comma::from_cst)
@@ -1202,7 +1212,10 @@ impl Printable for ConfigBlock {
 
         for (item, comma) in &self.items {
             printer.print_spaces(inner_shape.indent);
-            printer.print(item, inner_shape.clone());
+            match item {
+                ConfigBlockMember::Item(item) => printer.print(item, inner_shape.clone()),
+                ConfigBlockMember::TypeBuilder(block) => printer.print(block, inner_shape.clone()),
+            };
             if let Some(comma) = comma {
                 printer.print_raw_token(comma);
             } else {
@@ -1218,10 +1231,16 @@ impl Printable for ConfigBlock {
     }
 }
 
+#[derive(Debug)]
+pub enum ConfigBlockMember {
+    Item(ConfigItem),
+    TypeBuilder(TypeBuilderBlock),
+}
+
 /// Corresponds to a [`SyntaxKind::CONFIG_ITEM`] node.
 #[derive(Debug)]
 pub struct ConfigItem {
-    pub key: t::Word,
+    pub key: ConfigItemKey,
     // /// Colons are currently invalid, it seems
     // pub colon: Option<t::Colon>,
     pub value: ConfigItemValue,
@@ -1234,7 +1253,8 @@ impl FromCST for ConfigItem {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let key = it.expect_parse()?;
+        let key = it.expect_next("a CONFIG_ITEM key")?;
+        let key = ConfigItemKey::from_cst(key)?;
 
         // let colon = it
         //     .next_if_kind(SyntaxKind::COLON)
@@ -1265,19 +1285,17 @@ impl KnownKind for ConfigItem {
 
 impl Printable for ConfigItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.key);
+        let mut multi_lined = false;
+        multi_lined |= printer.print(&self.key, shape.clone()).multi_lined;
         printer.print_str(" ");
-        let first_line_offset =
-            shape.first_line_offset + usize::from(self.key.span().len()) + const { " ".len() };
+        let remaining_width = printer.current_line_remaining_width();
         let value_shape = Shape {
-            width: printer
-                .config
-                .line_width
-                .saturating_sub(shape.indent + first_line_offset + const { ",".len() }),
+            width: remaining_width.saturating_sub(const { ",".len() }),
             indent: shape.indent,
-            first_line_offset,
+            first_line_offset: remaining_width.saturating_sub(shape.indent),
         };
-        printer.print(&self.value, value_shape)
+        multi_lined |= printer.print(&self.value, value_shape).multi_lined;
+        PrintInfo { multi_lined }
     }
 }
 
@@ -1286,6 +1304,16 @@ pub enum ConfigItemKey {
     Word(t::Word),
     String(t::QuotedString),
     RetryPolicy(t::RetryPolicy),
+}
+
+impl ConfigItemKey {
+    pub fn span(&self) -> TextRange {
+        match self {
+            ConfigItemKey::Word(word) => word.span(),
+            ConfigItemKey::String(string) => string.span(),
+            ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
+        }
+    }
 }
 
 impl FromCST for ConfigItemKey {
@@ -1485,6 +1513,150 @@ impl Printable for ConfigArray {
         } else {
             printer.append_from_printer(single_line_printer);
             PrintInfo::default_single_line()
+        }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::TYPE_BUILDER_BLOCK`] node.
+#[derive(Debug)]
+pub struct TypeBuilderBlock {
+    pub keyword: t::TypeBuilder,
+    pub open_brace: t::LBrace,
+    pub items: Vec<TypeBuilderItem>,
+    pub close_brace: t::RBrace,
+}
+
+impl FromCST for TypeBuilderBlock {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_BUILDER_BLOCK)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let keyword = it.expect_parse()?;
+
+        let open_brace = it.expect_parse()?;
+
+        let mut items = Vec::new();
+        let close_brace = loop {
+            let elem = it.expect_next("DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF")?;
+            if elem.kind() == SyntaxKind::R_BRACE {
+                break t::RBrace::from_cst(elem)?;
+            }
+
+            items.push(TypeBuilderItem::from_cst(elem)?);
+        };
+
+        it.expect_end()?;
+
+        Ok(TypeBuilderBlock {
+            keyword,
+            open_brace,
+            items,
+            close_brace,
+        })
+    }
+}
+
+impl KnownKind for TypeBuilderBlock {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::TYPE_BUILDER_BLOCK
+    }
+}
+
+impl Printable for TypeBuilderBlock {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.open_brace);
+        printer.print_newline();
+
+        for item in &self.items {
+            printer.print_spaces(inner_shape.indent);
+            printer.print(item, inner_shape.clone());
+            printer.print_newline();
+        }
+
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_brace);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+#[derive(Debug)]
+pub enum TypeBuilderItem {
+    /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins a class definition.
+    DynamicClass(t::Dynamic, ClassDecl),
+    /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins an enum definition.
+    DynamicEnum(t::Dynamic, EnumDecl),
+    Class(ClassDecl),
+    Enum(EnumDecl),
+}
+
+impl FromCST for TypeBuilderItem {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::DYNAMIC_TYPE_DEF => {
+                let node = StrongAstError::assert_is_node(elem)?;
+                let mut it = SyntaxNodeIter::new(node);
+                let dynamic = it.expect_parse()?;
+                let class_or_enum = it.expect_next("CLASS_DEF or ENUM_DEF")?;
+                match class_or_enum.kind() {
+                    SyntaxKind::CLASS_DEF => {
+                        let class = ClassDecl::from_cst(class_or_enum)?;
+                        it.expect_end()?;
+                        Ok(TypeBuilderItem::DynamicClass(dynamic, class))
+                    }
+                    SyntaxKind::ENUM_DEF => {
+                        let enum_def = EnumDecl::from_cst(class_or_enum)?;
+                        it.expect_end()?;
+                        Ok(TypeBuilderItem::DynamicEnum(dynamic, enum_def))
+                    }
+                    _ => Err(StrongAstError::UnexpectedKindDesc {
+                        expected_desc: "CLASS_DEF or ENUM_DEF".into(),
+                        found: class_or_enum.kind(),
+                        at: class_or_enum.text_range(),
+                    }),
+                }
+            }
+            SyntaxKind::CLASS_DEF => {
+                let class = ClassDecl::from_cst(elem)?;
+                Ok(TypeBuilderItem::Class(class))
+            }
+            SyntaxKind::ENUM_DEF => {
+                let enum_def = EnumDecl::from_cst(elem)?;
+                Ok(TypeBuilderItem::Enum(enum_def))
+            }
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "DYNAMIC_TYPE_DEF, CLASS_DEF, or ENUM_DEF".into(),
+                found: elem.kind(),
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for TypeBuilderItem {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            TypeBuilderItem::DynamicClass(dynamic, class) => {
+                printer.print_raw_token(dynamic);
+                printer.print_str(" ");
+                printer.print(class, shape)
+            }
+            TypeBuilderItem::DynamicEnum(dynamic, enum_def) => {
+                printer.print_raw_token(dynamic);
+                printer.print_str(" ");
+                printer.print(enum_def, shape)
+            }
+            TypeBuilderItem::Class(class) => printer.print(class, shape),
+            TypeBuilderItem::Enum(enum_def) => printer.print(enum_def, shape),
         }
     }
 }
