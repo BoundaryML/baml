@@ -6,12 +6,10 @@ use rowan::TextRange;
 use crate::{
     ast::{
         BinaryOp, FromCST, KnownKind, MatchPattern, Statement, StrongAstError, SyntaxNodeIter,
-        Token, UnaryOp,
+        Token, UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
 };
-
-use super::tokens as t;
 
 #[derive(Debug)]
 pub enum Expression {
@@ -26,6 +24,7 @@ pub enum Expression {
     Call(CallExpr),
     Index(IndexExpr),
     FieldAccess(FieldAccessExpr),
+    EnvAccess(EnvAccessExpr),
     Block(BlockExpr),
     ArrayInitializer(ArrayInitializer),
     MapInitializer(MapLiteral),
@@ -70,6 +69,9 @@ impl FromCST for Expression {
             SyntaxKind::FIELD_ACCESS_EXPR => {
                 FieldAccessExpr::from_cst(elem).map(Expression::FieldAccess)?
             }
+            SyntaxKind::ENV_ACCESS_EXPR => {
+                EnvAccessExpr::from_cst(elem).map(Expression::EnvAccess)?
+            }
             SyntaxKind::BLOCK_EXPR => BlockExpr::from_cst(elem).map(Expression::Block)?,
             SyntaxKind::ARRAY_LITERAL => {
                 ArrayInitializer::from_cst(elem).map(Expression::ArrayInitializer)?
@@ -106,6 +108,7 @@ impl Printable for Expression {
             Expression::Unary(unary) => unary.print(shape, printer),
             Expression::If(if_expr) => if_expr.print(shape, printer),
             Expression::Match(match_expr) => match_expr.print(shape, printer),
+            Expression::EnvAccess(env) => env.print(shape, printer),
             Expression::Block(block) => block.print(shape, printer),
             Expression::ArrayInitializer(array) => array.print(shape, printer),
             Expression::MapInitializer(map) => map.print(shape, printer),
@@ -1213,6 +1216,52 @@ impl FromCST for FieldAccessExpr {
 impl KnownKind for FieldAccessExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::FIELD_ACCESS_EXPR
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::ENV_ACCESS_EXPR`] node.
+#[derive(Debug)]
+pub struct EnvAccessExpr {
+    pub keyword: t::Env,
+    pub dot: t::Dot,
+    pub field: t::Word,
+}
+
+impl FromCST for EnvAccessExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::ENV_ACCESS_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let keyword = it.expect_parse()?;
+
+        let dot = it.expect_parse()?;
+
+        let field = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(EnvAccessExpr {
+            keyword,
+            dot,
+            field,
+        })
+    }
+}
+
+impl KnownKind for EnvAccessExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::ENV_ACCESS_EXPR
+    }
+}
+
+impl Printable for EnvAccessExpr {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_raw_token(&self.dot);
+        printer.print_raw_token(&self.field);
+        PrintInfo::default_single_line()
     }
 }
 
