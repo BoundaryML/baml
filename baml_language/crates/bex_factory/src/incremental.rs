@@ -22,7 +22,7 @@ pub struct AddSourceResult {
     pub diagnostics: String,
 }
 
-/// Trait for the incremental runtime API (DB, `add_source`, `set_source`, `function_names`, `engine_is_current`, `call_function`, `function_params`).
+/// Trait for the incremental runtime API (DB, `add_source`, `set_source`, `function_names`, `engine_is_current`, `call_function`).
 ///
 /// Implemented by the incremental runtime. Use [`crate::new_incremental`] to get a `Box<dyn BexIncremental>`.
 #[async_trait(?Send)]
@@ -74,7 +74,7 @@ impl BexIncrementalRuntime {
         db.set_project_root(Path::new(root_path));
 
         for (filename, content) in src_files {
-            db.add_or_update_file(&std::path::PathBuf::from(filename), content);
+            db.add_or_update_file(Path::new(filename), content);
         }
 
         let engine = make_engine(&db, sys_ops.clone()).ok();
