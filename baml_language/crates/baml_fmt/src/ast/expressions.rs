@@ -93,15 +93,19 @@ impl Printable for Expression {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
             Expression::Literal(lit) => lit.print(shape, printer),
-            Expression::Path(path) => path.print(shape, printer),
+            chain @ (Expression::Path(_)
+            | Expression::Call(_)
+            | Expression::Index(_)
+            | Expression::FieldAccess(_)) => {
+                // These are all chains of postfix expressions
+                let chain = PrintChain::new(chain);
+                chain.print(shape, printer)
+            }
             Expression::Paren(paren) => paren.print(shape, printer),
             Expression::Binary(binary) => binary.print(shape, printer),
             Expression::Unary(unary) => unary.print(shape, printer),
             Expression::If(if_expr) => if_expr.print(shape, printer),
             Expression::Match(match_expr) => match_expr.print(shape, printer),
-            Expression::Call(call) => call.print(shape, printer),
-            Expression::Index(index) => index.print(shape, printer),
-            Expression::FieldAccess(field) => field.print(shape, printer),
             Expression::Block(block) => block.print(shape, printer),
             Expression::ArrayInitializer(array) => array.print(shape, printer),
             Expression::MapInitializer(map) => map.print(shape, printer),
@@ -184,50 +188,26 @@ impl KnownKind for PathExpr {
     }
 }
 
-impl PrintMultiLine for PathExpr {
-    /// Multi-line layout: splits at dots, each subsequent segment on
-    /// an indented new line. Used for chained method calls.
-    ///
-    /// ```baml
-    /// baml
-    ///     .fs
-    ///     .open("some_long_file_name.txt")
-    ///     .read()
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.first);
-        for (dot, word) in &self.rest {
-            printer.print_newline();
-            printer.print_spaces(shape.indent + printer.config.indent_width);
-            printer.print_raw_token(dot);
-            printer.print_raw_token(word);
-        }
-        PrintInfo::default_multi_lined()
-    }
-}
-
 impl Printable for PathExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         if self.rest.is_empty() {
             printer.print_raw_token(&self.first);
             return PrintInfo::default_single_line();
         }
-        let single_line_width = usize::from(self.first.span().len())
-            + self
-                .rest
-                .iter()
-                .map(|(dot, word)| usize::from(dot.span().len() + word.span().len()))
-                .sum::<usize>();
-        if single_line_width > shape.width {
-            self.print_multi_line(shape, printer)
-        } else {
-            printer.print_raw_token(&self.first);
-            for (dot, word) in &self.rest {
-                printer.print_raw_token(dot);
-                printer.print_raw_token(word);
-            }
-            PrintInfo::default_single_line()
-        }
+        let first = Expression::Path(PathExpr {
+            first: self.first.clone(),
+            rest: Vec::new(),
+        });
+        let chain_members = self
+            .rest
+            .iter()
+            .map(|(dot, word)| PrintChainItem::FieldAccess(dot, word))
+            .collect();
+        let chain = PrintChain {
+            first: &first,
+            chain_members,
+        };
+        chain.print(shape, printer)
     }
 }
 
@@ -982,6 +962,7 @@ impl KnownKind for CallExpr {
 }
 
 impl Printable for CallExpr {
+    /// The main way to call this should be through [`PrintChain`]
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
@@ -1048,9 +1029,10 @@ impl PrintMultiLine for CallArgs {
         printer.print_raw_token(&self.open_paren);
         printer.print_newline();
 
+        let inner_indent = shape.indent + printer.config.indent_width;
         let inner_shape = Shape {
-            width: shape.width.saturating_sub(printer.config.indent_width),
-            indent: shape.indent + printer.config.indent_width,
+            width: printer.config.line_width.saturating_sub(inner_indent),
+            indent: inner_indent,
             first_line_offset: 0,
         };
         for (arg, comma) in self.args.iter() {
@@ -1149,6 +1131,7 @@ impl KnownKind for IndexExpr {
 }
 
 impl Printable for IndexExpr {
+    /// The main way to call this should be through [`PrintChain`]
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let multi_lined = printer.print(&*self.base, shape.clone()).multi_lined;
 
@@ -1215,47 +1198,6 @@ impl FromCST for FieldAccessExpr {
 impl KnownKind for FieldAccessExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::FIELD_ACCESS_EXPR
-    }
-}
-
-impl PrintMultiLine for FieldAccessExpr {
-    /// Multi-line layout:
-    ///
-    /// ```baml
-    /// some_multi_line_expression(
-    ///     long_arg,
-    /// ).field
-    /// ```
-    ///
-    /// ```baml
-    /// not_a_chain
-    ///     .because_it_is_an_expression()
-    ///     .field
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&*self.base, shape);
-        printer.print_raw_token(&self.dot);
-        printer.print_raw_token(&self.field);
-        PrintInfo::default_multi_lined()
-    }
-}
-
-impl Printable for FieldAccessExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let multi_lined = single_line_printer
-            .print(&*self.base, Shape::unlimited_single_line())
-            .multi_lined;
-        single_line_printer.print_raw_token(&self.dot);
-        single_line_printer.print_raw_token(&self.field);
-
-        if multi_lined || single_line_printer.output.len() > shape.width {
-            Self::print_multi_line(self, shape, printer)
-        } else {
-            printer.append_from_printer(single_line_printer);
-            PrintInfo::default_single_line()
-        }
     }
 }
 
@@ -1798,4 +1740,268 @@ impl Printable for ObjectField {
         printer.print_str(" ");
         printer.print(&self.value, shape)
     }
+}
+
+/// Only used for printing chained expressions.
+///
+/// Needed to re-organize before printing from a hierarchical structure to a flat-ish one.
+struct PrintChain<'a> {
+    /// May be a [`PathExpr`] in which case only the first item is used (the rest are included in [`PrintChain::chain_members`]).
+    first: &'a Expression,
+    /// Will always start with a field access (if not empty), since calls/indexes will be included in `first` if not following a field access.
+    chain_members: Vec<PrintChainItem<'a>>,
+}
+impl<'a> PrintChain<'a> {
+    fn new(from: &'a Expression) -> Self {
+        match from {
+            Expression::Path(path_expr) => Self {
+                first: from,
+                chain_members: path_expr
+                    .rest
+                    .iter()
+                    .map(|(dot, word)| PrintChainItem::FieldAccess(dot, word))
+                    .collect(),
+            },
+            Expression::Call(call_expr) => {
+                let mut chain = Self::new(&call_expr.callee);
+                if chain.chain_members.is_empty() {
+                    // included in `first` if not following a field access
+                    Self {
+                        first: from,
+                        chain_members: Vec::new(),
+                    }
+                } else {
+                    chain
+                        .chain_members
+                        .push(PrintChainItem::Call(&call_expr.args));
+                    chain
+                }
+            }
+            Expression::Index(index_expr) => {
+                let mut chain = Self::new(&index_expr.base);
+                if chain.chain_members.is_empty() {
+                    // included in `first` if not following a field access
+                    Self {
+                        first: from,
+                        chain_members: Vec::new(),
+                    }
+                } else {
+                    chain.chain_members.push(PrintChainItem::Index(
+                        &index_expr.open_bracket,
+                        &index_expr.index,
+                        &index_expr.close_bracket,
+                    ));
+                    chain
+                }
+            }
+            Expression::FieldAccess(field_access_expr) => {
+                let mut chain = Self::new(&field_access_expr.base);
+                chain.chain_members.push(PrintChainItem::FieldAccess(
+                    &field_access_expr.dot,
+                    &field_access_expr.field,
+                ));
+                chain
+            }
+            base => Self {
+                first: base,
+                chain_members: Vec::new(),
+            },
+        }
+    }
+}
+
+impl<'a> PrintMultiLine for PrintChain<'a> {
+    /// Prints the chained expression, with each field member on a new line.
+    ///
+    /// Uses similar rules to rustfmt
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let first_single_line = match self.first {
+            Expression::Path(path_expr) => {
+                printer.print_raw_token(&path_expr.first);
+                true
+            }
+            Expression::Call(call_expr) => {
+                let first_info = printer.print(&*call_expr, shape.clone());
+                !first_info.multi_lined
+            }
+            Expression::Index(index_expr) => {
+                let first_info = printer.print(&*index_expr, shape.clone());
+                !first_info.multi_lined
+            }
+            _ => {
+                let first_info = printer.print(self.first, shape.clone());
+                !first_info.multi_lined
+            }
+        };
+
+        let offset = printer.current_line_len().saturating_sub(shape.indent);
+        let should_indent_chain = first_single_line || offset > printer.config.indent_width;
+        let chain_indent = if should_indent_chain {
+            shape.indent + printer.config.indent_width
+        } else {
+            shape.indent
+        };
+
+        let mut line_remaining_width = printer.current_line_remaining_width();
+        let mut it = self.chain_members.iter();
+        if first_single_line
+            && offset <= printer.config.indent_width
+            && let Some(&PrintChainItem::FieldAccess(dot, word)) = it.next()
+        {
+            // We can try to print the second item on the same line as the first item
+            // if it fits, since the first item is very short.
+            let second_len = usize::from(dot.span().len() + word.span().len());
+            if line_remaining_width >= second_len {
+                printer.print_raw_token(dot);
+                printer.print_raw_token(word);
+                line_remaining_width = line_remaining_width.saturating_sub(second_len);
+            } else {
+                // Otherwise, we need to print the first item on its own line.
+                printer.print_newline();
+                printer.print_spaces(chain_indent);
+                printer.print_raw_token(dot);
+                printer.print_raw_token(word);
+                line_remaining_width = printer
+                    .config
+                    .line_width
+                    .saturating_sub(chain_indent + second_len);
+            }
+        }
+        for item in it {
+            match *item {
+                PrintChainItem::FieldAccess(dot, word) => {
+                    printer.print_newline();
+                    printer.print_spaces(chain_indent);
+                    printer.print_raw_token(dot);
+                    printer.print_raw_token(word);
+                    line_remaining_width = printer.config.line_width.saturating_sub(
+                        chain_indent + usize::from(dot.span().len() + word.span().len()),
+                    );
+                }
+                PrintChainItem::Index(lbracket, expression, rbracket) => {
+                    let mut single_line_printer =
+                        Printer::new_empty(printer.input, printer.config, printer.trivia);
+                    let single_line_info =
+                        single_line_printer.print(expression, Shape::unlimited_single_line());
+                    let single_line_len = single_line_printer.output.len()
+                        + usize::from(lbracket.span().len() + rbracket.span().len());
+                    if single_line_info.multi_lined || single_line_len > line_remaining_width {
+                        // Print multi-line
+                        printer.print_raw_token(lbracket);
+                        printer.print_newline();
+                        let inner_expr_indent = chain_indent + printer.config.indent_width;
+                        let inner_expr_shape = Shape {
+                            width: printer.config.line_width.saturating_sub(inner_expr_indent),
+                            indent: inner_expr_indent,
+                            first_line_offset: 0,
+                        };
+                        printer.print_spaces(inner_expr_indent);
+                        printer.print(expression, inner_expr_shape);
+                        printer.print_newline();
+                        printer.print_spaces(chain_indent);
+                        printer.print_raw_token(rbracket);
+                        line_remaining_width = printer
+                            .config
+                            .line_width
+                            .saturating_sub(chain_indent + usize::from(rbracket.span().len()));
+                    } else {
+                        // Print on end of line
+                        line_remaining_width = line_remaining_width.saturating_sub(single_line_len);
+                        printer.print_raw_token(lbracket);
+                        printer.append_from_printer(single_line_printer);
+                        printer.print_raw_token(rbracket);
+                    }
+                }
+                PrintChainItem::Call(call_args) => {
+                    let mut single_line_printer =
+                        Printer::new_empty(printer.input, printer.config, printer.trivia);
+                    let single_line_info =
+                        single_line_printer.print(call_args, Shape::unlimited_single_line());
+                    if single_line_info.multi_lined
+                        || single_line_printer.output.len() > line_remaining_width
+                    {
+                        // Print multi-line
+                        let call_args_shape = Shape {
+                            width: 0, // not single-lined
+                            indent: chain_indent,
+                            first_line_offset: line_remaining_width.saturating_sub(chain_indent),
+                        };
+                        call_args.print_multi_line(call_args_shape, printer);
+                    } else {
+                        // Print on end of line
+                        line_remaining_width =
+                            line_remaining_width.saturating_sub(single_line_printer.output.len());
+                        printer.append_from_printer(single_line_printer);
+                    }
+                }
+            }
+        }
+
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl<'a> Printable for PrintChain<'a> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut single_line_printer =
+            Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let mut multi_lined = false;
+
+        match self.first {
+            Expression::Path(path_expr) => {
+                single_line_printer.print_raw_token(&path_expr.first);
+            }
+            Expression::Call(call_expr) => {
+                multi_lined |= single_line_printer
+                    .print(call_expr, Shape::unlimited_single_line())
+                    .multi_lined;
+            }
+            Expression::Index(index_expr) => {
+                multi_lined |= single_line_printer
+                    .print(index_expr, Shape::unlimited_single_line())
+                    .multi_lined;
+            }
+            _ => {
+                multi_lined |= single_line_printer
+                    .print(self.first, Shape::unlimited_single_line())
+                    .multi_lined;
+            }
+        }
+        for item in &self.chain_members {
+            if multi_lined || single_line_printer.output.len() > shape.width {
+                return Self::print_multi_line(self, shape, printer);
+            }
+            match *item {
+                PrintChainItem::FieldAccess(dot, word) => {
+                    single_line_printer.print_raw_token(dot);
+                    single_line_printer.print_raw_token(word);
+                }
+                PrintChainItem::Index(open_bracket, index, close_bracket) => {
+                    single_line_printer.print_raw_token(open_bracket);
+                    multi_lined |= single_line_printer
+                        .print(index, Shape::unlimited_single_line())
+                        .multi_lined;
+                    single_line_printer.print_raw_token(close_bracket);
+                }
+                PrintChainItem::Call(call_args) => {
+                    multi_lined |= single_line_printer
+                        .print(call_args, Shape::unlimited_single_line())
+                        .multi_lined;
+                }
+            }
+        }
+        if multi_lined || single_line_printer.output.len() > shape.width {
+            Self::print_multi_line(self, shape, printer)
+        } else {
+            printer.append_from_printer(single_line_printer);
+            PrintInfo::default_single_line()
+        }
+    }
+}
+
+/// Only used for printing chained expressions. See [`PrintChain`].
+enum PrintChainItem<'a> {
+    FieldAccess(&'a t::Dot, &'a t::Word),
+    Index(&'a t::LBracket, &'a Expression, &'a t::RBracket),
+    Call(&'a CallArgs),
 }
