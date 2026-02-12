@@ -338,8 +338,7 @@ macro_rules! with_builtins {
                         /// Parse an HTTP response into a BAML value.
                         /// Interprets the provider-specific response format and parses the output.
                         #[sys_op]
-                        #[uses(engine_ctx)]
-                        fn parse(self: PrimitiveClient, http_response_body: String, function_name: String) -> Any;
+                        fn parse(self: PrimitiveClient, http_response_body: String, type_def: Type) -> Any;
                     }
 
                     /// Get the Jinja template for an LLM function.
@@ -363,6 +362,12 @@ macro_rules! with_builtins {
                     #[sys_op]
                     #[uses(engine_ctx)]
                     fn get_client_function(function_name: String) -> fn() -> PrimitiveClient;
+
+                    /// Get the return type for an LLM function.
+                    /// Returns a Type value that can be passed to parse().
+                    #[sys_op]
+                    #[uses(engine_ctx)]
+                    fn get_return_type(function_name: String) -> Type;
                 }
             }
 

@@ -78,5 +78,6 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
     let result = http_response.text();
 
     // Parse the response
-    return primitive_client.parse(result, function_name);
+    let return_type = baml.llm.get_return_type(function_name);
+    return primitive_client.parse(result, return_type);
 }

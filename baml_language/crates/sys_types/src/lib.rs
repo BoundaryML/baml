@@ -419,22 +419,11 @@ impl<T> SysOpLlm for T {
     fn baml_llm_primitive_client_parse(
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         response: String,
-        function_name: String,
-        ctx: &SysOpContext,
+        type_def: baml_type::Ty,
     ) -> SysOpOutput {
-        let Some(info) = ctx.llm_functions.get(&function_name) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "LLM function not found: {function_name}"
-            )));
-        };
-
         SysOpOutput::Ready(
-            sys_llm::execute_parse_response_from_owned(
-                &primitive_client,
-                &response,
-                &info.return_type,
-            )
-            .map_err(OpErrorKind::from),
+            sys_llm::execute_parse_response_from_owned(&primitive_client, &response, &type_def)
+                .map_err(OpErrorKind::from),
         )
     }
 
@@ -507,6 +496,18 @@ impl<T> SysOpLlm for T {
             allowed_roles,
             options,
         })
+    }
+
+    fn baml_llm_get_return_type(
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<baml_type::Ty> {
+        let Some(info) = ctx.llm_functions.get(&function_name) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "LLM function not found: {function_name}"
+            )));
+        };
+        SysOpOutput::Ready(Ok(info.return_type.clone()))
     }
 
     fn baml_llm_get_client_function(function_name: String, ctx: &SysOpContext) -> SysOpOutput {
