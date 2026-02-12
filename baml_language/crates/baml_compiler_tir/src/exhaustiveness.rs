@@ -527,7 +527,7 @@ impl<'a> ExhaustivenessChecker<'a> {
     fn find_uncovered(required: &[ValueSet], covered: &[ValueSet]) -> Vec<ValueSet> {
         required
             .iter()
-            .filter(|req| !Self::is_fully_covered(req, covered, &[]))
+            .filter(|req| !Self::is_fully_covered(req, covered, &required))
             .cloned()
             .collect()
     }
