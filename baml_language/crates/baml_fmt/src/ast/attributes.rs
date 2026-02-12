@@ -214,11 +214,10 @@ impl FromCST for AttributeArgs {
             };
             match elem.kind() {
                 SyntaxKind::R_PAREN => {
-                    break it.expect_parse()?;
+                    break t::RParen::from_cst(elem)?;
                 }
                 _ => {
-                    let next = it.expect_next("attribute argument")?;
-                    let next = AttributeArg::from_cst(next)?;
+                    let next = AttributeArg::from_cst(elem)?;
                     let comma = it
                         .next_if_kind(SyntaxKind::COMMA)
                         .map(t::Comma::from_cst)

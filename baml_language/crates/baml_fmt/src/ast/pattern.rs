@@ -2,7 +2,7 @@
 
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
-use crate::ast::{FromCST, KnownKind, Literal, StrongAstError, SyntaxNodeIter, tokens as t};
+use crate::ast::{FromCST, KnownKind, Literal, StrongAstError, SyntaxNodeIter, Type, tokens as t};
 use crate::printer::*;
 
 /// Corresponds to a [`SyntaxKind::MATCH_PATTERN`] node.
@@ -24,13 +24,9 @@ impl FromCST for MatchPattern {
 
         let mut it = SyntaxNodeIter::new(node.clone());
 
-        // if first elem is a word, it could also be a binding, not a pattern
-        let mut first_elem = UnionPatternMember::take(&mut it)?;
+        let first_elem = UnionPatternMember::take(&mut it)?;
 
-        let binding = if it.peek().is_none() {
-            return Ok(first_elem.into());
-        } else if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
-            let colon = StrongAstError::assert_is_token(colon)?;
+        if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
             let UnionPatternMember::Word(binding_name) = first_elem else {
                 return Err(StrongAstError::UnexpectedKindDesc {
                     expected_desc: "PIPE".into(),
@@ -38,11 +34,13 @@ impl FromCST for MatchPattern {
                     at: colon.text_range(),
                 });
             };
-            first_elem = UnionPatternMember::take(&mut it)?;
-            Some((binding_name, t::Colon::new_from_span(colon.text_range())))
-        } else {
-            None
-        };
+            let colon = t::Colon::from_cst(colon)?;
+            let ty = it.expect_parse()?;
+            return Ok(MatchPattern::Binding(BindingPattern {
+                name: binding_name,
+                ty: Some((colon, ty)),
+            }));
+        }
 
         let mut rest = Vec::new();
         while let Some(pipe) = it.next() {
@@ -69,14 +67,7 @@ impl FromCST for MatchPattern {
             })
         };
 
-        if let Some((binding_name, colon)) = binding {
-            Ok(MatchPattern::Binding(BindingPattern {
-                name: binding_name,
-                ty: Some((colon, ty)),
-            }))
-        } else {
-            Ok(ty.into())
-        }
+        Ok(ty.into())
     }
 }
 
@@ -100,7 +91,7 @@ impl Printable for MatchPattern {
 #[derive(Debug)]
 pub struct BindingPattern {
     pub name: t::Word,
-    pub ty: Option<(t::Colon, BindingPatternPattern)>,
+    pub ty: Option<(t::Colon, Type)>,
 }
 
 impl Printable for BindingPattern {

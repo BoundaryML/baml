@@ -5,7 +5,10 @@
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
 use super::{FromCST, KnownKind, StrongAstError, tokens as t};
-use crate::{ast::SyntaxNodeIter, printer::*};
+use crate::{
+    ast::{Literal, SyntaxNodeIter},
+    printer::*,
+};
 use rowan::TextRange;
 
 /// Corresponds to a [`SyntaxKind::TYPE_EXPR`] node.
@@ -13,7 +16,9 @@ use rowan::TextRange;
 pub enum Type {
     Paren(ParenType),
     Path(PathType),
-    String(StringType),
+    /// Generally only string literals are used in normal types,
+    /// but other literals are valid in some contexts like match bindings.
+    Literal(Literal),
     Union(UnionType),
     Optional(OptionalType),
     Array(ArrayType),
@@ -34,7 +39,7 @@ impl Type {
         match self {
             Type::Paren(_) => false,
             Type::Path(_) => true,
-            Type::String(_) => false,
+            Type::Literal(_) => false,
             Type::Union(_) => true,
             Type::Optional(inner) => inner.ty.multi_line_is_indented(),
             Type::Array(inner) => inner.ty.multi_line_is_indented(),
@@ -87,7 +92,7 @@ impl Printable for Type {
         match self {
             Type::Paren(paren) => paren.print(shape, printer),
             Type::Path(path) => path.print(shape, printer),
-            Type::String(string) => string.print(shape, printer),
+            Type::Literal(literal) => literal.print(shape, printer),
             Type::Union(union) => union.print(shape, printer),
             Type::Optional(optional) => optional.print(shape, printer),
             Type::Array(array) => array.print(shape, printer),
@@ -258,7 +263,7 @@ impl Printable for UnionType {
 pub enum UnionTypeMember {
     Paren(ParenType),
     Path(PathType),
-    String(StringType),
+    Literal(Literal),
     Optional(OptionalType),
     Array(ArrayType),
     Generic(GenericType),
@@ -353,12 +358,15 @@ impl UnionTypeMember {
                 }
                 Ok(UnionTypeMember::Path(PathType { first, rest }))
             }
-            SyntaxKind::STRING_LITERAL => {
-                let string = t::QuotedString::from_cst(first)?;
-                Ok(UnionTypeMember::String(StringType(string)))
+            SyntaxKind::STRING_LITERAL
+            | SyntaxKind::INTEGER_LITERAL
+            | SyntaxKind::FLOAT_LITERAL => {
+                let string = Literal::from_cst(first)?;
+                Ok(UnionTypeMember::Literal(string))
             }
             found => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "L_PAREN, WORD, or STRING_LITERAL".into(),
+                expected_desc: "L_PAREN, WORD, STRING_LITERAL, INTEGER_LITERAL, or FLOAT_LITERAL"
+                    .into(),
                 found,
                 at: first.text_range(),
             }),
@@ -415,7 +423,7 @@ impl From<UnionTypeMember> for Type {
         match member {
             UnionTypeMember::Paren(paren) => Type::Paren(paren),
             UnionTypeMember::Path(path) => Type::Path(path),
-            UnionTypeMember::String(string) => Type::String(string),
+            UnionTypeMember::Literal(literal) => Type::Literal(literal),
             UnionTypeMember::Optional(optional) => Type::Optional(optional),
             UnionTypeMember::Array(array) => Type::Array(array),
             UnionTypeMember::Generic(generic) => Type::Generic(generic),
@@ -432,7 +440,7 @@ impl Printable for UnionTypeMember {
         match self {
             UnionTypeMember::Paren(paren) => paren.print(shape, printer),
             UnionTypeMember::Path(path) => path.print(shape, printer),
-            UnionTypeMember::String(string) => string.print(shape, printer),
+            UnionTypeMember::Literal(literal) => literal.print(shape, printer),
             UnionTypeMember::Optional(optional) => optional.print(shape, printer),
             UnionTypeMember::Array(array) => array.print(shape, printer),
             UnionTypeMember::Generic(generic) => generic.print(shape, printer),

@@ -1281,6 +1281,48 @@ impl Printable for ConfigItem {
     }
 }
 
+#[derive(Debug)]
+pub enum ConfigItemKey {
+    Word(t::Word),
+    String(t::QuotedString),
+    RetryPolicy(t::RetryPolicy),
+}
+
+impl FromCST for ConfigItemKey {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::WORD => t::Word::from_cst(elem).map(ConfigItemKey::Word),
+            SyntaxKind::STRING_LITERAL => {
+                t::QuotedString::from_cst(elem).map(ConfigItemKey::String)
+            }
+            SyntaxKind::KW_RETRY_POLICY => {
+                t::RetryPolicy::from_cst(elem).map(ConfigItemKey::RetryPolicy)
+            }
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "WORD or KW_RETRY_POLICY".into(),
+                found: elem.kind(),
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for ConfigItemKey {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ConfigItemKey::Word(word) => {
+                printer.print_raw_token(word);
+                PrintInfo::default_single_line()
+            }
+            ConfigItemKey::String(string) => printer.print(string, shape),
+            ConfigItemKey::RetryPolicy(retry_policy) => {
+                printer.print_raw_token(retry_policy);
+                PrintInfo::default_single_line()
+            }
+        }
+    }
+}
+
 /// Does not correspond to a specific [`SyntaxKind`].
 #[derive(Debug)]
 pub enum ConfigItemValue {

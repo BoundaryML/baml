@@ -312,8 +312,8 @@ impl FromCST for ForStmt {
 
             let semicolon = it.expect_parse()?;
 
-            let update = it.expect_next("a statement")?;
-            let update = Statement::from_cst(update)?;
+            let update = it.expect_next("an expression")?;
+            let update = Expression::from_cst(update)?;
 
             let close_paren = it.expect_parse()?;
 
@@ -378,7 +378,7 @@ pub struct ForCStyleArgs {
     pub init: Box<Statement>,
     pub condition: Expression,
     pub semicolon: t::Semicolon,
-    pub update: Box<Statement>,
+    pub update: Box<Expression>,
     pub close_paren: t::RParen,
 }
 

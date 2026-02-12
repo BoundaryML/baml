@@ -126,6 +126,21 @@ pub enum Literal {
     Float(t::FloatLiteral),
 }
 
+impl FromCST for Literal {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::STRING_LITERAL => Ok(Literal::String(t::QuotedString::from_cst(elem)?)),
+            SyntaxKind::INTEGER_LITERAL => Ok(Literal::Integer(t::IntegerLiteral::from_cst(elem)?)),
+            SyntaxKind::FLOAT_LITERAL => Ok(Literal::Float(t::FloatLiteral::from_cst(elem)?)),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "STRING_LITERAL, INTEGER_LITERAL, or FLOAT_LITERAL".into(),
+                found: elem.kind(),
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
 impl Printable for Literal {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
@@ -1702,7 +1717,7 @@ impl Printable for MapLiteral {
 /// Corresponds to a [`SyntaxKind::OBJECT_FIELD`] node.
 #[derive(Debug)]
 pub struct ObjectField {
-    pub name: t::Word,
+    pub name: ObjectFieldKey,
     pub colon: t::Colon,
     pub value: Expression,
 }
@@ -1714,7 +1729,8 @@ impl FromCST for ObjectField {
 
         let mut it = SyntaxNodeIter::new(node);
 
-        let name = it.expect_parse()?;
+        let name = it.expect_next("WORD or STRING_LITERAL")?;
+        let name = ObjectFieldKey::from_cst(name)?;
 
         let colon = it.expect_parse()?;
 
@@ -1735,10 +1751,44 @@ impl KnownKind for ObjectField {
 
 impl Printable for ObjectField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.name);
+        printer.print(&self.name, shape.clone());
         printer.print_raw_token(&self.colon);
         printer.print_str(" ");
         printer.print(&self.value, shape)
+    }
+}
+
+#[derive(Debug)]
+pub enum ObjectFieldKey {
+    Word(t::Word),
+    String(t::QuotedString),
+}
+
+impl FromCST for ObjectFieldKey {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::WORD => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
+            SyntaxKind::STRING_LITERAL => {
+                Ok(ObjectFieldKey::String(t::QuotedString::from_cst(elem)?))
+            }
+            _ => Err(StrongAstError::UnexpectedKindDesc {
+                expected_desc: "WORD or STRING_LITERAL".into(),
+                found: elem.kind(),
+                at: elem.text_range(),
+            }),
+        }
+    }
+}
+
+impl Printable for ObjectFieldKey {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        match self {
+            ObjectFieldKey::Word(word) => {
+                printer.print_raw_token(word);
+                PrintInfo::default_single_line()
+            }
+            ObjectFieldKey::String(string) => printer.print(string, shape),
+        }
     }
 }
 
