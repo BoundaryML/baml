@@ -15,6 +15,8 @@ pub enum MatchPattern {
     Binding(BindingPattern),
     EnumVariant(EnumVariantPattern),
     Union(UnionPattern),
+    /// This would be a top-level nested pattern, meaning there are parentheses around the whole thing
+    Nested(NestedPattern),
 }
 
 impl FromCST for MatchPattern {
@@ -54,20 +56,22 @@ impl FromCST for MatchPattern {
 
         let ty = if rest.is_empty() {
             match first_elem {
-                UnionPatternMember::Literal(lit) => BindingPatternPattern::Literal(lit),
-                UnionPatternMember::EnumVariant(variant) => {
-                    BindingPatternPattern::EnumVariant(variant)
-                }
-                UnionPatternMember::Word(word) => BindingPatternPattern::Word(word),
+                UnionPatternMember::Literal(lit) => MatchPattern::Literal(lit),
+                UnionPatternMember::EnumVariant(variant) => MatchPattern::EnumVariant(variant),
+                UnionPatternMember::Word(word) => MatchPattern::Binding(BindingPattern {
+                    name: word,
+                    ty: None,
+                }),
+                UnionPatternMember::Nested(nested) => MatchPattern::Nested(nested),
             }
         } else {
-            BindingPatternPattern::Union(UnionPattern {
+            MatchPattern::Union(UnionPattern {
                 first: Box::new(first_elem),
                 rest,
             })
         };
 
-        Ok(ty.into())
+        Ok(ty)
     }
 }
 
@@ -84,6 +88,7 @@ impl Printable for MatchPattern {
             MatchPattern::Binding(binding) => binding.print(shape, printer),
             MatchPattern::EnumVariant(variant) => variant.print(shape, printer),
             MatchPattern::Union(union) => union.print(shape, printer),
+            MatchPattern::Nested(nested) => nested.print(shape, printer),
         }
     }
 }
@@ -103,42 +108,6 @@ impl Printable for BindingPattern {
             printer.print(ty, shape);
         }
         PrintInfo::default_single_line()
-    }
-}
-
-#[derive(Debug)]
-pub enum BindingPatternPattern {
-    Literal(Literal),
-    Word(t::Word),
-    EnumVariant(EnumVariantPattern),
-    Union(UnionPattern),
-}
-
-impl From<BindingPatternPattern> for MatchPattern {
-    fn from(pattern: BindingPatternPattern) -> Self {
-        match pattern {
-            BindingPatternPattern::Literal(lit) => MatchPattern::Literal(lit),
-            BindingPatternPattern::Word(word) => MatchPattern::Binding(BindingPattern {
-                name: word,
-                ty: None,
-            }),
-            BindingPatternPattern::EnumVariant(variant) => MatchPattern::EnumVariant(variant),
-            BindingPatternPattern::Union(union) => MatchPattern::Union(union),
-        }
-    }
-}
-
-impl Printable for BindingPatternPattern {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        match self {
-            BindingPatternPattern::Literal(lit) => printer.print(lit, shape),
-            BindingPatternPattern::Word(word) => {
-                printer.print_raw_token(word);
-                PrintInfo::default_single_line()
-            }
-            BindingPatternPattern::EnumVariant(variant) => variant.print(shape, printer),
-            BindingPatternPattern::Union(union) => union.print(shape, printer),
-        }
     }
 }
 
@@ -222,6 +191,7 @@ pub enum UnionPatternMember {
     /// Should probably treat these as literals, but we can change if we have a use case.
     Word(t::Word),
     EnumVariant(EnumVariantPattern),
+    Nested(NestedPattern),
 }
 
 impl UnionPatternMember {
@@ -229,23 +199,20 @@ impl UnionPatternMember {
         let first = it.expect_next("a literal or WORD")?;
         let first = match first.kind() {
             SyntaxKind::WORD => t::Word::new_from_span(first.text_range()),
-            SyntaxKind::INTEGER_LITERAL => {
-                let token = StrongAstError::assert_is_token(first.clone())?;
-                return Ok(UnionPatternMember::Literal(Literal::Integer(
-                    t::IntegerLiteral::new_from_span(token.text_range()),
-                )));
+            SyntaxKind::INTEGER_LITERAL
+            | SyntaxKind::FLOAT_LITERAL
+            | SyntaxKind::STRING_LITERAL => {
+                return Literal::from_cst(first).map(UnionPatternMember::Literal);
             }
-            SyntaxKind::FLOAT_LITERAL => {
-                let token = StrongAstError::assert_is_token(first.clone())?;
-                return Ok(UnionPatternMember::Literal(Literal::Float(
-                    t::FloatLiteral::new_from_span(token.text_range()),
-                )));
-            }
-            SyntaxKind::STRING_LITERAL => {
-                let token = StrongAstError::assert_is_token(first.clone())?;
-                return Ok(UnionPatternMember::Literal(Literal::String(
-                    t::QuotedString::new_from_span(token.text_range()),
-                )));
+            SyntaxKind::L_PAREN => {
+                let open_paren = t::LParen::from_cst(first)?;
+                let pattern = it.expect_parse()?;
+                let close_paren = it.expect_parse()?;
+                return Ok(UnionPatternMember::Nested(NestedPattern {
+                    open_paren,
+                    pattern: Box::new(pattern),
+                    close_paren,
+                }));
             }
             found => {
                 return Err(StrongAstError::UnexpectedKindDesc {
@@ -279,6 +246,7 @@ impl From<UnionPatternMember> for MatchPattern {
                 name: word,
                 ty: None,
             }),
+            UnionPatternMember::Nested(nested) => MatchPattern::Nested(nested),
         }
     }
 }
@@ -292,6 +260,42 @@ impl Printable for UnionPatternMember {
                 PrintInfo::default_single_line()
             }
             UnionPatternMember::EnumVariant(variant) => variant.print(shape, printer),
+            UnionPatternMember::Nested(nested) => nested.print(shape, printer),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct NestedPattern {
+    pub open_paren: t::LParen,
+    pub pattern: Box<MatchPattern>,
+    pub close_paren: t::RParen,
+}
+
+impl Printable for NestedPattern {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut inner_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(2),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+        let inner_info = inner_printer.print(&*self.pattern, inner_shape);
+
+        if inner_info.multi_lined {
+            printer.print_raw_token(&self.open_paren);
+            printer.print_newline();
+            printer.print_spaces(shape.indent + printer.config.indent_width);
+            printer.append_from_printer(inner_printer);
+            printer.print_newline();
+            printer.print_spaces(shape.indent);
+            printer.print_raw_token(&self.close_paren);
+            PrintInfo::default_multi_lined()
+        } else {
+            printer.print_raw_token(&self.open_paren);
+            printer.append_from_printer(inner_printer);
+            printer.print_raw_token(&self.close_paren);
+            PrintInfo::default_single_line()
         }
     }
 }

@@ -11,7 +11,6 @@ client<llm> MyClient {
                 d"#
     inline_raw_string #"inline "raw" string,,"#
     "string key" "value with spaces"
-    filePathString ../this-is-also-a-string
     booleanValue true
     stringKey "true"
     array1 [

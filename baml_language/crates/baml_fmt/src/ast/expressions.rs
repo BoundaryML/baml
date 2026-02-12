@@ -786,9 +786,9 @@ impl Printable for MatchExpr {
 #[derive(Debug)]
 pub struct MatchArm {
     pub pattern: MatchPattern,
-    pub guard: Option<(t::If, Box<Expression>)>,
+    pub guard: Option<MatchGuard>,
     pub fat_arrow: t::FatArrow,
-    pub body: Box<Expression>,
+    pub body: Expression,
     pub comma: Option<t::Comma>,
 }
 
@@ -803,17 +803,10 @@ impl FromCST for MatchArm {
         let pattern: MatchPattern = it.expect_parse()?;
 
         // Check for optional guard (if condition)
-        let guard = if let Some(elem) = it.next_if_kind(SyntaxKind::KW_IF) {
-            let if_token = StrongAstError::assert_is_token(elem)?;
-            let guard_expr_node = it.expect_next("guard expression")?;
-            let guard_expr = Expression::from_cst(guard_expr_node)?;
-            Some((
-                t::If::new_from_span(if_token.text_range()),
-                Box::new(guard_expr),
-            ))
-        } else {
-            None
-        };
+        let guard = it
+            .next_if_kind(SyntaxKind::MATCH_GUARD)
+            .map(MatchGuard::from_cst)
+            .transpose()?;
 
         // FAT_ARROW
         let fat_arrow = it.expect_parse()?;
@@ -830,7 +823,7 @@ impl FromCST for MatchArm {
             pattern,
             guard,
             fat_arrow,
-            body: Box::new(body),
+            body,
             comma,
         })
     }
@@ -842,109 +835,149 @@ impl KnownKind for MatchArm {
     }
 }
 
-impl PrintMultiLine for MatchArm {
-    /// Multi-line layout: the body is made into a block expression
-    /// (if it is not already a block expression).
-    /// The if guard (if present) is on its own indented line.
-    ///
-    /// ```baml
-    /// pattern => {
-    ///     some_long_body_expression
-    /// }
-    /// ```
-    ///
-    /// ```baml
-    /// binding: pattern
-    ///     | more_pattern
-    ///     | yet_more_pattern
-    ///     if some_long_guard_expression => {
-    ///     some_long_body_expression
-    /// }
-    /// ```
-    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_shape = Shape {
-            width: shape.width.saturating_sub(printer.config.indent_width),
-            indent: shape.indent + printer.config.indent_width,
-            first_line_offset: 0,
+impl Printable for MatchArm {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut pattern_printer = printer.sub_printer();
+        let pattern_info = pattern_printer.print(&self.pattern, shape.clone());
+
+        let condition_multi_lined;
+        printer.append_from_printer(pattern_printer);
+
+        if let Some(guard) = &self.guard {
+            let guard_indent = shape.indent + printer.config.indent_width;
+            if pattern_info.multi_lined {
+                // guard goes on new line
+                printer.print_newline();
+                printer.print_spaces(guard_indent);
+                let offset = usize::from(guard.keyword.token_span.len()) + const { " ".len() };
+                let guard_shape = Shape {
+                    width: printer
+                        .config
+                        .line_width
+                        .saturating_sub(guard_indent + offset + const { " => ".len() }),
+                    indent: guard_indent,
+                    first_line_offset: offset,
+                };
+                printer.print(guard, guard_shape);
+                printer.print_str(" => ");
+                condition_multi_lined = true;
+            } else {
+                let mut single_line_guard_printer = printer.sub_printer();
+                single_line_guard_printer.print_str(" ");
+                single_line_guard_printer.print_raw_token(&guard.keyword);
+                single_line_guard_printer.print_str(" ");
+                let guard_info = single_line_guard_printer
+                    .print(&guard.condition, Shape::unlimited_single_line());
+                if guard_info.multi_lined
+                    || printer.current_line_len() + single_line_guard_printer.len()
+                        > printer.config.line_width
+                {
+                    // Guard is too long to fit on a single line, so print it on the next line
+                    printer.print_newline();
+                    printer.print_spaces(guard_indent);
+                    printer.print_raw_token(&guard.keyword);
+                    printer.print_str(" ");
+                    let guard_shape = Shape {
+                        width: printer.config.line_width.saturating_sub(
+                            guard_indent + usize::from(guard.keyword.span().len()) + 1,
+                        ),
+                        indent: guard_indent,
+                        first_line_offset: usize::from(guard.keyword.span().len()) + 1,
+                    };
+                    printer.print(&guard.condition, guard_shape);
+                    printer.print_str(" ");
+                    printer.print_raw_token(&self.fat_arrow);
+                    condition_multi_lined = true;
+                } else {
+                    printer.append_from_printer(single_line_guard_printer);
+                    printer.print_str(" ");
+                    printer.print_raw_token(&self.fat_arrow);
+                    printer.print_str(" ");
+                    condition_multi_lined = false;
+                }
+            }
+        } else {
+            condition_multi_lined = pattern_info.multi_lined;
+            printer.print_str(" ");
+            printer.print_raw_token(&self.fat_arrow);
+            printer.print_str(" ");
+        }
+
+        let body_info = if condition_multi_lined {
+            printer.print_newline();
+            let body_shape = Shape {
+                width: printer.config.line_width.saturating_sub(shape.indent),
+                indent: shape.indent,
+                first_line_offset: 0,
+            };
+            printer.print_spaces(shape.indent);
+            printer.print(&self.body, body_shape)
+        } else {
+            let remaining = printer.current_line_remaining_width();
+            let body_shape = Shape {
+                width: remaining,
+                indent: shape.indent,
+                first_line_offset: printer
+                    .config
+                    .line_width
+                    .saturating_sub(remaining + shape.indent),
+            };
+            printer.print(&self.body, body_shape)
         };
 
-        printer.print(&self.pattern, shape.clone());
-
-        if let Some((if_kw, guard)) = &self.guard {
-            printer.print_newline();
-            printer.print_spaces(inner_shape.indent);
-            printer.print_raw_token(if_kw);
-            printer.print_str(" ");
-            printer.print(&**guard, inner_shape.clone());
-        }
-
-        printer.print_str(" ");
-        printer.print_raw_token(&self.fat_arrow);
-        printer.print_str(" ");
-
-        // If body is already a block, print it directly; otherwise wrap it in a block
-        match &*self.body {
-            Expression::Block(block) => {
-                printer.print(block, shape.clone());
-            }
-            _ => {
-                printer.print_str("{");
-                printer.print_newline();
-                printer.print_spaces(inner_shape.indent);
-                printer.print(&*self.body, inner_shape);
-                printer.print_newline();
-                printer.print_spaces(shape.indent);
-                printer.print_str("}");
-            }
-        }
-
+        let multi_lined = condition_multi_lined || body_info.multi_lined;
         if let Some(comma) = &self.comma {
             printer.print_raw_token(comma);
         } else {
             printer.print_str(",");
         }
-
-        PrintInfo::default_multi_lined()
+        PrintInfo { multi_lined }
     }
 }
 
-impl Printable for MatchArm {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let mut multi_lined = false;
-        multi_lined |= single_line_printer
-            .print(&self.pattern, Shape::unlimited_single_line())
-            .multi_lined;
+/// Corresponds to a [`SyntaxKind::MATCH_GUARD`] node.
+#[derive(Debug)]
+pub struct MatchGuard {
+    pub keyword: t::If,
+    pub condition: Expression,
+}
 
-        if let Some((if_kw, guard)) = &self.guard {
-            single_line_printer.print_str(" ");
-            single_line_printer.print_raw_token(if_kw);
-            single_line_printer.print_str(" ");
-            multi_lined |= single_line_printer
-                .print(&**guard, Shape::unlimited_single_line())
-                .multi_lined;
-        }
+impl FromCST for MatchGuard {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::MATCH_GUARD)?;
 
-        single_line_printer.print_str(" ");
-        single_line_printer.print_raw_token(&self.fat_arrow);
-        single_line_printer.print_str(" ");
-        multi_lined |= single_line_printer
-            .print(&*self.body, Shape::unlimited_single_line())
-            .multi_lined;
+        let mut it = SyntaxNodeIter::new(node);
 
-        if let Some(comma) = &self.comma {
-            single_line_printer.print_raw_token(comma);
-        } else {
-            single_line_printer.print_str(",");
-        }
+        let if_token = it.expect_parse()?;
 
-        if multi_lined || single_line_printer.output.len() > shape.width {
-            Self::print_multi_line(self, shape, printer)
-        } else {
-            printer.append_from_printer(single_line_printer);
-            PrintInfo::default_single_line()
-        }
+        let condition = it.expect_next("a condition")?;
+        let condition = Expression::from_cst(condition)?;
+
+        it.expect_end()?;
+
+        Ok(MatchGuard {
+            keyword: if_token,
+            condition,
+        })
+    }
+}
+
+impl KnownKind for MatchGuard {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::MATCH_GUARD
+    }
+}
+
+impl Printable for MatchGuard {
+    fn print(&self, mut shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        shape.width = shape
+            .width
+            .saturating_sub(usize::from(self.keyword.token_span.len()) + 1);
+        shape.first_line_offset += usize::from(self.keyword.token_span.len()) + 1;
+        printer.print(&self.condition, shape)
     }
 }
 

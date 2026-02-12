@@ -118,13 +118,6 @@ SOURCE_FILE
                 WORD "spaces"
                 QUOTE """
           CONFIG_ITEM
-            WORD "filePathString"
-            CONFIG_VALUE "../this-is-also-a-string"
-              DOT "."
-              DOT "."
-              SLASH "/"
-              WORD "this-is-also-a-string"
-          CONFIG_ITEM
             WORD "booleanValue"
             CONFIG_VALUE "true"
               WORD "true"

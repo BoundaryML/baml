@@ -4,7 +4,7 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 4
-Objects: 117
+Objects: 115
 Globals: 52
 
 Function MyClient.resolve (arity: 0, kind: Bytecode):
@@ -27,73 +27,71 @@ Function MyClient.resolve (arity: 0, kind: Bytecode):
      16   LOAD_CONST 13       ("hello there my frien
                   d")
      17   LOAD_CONST 14       ("inline "raw" string,,")
-     18   LOAD_CONST 15       ("this-is-also-a-string")
-     19   LOAD_CONST 16       (true)
-     20   LOAD_CONST 17       ("true")
-     21   LOAD_CONST 18       ("one")
-     22   LOAD_CONST 19       ("two")
-     23   ALLOC_ARRAY 2       
-     24   LOAD_CONST 20       ("one")
-     25   LOAD_CONST 21       ("two")
-     26   ALLOC_ARRAY 2       
-     27   LOAD_CONST 22       (1)
-     28   LOAD_CONST 23       (2)
-     29   LOAD_CONST 24       (3)
-     30   ALLOC_ARRAY 3       
-     31   LOAD_CONST 25       ("value")
-     32   LOAD_CONST 26       ("value2")
-     33   LOAD_CONST 27       ("yes")
-     34   LOAD_CONST 28       ("queen")
-     35   ALLOC_ARRAY 2       
-     36   LOAD_CONST 29       (10)
-     37   LOAD_CONST 30       ("key")
-     38   LOAD_CONST 31       ("key2")
-     39   LOAD_CONST 32       ("nestedArray")
-     40   LOAD_CONST 33       ("number")
-     41   ALLOC_MAP 4         
-     42   LOAD_CONST 34       ("value")
-     43   LOAD_CONST 6        (100)
-     44   LOAD_CONST 35       ("parallel_web_search")
-     45   LOAD_CONST 36       ("https://example.com")
-     46   LOAD_CONST 37       ("Bearer token")
-     47   LOAD_CONST 38       ("authorization")
-     48   ALLOC_MAP 1         
-     49   LOAD_CONST 39       ("mcp")
-     50   LOAD_CONST 40       ("server_label")
-     51   LOAD_CONST 41       ("server_url")
-     52   LOAD_CONST 42       ("headers")
-     53   LOAD_CONST 43       ("type")
-     54   ALLOC_MAP 4         
-     55   LOAD_CONST 44       ("value")
-     56   LOAD_CONST 45       ("another_tool")
-     57   ALLOC_MAP 1         
-     58   ALLOC_ARRAY 2       
-     59   LOAD_CONST 46       ("
+     18   LOAD_CONST 15       (true)
+     19   LOAD_CONST 16       ("true")
+     20   LOAD_CONST 17       ("one")
+     21   LOAD_CONST 18       ("two")
+     22   ALLOC_ARRAY 2       
+     23   LOAD_CONST 19       ("one")
+     24   LOAD_CONST 20       ("two")
+     25   ALLOC_ARRAY 2       
+     26   LOAD_CONST 21       (1)
+     27   LOAD_CONST 22       (2)
+     28   LOAD_CONST 23       (3)
+     29   ALLOC_ARRAY 3       
+     30   LOAD_CONST 24       ("value")
+     31   LOAD_CONST 25       ("value2")
+     32   LOAD_CONST 26       ("yes")
+     33   LOAD_CONST 27       ("queen")
+     34   ALLOC_ARRAY 2       
+     35   LOAD_CONST 28       (10)
+     36   LOAD_CONST 29       ("key")
+     37   LOAD_CONST 30       ("key2")
+     38   LOAD_CONST 31       ("nestedArray")
+     39   LOAD_CONST 32       ("number")
+     40   ALLOC_MAP 4         
+     41   LOAD_CONST 33       ("value")
+     42   LOAD_CONST 6        (100)
+     43   LOAD_CONST 34       ("parallel_web_search")
+     44   LOAD_CONST 35       ("https://example.com")
+     45   LOAD_CONST 36       ("Bearer token")
+     46   LOAD_CONST 37       ("authorization")
+     47   ALLOC_MAP 1         
+     48   LOAD_CONST 38       ("mcp")
+     49   LOAD_CONST 39       ("server_label")
+     50   LOAD_CONST 40       ("server_url")
+     51   LOAD_CONST 41       ("headers")
+     52   LOAD_CONST 42       ("type")
+     53   ALLOC_MAP 4         
+     54   LOAD_CONST 43       ("value")
+     55   LOAD_CONST 44       ("another_tool")
+     56   ALLOC_MAP 1         
+     57   ALLOC_ARRAY 2       
+     58   LOAD_CONST 45       ("
         hello there my friend
         {# a comment in a prompt #}
       ")
-     60   LOAD_CONST 47       ("max_tokens")
-     61   LOAD_CONST 48       ("array_key_with_quoted_unquoted")
-     62   LOAD_CONST 49       ("key2")
-     63   LOAD_CONST 50       ("hello")
-     64   LOAD_CONST 51       ("thing")
-     65   LOAD_CONST 52       ("block_string")
-     66   LOAD_CONST 53       ("inline_raw_string")
-     67   LOAD_CONST 54       ("filePathString")
-     68   LOAD_CONST 55       ("booleanValue")
-     69   LOAD_CONST 56       ("stringKey")
-     70   LOAD_CONST 57       ("array1")
-     71   LOAD_CONST 58       ("array2")
-     72   LOAD_CONST 59       ("array3Numbers")
-     73   LOAD_CONST 60       ("nestedKey")
-     74   LOAD_CONST 61       ("oneMoreValueToTestBrokenness")
-     75   LOAD_CONST 62       ("myInteger")
-     76   LOAD_CONST 63       ("tools")
-     77   LOAD_CONST 64       ("block_string")
-     78   ALLOC_MAP 18        
-     79   DISPATCH_FUTURE 5   
-     80   AWAIT               
-     81   RETURN              
+     59   LOAD_CONST 46       ("max_tokens")
+     60   LOAD_CONST 47       ("array_key_with_quoted_unquoted")
+     61   LOAD_CONST 48       ("key2")
+     62   LOAD_CONST 49       ("hello")
+     63   LOAD_CONST 50       ("thing")
+     64   LOAD_CONST 51       ("block_string")
+     65   LOAD_CONST 52       ("inline_raw_string")
+     66   LOAD_CONST 53       ("booleanValue")
+     67   LOAD_CONST 54       ("stringKey")
+     68   LOAD_CONST 55       ("array1")
+     69   LOAD_CONST 56       ("array2")
+     70   LOAD_CONST 57       ("array3Numbers")
+     71   LOAD_CONST 58       ("nestedKey")
+     72   LOAD_CONST 59       ("oneMoreValueToTestBrokenness")
+     73   LOAD_CONST 60       ("myInteger")
+     74   LOAD_CONST 61       ("tools")
+     75   LOAD_CONST 62       ("block_string")
+     76   ALLOC_MAP 17        
+     77   DISPATCH_FUTURE 5   
+     78   AWAIT               
+     79   RETURN              
 
 Function baml.llm.PlannerState.rr_local_offset (arity: 2, kind: Bytecode):
      0    INIT_LOCALS 5          

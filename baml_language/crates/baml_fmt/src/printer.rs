@@ -86,13 +86,39 @@ impl<'a> Printer<'a> {
         self.warnings.extend(other.warnings);
     }
 
-    pub fn new_empty_copy(&'a self) -> Printer<'a> {
-        Printer {
-            input: self.input,
-            config: self.config,
-            output: String::new(),
-            trivia: self.trivia,
-            warnings: Vec::new(),
+    pub fn sub_printer<'s>(&'s self) -> Printer<'a>
+    where
+        'a: 's,
+    {
+        Printer::new_empty(self.input, self.config, self.trivia)
+    }
+
+    /// Runs the function on a sub-printer (a copy of the current printer but with an empty output).
+    ///
+    /// The output of the sub-printer is returned, without changing the current printer.
+    pub fn with_sub_printer(
+        &self,
+        f: impl FnOnce(&mut Printer<'a>) -> PrintInfo,
+    ) -> (String, PrintInfo, Vec<PrinterWarning>) {
+        let mut empty_copy = Printer::new_empty(self.input, self.config, self.trivia);
+        let info = f(&mut empty_copy);
+        (empty_copy.output, info, empty_copy.warnings)
+    }
+
+    /// Runs the function on a sub-printer  (a copy of the current printer but with an empty output).
+    /// If the function returns `Some(info)`, the sub-printer
+    /// is appended to the current printer and the info is returned. Otherwise, the sub-printer is
+    /// not appended and `None` is returned.
+    pub fn try_sub_printer(
+        &mut self,
+        f: impl FnOnce(&mut Printer<'a>) -> Option<PrintInfo>,
+    ) -> Option<PrintInfo> {
+        let mut sub_printer = Printer::new_empty(self.input, self.config, self.trivia);
+        if let Some(info) = f(&mut sub_printer) {
+            self.append_from_printer(sub_printer);
+            Some(info)
+        } else {
+            None
         }
     }
 
@@ -111,7 +137,12 @@ impl<'a> Printer<'a> {
     ///
     /// Equivalent to `self.config.line_width - self.current_line_len()`.
     pub fn current_line_remaining_width(&self) -> usize {
-        self.config.line_width - self.current_line_len()
+        self.config.line_width.saturating_sub(self.current_line_len())
+    }
+
+    /// The current length of the output.
+    pub const fn len(&self) -> usize {
+        self.output.len()
     }
 }
 
