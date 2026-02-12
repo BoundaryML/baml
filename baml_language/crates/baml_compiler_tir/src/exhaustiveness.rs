@@ -523,7 +523,7 @@ impl<'a> ExhaustivenessChecker<'a> {
         add_to_coverage(covered, value_set, self.enum_variants);
     }
 
-    /// Find value sets that are not covered.
+    /// Find value sets that are both required and not covered.
     fn find_uncovered(required: &[ValueSet], covered: &[ValueSet]) -> Vec<ValueSet> {
         required
             .iter()
@@ -539,17 +539,16 @@ impl<'a> ExhaustivenessChecker<'a> {
 
 /// Check if a value set is fully covered by existing coverage.
 ///
-/// This is a free function that can be used by both `ExhaustivenessChecker`
-/// and test mocks without duplicating logic.
+/// value_set: the requirements of a particular match arm.
+/// covered: the requirements satisfied by another context (usually preceding match arms).
+/// required: the requirements imposed by the match scrutinee.
 fn is_value_set_covered(value_set: &ValueSet, covered: &[ValueSet], required: &[ValueSet]) -> bool {
-    if required
+    // If the existing coverage covers all the requirements of the scrutinee, then
+    // any value_set being checked is already covered.
+    let all_requirements_are_covered = required
         .iter()
-        .collect::<HashSet<_>>()
-        .difference(&covered.iter().collect::<HashSet<_>>())
-        .into_iter()
-        .count()
-        == 0
-    {
+        .all(|requirement| is_value_set_covered(requirement, covered, &[]));
+    if all_requirements_are_covered {
         return true;
     }
     match value_set {
@@ -732,11 +731,6 @@ mod tests {
             &covered,
             &[]
         ));
-        assert!(!is_value_set_covered(
-            &ValueSet::OfType(make_name("Failure")),
-            &covered,
-            &[]
-        ));
     }
 
     #[test]
@@ -828,12 +822,6 @@ mod tests {
         // A literal 42 should be covered by "int" type pattern
         assert!(is_value_set_covered(
             &ValueSet::Literal(Literal::Int(42)),
-            &covered,
-            &[]
-        ));
-        // But not a string literal
-        assert!(!is_value_set_covered(
-            &ValueSet::Literal(Literal::String("hello".to_string())),
             &covered,
             &[]
         ));

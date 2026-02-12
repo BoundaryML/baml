@@ -127,7 +127,7 @@ pub fn to_lsp_diagnostics(
     let related_information = if related_information.is_empty() {
         None
     } else {
-        Some(related_information.clone())
+        Some(related_information)
     };
 
     let primary_location = Location {

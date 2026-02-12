@@ -2555,11 +2555,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             extract_pattern_binding(ctx, pattern, arm.pattern, &scrutinee_ty, body);
 
                         if !ctx.is_subtype_of(&narrowed_ty, &scrutinee_ty) {
-                            ctx.push_error(TypeError::TypeMismatch {
-                                expected: scrutinee_ty.clone(),
-                                found: narrowed_ty.clone(),
+                            ctx.push_error(TypeError::UnreachableArm {
                                 location: ErrorLocation::Pattern(arm.pattern),
-                                info_location: Some(ErrorLocation::Expr(*scrutinee)),
                             })
                         }
 

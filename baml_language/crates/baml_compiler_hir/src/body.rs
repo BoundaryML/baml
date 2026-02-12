@@ -1933,6 +1933,12 @@ impl LoweringContext {
                         .alloc(Pattern::EnumVariant { enum_name, variant })
                 }
             }
+            PatternElement::SegmentsAwaitingWord(segs, _start) => {
+                // Incomplete dotted path (e.g., "Foo.") — treat last segment as binding
+                // This is a parse error, but we handle it gracefully
+                let last = segs.into_iter().last().unwrap_or_else(|| Name::new("_"));
+                self.patterns.alloc(Pattern::Binding(last))
+            }
             PatternElement::TypedBindingStart(name, start) => {
                 // Incomplete typed binding (missing type) - treat as simple binding
                 let end = start + TextSize::new(name.as_str().len() as u32);
