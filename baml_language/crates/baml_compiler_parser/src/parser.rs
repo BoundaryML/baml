@@ -5,7 +5,7 @@
 use baml_base::Span;
 use baml_compiler_lexer::{Token, TokenKind};
 use baml_compiler_syntax::SyntaxKind;
-use rowan::{GreenNode, GreenNodeBuilder, NodeCache};
+use rowan::{GreenNode, GreenNodeBuilder, NodeCache, TextSize};
 use text_size::TextRange;
 
 use crate::ParseError;
@@ -622,9 +622,15 @@ impl<'a> Parser<'a> {
             true
         } else if self.at(TokenKind::GreaterGreater) {
             // Handle '>>' as two '>':
-            // - Consume the '>>' token (adds it to tree once)
+            // - Consume the '>>' token and splits into two '>' tokens (first `>` is added to tree)
             // - Track that the second '>' is pending for the outer generic
-            let span = self.current().map(|t| t.span);
+            let span = self.current().map(|t| {
+                let mut span = t.span;
+                // Span should be on the second `>` token only
+                span.range =
+                    TextRange::new(span.range.start() + TextSize::from(1), span.range.end());
+                span
+            });
             self.events.push(Event::Token {
                 kind: SyntaxKind::GREATER,
                 text: ">".to_string(),
@@ -1567,6 +1573,12 @@ impl<'a> Parser<'a> {
                             ),
                             span,
                         );
+                    }
+                    for _ in 0..self.pending_greaters {
+                        self.events.push(Event::Token {
+                            kind: SyntaxKind::GREATER,
+                            text: ">".to_string(),
+                        });
                     }
                     self.pending_greaters = 0;
                     self.pending_greater_span = None;
@@ -3082,6 +3094,12 @@ impl<'a> Parser<'a> {
                     span,
                 );
             }
+            for _ in 0..self.pending_greaters {
+                self.events.push(Event::Token {
+                    kind: SyntaxKind::GREATER,
+                    text: ">".to_string(),
+                });
+            }
             self.pending_greaters = 0;
             self.pending_greater_span = None;
         }
@@ -3417,6 +3435,7 @@ impl<'a> Parser<'a> {
 
             // Optional client type: <llm>
             if p.at(TokenKind::Less) {
+                p.type_args_depth += 1;
                 p.with_node(SyntaxKind::CLIENT_TYPE, |p| {
                     p.bump(); // <
                     if p.at(TokenKind::Word) {
@@ -3424,6 +3443,27 @@ impl<'a> Parser<'a> {
                     }
                     p.expect_greater(); // >
                 });
+                p.type_args_depth -= 1;
+
+                if p.pending_greaters > 0 {
+                    if let Some(span) = p.pending_greater_span {
+                        p.error(
+                            format!(
+                                "Unmatched '>' in client definition (found {} extra)",
+                                p.pending_greaters
+                            ),
+                            span,
+                        );
+                    }
+                    for _ in 0..p.pending_greaters {
+                        p.events.push(Event::Token {
+                            kind: SyntaxKind::GREATER,
+                            text: ">".to_string(),
+                        });
+                    }
+                    p.pending_greaters = 0;
+                    p.pending_greater_span = None;
+                }
             }
 
             // Client name
