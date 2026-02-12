@@ -133,6 +133,7 @@ fn convert_instruction(
         bex_vm_types::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
         bex_vm_types::Instruction::Notify(idx) => Instruction::Notify(*idx),
         bex_vm_types::Instruction::Call(n) => Instruction::Call(*n),
+        bex_vm_types::Instruction::CallWithTrace(n) => Instruction::CallWithTrace(*n),
         bex_vm_types::Instruction::Return => Instruction::Return,
         bex_vm_types::Instruction::Assert => Instruction::Assert,
         bex_vm_types::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),

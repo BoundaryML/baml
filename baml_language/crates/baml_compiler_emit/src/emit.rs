@@ -6,6 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use baml_base::QualifiedName;
 use baml_compiler_mir::{
     AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
     Place, Rvalue, StatementKind, Terminator, UnaryOp,
@@ -116,6 +117,8 @@ struct StackifyCodegen<'ctx, 'obj> {
     enum_object_indices: &'ctx HashMap<String, usize>,
     /// Enum variant mappings (enum name -> variant name -> variant index).
     enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Set of LLM function names. Calls to these emit CallWithTrace; others use Call.
+    llm_functions: &'ctx HashSet<String>,
     /// Shared object pool.
     objects: &'obj mut ObjectPool,
 
@@ -161,6 +164,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             class_object_indices: ctx.class_object_indices,
             enum_object_indices: ctx.enum_object_indices,
             enum_variants: ctx.enum_variants,
+            llm_functions: ctx.llm_functions,
             objects: ctx.objects,
             analysis,
             local_slots: HashMap::new(),
@@ -365,7 +369,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Emit terminator
         if let Some(term) = &block.terminator {
-            self.emit_terminator(term, mir);
+            self.emit_terminator(term, block, mir);
         }
     }
 
@@ -833,7 +837,40 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     // ========================================================================
 
     /// Emit a terminator.
-    fn emit_terminator(&mut self, term: &Terminator, mir: &MirFunction) {
+    /// Resolve an operand to its underlying function QualifiedName, if any.
+    ///
+    /// When MIR lowering stores function references in temp locals:
+    ///   _tmp = Constant(Function(qn))
+    ///   Call { callee: Copy(Local(_tmp)), ... }
+    /// this helper traces through the assignment to find the original `qn`.
+    fn resolve_callee_function<'a>(
+        operand: &'a Operand,
+        block: &'a BasicBlock,
+    ) -> Option<&'a QualifiedName> {
+        // Direct constant case
+        if let Operand::Constant(Constant::Function(qn)) = operand {
+            return Some(qn);
+        }
+
+        // Copy(Local(local)) — find the assignment in the block's statements
+        if let Operand::Copy(Place::Local(local)) = operand {
+            for stmt in block.statements.iter().rev() {
+                if let StatementKind::Assign {
+                    destination: Place::Local(dest_local),
+                    value: Rvalue::Use(Operand::Constant(Constant::Function(qn))),
+                } = &stmt.kind
+                {
+                    if dest_local == local {
+                        return Some(qn);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn emit_terminator(&mut self, term: &Terminator, block: &BasicBlock, mir: &MirFunction) {
         match term {
             Terminator::Goto { target } => {
                 // Skip jump if target is the next block (fall-through)
@@ -903,11 +940,26 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
+                // Determine if this call target is an LLM function.
+                // Only LLM function calls emit CallWithTrace (producing trace spans);
+                // regular expression function calls use plain Call.
+                //
+                // MIR lowering stores function references in temp locals:
+                //   _tmp = Constant(Function(qn))
+                //   Call { callee: Copy(Local(_tmp)), ... }
+                // so we resolve through the assignment chain to find the function name.
+                let is_llm = Self::resolve_callee_function(callee, block)
+                    .is_some_and(|qn| self.llm_functions.contains(&qn.to_runtime_string()));
+
                 self.emit_operand_pull(callee, mir);
                 for arg in args {
                     self.emit_operand_pull(arg, mir);
                 }
-                self.emit(Instruction::Call(args.len()));
+                if is_llm {
+                    self.emit(Instruction::CallWithTrace(args.len()));
+                } else {
+                    self.emit(Instruction::Call(args.len()));
+                }
                 self.emit_store_place(destination, mir);
                 self.emit_jump_unless_fallthrough(*target);
             }

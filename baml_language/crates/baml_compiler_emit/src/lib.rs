@@ -40,6 +40,8 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub enum_object_indices: &'ctx HashMap<String, usize>,
     /// Enum variant mappings (enum name -> variant name -> variant index).
     pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
+    /// Set of LLM function names (qualified). Calls to these emit CallWithTrace.
+    pub llm_functions: &'ctx HashSet<String>,
     /// Shared object pool for strings, etc.
     pub objects: &'obj mut ObjectPool,
 }
@@ -135,6 +137,23 @@ pub fn compile_files(
                 let func_name = qualified_name.display();
                 globals.insert(func_name, global_idx);
                 global_idx += 1;
+            }
+        }
+    }
+
+    // Build set of LLM function names for selective CallWithTrace emission.
+    // Only calls to LLM functions emit CallWithTrace; regular expression function
+    // calls use plain Call so they don't appear as separate spans in traces.
+    let mut llm_functions: HashSet<String> = HashSet::new();
+    for file in files {
+        let items_struct = baml_compiler_hir::file_items(db, *file);
+        for item in items_struct.items(db) {
+            if let ItemId::Function(func_loc) = item {
+                if baml_compiler_hir::llm_function_meta(db, *func_loc).is_some() {
+                    let qualified_name =
+                        baml_compiler_hir::function_qualified_name(db, *func_loc);
+                    llm_functions.insert(qualified_name.display());
+                }
             }
         }
     }
@@ -474,6 +493,7 @@ pub fn compile_files(
                             class_object_indices: &class_object_indices,
                             enum_object_indices: &enum_object_indices,
                             enum_variants: &enum_variants,
+                            llm_functions: &llm_functions,
                             objects: &mut program.objects,
                         };
                         compile_mir_function(&mir, ctx)

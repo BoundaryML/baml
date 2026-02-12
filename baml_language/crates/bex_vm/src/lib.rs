@@ -25,4 +25,4 @@ pub use builtins::{BuiltinSignature, TypePattern, functions, get_native_fn};
 pub use errors::{InternalError, RuntimeError, StackTrace};
 pub use indexable::EvalStack;
 pub use native::NativeFunction;
-pub use vm::{BexVm, BytecodeProgram, Frame, VmExecState, convert_program};
+pub use vm::{BexVm, BytecodeProgram, Frame, SpanNotification, VmExecState, convert_program};

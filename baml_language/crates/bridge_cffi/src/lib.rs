@@ -4,9 +4,10 @@
 //! but powered by `bex_engine` instead of `baml-runtime`.
 
 mod ctypes;
-mod engine;
-mod error;
+pub mod engine;
+pub mod error;
 mod ffi;
+pub mod host_spans;
 mod panic;
 
 pub use error::BridgeError;

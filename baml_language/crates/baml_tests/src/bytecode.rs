@@ -180,6 +180,11 @@ pub fn collect_vm_exec_states(
 
     loop {
         let result = vm.exec()?;
+        // Skip SpanNotify states — these are span lifecycle events from
+        // CallWithTrace that aren't relevant for watch/emit tests.
+        if matches!(result, VmExecState::SpanNotify(_)) {
+            continue;
+        }
         let is_complete = matches!(result, VmExecState::Complete(_));
         let test_state = ExecState::from_vm_exec_state(result, &vm)?;
         states.push(test_state);
@@ -238,7 +243,17 @@ fn setup_and_exec_program(
     let mut vm = BexVm::from_program(program)?;
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &[]);
-    let result = vm.exec();
+
+    // Loop past SpanNotify states. The compiler now emits CallWithTrace for
+    // all function calls, so every inter-function call yields SpanNotify
+    // before reaching the actual result.
+    let result = loop {
+        let result = vm.exec();
+        match &result {
+            Ok(VmExecState::SpanNotify(_)) => continue,
+            _ => break result,
+        }
+    };
     Ok((vm, result))
 }
 

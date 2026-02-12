@@ -61,17 +61,36 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
+    time::{Instant, SystemTime},
 };
 
+use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
+
+// Re-export event types so callers of call_function_traced can inspect results.
+pub use bex_events::{RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
 use bex_heap::BexHeap;
 // Re-export GcStats for users of the engine
 pub use bex_heap::GcStats;
-use bex_vm::{BexVm, VmExecState};
+use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
+
+/// Host-side span context passed from the bridge to the engine.
+///
+/// When the host language (Python/TS) has active `@trace` spans, this struct
+/// allows the engine's trace events to be nested under the host's span tree,
+/// maintaining a unified call stack across the host/engine boundary.
+pub struct HostSpanContext {
+    /// The host's root span ID (top-level @trace span).
+    pub root_span_id: SpanId,
+    /// The innermost active host span (will be parent of the engine's root span).
+    pub parent_span_id: SpanId,
+    /// The full host call stack (list of SpanIds from root to tip).
+    pub call_stack: Vec<SpanId>,
+}
 
 // ============================================================================
 // Engine Types
@@ -123,6 +142,34 @@ impl EpochState {
             parked_vms: Mutex::new(Vec::new()),
         }
     }
+}
+
+// ============================================================================
+// Span Tracking (per-invocation, NOT on Arc<BexEngine>)
+// ============================================================================
+
+/// A single active span in the engine's per-invocation span stack.
+struct EngineSpan {
+    span_id: SpanId,
+    parent_span_id: Option<SpanId>,
+    label: String,
+    started_at: Instant,
+}
+
+/// Per-invocation span tracking state.
+///
+/// Created as a local in `call_function_traced` and threaded through the event
+/// loop. NOT stored on the shared `BexEngine`.
+struct SpanState {
+    /// Stack of active spans (LIFO).
+    stack: Vec<EngineSpan>,
+    /// Collected runtime events.
+    events: Vec<RuntimeEvent>,
+    /// Root span ID for the entire call tree.
+    root_span_id: SpanId,
+    /// Host-side call stack prefix (from Python @trace spans).
+    /// Prepended to the engine's call stack in emitted events.
+    host_call_stack: Vec<SpanId>,
 }
 
 /// Errors that can occur during engine execution.
@@ -577,9 +624,10 @@ impl BexEngine {
         // Set entry point with converted args
         vm.set_entry_point(function_index, &vm_args);
 
-        // Run the event loop with epoch tracking
+        // Run the event loop with epoch tracking (no span collection)
+        let mut no_spans: Option<SpanState> = None;
         let result = self
-            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch)
+            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch, &mut no_spans)
             .await;
 
         // Unregister from epoch
@@ -594,6 +642,125 @@ impl BexEngine {
 
         // Convert BexValue to BexExternalValue, wrapping in Union if return type is union
         result
+    }
+
+    /// Execute a function by name with span tracing enabled.
+    ///
+    /// Same as [`call_function`](Self::call_function) but also collects
+    /// [`RuntimeEvent`]s for every `CallWithTrace` span boundary the VM crosses.
+    /// The entry-point function itself gets a root span automatically.
+    ///
+    /// If `host_ctx` is provided, the engine's root span is nested under the
+    /// host's active span tree (e.g., Python `@trace` spans). The host's
+    /// call stack is prepended to the engine's call stack in events.
+    ///
+    /// Returns `(result_or_error, events)` — events are always returned, even
+    /// when the call fails, so callers can inspect partial traces.
+    pub async fn call_function_traced(
+        &self,
+        function_name: &str,
+        args: Vec<BexExternalValue>,
+        host_ctx: Option<HostSpanContext>,
+    ) -> (Result<BexExternalValue, EngineError>, Vec<RuntimeEvent>) {
+        // Wait for any in-progress GC to complete.
+        while self.gc_in_progress.load(Ordering::Acquire) {
+            self.gc_complete.notified().await;
+        }
+
+        let function_index = match self.lookup_function(function_name) {
+            Ok(idx) => idx,
+            Err(e) => return (Err(e), vec![]),
+        };
+        let return_type = self.function_return_type(function_name).unwrap_or(Ty::Null);
+
+        // Register with current epoch
+        let my_epoch = self.current_epoch.load(Ordering::Acquire);
+        let slot = (my_epoch % 2) as usize;
+        self.epoch_states[slot]
+            .active
+            .fetch_add(1, Ordering::AcqRel);
+
+        // SAFETY: We just registered with the epoch above
+        let guard = unsafe { EpochGuard::new() };
+
+        let mut vm = BexVm::new(
+            Arc::clone(&self.heap),
+            self.globals.clone(),
+            self.env_vars.clone(),
+        );
+
+        // Snapshot args for the root FunctionStart event before converting to VM values
+        let args_snapshot = args.clone();
+
+        let vm_args: Vec<Value> = args
+            .into_iter()
+            .map(|arg| self.convert_external_to_vm_value(&mut vm, arg, &guard))
+            .collect();
+
+        vm.set_entry_point(function_index, &vm_args);
+
+        // Initialize span tracking for the root call.
+        // If host context is provided, nest under the host's span tree.
+        let engine_span_id = SpanId::new();
+        let (parent_span_id, effective_root_span_id, host_call_stack) = match &host_ctx {
+            Some(ctx) => (
+                Some(ctx.parent_span_id.clone()),
+                ctx.root_span_id.clone(),
+                ctx.call_stack.clone(),
+            ),
+            None => (None, engine_span_id.clone(), vec![]),
+        };
+
+        // Build the call stack: host prefix + this engine span
+        let mut call_stack = host_call_stack.clone();
+        call_stack.push(engine_span_id.clone());
+
+        let root_ctx = SpanContext {
+            span_id: engine_span_id.clone(),
+            parent_span_id: parent_span_id.clone(),
+            root_span_id: effective_root_span_id.clone(),
+        };
+
+        let root_start_event = RuntimeEvent {
+            ctx: root_ctx,
+            call_stack,
+            timestamp: SystemTime::now(),
+            event: EventKind::Function(FunctionEvent::Start(FunctionStart {
+                name: function_name.to_string(),
+                args: args_snapshot,
+                tags: vec![],
+            })),
+        };
+        bex_events::event_store::emit(root_start_event.clone());
+
+        let mut span_state = Some(SpanState {
+            stack: vec![EngineSpan {
+                span_id: engine_span_id.clone(),
+                parent_span_id,
+                label: function_name.to_string(),
+                started_at: Instant::now(),
+            }],
+            events: vec![root_start_event],
+            root_span_id: effective_root_span_id,
+            host_call_stack,
+        });
+
+        // Run the event loop with span collection
+        let result = self
+            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch, &mut span_state)
+            .await;
+
+        // Unregister from epoch
+        if self.epoch_states[slot]
+            .active
+            .fetch_sub(1, Ordering::AcqRel)
+            == 1
+        {
+            self.epoch_drained.notify_one();
+        }
+
+        let events = span_state.map(|s| s.events).unwrap_or_default();
+        (result, events)
     }
 
     /// Look up a function by name and return its heap pointer.
@@ -692,12 +859,40 @@ impl BexEngine {
         return_type: Ty,
         vm: &mut BexVm,
         my_epoch: u64,
+        span_state: &mut Option<SpanState>,
     ) -> Result<BexExternalValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
 
         'vm_exec: loop {
             match vm.exec()? {
                 VmExecState::Complete(value) => {
+                    // Emit FunctionEnd for the root entry-point span if tracing
+                    if let Some(state) = span_state.as_mut() {
+                        if let Some(root_span) = state.stack.pop() {
+                            let external_result = self.vm_arg_to_bex_value(&value);
+                            let mut full_call_stack = state.host_call_stack.clone();
+                            full_call_stack
+                                .extend(state.stack.iter().map(|s| s.span_id.clone()));
+                            full_call_stack.push(root_span.span_id.clone());
+                            let end_event = RuntimeEvent {
+                                ctx: SpanContext {
+                                    span_id: root_span.span_id,
+                                    parent_span_id: root_span.parent_span_id,
+                                    root_span_id: state.root_span_id.clone(),
+                                },
+                                call_stack: full_call_stack,
+                                timestamp: SystemTime::now(),
+                                event: EventKind::Function(FunctionEvent::End(FunctionEnd {
+                                    name: root_span.label,
+                                    result: external_result,
+                                    duration: root_span.started_at.elapsed(),
+                                })),
+                            };
+                            bex_events::event_store::emit(end_event.clone());
+                            state.events.push(end_event);
+                        }
+                    }
+
                     return self.heap.with_gc_protection(|protected| {
                         // Convert to BexValue (handles for objects, BexExternalValue for primitives)
                         self.convert_vm_value_to_external_with_type(
@@ -832,6 +1027,92 @@ impl BexEngine {
 
                 VmExecState::Notify(_notification) => {
                     // Ignore watch notifications for now
+                }
+
+                VmExecState::SpanNotify(notification) => {
+                    if let Some(state) = span_state.as_mut() {
+                        match notification {
+                            SpanNotification::FunctionEnter {
+                                function_name,
+                                frame_depth: _,
+                                args,
+                            } => {
+                                let span_id = SpanId::new();
+                                let parent_span_id =
+                                    state.stack.last().map(|s| s.span_id.clone());
+
+                                // Build call_stack: host prefix + existing engine spans + new span
+                                let mut call_stack = state.host_call_stack.clone();
+                                call_stack
+                                    .extend(state.stack.iter().map(|s| s.span_id.clone()));
+                                call_stack.push(span_id.clone());
+
+                                // Convert VM args to external values for the event
+                                let external_args: Vec<BexExternalValue> = args
+                                    .iter()
+                                    .map(|v| self.vm_arg_to_bex_value(v))
+                                    .collect();
+
+                                let enter_event = RuntimeEvent {
+                                    ctx: SpanContext {
+                                        span_id: span_id.clone(),
+                                        parent_span_id: parent_span_id.clone(),
+                                        root_span_id: state.root_span_id.clone(),
+                                    },
+                                    call_stack,
+                                    timestamp: SystemTime::now(),
+                                    event: EventKind::Function(FunctionEvent::Start(
+                                        FunctionStart {
+                                            name: function_name.clone(),
+                                            args: external_args,
+                                            tags: vec![],
+                                        },
+                                    )),
+                                };
+                                bex_events::event_store::emit(enter_event.clone());
+                                state.events.push(enter_event);
+
+                                state.stack.push(EngineSpan {
+                                    span_id,
+                                    parent_span_id,
+                                    label: function_name,
+                                    started_at: Instant::now(),
+                                });
+                            }
+                            SpanNotification::FunctionExit {
+                                function_name,
+                                result,
+                            } => {
+                                if let Some(span) = state.stack.pop() {
+                                    let external_result = self.vm_arg_to_bex_value(&result);
+                                    // call_stack: host prefix + remaining engine spans + exiting span
+                                    let mut call_stack = state.host_call_stack.clone();
+                                    call_stack.extend(
+                                        state.stack.iter().map(|s| s.span_id.clone()),
+                                    );
+                                    call_stack.push(span.span_id.clone());
+                                    let exit_event = RuntimeEvent {
+                                        ctx: SpanContext {
+                                            span_id: span.span_id,
+                                            parent_span_id: span.parent_span_id,
+                                            root_span_id: state.root_span_id.clone(),
+                                        },
+                                        call_stack,
+                                        timestamp: SystemTime::now(),
+                                        event: EventKind::Function(FunctionEvent::End(
+                                            FunctionEnd {
+                                                name: function_name,
+                                                result: external_result,
+                                                duration: span.started_at.elapsed(),
+                                            },
+                                        )),
+                                    };
+                                    bex_events::event_store::emit(exit_event.clone());
+                                    state.events.push(exit_event);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

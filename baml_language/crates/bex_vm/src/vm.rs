@@ -209,6 +209,10 @@ pub struct BexVm {
     pub watched_vars: HashMap<StackIndex, (String, String)>,
 
     pub interrupt_frame: Option<usize>,
+
+    /// Frame depths pushed via `CallWithTrace`. Always sorted ascending (LIFO).
+    /// Checked on `Return` to yield `FunctionExit` notifications.
+    traced_frames: Vec<usize>,
 }
 
 /// VM execution state.
@@ -238,6 +242,9 @@ pub enum VmExecState {
 
     /// Notify about watched variables.
     Notify(WatchNotification),
+
+    /// Notify about span lifecycle (from `CallWithTrace` / `Return`).
+    SpanNotify(SpanNotification),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -248,6 +255,29 @@ pub enum WatchNotification {
     Viz {
         function_name: String,
         event: bex_vm_types::bytecode::VizExecEvent,
+    },
+}
+
+/// Span notifications yielded by the VM for callstack tracking.
+///
+/// The VM provides args and result values from the eval stack so the engine
+/// can emit `FunctionStart`/`FunctionEnd` events without additional lookups.
+/// The VM itself has no span state (no SpanId, no timing) — all observability
+/// logic lives in the engine.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SpanNotification {
+    /// A traced function call was entered (via `CallWithTrace`).
+    /// `args` are snapshotted from the eval stack before the frame is pushed.
+    FunctionEnter {
+        function_name: String,
+        frame_depth: usize,
+        args: Vec<Value>,
+    },
+    /// A traced function call is returning.
+    /// `result` is the return value popped from the eval stack.
+    FunctionExit {
+        function_name: String,
+        result: Value,
     },
 }
 
@@ -388,6 +418,7 @@ impl BexVm {
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
+            traced_frames: Vec::new(),
         }
     }
 
@@ -2198,6 +2229,94 @@ impl BexVm {
                     }
                 }
 
+                Instruction::CallWithTrace(arg_count) => {
+                    // Same as Call(arg_count), but also yields a
+                    // SpanNotification::FunctionEnter to the engine.
+                    let locals_offset = self.stack.ensure_slot_from_top(arg_count)?;
+                    let local = &self.stack[locals_offset];
+                    let function_type = FunctionType::Callable;
+                    let index = self.as_object_ptr(local, function_type.into())?;
+
+                    let Object::Function(callee) = self.get_object(index) else {
+                        return Err(InternalError::TypeError {
+                            expected: function_type.into(),
+                            got: ObjectType::of(self.get_object(index)).into(),
+                        }
+                        .into());
+                    };
+
+                    if arg_count != callee.arity {
+                        return Err(VmError::from(InternalError::InvalidArgumentCount {
+                            expected: callee.arity,
+                            got: arg_count,
+                        }));
+                    }
+
+                    if self.frames.len() >= MAX_FRAMES {
+                        return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
+                    }
+
+                    match callee.kind {
+                        FunctionKind::Bytecode => {
+                            // Snapshot args from the eval stack BEFORE pushing the frame.
+                            let args_start = locals_offset.into_raw() + 1;
+                            let args: Vec<Value> =
+                                self.stack[StackIndex::from_raw(args_start)..].to_owned();
+
+                            let callee_name = callee.name.clone();
+
+                            self.frames.push(Frame {
+                                function: index,
+                                instruction_ptr: 0,
+                                locals_offset,
+                            });
+
+                            frame_idx = self.frames.len() - 1;
+                            self.traced_frames.push(frame_idx);
+
+                            return Ok(VmExecState::SpanNotify(
+                                SpanNotification::FunctionEnter {
+                                    function_name: callee_name,
+                                    frame_depth: frame_idx,
+                                    args,
+                                },
+                            ));
+                        }
+
+                        FunctionKind::Native(func_ptr) => {
+                            // Native calls: no frame push, cannot be traced.
+                            let func = unsafe {
+                                std::mem::transmute::<*const (), NativeFunction>(func_ptr)
+                            };
+                            let args = self.stack
+                                [StackIndex::from_raw(locals_offset.into_raw() + 1)..]
+                                .to_owned();
+                            let result = func(self, &args)?;
+                            self.stack.drain(locals_offset..);
+                            self.stack.push(result);
+                            function = self
+                                .get_object(self.frames[frame_idx].function)
+                                .as_function()?
+                                .clone();
+                        }
+
+                        FunctionKind::SysOp(_) => {
+                            return Err(InternalError::TypeError {
+                                expected: FunctionType::Callable.into(),
+                                got: FunctionType::from(&callee.kind).into(),
+                            }
+                            .into());
+                        }
+
+                        FunctionKind::NativeUnresolved => {
+                            panic!(
+                                "Unresolved native function '{}' - did you forget to call attach_builtins()?",
+                                callee.name
+                            );
+                        }
+                    }
+                }
+
                 Instruction::Return => {
                     // Pop the result from the eval stack.
                     let result = self.stack.ensure_pop()?;
@@ -2224,6 +2343,21 @@ impl BexVm {
                         }
                     }
 
+                    // Check if this frame was traced (via CallWithTrace).
+                    // Capture function name before popping the frame.
+                    let span_exit =
+                        if self.traced_frames.last() == Some(&frame_idx) {
+                            let func_name = self
+                                .get_object(self.frames[frame_idx].function)
+                                .as_function()
+                                .map(|f| f.name.clone())
+                                .ok();
+                            self.traced_frames.pop();
+                            func_name
+                        } else {
+                            None
+                        };
+
                     // Restore the eval stack to the state before the function
                     // was called and leave the result on top.
                     self.stack.drain(self.frames[frame_idx].locals_offset..);
@@ -2249,6 +2383,16 @@ impl BexVm {
                             .ensure_pop()
                             .map(VmExecState::Complete)
                             .map_err(Into::into);
+                    }
+
+                    // Yield FunctionExit for traced frames (with result value).
+                    if let Some(name) = span_exit {
+                        return Ok(VmExecState::SpanNotify(
+                            SpanNotification::FunctionExit {
+                                function_name: name,
+                                result,
+                            },
+                        ));
                     }
 
                     // Resume previous frame execution.

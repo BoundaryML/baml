@@ -290,6 +290,11 @@ impl ExecState {
             VmExecState::Complete(value) => {
                 Value::from_vm_value(&value, vm).map(ExecState::Complete)
             }
+            VmExecState::SpanNotify(_) => {
+                // Span notifications: treated as empty emit in test context.
+                // The test runner will call exec() again to continue.
+                Ok(ExecState::Emit(vec![]))
+            }
             VmExecState::Notify(notification) => match notification {
                 VmWatchNotification::Variables(nodes) => {
                     let notifications = nodes
@@ -349,6 +354,7 @@ pub enum Instruction {
     Unwatch(usize),
     Notify(usize),
     Call(usize),
+    CallWithTrace(usize),
     Return,
     Assert,
     NotifyBlock(usize),

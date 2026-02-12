@@ -1678,6 +1678,9 @@ impl CompilerRunner {
                     "Function sent a watch notification (not supported in VM Runner)".to_string(),
                 ));
             }
+            Ok(VmExecState::SpanNotify(_)) => {
+                // Span notifications are ignored in the VM Runner — just continue.
+            }
             Err(e) => {
                 self.vm_runner_state.execution_result =
                     Some(VmExecutionResult::Error(format!("{:?}", e)));

@@ -289,6 +289,17 @@ pub enum Instruction {
     /// is right below them.
     Call(usize),
 
+    /// Call a function AND notify the engine that this call is traced.
+    ///
+    /// Behaves exactly like `Call(n)`: pushes a frame, sets up locals.
+    /// Additionally, when `tracing_enabled` is true:
+    ///   1. Snapshots the arguments from the eval stack
+    ///   2. Records the new frame's depth in `traced_frames`
+    ///   3. Yields `SpanNotification::FunctionEnter` to the engine
+    ///
+    /// When `tracing_enabled` is false, behaves identically to `Call(n)`.
+    CallWithTrace(usize),
+
     /// Return from a function.
     ///
     /// No arguments needed, result is stored in the eval stack and the VM
@@ -544,6 +555,7 @@ impl std::fmt::Display for Instruction {
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(n) => write!(f, "CALL {n}"),
+            Instruction::CallWithTrace(n) => write!(f, "CALL_WITH_TRACE {n}"),
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),

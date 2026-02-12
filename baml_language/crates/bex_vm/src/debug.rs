@@ -178,6 +178,7 @@ pub fn display_instruction(
         | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::Call(_)
+        | Instruction::CallWithTrace(_)
         | Instruction::Assert
         | Instruction::Discriminant
         | Instruction::TypeTag
@@ -290,7 +291,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Jump(_) | Instruction::PopJumpIfFalse(_) | Instruction::JumpTable { .. } => {
             Color::Yellow
         }
-        Instruction::Call(_) => Color::Magenta,
+        Instruction::Call(_) | Instruction::CallWithTrace(_) => Color::Magenta,
         Instruction::Assert
         | Instruction::Return
         | Instruction::Pop(_)
