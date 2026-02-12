@@ -510,6 +510,121 @@ pub fn track_watch_dependencies(watch: &mut Watch, parent: NodeId, path: Path, c
     }
 }
 
+// --- Garbage Collection ---
+
+/// Forward a `Value::Object` pointer if present in the forwarding map.
+fn forward_value(value: &mut Value, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    if let Value::Object(ptr) = value {
+        if let Some(&new_ptr) = forwarding.get(ptr) {
+            *ptr = new_ptr;
+        }
+    }
+}
+
+/// Remap a `NodeId` using the GC forwarding map.
+///
+/// Not all pointers are in the forwarding map — only objects that were actually
+/// relocated by the copying GC have entries. Compile-time objects (permanent
+/// space) and objects that weren't moved keep their original pointer.
+fn remap_node(node: NodeId, forwarding: &HashMap<HeapPtr, HeapPtr>) -> NodeId {
+    match node {
+        NodeId::HeapObject(ptr) => NodeId::HeapObject(*forwarding.get(&ptr).unwrap_or(&ptr)),
+        NodeId::LocalVar(_) => node,
+    }
+}
+
+/// Remap all keys and values in a `NodeId -> HashSet<NodeId>` map.
+fn remap_node_set(
+    map: &mut HashMap<NodeId, HashSet<NodeId>>,
+    forwarding: &HashMap<HeapPtr, HeapPtr>,
+) {
+    let old = std::mem::take(map);
+    for (key, values) in old {
+        let new_values: HashSet<_> = values
+            .into_iter()
+            .map(|v| remap_node(v, forwarding))
+            .collect();
+        map.insert(remap_node(key, forwarding), new_values);
+    }
+}
+
+impl Watch {
+    /// Collects GC roots from Watch state.
+    ///
+    /// Only `last_assigned` and `last_notified` need to be roots — `value`
+    /// is always a copy of the stack slot (already a root), and graph `NodeId`s
+    /// point to objects transitively reachable from stack values.
+    pub fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        for state in self.roots.values() {
+            if let Some(Value::Object(ptr)) = state.last_assigned {
+                roots.push(ptr);
+            }
+            if let Some(Value::Object(ptr)) = state.last_notified {
+                roots.push(ptr);
+            }
+        }
+    }
+
+    /// Applies GC forwarding pointers to all `HeapPtr`s in Watch state.
+    ///
+    /// After a copying GC, all heap objects may have moved. This updates
+    /// `RootState` values and rebuilds the graph maps with new pointers.
+    pub fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        if forwarding.is_empty() || self.roots.is_empty() {
+            return;
+        }
+
+        // Patch RootState values.
+        for state in self.roots.values_mut() {
+            forward_value(&mut state.value, forwarding);
+            if let Some(ref mut val) = state.last_assigned {
+                forward_value(val, forwarding);
+            }
+            if let Some(ref mut val) = state.last_notified {
+                forward_value(val, forwarding);
+            }
+            if let WatchFilter::Function(ref mut ptr) = state.filter {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
+                }
+            }
+        }
+
+        // Remap all HeapObject NodeIds in the graph maps.
+
+        // children: parent -> {(path, child)}
+        let old_children = std::mem::take(&mut self.children);
+        for (parent, edges) in old_children {
+            let new_edges: HashSet<_> = edges
+                .into_iter()
+                .map(|(path, child)| (path, remap_node(child, forwarding)))
+                .collect();
+            self.children
+                .insert(remap_node(parent, forwarding), new_edges);
+        }
+
+        // parents: child -> {(parent, path)}
+        let old_parents = std::mem::take(&mut self.parents);
+        for (child, edges) in old_parents {
+            let new_edges: HashSet<_> = edges
+                .into_iter()
+                .map(|(parent, path)| (remap_node(parent, forwarding), path))
+                .collect();
+            self.parents
+                .insert(remap_node(child, forwarding), new_edges);
+        }
+
+        remap_node_set(&mut self.reachable_from_root, forwarding);
+        remap_node_set(&mut self.roots_reaching_node, forwarding);
+
+        // roots: NodeId -> RootState
+        let old_roots = std::mem::take(&mut self.roots);
+        for (key, value) in old_roots {
+            self.roots.insert(remap_node(key, forwarding), value);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use bex_vm_types::types::Instance;
