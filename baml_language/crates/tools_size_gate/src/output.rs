@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     compare::{Violation, format_bytes},
     measure::ArtifactMeasurement,
@@ -182,6 +184,95 @@ pub(crate) fn render_markdown_fragment(rows: &[ReportRow]) {
         println!("\n<!-- FIX_HINTS -->");
         print_fix_hint_md(rows);
     }
+}
+
+/// JSON output for CI composition via jq.
+pub(crate) fn render_json(rows: &[ReportRow]) {
+    let artifacts: Vec<JsonArtifact> = rows
+        .iter()
+        .map(|row| {
+            let (delta, delta_pct) = delta_strings(row);
+            let status = row_status(row);
+            JsonArtifact {
+                artifact: row.artifact.clone(),
+                platform: row.platform.clone(),
+                status: status.to_owned(),
+                file_bytes: row.current.file_bytes,
+                file_display: format_bytes(row.current.file_bytes),
+                stripped_bytes: row.current.stripped_bytes,
+                stripped_display: row
+                    .current
+                    .stripped_bytes
+                    .map(format_bytes)
+                    .unwrap_or_else(|| "-".into()),
+                gzip_bytes: row.current.gzip_bytes,
+                gzip_display: format_bytes(row.current.gzip_bytes),
+                baseline_gzip_bytes: row.baseline.as_ref().map(|b| b.gzip_bytes),
+                delta,
+                delta_pct,
+                violations: row
+                    .violations
+                    .iter()
+                    .map(|v| JsonViolation {
+                        metric: v.metric.clone(),
+                        policy_name: v.policy_name.clone(),
+                        actual: v.actual.clone(),
+                        limit: v.limit.clone(),
+                        exceeded_by: v.exceeded_by.clone(),
+                    })
+                    .collect(),
+                baseline_missing: row.baseline.is_none(),
+                baseline_file_missing: !row.platform_file_exists,
+                baseline_snippet: baseline_toml_snippet(row),
+            }
+        })
+        .collect();
+
+    let report = JsonReport {
+        ok: !rows.iter().any(ReportRow::has_failure),
+        artifacts,
+    };
+
+    println!(
+        "{}",
+        serde_json::to_string(&report).expect("failed to serialize JSON report")
+    );
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct JsonReport {
+    pub ok: bool,
+    pub artifacts: Vec<JsonArtifact>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct JsonArtifact {
+    pub artifact: String,
+    pub platform: String,
+    pub status: String,
+    pub file_bytes: u64,
+    pub file_display: String,
+    pub stripped_bytes: Option<u64>,
+    pub stripped_display: String,
+    pub gzip_bytes: u64,
+    pub gzip_display: String,
+    pub baseline_gzip_bytes: Option<u64>,
+    pub delta: String,
+    pub delta_pct: String,
+    pub violations: Vec<JsonViolation>,
+    pub baseline_missing: bool,
+    pub baseline_file_missing: bool,
+    /// TOML snippet to add/update this artifact's baseline.
+    pub baseline_snippet: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct JsonViolation {
+    pub metric: String,
+    pub policy_name: String,
+    pub actual: String,
+    pub limit: String,
+    pub exceeded_by: String,
 }
 
 /// Returns true if any row has a failure (violation or missing baseline).
@@ -456,5 +547,174 @@ fn print_fix_hint_md(rows: &[ReportRow]) {
                 );
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate report (reads multiple JSON files, renders unified markdown)
+// ---------------------------------------------------------------------------
+
+/// Shorten a platform triple to a human-friendly label.
+fn short_platform(platform: &str) -> &str {
+    match platform {
+        s if s.contains("apple-darwin") => "macOS",
+        s if s.contains("linux") => "Linux",
+        s if s.contains("windows") => "Windows",
+        s if s.contains("wasm") => "WASM",
+        other => other,
+    }
+}
+
+/// Render a unified CodSpeed-style markdown report from multiple JSON reports.
+///
+/// The `run_url` is optional and used for the footer link to the workflow run.
+pub(crate) fn render_aggregate_markdown(reports: &[JsonReport], run_url: Option<&str>) {
+    // Merge all artifacts from all reports
+    let all_artifacts: Vec<&JsonArtifact> = reports.iter().flat_map(|r| &r.artifacts).collect();
+
+    let fail_count = all_artifacts
+        .iter()
+        .filter(|a| a.status == "FAIL" || a.status == "MISSING")
+        .count();
+    let ok_count = all_artifacts.iter().filter(|a| a.status == "OK").count();
+    let all_ok = fail_count == 0;
+
+    // Header
+    if all_ok {
+        println!("# Binary size checks passed");
+    } else {
+        println!("# Binary size checks failed");
+    }
+    println!();
+
+    // Summary line
+    let mut summary_parts = Vec::new();
+    if fail_count > 0 {
+        summary_parts.push(format!("❌ **{fail_count}** violations"));
+    }
+    if ok_count > 0 {
+        summary_parts.push(format!("✅ **{ok_count}** passed"));
+    }
+    println!("{}", summary_parts.join("  ·  "));
+    println!();
+
+    // Warning callout
+    if !all_ok {
+        println!(
+            "> ⚠️ Please fix the size gate issues or acknowledge them by updating baselines.\n"
+        );
+    }
+
+    // Unified table
+    println!("| | Artifact | Platform | Gzip | Baseline | Delta | Status |");
+    println!("|---|----------|----------|------|----------|-------|--------|");
+
+    for a in &all_artifacts {
+        let icon = match a.status.as_str() {
+            "OK" => ":white_check_mark:",
+            "FAIL" => ":x:",
+            _ => ":warning:",
+        };
+        let baseline_display = match a.baseline_gzip_bytes {
+            Some(b) => format_bytes(b),
+            None => "n/a".into(),
+        };
+        let platform_label = short_platform(&a.platform);
+
+        println!(
+            "| {icon} | `{}` | {platform_label} | {} | {baseline_display} | {} ({}) | {} |",
+            a.artifact, a.gzip_display, a.delta, a.delta_pct, a.status
+        );
+    }
+    println!();
+
+    // Details section (only if failures)
+    if !all_ok {
+        println!("<details>");
+        println!("<summary>Details & how to fix</summary>");
+        println!();
+
+        // Violations
+        let violations: Vec<_> = all_artifacts
+            .iter()
+            .filter(|a| !a.violations.is_empty())
+            .collect();
+        if !violations.is_empty() {
+            println!("**Violations:**\n");
+            for a in &violations {
+                for v in &a.violations {
+                    println!(
+                        "- **{}** ({}) `{}`: {} exceeds limit of {} (exceeded by {}, policy: `{}`)",
+                        a.artifact,
+                        short_platform(&a.platform),
+                        v.metric,
+                        v.actual,
+                        v.limit,
+                        v.exceeded_by,
+                        v.policy_name
+                    );
+                }
+            }
+            println!();
+        }
+
+        // Missing baselines
+        let missing: Vec<_> = all_artifacts
+            .iter()
+            .filter(|a| a.baseline_missing)
+            .collect();
+        if !missing.is_empty() {
+            println!("**Missing baselines:**\n");
+            for a in &missing {
+                if a.baseline_file_missing {
+                    println!(
+                        "- **{}** — baseline file `.ci/size-gate/{}.toml` does not exist",
+                        a.artifact, a.platform
+                    );
+                } else {
+                    println!(
+                        "- **{}** — artifact not found in `.ci/size-gate/{}.toml`",
+                        a.artifact, a.platform
+                    );
+                }
+            }
+            println!();
+        }
+
+        // TOML snippets grouped by platform
+        let needs_fix: Vec<_> = all_artifacts
+            .iter()
+            .filter(|a| a.baseline_missing || !a.violations.is_empty())
+            .collect();
+        if !needs_fix.is_empty() {
+            println!("**Add/update baselines:**\n");
+            // Group by platform
+            let mut by_platform: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+            for a in &needs_fix {
+                by_platform
+                    .entry(&a.platform)
+                    .or_default()
+                    .push(&a.baseline_snippet);
+            }
+            for (platform, snippets) in &by_platform {
+                println!("**`.ci/size-gate/{platform}.toml`**:");
+                println!("```toml");
+                for snippet in snippets {
+                    println!("{snippet}");
+                }
+                println!("```\n");
+            }
+        }
+
+        println!("</details>");
+        println!();
+    }
+
+    // Footer
+    println!("---");
+    if let Some(url) = run_url {
+        println!("*Generated by `cargo size-gate` · [workflow run]({url})*");
+    } else {
+        println!("*Generated by `cargo size-gate`*");
     }
 }

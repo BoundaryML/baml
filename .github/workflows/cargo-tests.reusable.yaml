@@ -215,7 +215,7 @@ jobs:
         run: |
           cargo run -p cargo-size-gate -- size-gate check \
             --only bridge_cffi-stripped,bridge_cffi \
-            --format md-fragment > size-gate-report-linux.md 2> size-gate-stderr.txt || exit_code=$?
+            --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
 
@@ -224,7 +224,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: size-gate-linux
-          path: baml_language/size-gate-report-linux.md
+          path: baml_language/size-gate-linux.json
+          if-no-files-found: ignore
+
+      - name: "Upload size-gate binary"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-binary
+          path: baml_language/target/debug/cargo-size-gate
           if-no-files-found: ignore
 
       - name: "Fail on policy violation"
@@ -256,7 +264,7 @@ jobs:
         run: |
           cargo run -p cargo-size-gate -- size-gate check \
             --only bridge_cffi-stripped,bridge_cffi \
-            --format md-fragment > size-gate-report-macos.md 2> size-gate-stderr.txt || exit_code=$?
+            --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
 
@@ -265,7 +273,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: size-gate-macos
-          path: baml_language/size-gate-report-macos.md
+          path: baml_language/size-gate-macos.json
           if-no-files-found: ignore
 
       - name: "Fail on policy violation"
@@ -297,7 +305,7 @@ jobs:
         run: |
           cargo run -p cargo-size-gate -- size-gate check \
             --only bridge_cffi-stripped,bridge_cffi \
-            --format md-fragment > size-gate-report-windows.md 2> size-gate-stderr.txt || exit_code=$?
+            --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
 
@@ -306,7 +314,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: size-gate-windows
-          path: baml_language/size-gate-report-windows.md
+          path: baml_language/size-gate-windows.json
           if-no-files-found: ignore
 
       - name: "Fail on policy violation"
@@ -340,7 +348,7 @@ jobs:
         run: |
           cargo run -p cargo-size-gate -- size-gate check \
             --only bridge_wasm \
-            --format md-fragment > size-gate-report-wasm.md 2> size-gate-stderr.txt || exit_code=$?
+            --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
           cat size-gate-stderr.txt >&2
           echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
 
@@ -349,7 +357,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: size-gate-wasm
-          path: baml_language/size-gate-report-wasm.md
+          path: baml_language/size-gate-wasm.json
           if-no-files-found: ignore
 
       - name: "Fail on policy violation"
@@ -364,7 +372,7 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - name: "Download all size-gate reports"
+      - name: "Download size-gate reports and binary"
         uses: actions/download-artifact@v4
         with:
           pattern: size-gate-*
@@ -372,125 +380,23 @@ jobs:
           path: reports
 
       - name: "Compose unified report"
+        env:
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         run: |
-          # Build a CodSpeed-style unified markdown comment
-          {
-            # --- Header ---
-            failed=false
-            skipped=0
-            passed=0
-            failed_count=0
-            declare -A platform_results
-            platform_results[linux]="${{ needs.size-gate-linux.result }}"
-            platform_results[macos]="${{ needs.size-gate-macos.result }}"
-            platform_results[windows]="${{ needs.size-gate-windows.result }}"
-            platform_results[wasm]="${{ needs.size-gate-wasm.result }}"
-            for platform in linux macos windows wasm; do
-              r="${platform_results[$platform]}"
-              case "$r" in
-                success) passed=$((passed + 1)) ;;
-                failure) failed=true; failed_count=$((failed_count + 1)) ;;
-                *) skipped=$((skipped + 1)) ;;
-              esac
-            done
+          chmod +x reports/cargo-size-gate
 
-            if [ "$failed" = "true" ]; then
-              echo "# Binary size checks failed"
-            else
-              echo "# Binary size checks passed"
-            fi
-            echo ""
+          # Collect all JSON reports that exist
+          json_files=()
+          for platform in linux macos windows wasm; do
+            f="reports/size-gate-${platform}.json"
+            [ -f "$f" ] && json_files+=("$f")
+          done
 
-            # --- Summary stats ---
-            echo -n ""
-            if [ "$failed_count" -gt 0 ]; then
-              echo "❌ **${failed_count}** failed platforms"
-            fi
-            if [ "$passed" -gt 0 ]; then
-              echo "✅ **${passed}** passed platforms"
-            fi
-            if [ "$skipped" -gt 0 ]; then
-              echo "⏭️ **${skipped}** skipped platforms"
-            fi
-            echo ""
-
-            if [ "$failed" = "true" ]; then
-              echo "> ⚠️ Please fix the size gate issues or acknowledge them by updating baselines."
-              echo ""
-            fi
-
-            # --- Unified size table ---
-            echo "### Size Changes"
-            echo ""
-            echo "| | Platform | Artifact | File | Stripped | Gzip | Delta | Delta% |"
-            echo "|---|----------|----------|------|---------|------|-------|--------|"
-
-            for platform in linux macos windows wasm; do
-              file="reports/size-gate-report-${platform}.md"
-              if [ ! -f "$file" ]; then
-                continue
-              fi
-              result="${platform_results[$platform]}"
-
-              # Extract just the table rows (lines starting with |, from the fragment)
-              grep '^|' "$file" | while IFS= read -r line; do
-                # Parse: | artifact | file | stripped | gzip | delta | delta% | status |
-                # Re-emit as: | status | platform | artifact | file | stripped | gzip | delta | delta% |
-                artifact=$(echo "$line" | cut -d'|' -f2 | xargs)
-                file_size=$(echo "$line" | cut -d'|' -f3 | xargs)
-                stripped=$(echo "$line" | cut -d'|' -f4 | xargs)
-                gzip_size=$(echo "$line" | cut -d'|' -f5 | xargs)
-                delta=$(echo "$line" | cut -d'|' -f6 | xargs)
-                delta_pct=$(echo "$line" | cut -d'|' -f7 | xargs)
-                status=$(echo "$line" | cut -d'|' -f8 | xargs)
-
-                echo "| ${status} | ${platform} | \`${artifact}\` | ${file_size} | ${stripped} | ${gzip_size} | ${delta} | ${delta_pct} |"
-              done
-            done
-
-            echo ""
-
-            # --- Violations & fix hints (in collapsible) ---
-            has_details=false
-            for platform in linux macos windows wasm; do
-              file="reports/size-gate-report-${platform}.md"
-              if [ -f "$file" ] && grep -q '<!-- VIOLATIONS -->\|<!-- MISSING -->\|<!-- FIX_HINTS -->' "$file"; then
-                has_details=true
-                break
-              fi
-            done
-
-            if [ "$has_details" = "true" ]; then
-              echo "<details>"
-              echo "<summary>Details & how to fix</summary>"
-              echo ""
-
-              for platform in linux macos windows wasm; do
-                file="reports/size-gate-report-${platform}.md"
-                if [ ! -f "$file" ]; then
-                  continue
-                fi
-                # Extract everything after the table rows (violations + fix hints)
-                # Skip lines that are just table rows (start with |) and blank lines before markers
-                sed -n '/<!-- VIOLATIONS -->/,$ p' "$file" 2>/dev/null | grep -v '^<!-- ' | while IFS= read -r line; do
-                  [ -n "$line" ] && echo "$line"
-                done
-                # Also get MISSING section if separate from VIOLATIONS
-                if ! grep -q '<!-- VIOLATIONS -->' "$file" 2>/dev/null; then
-                  sed -n '/<!-- MISSING -->/,$ p' "$file" 2>/dev/null | grep -v '^<!-- ' | while IFS= read -r line; do
-                    [ -n "$line" ] && echo "$line"
-                  done
-                fi
-              done
-
-              echo ""
-              echo "</details>"
-            fi
-
-            echo ""
-            echo "---"
-            echo "*Generated by \`cargo size-gate\` · [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*"
-          } > unified-report.md
+          # Run agg to produce unified markdown
+          reports/cargo-size-gate size-gate agg \
+            "${json_files[@]}" \
+            --run-url "$RUN_URL" \
+            > unified-report.md || true
 
       - name: "Post PR comment"
         if: github.event_name == 'pull_request'

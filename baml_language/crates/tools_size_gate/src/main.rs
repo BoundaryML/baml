@@ -24,8 +24,8 @@ use compare::check_policy;
 use config::{Config, host_triple};
 use measure::{ArtifactMeasurement, build_artifact, locate_artifact_public, measure_artifact};
 use output::{
-    ReportRow, has_any_failure, has_missing_baseline, render_markdown, render_markdown_fragment,
-    render_table,
+    JsonReport, ReportRow, has_any_failure, has_missing_baseline, render_aggregate_markdown,
+    render_json, render_markdown, render_markdown_fragment, render_table,
 };
 
 /// Exit codes.
@@ -72,6 +72,19 @@ enum Command {
 
     /// Show diff between baseline and current measurements (no gating).
     Diff,
+
+    /// Aggregate multiple JSON report files into a unified markdown report.
+    ///
+    /// Reads JSON files produced by `check --format json` and renders
+    /// a single CodSpeed-style markdown report suitable for PR comments.
+    Agg {
+        /// JSON report files to aggregate.
+        files: Vec<PathBuf>,
+
+        /// Optional URL to the CI workflow run (shown in the report footer).
+        #[arg(long)]
+        run_url: Option<String>,
+    },
 }
 
 #[derive(Clone, ValueEnum)]
@@ -82,6 +95,8 @@ enum OutputFormat {
     /// Markdown fragment: table rows only (no header), for CI composition.
     #[value(alias = "md-fragment")]
     MarkdownFragment,
+    /// JSON output for CI composition via jq.
+    Json,
 }
 
 fn main() {
@@ -91,6 +106,7 @@ fn main() {
         Command::Record => cmd_record(&args),
         Command::Check => cmd_check(&args),
         Command::Diff => cmd_diff(&args),
+        Command::Agg { files, run_url } => cmd_agg(files, run_url.as_deref()),
     };
 
     match result {
@@ -254,6 +270,37 @@ fn cmd_check(args: &Args) -> Result<i32> {
     Ok(EXIT_OK)
 }
 
+fn cmd_agg(files: &[PathBuf], run_url: Option<&str>) -> Result<i32> {
+    if files.is_empty() {
+        eprintln!("warning: no JSON files provided to aggregate");
+        // Still produce a valid (empty) report
+        render_aggregate_markdown(&[], run_url);
+        return Ok(EXIT_OK);
+    }
+
+    let mut reports = Vec::new();
+    let mut any_failure = false;
+
+    for path in files {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read report: {}", path.display()))?;
+        let report: JsonReport = serde_json::from_str(&content)
+            .with_context(|| format!("failed to parse JSON report: {}", path.display()))?;
+        if !report.ok {
+            any_failure = true;
+        }
+        reports.push(report);
+    }
+
+    render_aggregate_markdown(&reports, run_url);
+
+    if any_failure {
+        Ok(EXIT_POLICY_VIOLATED)
+    } else {
+        Ok(EXIT_OK)
+    }
+}
+
 fn cmd_diff(args: &Args) -> Result<i32> {
     let workspace_root = find_workspace_root()?;
     let config = Config::load(&workspace_root)?;
@@ -312,6 +359,7 @@ fn render_output(args: &Args, rows: &[ReportRow]) {
         OutputFormat::Table => render_table(rows),
         OutputFormat::Markdown => render_markdown(rows),
         OutputFormat::MarkdownFragment => render_markdown_fragment(rows),
+        OutputFormat::Json => render_json(rows),
     }
 }
 
