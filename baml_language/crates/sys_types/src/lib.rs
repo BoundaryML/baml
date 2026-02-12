@@ -384,8 +384,9 @@ baml_builtins::with_builtins!(baml_builtins_macros::generate_sys_op_traits);
 /// the blanket implementation), and allows selectively overriding modules:
 ///
 /// ```ignore
+/// // Use with_http::<T>() when T implements Default; use with_http_instance for pre-built instances.
 /// let ops = SysOpsBuilder::new()
-///     .with_http::<WasmHttp>()
+///     .with_http_instance(Arc::new(my_http_impl))
 ///     .build();
 /// ```
 pub struct SysOpsBuilder {

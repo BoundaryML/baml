@@ -119,8 +119,8 @@ impl SysOpHttp for WasmHttp {
                     OpErrorKind::Other("Response 'bodyPromise' is not a Promise".into())
                 })?;
 
-            let headers: indexmap::IndexMap<String, String> =
-                serde_json::from_str(&headers_str).unwrap_or_default();
+            let headers: indexmap::IndexMap<String, String> = serde_json::from_str(&headers_str)
+                .map_err(|e| OpErrorKind::Other(format!("Failed to parse headersJson: {e}")))?;
 
             let handle = registry.register_http_response(body_promise, final_url.clone());
 

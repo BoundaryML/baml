@@ -9,7 +9,7 @@ use std::{
 use async_trait::async_trait;
 use baml_project::{ProjectDatabase, list_functions};
 use bex_engine::BexEngine;
-use bex_external_types::{BexExternalValue, Ty};
+use bex_external_types::BexExternalValue;
 
 use crate::{Bex, BexArgs, RuntimeError, SysOps, render_lowering_error};
 
@@ -22,7 +22,7 @@ pub struct AddSourceResult {
     pub diagnostics: String,
 }
 
-/// Trait for the incremental runtime API (DB, `add_source`, `set_source`, `function_names`, `engine_is_current`, `call_function`, `function_params`).
+/// Trait for the incremental runtime API (DB, `add_source`, `set_source`, `function_names`, `engine_is_current`, `call_function`).
 ///
 /// Implemented by the incremental runtime. Use [`crate::new_incremental`] to get a `Box<dyn BexIncremental>`.
 #[async_trait(?Send)]
@@ -42,9 +42,6 @@ pub trait BexIncremental {
 
     /// True iff the last `add_source`/`set_source` compiled successfully.
     fn engine_is_current(&self) -> bool;
-
-    /// Parameter names and types for a function (e.g. for kwargs ordering).
-    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>>;
 }
 
 /// Incremental runtime: holds the DB, implements [`BexIncremental`].
@@ -77,7 +74,7 @@ impl BexIncrementalRuntime {
         db.set_project_root(Path::new(root_path));
 
         for (filename, content) in src_files {
-            db.add_or_update_file(&std::path::PathBuf::from(filename), content);
+            db.add_or_update_file(Path::new(filename), content);
         }
 
         let engine = make_engine(&db, sys_ops.clone()).ok();
@@ -148,12 +145,6 @@ impl BexIncrementalRuntime {
             })?;
         Bex::call_function(engine, function_name, args).await
     }
-
-    pub(crate) fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
-        self.engine
-            .as_ref()
-            .and_then(|e| e.function_params(name).ok())
-    }
 }
 
 #[async_trait(?Send)]
@@ -176,9 +167,5 @@ impl BexIncremental for BexIncrementalRuntime {
         args: BexArgs,
     ) -> Result<BexExternalValue, RuntimeError> {
         BexIncrementalRuntime::call_function(self, function_name, args).await
-    }
-
-    fn function_params(&self, name: &str) -> Option<Vec<(&str, &Ty)>> {
-        BexIncrementalRuntime::function_params(self, name)
     }
 }

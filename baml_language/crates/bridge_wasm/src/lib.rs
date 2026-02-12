@@ -1,5 +1,8 @@
 //! `bridge_wasm` - WASM bindings for BAML using `bex_engine`.
 //!
+//! This crate only supports the `wasm32-unknown-unknown` target. Use
+//! `--target wasm32-unknown-unknown` when building.
+//!
 //! This crate provides WebAssembly bindings for BAML, allowing it to run in
 //! browsers and Node.js. It uses the same protobuf protocol as `bridge_cffi`
 //! for function arguments and results.
@@ -200,13 +203,5 @@ impl BamlWasmRuntime {
     #[wasm_bindgen(js_name = functionNames)]
     pub fn function_names(&self) -> Vec<String> {
         self.bex.function_names()
-    }
-
-    /// Get parameter names for a function. Returns a JSON array of parameter names, or `undefined` if not found.
-    #[wasm_bindgen(js_name = functionParams)]
-    pub fn function_params(&self, name: &str) -> Option<String> {
-        let params = self.bex.function_params(name)?;
-        let names: Vec<&str> = params.iter().map(|(n, _)| *n).collect();
-        serde_json::to_string(&names).ok()
     }
 }

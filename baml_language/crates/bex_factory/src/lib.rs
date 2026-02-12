@@ -1,7 +1,7 @@
 //! Reusable compile-and-run runtime for BAML programs.
 //!
 //! Two traits define the API:
-//! - **`Bex`**: core run API (`call_function`, `function_params`). Implemented by `Arc<BexEngine>`.
+//! - **`Bex`**: core run API (`call_function`). Implemented by `Arc<BexEngine>`.
 //! - **`BexIncremental`**: holds DB, `add_source`/`set_source`, `function_names`, `engine_is_current`, plus `call_function`/`function_params`.
 //!
 //! Two public constructors:
@@ -20,6 +20,7 @@ use baml_compiler_emit::LoweringError;
 use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
+use bex_heap::BexValue;
 pub use bex_heap::builtin_types;
 pub use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 pub use error::RuntimeError;
@@ -68,7 +69,7 @@ impl Bex for BexEngine {
         function_name: &str,
         BexArgs(mut args): BexArgs,
     ) -> Result<BexExternalValue, RuntimeError> {
-        // gurantee function ordering.
+        // guarantee function ordering.
         let params = self
             .function_params(function_name)
             .map_err(RuntimeError::from)?;
@@ -91,7 +92,14 @@ impl Bex for BexEngine {
         }
 
         let result = BexEngine::call_function(self, function_name, ordered_args).await?;
-        Ok(result)
+
+        // For now call_function guarantees that the result is owned, but we should change this in the future
+        // once we allow devs to control if functions return owned values or not.
+        let owned_result = self
+            .heap()
+            .with_gc_protection(|p| BexValue::from(&result).as_owned_but_very_slow(&p))?;
+
+        Ok(owned_result)
     }
 }
 

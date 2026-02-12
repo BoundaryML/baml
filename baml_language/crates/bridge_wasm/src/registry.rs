@@ -2,7 +2,7 @@
 //!
 //! In `sys_native`, response bodies live in a registry as `reqwest::Response`
 //! and are consumed lazily. For WASM, the JS fetch callback returns a
-//! `bodyPromise` (Promise<string>); we store that and await it only when
+//! `bodyPromise` (`Promise<string>`); we store that and await it only when
 //! `response_text()` is called.
 
 use std::{
@@ -74,14 +74,16 @@ impl WasmRegistry {
         )
     }
 
-    /// Take the body promise for the given key (removes the entry).
+    /// Take the body promise for the given key.
     ///
+    /// Keeps the entry so that the handle's Drop can remove it (Drop-driven cleanup).
     /// Returns `None` if the handle is invalid or body was already consumed.
     pub(crate) fn take_body_promise(&self, key: usize) -> Option<Promise> {
         let mut entries = self.entries.write().unwrap();
-        match entries.remove(&key) {
+        match entries.get_mut(&key) {
             Some(RegistryEntry::Response(r)) => r
                 .body_promise
+                .take()
                 .map(super::send_wrapper::SendWrapper::into_inner),
             _ => None,
         }

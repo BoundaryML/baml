@@ -145,7 +145,8 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
         }
     };
 
-    // Generate SysOpsBuilder::with_<module>::<T>() and, for http, with_http_instance.
+    // Generate SysOpsBuilder::with_<module>::<T>() and with_<module>_instance for each non-llm module.
+    // Skip "llm": LLM ops use a blanket impl (SysOpLlm for T) and are not overridable via the builder.
     let builder_methods: Vec<_> = module_order
         .iter()
         .filter(|m| m.as_str() != "llm")
@@ -153,6 +154,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
             let ops = &module_ops[module_name];
             let trait_name = format_ident!("SysOp{}", to_pascal_case(module_name));
             let method_name = format_ident!("with_{}", module_name);
+            let instance_method_name = format_ident!("with_{}_instance", module_name);
 
             let assignments: Vec<_> = ops
                 .iter()
@@ -176,64 +178,33 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                 }
             };
 
-            // For HTTP: add with_http_instance(Arc<dyn SysOpHttp>).
-            // For env: add with_env_instance(Arc<dyn SysOpEnv>).
-            let with_instance = if module_name.as_str() == "http" {
-                let http_assignments: Vec<_> = ops
-                    .iter()
-                    .map(|d| {
-                        let fn_name = &d.fn_name;
-                        let glue_fn_name = format_ident!("__{}", fn_name);
-                        quote! {
-                            self.inner.#fn_name = {
-                                let __instance = ::std::sync::Arc::clone(&instance);
-                                ::std::sync::Arc::new(move |heap, args, ctx| __instance.#glue_fn_name(heap, args, ctx))
-                            };
-                        }
-                    })
-                    .collect();
-                quote! {
-                    /// Override the HTTP module with an existing instance (e.g. when the type has no `Default`).
-                    pub fn with_http_instance(
-                        mut self,
-                        instance: ::std::sync::Arc<dyn SysOpHttp + Send + Sync + 'static>,
-                    ) -> Self {
-                        #(#http_assignments)*
-                        self
+            let instance_assignments: Vec<_> = ops
+                .iter()
+                .map(|d| {
+                    let fn_name = &d.fn_name;
+                    let glue_fn_name = format_ident!("__{}", fn_name);
+                    quote! {
+                        self.inner.#fn_name = {
+                            let __instance = ::std::sync::Arc::clone(&instance);
+                            ::std::sync::Arc::new(move |heap, args, ctx| __instance.#glue_fn_name(heap, args, ctx))
+                        };
                     }
+                })
+                .collect();
+            let instance_doc = format!(
+                "Override the `{module_name}` module with an existing instance (e.g. when the type has no `Default`)."
+            );
+            let with_instance = quote! {
+                #[doc = #instance_doc]
+                pub fn #instance_method_name(
+                    mut self,
+                    instance: ::std::sync::Arc<dyn #trait_name + Send + Sync + 'static>,
+                ) -> Self {
+                    #(#instance_assignments)*
+                    self
                 }
-            } else if module_name.as_str() == "env" {
-                let env_assignments: Vec<_> = ops
-                    .iter()
-                    .map(|d| {
-                        let fn_name = &d.fn_name;
-                        let glue_fn_name = format_ident!("__{}", fn_name);
-                        quote! {
-                            self.inner.#fn_name = {
-                                let __instance = ::std::sync::Arc::clone(&instance);
-                                ::std::sync::Arc::new(move |heap, args, ctx| __instance.#glue_fn_name(heap, args, ctx))
-                            };
-                        }
-                    })
-                    .collect();
-                quote! {
-                    /// Override the env module with an existing instance (e.g. when the type has no `Default`).
-                    pub fn with_env_instance(
-                        mut self,
-                        instance: ::std::sync::Arc<dyn SysOpEnv + Send + Sync + 'static>,
-                    ) -> Self {
-                        #(#env_assignments)*
-                        self
-                    }
-                }
-            } else {
-                quote! {}
             };
-            if module_name.as_str() == "http" || module_name.as_str() == "env" {
-                vec![with_module, with_instance]
-            } else {
-                vec![with_module]
-            }
+            vec![with_module, with_instance]
         })
         .collect();
 
