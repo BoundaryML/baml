@@ -374,6 +374,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Media(_) => type_tags::MEDIA,
                 Object::Resource(_) => type_tags::RESOURCE,
                 Object::PromptAst(_) => type_tags::PROMPT_AST,
+                Object::Collector(_) => type_tags::COLLECTOR,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -758,6 +759,24 @@ impl BexVm {
             Object::PromptAst(ast) => Ok(ast),
             _ => Err(InternalError::TypeError {
                 expected: ObjectType::PromptAst.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// Allocate a collector object on the heap.
+    pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> Value {
+        Value::Object(self.tlab.alloc(Object::Collector(collector)))
+    }
+
+    /// Get collector ref from a Value.
+    pub fn as_collector(&self, value: &Value) -> Result<&bex_vm_types::CollectorRef, InternalError> {
+        let index = self.as_object_ptr(value, ObjectType::Collector)?;
+        let obj = self.get_object(index);
+        match obj {
+            Object::Collector(c) => Ok(c),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::Collector.into(),
                 got: ObjectType::of(obj).into(),
             }),
         }

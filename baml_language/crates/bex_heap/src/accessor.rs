@@ -515,6 +515,41 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    pub fn as_collector_owned(
+        self,
+        heap: &GcProtectedHeap<'_>,
+    ) -> Result<bex_vm_types::CollectorRef, AccessError> {
+        fn from_ptr(ptr: &HeapPtr) -> Result<bex_vm_types::CollectorRef, AccessError> {
+            let obj = unsafe { ptr.get() };
+            let Object::Collector(c) = obj else {
+                return Err(AccessError::TypeMismatch {
+                    expected: "collector",
+                    actual: obj.to_string(),
+                });
+            };
+            Ok(c.clone())
+        }
+
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::Collector(c))) => {
+                Ok(c.clone())
+            }
+            BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
+                let ptr = heap
+                    .resolve_handle(handle.slab_key())
+                    .ok_or(AccessError::InvalidHandle {
+                        expected: "collector",
+                    })?;
+                from_ptr(&ptr)
+            }
+            BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => from_ptr(ptr),
+            other => Err(AccessError::TypeMismatch {
+                expected: "collector",
+                actual: other.type_name(),
+            }),
+        }
+    }
+
     /// Attempts to own as much as possible.
     /// If it can't be owned, it fails.
     pub fn as_owned_but_very_slow(
@@ -678,6 +713,9 @@ impl<'a> BexValue<'a> {
                     ))),
                     Object::PromptAst(prompt_ast) => Ok(BexExternalValue::Adt(
                         BexExternalAdt::PromptAst(prompt_ast.clone()),
+                    )),
+                    Object::Collector(c) => Ok(BexExternalValue::Adt(
+                        BexExternalAdt::Collector(c.clone()),
                     )),
                     #[cfg(feature = "heap_debug")]
                     Object::Sentinel(sentinel_kind) => Err(AccessError::CannotConvertToOwned {

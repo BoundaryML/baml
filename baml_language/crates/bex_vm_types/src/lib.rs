@@ -22,7 +22,7 @@ pub use bytecode::{
 pub use heap_ptr::HeapPtr;
 pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex};
 pub use types::{
-    Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind, FunctionMeta, Future,
-    Instance, MediaValue, Object, ObjectType, PendingFuture, Program, PromptAst, SysOp, Value,
-    Variant, sys_op_for_path, type_tags,
+    Class, ClassField, CollectorRef, ConstValue, Enum, EnumVariant, Function, FunctionKind,
+    FunctionMeta, Future, Instance, MediaValue, Object, ObjectType, PendingFuture, Program,
+    PromptAst, SysOp, Value, Variant, sys_op_for_path, type_tags,
 };

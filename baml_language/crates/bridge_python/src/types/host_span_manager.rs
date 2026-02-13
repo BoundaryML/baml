@@ -31,6 +31,11 @@ impl HostSpanManager {
 
 #[pymethods]
 impl HostSpanManager {
+    #[new]
+    fn py_new() -> Self {
+        Self::new()
+    }
+
     /// Enter a new host-language span (`@trace` function start).
     #[pyo3(signature = (name, args))]
     fn enter(&mut self, py: Python<'_>, name: String, args: PyObject) -> PyResult<()> {

@@ -84,6 +84,7 @@ impl UnionMetadata {
 pub enum BexExternalAdt {
     Media(bex_vm_types::MediaValue),
     PromptAst(bex_vm_types::PromptAst),
+    Collector(bex_vm_types::CollectorRef),
 }
 
 /// A deep-copied value tree with no heap references.
@@ -190,6 +191,7 @@ impl BexExternalAdt {
                 baml_type::MediaKind::Generic => "media",
             },
             BexExternalAdt::PromptAst(_) => "prompt_ast",
+            BexExternalAdt::Collector(_) => "collector",
         }
     }
 }

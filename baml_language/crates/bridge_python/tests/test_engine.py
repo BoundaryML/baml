@@ -216,19 +216,16 @@ class TestCallFunctionAsync:
 
 class TestHostSpanManager:
     def test_create_host_span_manager(self):
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        hsm = rt.create_host_span_manager()
+        hsm = HostSpanManager()
         assert isinstance(hsm, HostSpanManager)
 
     def test_deep_clone(self):
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        hsm = rt.create_host_span_manager()
+        hsm = HostSpanManager()
         cloned = hsm.deep_clone()
         assert isinstance(cloned, HostSpanManager)
 
     def test_context_depth_is_zero(self):
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        hsm = rt.create_host_span_manager()
+        hsm = HostSpanManager()
         assert hsm.context_depth() == 0
 
 
@@ -370,20 +367,6 @@ class TestTracing:
             1,
             2,
         ], f"Expected [1, 2] but got {call_stack_depths}"
-
-    @pytest.mark.xfail(reason="Needs host→engine context wiring (Step 8)")
-    def test_call_function_records_span(self):
-        """Calling a BAML function through the runtime should record a trace span."""
-        rt = make_runtime(EXPR_FUNCS_BAML)
-        hsm = rt.create_host_span_manager()
-
-        # Call function with host span manager
-        result = rt.call_function_sync("ReturnOne", {}, hsm)
-        assert result.result() == 1
-
-        # context_depth should be > 0 after a traced call
-        # (currently always returns 0 because HostSpanManager is a stub)
-        assert hsm.context_depth() > 0, "Expected context_depth > 0 after traced call"
 
     def test_flush_trace_events(self):
         """Flushing writes trace events to the JSONL file."""

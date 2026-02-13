@@ -636,6 +636,17 @@ impl BexEngine {
             collector.track(&engine_span_id);
         }
 
+        // Allocate collectors on the heap for future $collector syntax.
+        let _collector_values: Vec<Value> = collectors
+            .iter()
+            .map(|c| {
+                let collector_ref = bex_vm_types::CollectorRef(
+                    Arc::clone(c) as Arc<dyn std::any::Any + Send + Sync>
+                );
+                vm.alloc_collector(collector_ref)
+            })
+            .collect();
+
         // Build the call stack: host prefix + this engine span
         let mut call_stack = host_call_stack.clone();
         call_stack.push(engine_span_id.clone());

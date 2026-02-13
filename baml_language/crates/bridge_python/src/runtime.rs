@@ -170,8 +170,4 @@ impl BamlRuntime {
         Ok(FunctionResult::new(py_result))
     }
 
-    /// Create a host span manager (stub for MVP).
-    fn create_host_span_manager(&self) -> crate::types::HostSpanManager {
-        crate::types::HostSpanManager::new()
-    }
 }

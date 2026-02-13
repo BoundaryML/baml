@@ -1357,19 +1357,6 @@ class TestTraceEventRecording:
             assert len(leaves) == 3
 
     # ============================================================================
-    # TEST 12: Event log hook
-    # ============================================================================
-
-    @pytest.mark.xfail(reason="on_log_event not yet implemented in bridge_python")
-    def test_event_log_hook(self, ctx, trace_file):
-        """Event log hook callback receives events.
-
-        Equivalent of integ-tests TEST 12.
-        Requires on_log_event() to be exposed in bridge_python.
-        """
-        pass
-
-    # ============================================================================
     # TEST 13: Big unions / complex nested args
     # ============================================================================
 

@@ -424,6 +424,19 @@ pub type MediaValue = std::sync::Arc<baml_builtins::MediaValue>;
 /// Prompt AST tree node.
 pub type PromptAst = std::sync::Arc<baml_builtins::PromptAst>;
 
+/// Opaque handle to a `Collector` object from `bex_events`.
+///
+/// Uses `Arc<dyn Any + Send + Sync>` to avoid a dependency from `bex_vm_types` on `bex_events`.
+/// Downcast to `bex_events::Collector` at the `bex_engine` layer.
+#[derive(Clone, Debug)]
+pub struct CollectorRef(pub std::sync::Arc<dyn std::any::Any + Send + Sync>);
+
+impl PartialEq for CollectorRef {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 /// Any data that the Baml program can reference and is allocated on heap.
 ///
 /// `Vm` (in `bex_vm` crate) should own objects and give references to them to the running Baml
@@ -477,6 +490,9 @@ pub enum Object {
     /// External resource (file handle, socket, etc.).
     Resource(ResourceHandle),
 
+    /// Collector object (opaque handle to `bex_events::Collector`).
+    Collector(CollectorRef),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -497,6 +513,7 @@ impl std::fmt::Display for Object {
             Object::Map(map) => write!(f, "<map len={}>", map.len()),
             Object::Media(media) => media.fmt(f),
             Object::Resource(r) => write!(f, "<{r}>"),
+            Object::Collector(_) => write!(f, "<collector>"),
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
@@ -595,6 +612,7 @@ pub enum ObjectType {
     Future(FutureType),
     Resource,
     PromptAst,
+    Collector,
 }
 
 impl ObjectType {
@@ -611,6 +629,7 @@ impl ObjectType {
             Object::Media(media) => Self::Media(media.kind),
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
+            Object::Collector(_) => Self::Collector,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -647,6 +666,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
+            ObjectType::Collector => write!(f, "collector"),
         }
     }
 }

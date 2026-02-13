@@ -68,7 +68,7 @@ class CtxManager:
         ctx = self.ctx.get()
         thread_id = current_thread_id()
         if thread_id not in ctx:
-            ctx[thread_id] = self.rt.create_host_span_manager()
+            ctx[thread_id] = HostSpanManager()
         return ctx[thread_id]
 
     def get(self) -> HostSpanManager:
@@ -88,7 +88,7 @@ class CtxManager:
 
     def reset(self) -> None:
         self.ctx.set(
-            {current_thread_id(): self.rt.create_host_span_manager()}
+            {current_thread_id(): HostSpanManager()}
         )
 
     def clone_context(self) -> HostSpanManager:

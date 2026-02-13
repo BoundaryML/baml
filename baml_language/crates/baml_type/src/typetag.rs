@@ -53,6 +53,9 @@ pub const RESOURCE: i64 = 11;
 /// `PromptAst` type tag.
 pub const PROMPT_AST: i64 = 12;
 
+/// `Collector` type tag.
+pub const COLLECTOR: i64 = 13;
+
 /// Base value for class type tags (classes start at 100).
 pub const CLASS_BASE: i64 = 100;
 

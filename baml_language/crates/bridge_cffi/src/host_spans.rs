@@ -97,12 +97,12 @@ impl HostSpanManager {
 
     /// Exit the current span successfully.
     pub fn exit_ok(&mut self) {
-        self.exit_inner();
+        self.exit_inner(bex_external_types::BexExternalValue::Null);
     }
 
     /// Exit the current span with an error.
-    pub fn exit_error(&mut self, _error_message: String) {
-        self.exit_inner();
+    pub fn exit_error(&mut self, error_message: String) {
+        self.exit_inner(bex_external_types::BexExternalValue::String(error_message));
     }
 
     /// Merge tags into the current span and emit a `SetTags` event.
@@ -150,7 +150,7 @@ impl HostSpanManager {
         })
     }
 
-    fn exit_inner(&mut self) {
+    fn exit_inner(&mut self, result: bex_external_types::BexExternalValue) {
         let Some(entry) = self.stack.pop() else {
             return;
         };
@@ -169,7 +169,7 @@ impl HostSpanManager {
             timestamp: std::time::SystemTime::now(),
             event: EventKind::Function(FunctionEvent::End(bex_events::FunctionEnd {
                 name: entry.function_name,
-                result: bex_external_types::BexExternalValue::Null,
+                result,
                 duration: entry.started_at.elapsed(),
             })),
         });
