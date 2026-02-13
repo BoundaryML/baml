@@ -29,7 +29,7 @@ export const markdownComponents: Components = {
     const isInline = !className;
     if (isInline) {
       return (
-        <code className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-[0.875em] text-gray-800 border border-gray-200">
+        <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.875em] text-foreground border border-border">
           {children}
         </code>
       );

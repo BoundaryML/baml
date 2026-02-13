@@ -39,13 +39,13 @@ const components: Components = {
       return <ShikiCodeBlock code={code} language={language} showLineNumbers />;
     }
 
-    return <pre className="my-5 overflow-x-auto rounded-xl bg-gray-50 p-5 font-mono text-sm">{children}</pre>;
+    return <pre className="my-5 overflow-x-auto rounded-xl bg-muted p-5 font-mono text-sm">{children}</pre>;
   },
   code: ({ className, children }) => {
     const isInline = !className;
     if (isInline) {
       return (
-        <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[0.875em] text-gray-800 border border-gray-200">
+        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.875em] text-foreground border border-border">
           {children}
         </code>
       );
