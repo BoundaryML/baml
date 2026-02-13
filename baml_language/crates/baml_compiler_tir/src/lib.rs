@@ -2600,6 +2600,21 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 ///
 /// Returns the actual type of the expression (which should be a subtype of expected).
 fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
+    check_expr_with_info_location(ctx, expr_id, body, expected, None)
+}
+
+/// Check an expression with an optional location for the type constraint source.
+///
+/// When `info_location` is provided, type mismatches include a secondary location
+/// that points to where the expected type requirement came from (for example,
+/// a `let` type annotation).
+fn check_expr_with_info_location(
+    ctx: &mut TypeContext<'_>,
+    expr_id: ExprId,
+    body: &ExprBody,
+    expected: &Ty,
+    info_location: Option<&ErrorLocation>,
+) -> Ty {
     use baml_compiler_hir::Expr;
 
     let expr = &body.exprs[expr_id];
@@ -2693,7 +2708,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2771,7 +2786,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2810,7 +2825,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2832,7 +2847,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     expected: expected.clone(),
                     found: generalize_for_error(expected, &ty),
                     location,
-                    info_location: None,
+                    info_location: info_location.cloned(),
                 });
             }
             ty
@@ -3458,9 +3473,16 @@ fn check_stmt_with_return(
                     let type_ref = &body.types[*type_id];
                     let span = ctx.type_span(*type_id);
                     let annot_ty = ctx.lower_type(type_ref, span);
+                    let annotation_location = ErrorLocation::Span(span);
                     // Use check_expr when we have an expected type
                     // check_expr already reports any type mismatch errors
-                    check_expr(ctx, *init, body, &annot_ty);
+                    check_expr_with_info_location(
+                        ctx,
+                        *init,
+                        body,
+                        &annot_ty,
+                        Some(&annotation_location),
+                    );
                     annot_ty
                 } else {
                     // No type annotation - infer and generalize for mutable variables
