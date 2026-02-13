@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 import {
   Upload,
   Loader2,
@@ -50,14 +51,18 @@ interface ParsedFile {
   error?: string;
 }
 
+type VersionMode = "new" | "current";
+
 export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [editNote, setEditNote] = useState("");
+  const [versionMode, setVersionMode] = useState<VersionMode>("new");
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{
     versionNumber: number;
+    versionAction: "created" | "updated";
     pagesCreated: number;
     pagesUpdated: number;
   } | null>(null);
@@ -237,10 +242,12 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
         })),
         editNote: editNote || undefined,
         userId: userId as Id<"users">,
+        versionMode,
       });
 
       setSuccess({
         versionNumber: result.versionNumber,
+        versionAction: result.versionAction,
         pagesCreated: result.pagesCreated,
         pagesUpdated: result.pagesUpdated,
       });
@@ -255,7 +262,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
     } finally {
       setIsImporting(false);
     }
-  }, [parsedFiles, editNote, bepId, importVersion]);
+  }, [parsedFiles, editNote, bepId, importVersion, versionMode]);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -263,6 +270,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
     setError(null);
     setSuccess(null);
     setEditNote("");
+    setVersionMode("new");
   };
 
   const readmeFile = parsedFiles.find((f) => f.type === "readme");
@@ -270,9 +278,25 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
   const hasValidReadme = readmeFile && !readmeFile.error;
   const validPageCount = pageFiles.filter((p) => !p.error).length;
   const errorCount = parsedFiles.filter((f) => f.error).length;
+  const latestVersionNumber = bepData?.versions?.[0]?.version ?? 0;
+  const targetVersionNumber =
+    versionMode === "new" || latestVersionNumber === 0
+      ? latestVersionNumber + 1
+      : latestVersionNumber;
+  const latestVersionLabel =
+    latestVersionNumber > 0 ? `v${latestVersionNumber}` : "the current draft";
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleClose();
+          return;
+        }
+        setIsOpen(true);
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Upload className="h-4 w-4 mr-2" />
@@ -286,8 +310,8 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
             Import {formatBepNumber(bepNumber)}
           </DialogTitle>
           <DialogDescription>
-            Upload markdown files to create a new version. Comments will be
-            stripped automatically.
+            Upload markdown files, then choose whether to create a new version
+            or apply edits to the current version.
           </DialogDescription>
         </DialogHeader>
 
@@ -297,7 +321,9 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
             <Alert className="border-green-500 bg-green-50">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">
-                Successfully created version {success.versionNumber}
+                Successfully{" "}
+                {success.versionAction === "created" ? "created version" : "updated current version"}{" "}
+                {success.versionNumber}
                 {success.pagesCreated > 0 &&
                   ` (${success.pagesCreated} new page${success.pagesCreated > 1 ? "s" : ""})`}
                 {success.pagesUpdated > 0 &&
@@ -305,6 +331,42 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
               </AlertDescription>
             </Alert>
           )}
+
+          <div className="space-y-2">
+            <Label>How should this import be applied?</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setVersionMode("new")}
+                className={cn(
+                  "rounded-lg border p-3 text-left transition-colors",
+                  versionMode === "new"
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-muted/50"
+                )}
+              >
+                <p className="font-medium text-sm">Create New Version</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use for major updates and fresh review cycles.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVersionMode("current")}
+                className={cn(
+                  "rounded-lg border p-3 text-left transition-colors",
+                  versionMode === "current"
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-muted/50"
+                )}
+              >
+                <p className="font-medium text-sm">Apply To Current Version</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use for small fixes to keep current comments in place.
+                </p>
+              </button>
+            </div>
+          </div>
 
           {/* Error message */}
           {error && (
@@ -426,11 +488,15 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
           {parsedFiles.length > 0 && hasValidReadme && (
             <div>
               <Label htmlFor="edit-note" className="block mb-2">
-                Version note (optional)
+                {versionMode === "new" ? "Version note (optional)" : "Change note (optional)"}
               </Label>
               <Input
                 id="edit-note"
-                placeholder="e.g., Updated after AI review"
+                placeholder={
+                  versionMode === "new"
+                    ? "e.g., Updated after AI review"
+                    : "e.g., Fixed typo and clarified wording"
+                }
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
               />
@@ -439,9 +505,9 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
 
           {/* Info text */}
           <p className="text-xs text-muted-foreground">
-            Importing creates a new version (v{(bepData?.versions?.[0]?.version ?? 0) + 1}) with clean
-            content. The new version will start with zero comments - users can
-            add fresh feedback.
+            {versionMode === "new"
+              ? `This will create version v${targetVersionNumber}. Existing comments stay with ${latestVersionLabel} and v${targetVersionNumber} starts with zero comments.`
+              : `This will update current version v${targetVersionNumber} in place and keep existing comment threads visible.`}
           </p>
         </div>
 
@@ -462,7 +528,10 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
               ) : (
                 <>
                   <Upload className="h-4 w-4 mr-2" />
-                  Import ({validPageCount > 0 ? `${validPageCount + 1} files` : "1 file"})
+                  {versionMode === "new"
+                    ? `Import & Create v${targetVersionNumber}`
+                    : `Import To v${targetVersionNumber}`}{" "}
+                  ({validPageCount > 0 ? `${validPageCount + 1} files` : "1 file"})
                 </>
               )}
             </Button>
