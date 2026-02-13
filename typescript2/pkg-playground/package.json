@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@b/bridge_wasm": "link:wasm",
+    "@b/pkg-proto": "workspace:*",
     "jotai": "^2.15.1"
   }
 }

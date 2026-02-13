@@ -29,7 +29,7 @@
 //!                 bodyPromise: response.text(),  // body is read when .text() is called in BAML
 //!             };
 //!         },
-//!         env: (variable) => process.env[variable],  // or (variable) => undefined to disable env lookups
+//!         env: (variable) => process.env[variable],  // may return Promise<string | undefined> for async lookups
 //!     }
 //! );
 //!
@@ -86,7 +86,7 @@ export type WasmFetchCallback = (
   body: string,
 ) => Promise<{ status: number; headersJson: string; url: string; bodyPromise: Promise<string> }>;
 
-export type WasmEnvVarsCallback = (variable: string) => string | undefined;
+export type WasmEnvVarsCallback = (variable: string) => Promise<string | undefined> | string | undefined;
 "#;
 
 #[wasm_bindgen]
@@ -183,23 +183,19 @@ impl BamlWasmRuntime {
 
     /// Add a source file to the runtime.
     ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to the source file
-    /// * `content` - The content of the source file
+    /// Returns `true` if the engine was updated (compilation succeeded).
+    /// Call [`diagnostics`](Self::diagnostics) afterwards for errors/warnings.
     #[wasm_bindgen(js_name = addSource)]
-    pub fn add_source(&mut self, path: &str, content: &str) -> Result<(), JsError> {
-        let result = self.bex.add_source(path, content);
-        if result.engine_updated {
-            Ok(())
-        } else {
-            Err(JsError::new(&result.diagnostics))
-        }
+    pub fn add_source(&mut self, path: &str, content: &str) -> bool {
+        self.bex.add_source(path, content).engine_updated
     }
 
     /// Set the main file content (convenience for single-file). Equivalent to `addSource("main.baml", content)`.
+    ///
+    /// Returns `true` if the engine was updated (compilation succeeded).
+    /// Call [`diagnostics`](Self::diagnostics) afterwards for errors/warnings.
     #[wasm_bindgen(js_name = setSource)]
-    pub fn set_source(&mut self, content: &str) -> Result<(), JsError> {
+    pub fn set_source(&mut self, content: &str) -> bool {
         self.add_source("main.baml", content)
     }
 
@@ -207,5 +203,53 @@ impl BamlWasmRuntime {
     #[wasm_bindgen(js_name = functionNames)]
     pub fn function_names(&self) -> Vec<String> {
         self.bex.function_names()
+    }
+
+    /// True if the engine matches the current source (last compile succeeded).
+    /// When false, `callFunction` will use the last successfully compiled engine.
+    #[wasm_bindgen(js_name = engineIsCurrent)]
+    pub fn engine_is_current(&self) -> bool {
+        self.bex.engine_is_current()
+    }
+
+    /// Return all diagnostics (errors, warnings) for the current project state as JSON.
+    ///
+    /// Returns a JSON string: `[{ "severity": "error"|"warning"|"info", "message": "..." }, ...]`
+    #[wasm_bindgen]
+    pub fn diagnostics(&self) -> String {
+        use bex_factory::{RenderedDiagnostic, Severity};
+        use std::fmt::Write;
+
+        let diags = self.bex.diagnostics();
+        let json_values: Vec<String> = diags
+            .iter()
+            .map(|RenderedDiagnostic { severity, message }| {
+                let sev = match severity {
+                    Severity::Error => "error",
+                    Severity::Warning => "warning",
+                    Severity::Info => "info",
+                };
+                // Manual JSON string escaping — must handle all control chars.
+                let mut escaped_msg = String::with_capacity(message.len());
+                for ch in message.chars() {
+                    match ch {
+                        '\\' => escaped_msg.push_str("\\\\"),
+                        '"' => escaped_msg.push_str("\\\""),
+                        '\n' => escaped_msg.push_str("\\n"),
+                        '\r' => escaped_msg.push_str("\\r"),
+                        '\t' => escaped_msg.push_str("\\t"),
+                        c if c.is_control() => {
+                            // Escape other control chars as \uXXXX
+                            for unit in c.encode_utf16(&mut [0; 2]) {
+                                let _ = write!(escaped_msg, "\\u{unit:04x}");
+                            }
+                        }
+                        c => escaped_msg.push(c),
+                    }
+                }
+                format!(r#"{{"severity":"{sev}","message":"{escaped_msg}"}}"#)
+            })
+            .collect();
+        format!("[{}]", json_values.join(","))
     }
 }

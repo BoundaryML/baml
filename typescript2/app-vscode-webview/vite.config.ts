@@ -26,6 +26,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
+      '@b/pkg-proto': resolve(projectRoot, '../pkg-proto/src'),
       '@b/bridge_wasm': resolve(projectRoot, '../pkg-playground/wasm/bridge_wasm.js'),
     }
   },

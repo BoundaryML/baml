@@ -16,6 +16,12 @@
       ],
       "@b/pkg-playground/*": [
         "../pkg-playground/src/*"
+      ],
+      "@b/pkg-proto": [
+        "../pkg-proto/src"
+      ],
+      "@b/pkg-proto/*": [
+        "../pkg-proto/src/*"
       ]
     },
     "types": [

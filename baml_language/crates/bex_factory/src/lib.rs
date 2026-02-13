@@ -15,6 +15,7 @@ mod incremental;
 use std::{collections::HashMap, path::Path, sync::Arc};
 
 use async_trait::async_trait;
+pub use baml_compiler_diagnostics::Severity;
 use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
 use baml_compiler_emit::LoweringError;
 use baml_project::ProjectDatabase;
@@ -27,7 +28,7 @@ pub use error::RuntimeError;
 #[cfg(feature = "incremental")]
 use incremental::BexIncrementalRuntime;
 #[cfg(feature = "incremental")]
-pub use incremental::{AddSourceResult, BexIncremental};
+pub use incremental::{AddSourceResult, BexIncremental, RenderedDiagnostic};
 pub use sys_types::SysOps;
 
 // ---------------------------------------------------------------------------
@@ -137,7 +138,7 @@ pub fn new(
     }
 
     let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
-        .map_err(|e| render_lowering_error(&db, &e))?;
+        .map_err(|e| render_lowering_error(&db, &e, &RenderConfig::cli()))?;
 
     let engine = BexEngine::new(bytecode, sys_ops)?;
 
@@ -163,7 +164,11 @@ pub fn new_incremental(
 // Error rendering helpers
 // ---------------------------------------------------------------------------
 
-pub(crate) fn render_lowering_error(db: &ProjectDatabase, error: &LoweringError) -> RuntimeError {
+pub(crate) fn render_lowering_error(
+    db: &ProjectDatabase,
+    error: &LoweringError,
+    config: &RenderConfig,
+) -> RuntimeError {
     let diagnostic = error.to_diagnostic();
 
     let source_files = db.get_source_files();
@@ -176,7 +181,7 @@ pub(crate) fn render_lowering_error(db: &ProjectDatabase, error: &LoweringError)
         file_paths.insert(file_id, source_file.path(db));
     }
 
-    let rendered = render_diagnostic(&diagnostic, &sources, &file_paths, &RenderConfig::cli());
+    let rendered = render_diagnostic(&diagnostic, &sources, &file_paths, config);
 
     RuntimeError::Compilation { message: rendered }
 }
