@@ -350,8 +350,6 @@ impl Printable for SourceFile {
             printer.print_newline();
         }
 
-        printer.print_newline();
-
         PrintInfo::default_multi_lined()
     }
 }

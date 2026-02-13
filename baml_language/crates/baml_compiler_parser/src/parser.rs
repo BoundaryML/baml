@@ -3985,7 +3985,9 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
     }
 
     while parser.current < parser.tokens.len() {
-        if parser.at_line_comment_start() {
+        if parser.at_header_comment_start() {
+            parser.consume_header_comment();
+        } else if parser.at_line_comment_start() {
             parser.consume_line_comment();
         } else if parser.at_block_comment_start() {
             parser.consume_block_comment();

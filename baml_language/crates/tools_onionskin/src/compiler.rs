@@ -1757,18 +1757,23 @@ impl CompilerRunner {
 
         for (path, source_file) in sorted_files {
             let file_path = path.display().to_string();
-            let source_text = source_file.text(&self.db);
+            let file_recomputed = self.modified_files.contains(path);
 
             writeln!(output, "File: {file_path}").ok();
             output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
 
             // Format the source code using baml_fmt
             let format_options = baml_fmt::FormatOptions::default();
-            match baml_fmt::format(source_text, &format_options) {
+            match baml_fmt::format_salsa(&self.db, *source_file, format_options) {
                 Ok(formatted) => {
                     writeln!(output, "{}", formatted).ok();
+                    let status = if file_recomputed {
+                        LineStatus::Recomputed
+                    } else {
+                        LineStatus::Cached
+                    };
                     for line in formatted.lines() {
-                        output_annotated.push((line.to_string(), LineStatus::Cached));
+                        output_annotated.push((line.to_string(), status));
                     }
                 }
                 Err(err) => {

@@ -27,6 +27,8 @@ impl FromCST for BlockAttribute {
 
         let args = it.next().map(AttributeArgs::from_cst).transpose()?;
 
+        it.expect_end()?;
+
         Ok(BlockAttribute { atat, name, args })
     }
 }
@@ -116,9 +118,10 @@ impl Printable for Attribute {
         printer.print_raw_token(&self.at);
         printer.print(&self.name, shape.clone());
         if let Some(args) = &self.args {
-            printer.print(args, shape);
+            printer.print(args, shape)
+        } else {
+            PrintInfo::default_single_line()
         }
-        PrintInfo::default_single_line()
     }
 }
 

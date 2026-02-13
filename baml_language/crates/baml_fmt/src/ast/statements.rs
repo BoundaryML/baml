@@ -301,12 +301,9 @@ impl FromCST for ForStmt {
 
         let open_paren = it.expect_parse()?;
 
-        let args_first = it.expect_next("a statement")?;
-        let mut args_first = Statement::from_cst(args_first)?;
+        let let_stmt = it.expect_parse()?;
 
-        let args = if let Some(kw_in) = it.next_if_kind(SyntaxKind::KW_IN)
-            && let Statement::Let(let_stmt) = args_first
-        {
+        let args = if let Some(kw_in) = it.next_if_kind(SyntaxKind::KW_IN) {
             // for-in
             let expr = it.expect_next("iterator expression")?;
             let expression = Expression::from_cst(expr)?;
@@ -322,14 +319,6 @@ impl FromCST for ForStmt {
             })
         } else {
             // C-style
-            if let Statement::Expr(expr_first) = args_first {
-                let semicolon = it.expect_parse()?;
-                args_first = Statement::Expr(ExpressionStmt {
-                    expr: expr_first.expr,
-                    semicolon: Some(semicolon),
-                });
-            }
-
             let condition = it.expect_next("an expression")?;
             let condition = Expression::from_cst(condition)?;
 
@@ -342,7 +331,7 @@ impl FromCST for ForStmt {
 
             ForArgs::CStyle(ForCStyleArgs {
                 open_paren,
-                init: Box::new(args_first),
+                init: let_stmt,
                 condition,
                 semicolon,
                 update: Box::new(update),
@@ -398,7 +387,7 @@ impl Printable for ForArgs {
 #[derive(Debug)]
 pub struct ForCStyleArgs {
     pub open_paren: t::LParen,
-    pub init: Box<Statement>,
+    pub init: LetStmt,
     pub condition: Expression,
     pub semicolon: t::Semicolon,
     pub update: Box<Expression>,
@@ -427,7 +416,7 @@ impl PrintMultiLine for ForCStyleArgs {
         printer.print_newline();
 
         printer.print_spaces(inner_shape.indent);
-        printer.print(&*self.init, inner_shape.clone());
+        printer.print(&self.init, inner_shape.clone());
         printer.print_newline();
 
         printer.print_spaces(inner_shape.indent);
@@ -452,7 +441,7 @@ impl Printable for ForCStyleArgs {
         let mut multi_lined = false;
         single_line_printer.print_raw_token(&self.open_paren);
         multi_lined |= single_line_printer
-            .print(&*self.init, Shape::unlimited_single_line())
+            .print(&self.init, Shape::unlimited_single_line())
             .multi_lined;
         single_line_printer.print_str(" ");
         multi_lined |= single_line_printer
@@ -499,6 +488,10 @@ impl PrintMultiLine for ForIteratorArgs {
         };
 
         printer.print_raw_token(&self.open_paren);
+        if let Some(watch) = &self.let_stmt.watch {
+            printer.print_raw_token(watch);
+            printer.print_spaces(1);
+        }
         printer.print_raw_token(&self.let_stmt.keyword);
         printer.print_str(" ");
         printer.print_raw_token(&self.let_stmt.name);
@@ -517,6 +510,10 @@ impl Printable for ForIteratorArgs {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.open_paren);
+        if let Some(watch) = &self.let_stmt.watch {
+            printer.print_raw_token(watch);
+            printer.print_spaces(1);
+        }
         single_line_printer.print_raw_token(&self.let_stmt.keyword);
         single_line_printer.print_str(" ");
         single_line_printer.print_raw_token(&self.let_stmt.name);

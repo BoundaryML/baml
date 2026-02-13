@@ -1206,6 +1206,9 @@ impl FromCST for ConfigBlock {
 
             items.push((item, comma));
         };
+
+        it.expect_end()?;
+
         Ok(ConfigBlock {
             open_brace,
             items,
@@ -1321,7 +1324,10 @@ impl Printable for ConfigItem {
         let value_shape = Shape {
             width: remaining_width.saturating_sub(const { ",".len() }),
             indent: shape.indent,
-            first_line_offset: remaining_width.saturating_sub(shape.indent),
+            first_line_offset: printer
+                .config
+                .line_width
+                .saturating_sub(shape.indent + remaining_width),
         };
         multi_lined |= printer.print(&self.value, value_shape).multi_lined;
         PrintInfo { multi_lined }

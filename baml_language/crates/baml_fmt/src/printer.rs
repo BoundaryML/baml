@@ -66,6 +66,9 @@ impl<'a> Printer<'a> {
         self.output.push_str(text);
     }
 
+    /// Should try to print the given element in the given shape.
+    ///
+    /// Tries to print the element single-line first, then multi-line if it doesn't fit.
     #[allow(unused_must_use)]
     pub fn print(&mut self, printable: &impl Printable, shape: Shape) -> PrintInfo {
         printable.print(shape, self)
@@ -137,7 +140,9 @@ impl<'a> Printer<'a> {
     ///
     /// Equivalent to `self.config.line_width - self.current_line_len()`.
     pub fn current_line_remaining_width(&self) -> usize {
-        self.config.line_width.saturating_sub(self.current_line_len())
+        self.config
+            .line_width
+            .saturating_sub(self.current_line_len())
     }
 
     /// The current length of the output.
@@ -181,13 +186,44 @@ pub trait PrintMultiLine {
 #[derive(Debug, Clone)]
 pub enum PrinterWarning {}
 
+/// The shape available to print an element.
+///
+/// ## Single-line
+/// For printing single-line, `width` is the maximum width.
+/// When the available width is unknown (e.g. more items potentially later on the line),
+/// a large width may be set (e.g. `Shape::unlimited_single_line()`).
+/// Then once the other elements are printed, the total width can be calculated.
+/// It is preferable to use more efficient methods for calculating the width
+/// if available.
+///
+/// ## Multi-line
+/// For printing multi-line, for example:
+/// ```baml
+/// function MaxFunction(a: int, b: int) -> int {
+///     if (a > b) {
+///         return a;
+///     } else {
+///         return b;
+///     }
+/// }
+/// ```
+///
+/// For the body of the if statement, `indent = 4` and `first_line_offset = 11`.
+/// This is because the baseline indentation at that line is `4` spaces (one indentation level)
+/// and the length of the other characters in the line "`if (a > b) `" is `11`.
 #[derive(Debug, Clone)]
 pub struct Shape {
+    /// SINGLE-LINE ONLY
+    ///
     /// The maximum width of the printed code if single-lined, not including base indentation.
     pub width: usize,
+    /// MULTI-LINE ONLY
+    ///
     /// The number of spaces that should be added before every line printed,
     /// except for the first line.
     pub indent: usize,
+    /// MULTI-LINE ONLY
+    ///
     /// This number is the column offset of the first line printed.
     /// It should be subtracted from the available width when printing the first line.
     pub first_line_offset: usize,

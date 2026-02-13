@@ -296,7 +296,7 @@ impl Printable for ParenExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut inner_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
         let inner_shape_single_line = Shape {
-            width: shape.width.saturating_sub(1),
+            width: shape.width.saturating_sub(2),
             indent: shape.indent,
             first_line_offset: shape.first_line_offset + 1,
         };
@@ -868,8 +868,11 @@ impl Printable for MatchArm {
                 single_line_guard_printer.print_str(" ");
                 let guard_info = single_line_guard_printer
                     .print(&guard.condition, Shape::unlimited_single_line());
+
                 if guard_info.multi_lined
-                    || printer.current_line_len() + single_line_guard_printer.len()
+                    || printer.current_line_len()
+                        + single_line_guard_printer.len()
+                        + const { " =>".len() }
                         > printer.config.line_width
                 {
                     // Guard is too long to fit on a single line, so print it on the next line

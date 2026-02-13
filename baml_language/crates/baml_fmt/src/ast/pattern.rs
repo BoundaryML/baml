@@ -2,7 +2,9 @@
 
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
-use crate::ast::{FromCST, KnownKind, Literal, StrongAstError, SyntaxNodeIter, Type, tokens as t};
+use crate::ast::{
+    FromCST, KnownKind, Literal, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
+};
 use crate::printer::*;
 
 /// Corresponds to a [`SyntaxKind::MATCH_PATTERN`] node.
@@ -100,14 +102,18 @@ pub struct BindingPattern {
 }
 
 impl Printable for BindingPattern {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+    fn print(&self, mut shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.name);
         if let Some((colon, ty)) = &self.ty {
             printer.print_raw_token(colon);
             printer.print_str(" ");
-            printer.print(ty, shape);
+            let new_overhead = usize::from(self.name.span().len() + colon.span().len()) + 1;
+            shape.width = shape.width.saturating_sub(new_overhead);
+            shape.first_line_offset += new_overhead;
+            printer.print(ty, shape)
+        } else {
+            PrintInfo::default_single_line()
         }
-        PrintInfo::default_single_line()
     }
 }
 
@@ -282,7 +288,7 @@ impl Printable for NestedPattern {
         };
         let inner_info = inner_printer.print(&*self.pattern, inner_shape);
 
-        if inner_info.multi_lined {
+        if inner_info.multi_lined || inner_printer.output.len() > shape.width {
             printer.print_raw_token(&self.open_paren);
             printer.print_newline();
             printer.print_spaces(shape.indent + printer.config.indent_width);
