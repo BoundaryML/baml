@@ -44,7 +44,7 @@ ignore_crates = ["rig_*"]
 # Graph visualization settings
 # Run: cargo stow --graph /tmp/deps.svg
 [graph]
-external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan"]
+external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan", "reqwest"]
 
 # Implied dependencies: if a crate depends on both the key and a value,
 # the edge to the value is hidden (it's visually implied by the key).
@@ -59,7 +59,7 @@ bex_vm_types = ["bex_resource_types"]
 # Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
 pattern = "anyhow"
-allowed_crates = ["*_cli", "tools_*", "baml_lsp_*"]
+allowed_crates = ["*_cli", "tools_*", "cargo-*", "baml_lsp_*"]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
@@ -93,7 +93,7 @@ reason = "Only compiler_emit crates should depend on bex_vm_types (pure data lay
 [[namespaces]]
 name = "tools"
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
-name_exceptions = { "tools_stow" = "cargo-stow" }
+name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 
 # bex namespace configuration
 [[namespaces]]

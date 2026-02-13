@@ -4,4 +4,5 @@
 //! (`SysOpFs`, `SysOpHttp`, etc.) in `lib.rs`. This module just
 //! provides shared utilities (e.g., HTTP send logic).
 
+#[cfg(feature = "bundle-http")]
 pub(crate) mod http;

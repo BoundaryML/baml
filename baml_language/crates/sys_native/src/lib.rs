@@ -187,6 +187,14 @@ impl SysOpNet for NativeSysOps {
 // ============================================================================
 
 impl SysOpHttp for NativeSysOps {
+    fn baml_http_response_ok(
+        &self,
+        response: builtin_types::owned::HttpResponse,
+    ) -> SysOpOutput<bool> {
+        SysOpOutput::ok((200..300).contains(&response.status_code))
+    }
+
+    #[cfg(feature = "bundle-http")]
     fn baml_http_fetch(&self, url: String) -> SysOpOutput<builtin_types::owned::HttpResponse> {
         let req = builtin_types::owned::HttpRequest {
             method: "GET".to_string(),
@@ -197,6 +205,7 @@ impl SysOpHttp for NativeSysOps {
         SysOpOutput::async_op(async move { ops::http::send_async(req).await })
     }
 
+    #[cfg(feature = "bundle-http")]
     fn baml_http_response_text(
         &self,
         response: builtin_types::owned::HttpResponse,
@@ -224,13 +233,7 @@ impl SysOpHttp for NativeSysOps {
         })
     }
 
-    fn baml_http_response_ok(
-        &self,
-        response: builtin_types::owned::HttpResponse,
-    ) -> SysOpOutput<bool> {
-        SysOpOutput::ok((200..300).contains(&response.status_code))
-    }
-
+    #[cfg(feature = "bundle-http")]
     fn baml_http_send(
         &self,
         request: builtin_types::owned::HttpRequest,

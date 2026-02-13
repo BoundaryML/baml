@@ -25,6 +25,7 @@ pub struct SocketResource {
 
 /// An HTTP response resource with lazy body consumption.
 pub struct ResponseResource {
+    #[cfg(feature = "bundle-http")]
     /// The underlying reqwest response (None after body consumed).
     pub response: Arc<TokioMutex<Option<reqwest::Response>>>,
 }
@@ -114,6 +115,7 @@ impl ResourceRegistry {
         }
     }
 
+    #[cfg(feature = "bundle-http")]
     /// Register an HTTP response and return an opaque handle.
     pub fn register_http_response(
         self: &Arc<Self>,
@@ -138,6 +140,7 @@ impl ResourceRegistry {
         )
     }
 
+    #[cfg(feature = "bundle-http")]
     /// Get the HTTP response mutex for body consumption.
     pub fn get_http_response_body(
         &self,

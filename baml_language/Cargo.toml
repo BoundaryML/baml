@@ -85,6 +85,7 @@ crossbeam = { version = "0.8.4", features = [ "crossbeam-channel" ] }
 crossterm = "0.28"
 ctrlc = "3.4"
 divan = { package = "codspeed-divan-compat", version = "*" }
+flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 indexmap = { version = "2.1.0", features = [ "serde" ] }
@@ -221,7 +222,10 @@ large_stack_arrays = "allow"
 
 [profile.release]
 lto = "fat"
-codegen-units = 16
+codegen-units = 1
+opt-level = "s"   # smallest; try "s" if perf matters
+strip = "symbols" # still keep your strip -x in packaging
+panic = "abort"
 
 # Some crates don't change as much but benefit more from
 # more expensive optimization passes, so we selectively

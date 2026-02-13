@@ -182,12 +182,245 @@ jobs:
           cargo build $WASM_PACKAGES --target wasm32-unknown-unknown --no-default-features --release
         working-directory: baml_language
 
-      - name: "Check WASM size"
-        run: |
-          ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
-          echo "WASM build artifacts:"
-          find target/wasm32-unknown-unknown -name "*.wasm" -exec ls -lh {} \;
+      - name: "List WASM artifacts"
+        run: ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
         working-directory: baml_language
+
+  # ---------------------------------------------------------------------------
+  # Size Gate — one job per platform, unified PR comment at the end
+  # ---------------------------------------------------------------------------
+
+  size-gate-linux:
+    name: "size-gate (linux)"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-cargo"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run -p cargo-size-gate -- size-gate check \
+            --only bridge_cffi-stripped,bridge_cffi \
+            --format json > size-gate-linux.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-linux
+          path: baml_language/size-gate-linux.json
+          if-no-files-found: ignore
+
+      - name: "Upload size-gate binary"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-binary
+          path: baml_language/target/debug/cargo-size-gate
+          if-no-files-found: ignore
+
+      - name: "Fail on policy violation"
+        if: steps.check.outputs.exit_code != '0'
+        run: exit ${{ steps.check.outputs.exit_code }}
+
+  size-gate-macos:
+    name: "size-gate (macos)"
+    runs-on: macos-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "macos-cargo"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run -p cargo-size-gate -- size-gate check \
+            --only bridge_cffi-stripped,bridge_cffi \
+            --format json > size-gate-macos.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-macos
+          path: baml_language/size-gate-macos.json
+          if-no-files-found: ignore
+
+      - name: "Fail on policy violation"
+        if: steps.check.outputs.exit_code != '0'
+        run: exit ${{ steps.check.outputs.exit_code }}
+
+  size-gate-windows:
+    name: "size-gate (windows)"
+    runs-on: windows-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "windows-cargo"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run -p cargo-size-gate -- size-gate check \
+            --only bridge_cffi-stripped,bridge_cffi \
+            --format json > size-gate-windows.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-windows
+          path: baml_language/size-gate-windows.json
+          if-no-files-found: ignore
+
+      - name: "Fail on policy violation"
+        if: steps.check.outputs.exit_code != '0'
+        run: exit ${{ steps.check.outputs.exit_code }}
+
+  size-gate-wasm:
+    name: "size-gate (wasm)"
+    runs-on: ubuntu-latest
+    if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: "Install Rust toolchain"
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown
+        working-directory: baml_language
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          shared-key: "linux-wasm"
+
+      - name: "Run size-gate check"
+        id: check
+        working-directory: baml_language
+        run: |
+          cargo run -p cargo-size-gate -- size-gate check \
+            --only bridge_wasm \
+            --format json > size-gate-wasm.json 2> size-gate-stderr.txt || exit_code=$?
+          cat size-gate-stderr.txt >&2
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: "Upload size-gate report"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: size-gate-wasm
+          path: baml_language/size-gate-wasm.json
+          if-no-files-found: ignore
+
+      - name: "Fail on policy violation"
+        if: steps.check.outputs.exit_code != '0'
+        run: exit ${{ steps.check.outputs.exit_code }}
+
+  size-gate-report:
+    name: "size-gate (report)"
+    runs-on: ubuntu-latest
+    if: ${{ always() && (inputs.code_changed == 'true' || inputs.run_all) }}
+    needs: [size-gate-linux, size-gate-macos, size-gate-windows, size-gate-wasm]
+    permissions:
+      pull-requests: write
+    steps:
+      - name: "Download size-gate reports and binary"
+        uses: actions/download-artifact@v4
+        with:
+          pattern: size-gate-*
+          merge-multiple: true
+          path: reports
+
+      - name: "Compose unified report"
+        env:
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: |
+          chmod +x reports/cargo-size-gate
+
+          # Collect all JSON reports that exist
+          json_files=()
+          for platform in linux macos windows wasm; do
+            f="reports/size-gate-${platform}.json"
+            [ -f "$f" ] && json_files+=("$f")
+          done
+
+          # Run agg to produce unified markdown
+          reports/cargo-size-gate size-gate agg \
+            "${json_files[@]}" \
+            --run-url "$RUN_URL" \
+            > unified-report.md || true
+
+      - name: "Post PR comment"
+        if: github.event_name == 'pull_request'
+        uses: thollander/actions-comment-pull-request@v3.0.1
+        with:
+          file-path: unified-report.md
+          comment-tag: size-gate
+
+      - name: "Write job summary"
+        run: cat unified-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Fail if any size check failed"
+        run: |
+          for result in \
+            "${{ needs.size-gate-linux.result }}" \
+            "${{ needs.size-gate-macos.result }}" \
+            "${{ needs.size-gate-windows.result }}" \
+            "${{ needs.size-gate-wasm.result }}" \
+          ; do
+            if [ "$result" = "failure" ]; then
+              echo "::error::One or more size-gate checks failed"
+              exit 1
+            fi
+          done
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
