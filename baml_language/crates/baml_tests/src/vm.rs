@@ -356,7 +356,7 @@ pub enum Instruction {
     Unwatch(usize),
     Notify(usize),
     Call(usize),
-    CallWithTrace(usize),
+
     Return,
     Assert,
     NotifyBlock(usize),

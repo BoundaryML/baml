@@ -181,7 +181,7 @@ pub fn collect_vm_exec_states(
     loop {
         let result = vm.exec()?;
         // Skip SpanNotify states — these are span lifecycle events from
-        // CallWithTrace that aren't relevant for watch/emit tests.
+        // traced function calls that aren't relevant for watch/emit tests.
         if matches!(result, VmExecState::SpanNotify(_)) {
             continue;
         }
@@ -244,8 +244,7 @@ fn setup_and_exec_program(
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &[]);
 
-    // Loop past SpanNotify states. The compiler now emits CallWithTrace for
-    // all function calls, so every inter-function call yields SpanNotify
+    // Loop past SpanNotify states. Traced function calls yield SpanNotify
     // before reaching the actual result.
     let result = loop {
         let result = vm.exec();
@@ -304,6 +303,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         param_names: Vec::new(),
         param_types: Vec::new(),
         body_meta: None,
+        trace: false,
     };
 
     let mut program = VmProgram::new();

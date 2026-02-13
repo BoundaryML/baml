@@ -1,9 +1,9 @@
 //! End-to-end tests for span tracing via `call_function`.
 //!
 //! These tests verify that `call_function` produces a root span for the
-//! entry-point function. Inner expression function calls use `Call` (not `CallWithTrace`)
-//! so they do NOT produce child spans. Only LLM function calls emit `CallWithTrace`
-//! and would appear as child spans in the trace.
+//! entry-point function. Inner expression function calls are not traced
+//! so they do NOT produce child spans. Only LLM functions have `trace: true`
+//! set on their `Function` objects and would appear as child spans in the trace.
 //!
 //! Events are collected via the global event store (`track` / `events_for_span` / `untrack`).
 
@@ -85,8 +85,8 @@ async fn trace_single_function() {
 
 #[tokio::test]
 async fn trace_nested_expression_calls_no_child_spans() {
-    // Expression-to-expression calls use `Call` (not `CallWithTrace`),
-    // so inner functions don't produce span events.
+    // Expression functions have `trace: false`, so inner functions
+    // don't produce span events.
     let source = r#"
         function inner() -> int {
             10
@@ -185,7 +185,7 @@ async fn trace_sibling_expression_calls_no_child_spans() {
 
     assert_eq!(value, BexExternalValue::Int(3));
 
-    // Only root function produces events; foo() and bar() use Call, not CallWithTrace
+    // Only root function produces events; foo() and bar() have trace: false
     let names = event_names(&events);
     assert_eq!(names, vec!["start:main", "end:main"]);
 }
@@ -257,11 +257,9 @@ async fn trace_captures_root_result() {
     }
 }
 
-/// Verify that LLM function calls compile to `CallWithTrace` instructions.
+/// Verify that LLM functions have `trace: true` and expression functions have `trace: false`.
 #[test]
-fn llm_functions_compile_to_call_with_trace() {
-    use bex_vm_types::bytecode::Instruction;
-
+fn llm_functions_have_trace_flag() {
     let source = r##"
         client<llm> MockClient {
             provider openai
@@ -296,54 +294,35 @@ fn llm_functions_compile_to_call_with_trace() {
 
     let program = compile_for_engine(source);
 
-    // Check that InnerPipeline has CallWithTrace for ExtractInfo and SummarizeInfo
-    let inner_idx = program
-        .function_indices
-        .get("InnerPipeline")
-        .expect("InnerPipeline should exist");
-    let inner_func = match program.objects.get(*inner_idx) {
-        Some(bex_vm_types::Object::Function(f)) => f,
-        other => panic!("Expected Function object for InnerPipeline, got {other:?}"),
-    };
+    // LLM functions should have trace: true
+    for name in ["ExtractInfo", "SummarizeInfo"] {
+        let idx = program
+            .function_indices
+            .get(name)
+            .unwrap_or_else(|| panic!("{name} should exist"));
+        let func = match program.objects.get(*idx) {
+            Some(bex_vm_types::Object::Function(f)) => f,
+            other => panic!("Expected Function object for {name}, got {other:?}"),
+        };
+        assert!(
+            func.trace,
+            "LLM function {name} should have trace: true"
+        );
+    }
 
-    let call_with_trace_count = inner_func
-        .bytecode
-        .instructions
-        .iter()
-        .filter(|inst| matches!(inst, Instruction::CallWithTrace(_)))
-        .count();
-
-    let call_count = inner_func
-        .bytecode
-        .instructions
-        .iter()
-        .filter(|inst| matches!(inst, Instruction::Call(_)))
-        .count();
-
-    assert_eq!(
-        call_with_trace_count, 2,
-        "InnerPipeline should have 2 CallWithTrace (ExtractInfo + SummarizeInfo), found {call_with_trace_count} CallWithTrace and {call_count} Call"
-    );
-
-    // Check that OuterPipeline has Call (not CallWithTrace) for InnerPipeline
-    let outer_idx = program
-        .function_indices
-        .get("OuterPipeline")
-        .expect("OuterPipeline should exist");
-    let outer_func = match program.objects.get(*outer_idx) {
-        Some(bex_vm_types::Object::Function(f)) => f,
-        other => panic!("Expected Function object for OuterPipeline, got {other:?}"),
-    };
-
-    let outer_call_with_trace = outer_func
-        .bytecode
-        .instructions
-        .iter()
-        .filter(|inst| matches!(inst, Instruction::CallWithTrace(_)))
-        .count();
-
-    assert_eq!(
-        outer_call_with_trace, 0,
-        "OuterPipeline should have 0 CallWithTrace (InnerPipeline is not an LLM function)"
-    );
+    // Expression functions should have trace: false
+    for name in ["InnerPipeline", "OuterPipeline"] {
+        let idx = program
+            .function_indices
+            .get(name)
+            .unwrap_or_else(|| panic!("{name} should exist"));
+        let func = match program.objects.get(*idx) {
+            Some(bex_vm_types::Object::Function(f)) => f,
+            other => panic!("Expected Function object for {name}, got {other:?}"),
+        };
+        assert!(
+            !func.trace,
+            "Expression function {name} should have trace: false"
+        );
+    }
 }

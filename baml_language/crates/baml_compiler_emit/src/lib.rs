@@ -40,8 +40,6 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub enum_object_indices: &'ctx HashMap<String, usize>,
     /// Enum variant mappings (enum name -> variant name -> variant index).
     pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
-    /// Set of LLM function names (qualified). Calls to these emit CallWithTrace.
-    pub llm_functions: &'ctx HashSet<String>,
     /// Shared object pool for strings, etc.
     pub objects: &'obj mut ObjectPool,
 }
@@ -137,23 +135,6 @@ pub fn compile_files(
                 let func_name = qualified_name.display();
                 globals.insert(func_name, global_idx);
                 global_idx += 1;
-            }
-        }
-    }
-
-    // Build set of LLM function names for selective CallWithTrace emission.
-    // Only calls to LLM functions emit CallWithTrace; regular expression function
-    // calls use plain Call so they don't appear as separate spans in traces.
-    let mut llm_functions: HashSet<String> = HashSet::new();
-    for file in files {
-        let items_struct = baml_compiler_hir::file_items(db, *file);
-        for item in items_struct.items(db) {
-            if let ItemId::Function(func_loc) = item {
-                if baml_compiler_hir::llm_function_meta(db, *func_loc).is_some() {
-                    let qualified_name =
-                        baml_compiler_hir::function_qualified_name(db, *func_loc);
-                    llm_functions.insert(qualified_name.display());
-                }
             }
         }
     }
@@ -354,6 +335,7 @@ pub fn compile_files(
             param_names: Vec::new(),
             param_types: Vec::new(),
             body_meta: None,
+            trace: false,
         };
         let fn_obj_idx = program.add_object(Object::Function(Box::new(builtin_fn)));
         program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
@@ -384,6 +366,7 @@ pub fn compile_files(
             param_names: Vec::new(),
             param_types: Vec::new(),
             body_meta: None,
+            trace: false,
         };
         let fn_obj_idx = program.add_object(Object::Function(Box::new(builtin_fn)));
         program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
@@ -444,6 +427,7 @@ pub fn compile_files(
                             param_names: Vec::new(),
                             param_types: Vec::new(),
                             body_meta: None,
+                            trace: false,
                         }
                     }
                     baml_compiler_hir::FunctionBody::Expr(_, _) => {
@@ -493,7 +477,6 @@ pub fn compile_files(
                             class_object_indices: &class_object_indices,
                             enum_object_indices: &enum_object_indices,
                             enum_variants: &enum_variants,
-                            llm_functions: &llm_functions,
                             objects: &mut program.objects,
                         };
                         compile_mir_function(&mir, ctx)
@@ -505,12 +488,13 @@ pub fn compile_files(
                 compiled_fn.param_names = meta_param_names;
                 compiled_fn.param_types = meta_param_types;
 
-                // If this is an LLM function, attach prompt/client metadata
+                // If this is an LLM function, attach prompt/client metadata and enable tracing
                 if let Some(llm_meta) = baml_compiler_hir::llm_function_meta(db, *func_loc) {
                     compiled_fn.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
                         prompt_template: llm_meta.prompt.text.clone(),
                         client: llm_meta.client.to_string(),
                     });
+                    compiled_fn.trace = true;
                 }
 
                 // Validate types at emit time (safety net)

@@ -548,7 +548,7 @@ impl BexEngine {
     /// Execute a function by name with tracing.
     ///
     /// Every call emits [`RuntimeEvent`]s to the global event store for each
-    /// `CallWithTrace` span boundary the VM crosses. The entry-point function
+    /// traced function span boundary the VM crosses. The entry-point function
     /// itself gets a root span automatically.
     ///
     /// If `host_ctx` is provided, the engine's root span is nested under the

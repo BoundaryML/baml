@@ -576,6 +576,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                 param_names: function.param_names,
                 param_types: function.param_types,
                 body_meta: function.body_meta,
+                trace: function.trace,
             }))
         }
         // All other object types pass through unchanged
