@@ -5,6 +5,7 @@ import "./globals.css";
 import { ConvexClientProvider } from "@/components/providers/convex-provider";
 import { UserProvider } from "@/components/providers/user-provider";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,9 +23,10 @@ export const metadata: Metadata = {
 };
 
 const themeInitScript = `
+// NOTE: Keep in sync with theme logic in theme-toggle.tsx.
 (() => {
   try {
-    const STORAGE_KEY = "beps-theme";
+    const STORAGE_KEY = "${THEME_STORAGE_KEY}";
     const stored = window.localStorage.getItem(STORAGE_KEY);
     const theme =
       stored === "light" || stored === "dark" || stored === "system"

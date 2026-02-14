@@ -9,10 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 type ThemeMode = "light" | "dark" | "system";
-
-const THEME_STORAGE_KEY = "beps-theme";
 
 function isThemeMode(value: string | null): value is ThemeMode {
   return value === "light" || value === "dark" || value === "system";
