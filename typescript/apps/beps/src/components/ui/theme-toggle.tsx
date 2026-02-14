@@ -46,12 +46,13 @@ function getStoredTheme(): ThemeMode {
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<ThemeMode>("system");
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "system";
+    return getStoredTheme();
+  });
 
   useEffect(() => {
-    const initialTheme = getStoredTheme();
-    setTheme(initialTheme);
-    applyTheme(initialTheme);
+    applyTheme(theme);
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handleMediaChange = () => {
@@ -67,7 +68,7 @@ export function ThemeToggle() {
 
     media.addListener(handleMediaChange);
     return () => media.removeListener(handleMediaChange);
-  }, []);
+  }, [theme]);
 
   const handleThemeChange = (value: string) => {
     if (!isThemeMode(value)) return;
