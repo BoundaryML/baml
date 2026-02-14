@@ -19,6 +19,7 @@ pub type TraceTags = Vec<(String, String)>;
 
 /// The kind of event.
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum EventKind {
     Function(FunctionEvent),
     /// Metadata/tag updates on the current span.

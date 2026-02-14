@@ -109,8 +109,9 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
         }
         // Runtime-only types not representable in CFFI; map to null (caller receives null value).
         BexExternalValue::Resource(_handle) => None,
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(_))
-        | BexExternalValue::Adt(BexExternalAdt::Collector(_))
+        BexExternalValue::Adt(
+            BexExternalAdt::PromptAst(_) | BexExternalAdt::Collector(_),
+        )
         | BexExternalValue::FunctionRef { .. } => None,
     };
 

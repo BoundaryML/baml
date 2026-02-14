@@ -23,5 +23,8 @@ indexmap = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }
+
 [dev-dependencies]
 tempfile = { workspace = true }

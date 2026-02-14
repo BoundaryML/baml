@@ -141,7 +141,8 @@ pub struct Usage {
 }
 
 impl Usage {
-    /// Add two Usage values, summing each field.
+    /// Add two `Usage` values, summing each field.
+    #[must_use]
     pub fn add(&self, other: &Usage) -> Usage {
         Usage {
             input_tokens: sum_option(self.input_tokens, other.input_tokens),
@@ -163,30 +164,29 @@ pub struct LLMCall {
 // ─────────────────────────── from_events ─────────────────────────────────
 
 impl FunctionLog {
-    /// Materialize a FunctionLog from a list of RuntimeEvents for an engine span.
+    /// Materialize a `FunctionLog` from a list of `RuntimeEvent`s for an engine span.
     ///
     /// The `engine_span_id` identifies this specific function call. Events are
     /// already filtered to this call's bucket by the event store.
     ///
     /// Walks the event list:
-    /// - Root `FunctionStart` -> function_name, args, tags, start time
+    /// - Root `FunctionStart` -> `function_name`, args, tags, start time
     /// - Root `FunctionEnd` -> result, duration
     /// - Child `FunctionStart`/`FunctionEnd` pairs -> `LLMCall` entries
     /// - `SetTags` -> merged into tags map
     pub fn from_events(engine_span_id: SpanId, events: &[RuntimeEvent]) -> Self {
+        struct ChildSpan {
+            #[allow(dead_code)]
+            function_name: String,
+            start_time_utc_ms: i64,
+        }
+
         let mut function_name = String::new();
         let mut args = vec![];
         let mut result = None;
         let mut timing = Timing::default();
         let mut tags: HashMap<String, String> = HashMap::new();
         let usage = Usage::default();
-
-        // Collect child span starts for building LLMCall entries
-        struct ChildSpan {
-            #[allow(dead_code)]
-            function_name: String,
-            start_time_utc_ms: i64,
-        }
         let mut child_starts: HashMap<SpanId, ChildSpan> = HashMap::new();
         let mut calls: Vec<LLMCall> = vec![];
 
@@ -196,8 +196,8 @@ impl FunctionLog {
             match &event.event {
                 EventKind::Function(FunctionEvent::Start(start)) => {
                     if is_root {
-                        function_name = start.name.clone();
-                        args = start.args.clone();
+                        function_name.clone_from(&start.name);
+                        args.clone_from(&start.args);
                         timing.start_time_utc_ms = system_time_to_epoch_ms(event.timestamp);
                         // Merge tags from start event
                         for (k, v) in &start.tags {
@@ -217,7 +217,7 @@ impl FunctionLog {
                 EventKind::Function(FunctionEvent::End(end)) => {
                     if is_root {
                         result = Some(end.result.clone());
-                        timing.duration_ms = Some(end.duration.as_millis() as i64);
+                        timing.duration_ms = Some(i64::try_from(end.duration.as_millis()).unwrap_or(i64::MAX));
                     } else {
                         // Child span end — pair with the start
                         let child_start = child_starts.remove(&event.ctx.span_id);
@@ -229,7 +229,7 @@ impl FunctionLog {
                                     .as_ref()
                                     .map(|s| s.start_time_utc_ms)
                                     .unwrap_or(0),
-                                duration_ms: Some(end.duration.as_millis() as i64),
+                                duration_ms: Some(i64::try_from(end.duration.as_millis()).unwrap_or(i64::MAX)),
                             },
                             usage: Usage::default(), // Deferred: requires usage events
                         });
@@ -259,9 +259,12 @@ impl FunctionLog {
 // ─────────────────────────── Helpers ─────────────────────────────────────
 
 fn system_time_to_epoch_ms(t: std::time::SystemTime) -> i64 {
-    t.duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or(Duration::ZERO)
-        .as_millis() as i64
+    i64::try_from(
+        t.duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO)
+            .as_millis(),
+    )
+    .unwrap_or(i64::MAX)
 }
 
 fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
@@ -350,7 +353,7 @@ mod tests {
             ),
         ];
 
-        let log = FunctionLog::from_events(root.clone(), &events);
+        let log = FunctionLog::from_events(root, &events);
         assert_eq!(log.function_name, "my_func");
         assert_eq!(log.args, vec![BexExternalValue::Int(42)]);
         assert_eq!(log.result, Some(BexExternalValue::String("hello".into())));
@@ -376,7 +379,7 @@ mod tests {
                 vec![],
             ),
             make_end_event(
-                child1.clone(),
+                child1,
                 root.clone(),
                 Some(root.clone()),
                 "extract",
@@ -392,7 +395,7 @@ mod tests {
                 vec![],
             ),
             make_end_event(
-                child2.clone(),
+                child2,
                 root.clone(),
                 Some(root.clone()),
                 "summarize",
@@ -477,7 +480,7 @@ mod tests {
         ));
         event_store::emit(make_end_event(
             root.clone(),
-            root.clone(),
+            root,
             None,
             "my_func",
             BexExternalValue::Int(2),
@@ -550,7 +553,7 @@ mod tests {
         ));
         event_store::emit(make_end_event(
             root1.clone(),
-            root1.clone(),
+            root1,
             None,
             "first",
             BexExternalValue::Null,
@@ -566,7 +569,7 @@ mod tests {
         ));
         event_store::emit(make_end_event(
             root2.clone(),
-            root2.clone(),
+            root2,
             None,
             "second",
             BexExternalValue::Null,
@@ -666,7 +669,7 @@ mod tests {
         collector.track(&root1);
         event_store::emit(make_start_event(
             root1.clone(),
-            root1.clone(),
+            root1,
             None,
             "first",
             vec![],
@@ -682,7 +685,7 @@ mod tests {
         collector.track(&root2);
         event_store::emit(make_start_event(
             root2.clone(),
-            root2.clone(),
+            root2,
             None,
             "second",
             vec![],

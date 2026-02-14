@@ -250,7 +250,7 @@ pub enum WatchNotification {
 ///
 /// The VM provides args and result values from the eval stack so the engine
 /// can emit `FunctionStart`/`FunctionEnd` events without additional lookups.
-/// The VM itself has no span state (no SpanId, no timing) — all observability
+/// The VM itself has no span state (no `SpanId`, no timing) — all observability
 /// logic lives in the engine.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SpanNotification {

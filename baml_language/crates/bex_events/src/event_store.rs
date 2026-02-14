@@ -1,4 +1,4 @@
-//! Global EventStore with an MPSC publisher thread.
+//! Global `EventStore` with an MPSC publisher thread.
 //!
 //! All events (engine + host-language spans) flow through this module.
 //! The publisher thread buffers events and writes JSONL to file on `flush()`
@@ -17,6 +17,7 @@ use crate::{RuntimeEvent, SpanId};
 // ─────────────────────────── Publisher Channel ───────────────────────────
 
 /// Messages sent to the publisher thread.
+#[allow(clippy::large_enum_variant)]
 enum PublisherMessage {
     /// A new event to buffer.
     Event(RuntimeEvent),
@@ -40,6 +41,7 @@ fn ensure_publisher() -> &'static mpsc::SyncSender<PublisherMessage> {
 }
 
 /// The publisher worker loop. Receives events and flush requests.
+#[allow(clippy::needless_pass_by_value)] // Receiver must be owned by the thread
 fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>) {
     let mut buffer: Vec<RuntimeEvent> = Vec::new();
     loop {
@@ -158,7 +160,7 @@ pub fn flush() {
 }
 
 /// Start tracking a span ID for in-memory querying (collector use case).
-/// Typically called with the engine_span_id (unique per call_function).
+/// Typically called with the `engine_span_id` (unique per `call_function`).
 pub fn track(span_id: &SpanId) {
     let mut store = collector_store().lock().unwrap();
     *store.ref_counts.entry(span_id.clone()).or_insert(0) += 1;
@@ -190,7 +192,7 @@ mod tests {
     use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};
     use std::time::SystemTime;
 
-    /// Create an event whose span_id matches the given ID (function's own event).
+    /// Create an event whose `span_id` matches the given ID (function's own event).
     fn make_event(span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
             ctx: SpanContext {
@@ -208,7 +210,7 @@ mod tests {
         }
     }
 
-    /// Create a child event whose parent_span_id matches the given parent.
+    /// Create a child event whose `parent_span_id` matches the given parent.
     fn make_child_event(parent_span_id: SpanId, root_span_id: SpanId) -> RuntimeEvent {
         RuntimeEvent {
             ctx: SpanContext {

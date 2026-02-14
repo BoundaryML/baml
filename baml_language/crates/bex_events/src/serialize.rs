@@ -8,12 +8,12 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
     let call_id = event.ctx.span_id.to_string();
     let function_event_id = uuid::Uuid::new_v4().to_string();
 
-    let call_stack: Vec<String> = event.call_stack.iter().map(|s| s.to_string()).collect();
+    let call_stack: Vec<String> = event.call_stack.iter().map(std::string::ToString::to_string).collect();
 
     let timestamp_epoch_ms = event
         .timestamp
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
+        .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
         .unwrap_or(0);
 
     let content = match &event.event {
@@ -40,7 +40,7 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
                 "data": {
                     "function_display_name": end.name,
                     "result": result_json,
-                    "duration_ms": end.duration.as_millis() as u64,
+                    "duration_ms": u64::try_from(end.duration.as_millis()).unwrap_or(u64::MAX),
                 }
             })
         }
@@ -74,7 +74,7 @@ fn bex_value_vec_to_json(values: &[BexExternalValue]) -> serde_json::Value {
     serde_json::Value::Array(values.iter().map(bex_value_to_json).collect())
 }
 
-/// Convert a single BexExternalValue to a JSON value.
+/// Convert a single `BexExternalValue` to a JSON value.
 fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
     match value {
         BexExternalValue::Null => serde_json::Value::Null,

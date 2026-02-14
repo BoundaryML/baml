@@ -88,7 +88,7 @@ pub struct HostSpanContext {
     pub root_span_id: SpanId,
     /// The innermost active host span (will be parent of the engine's root span).
     pub parent_span_id: SpanId,
-    /// The full host call stack (list of SpanIds from root to tip).
+    /// The full host call stack (list of `SpanId`s from root to tip).
     pub call_stack: Vec<SpanId>,
 }
 
