@@ -3,17 +3,17 @@
 {% else %}
 //! Generated enum types.
 
-use baml::{BamlEncode, BamlDecode};
+use baml::{BamlEncode, BamlDecode, BamlSerde};
 {% for enum_ in enums %}
 
 {% if let Some(docstring) = enum_.docstring -%}
 {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
 {% if enum_.dynamic %}
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
 {% else %}
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 {% endif %}
 pub enum {{ enum_.name }} {
 {% for (value, docstring) in enum_.values %}

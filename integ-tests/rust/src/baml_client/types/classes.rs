@@ -6,18 +6,15 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{BamlDecode, BamlEncode, BamlSerde};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct AddTodoItem {
     #[baml(name = "type")]
     pub r#type: String,
-
     pub item: String,
-
     pub time: String,
-
+    pub a: Audio,
     pub description: String,
 }
 
@@ -27,13 +24,10 @@ impl AsRef<AddTodoItem> for AddTodoItem {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct AddressWithMeta {
     pub street: String,
-
     pub city: String,
-
     pub zipcode: String,
 }
 
@@ -43,13 +37,10 @@ impl AsRef<AddressWithMeta> for AddressWithMeta {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct AnotherObject {
     pub id: String,
-
     pub thingy2: String,
-
     pub thingy3: String,
 }
 
@@ -59,11 +50,9 @@ impl AsRef<AnotherObject> for AnotherObject {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct BigNumbers {
     pub a: i64,
-
     pub b: f64,
 }
 
@@ -73,13 +62,10 @@ impl AsRef<BigNumbers> for BigNumbers {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct BinaryNode {
     pub data: i64,
-
     pub left: Option<Box<BinaryNode>>,
-
     pub right: Option<Box<BinaryNode>>,
 }
 
@@ -89,8 +75,7 @@ impl AsRef<BinaryNode> for BinaryNode {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Blah {
     pub prop4: Option<String>,
 }
@@ -101,11 +86,9 @@ impl AsRef<Blah> for Blah {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct BlockConstraint {
     pub foo: i64,
-
     pub bar: String,
 }
 
@@ -115,11 +98,9 @@ impl AsRef<BlockConstraint> for BlockConstraint {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct BlockConstraintForParam {
     pub bcfp: i64,
-
     pub bcfp2: String,
 }
 
@@ -129,15 +110,11 @@ impl AsRef<BlockConstraintForParam> for BlockConstraintForParam {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct BookOrder {
     pub orderId: String,
-
     pub title: String,
-
     pub quantity: i64,
-
     pub price: f64,
 }
 
@@ -147,8 +124,7 @@ impl AsRef<BookOrder> for BookOrder {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ClassForNullLiteral {
     pub a: String,
 }
@@ -159,11 +135,9 @@ impl AsRef<ClassForNullLiteral> for ClassForNullLiteral {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ClassOptionalOutput {
     pub prop1: String,
-
     pub prop2: String,
 }
 
@@ -173,13 +147,10 @@ impl AsRef<ClassOptionalOutput> for ClassOptionalOutput {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ClassOptionalOutput2 {
     pub prop1: Option<String>,
-
     pub prop2: Option<String>,
-
     pub prop3: Option<Blah>,
 }
 
@@ -189,8 +160,7 @@ impl AsRef<ClassOptionalOutput2> for ClassOptionalOutput2 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ClassToRecAlias {
     pub list: LinkedListAliasNode,
 }
@@ -201,11 +171,9 @@ impl AsRef<ClassToRecAlias> for ClassToRecAlias {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ClassWithBlockDone {
     pub i_16_digits: i64,
-
     pub s_20_words: String,
 }
 
@@ -215,13 +183,10 @@ impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ClassWithImage {
     pub myImage: Image,
-
     pub param2: String,
-
     pub fake_image: FakeImage,
 }
 
@@ -231,11 +196,9 @@ impl AsRef<ClassWithImage> for ClassWithImage {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ClassWithoutDone {
     pub i_16_digits: i64,
-
     pub s_20_words: String,
 }
 
@@ -245,21 +208,14 @@ impl AsRef<ClassWithoutDone> for ClassWithoutDone {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ClientDetails1559 {
     pub client_name: Option<String>,
-
     pub client_address: Option<String>,
-
     pub client_postal_code: Option<String>,
-
     pub client_city: Option<String>,
-
     pub client_country: Option<String>,
-
     pub client_phone: Option<String>,
-
     pub client_email: Option<String>,
 }
 
@@ -269,15 +225,11 @@ impl AsRef<ClientDetails1559> for ClientDetails1559 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ComplexMemoryObject {
     pub id: String,
-
     pub name: String,
-
     pub description: String,
-
     pub metadata: Vec<Union3FloatOrIntOrString>,
 }
 
@@ -287,13 +239,10 @@ impl AsRef<ComplexMemoryObject> for ComplexMemoryObject {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct CompoundBigNumbers {
     pub big: BigNumbers,
-
     pub big_nums: Vec<BigNumbers>,
-
     pub another: BigNumbers,
 }
 
@@ -303,11 +252,9 @@ impl AsRef<CompoundBigNumbers> for CompoundBigNumbers {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ContactInfo {
     pub primary: Union2EmailAddressOrPhoneNumber,
-
     pub secondary: Option<Union2EmailAddressOrPhoneNumber>,
 }
 
@@ -317,13 +264,10 @@ impl AsRef<ContactInfo> for ContactInfo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct CustomStory {
     pub title: String,
-
     pub characters: Vec<String>,
-
     pub content: String,
 }
 
@@ -333,13 +277,10 @@ impl AsRef<CustomStory> for CustomStory {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct CustomTaskResult {
     pub bookOrder: Option<BookOrder>,
-
     pub flightConfirmation: Option<FlightConfirmation>,
-
     pub groceryReceipt: Option<GroceryReceipt>,
 }
 
@@ -349,11 +290,9 @@ impl AsRef<CustomTaskResult> for CustomTaskResult {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Document1559 {
     pub client_details: ClientDetails1559,
-
     pub notes: Vec<Note1599>,
 }
 
@@ -363,15 +302,11 @@ impl AsRef<Document1559> for Document1559 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct DummyJsonTodo {
     pub id: i64,
-
     pub todo: String,
-
     pub completed: bool,
-
     pub userId: i64,
 }
 
@@ -381,12 +316,10 @@ impl AsRef<DummyJsonTodo> for DummyJsonTodo {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct DummyOutput {
     pub nonce: String,
-
     pub nonce2: String,
 
     /// Dynamic fields added at runtime via TypeBuilder.
@@ -442,9 +375,7 @@ impl Default for DummyOutput {
     fn default() -> Self {
         Self {
             nonce: Default::default(),
-
             nonce2: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -456,9 +387,8 @@ impl AsRef<DummyOutput> for DummyOutput {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct DynInputOutput {
     pub testKey: String,
 
@@ -515,7 +445,6 @@ impl Default for DynInputOutput {
     fn default() -> Self {
         Self {
             testKey: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -527,9 +456,8 @@ impl AsRef<DynInputOutput> for DynInputOutput {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct DynamicClassOne {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
@@ -594,14 +522,11 @@ impl AsRef<DynamicClassOne> for DynamicClassOne {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct DynamicClassTwo {
     pub hi: String,
-
     pub some_class: SomeClassNestedDynamic,
-
     pub status: DynEnumOne,
 
     /// Dynamic fields added at runtime via TypeBuilder.
@@ -657,11 +582,8 @@ impl Default for DynamicClassTwo {
     fn default() -> Self {
         Self {
             hi: Default::default(),
-
             some_class: Default::default(),
-
             status: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -673,9 +595,8 @@ impl AsRef<DynamicClassTwo> for DynamicClassTwo {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct DynamicOutput {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
@@ -740,9 +661,8 @@ impl AsRef<DynamicOutput> for DynamicOutput {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct DynamicSchema {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
@@ -807,8 +727,7 @@ impl AsRef<DynamicSchema> for DynamicSchema {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Earthling {
     pub age: Checked<i64>,
 }
@@ -819,17 +738,12 @@ impl AsRef<Earthling> for Earthling {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Education {
     pub institution: String,
-
     pub location: String,
-
     pub degree: String,
-
     pub major: Vec<String>,
-
     pub graduation_date: Option<String>,
 }
 
@@ -839,13 +753,10 @@ impl AsRef<Education> for Education {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Email {
     pub subject: String,
-
     pub body: String,
-
     pub from_address: String,
 }
 
@@ -855,8 +766,7 @@ impl AsRef<Email> for Email {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct EmailAddress {
     pub value: String,
 }
@@ -867,15 +777,11 @@ impl AsRef<EmailAddress> for EmailAddress {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Event {
     pub title: String,
-
     pub date: String,
-
     pub location: String,
-
     pub description: String,
 }
 
@@ -885,8 +791,7 @@ impl AsRef<Event> for Event {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct FakeImage {
     pub url: String,
 }
@@ -897,17 +802,12 @@ impl AsRef<FakeImage> for FakeImage {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct FlightConfirmation {
     pub confirmationNumber: String,
-
     pub flightNumber: String,
-
     pub departureTime: String,
-
     pub arrivalTime: String,
-
     pub seatNumber: String,
 }
 
@@ -917,13 +817,10 @@ impl AsRef<FlightConfirmation> for FlightConfirmation {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct FooAny {
     pub planetary_age: Union2EarthlingOrMartian,
-
     pub certainty: Checked<i64>,
-
     pub species: Checked<String>,
 }
 
@@ -933,8 +830,7 @@ impl AsRef<FooAny> for FooAny {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Forest {
     pub trees: Vec<Box<Tree>>,
 }
@@ -945,11 +841,9 @@ impl AsRef<Forest> for Forest {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct FormatterTest0 {
     pub lorem: String,
-
     pub ipsum: String,
 }
 
@@ -959,11 +853,9 @@ impl AsRef<FormatterTest0> for FormatterTest0 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct FormatterTest1 {
     pub lorem: String,
-
     pub ipsum: String,
 }
 
@@ -973,11 +865,9 @@ impl AsRef<FormatterTest1> for FormatterTest1 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct FormatterTest2 {
     pub lorem: String,
-
     pub ipsum: String,
 }
 
@@ -987,11 +877,9 @@ impl AsRef<FormatterTest2> for FormatterTest2 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct FormatterTest3 {
     pub lorem: String,
-
     pub ipsum: String,
 }
 
@@ -1001,15 +889,11 @@ impl AsRef<FormatterTest3> for FormatterTest3 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct GroceryReceipt {
     pub receiptId: String,
-
     pub storeName: String,
-
     pub items: Vec<Union3FloatOrIntOrString>,
-
     pub totalAmount: f64,
 }
 
@@ -1019,13 +903,10 @@ impl AsRef<GroceryReceipt> for GroceryReceipt {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Haiku {
     pub line1: String,
-
     pub line2: String,
-
     pub line3: String,
 }
 
@@ -1035,13 +916,10 @@ impl AsRef<Haiku> for Haiku {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct InnerClass {
     pub prop1: String,
-
     pub prop2: String,
-
     pub inner: InnerClass2,
 }
 
@@ -1051,11 +929,9 @@ impl AsRef<InnerClass> for InnerClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct InnerClass2 {
     pub prop2: i64,
-
     pub prop3: f64,
 }
 
@@ -1065,11 +941,9 @@ impl AsRef<InnerClass2> for InnerClass2 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct InputClass {
     pub key: String,
-
     pub key2: String,
 }
 
@@ -1079,11 +953,9 @@ impl AsRef<InputClass> for InputClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct InputClassNested {
     pub key: String,
-
     pub nested: InputClass,
 }
 
@@ -1093,11 +965,9 @@ impl AsRef<InputClassNested> for InputClassNested {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct LinkedList {
     pub head: Option<Node>,
-
     pub len: i64,
 }
 
@@ -1107,11 +977,9 @@ impl AsRef<LinkedList> for LinkedList {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct LinkedListAliasNode {
     pub value: i64,
-
     pub next: Option<Box<LinkedListAliasNode>>,
 }
 
@@ -1121,8 +989,7 @@ impl AsRef<LinkedListAliasNode> for LinkedListAliasNode {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct LiteralClassHello {
     pub prop: String,
 }
@@ -1133,8 +1000,7 @@ impl AsRef<LiteralClassHello> for LiteralClassHello {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct LiteralClassOne {
     pub prop: String,
 }
@@ -1145,8 +1011,7 @@ impl AsRef<LiteralClassOne> for LiteralClassOne {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct LiteralClassTwo {
     pub prop: String,
 }
@@ -1157,13 +1022,10 @@ impl AsRef<LiteralClassTwo> for LiteralClassTwo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct MaintainFieldOrder {
     pub c: String,
-
     pub b: String,
-
     pub a: String,
 }
 
@@ -1173,8 +1035,7 @@ impl AsRef<MaintainFieldOrder> for MaintainFieldOrder {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct MalformedConstraints {
     pub foo: Checked<i64>,
 }
@@ -1185,8 +1046,7 @@ impl AsRef<MalformedConstraints> for MalformedConstraints {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct MalformedConstraints2 {
     pub foo: i64,
 }
@@ -1200,8 +1060,7 @@ impl AsRef<MalformedConstraints2> for MalformedConstraints2 {
 /// A Martian organism with an age.
 /// Such a nice type.
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Martian {
     /// The age of the Martian in Mars years.
     /// So many Mars years.
@@ -1214,13 +1073,10 @@ impl AsRef<Martian> for Martian {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct MemoryObject {
     pub id: String,
-
     pub name: String,
-
     pub description: String,
 }
 
@@ -1230,8 +1086,7 @@ impl AsRef<MemoryObject> for MemoryObject {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct MergeAttrs {
     pub amount: Checked<i64>,
 }
@@ -1242,13 +1097,10 @@ impl AsRef<MergeAttrs> for MergeAttrs {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct NamedArgsSingleClass {
     pub key: String,
-
     pub key_two: bool,
-
     pub key_three: i64,
 }
 
@@ -1258,13 +1110,10 @@ impl AsRef<NamedArgsSingleClass> for NamedArgsSingleClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Nested {
     pub prop3: Option<String>,
-
     pub prop4: Option<String>,
-
     pub prop20: Nested2,
 }
 
@@ -1274,11 +1123,9 @@ impl AsRef<Nested> for Nested {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Nested2 {
     pub prop11: Option<String>,
-
     pub prop12: Option<String>,
 }
 
@@ -1288,8 +1135,7 @@ impl AsRef<Nested2> for Nested2 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct NestedBlockConstraint {
     pub nbc: Checked<BlockConstraint>,
 }
@@ -1300,8 +1146,7 @@ impl AsRef<NestedBlockConstraint> for NestedBlockConstraint {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct NestedBlockConstraintForParam {
     pub nbcfp: BlockConstraintForParam,
 }
@@ -1312,11 +1157,9 @@ impl AsRef<NestedBlockConstraintForParam> for NestedBlockConstraintForParam {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Node {
     pub data: i64,
-
     pub next: Option<Box<Node>>,
 }
 
@@ -1326,11 +1169,9 @@ impl AsRef<Node> for Node {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct NodeWithAliasIndirection {
     pub value: i64,
-
     pub next: Option<Box<NodeWithAliasIndirection>>,
 }
 
@@ -1340,13 +1181,10 @@ impl AsRef<NodeWithAliasIndirection> for NodeWithAliasIndirection {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Note1599 {
     pub note_title: String,
-
     pub note_description: Option<String>,
-
     pub note_amount: Option<String>,
 }
 
@@ -1356,11 +1194,9 @@ impl AsRef<Note1599> for Note1599 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct OptionalListAndMap {
     pub p: Option<Vec<String>>,
-
     pub q: Option<std::collections::HashMap<String, String>>,
 }
 
@@ -1370,11 +1206,9 @@ impl AsRef<OptionalListAndMap> for OptionalListAndMap {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct OptionalTest_Prop1 {
     pub omega_a: String,
-
     pub omega_b: i64,
 }
 
@@ -1384,13 +1218,10 @@ impl AsRef<OptionalTest_Prop1> for OptionalTest_Prop1 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct OptionalTest_ReturnType {
     pub omega_1: Option<OptionalTest_Prop1>,
-
     pub omega_2: Option<String>,
-
     pub omega_3: Vec<Option<OptionalTest_CategoryType>>,
 }
 
@@ -1400,13 +1231,10 @@ impl AsRef<OptionalTest_ReturnType> for OptionalTest_ReturnType {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct OrderInfo {
     pub order_status: OrderStatus,
-
     pub tracking_number: Option<String>,
-
     pub estimated_arrival_date: Option<String>,
 }
 
@@ -1416,8 +1244,7 @@ impl AsRef<OrderInfo> for OrderInfo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct OriginalA {
     pub value: i64,
 }
@@ -1428,9 +1255,8 @@ impl AsRef<OriginalA> for OriginalA {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct OriginalB {
     pub value: i64,
 
@@ -1487,7 +1313,6 @@ impl Default for OriginalB {
     fn default() -> Self {
         Self {
             value: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -1499,12 +1324,10 @@ impl AsRef<OriginalB> for OriginalB {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct Person {
     pub name: Option<String>,
-
     pub hair_color: Option<Color>,
 
     /// Dynamic fields added at runtime via TypeBuilder.
@@ -1560,9 +1383,7 @@ impl Default for Person {
     fn default() -> Self {
         Self {
             name: Default::default(),
-
             hair_color: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -1574,15 +1395,11 @@ impl AsRef<Person> for Person {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct PersonWithMeta {
     pub name: String,
-
     pub age: i64,
-
     pub address: AddressWithMeta,
-
     pub tags: Vec<String>,
 }
 
@@ -1592,8 +1409,7 @@ impl AsRef<PersonWithMeta> for PersonWithMeta {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct PhoneNumber {
     pub value: String,
 }
@@ -1604,11 +1420,9 @@ impl AsRef<PhoneNumber> for PhoneNumber {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Quantity {
     pub amount: Union2FloatOrInt,
-
     pub unit: Option<String>,
 }
 
@@ -1618,11 +1432,9 @@ impl AsRef<Quantity> for Quantity {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct RaysData {
     pub dataType: DataType,
-
     pub value: Union2EventOrResume,
 }
 
@@ -1632,13 +1444,10 @@ impl AsRef<RaysData> for RaysData {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ReceiptInfo {
     pub items: Vec<ReceiptItem>,
-
     pub total_cost: Option<f64>,
-
     pub venue: Union2KbarisaOrKox_burger,
 }
 
@@ -1648,15 +1457,11 @@ impl AsRef<ReceiptInfo> for ReceiptInfo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct ReceiptItem {
     pub name: String,
-
     pub description: Option<String>,
-
     pub quantity: i64,
-
     pub price: f64,
 }
 
@@ -1666,11 +1471,9 @@ impl AsRef<ReceiptItem> for ReceiptItem {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Recipe {
     pub ingredients: std::collections::HashMap<String, Quantity>,
-
     pub recipe_type: Union2KbreakfastOrKdinner,
 }
 
@@ -1680,8 +1483,7 @@ impl AsRef<Recipe> for Recipe {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct RecursiveAliasDependency {
     pub value: JsonValue,
 }
@@ -1692,9 +1494,8 @@ impl AsRef<RecursiveAliasDependency> for RecursiveAliasDependency {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct RenderEnumInput {
     pub testKey: String,
 
@@ -1751,7 +1552,6 @@ impl Default for RenderEnumInput {
     fn default() -> Self {
         Self {
             testKey: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -1763,12 +1563,10 @@ impl AsRef<RenderEnumInput> for RenderEnumInput {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct RenderTestClass {
     pub name: String,
-
     pub status: RenderStatusEnum,
 
     /// Dynamic fields added at runtime via TypeBuilder.
@@ -1824,9 +1622,7 @@ impl Default for RenderTestClass {
     fn default() -> Self {
         Self {
             name: Default::default(),
-
             status: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -1838,19 +1634,13 @@ impl AsRef<RenderTestClass> for RenderTestClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Resume {
     pub name: String,
-
     pub email: String,
-
     pub phone: String,
-
     pub experience: Vec<String>,
-
     pub education: Vec<Education>,
-
     pub skills: Vec<String>,
 }
 
@@ -1860,21 +1650,14 @@ impl AsRef<Resume> for Resume {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Schema {
     pub prop1: Option<String>,
-
     pub prop2: Union2NestedOrString,
-
     pub prop5: Vec<Option<String>>,
-
     pub prop6: Union2ListNestedOrString,
-
     pub nested_attrs: Vec<Option<Union2NestedOrString>>,
-
     pub parens: Option<String>,
-
     pub other_group: Union2IntOrString,
 }
 
@@ -1884,19 +1667,13 @@ impl AsRef<Schema> for Schema {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct SearchParams {
     pub dateRange: Option<i64>,
-
     pub location: Vec<String>,
-
     pub jobTitle: Option<WithReasoning>,
-
     pub company: Option<WithReasoning>,
-
     pub description: Vec<WithReasoning>,
-
     pub tags: Vec<Union2StringOrTag>,
 }
 
@@ -1906,23 +1683,15 @@ impl AsRef<SearchParams> for SearchParams {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct SemanticContainer {
     pub sixteen_digit_number: i64,
-
     pub string_with_twenty_words: String,
-
     pub class_1: ClassWithoutDone,
-
     pub class_2: ClassWithBlockDone,
-
     pub class_done_needed: ClassWithBlockDone,
-
     pub class_needed: ClassWithoutDone,
-
     pub three_small_things: Vec<SmallThing>,
-
     pub final_string: String,
 }
 
@@ -1932,8 +1701,7 @@ impl AsRef<SemanticContainer> for SemanticContainer {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct SimpleTag {
     pub field: String,
 }
@@ -1944,12 +1712,10 @@ impl AsRef<SimpleTag> for SimpleTag {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct SkipDynamicClass {
     pub value: String,
-
     pub internal_id: Option<String>,
 
     /// Dynamic fields added at runtime via TypeBuilder.
@@ -2005,9 +1771,7 @@ impl Default for SkipDynamicClass {
     fn default() -> Self {
         Self {
             value: Default::default(),
-
             internal_id: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -2019,13 +1783,10 @@ impl AsRef<SkipDynamicClass> for SkipDynamicClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct SkipNonDynamicClass {
     pub name: String,
-
     pub description: Option<String>,
-
     pub metadata: Option<String>,
 }
 
@@ -2035,11 +1796,9 @@ impl AsRef<SkipNonDynamicClass> for SkipNonDynamicClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct SmallThing {
     pub i_16_digits: i64,
-
     pub i_8_digits: i64,
 }
 
@@ -2049,9 +1808,8 @@ impl AsRef<SmallThing> for SmallThing {
     }
 }
 
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-
 pub struct SomeClassNestedDynamic {
     pub hi: String,
 
@@ -2108,7 +1866,6 @@ impl Default for SomeClassNestedDynamic {
     fn default() -> Self {
         Self {
             hi: Default::default(),
-
             __dynamic: std::collections::HashMap::new(),
         }
     }
@@ -2120,8 +1877,7 @@ impl AsRef<SomeClassNestedDynamic> for SomeClassNestedDynamic {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct StringToClassEntry {
     pub word: String,
 }
@@ -2132,17 +1888,12 @@ impl AsRef<StringToClassEntry> for StringToClassEntry {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct TestClassAlias {
     pub key: String,
-
     pub key2: String,
-
     pub key3: String,
-
     pub key4: String,
-
     pub key5: String,
 }
 
@@ -2152,11 +1903,9 @@ impl AsRef<TestClassAlias> for TestClassAlias {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct TestClassNested {
     pub prop1: String,
-
     pub prop2: InnerClass,
 }
 
@@ -2166,11 +1915,9 @@ impl AsRef<TestClassNested> for TestClassNested {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct TestClassWithEnum {
     pub prop1: String,
-
     pub prop2: EnumInClass,
 }
 
@@ -2180,11 +1927,9 @@ impl AsRef<TestClassWithEnum> for TestClassWithEnum {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct TestMemoryOutput {
     pub items: Vec<Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject>,
-
     pub more_items: Vec<Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject>,
 }
 
@@ -2194,11 +1939,9 @@ impl AsRef<TestMemoryOutput> for TestMemoryOutput {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct TestOutputClass {
     pub prop1: String,
-
     pub prop2: i64,
 }
 
@@ -2208,12 +1951,10 @@ impl AsRef<TestOutputClass> for TestOutputClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct TodoMessageToUser {
     #[baml(name = "type")]
     pub r#type: String,
-
     pub message: String,
 }
 
@@ -2223,11 +1964,9 @@ impl AsRef<TodoMessageToUser> for TodoMessageToUser {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct Tree {
     pub data: i64,
-
     pub children: Box<Forest>,
 }
 
@@ -2237,13 +1976,10 @@ impl AsRef<Tree> for Tree {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct TwoStoriesOneTitle {
     pub title: String,
-
     pub story_a: String,
-
     pub story_b: String,
 }
 
@@ -2253,13 +1989,10 @@ impl AsRef<TwoStoriesOneTitle> for TwoStoriesOneTitle {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct TwoStoriesOneTitleCheck {
     pub title: String,
-
     pub story_a: Checked<String>,
-
     pub story_b: Checked<String>,
 }
 
@@ -2269,13 +2002,10 @@ impl AsRef<TwoStoriesOneTitleCheck> for TwoStoriesOneTitleCheck {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct UnionTest_ReturnType {
     pub prop1: Union2BoolOrString,
-
     pub prop2: Vec<Union2BoolOrFloat>,
-
     pub prop3: Union2ListBoolOrListInt,
 }
 
@@ -2287,11 +2017,9 @@ impl AsRef<UnionTest_ReturnType> for UnionTest_ReturnType {
 
 /// my docs
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct UniverseQuestion {
     pub question: String,
-
     pub answer: String,
 }
 
@@ -2301,8 +2029,7 @@ impl AsRef<UniverseQuestion> for UniverseQuestion {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct UniverseQuestionInput {
     pub question: String,
 }
@@ -2313,11 +2040,9 @@ impl AsRef<UniverseQuestionInput> for UniverseQuestionInput {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
 pub struct WithReasoning {
     pub value: String,
-
     pub reasoning: String,
 }
 

@@ -3,14 +3,15 @@
 {% else %}
 //! Generated union types.
 
-use baml::{BamlEncode, BamlDecode};
+use baml::{BamlEncode, BamlDecode, __internal::serde::{Serialize, Deserialize}};
 use super::*;
 {% for u in unions %}
 
 {% if let Some(docstring) = u.docstring -%}
 {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
-#[derive(Debug, Clone, BamlEncode, BamlDecode{% if u.is_all_literals() %}, PartialEq, Eq, Hash{% endif %})]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize{% if u.is_all_literals() %}, PartialEq, Eq, Hash{% endif %})]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum {{ u.name }} {
 {% for variant in u.variants %}
@@ -18,10 +19,10 @@ pub enum {{ u.name }} {
     #[baml(name = "{{ variant.cffi_name }}", literal_{{ variant.cffi_name.split("_").next().unwrap() }} = {{ literal_repr }})]
     {{ variant.name }},
     {% else -%}
-        #[baml(name = "{{ variant.cffi_name }}")]
-        {{ variant.name }}({{ variant.type_str }}),
+    #[baml(name = "{{ variant.cffi_name }}")]
+    {{ variant.name }}({{ variant.type_str }}),
     {% endif -%}
-{% endfor %}
+{%- endfor %}
 }
 
 impl AsRef<{{ u.name }}> for {{ u.name }} {

@@ -3,7 +3,7 @@
 {% else %}
 //! Generated class types.
 
-use baml::{BamlEncode, BamlDecode};
+use baml::{BamlEncode, BamlDecode, BamlSerde};
 use super::*;
 {% for class in classes %}
 
@@ -11,21 +11,21 @@ use super::*;
 {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
 {% if class.dynamic %}
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
-{% else %}
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-{% endif %}
+{%- else %}
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
+{%- endif %}
 pub struct {{ class.name }} {
 {% for field in class.fields %}
-{% if let Some(docstring) = field.docstring %}
+{%- if let Some(docstring) = field.docstring %}
     {{ crate::utils::prefix_lines(docstring, "/// ") }}
-{% endif %}
-{% if let Some(cffi_name) = field.cffi_name %}
+{%- endif %}
+{%- if let Some(cffi_name) = field.cffi_name %}
     #[baml(name = "{{ cffi_name }}")]
-{% endif %}
+{%- endif %}
     pub {{ field.name }}: {{ field.type_str }},
-{% endfor %}
+{%- endfor %}
 {% if class.dynamic %}
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
@@ -68,7 +68,7 @@ impl Default for {{ class.name }} {
         Self {
 {% for field in class.fields %}
             {{ field.name }}: Default::default(),
-{% endfor %}
+{%- endfor %}
             __dynamic: std::collections::HashMap::new(),
         }
     }

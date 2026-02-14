@@ -5,9 +5,9 @@
 
 //! Generated enum types.
 
-use baml::{BamlDecode, BamlEncode};
+use baml::{BamlDecode, BamlEncode, BamlSerde};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum AliasedEnum {
     KEY_ONE,
@@ -51,7 +51,7 @@ impl AsRef<AliasedEnum> for AliasedEnum {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum Category {
     Refund,
@@ -113,7 +113,7 @@ impl AsRef<Category> for Category {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum Category2 {
     Refund,
@@ -175,7 +175,7 @@ impl AsRef<Category2> for Category2 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum Category3 {
     Refund,
@@ -237,7 +237,7 @@ impl AsRef<Category3> for Category3 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
 
 pub enum Color {
@@ -312,7 +312,7 @@ impl AsRef<Color> for Color {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum DataType {
     Resume,
@@ -356,7 +356,7 @@ impl AsRef<DataType> for DataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
 
 pub enum DynEnumOne {
@@ -397,7 +397,7 @@ impl AsRef<DynEnumOne> for DynEnumOne {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
 
 pub enum DynEnumThree {
@@ -448,7 +448,7 @@ impl AsRef<DynEnumThree> for DynEnumThree {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
 
 pub enum DynEnumTwo {
@@ -489,7 +489,7 @@ impl AsRef<DynEnumTwo> for DynEnumTwo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum EnumInClass {
     ONE,
@@ -536,7 +536,7 @@ impl AsRef<EnumInClass> for EnumInClass {
 /// An enum with three values,
 /// ONE, TWO and THREE.
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum EnumOutput {
     /// The first enum.
@@ -588,7 +588,7 @@ impl AsRef<EnumOutput> for EnumOutput {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
 
 pub enum Hobby {
@@ -645,7 +645,7 @@ impl AsRef<Hobby> for Hobby {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum MapKey {
     A,
@@ -695,7 +695,7 @@ impl AsRef<MapKey> for MapKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum NamedArgsSingleEnum {
     ONE,
@@ -739,7 +739,7 @@ impl AsRef<NamedArgsSingleEnum> for NamedArgsSingleEnum {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum NamedArgsSingleEnumList {
     ONE,
@@ -783,7 +783,7 @@ impl AsRef<NamedArgsSingleEnumList> for NamedArgsSingleEnumList {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum OptionalTest_CategoryType {
     Aleph,
@@ -833,7 +833,7 @@ impl AsRef<OptionalTest_CategoryType> for OptionalTest_CategoryType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum OrderStatus {
     ORDERED,
@@ -889,7 +889,7 @@ impl AsRef<OrderStatus> for OrderStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
 
 pub enum RenderStatusEnum {
@@ -940,7 +940,7 @@ impl AsRef<RenderStatusEnum> for RenderStatusEnum {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 #[baml(dynamic)]
 
 pub enum RenderTestEnum {
@@ -991,7 +991,7 @@ impl AsRef<RenderTestEnum> for RenderTestEnum {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum Tag {
     Security,
@@ -1041,7 +1041,7 @@ impl AsRef<Tag> for Tag {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
 
 pub enum TestEnum {
     A,

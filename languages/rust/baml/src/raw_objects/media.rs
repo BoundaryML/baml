@@ -97,6 +97,17 @@ macro_rules! define_media_type {
                 ))
             }
         }
+
+        impl serde::Serialize for $name {
+            fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+                Err(serde::ser::Error::custom(format!("Cannot serialize {}", stringify!($name))))
+            }
+        }
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+                Err(serde::de::Error::custom(format!("Cannot deserialize {}", stringify!($name))))
+            }
+        }
     };
 }
 

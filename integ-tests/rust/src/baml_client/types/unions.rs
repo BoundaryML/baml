@@ -6,10 +6,14 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    __internal::serde::{Deserialize, Serialize},
+    BamlDecode, BamlEncode,
+};
 
 /// Generated from: (AddTodoItem | TodoMessageToUser)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2AddTodoItemOrTodoMessageToUser {
     #[baml(name = "AddTodoItem")]
@@ -32,7 +36,8 @@ impl Default for Union2AddTodoItemOrTodoMessageToUser {
 }
 
 /// Generated from: (float | bool)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2BoolOrFloat {
     #[baml(name = "float")]
@@ -55,7 +60,8 @@ impl Default for Union2BoolOrFloat {
 }
 
 /// Generated from: (string | bool)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2BoolOrString {
     #[baml(name = "string")]
@@ -78,7 +84,8 @@ impl Default for Union2BoolOrString {
 }
 
 /// Generated from: (Martian | Earthling)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2EarthlingOrMartian {
     #[baml(name = "Martian")]
@@ -101,7 +108,8 @@ impl Default for Union2EarthlingOrMartian {
 }
 
 /// Generated from: (PhoneNumber | EmailAddress)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2EmailAddressOrPhoneNumber {
     #[baml(name = "PhoneNumber")]
@@ -124,7 +132,8 @@ impl Default for Union2EmailAddressOrPhoneNumber {
 }
 
 /// Generated from: (Resume | Event)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2EventOrResume {
     #[baml(name = "Resume")]
@@ -147,7 +156,8 @@ impl Default for Union2EventOrResume {
 }
 
 /// Generated from: (int | float)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2FloatOrInt {
     #[baml(name = "int")]
@@ -170,7 +180,8 @@ impl Default for Union2FloatOrInt {
 }
 
 /// Generated from: (string | int)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2IntOrString {
     #[baml(name = "string")]
@@ -193,7 +204,8 @@ impl Default for Union2IntOrString {
 }
 
 /// Generated from: (SimpleTag | JsonTemplate)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2JsonTemplateOrSimpleTag {
     #[baml(name = "SimpleTag")]
@@ -216,7 +228,8 @@ impl Default for Union2JsonTemplateOrSimpleTag {
 }
 
 /// Generated from: ("barisa" | "ox_burger")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2KbarisaOrKox_burger {
     #[baml(name = "string_barisa", literal_string = "barisa")]
@@ -239,7 +252,8 @@ impl Default for Union2KbarisaOrKox_burger {
 }
 
 /// Generated from: ("breakfast" | "dinner")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2KbreakfastOrKdinner {
     #[baml(name = "string_breakfast", literal_string = "breakfast")]
@@ -262,7 +276,8 @@ impl Default for Union2KbreakfastOrKdinner {
 }
 
 /// Generated from: ("curiosity" | "personal_finance")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2KcuriosityOrKpersonal_finance {
     #[baml(name = "string_curiosity", literal_string = "curiosity")]
@@ -285,7 +300,8 @@ impl Default for Union2KcuriosityOrKpersonal_finance {
 }
 
 /// Generated from: (bool[] | int[])
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2ListBoolOrListInt {
     #[baml(name = "List__bool")]
@@ -308,7 +324,8 @@ impl Default for Union2ListBoolOrListInt {
 }
 
 /// Generated from: (string | Nested[])
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2ListNestedOrString {
     #[baml(name = "string")]
@@ -331,7 +348,8 @@ impl Default for Union2ListNestedOrString {
 }
 
 /// Generated from: (LiteralClassOne | LiteralClassTwo)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2LiteralClassOneOrLiteralClassTwo {
     #[baml(name = "LiteralClassOne")]
@@ -354,7 +372,8 @@ impl Default for Union2LiteralClassOneOrLiteralClassTwo {
 }
 
 /// Generated from: (string | map<string, RecursiveUnion>)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2MapStringKeyRecursiveUnionValueOrString {
     #[baml(name = "string")]
@@ -379,7 +398,8 @@ impl Default for Union2MapStringKeyRecursiveUnionValueOrString {
 }
 
 /// Generated from: (Nested | string)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2NestedOrString {
     #[baml(name = "Nested")]
@@ -402,7 +422,8 @@ impl Default for Union2NestedOrString {
 }
 
 /// Generated from: (OriginalA | OriginalB)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2OriginalAOrOriginalB {
     #[baml(name = "OriginalA")]
@@ -425,7 +446,8 @@ impl Default for Union2OriginalAOrOriginalB {
 }
 
 /// Generated from: (Tag | string)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union2StringOrTag {
     #[baml(name = "Tag")]
@@ -448,7 +470,8 @@ impl Default for Union2StringOrTag {
 }
 
 /// Generated from: (MemoryObject | ComplexMemoryObject | AnotherObject)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
     #[baml(name = "MemoryObject")]
@@ -476,7 +499,8 @@ impl Default for Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
 }
 
 /// Generated from: (BookOrder | FlightConfirmation | GroceryReceipt)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
     #[baml(name = "BookOrder")]
@@ -504,7 +528,8 @@ impl Default for Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
 }
 
 /// Generated from: (1 | true | "string output")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union3BoolKTrueOrIntK1OrKstring_output {
     #[baml(name = "int_1", literal_int = 1)]
@@ -530,7 +555,8 @@ impl Default for Union3BoolKTrueOrIntK1OrKstring_output {
 }
 
 /// Generated from: (string | int | float)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union3FloatOrIntOrString {
     #[baml(name = "string")]
@@ -556,7 +582,8 @@ impl Default for Union3FloatOrIntOrString {
 }
 
 /// Generated from: (image | string | pdf | audio)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union4AudioOrImageOrPDFOrString {
     #[baml(name = "image")]
@@ -585,7 +612,8 @@ impl Default for Union4AudioOrImageOrPDFOrString {
 }
 
 /// Generated from: (int | string | bool | float)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union4BoolOrFloatOrIntOrString {
     #[baml(name = "int")]
@@ -614,7 +642,8 @@ impl Default for Union4BoolOrFloatOrIntOrString {
 }
 
 /// Generated from: ("one" | "two" | "three" | "four")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union4KfourOrKoneOrKthreeOrKtwo {
     #[baml(name = "string_one", literal_string = "one")]
@@ -643,7 +672,8 @@ impl Default for Union4KfourOrKoneOrKthreeOrKtwo {
 }
 
 /// Generated from: (int | string | bool | float | JsonObject | JsonArray)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
     #[baml(name = "int")]
@@ -680,7 +710,8 @@ impl Default for Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
 }
 
 /// Generated from: (int | string | bool | float | string[] | map<string, string[]>)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
 #[baml(union)]
 pub enum Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString {
     #[baml(name = "int")]
