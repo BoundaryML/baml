@@ -1,0 +1,551 @@
+---
+source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn ArrayAtWildcard() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int[] // arr
+    let _2: 1
+    let _3: 2
+    let _4: 3
+    let _5: (int[], int) -> int
+    let _6: int[]
+    let _7: 999
+    let _8: null
+    let _9: null // _
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _4 = const 3_i64;
+        _1 = [copy _2, copy _3, copy _4];
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = const fn baml.Array.at;
+        _6 = copy _1;
+        _7 = const 999_i64;
+        _0 = call copy _5(copy _6, copy _7) -> [bb5];
+    }
+
+    bb3: {
+        _8 = store_exception;
+        _9 = copy _8;
+        goto -> bb6;
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        goto -> bb4;
+    }
+
+    bb6: {
+        _0 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb7: {
+        throw copy _8;
+    }
+
+}
+
+fn ArrayAtCatch() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int[] // arr
+    let _2: 10
+    let _3: 20
+    let _4: 30
+    let _5: (int[], int) -> int
+    let _6: int[]
+    let _7: 99
+    let _8: null
+    let _9: bool
+    let _10: baml.error.IndexError // e
+    let _11: 1
+    let _12: null // _e
+    let _13: baml.error.IndexError
+
+    bb0: {
+        _2 = const 10_i64;
+        _3 = const 20_i64;
+        _4 = const 30_i64;
+        _1 = [copy _2, copy _3, copy _4];
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = const fn baml.Array.at;
+        _6 = copy _1;
+        _7 = const 99_i64;
+        _0 = call copy _5(copy _6, copy _7) -> [bb5];
+    }
+
+    bb3: {
+        _8 = store_exception;
+        _9 = is_type(copy _8, Class(TypeName { name: "IndexError", module_path: ["baml", "error"], display_name: "baml.error.IndexError" }));
+        branch copy _9 -> [bb8, bb7];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        goto -> bb4;
+    }
+
+    bb6: {
+        _11 = const 1_i64;
+        _0 = -copy _11;
+        goto -> bb4;
+    }
+
+    bb7: {
+        _12 = copy _8;
+        goto -> bb9;
+    }
+
+    bb8: {
+        _10 = copy _8;
+        goto -> bb6;
+    }
+
+    bb9: {
+        _13 = copy _12;
+        throw move _13;
+    }
+
+    bb10: {
+        throw copy _8;
+    }
+
+    bb11: {
+        goto -> bb4;
+    }
+
+}
+
+fn ArrayAtCatchAll() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int[] // arr
+    let _2: 1
+    let _3: 2
+    let _4: 3
+    let _5: (int[], int) -> int
+    let _6: int[]
+    let _7: 5
+    let _8: null
+    let _9: null // e
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _4 = const 3_i64;
+        _1 = [copy _2, copy _3, copy _4];
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = const fn baml.Array.at;
+        _6 = copy _1;
+        _7 = const 5_i64;
+        _0 = call copy _5(copy _6, copy _7) -> [bb5];
+    }
+
+    bb3: {
+        _8 = store_exception;
+        _9 = copy _8;
+        goto -> bb6;
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        goto -> bb4;
+    }
+
+    bb6: {
+        _0 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb7: {
+        throw copy _8;
+    }
+
+}
+
+fn ArrayAtTypedBinding() -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string[] // arr
+    let _2: "a"
+    let _3: "b"
+    let _4: "c"
+    let _5: (string[], int) -> string
+    let _6: string[]
+    let _7: 10
+    let _8: null
+    let _9: bool
+    let _10: baml.error.IndexError // e
+
+    bb0: {
+        _2 = const "a";
+        _3 = const "b";
+        _4 = const "c";
+        _1 = [copy _2, copy _3, copy _4];
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = const fn baml.Array.at;
+        _6 = copy _1;
+        _7 = const 10_i64;
+        _0 = call copy _5(copy _6, copy _7) -> [bb5];
+    }
+
+    bb3: {
+        _8 = store_exception;
+        _9 = is_type(copy _8, Class(TypeName { name: "IndexError", module_path: ["baml", "error"], display_name: "baml.error.IndexError" }));
+        branch copy _9 -> [bb8, bb7];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        goto -> bb4;
+    }
+
+    bb6: {
+        _0 = const "not found";
+        goto -> bb4;
+    }
+
+    bb7: {
+        throw copy _8;
+    }
+
+    bb8: {
+        _10 = copy _8;
+        goto -> bb6;
+    }
+
+}
+
+fn NestedBuiltinCatch() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int[] // arr
+    let _2: 1
+    let _3: 2
+    let _4: 3
+    let _5: (int[], int) -> int
+    let _6: int[]
+    let _7: 100
+    let _8: null
+    let _9: bool
+    let _10: baml.error.IndexError // e
+    let _11: (int[], int) -> int
+    let _12: int[]
+    let _13: 0
+    let _14: null
+    let _15: bool
+    let _16: baml.error.IndexError // f
+    let _17: 1
+    let _18: null // _e
+    let _19: baml.error.IndexError
+    let _20: null // _e1
+    let _21: baml.error.IndexError
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _4 = const 3_i64;
+        _1 = [copy _2, copy _3, copy _4];
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = const fn baml.Array.at;
+        _6 = copy _1;
+        _7 = const 100_i64;
+        _0 = call copy _5(copy _6, copy _7) -> [bb5];
+    }
+
+    bb3: {
+        _8 = store_exception;
+        _9 = is_type(copy _8, Class(TypeName { name: "IndexError", module_path: ["baml", "error"], display_name: "baml.error.IndexError" }));
+        branch copy _9 -> [bb8, bb7];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        goto -> bb4;
+    }
+
+    bb6: {
+        goto -> bb9;
+    }
+
+    bb7: {
+        _20 = copy _8;
+        goto -> bb19;
+    }
+
+    bb8: {
+        _10 = copy _8;
+        goto -> bb6;
+    }
+
+    bb9: {
+        _11 = const fn baml.Array.at;
+        _12 = copy _1;
+        _13 = const 0_i64;
+        _0 = call copy _11(copy _12, copy _13) -> [bb12];
+    }
+
+    bb10: {
+        _14 = store_exception;
+        _15 = is_type(copy _14, Class(TypeName { name: "IndexError", module_path: ["baml", "error"], display_name: "baml.error.IndexError" }));
+        branch copy _15 -> [bb15, bb14];
+    }
+
+    bb11: {
+        goto -> bb4;
+    }
+
+    bb12: {
+        goto -> bb11;
+    }
+
+    bb13: {
+        _17 = const 1_i64;
+        _0 = -copy _17;
+        goto -> bb11;
+    }
+
+    bb14: {
+        _18 = copy _14;
+        goto -> bb16;
+    }
+
+    bb15: {
+        _16 = copy _14;
+        goto -> bb13;
+    }
+
+    bb16: {
+        _19 = copy _18;
+        throw move _19;
+    }
+
+    bb17: {
+        throw copy _14;
+    }
+
+    bb18: {
+        goto -> bb11;
+    }
+
+    bb19: {
+        _21 = copy _20;
+        throw move _21;
+    }
+
+    bb20: {
+        throw copy _8;
+    }
+
+    bb21: {
+        goto -> bb4;
+    }
+
+}
+
+fn ArrayAtSuccess() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int[] // arr
+    let _2: 10
+    let _3: 20
+    let _4: 30
+    let _5: (int[], int) -> int
+    let _6: int[]
+    let _7: 1
+    let _8: null
+    let _9: bool
+    let _10: baml.error.IndexError // e
+    let _11: 1
+    let _12: null // _e
+    let _13: baml.error.IndexError
+
+    bb0: {
+        _2 = const 10_i64;
+        _3 = const 20_i64;
+        _4 = const 30_i64;
+        _1 = [copy _2, copy _3, copy _4];
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = const fn baml.Array.at;
+        _6 = copy _1;
+        _7 = const 1_i64;
+        _0 = call copy _5(copy _6, copy _7) -> [bb5];
+    }
+
+    bb3: {
+        _8 = store_exception;
+        _9 = is_type(copy _8, Class(TypeName { name: "IndexError", module_path: ["baml", "error"], display_name: "baml.error.IndexError" }));
+        branch copy _9 -> [bb8, bb7];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        goto -> bb4;
+    }
+
+    bb6: {
+        _11 = const 1_i64;
+        _0 = -copy _11;
+        goto -> bb4;
+    }
+
+    bb7: {
+        _12 = copy _8;
+        goto -> bb9;
+    }
+
+    bb8: {
+        _10 = copy _8;
+        goto -> bb6;
+    }
+
+    bb9: {
+        _13 = copy _12;
+        throw move _13;
+    }
+
+    bb10: {
+        throw copy _8;
+    }
+
+    bb11: {
+        goto -> bb4;
+    }
+
+}
+
+fn DeepCopyCatch() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: (42) -> 42
+    let _2: 42
+    let _3: null
+    let _4: bool
+    let _5: baml.error.ValueError // e
+    let _6: 1
+    let _7: null // _e
+    let _8: baml.error.ValueError
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const fn baml.deep_copy;
+        _2 = const 42_i64;
+        _0 = call copy _1(copy _2) -> [bb5];
+    }
+
+    bb3: {
+        _3 = store_exception;
+        _4 = is_type(copy _3, Class(TypeName { name: "ValueError", module_path: ["baml", "error"], display_name: "baml.error.ValueError" }));
+        branch copy _4 -> [bb8, bb7];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        goto -> bb4;
+    }
+
+    bb6: {
+        _6 = const 1_i64;
+        _0 = -copy _6;
+        goto -> bb4;
+    }
+
+    bb7: {
+        _7 = copy _3;
+        goto -> bb9;
+    }
+
+    bb8: {
+        _5 = copy _3;
+        goto -> bb6;
+    }
+
+    bb9: {
+        _8 = copy _7;
+        throw move _8;
+    }
+
+    bb10: {
+        throw copy _3;
+    }
+
+    bb11: {
+        goto -> bb4;
+    }
+
+}

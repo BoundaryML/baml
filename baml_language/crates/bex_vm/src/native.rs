@@ -50,11 +50,9 @@ impl NativeFunctions for VmNatives {
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn baml_array_at(array: &[Value], index: i64) -> Result<Value, VmError> {
-        array.get(index as usize).copied().ok_or_else(|| {
-            VmError::RuntimeError(RuntimeError::Other(
-                format!("Index out of bounds: {index}",),
-            ))
+    fn baml_array_at(array: &[Value], index: i64) -> Result<Value, IndexError> {
+        array.get(index as usize).copied().ok_or_else(|| IndexError {
+            message: format!("Index out of bounds: {index}"),
         })
     }
 
@@ -132,9 +130,10 @@ impl NativeFunctions for VmNatives {
     // Free functions
     // =========================================================================
 
-    fn baml_deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, VmError> {
+    fn baml_deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, ValueError> {
         let mut copied_objects = HashMap::new();
         deep_copy_value_recursive(vm, *value, &mut copied_objects)
+            .map_err(|e| ValueError { message: e.to_string() })
     }
 
     fn baml_deep_equals(vm: &mut BexVm, a: &Value, b: &Value) -> bool {
@@ -142,8 +141,9 @@ impl NativeFunctions for VmNatives {
         deep_equals_recursive(vm, *a, *b, &mut visited)
     }
 
-    fn baml_unstable_string(vm: &mut BexVm, value: &Value) -> Result<String, VmError> {
+    fn baml_unstable_string(vm: &mut BexVm, value: &Value) -> Result<String, ValueError> {
         format_value_recursive(vm, value, 0)
+            .map_err(|e| ValueError { message: e.to_string() })
     }
 
     // =========================================================================

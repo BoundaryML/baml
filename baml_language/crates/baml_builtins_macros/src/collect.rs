@@ -31,8 +31,8 @@ pub(crate) struct BuiltinDef {
     pub params: Vec<(String, TokenStream2)>,
     /// Return type pattern.
     pub returns: TokenStream2,
-    /// Error type pattern this function can throw (`None` if infallible).
-    pub throws: Option<TokenStream2>,
+    /// Error type patterns this function can throw (empty if infallible).
+    pub throws: Vec<TokenStream2>,
     /// Whether this is a `sys_op` function (runs async outside VM).
     pub is_sys_op: bool,
 }
@@ -111,6 +111,8 @@ pub(crate) struct NativeFnDef {
     pub is_sys_op: bool,
     /// Whether this `sys_op` needs engine context (marked with `#[uses(engine_ctx)]`).
     pub uses_engine_ctx: bool,
+    /// The specific error type names (e.g. ["IndexError", "ValueError"]), empty if infallible.
+    pub throws_type_names: Vec<String>,
 }
 
 /// Classify a DSL field type for accessor code generation.
@@ -423,10 +425,11 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
 
         let returns = type_to_pattern(&method.return_type, &all_generics, ctx.builtin_types);
 
-        let throws = method
-            .throws_type
-            .as_ref()
-            .map(|ty| type_to_pattern(ty, &all_generics, ctx.builtin_types));
+        let throws: Vec<_> = method
+            .throws_types
+            .iter()
+            .map(|ty| type_to_pattern(ty, &all_generics, ctx.builtin_types))
+            .collect();
 
         if !ctx.is_hidden {
             ctx.defs.push(BuiltinDef {
@@ -458,8 +461,14 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             })
             .collect();
 
+        let throws_type_names: Vec<String> = method
+            .throws_types
+            .iter()
+            .map(|ty| type_to_simple_name(ty))
+            .collect();
+
         let native_returns = {
-            let is_fallible = method.throws_type.is_some();
+            let is_fallible = !throws_type_names.is_empty();
             ReturnInfo {
                 type_name: type_to_simple_name(&method.return_type),
                 is_generic: is_generic_type(&method.return_type, &all_generics),
@@ -477,6 +486,7 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             uses_vm: method.uses_vm,
             is_sys_op: method.is_sys_op,
             uses_engine_ctx: method.uses_engine_ctx,
+            throws_type_names,
         });
     }
 }
@@ -520,10 +530,11 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
 
     let returns = type_to_pattern(&f.return_type, &fn_generics, ctx.builtin_types);
 
-    let throws = f
-        .throws_type
-        .as_ref()
-        .map(|ty| type_to_pattern(ty, &fn_generics, ctx.builtin_types));
+    let throws: Vec<_> = f
+        .throws_types
+        .iter()
+        .map(|ty| type_to_pattern(ty, &fn_generics, ctx.builtin_types))
+        .collect();
 
     if !ctx.is_hidden {
         ctx.defs.push(BuiltinDef {
@@ -554,8 +565,14 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         })
         .collect();
 
+    let throws_type_names: Vec<String> = f
+        .throws_types
+        .iter()
+        .map(|ty| type_to_simple_name(ty))
+        .collect();
+
     let native_returns = {
-        let is_fallible = f.throws_type.is_some();
+        let is_fallible = !throws_type_names.is_empty();
         ReturnInfo {
             type_name: type_to_simple_name(&f.return_type),
             is_generic: is_generic_type(&f.return_type, &fn_generics),
@@ -573,6 +590,7 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         uses_vm: f.uses_vm,
         is_sys_op: f.is_sys_op,
         uses_engine_ctx: f.uses_engine_ctx,
+        throws_type_names,
     });
 }
 

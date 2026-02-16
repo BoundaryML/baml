@@ -125,9 +125,9 @@ pub struct BuiltinSignature {
     /// Return type.
     pub returns: TypePattern,
 
-    /// Error type this function can throw, if fallible.
+    /// Error types this function can throw (empty if infallible).
     /// Used by the type checker for exhaustive catch checking.
-    pub throws: Option<TypePattern>,
+    pub throws: Vec<TypePattern>,
 
     /// Whether this is a `sys_op` function (runs async outside VM).
     /// `Sys_op` functions use DispatchFuture/Await instead of Call.

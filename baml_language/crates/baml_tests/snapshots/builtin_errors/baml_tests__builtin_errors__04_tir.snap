@@ -1,0 +1,19 @@
+---
+source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+expression: output
+---
+=== TYPE INFERENCE ===
+  Function ArrayAtWildcard:
+    Return: Union([Int, Literal(Int(42))])
+  Function ArrayAtCatch:
+    Return: Int
+  Function ArrayAtCatchAll:
+    Return: Union([Int, Literal(Int(0))])
+  Function ArrayAtTypedBinding:
+    Return: Union([Literal(String("not found")), String])
+  Function NestedBuiltinCatch:
+    Return: Int
+  Function ArrayAtSuccess:
+    Return: Int
+  Function DeepCopyCatch:
+    Return: Union([Int, Literal(Int(42))])

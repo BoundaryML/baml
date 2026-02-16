@@ -1,9 +1,12 @@
 //! Code generation for `generate_native_trait` — the VM-native function trait.
 
+use std::collections::BTreeSet;
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 
 use crate::collect::{CollectedBuiltins, NativeFnDef};
+use crate::util::to_pascal_case;
 
 pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
     let non_sys_ops: Vec<_> = collected
@@ -20,6 +23,74 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
             };
         }
     }
+
+    // Generate typed error structs for each unique throws type.
+    let error_type_names: BTreeSet<&str> = non_sys_ops
+        .iter()
+        .flat_map(|d| d.throws_type_names.iter().map(|s| s.as_str()))
+        .collect();
+
+    let error_structs: Vec<_> = error_type_names
+        .iter()
+        .map(|name| {
+            let ident = format_ident!("{}", name);
+            quote! {
+                /// Typed error for native functions that throw this error kind.
+                #[derive(Debug, Clone)]
+                pub struct #ident {
+                    pub message: String,
+                }
+                impl From<#ident> for VmError {
+                    fn from(e: #ident) -> Self {
+                        VmError::RuntimeError(RuntimeError::Other(e.message))
+                    }
+                }
+            }
+        })
+        .collect();
+
+    // Generate per-function error enums for functions that throw ≥2 error types.
+    let multi_error_enums: Vec<_> = non_sys_ops
+        .iter()
+        .filter(|d| d.throws_type_names.len() >= 2)
+        .map(|d| {
+            let enum_name = format_ident!("{}Error", to_pascal_case(&d.fn_name.to_string()));
+            let variant_idents: Vec<_> = d
+                .throws_type_names
+                .iter()
+                .map(|n| format_ident!("{}", n))
+                .collect();
+            let variants: Vec<_> = variant_idents
+                .iter()
+                .map(|ident| quote!(#ident(#ident)))
+                .collect();
+            let from_impls: Vec<_> = variant_idents
+                .iter()
+                .map(|ident| {
+                    quote! {
+                        impl From<#ident> for #enum_name {
+                            fn from(e: #ident) -> Self { Self::#ident(e) }
+                        }
+                    }
+                })
+                .collect();
+            let match_arms: Vec<_> = variant_idents
+                .iter()
+                .map(|ident| quote!(#enum_name::#ident(inner) => VmError::from(inner)))
+                .collect();
+            quote! {
+                /// Combined error enum for a native function that throws multiple error types.
+                #[derive(Debug, Clone)]
+                pub enum #enum_name { #(#variants),* }
+                #(#from_impls)*
+                impl From<#enum_name> for VmError {
+                    fn from(e: #enum_name) -> Self {
+                        match e { #(#match_arms),* }
+                    }
+                }
+            }
+        })
+        .collect();
 
     // Generate required trait methods (clean signatures).
     let required_methods: Vec<_> = non_sys_ops
@@ -55,11 +126,26 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
             let is_fallible = d.returns.is_fallible;
 
             let needs_vm = d.uses_vm && !has_mut_receiver;
-            let call_expr = match (needs_vm, is_fallible) {
-                (true, true) => quote!(Self::#fn_name(vm, #call_args)?),
-                (true, false) => quote!(Self::#fn_name(vm, #call_args)),
-                (false, true) => quote!(Self::#fn_name(#call_args)?),
-                (false, false) => quote!(Self::#fn_name(#call_args)),
+            let call_expr = if !d.throws_type_names.is_empty() {
+                // Typed error: use match to convert specific error → VmError
+                if needs_vm {
+                    quote!(match Self::#fn_name(vm, #call_args) {
+                        Ok(v) => v,
+                        Err(e) => return Err(VmError::from(e)),
+                    })
+                } else {
+                    quote!(match Self::#fn_name(#call_args) {
+                        Ok(v) => v,
+                        Err(e) => return Err(VmError::from(e)),
+                    })
+                }
+            } else {
+                match (needs_vm, is_fallible) {
+                    (true, true) => quote!(Self::#fn_name(vm, #call_args)?),
+                    (true, false) => quote!(Self::#fn_name(vm, #call_args)),
+                    (false, true) => quote!(Self::#fn_name(#call_args)?),
+                    (false, false) => quote!(Self::#fn_name(#call_args)),
+                }
             };
 
             quote! {
@@ -99,6 +185,12 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
         .collect();
 
     quote! {
+        // ========== Typed error structs ==========
+        #(#error_structs)*
+
+        // ========== Multi-error enums ==========
+        #(#multi_error_enums)*
+
         /// Trait for implementing native BAML functions.
         ///
         /// Implement the `baml_*` methods — they have clean Rust types.
@@ -150,10 +242,17 @@ fn generate_clean_params(d: &NativeFnDef) -> TokenStream2 {
 /// Generate the clean return type for a trait method.
 fn generate_clean_return_type(d: &NativeFnDef) -> TokenStream2 {
     let inner_type = rust_type_for_output(&d.returns.type_name, d.returns.is_generic);
-    if d.returns.is_fallible {
-        quote!(Result<#inner_type, VmError>)
-    } else {
-        inner_type
+    match d.throws_type_names.len() {
+        0 => inner_type,
+        1 => {
+            let error_ident = format_ident!("{}", &d.throws_type_names[0]);
+            quote!(Result<#inner_type, #error_ident>)
+        }
+        _ => {
+            let enum_name =
+                format_ident!("{}Error", to_pascal_case(&d.fn_name.to_string()));
+            quote!(Result<#inner_type, #enum_name>)
+        }
     }
 }
 

@@ -291,14 +291,26 @@ pub fn method_return_type(receiver_ty: &Ty, method_name: &str) -> Option<Ty> {
 ///
 /// Returns `Some(Ty)` if the function has a `throws` clause, `None` if infallible.
 pub fn thrown_type(def: &BuiltinSignature, bindings: &Bindings) -> Option<Ty> {
-    def.throws.as_ref().map(|pat| substitute(pat, bindings))
+    match def.throws.len() {
+        0 => None,
+        1 => Some(substitute(&def.throws[0], bindings)),
+        _ => Some(Ty::Union(
+            def.throws.iter().map(|p| substitute(p, bindings)).collect(),
+        )),
+    }
 }
 
 /// Get the thrown type of a built-in function using `Ty::Unknown` for unbound variables.
 ///
 /// Returns `Some(Ty)` if the function has a `throws` clause, `None` if infallible.
 pub fn thrown_type_unknown(def: &BuiltinSignature) -> Option<Ty> {
-    def.throws.as_ref().map(|pat| substitute_unknown(pat))
+    match def.throws.len() {
+        0 => None,
+        1 => Some(substitute_unknown(&def.throws[0])),
+        _ => Some(Ty::Union(
+            def.throws.iter().map(|p| substitute_unknown(p)).collect(),
+        )),
+    }
 }
 
 /// Get the expected parameter types of a built-in method for a specific receiver type.

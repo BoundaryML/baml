@@ -1,0 +1,61 @@
+---
+source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function ArrayAtWildcard() -> int {
+      let arr = [1, 2, 3];
+      baml.Array.at(arr, 999) catch {
+          _ => 42,
+      }
+}
+
+function ArrayAtCatch() -> int {
+      let arr = [10, 20, 30];
+      baml.Array.at(arr, 99) catch {
+          e: IndexError => -1,
+          _e => throw _e,
+      }
+}
+
+function ArrayAtCatchAll() -> int {
+      let arr = [1, 2, 3];
+      baml.Array.at(arr, 5) catch {
+          e => 0,
+      }
+}
+
+function ArrayAtTypedBinding() -> string {
+      let arr = ["a", "b", "c"];
+      baml.Array.at(arr, 10) catch {
+          e: IndexError => "not found",
+      }
+}
+
+function NestedBuiltinCatch() -> int {
+      let arr = [1, 2, 3];
+      baml.Array.at(arr, 100) catch {
+          e: IndexError => {
+              baml.Array.at(arr, 0) catch {
+                  f: IndexError => -1,
+                  _e => throw _e,
+              }
+          },
+          _e1 => throw _e1,
+      }
+}
+
+function ArrayAtSuccess() -> int {
+      let arr = [10, 20, 30];
+      baml.Array.at(arr, 1) catch {
+          e: IndexError => -1,
+          _e => throw _e,
+      }
+}
+
+function DeepCopyCatch() -> int {
+      baml.deep_copy(42) catch {
+          e: ValueError => -1,
+          _e => throw _e,
+      }
+}
