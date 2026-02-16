@@ -1,6 +1,6 @@
 //! FunctionResult - wraps the result of a BAML function call.
 
-use pyo3::{prelude::pymethods, pyclass, types::PyAnyMethods, PyObject, PyResult, Python};
+use pyo3::{PyObject, PyResult, Python, prelude::pymethods, pyclass, types::PyAnyMethods};
 
 /// Result of a BAML function call.
 ///

@@ -535,11 +535,11 @@ impl<'a> BexValue<'a> {
                 Ok(c.clone())
             }
             BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
-                let ptr = heap
-                    .resolve_handle(handle.slab_key())
-                    .ok_or(AccessError::InvalidHandle {
-                        expected: "collector",
-                    })?;
+                let ptr =
+                    heap.resolve_handle(handle.slab_key())
+                        .ok_or(AccessError::InvalidHandle {
+                            expected: "collector",
+                        })?;
                 from_ptr(&ptr)
             }
             BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => from_ptr(ptr),
@@ -714,9 +714,9 @@ impl<'a> BexValue<'a> {
                     Object::PromptAst(prompt_ast) => Ok(BexExternalValue::Adt(
                         BexExternalAdt::PromptAst(prompt_ast.clone()),
                     )),
-                    Object::Collector(c) => Ok(BexExternalValue::Adt(
-                        BexExternalAdt::Collector(c.clone()),
-                    )),
+                    Object::Collector(c) => {
+                        Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone())))
+                    }
                     #[cfg(feature = "heap_debug")]
                     Object::Sentinel(sentinel_kind) => Err(AccessError::CannotConvertToOwned {
                         reason: format!("sentinel: {:?}", sentinel_kind),

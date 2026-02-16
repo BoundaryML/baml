@@ -770,7 +770,10 @@ impl BexVm {
     }
 
     /// Get collector ref from a Value.
-    pub fn as_collector(&self, value: &Value) -> Result<&bex_vm_types::CollectorRef, InternalError> {
+    pub fn as_collector(
+        &self,
+        value: &Value,
+    ) -> Result<&bex_vm_types::CollectorRef, InternalError> {
         let index = self.as_object_ptr(value, ObjectType::Collector)?;
         let obj = self.get_object(index);
         match obj {
@@ -2171,18 +2174,17 @@ impl BexVm {
 
                     // Check if this frame was traced.
                     // Capture function name before popping the frame.
-                    let span_exit =
-                        if self.traced_frames.last() == Some(&frame_idx) {
-                            let func_name = self
-                                .get_object(self.frames[frame_idx].function)
-                                .as_function()
-                                .map(|f| f.name.clone())
-                                .ok();
-                            self.traced_frames.pop();
-                            func_name
-                        } else {
-                            None
-                        };
+                    let span_exit = if self.traced_frames.last() == Some(&frame_idx) {
+                        let func_name = self
+                            .get_object(self.frames[frame_idx].function)
+                            .as_function()
+                            .map(|f| f.name.clone())
+                            .ok();
+                        self.traced_frames.pop();
+                        func_name
+                    } else {
+                        None
+                    };
 
                     // Restore the eval stack to the state before the function
                     // was called and leave the result on top.
@@ -2213,12 +2215,10 @@ impl BexVm {
 
                     // Yield FunctionExit for traced frames (with result value).
                     if let Some(name) = span_exit {
-                        return Ok(VmExecState::SpanNotify(
-                            SpanNotification::FunctionExit {
-                                function_name: name,
-                                result,
-                            },
-                        ));
+                        return Ok(VmExecState::SpanNotify(SpanNotification::FunctionExit {
+                            function_name: name,
+                            result,
+                        }));
                     }
 
                     // Resume previous frame execution.

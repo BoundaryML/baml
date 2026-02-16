@@ -289,10 +289,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::Yellow
         }
         Instruction::Call(_) => Color::Magenta,
-        Instruction::Assert
-        | Instruction::Return
-        | Instruction::Pop(_)
-        | Instruction::Copy(_) => Color::Red,
+        Instruction::Assert | Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) => {
+            Color::Red
+        }
         Instruction::AllocMap(_)
         | Instruction::AllocInstance(_)
         | Instruction::AllocVariant(_)

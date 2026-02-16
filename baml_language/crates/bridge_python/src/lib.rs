@@ -8,9 +8,10 @@ mod runtime;
 mod types;
 
 use pyo3::{
-    prelude::{pyfunction, pymodule, PyModule, PyResult},
+    Bound,
+    prelude::{PyModule, PyResult, pyfunction, pymodule},
     types::PyModuleMethods,
-    wrap_pyfunction, Bound,
+    wrap_pyfunction,
 };
 
 #[pyfunction]

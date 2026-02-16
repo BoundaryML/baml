@@ -1,14 +1,19 @@
 //! JSONL serialization for `RuntimeEvent`.
 
-use crate::{EventKind, FunctionEvent, RuntimeEvent};
 use bex_external_types::BexExternalValue;
+
+use crate::{EventKind, FunctionEvent, RuntimeEvent};
 
 /// Serialize a `RuntimeEvent` to a single-line JSON string (JSONL format).
 pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
     let call_id = event.ctx.span_id.to_string();
     let function_event_id = uuid::Uuid::new_v4().to_string();
 
-    let call_stack: Vec<String> = event.call_stack.iter().map(std::string::ToString::to_string).collect();
+    let call_stack: Vec<String> = event
+        .call_stack
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect();
 
     let timestamp_epoch_ms = event
         .timestamp
@@ -121,9 +126,10 @@ fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
+    use std::time::SystemTime;
+
     use super::*;
     use crate::{FunctionStart, SpanContext, SpanId};
-    use std::time::SystemTime;
 
     #[test]
     fn test_serialize_function_start() {
@@ -151,7 +157,10 @@ mod tests {
         assert!(parsed["function_event_id"].is_string());
         assert!(parsed["call_stack"].is_array());
         assert_eq!(parsed["content"]["type"], "function_start");
-        assert_eq!(parsed["content"]["data"]["function_display_name"], "my_func");
+        assert_eq!(
+            parsed["content"]["data"]["function_display_name"],
+            "my_func"
+        );
         assert_eq!(parsed["content"]["data"]["args"][0], 42);
     }
 }

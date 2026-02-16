@@ -2,8 +2,10 @@
 
 use std::collections::HashMap;
 
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList};
+use pyo3::{
+    prelude::*,
+    types::{PyDict, PyList},
+};
 
 /// Manages host-side span tracking for `@trace` in Python.
 ///

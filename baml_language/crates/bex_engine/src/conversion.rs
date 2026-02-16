@@ -192,9 +192,7 @@ impl BexEngine {
             Object::PromptAst(ast) => Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(
                 ast.clone(),
             ))),
-            Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(
-                c.clone(),
-            ))),
+            Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),

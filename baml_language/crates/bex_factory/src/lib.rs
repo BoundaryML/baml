@@ -91,8 +91,7 @@ impl Bex for BexEngine {
             });
         }
 
-        let result =
-            BexEngine::call_function(self, function_name, ordered_args, None, &[]).await?;
+        let result = BexEngine::call_function(self, function_name, ordered_args, None, &[]).await?;
 
         // For now call_function guarantees that the result is owned, but we should change this in the future
         // once we allow devs to control if functions return owned values or not.

@@ -4,12 +4,11 @@
 //! Python/PyO3 dependencies. The PyO3 wrapper in `bridge_python` delegates
 //! all operations to this struct.
 
-use std::collections::HashMap;
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
-use bex_events::event_store;
 use bex_events::{
     EventKind, FunctionEvent, FunctionStart, RuntimeEvent, SpanContext, SpanId, TraceTags,
+    event_store,
 };
 
 /// One entry on the host-language span stack.
@@ -70,7 +69,11 @@ impl HostSpanManager {
         let args_external = json_to_bex_values(&args);
 
         // Inherit current tags so children carry parent's tags in their start event.
-        let inherited_tags: TraceTags = self.tags.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        let inherited_tags: TraceTags = self
+            .tags
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
 
         event_store::emit(RuntimeEvent {
             ctx: SpanContext {
@@ -118,12 +121,7 @@ impl HostSpanManager {
             event_store::emit(RuntimeEvent {
                 ctx: SpanContext {
                     span_id: entry.span_id.clone(),
-                    parent_span_id: self
-                        .stack
-                        .iter()
-                        .rev()
-                        .nth(1)
-                        .map(|e| e.span_id.clone()),
+                    parent_span_id: self.stack.iter().rev().nth(1).map(|e| e.span_id.clone()),
                     root_span_id: entry.root_span_id.clone(),
                 },
                 call_stack,

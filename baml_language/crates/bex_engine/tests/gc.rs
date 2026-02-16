@@ -22,7 +22,10 @@ async fn test_handle_prevents_gc_collection() {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     // Get a handle to a string object
-    let result = engine.call_function("return_string", vec![], None, &[]).await.unwrap();
+    let result = engine
+        .call_function("return_string", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(
         matches!(result, BexExternalValue::String(_)),
         "Expected String, got {result:?}"
@@ -49,7 +52,10 @@ async fn test_array_preserved_through_gc() {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     // Get a handle to the array
-    let result = engine.call_function("return_array", vec![], None, &[]).await.unwrap();
+    let result = engine
+        .call_function("return_array", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(
         matches!(result, BexExternalValue::Array { .. }),
         "Expected Array, got {result:?}"
@@ -169,14 +175,23 @@ async fn test_primitive_returns_are_external_values() {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     // Int should be BexExternalValue::Int
-    let result = engine.call_function("return_int", vec![], None, &[]).await.unwrap();
+    let result = engine
+        .call_function("return_int", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Int(42)));
 
     // Null should be BexExternalValue::Null
-    let result = engine.call_function("return_null", vec![], None, &[]).await.unwrap();
+    let result = engine
+        .call_function("return_null", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Null));
 
     // Bool should be BexExternalValue::Bool
-    let result = engine.call_function("return_bool", vec![], None, &[]).await.unwrap();
+    let result = engine
+        .call_function("return_bool", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Bool(true)));
 }

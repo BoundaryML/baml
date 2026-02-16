@@ -59,8 +59,7 @@ async fn trace_single_function() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -99,8 +98,7 @@ async fn trace_nested_expression_calls_no_child_spans() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -139,8 +137,7 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -173,8 +170,7 @@ async fn trace_sibling_expression_calls_no_child_spans() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -199,8 +195,7 @@ async fn trace_captures_root_args() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
@@ -236,12 +231,16 @@ async fn trace_captures_root_result() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     let (host_ctx, root) = setup_tracking();
     let value = engine
-        .call_function("double", vec![BexExternalValue::Int(5)], Some(host_ctx), &[])
+        .call_function(
+            "double",
+            vec![BexExternalValue::Int(5)],
+            Some(host_ctx),
+            &[],
+        )
         .await
         .unwrap();
     let events = collect_events(&root);
@@ -304,10 +303,7 @@ fn llm_functions_have_trace_flag() {
             Some(bex_vm_types::Object::Function(f)) => f,
             other => panic!("Expected Function object for {name}, got {other:?}"),
         };
-        assert!(
-            func.trace,
-            "LLM function {name} should have trace: true"
-        );
+        assert!(func.trace, "LLM function {name} should have trace: true");
     }
 
     // Expression functions should have trace: false

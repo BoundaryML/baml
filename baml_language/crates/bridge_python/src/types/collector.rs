@@ -1,7 +1,6 @@
 //! PyO3 wrappers for the Collector and its view types.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use bridge_ctypes::external_to_cffi_value;
 use prost::Message;
@@ -50,7 +49,11 @@ impl Collector {
     /// All function logs tracked by this collector, in insertion order.
     #[getter]
     fn logs(&self) -> Vec<FunctionLog> {
-        self.inner.logs().into_iter().map(FunctionLog::from).collect()
+        self.inner
+            .logs()
+            .into_iter()
+            .map(FunctionLog::from)
+            .collect()
     }
 
     /// The most recent function log, or None if empty.
@@ -127,7 +130,12 @@ impl FunctionLog {
     /// Child LLM calls made during this function invocation.
     #[getter]
     fn calls(&self) -> Vec<LLMCall> {
-        self.inner.calls.iter().cloned().map(LLMCall::from).collect()
+        self.inner
+            .calls
+            .iter()
+            .cloned()
+            .map(LLMCall::from)
+            .collect()
     }
 
     /// Tags (metadata) attached to this invocation.

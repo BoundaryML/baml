@@ -8,9 +8,11 @@
 //! invocation). Events are routed to the correct bucket by matching
 //! `span_id` or `parent_span_id` against tracked IDs.
 
-use std::collections::HashMap;
-use std::io::Write;
-use std::sync::{Mutex, OnceLock, mpsc};
+use std::{
+    collections::HashMap,
+    io::Write,
+    sync::{Mutex, OnceLock, mpsc},
+};
 
 use crate::{RuntimeEvent, SpanId};
 
@@ -188,9 +190,10 @@ pub fn events_for_span(id: &SpanId) -> Option<Vec<RuntimeEvent>> {
 #[cfg(test)]
 #[allow(unsafe_code)]
 mod tests {
+    use std::time::SystemTime;
+
     use super::*;
     use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};
-    use std::time::SystemTime;
 
     /// Create an event whose `span_id` matches the given ID (function's own event).
     fn make_event(span_id: SpanId) -> RuntimeEvent {

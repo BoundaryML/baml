@@ -65,7 +65,6 @@ use std::{
 };
 
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
-
 // Re-export event types for callers.
 pub use bex_events::{RuntimeEvent, SpanId};
 pub use bex_external_types::{BexExternalValue, EpochGuard, Ty, TypeName, UnionMetadata};
@@ -816,8 +815,7 @@ impl BexEngine {
                         if let Some(root_span) = state.stack.pop() {
                             let external_result = self.vm_arg_to_bex_value(&value);
                             let mut full_call_stack = state.host_call_stack.clone();
-                            full_call_stack
-                                .extend(state.stack.iter().map(|s| s.span_id.clone()));
+                            full_call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
                             full_call_stack.push(root_span.span_id.clone());
                             let end_event = RuntimeEvent {
                                 ctx: SpanContext {
@@ -991,20 +989,16 @@ impl BexEngine {
                                 args,
                             } => {
                                 let span_id = SpanId::new();
-                                let parent_span_id =
-                                    state.stack.last().map(|s| s.span_id.clone());
+                                let parent_span_id = state.stack.last().map(|s| s.span_id.clone());
 
                                 // Build call_stack: host prefix + existing engine spans + new span
                                 let mut call_stack = state.host_call_stack.clone();
-                                call_stack
-                                    .extend(state.stack.iter().map(|s| s.span_id.clone()));
+                                call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
                                 call_stack.push(span_id.clone());
 
                                 // Convert VM args to external values for the event
-                                let external_args: Vec<BexExternalValue> = args
-                                    .iter()
-                                    .map(|v| self.vm_arg_to_bex_value(v))
-                                    .collect();
+                                let external_args: Vec<BexExternalValue> =
+                                    args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
 
                                 let enter_event = RuntimeEvent {
                                     ctx: SpanContext {
@@ -1039,9 +1033,8 @@ impl BexEngine {
                                     let external_result = self.vm_arg_to_bex_value(&result);
                                     // call_stack: host prefix + remaining engine spans + exiting span
                                     let mut call_stack = state.host_call_stack.clone();
-                                    call_stack.extend(
-                                        state.stack.iter().map(|s| s.span_id.clone()),
-                                    );
+                                    call_stack
+                                        .extend(state.stack.iter().map(|s| s.span_id.clone()));
                                     call_stack.push(span.span_id.clone());
                                     let exit_event = RuntimeEvent {
                                         ctx: SpanContext {

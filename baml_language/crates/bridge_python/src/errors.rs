@@ -1,10 +1,9 @@
 //! Python exception types for BAML errors.
 
 use pyo3::{
-    create_exception,
+    Bound, PyErr, create_exception,
     prelude::{PyModule, PyResult},
     types::PyModuleMethods,
-    Bound, PyErr,
 };
 
 create_exception!(baml_py, BamlError, pyo3::exceptions::PyException);
@@ -18,10 +17,7 @@ pub fn register_errors(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "BamlInvalidArgumentError",
         m.py().get_type::<BamlInvalidArgumentError>(),
     )?;
-    m.add(
-        "BamlClientError",
-        m.py().get_type::<BamlClientError>(),
-    )?;
+    m.add("BamlClientError", m.py().get_type::<BamlClientError>())?;
     Ok(())
 }
 

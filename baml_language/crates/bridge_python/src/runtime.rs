@@ -6,13 +6,14 @@ use bex_engine::BexEngine;
 use bridge_ctypes::{external_to_cffi_value, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{
-    prelude::{pymethods, PyResult},
-    pyclass, PyObject, Python,
+    PyObject, Python,
+    prelude::{PyResult, pymethods},
+    pyclass,
 };
 use sys_native::SysOpsExt;
 
 use crate::{
-    errors::{engine_error_to_py, BamlInvalidArgumentError},
+    errors::{BamlInvalidArgumentError, engine_error_to_py},
     types::collector::Collector,
 };
 
@@ -34,11 +35,8 @@ impl BamlRuntime {
         root_path: String,
         files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
-        let engine =
-            bex_factory::new_engine(&root_path, &files, bex_factory::SysOps::native())
-                .map_err(|e| {
-                    pyo3::PyErr::new::<BamlInvalidArgumentError, _>(e.to_string())
-                })?;
+        let engine = bex_factory::new_engine(&root_path, &files, bex_factory::SysOps::native())
+            .map_err(|e| pyo3::PyErr::new::<BamlInvalidArgumentError, _>(e.to_string()))?;
 
         Ok(BamlRuntime { engine })
     }
@@ -62,13 +60,12 @@ impl BamlRuntime {
         let engine = self.engine.clone();
 
         // Decode protobuf arguments
-        let args =
-            bridge_ctypes::baml::cffi::HostFunctionArguments::decode(args_proto.as_slice())
-                .map_err(|e| {
-                    pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
-                        "Failed to decode arguments: {e}"
-                    ))
-                })?;
+        let args = bridge_ctypes::baml::cffi::HostFunctionArguments::decode(args_proto.as_slice())
+            .map_err(|e| {
+                pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                    "Failed to decode arguments: {e}"
+                ))
+            })?;
 
         // Convert kwargs to BexExternalValue HashMap
         let kwargs = kwargs_to_bex_values(args.kwargs).map_err(|e| {
@@ -144,13 +141,12 @@ impl BamlRuntime {
         let engine = self.engine.clone();
 
         // Decode protobuf arguments
-        let args =
-            bridge_ctypes::baml::cffi::HostFunctionArguments::decode(args_proto.as_slice())
-                .map_err(|e| {
-                    pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
-                        "Failed to decode arguments: {e}"
-                    ))
-                })?;
+        let args = bridge_ctypes::baml::cffi::HostFunctionArguments::decode(args_proto.as_slice())
+            .map_err(|e| {
+                pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                    "Failed to decode arguments: {e}"
+                ))
+            })?;
 
         // Convert kwargs to BexExternalValue HashMap
         let kwargs = kwargs_to_bex_values(args.kwargs).map_err(|e| {
@@ -190,21 +186,20 @@ impl BamlRuntime {
 
         let rt = baml_cffi::engine::get_tokio_runtime();
 
-        let result = py.allow_threads(|| {
-            rt.block_on(engine.call_function(
-                &function_name,
-                ordered_args,
-                host_ctx,
-                &collector_arcs,
-            ))
-        })
-        .map_err(engine_error_to_py)?;
+        let result = py
+            .allow_threads(|| {
+                rt.block_on(engine.call_function(
+                    &function_name,
+                    ordered_args,
+                    host_ctx,
+                    &collector_arcs,
+                ))
+            })
+            .map_err(engine_error_to_py)?;
 
         // Encode result as protobuf
         let cffi_value = external_to_cffi_value(&result).map_err(|e| {
-            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
-                "Failed to encode result: {e}"
-            ))
+            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!("Failed to encode result: {e}"))
         })?;
 
         Ok(cffi_value.encode_to_vec())

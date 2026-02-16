@@ -12,15 +12,12 @@
 //! Drop-based cleanup: when the Collector is dropped, all tracked spans are
 //! untracked from the event store (ref-count decremented).
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::Duration;
+use std::{collections::HashMap, sync::Mutex, time::Duration};
 
+use bex_external_types::BexExternalValue;
 use indexmap::IndexSet;
 
-use crate::event_store;
-use crate::{EventKind, FunctionEvent, RuntimeEvent, SpanId};
-use bex_external_types::BexExternalValue;
+use crate::{EventKind, FunctionEvent, RuntimeEvent, SpanId, event_store};
 
 // ─────────────────────────── Collector ────────────────────────────────────
 
@@ -217,7 +214,8 @@ impl FunctionLog {
                 EventKind::Function(FunctionEvent::End(end)) => {
                     if is_root {
                         result = Some(end.result.clone());
-                        timing.duration_ms = Some(i64::try_from(end.duration.as_millis()).unwrap_or(i64::MAX));
+                        timing.duration_ms =
+                            Some(i64::try_from(end.duration.as_millis()).unwrap_or(i64::MAX));
                     } else {
                         // Child span end — pair with the start
                         let child_start = child_starts.remove(&event.ctx.span_id);
@@ -229,7 +227,9 @@ impl FunctionLog {
                                     .as_ref()
                                     .map(|s| s.start_time_utc_ms)
                                     .unwrap_or(0),
-                                duration_ms: Some(i64::try_from(end.duration.as_millis()).unwrap_or(i64::MAX)),
+                                duration_ms: Some(
+                                    i64::try_from(end.duration.as_millis()).unwrap_or(i64::MAX),
+                                ),
                             },
                             usage: Usage::default(), // Deferred: requires usage events
                         });
@@ -279,9 +279,10 @@ fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::SystemTime;
+
     use super::*;
     use crate::{FunctionEnd, FunctionStart, SpanContext};
-    use std::time::SystemTime;
 
     fn make_start_event(
         span_id: SpanId,

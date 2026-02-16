@@ -348,7 +348,9 @@ function test_build_request() -> int {
     let engine =
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
-    let result = engine.call_function("test_build_request", vec![], None, &[]).await;
+    let result = engine
+        .call_function("test_build_request", vec![], None, &[])
+        .await;
     assert!(result.is_ok(), "build_request should succeed: {result:?}");
 }
 
@@ -384,7 +386,9 @@ function test_call_llm() -> unknown {
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
-    let result = engine.call_function("test_call_llm", vec![], None, &[]).await;
+    let result = engine
+        .call_function("test_call_llm", vec![], None, &[])
+        .await;
 
     match result {
         Ok(value) => {
@@ -448,7 +452,9 @@ function test_call_llm() -> string {
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
-    let result = engine.call_function("test_call_llm", vec![], None, &[]).await;
+    let result = engine
+        .call_function("test_call_llm", vec![], None, &[])
+        .await;
 
     match result {
         Ok(value) => {
@@ -513,7 +519,9 @@ function test_call_llm() -> unknown {
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
-    let result = engine.call_function("test_call_llm", vec![], None, &[]).await;
+    let result = engine
+        .call_function("test_call_llm", vec![], None, &[])
+        .await;
 
     match result {
         Ok(value) => {
