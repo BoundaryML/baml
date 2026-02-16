@@ -4,7 +4,7 @@ use rowan::TextRange;
 use crate::{
     ast::{
         BlockExpr, Expression, FromCST, HeaderComment, KnownKind, ParenExpr, StrongAstError,
-        SyntaxNodeIter, Type,
+        SyntaxNodeIter, Token, Type,
     },
     printer::*,
 };
@@ -77,6 +77,36 @@ impl Printable for Statement {
             }
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Statement::Expr(expr) => expr.leftmost_token(),
+            Statement::Let(let_stmt) => let_stmt.leftmost_token(),
+            Statement::While(while_stmt) => while_stmt.leftmost_token(),
+            Statement::Return(return_stmt) => return_stmt.leftmost_token(),
+            Statement::Break(break_stmt) => break_stmt.leftmost_token(),
+            Statement::Continue(continue_stmt) => continue_stmt.leftmost_token(),
+            Statement::Assert(assert_stmt) => assert_stmt.leftmost_token(),
+            Statement::For(for_stmt) => for_stmt.leftmost_token(),
+            Statement::HeaderComment(header_comment) => header_comment.span(),
+            Statement::EmptySemicolon(semicolon) => semicolon.span(),
+            Statement::Unknown(range) => *range,
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Statement::Expr(expr) => expr.rightmost_token(),
+            Statement::Let(let_stmt) => let_stmt.rightmost_token(),
+            Statement::While(while_stmt) => while_stmt.rightmost_token(),
+            Statement::Return(return_stmt) => return_stmt.rightmost_token(),
+            Statement::Break(break_stmt) => break_stmt.rightmost_token(),
+            Statement::Continue(continue_stmt) => continue_stmt.rightmost_token(),
+            Statement::Assert(assert_stmt) => assert_stmt.rightmost_token(),
+            Statement::For(for_stmt) => for_stmt.rightmost_token(),
+            Statement::HeaderComment(header_comment) => header_comment.span(),
+            Statement::EmptySemicolon(semicolon) => semicolon.span(),
+            Statement::Unknown(range) => *range,
+        }
+    }
 }
 
 /// Does not correspond to a [`SyntaxKind`].
@@ -113,6 +143,16 @@ impl Printable for ExpressionStmt {
             printer.print_str(";");
         }
         info
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.expr.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(semicolon) = &self.semicolon {
+            semicolon.span()
+        } else {
+            self.expr.rightmost_token()
+        }
     }
 }
 
@@ -215,6 +255,25 @@ impl Printable for LetStmt {
         }
         PrintInfo { multi_lined }
     }
+    fn leftmost_token(&self) -> TextRange {
+        if let Some(watch) = &self.watch {
+            watch.span()
+        } else {
+            self.keyword.span()
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(semicolon) = &self.semicolon {
+            return semicolon.span();
+        }
+        if let Some((_, expr)) = &self.initializer {
+            return expr.rightmost_token();
+        }
+        if let Some((_, ty)) = &self.type_annotation {
+            return ty.rightmost_token();
+        }
+        self.name.span()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::WHILE_STMT`] node.
@@ -278,6 +337,12 @@ impl Printable for WhileStmt {
         };
         printer.print(&self.body, body_shape);
         PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
     }
 }
 
@@ -367,6 +432,12 @@ impl Printable for ForStmt {
         printer.print(&self.body, shape);
         PrintInfo::default_multi_lined()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
+    }
 }
 
 #[derive(Debug)]
@@ -380,6 +451,18 @@ impl Printable for ForArgs {
         match self {
             ForArgs::Iterator(iter) => iter.print(shape, printer),
             ForArgs::CStyle(cstyle) => cstyle.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ForArgs::Iterator(iter) => iter.leftmost_token(),
+            ForArgs::CStyle(cstyle) => cstyle.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ForArgs::Iterator(iter) => iter.rightmost_token(),
+            ForArgs::CStyle(cstyle) => cstyle.rightmost_token(),
         }
     }
 }
@@ -461,6 +544,12 @@ impl Printable for ForCStyleArgs {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
 }
 
 #[derive(Debug)]
@@ -532,6 +621,12 @@ impl Printable for ForIteratorArgs {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
 }
 
 #[derive(Debug)]
@@ -600,6 +695,18 @@ impl Printable for ReturnStmt {
 
         PrintInfo::default_single_line()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(semicolon) = &self.semicolon {
+            return semicolon.span();
+        }
+        if let Some(value) = &self.value {
+            return value.rightmost_token();
+        }
+        self.keyword.span()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::BREAK_STMT`] node.
@@ -651,6 +758,15 @@ impl Printable for BreakStmt {
 
         PrintInfo::default_single_line()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.semicolon
+            .as_ref()
+            .map(|s| s.span())
+            .unwrap_or(self.keyword.span())
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::CONTINUE_STMT`] node.
@@ -699,6 +815,15 @@ impl Printable for ContinueStmt {
             printer.print_str(";");
         }
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.semicolon
+            .as_ref()
+            .map(|s| s.span())
+            .unwrap_or(self.keyword.span())
     }
 }
 
@@ -763,5 +888,15 @@ impl Printable for AssertStmt {
             printer.print_str(";");
         }
         info
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(semicolon) = &self.semicolon {
+            semicolon.span()
+        } else {
+            self.condition.rightmost_token()
+        }
     }
 }

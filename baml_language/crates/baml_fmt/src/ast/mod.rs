@@ -352,6 +352,20 @@ impl Printable for SourceFile {
 
         PrintInfo::default_multi_lined()
     }
+    /// May return [`TextRange::default()`] if there are no items.
+    fn leftmost_token(&self) -> TextRange {
+        self.items
+            .first()
+            .map(|item| item.leftmost_token())
+            .unwrap_or(TextRange::default())
+    }
+    /// May return [`TextRange::default()`] if there are no items.
+    fn rightmost_token(&self) -> TextRange {
+        self.items
+            .last()
+            .map(|item| item.rightmost_token())
+            .unwrap_or(TextRange::default())
+    }
 }
 
 #[cfg(test)]

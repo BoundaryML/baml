@@ -1,7 +1,7 @@
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
-use rowan::TextRange;
+use rowan::{TextRange, TextSize};
 
-use crate::ast::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, tokens as t};
+use crate::ast::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, Token, tokens as t};
 use crate::printer::*;
 
 /// Corresponds to a [`SyntaxKind::BLOCK_ATTRIBUTE`] node.
@@ -48,6 +48,16 @@ impl Printable for BlockAttribute {
             multi_lined |= printer.print(args, shape).multi_lined;
         }
         PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.atat.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(args) = &self.args {
+            args.rightmost_token()
+        } else {
+            self.name.rightmost_token()
+        }
     }
 }
 
@@ -123,6 +133,16 @@ impl Printable for Attribute {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.at.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(args) = &self.args {
+            args.rightmost_token()
+        } else {
+            self.name.rightmost_token()
+        }
+    }
 }
 
 /// Attribute names are not normal paths: they may contain keywords.
@@ -156,6 +176,18 @@ impl Printable for AttributeNamePart {
             AttributeNamePart::Keyword(range) => printer.print_input_range(*range),
         }
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            AttributeNamePart::Word(word) => word.span(),
+            AttributeNamePart::Keyword(range) => *range,
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            AttributeNamePart::Word(word) => word.span(),
+            AttributeNamePart::Keyword(range) => *range,
+        }
     }
 }
 
@@ -191,6 +223,15 @@ impl Printable for AttributeName {
             printer.print(part, shape.clone());
         }
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.rest
+            .last()
+            .map(|(_, part)| part.rightmost_token())
+            .unwrap_or(self.first.rightmost_token())
     }
 }
 
@@ -317,6 +358,12 @@ impl Printable for AttributeArgs {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
 }
 
 #[derive(Debug)]
@@ -390,6 +437,26 @@ impl Printable for AttributeArg {
                 printer.print_raw_token(s);
                 PrintInfo::default_single_line()
             }
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            AttributeArg::QuotedString(s) => s.leftmost_token(),
+            AttributeArg::RawString(s) => s.leftmost_token(),
+            AttributeArg::AttrExpr(range) => {
+                TextRange::new(range.start(), range.start() + TextSize::from(1))
+            }
+            AttributeArg::UnquotedString(s) => s.span(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            AttributeArg::QuotedString(s) => s.rightmost_token(),
+            AttributeArg::RawString(s) => s.rightmost_token(),
+            AttributeArg::AttrExpr(range) => {
+                TextRange::new(range.start(), range.start() + TextSize::from(1))
+            }
+            AttributeArg::UnquotedString(s) => s.span(),
         }
     }
 }

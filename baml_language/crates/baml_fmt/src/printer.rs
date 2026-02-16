@@ -169,11 +169,23 @@ impl PrintInfo {
     }
 }
 
+/// Main trait for printing elements.
+/// 
+/// ## Trivia
+/// A node should print its internal trivia, but not the outer trivia
+/// (leading trivia on `Self::leftmost_token` and trailing trivia on `Self::rightmost_token`).
+/// The outer trivia is handled by whichever parent node has it as internal trivia.
+/// 
+/// The only exception is [`crate::ast::SourceFile`]: it can print EOF-attached trivia.
 pub trait Printable {
     /// Prints to the printer.
     ///
     /// trivia is emitted by the parent of an element, not the element itself.
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo;
+    /// The span of the leftmost (earliest) non-trivia token in the element.
+    fn leftmost_token(&self) -> TextRange;
+    /// The span of the rightmost (latest) non-trivia token in the element.
+    fn rightmost_token(&self) -> TextRange;
 }
 
 pub trait PrintMultiLine {

@@ -3,7 +3,7 @@ use crate::{
     printer::*,
 };
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
-use rowan::TextRange;
+use rowan::{TextRange, TextSize};
 
 pub trait Token {
     fn span(&self) -> TextRange;
@@ -367,6 +367,15 @@ impl UnaryOp {
     }
 }
 
+impl Token for UnaryOp {
+    fn span(&self) -> TextRange {
+        match self {
+            UnaryOp::Not(t) => t.span(),
+            UnaryOp::Minus(t) => t.span(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IntegerLiteral {
     pub token_span: TextRange,
@@ -494,6 +503,18 @@ impl Printable for QuotedString {
             multi_lined: printer.input[self.span()].contains('\n'),
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -531,6 +552,18 @@ impl Printable for RawString {
         let multi_lined = text.contains('\n');
         printer.print_raw_token(self);
         PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
     }
 }
 
@@ -570,6 +603,12 @@ impl Printable for BinaryOp {
         }
         PrintInfo::default_single_line()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.span()
+    }
 }
 
 impl Printable for UnaryOp {
@@ -579,6 +618,12 @@ impl Printable for UnaryOp {
             UnaryOp::Minus(t) => printer.print_raw_token(t),
         }
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.span()
     }
 }
 

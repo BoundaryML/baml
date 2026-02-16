@@ -120,6 +120,48 @@ impl Printable for Expression {
             }
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Expression::Literal(lit) => lit.leftmost_token(),
+            Expression::Path(path) => path.leftmost_token(),
+            Expression::Paren(paren) => paren.leftmost_token(),
+            Expression::Binary(binary) => binary.leftmost_token(),
+            Expression::Unary(unary) => unary.leftmost_token(),
+            Expression::If(if_expr) => if_expr.leftmost_token(),
+            Expression::Match(match_expr) => match_expr.leftmost_token(),
+            Expression::Call(call) => call.leftmost_token(),
+            Expression::Index(index) => index.leftmost_token(),
+            Expression::FieldAccess(fa) => fa.base.leftmost_token(),
+            Expression::EnvAccess(env) => env.leftmost_token(),
+            Expression::Block(block) => block.leftmost_token(),
+            Expression::ArrayInitializer(array) => array.leftmost_token(),
+            Expression::MapInitializer(map) => map.leftmost_token(),
+            Expression::ObjectInitializer(obj) => obj.leftmost_token(),
+            Expression::RawString(raw) => raw.leftmost_token(),
+            Expression::Unknown(range) => *range,
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Expression::Literal(lit) => lit.rightmost_token(),
+            Expression::Path(path) => path.rightmost_token(),
+            Expression::Paren(paren) => paren.rightmost_token(),
+            Expression::Binary(binary) => binary.rightmost_token(),
+            Expression::Unary(unary) => unary.rightmost_token(),
+            Expression::If(if_expr) => if_expr.rightmost_token(),
+            Expression::Match(match_expr) => match_expr.rightmost_token(),
+            Expression::Call(call) => call.rightmost_token(),
+            Expression::Index(index) => index.rightmost_token(),
+            Expression::FieldAccess(fa) => fa.field.span(),
+            Expression::EnvAccess(env) => env.rightmost_token(),
+            Expression::Block(block) => block.rightmost_token(),
+            Expression::ArrayInitializer(array) => array.rightmost_token(),
+            Expression::MapInitializer(map) => map.rightmost_token(),
+            Expression::ObjectInitializer(obj) => obj.rightmost_token(),
+            Expression::RawString(raw) => raw.rightmost_token(),
+            Expression::Unknown(range) => *range,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -152,6 +194,20 @@ impl Printable for Literal {
             Literal::Float(f) => printer.print_raw_token(f),
         }
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Literal::String(s) => s.leftmost_token(),
+            Literal::Integer(i) => i.span(),
+            Literal::Float(f) => f.span(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Literal::String(s) => s.rightmost_token(),
+            Literal::Integer(i) => i.span(),
+            Literal::Float(f) => f.span(),
+        }
     }
 }
 
@@ -226,6 +282,15 @@ impl Printable for PathExpr {
             chain_members,
         };
         chain.print(shape, printer)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.rest
+            .last()
+            .map(|(_, word)| word.span())
+            .unwrap_or(self.first.span())
     }
 }
 
@@ -322,6 +387,12 @@ impl Printable for ParenExpr {
             printer.print_raw_token(&self.close_paren);
             PrintInfo::default_single_line()
         }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
     }
 }
 
@@ -496,6 +567,12 @@ impl Printable for BinaryExpr {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.sides.0.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.sides.1.rightmost_token()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -566,6 +643,12 @@ impl Printable for UnaryExpr {
         multi_lined |= printer.print(&*self.expr, shape).multi_lined;
 
         PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.op.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.expr.rightmost_token()
     }
 }
 
@@ -654,6 +737,16 @@ impl Printable for IfExpr {
 
         PrintInfo::default_multi_lined()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some((_, else_expr)) = &self.else_branch {
+            else_expr.rightmost_token()
+        } else {
+            self.block.rightmost_token()
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -669,6 +762,18 @@ impl Printable for ElseExpr {
         match self {
             ElseExpr::If(if_expr) => if_expr.print(shape, printer),
             ElseExpr::Block(block) => block.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ElseExpr::If(if_expr) => if_expr.leftmost_token(),
+            ElseExpr::Block(block) => block.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ElseExpr::If(if_expr) => if_expr.rightmost_token(),
+            ElseExpr::Block(block) => block.rightmost_token(),
         }
     }
 }
@@ -779,6 +884,12 @@ impl Printable for MatchExpr {
         printer.print_raw_token(&self.close_brace);
 
         PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
     }
 }
 
@@ -936,6 +1047,16 @@ impl Printable for MatchArm {
         }
         PrintInfo { multi_lined }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.pattern.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(comma) = &self.comma {
+            comma.span()
+        } else {
+            self.body.rightmost_token()
+        }
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::MATCH_GUARD`] node.
@@ -982,6 +1103,12 @@ impl Printable for MatchGuard {
         shape.first_line_offset += usize::from(self.keyword.token_span.len()) + 1;
         printer.print(&self.condition, shape)
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.condition.rightmost_token()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::CALL_EXPR`] node.
@@ -1022,6 +1149,12 @@ impl Printable for CallExpr {
         multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
         multi_lined |= printer.print(&self.args, shape).multi_lined;
         PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.callee.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.args.rightmost_token()
     }
 }
 
@@ -1136,6 +1269,12 @@ impl Printable for CallArgs {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
 }
 
 #[derive(Debug)]
@@ -1216,6 +1355,12 @@ impl Printable for IndexExpr {
             printer.print_raw_token(&self.close_bracket);
             PrintInfo { multi_lined }
         }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.base.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_bracket.span()
     }
 }
 
@@ -1298,6 +1443,12 @@ impl Printable for EnvAccessExpr {
         printer.print_raw_token(&self.dot);
         printer.print_raw_token(&self.field);
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.field.span()
     }
 }
 
@@ -1394,6 +1545,12 @@ impl Printable for BlockExpr {
         printer.print_raw_token(&self.close_brace);
 
         PrintInfo { multi_lined: true }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_brace.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
     }
 }
 
@@ -1522,6 +1679,12 @@ impl Printable for ArrayInitializer {
             printer.append_from_printer(single_line_printer);
             PrintInfo::default_single_line()
         }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_bracket.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_bracket.span()
     }
 }
 
@@ -1665,6 +1828,12 @@ impl Printable for ObjectInitializer {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.name.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::MAP_LITERAL`] node.
@@ -1797,6 +1966,12 @@ impl Printable for MapLiteral {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_brace.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::OBJECT_FIELD`] node.
@@ -1841,6 +2016,12 @@ impl Printable for ObjectField {
         printer.print_str(" ");
         printer.print(&self.value, shape)
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.name.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.value.rightmost_token()
+    }
 }
 
 #[derive(Debug)]
@@ -1873,6 +2054,18 @@ impl Printable for ObjectFieldKey {
                 PrintInfo::default_single_line()
             }
             ObjectFieldKey::String(string) => printer.print(string, shape),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ObjectFieldKey::Word(word) => word.span(),
+            ObjectFieldKey::String(string) => string.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ObjectFieldKey::Word(word) => word.span(),
+            ObjectFieldKey::String(string) => string.rightmost_token(),
         }
     }
 }
@@ -2130,6 +2323,17 @@ impl<'a> Printable for PrintChain<'a> {
         } else {
             printer.append_from_printer(single_line_printer);
             PrintInfo::default_single_line()
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self.chain_members.last() {
+            Some(PrintChainItem::FieldAccess(_, word)) => word.span(),
+            Some(PrintChainItem::Index(_, _, close_bracket)) => close_bracket.span(),
+            Some(PrintChainItem::Call(call_args)) => call_args.rightmost_token(),
+            None => self.first.rightmost_token(),
         }
     }
 }

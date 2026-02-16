@@ -70,6 +70,32 @@ impl Printable for TopLevelDeclaration {
             }
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            TopLevelDeclaration::Function(f) => f.leftmost_token(),
+            TopLevelDeclaration::Class(c) => c.leftmost_token(),
+            TopLevelDeclaration::Enum(e) => e.leftmost_token(),
+            TopLevelDeclaration::Client(c) => c.leftmost_token(),
+            TopLevelDeclaration::Test(t) => t.leftmost_token(),
+            TopLevelDeclaration::RetryPolicy(r) => r.leftmost_token(),
+            TopLevelDeclaration::TemplateString(t) => t.leftmost_token(),
+            TopLevelDeclaration::TypeAlias(t) => t.leftmost_token(),
+            TopLevelDeclaration::Unknown(range) => *range,
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            TopLevelDeclaration::Function(f) => f.rightmost_token(),
+            TopLevelDeclaration::Class(c) => c.rightmost_token(),
+            TopLevelDeclaration::Enum(e) => e.rightmost_token(),
+            TopLevelDeclaration::Client(c) => c.rightmost_token(),
+            TopLevelDeclaration::Test(t) => t.rightmost_token(),
+            TopLevelDeclaration::RetryPolicy(r) => r.rightmost_token(),
+            TopLevelDeclaration::TemplateString(t) => t.rightmost_token(),
+            TopLevelDeclaration::TypeAlias(t) => t.rightmost_token(),
+            TopLevelDeclaration::Unknown(range) => *range,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -184,6 +210,12 @@ impl Printable for FunctionDecl {
 
             PrintInfo::default_multi_lined()
         }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.body.rightmost_token()
     }
 }
 
@@ -314,6 +346,12 @@ impl Printable for FunctionParamList {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
 }
 
 #[derive(Debug)]
@@ -372,6 +410,15 @@ impl Printable for FunctionParam {
         }
         PrintInfo::default_single_line()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.name.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.ty
+            .as_ref()
+            .map(|(_, ty)| ty.rightmost_token())
+            .unwrap_or(self.name.span())
+    }
 }
 
 #[derive(Debug)]
@@ -406,6 +453,18 @@ impl Printable for FunctionDeclBody {
         match self {
             FunctionDeclBody::Llm(llm) => llm.print(shape, printer),
             FunctionDeclBody::Block(block) => block.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            FunctionDeclBody::Llm(llm) => llm.leftmost_token(),
+            FunctionDeclBody::Block(block) => block.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            FunctionDeclBody::Llm(llm) => llm.rightmost_token(),
+            FunctionDeclBody::Block(block) => block.rightmost_token(),
         }
     }
 }
@@ -491,6 +550,12 @@ impl Printable for LlmFunctionBody {
         printer.print_raw_token(&self.close_brace);
         PrintInfo::default_multi_lined()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_brace.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::CLIENT_FIELD`] node.
@@ -553,6 +618,12 @@ impl Printable for ClientField {
         printer.print_str(" ");
         printer.print(&self.name, shape)
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.name.rightmost_token()
+    }
 }
 
 #[derive(Debug)]
@@ -566,6 +637,18 @@ impl Printable for ClientName {
         match self {
             ClientName::Path(path) => printer.print(path, shape),
             ClientName::String(string) => printer.print(string, shape),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ClientName::Path(path) => path.leftmost_token(),
+            ClientName::String(string) => string.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ClientName::Path(path) => path.rightmost_token(),
+            ClientName::String(string) => string.rightmost_token(),
         }
     }
 }
@@ -620,6 +703,12 @@ impl Printable for PromptField {
         printer.print_str(" ");
         printer.print(&self.string, shape)
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.prompt.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.string.rightmost_token()
+    }
 }
 
 #[derive(Debug)]
@@ -633,6 +722,18 @@ impl Printable for PromptValue {
         match self {
             PromptValue::RawString(raw_string) => printer.print(raw_string, shape),
             PromptValue::String(string) => printer.print(string, shape),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            PromptValue::RawString(raw_string) => raw_string.leftmost_token(),
+            PromptValue::String(string) => string.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            PromptValue::RawString(raw_string) => raw_string.rightmost_token(),
+            PromptValue::String(string) => string.rightmost_token(),
         }
     }
 }
@@ -725,6 +826,12 @@ impl Printable for ClassDecl {
         printer.print_raw_token(&self.close_brace);
 
         PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
     }
 }
 
@@ -847,6 +954,18 @@ impl Printable for ClassField {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.name.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(comma) = &self.comma {
+            return comma.span();
+        }
+        if let Some(attr) = self.attributes.last() {
+            return attr.rightmost_token();
+        }
+        self.ty.rightmost_token()
+    }
 }
 
 #[derive(Debug)]
@@ -882,6 +1001,20 @@ impl Printable for ClassItem {
             ClassItem::Field(field) => field.print(shape, printer),
             ClassItem::Function(function) => function.print(shape, printer),
             ClassItem::BlockAttribute(attr) => attr.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ClassItem::Field(field) => field.leftmost_token(),
+            ClassItem::Function(function) => function.leftmost_token(),
+            ClassItem::BlockAttribute(attr) => attr.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ClassItem::Field(field) => field.rightmost_token(),
+            ClassItem::Function(function) => function.rightmost_token(),
+            ClassItem::BlockAttribute(attr) => attr.rightmost_token(),
         }
     }
 }
@@ -993,6 +1126,12 @@ impl Printable for EnumDecl {
 
         PrintInfo::default_multi_lined()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
+    }
 }
 
 #[derive(Debug)]
@@ -1014,6 +1153,24 @@ impl Printable for EnumItem {
                 info
             }
             EnumItem::BlockAttribute(attr) => attr.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            EnumItem::Variant(variant, _) => variant.leftmost_token(),
+            EnumItem::BlockAttribute(attr) => attr.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            EnumItem::Variant(variant, comma) => {
+                if let Some(comma) = comma {
+                    comma.span()
+                } else {
+                    variant.rightmost_token()
+                }
+            }
+            EnumItem::BlockAttribute(attr) => attr.rightmost_token(),
         }
     }
 }
@@ -1092,6 +1249,15 @@ impl Printable for EnumVariant {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.name.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.attributes
+            .last()
+            .map(|attr| attr.rightmost_token())
+            .unwrap_or(self.name.span())
+    }
 }
 
 #[derive(Debug)]
@@ -1161,6 +1327,12 @@ impl Printable for ClientDecl {
         printer.print_str(" ");
         printer.print(&self.config_block, shape);
         PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.config_block.rightmost_token()
     }
 }
 
@@ -1261,6 +1433,12 @@ impl Printable for ConfigBlock {
 
         PrintInfo::default_multi_lined()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_brace.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
+    }
 }
 
 #[derive(Debug)]
@@ -1332,6 +1510,12 @@ impl Printable for ConfigItem {
         multi_lined |= printer.print(&self.value, value_shape).multi_lined;
         PrintInfo { multi_lined }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.key.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.value.rightmost_token()
+    }
 }
 
 #[derive(Debug)]
@@ -1384,6 +1568,20 @@ impl Printable for ConfigItemKey {
             }
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ConfigItemKey::Word(word) => word.span(),
+            ConfigItemKey::String(string) => string.leftmost_token(),
+            ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ConfigItemKey::Word(word) => word.span(),
+            ConfigItemKey::String(string) => string.rightmost_token(),
+            ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
+        }
+    }
 }
 
 /// Does not correspond to a specific [`SyntaxKind`].
@@ -1430,6 +1628,20 @@ impl Printable for ConfigItemValue {
             ConfigItemValue::Value(expr) => expr.print(shape, printer),
             ConfigItemValue::ConfigBlock(block) => block.print(shape, printer),
             ConfigItemValue::ConfigArray(array) => array.print(shape, printer),
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            ConfigItemValue::Value(expr) => expr.leftmost_token(),
+            ConfigItemValue::ConfigBlock(block) => block.leftmost_token(),
+            ConfigItemValue::ConfigArray(array) => array.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            ConfigItemValue::Value(expr) => expr.rightmost_token(),
+            ConfigItemValue::ConfigBlock(block) => block.rightmost_token(),
+            ConfigItemValue::ConfigArray(array) => array.rightmost_token(),
         }
     }
 }
@@ -1550,6 +1762,12 @@ impl Printable for ConfigArray {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_bracket.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_bracket.span()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::TYPE_BUILDER_BLOCK`] node.
@@ -1621,6 +1839,12 @@ impl Printable for TypeBuilderBlock {
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_brace);
         PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_brace.span()
     }
 }
 
@@ -1700,6 +1924,24 @@ impl Printable for TypeBuilderItem {
             TypeBuilderItem::TypeAlias(alias) => printer.print(alias, shape),
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            TypeBuilderItem::DynamicClass(dynamic, _) => dynamic.span(),
+            TypeBuilderItem::DynamicEnum(dynamic, _) => dynamic.span(),
+            TypeBuilderItem::Class(class) => class.leftmost_token(),
+            TypeBuilderItem::Enum(enum_def) => enum_def.leftmost_token(),
+            TypeBuilderItem::TypeAlias(alias) => alias.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            TypeBuilderItem::DynamicClass(_, class) => class.rightmost_token(),
+            TypeBuilderItem::DynamicEnum(_, enum_def) => enum_def.rightmost_token(),
+            TypeBuilderItem::Class(class) => class.rightmost_token(),
+            TypeBuilderItem::Enum(enum_def) => enum_def.rightmost_token(),
+            TypeBuilderItem::TypeAlias(alias) => alias.rightmost_token(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -1750,6 +1992,12 @@ impl Printable for TestDecl {
         printer.print(&self.config_block, shape);
         PrintInfo::default_multi_lined()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.config_block.rightmost_token()
+    }
 }
 
 #[derive(Debug)]
@@ -1798,6 +2046,12 @@ impl Printable for RetryPolicyDecl {
         printer.print_raw_token(&self.name);
         printer.print_str(" ");
         printer.print(&self.config_block, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.config_block.rightmost_token()
     }
 }
 
@@ -1859,6 +2113,12 @@ impl Printable for TemplateStringDecl {
             .print(&self.raw_string, Shape::unlimited_single_line())
             .multi_lined;
         PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.raw_string.rightmost_token()
     }
 }
 
@@ -1927,5 +2187,15 @@ impl Printable for TypeAliasDecl {
         }
 
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(semicolon) = &self.semicolon {
+            semicolon.span()
+        } else {
+            self.type_expr.rightmost_token()
+        }
     }
 }

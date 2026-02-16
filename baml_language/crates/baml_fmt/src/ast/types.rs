@@ -6,7 +6,7 @@ use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
 use super::{FromCST, KnownKind, StrongAstError, tokens as t};
 use crate::{
-    ast::{Literal, SyntaxNodeIter},
+    ast::{Literal, SyntaxNodeIter, Token},
     printer::*,
 };
 use rowan::TextRange;
@@ -70,6 +70,8 @@ impl FromCST for Type {
             rest.push((t::Pipe::new_from_span(pipe.text_range()), next));
         }
 
+        it.expect_end()?;
+
         if rest.is_empty() {
             Ok(first.into())
         } else {
@@ -102,6 +104,32 @@ impl Printable for Type {
                 printer.print_input_range(*range);
                 PrintInfo::default_single_line()
             }
+        }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            Type::Paren(paren) => paren.leftmost_token(),
+            Type::Path(path) => path.leftmost_token(),
+            Type::Literal(literal) => literal.leftmost_token(),
+            Type::Union(union) => union.leftmost_token(),
+            Type::Optional(optional) => optional.leftmost_token(),
+            Type::Array(array) => array.leftmost_token(),
+            Type::Generic(generic) => generic.leftmost_token(),
+            Type::Function(function) => function.leftmost_token(),
+            Type::Constrained(range) | Type::Unknown(range) => *range,
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            Type::Paren(paren) => paren.rightmost_token(),
+            Type::Path(path) => path.rightmost_token(),
+            Type::Literal(literal) => literal.rightmost_token(),
+            Type::Union(union) => union.rightmost_token(),
+            Type::Optional(optional) => optional.rightmost_token(),
+            Type::Array(array) => array.rightmost_token(),
+            Type::Generic(generic) => generic.rightmost_token(),
+            Type::Function(function) => function.rightmost_token(),
+            Type::Constrained(range) | Type::Unknown(range) => *range,
         }
     }
 }
@@ -180,6 +208,12 @@ impl Printable for ParenType {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
 }
 
 #[derive(Debug)]
@@ -198,6 +232,16 @@ impl Printable for PathType {
         }
         PrintInfo::default_single_line()
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.first.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.rest
+            .last()
+            .map(|(_, word)| word)
+            .unwrap_or(&self.first)
+            .span()
+    }
 }
 
 #[derive(Debug)]
@@ -207,6 +251,12 @@ impl Printable for StringType {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.0);
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.0.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.0.rightmost_token()
     }
 }
 
@@ -256,6 +306,16 @@ impl Printable for UnionType {
 
         printer.append_from_printer(single_line_printer);
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.rest
+            .last()
+            .map(|(_, ty)| ty)
+            .unwrap_or(&self.first)
+            .rightmost_token()
     }
 }
 
@@ -451,6 +511,30 @@ impl Printable for UnionTypeMember {
             }
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            UnionTypeMember::Paren(paren) => paren.leftmost_token(),
+            UnionTypeMember::Path(path) => path.leftmost_token(),
+            UnionTypeMember::Literal(lit) => lit.leftmost_token(),
+            UnionTypeMember::Optional(optional) => optional.leftmost_token(),
+            UnionTypeMember::Array(array) => array.leftmost_token(),
+            UnionTypeMember::Generic(generic) => generic.leftmost_token(),
+            UnionTypeMember::Function(function) => function.leftmost_token(),
+            UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => *range,
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            UnionTypeMember::Paren(paren) => paren.rightmost_token(),
+            UnionTypeMember::Path(path) => path.rightmost_token(),
+            UnionTypeMember::Literal(lit) => lit.rightmost_token(),
+            UnionTypeMember::Optional(optional) => optional.rightmost_token(),
+            UnionTypeMember::Array(array) => array.rightmost_token(),
+            UnionTypeMember::Generic(generic) => generic.rightmost_token(),
+            UnionTypeMember::Function(function) => function.rightmost_token(),
+            UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => *range,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -464,6 +548,12 @@ impl Printable for OptionalType {
         let info = printer.print(&*self.ty, shape);
         printer.print_raw_token(&self.question);
         info
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.ty.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.ty.rightmost_token()
     }
 }
 
@@ -482,6 +572,15 @@ impl Printable for ArrayType {
         }
         info
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.ty.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.brackets
+            .last()
+            .map(|(_, close)| close.span())
+            .unwrap_or(self.ty.rightmost_token())
+    }
 }
 
 #[derive(Debug)]
@@ -496,6 +595,12 @@ impl Printable for GenericType {
         multi_lined |= printer.print(&*self.base, shape.clone()).multi_lined;
         multi_lined |= printer.print(&self.args, shape).multi_lined;
         PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.base.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.args.rightmost_token()
     }
 }
 
@@ -626,6 +731,12 @@ impl Printable for TypeArgs {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_angle.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_angle.span()
+    }
 }
 
 #[derive(Debug)]
@@ -712,6 +823,12 @@ impl Printable for FunctionType {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.return_type.rightmost_token()
+    }
 }
 
 /// Corresponds to a [`SyntaxKind::FUNCTION_TYPE_PARAM`] node.
@@ -767,5 +884,14 @@ impl Printable for FunctionTypeParam {
         }
         printer.print(&*self.ty, shape);
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.name
+            .as_ref()
+            .map(|(name, _)| name.span())
+            .unwrap_or(self.ty.leftmost_token())
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.ty.rightmost_token()
     }
 }

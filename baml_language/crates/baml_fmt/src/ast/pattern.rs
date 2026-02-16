@@ -1,6 +1,7 @@
 //! Reference: [baml_compiler_syntax::ast::MatchPattern] and [baml_compiler_hir::body::Pattern]
 
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use rowan::TextRange;
 
 use crate::ast::{
     FromCST, KnownKind, Literal, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
@@ -93,6 +94,24 @@ impl Printable for MatchPattern {
             MatchPattern::Nested(nested) => nested.print(shape, printer),
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            MatchPattern::Literal(lit) => lit.leftmost_token(),
+            MatchPattern::Binding(binding) => binding.leftmost_token(),
+            MatchPattern::EnumVariant(variant) => variant.leftmost_token(),
+            MatchPattern::Union(union) => union.leftmost_token(),
+            MatchPattern::Nested(nested) => nested.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            MatchPattern::Literal(lit) => lit.rightmost_token(),
+            MatchPattern::Binding(binding) => binding.rightmost_token(),
+            MatchPattern::EnumVariant(variant) => variant.rightmost_token(),
+            MatchPattern::Union(union) => union.rightmost_token(),
+            MatchPattern::Nested(nested) => nested.rightmost_token(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -115,6 +134,16 @@ impl Printable for BindingPattern {
             PrintInfo::default_single_line()
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        self.name.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some((_, ty)) = &self.ty {
+            ty.rightmost_token()
+        } else {
+            self.name.span()
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -130,6 +159,12 @@ impl Printable for EnumVariantPattern {
         printer.print_raw_token(&self.dot);
         printer.print_raw_token(&self.variant_name);
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.enum_name.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.variant_name.span()
     }
 }
 
@@ -187,6 +222,15 @@ impl Printable for UnionPattern {
 
         printer.append_from_printer(single_line_printer);
         PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.first.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.rest
+            .last()
+            .map(|(_, member)| member.rightmost_token())
+            .unwrap_or(self.first.rightmost_token())
     }
 }
 
@@ -269,6 +313,22 @@ impl Printable for UnionPatternMember {
             UnionPatternMember::Nested(nested) => nested.print(shape, printer),
         }
     }
+    fn leftmost_token(&self) -> TextRange {
+        match self {
+            UnionPatternMember::Literal(lit) => lit.leftmost_token(),
+            UnionPatternMember::Word(word) => word.span(),
+            UnionPatternMember::EnumVariant(variant) => variant.leftmost_token(),
+            UnionPatternMember::Nested(nested) => nested.leftmost_token(),
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        match self {
+            UnionPatternMember::Literal(lit) => lit.rightmost_token(),
+            UnionPatternMember::Word(word) => word.span(),
+            UnionPatternMember::EnumVariant(variant) => variant.rightmost_token(),
+            UnionPatternMember::Nested(nested) => nested.rightmost_token(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -303,5 +363,11 @@ impl Printable for NestedPattern {
             printer.print_raw_token(&self.close_paren);
             PrintInfo::default_single_line()
         }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
     }
 }
