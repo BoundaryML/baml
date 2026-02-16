@@ -6,7 +6,7 @@ use crate::{
     functions::FunctionRust,
     generated_types::{ClassRustRendered, EnumRust, TypeAliasRustRendered, UnionRustRendered},
     package::CurrentRenderPackage,
-    r#type::SerializeType,
+    r#type::{MediaTypeRust, SerializeType},
 };
 
 /// Source map template - embeds BAML source files

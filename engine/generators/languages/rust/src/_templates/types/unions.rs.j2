@@ -15,14 +15,26 @@ use super::*;
 #[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum {{ u.name }} {
 {% for variant in u.variants %}
-    {% if let Some(literal_repr) = variant.literal_repr -%}
+{% if let Some(literal_repr) = variant.literal_repr -%}
     #[baml(name = "{{ variant.cffi_name }}", literal_{{ variant.cffi_name.split("_").next().unwrap() }} = {{ literal_repr }})]
     #[serde(with = "__baml_serde_union_literal_{{ u.name }}::{{ variant.name }}")]
     {{ variant.name }},
-    {% else -%}
+{% else -%}
     #[baml(name = "{{ variant.cffi_name }}")]
+{%- if let Some(media_type) = variant.media_type %}
+{%- match media_type %}
+{%- when MediaTypeRust::Image %}
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_image")]
+{%- when MediaTypeRust::Audio %}
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_audio")]
+{%- when MediaTypeRust::Pdf %}
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_pdf")]
+{%- when MediaTypeRust::Video %}
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_video")]
+{%- endmatch %}
+{%- endif %}
     {{ variant.name }}({{ variant.type_str }}),
-    {% endif -%}
+{% endif -%}
 {%- endfor %}
 }
 

@@ -18,7 +18,7 @@ use super::*;
 {%- endif %}
 #[serde(crate = "::baml::__internal::serde")]
 pub struct {{ class.name }} {
-{% for field in class.fields %}
+{%- for field in class.fields %}
 {%- if let Some(docstring) = field.docstring %}
     {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
@@ -26,14 +26,26 @@ pub struct {{ class.name }} {
     #[baml(name = "{{ cffi_name }}")]
     #[serde(rename = "{{ cffi_name }}")]
 {%- endif %}
+{%- if let Some(media_type) = field.media_type %}
+{%- match media_type %}
+{%- when MediaTypeRust::Image %}
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_image")]
+{%- when MediaTypeRust::Audio %}
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_audio")]
+{%- when MediaTypeRust::Pdf %}
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_pdf")]
+{%- when MediaTypeRust::Video %}
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_video")]
+{%- endmatch %}
+{%- endif %}
     pub {{ field.name }}: {{ field.type_str }},
 {%- endfor %}
-{% if class.dynamic %}
+{%- if class.dynamic %}
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<String, baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>>,
-{% endif %}
+{%- endif %}
 }
 
 {% if class.dynamic %}
