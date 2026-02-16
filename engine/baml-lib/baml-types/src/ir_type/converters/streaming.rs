@@ -123,6 +123,12 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                 let variants = union_type.iter_skip_null();
                 let variants = variants.into_iter().cloned().map(|mut t| {
                     t.meta_mut().streaming_behavior.needed = true;
+                    // If @stream.done is on the union, propagate it to variants.
+                    // This ensures variant classes use NonStreaming mode, preventing
+                    // incomplete objects from being coerced during streaming.
+                    if done {
+                        t.meta_mut().streaming_behavior.done = true;
+                    }
                     from_type_ir(&t, lookup)
                 });
 

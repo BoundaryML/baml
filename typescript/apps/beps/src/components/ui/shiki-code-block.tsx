@@ -76,7 +76,10 @@ export function ShikiCodeBlock({
         const lang = normalizeLanguage(language);
         const result = await codeToHtml(code, {
           lang,
-          theme: "github-light",
+          themes: {
+            light: "github-light",
+            dark: "github-dark",
+          },
           transformers: [
             {
               line(node, line) {
@@ -116,19 +119,19 @@ export function ShikiCodeBlock({
   if (isLoading) {
     const lines = code.split("\n");
     return (
-      <div className="not-prose my-5 rounded-xl border border-gray-200 overflow-hidden">
+      <div className="not-prose my-5 rounded-xl border border-border overflow-hidden">
         {showLanguageBar && (
-          <div className="bg-gray-100 border-b border-gray-200 px-4 py-2 text-xs font-medium text-gray-600">
+          <div className="bg-muted border-b border-border px-4 py-2 text-xs font-medium text-muted-foreground">
             {getDisplayName(normalizedLang)}
           </div>
         )}
-        <div className="bg-white overflow-x-auto">
+        <div className="bg-background overflow-x-auto">
           <pre className="p-4 m-0">
-            <code className="font-mono text-[13px] leading-5 text-gray-800">
+            <code className="font-mono text-[13px] leading-5 text-foreground">
               {lines.map((line, i) => (
                 <div key={i} className="flex">
                   {showLineNumbers && (
-                    <span className="select-none text-gray-400 text-right w-8 pr-3 mr-3 flex-shrink-0 border-r border-gray-200">
+                    <span className="select-none text-muted-foreground text-right w-8 pr-3 mr-3 flex-shrink-0 border-r border-border">
                       {i + 1}
                     </span>
                   )}
@@ -143,9 +146,9 @@ export function ShikiCodeBlock({
   }
 
   return (
-    <div className="not-prose my-5 rounded-xl border border-gray-200 overflow-hidden">
+    <div className="not-prose my-5 rounded-xl border border-border overflow-hidden">
       {showLanguageBar && (
-        <div className="bg-gray-100 border-b border-gray-200 px-4 py-2 text-xs font-medium text-gray-600">
+        <div className="bg-muted border-b border-border px-4 py-2 text-xs font-medium text-muted-foreground">
           {getDisplayName(normalizedLang)}
         </div>
       )}
@@ -164,10 +167,10 @@ export function ShikiCodeBlock({
           [&_.line-number]:w-8
           [&_.line-number]:pr-3
           [&_.line-number]:mr-3
-          [&_.line-number]:text-gray-400
+          [&_.line-number]:text-muted-foreground
           [&_.line-number]:shrink-0
           [&_.line-number]:border-r
-          [&_.line-number]:border-gray-200
+          [&_.line-number]:border-border
         `}
         dangerouslySetInnerHTML={{ __html: html }}
       />
