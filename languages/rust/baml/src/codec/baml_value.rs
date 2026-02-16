@@ -2,8 +2,6 @@
 
 use std::collections::HashMap;
 
-use serde::ser::SerializeMap as _;
-
 use super::{
     dynamic_types::{DynamicClass, DynamicEnum, DynamicUnion},
     from_baml_value::FromBamlValue,
@@ -422,16 +420,14 @@ impl<'de, T: KnownTypes + serde::Deserialize<'de>, S: KnownTypes + serde::Deseri
                 Ok(Self::Value::Int(v))
             }
 
-            fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
-                Ok(Self::Value::Int(v as i64))
-            }
-
-            fn visit_u16<E: serde::de::Error>(self, v: u16) -> Result<Self::Value, E> {
-                Ok(Self::Value::Int(v as i64))
-            }
-
-            fn visit_u8<E: serde::de::Error>(self, v: u8) -> Result<Self::Value, E> {
-                Ok(Self::Value::Int(v as i64))
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                let v = i64::try_from(v).map_err(|_| {
+                    E::invalid_value(
+                        serde::de::Unexpected::Unsigned(v),
+                        &"a value fitting in an i64",
+                    )
+                })?;
+                Ok(Self::Value::Int(v))
             }
 
             fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
