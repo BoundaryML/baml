@@ -72,7 +72,10 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
     });
 
     serde_json::to_string(&event_json).unwrap_or_else(|e| {
-        eprintln!("Failed to serialize trace event: {e}");
+        #[allow(clippy::print_stderr)]
+        {
+            eprintln!("Failed to serialize trace event: {e}");
+        }
         String::new()
     })
 }
