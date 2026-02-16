@@ -10,6 +10,7 @@ Run with:
     uv run pytest tests/ -v
 """
 
+import contextlib
 import json
 import os
 import tempfile
@@ -242,8 +243,9 @@ class TestTracing:
     """
 
     @staticmethod
-    def _with_trace_file(fn):
-        """Run `fn(trace_file_path)` with BAML_TRACE_FILE pointed at a temp file.
+    @contextlib.contextmanager
+    def _trace_file():
+        """Context manager that sets BAML_TRACE_FILE to a temp file.
 
         Saves and restores the original BAML_TRACE_FILE so that an
         externally-set value (e.g. ``BAML_TRACE_FILE=debug.jsonl pytest``)
@@ -256,7 +258,7 @@ class TestTracing:
             trace_file = f.name
         try:
             os.environ["BAML_TRACE_FILE"] = trace_file
-            fn(trace_file)
+            yield trace_file
         finally:
             if orig is not None:
                 os.environ["BAML_TRACE_FILE"] = orig
@@ -278,11 +280,10 @@ class TestTracing:
         def traced_function(x: int) -> int:
             return x * 2
 
-        def body(trace_file):
+        with self._trace_file() as trace_file:
             result = traced_function(21)
             assert result == 42
 
-            # Flush events to the trace file
             ctx.flush()
 
             with open(trace_file) as f:
@@ -291,12 +292,9 @@ class TestTracing:
             assert len(lines) >= 2, f"Expected at least 2 events, got {len(lines)}"
             events = [json.loads(line) for line in lines]
 
-            # Should have function_start and function_end
             types = [e["content"]["type"] for e in events]
             assert "function_start" in types
             assert "function_end" in types
-
-        self._with_trace_file(body)
 
     @pytest.mark.asyncio
     async def test_trace_decorator_async(self):
@@ -310,13 +308,7 @@ class TestTracing:
         async def traced_async_fn(s: str) -> str:
             return f"traced: {s}"
 
-        orig = os.environ.get("BAML_TRACE_FILE")
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".jsonl", delete=False
-        ) as f:
-            trace_file = f.name
-        try:
-            os.environ["BAML_TRACE_FILE"] = trace_file
+        with self._trace_file() as trace_file:
             result = await traced_async_fn("hello")
             assert result == "traced: hello"
 
@@ -330,15 +322,6 @@ class TestTracing:
             types = [e["content"]["type"] for e in events]
             assert "function_start" in types
             assert "function_end" in types
-        finally:
-            if orig is not None:
-                os.environ["BAML_TRACE_FILE"] = orig
-            else:
-                os.environ.pop("BAML_TRACE_FILE", None)
-            try:
-                os.unlink(trace_file)
-            except OSError:
-                pass
 
     def test_nested_trace_callstack(self):
         """Nested @trace calls build a proper call stack."""
@@ -375,7 +358,7 @@ class TestTracing:
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)
 
-        def body(trace_file):
+        with self._trace_file() as trace_file:
             @ctx.trace_fn
             def traced_fn():
                 return 42
@@ -388,8 +371,6 @@ class TestTracing:
 
             assert len(content) > 0, "Trace file should not be empty after flush"
 
-        self._with_trace_file(body)
-
     def test_tag_propagation(self):
         """Tags set on the current span are emitted as SetTags events."""
         from baml_py import BamlCtxManager
@@ -397,7 +378,7 @@ class TestTracing:
         rt = make_runtime(EXPR_FUNCS_BAML)
         ctx = BamlCtxManager(rt)
 
-        def body(trace_file):
+        with self._trace_file() as trace_file:
             @ctx.trace_fn
             def tagged_fn():
                 ctx.upsert_tags(env="test", version="1.0")
@@ -411,7 +392,6 @@ class TestTracing:
 
             events = [json.loads(line) for line in lines]
 
-            # Should have an intermediate/SetTags event
             intermediate_events = [
                 e for e in events if e["content"]["type"] == "intermediate"
             ]
@@ -419,9 +399,6 @@ class TestTracing:
                 f"Expected at least 1 SetTags event, got {len(intermediate_events)}"
             )
 
-            # Verify tags are present
             set_tags = intermediate_events[0]["content"]["data"]["SetTags"]
             assert set_tags["env"] == "test"
             assert set_tags["version"] == "1.0"
-
-        self._with_trace_file(body)

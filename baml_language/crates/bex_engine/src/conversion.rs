@@ -6,6 +6,7 @@
 
 use baml_type::Literal;
 use bex_external_types::{BexExternalAdt, BexExternalValue, EpochGuard, Ty, UnionMetadata};
+use bex_heap::BexValue;
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, Value};
 
@@ -302,6 +303,26 @@ impl BexEngine {
                 let handle = self.heap.create_handle(*ptr);
                 BexExternalValue::Handle(handle)
             }
+        }
+    }
+
+    /// Convert a VM value to a fully owned `BexExternalValue` (deep copy).
+    ///
+    /// Unlike `vm_arg_to_bex_value` which creates `Handle` references for objects,
+    /// this method deep-copies heap objects into standalone values. Use this for
+    /// trace event payloads that escape the engine scope (e.g. event collectors).
+    pub(crate) fn vm_value_to_owned(&self, value: &Value) -> BexExternalValue {
+        match value {
+            Value::Null => BexExternalValue::Null,
+            Value::Int(i) => BexExternalValue::Int(*i),
+            Value::Float(f) => BexExternalValue::Float(*f),
+            Value::Bool(b) => BexExternalValue::Bool(*b),
+            Value::Object(ptr) => self
+                .heap
+                .with_gc_protection(|protected| {
+                    BexValue::HeapPtr(ptr).as_owned_but_very_slow(&protected)
+                })
+                .unwrap_or(BexExternalValue::Null),
         }
     }
 

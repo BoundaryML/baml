@@ -4,9 +4,9 @@ version = "0.0.0"
 description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 license = "Apache-2.0"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
-    "protobuf>=4.21",
+    "protobuf>=6.31.1",
 ]
 
 [dependency-groups]

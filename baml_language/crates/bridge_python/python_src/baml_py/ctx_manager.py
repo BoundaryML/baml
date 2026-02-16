@@ -54,6 +54,12 @@ class CtxManager:
     def __init__(self, rt: BamlRuntime) -> None:
         global prev_ctx_manager
         if prev_ctx_manager is not None:
+            if rt is not prev_ctx_manager.rt:
+                import warnings
+                warnings.warn(
+                    "CtxManager is a singleton; ignoring new BamlRuntime argument",
+                    stacklevel=2,
+                )
             self.rt = prev_ctx_manager.rt
             self.ctx = prev_ctx_manager.ctx
             return

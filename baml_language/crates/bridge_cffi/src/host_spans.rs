@@ -150,6 +150,8 @@ impl HostSpanManager {
 
     fn exit_inner(&mut self, result: bex_external_types::BexExternalValue) {
         let Some(entry) = self.stack.pop() else {
+            #[cfg(debug_assertions)]
+            eprintln!("HostSpanManager::exit_inner called with empty stack");
             return;
         };
 

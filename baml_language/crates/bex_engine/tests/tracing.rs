@@ -30,9 +30,22 @@ fn event_names(events: &[RuntimeEvent]) -> Vec<String> {
         .collect()
 }
 
+/// RAII guard that untracks a span from the event store on drop,
+/// preventing span leaks if a test panics before calling `collect_events`.
+struct TrackingGuard {
+    root: SpanId,
+}
+
+impl Drop for TrackingGuard {
+    fn drop(&mut self) {
+        bex_events::event_store::untrack(&self.root);
+    }
+}
+
 /// Create a `HostSpanContext` with a fresh root span and start tracking it
-/// in the event store. Returns `(host_ctx, root_span_id)`.
-fn setup_tracking() -> (HostSpanContext, SpanId) {
+/// in the event store. Returns `(host_ctx, guard)` where the guard untracks
+/// on drop.
+fn setup_tracking() -> (HostSpanContext, TrackingGuard) {
     let root = SpanId::new();
     bex_events::event_store::track(&root);
     let host_ctx = HostSpanContext {
@@ -40,14 +53,12 @@ fn setup_tracking() -> (HostSpanContext, SpanId) {
         parent_span_id: root.clone(),
         call_stack: vec![root.clone()],
     };
-    (host_ctx, root)
+    (host_ctx, TrackingGuard { root })
 }
 
-/// Drain collected events for the given root span and stop tracking.
-fn collect_events(root: &SpanId) -> Vec<RuntimeEvent> {
-    let events = bex_events::event_store::events_for_span(root).unwrap_or_default();
-    bex_events::event_store::untrack(root);
-    events
+/// Drain collected events for the given root span.
+fn collect_events(guard: &TrackingGuard) -> Vec<RuntimeEvent> {
+    bex_events::event_store::events_for_span(&guard.root).unwrap_or_default()
 }
 
 #[tokio::test]
@@ -61,12 +72,12 @@ async fn trace_single_function() {
     let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
-    let (host_ctx, root) = setup_tracking();
+    let (host_ctx, guard) = setup_tracking();
     let value = engine
         .call_function("main", vec![], Some(host_ctx), &[])
         .await
         .unwrap();
-    let events = collect_events(&root);
+    let events = collect_events(&guard);
 
     assert_eq!(value, BexExternalValue::Int(42));
 
@@ -75,8 +86,8 @@ async fn trace_single_function() {
     assert_eq!(names, vec!["start:main", "end:main"]);
 
     // Both events should share the same root span ID
-    assert_eq!(&events[0].ctx.root_span_id, &root);
-    assert_eq!(&events[1].ctx.root_span_id, &root);
+    assert_eq!(&events[0].ctx.root_span_id, &guard.root);
+    assert_eq!(&events[1].ctx.root_span_id, &guard.root);
 
     // Both should share the same span_id (same span)
     assert_eq!(events[0].ctx.span_id, events[1].ctx.span_id);
@@ -100,12 +111,12 @@ async fn trace_nested_expression_calls_no_child_spans() {
     let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
-    let (host_ctx, root) = setup_tracking();
+    let (host_ctx, guard) = setup_tracking();
     let value = engine
         .call_function("main", vec![], Some(host_ctx), &[])
         .await
         .unwrap();
-    let events = collect_events(&root);
+    let events = collect_events(&guard);
 
     assert_eq!(value, BexExternalValue::Int(11));
 
@@ -139,12 +150,12 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
     let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
-    let (host_ctx, root) = setup_tracking();
+    let (host_ctx, guard) = setup_tracking();
     let value = engine
         .call_function("main", vec![], Some(host_ctx), &[])
         .await
         .unwrap();
-    let events = collect_events(&root);
+    let events = collect_events(&guard);
 
     assert_eq!(value, BexExternalValue::Int(4));
 
@@ -172,12 +183,12 @@ async fn trace_sibling_expression_calls_no_child_spans() {
     let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
-    let (host_ctx, root) = setup_tracking();
+    let (host_ctx, guard) = setup_tracking();
     let value = engine
         .call_function("main", vec![], Some(host_ctx), &[])
         .await
         .unwrap();
-    let events = collect_events(&root);
+    let events = collect_events(&guard);
 
     assert_eq!(value, BexExternalValue::Int(3));
 
@@ -197,7 +208,7 @@ async fn trace_captures_root_args() {
     let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
-    let (host_ctx, root) = setup_tracking();
+    let (host_ctx, guard) = setup_tracking();
     let value = engine
         .call_function(
             "add",
@@ -207,7 +218,7 @@ async fn trace_captures_root_args() {
         )
         .await
         .unwrap();
-    let events = collect_events(&root);
+    let events = collect_events(&guard);
 
     assert_eq!(value, BexExternalValue::Int(7));
 
@@ -233,7 +244,7 @@ async fn trace_captures_root_result() {
     let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
-    let (host_ctx, root) = setup_tracking();
+    let (host_ctx, guard) = setup_tracking();
     let value = engine
         .call_function(
             "double",
@@ -243,7 +254,7 @@ async fn trace_captures_root_result() {
         )
         .await
         .unwrap();
-    let events = collect_events(&root);
+    let events = collect_events(&guard);
 
     assert_eq!(value, BexExternalValue::Int(10));
 

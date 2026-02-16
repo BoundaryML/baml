@@ -190,10 +190,16 @@ pub fn events_for_span(id: &SpanId) -> Option<Vec<RuntimeEvent>> {
 #[cfg(test)]
 #[allow(unsafe_code)]
 mod tests {
-    use std::time::SystemTime;
+    use std::{
+        sync::{Mutex, OnceLock},
+        time::SystemTime,
+    };
 
     use super::*;
     use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};
+
+    /// Global lock to guard BAML_TRACE_FILE env var mutations against parallel test races.
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     /// Create an event whose `span_id` matches the given ID (function's own event).
     fn make_event(span_id: SpanId) -> RuntimeEvent {
@@ -233,10 +239,11 @@ mod tests {
 
     #[test]
     fn test_emit_and_flush_to_file() {
+        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
         let dir = tempfile::tempdir().unwrap();
         let trace_path = dir.path().join("trace.jsonl");
 
-        // SAFETY: test is single-threaded for env var access
+        // SAFETY: guarded by ENV_LOCK to prevent parallel test races.
         unsafe {
             std::env::set_var("BAML_TRACE_FILE", trace_path.to_str().unwrap());
         }

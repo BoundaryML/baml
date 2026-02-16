@@ -183,6 +183,7 @@ impl FunctionLog {
         let mut result = None;
         let mut timing = Timing::default();
         let mut tags: HashMap<String, String> = HashMap::new();
+        // TODO: Aggregate usage from child LLMCall spans once usage events are implemented.
         let usage = Usage::default();
         let mut child_starts: HashMap<SpanId, ChildSpan> = HashMap::new();
         let mut calls: Vec<LLMCall> = vec![];

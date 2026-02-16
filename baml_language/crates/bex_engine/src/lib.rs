@@ -813,7 +813,7 @@ impl BexEngine {
                     // Emit FunctionEnd for the root entry-point span if tracing
                     if let Some(state) = span_state.as_mut() {
                         if let Some(root_span) = state.stack.pop() {
-                            let external_result = self.vm_arg_to_bex_value(&value);
+                            let external_result = self.vm_value_to_owned(&value);
                             let mut full_call_stack = state.host_call_stack.clone();
                             full_call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
                             full_call_stack.push(root_span.span_id.clone());
@@ -996,9 +996,9 @@ impl BexEngine {
                                 call_stack.extend(state.stack.iter().map(|s| s.span_id.clone()));
                                 call_stack.push(span_id.clone());
 
-                                // Convert VM args to external values for the event
+                                // Convert VM args to fully owned values for the event
                                 let external_args: Vec<BexExternalValue> =
-                                    args.iter().map(|v| self.vm_arg_to_bex_value(v)).collect();
+                                    args.iter().map(|v| self.vm_value_to_owned(v)).collect();
 
                                 let enter_event = RuntimeEvent {
                                     ctx: SpanContext {
@@ -1030,7 +1030,7 @@ impl BexEngine {
                                 result,
                             } => {
                                 if let Some(span) = state.stack.pop() {
-                                    let external_result = self.vm_arg_to_bex_value(&result);
+                                    let external_result = self.vm_value_to_owned(&result);
                                     // call_stack: host prefix + remaining engine spans + exiting span
                                     let mut call_stack = state.host_call_stack.clone();
                                     call_stack

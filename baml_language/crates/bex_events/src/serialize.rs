@@ -71,7 +71,10 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
         "content": content,
     });
 
-    serde_json::to_string(&event_json).unwrap_or_default()
+    serde_json::to_string(&event_json).unwrap_or_else(|e| {
+        eprintln!("Failed to serialize trace event: {e}");
+        String::new()
+    })
 }
 
 /// Convert a Vec<BexExternalValue> to a JSON value.
