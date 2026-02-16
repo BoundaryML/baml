@@ -69,7 +69,7 @@ function Error_CatchArmTypeMismatch() -> string {
 function Error_PartialArmTypeMismatch(x: bool) -> string {
     throw 42 catch_all {
         e: int => {
-            if x {
+            if (x) {
                 "ok"
             } else {
                 e  // Error: else branch returns int

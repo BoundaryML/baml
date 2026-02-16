@@ -247,6 +247,20 @@ pub enum Expr {
         /// The header level (number of # symbols)
         level: usize,
     },
+
+    // ========== Exception Handling ==========
+    /// Throw an exception. Diverges (type is Never).
+    Throw(ExprId),
+
+    /// Catch expression: evaluate `body`, if it throws, match against `arms`.
+    ///
+    /// Arms are pattern-matched against the exception value, just like
+    /// match arms. HIR desugaring ensures non-exhaustive catches have a
+    /// wildcard rethrow arm appended.
+    Catch {
+        body: ExprId,
+        arms: Vec<CatchArm>,
+    },
 }
 
 /// A single arm in a match expression.
@@ -256,6 +270,15 @@ pub struct MatchArm {
     pub pattern: PatId,
     /// Optional guard: `if condition`
     pub guard: Option<ExprId>,
+    /// The body expression (result if this arm matches).
+    pub body: ExprId,
+}
+
+/// A single arm in a catch expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatchArm {
+    /// The pattern to match the exception against.
+    pub pattern: PatId,
     /// The body expression (result if this arm matches).
     pub body: ExprId,
 }

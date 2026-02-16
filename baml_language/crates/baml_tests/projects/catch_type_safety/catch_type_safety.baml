@@ -127,7 +127,7 @@ function CatchRethrow() -> int {
 function CatchConditionalRethrow(x: bool) -> int {
     throw 42 catch {
         e: int => {
-            if x {
+            if (x) {
                 e
             } else {
                 throw e

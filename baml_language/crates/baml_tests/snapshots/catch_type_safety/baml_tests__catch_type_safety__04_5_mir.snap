@@ -1,0 +1,1144 @@
+---
+source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn CatchAllExhaustiveTyped() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int | 42
+    let _2: null
+    let _3: bool
+    let _4: int // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = is_type(copy _2, Int);
+        branch copy _3 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = copy _4;
+        goto -> bb4;
+    }
+
+    bb6: {
+        throw copy _2;
+    }
+
+    bb7: {
+        _4 = copy _2;
+        goto -> bb5;
+    }
+
+    bb8: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchBindingTyped() -> string {
+    // Locals:
+    let _0: string // return
+    let _1: "hello" | string
+    let _2: null
+    let _3: bool
+    let _4: string // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const "hello";
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = is_type(copy _2, String);
+        branch copy _3 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = copy _4;
+        goto -> bb4;
+    }
+
+    bb6: {
+        throw copy _2;
+    }
+
+    bb7: {
+        _4 = copy _2;
+        goto -> bb5;
+    }
+
+    bb8: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchMultipleBindings() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int | 42 | null
+    let _2: null
+    let _3: bool
+    let _4: int // e
+    let _5: int
+    let _6: 2
+    let _7: null // f
+    let _8: null // _e
+    let _9: null
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = is_type(copy _2, Int);
+        branch copy _3 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _5 = copy _4;
+        _6 = const 2_i64;
+        _1 = copy _5 * copy _6;
+        goto -> bb4;
+    }
+
+    bb6: {
+        _7 = copy _2;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _4 = copy _2;
+        goto -> bb5;
+    }
+
+    bb8: {
+        _1 = copy _7;
+        goto -> bb4;
+    }
+
+    bb9: {
+        _8 = copy _2;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _9 = copy _8;
+        throw move _9;
+    }
+
+    bb11: {
+        throw copy _2;
+    }
+
+    bb12: {
+        goto -> bb4;
+    }
+
+    bb13: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchPartialHandling() -> string {
+    // Locals:
+    let _0: string // return
+    let _1: ErrorA | "handled A"
+    let _2: 1
+    let _3: null
+    let _4: bool
+    let _5: ErrorA // e
+    let _6: null // _e
+    let _7: null
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _2 = const 1_i64;
+        _1 = ErrorA { copy _2 };
+        goto -> bb4;
+    }
+
+    bb3: {
+        _3 = store_exception;
+        _4 = is_type(copy _3, Class(TypeName { name: "ErrorA", module_path: [], display_name: "ErrorA" }));
+        branch copy _4 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = const "handled A";
+        goto -> bb4;
+    }
+
+    bb6: {
+        _6 = copy _3;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _5 = copy _3;
+        goto -> bb5;
+    }
+
+    bb8: {
+        _7 = copy _6;
+        throw move _7;
+    }
+
+    bb9: {
+        throw copy _3;
+    }
+
+    bb10: {
+        goto -> bb4;
+    }
+
+    bb11: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchConditionalRethrow(x: bool) -> int {
+    // Locals:
+    let _0: int // return
+    let _1: bool // x // param
+    let _2: 42 | int | null
+    let _3: null
+    let _4: bool
+    let _5: int // e
+    let _6: bool
+    let _7: int
+    let _8: null // _e
+    let _9: null
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _2 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _3 = store_exception;
+        _4 = is_type(copy _3, Int);
+        branch copy _4 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _2;
+    }
+
+    bb5: {
+        _6 = copy _1;
+        branch copy _6 -> [bb8, bb9];
+    }
+
+    bb6: {
+        _8 = copy _3;
+        goto -> bb12;
+    }
+
+    bb7: {
+        _5 = copy _3;
+        goto -> bb5;
+    }
+
+    bb8: {
+        _2 = copy _5;
+        goto -> bb10;
+    }
+
+    bb9: {
+        _7 = copy _5;
+        throw move _7;
+    }
+
+    bb10: {
+        goto -> bb4;
+    }
+
+    bb11: {
+        goto -> bb10;
+    }
+
+    bb12: {
+        _9 = copy _8;
+        throw move _9;
+    }
+
+    bb13: {
+        throw copy _3;
+    }
+
+    bb14: {
+        goto -> bb4;
+    }
+
+    bb15: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchAllExhaustiveNamed() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: 42 | null
+    let _2: null
+    let _3: null // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = copy _2;
+        goto -> bb5;
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = copy _3;
+        goto -> bb4;
+    }
+
+    bb6: {
+        throw copy _2;
+    }
+
+    bb7: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchAllExhaustiveWildcard() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: 0 | 42
+    let _2: null
+    let _3: null // _
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = copy _2;
+        goto -> bb5;
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb6: {
+        throw copy _2;
+    }
+
+    bb7: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchAllExhaustiveUnion() -> string {
+    // Locals:
+    let _0: string // return
+    let _1: ErrorA | "A" | "B"
+    let _2: 1
+    let _3: null
+    let _4: bool
+    let _5: ErrorA // e
+    let _6: bool
+    let _7: ErrorB // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _2 = const 1_i64;
+        _1 = ErrorA { copy _2 };
+        goto -> bb4;
+    }
+
+    bb3: {
+        _3 = store_exception;
+        _4 = is_type(copy _3, Class(TypeName { name: "ErrorA", module_path: [], display_name: "ErrorA" }));
+        branch copy _4 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = const "A";
+        goto -> bb4;
+    }
+
+    bb6: {
+        _6 = is_type(copy _3, Class(TypeName { name: "ErrorB", module_path: [], display_name: "ErrorB" }));
+        branch copy _6 -> [bb10, bb9];
+    }
+
+    bb7: {
+        _5 = copy _3;
+        goto -> bb5;
+    }
+
+    bb8: {
+        _1 = const "B";
+        goto -> bb4;
+    }
+
+    bb9: {
+        throw copy _3;
+    }
+
+    bb10: {
+        _7 = copy _3;
+        goto -> bb8;
+    }
+
+    bb11: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchAlwaysExhaustive() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int | 42
+    let _2: null
+    let _3: bool
+    let _4: int // e
+    let _5: null // _e
+    let _6: null
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = is_type(copy _2, Int);
+        branch copy _3 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = copy _4;
+        goto -> bb4;
+    }
+
+    bb6: {
+        _5 = copy _2;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _4 = copy _2;
+        goto -> bb5;
+    }
+
+    bb8: {
+        _6 = copy _5;
+        throw move _6;
+    }
+
+    bb9: {
+        throw copy _2;
+    }
+
+    bb10: {
+        goto -> bb4;
+    }
+
+    bb11: {
+        goto -> bb1;
+    }
+
+}
+
+fn CatchBindingSimple() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: 42 | null
+    let _2: null
+    let _3: null // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = copy _2;
+        goto -> bb5;
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = copy _3;
+        goto -> bb4;
+    }
+
+    bb6: {
+        throw copy _2;
+    }
+
+    bb7: {
+        goto -> bb1;
+    }
+
+}
+
+fn ThrownTypePropagation() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: null // x
+    let _2: null // y
+    let _3: null
+    let _4: null
+
+    bb0: {
+        _1 = const null;
+        _2 = const null;
+        _3 = copy _1;
+        _4 = copy _2;
+        _0 = copy _3 + copy _4;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+
+}
+
+fn CatchRethrow() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: 42
+    let _2: null
+    let _3: bool
+    let _4: int // e
+    let _5: int
+    let _6: null // _e
+    let _7: null
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = is_type(copy _2, Int);
+        branch copy _3 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _5 = copy _4;
+        throw move _5;
+    }
+
+    bb6: {
+        _6 = copy _2;
+        goto -> bb9;
+    }
+
+    bb7: {
+        _4 = copy _2;
+        goto -> bb5;
+    }
+
+    bb8: {
+        goto -> bb4;
+    }
+
+    bb9: {
+        _7 = copy _6;
+        throw move _7;
+    }
+
+    bb10: {
+        throw copy _2;
+    }
+
+    bb11: {
+        goto -> bb4;
+    }
+
+    bb12: {
+        goto -> bb1;
+    }
+
+}
+
+fn NestedCatch() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: null | 42 | null
+    let _2: 42 | null
+    let _3: null
+    let _4: null // e
+    let _5: null
+    let _6: null // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb5;
+    }
+
+    bb3: {
+        _5 = store_exception;
+        _6 = copy _5;
+        goto -> bb11;
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _2 = const 42_i64;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _3 = store_exception;
+        _4 = copy _3;
+        goto -> bb8;
+    }
+
+    bb7: {
+        throw move _2;
+    }
+
+    bb8: {
+        _2 = copy _4;
+        goto -> bb7;
+    }
+
+    bb9: {
+        throw copy _3;
+    }
+
+    bb10: {
+        goto -> bb4;
+    }
+
+    bb11: {
+        _1 = copy _6;
+        goto -> bb4;
+    }
+
+    bb12: {
+        throw copy _5;
+    }
+
+    bb13: {
+        goto -> bb1;
+    }
+
+}
+
+fn Error_UnreachableAfterCatchAll() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int | 42 | null
+    let _2: null
+    let _3: null // e
+    let _4: bool
+    let _5: int // f
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = copy _2;
+        goto -> bb5;
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = copy _3;
+        goto -> bb4;
+    }
+
+    bb6: {
+        _4 = is_type(copy _2, Int);
+        branch copy _4 -> [bb9, bb8];
+    }
+
+    bb7: {
+        _1 = copy _5;
+        goto -> bb4;
+    }
+
+    bb8: {
+        throw copy _2;
+    }
+
+    bb9: {
+        _5 = copy _2;
+        goto -> bb7;
+    }
+
+    bb10: {
+        goto -> bb1;
+    }
+
+}
+
+fn Error_NonExhaustiveTypeMismatch() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: 0 | 42
+    let _2: null
+    let _3: bool
+    let _4: string // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = is_type(copy _2, String);
+        branch copy _3 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb6: {
+        throw copy _2;
+    }
+
+    bb7: {
+        _4 = copy _2;
+        goto -> bb5;
+    }
+
+    bb8: {
+        goto -> bb1;
+    }
+
+}
+
+fn Error_PartialArmTypeMismatch(x: bool) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: bool // x // param
+    let _2: 42 | string | int
+    let _3: null
+    let _4: bool
+    let _5: int // e
+    let _6: bool
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _2 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _3 = store_exception;
+        _4 = is_type(copy _3, Int);
+        branch copy _4 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _2;
+    }
+
+    bb5: {
+        _6 = copy _1;
+        branch copy _6 -> [bb8, bb9];
+    }
+
+    bb6: {
+        throw copy _3;
+    }
+
+    bb7: {
+        _5 = copy _3;
+        goto -> bb5;
+    }
+
+    bb8: {
+        _2 = const "ok";
+        goto -> bb10;
+    }
+
+    bb9: {
+        _2 = copy _5;
+        goto -> bb10;
+    }
+
+    bb10: {
+        goto -> bb4;
+    }
+
+    bb11: {
+        goto -> bb1;
+    }
+
+}
+
+fn Error_MultipleUnreachable() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int | 0 | 42 | null
+    let _2: null
+    let _3: null // _
+    let _4: null // a
+    let _5: bool
+    let _6: int // b
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = copy _2;
+        goto -> bb5;
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = const 0_i64;
+        goto -> bb4;
+    }
+
+    bb6: {
+        _4 = copy _2;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _1 = copy _4;
+        goto -> bb4;
+    }
+
+    bb8: {
+        _5 = is_type(copy _2, Int);
+        branch copy _5 -> [bb11, bb10];
+    }
+
+    bb9: {
+        _1 = copy _6;
+        goto -> bb4;
+    }
+
+    bb10: {
+        throw copy _2;
+    }
+
+    bb11: {
+        _6 = copy _2;
+        goto -> bb9;
+    }
+
+    bb12: {
+        goto -> bb1;
+    }
+
+}
+
+fn Error_NonExhaustiveUnion() -> string {
+    // Locals:
+    let _0: string // return
+    let _1: ErrorA | "A"
+    let _2: 1
+    let _3: null
+    let _4: bool
+    let _5: ErrorA // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _2 = const 1_i64;
+        _1 = ErrorA { copy _2 };
+        goto -> bb4;
+    }
+
+    bb3: {
+        _3 = store_exception;
+        _4 = is_type(copy _3, Class(TypeName { name: "ErrorA", module_path: [], display_name: "ErrorA" }));
+        branch copy _4 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = const "A";
+        goto -> bb4;
+    }
+
+    bb6: {
+        throw copy _3;
+    }
+
+    bb7: {
+        _5 = copy _3;
+        goto -> bb5;
+    }
+
+    bb8: {
+        goto -> bb1;
+    }
+
+}
+
+fn Error_CatchArmTypeMismatch() -> string {
+    // Locals:
+    let _0: string // return
+    let _1: int | 42
+    let _2: null
+    let _3: bool
+    let _4: int // e
+
+    bb0: {
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _1 = const 42_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _2 = store_exception;
+        _3 = is_type(copy _2, Int);
+        branch copy _3 -> [bb7, bb6];
+    }
+
+    bb4: {
+        throw move _1;
+    }
+
+    bb5: {
+        _1 = copy _4;
+        goto -> bb4;
+    }
+
+    bb6: {
+        throw copy _2;
+    }
+
+    bb7: {
+        _4 = copy _2;
+        goto -> bb5;
+    }
+
+    bb8: {
+        goto -> bb1;
+    }
+
+}

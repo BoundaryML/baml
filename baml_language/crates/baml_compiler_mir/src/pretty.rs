@@ -154,6 +154,9 @@ fn write_statement(f: &mut impl Write, stmt: &Statement) -> fmt::Result {
             write_operand(f, operand)?;
             write!(f, ");")
         }
+        StatementKind::StoreException(local) => {
+            write!(f, "{local} = store_exception;")
+        }
     }
 }
 

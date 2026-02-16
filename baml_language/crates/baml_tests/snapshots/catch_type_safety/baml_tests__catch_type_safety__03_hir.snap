@@ -4,7 +4,7 @@ expression: output
 ---
 === HIR ITEMS ===
 function CatchAllExhaustiveTyped() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           e: int => e,
       }
 }
@@ -16,7 +16,7 @@ function CatchBindingTyped() -> string {
 }
 
 function CatchMultipleBindings() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           e: int => e * 2,
           f => f,
           _e => throw _e,
@@ -31,10 +31,12 @@ function CatchPartialHandling() -> string {
 }
 
 function CatchConditionalRethrow(x: bool) -> int {
-      throw <missing> catch {
+      throw 42 catch {
           e: int => {
-              if (x { e: <missing> }) {
-                  throw <missing>
+              if (x) {
+                  e
+              } else {
+                  throw e
               }
           },
           _e => throw _e,
@@ -42,13 +44,13 @@ function CatchConditionalRethrow(x: bool) -> int {
 }
 
 function CatchAllExhaustiveNamed() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           e => e,
       }
 }
 
 function CatchAllExhaustiveWildcard() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           _ => 0,
       }
 }
@@ -61,14 +63,14 @@ function CatchAllExhaustiveUnion() -> string {
 }
 
 function CatchAlwaysExhaustive() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           e: int => e,
           _e => throw _e,
       }
 }
 
 function CatchBindingSimple() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           e => e,
       }
 }
@@ -80,14 +82,14 @@ function ThrownTypePropagation() -> int {
 }
 
 function CatchRethrow() -> int {
-      throw <missing> catch {
-          e: int => throw <missing>,
+      throw 42 catch {
+          e: int => throw e,
           _e => throw _e,
       }
 }
 
 function NestedCatch() -> int {
-      throw throw <missing> catch {
+      throw throw 42 catch {
           e => e,
       } catch {
           e => e,
@@ -103,22 +105,24 @@ class ErrorA {
 }
 
 function Error_UnreachableAfterCatchAll() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           e => e,
           f: int => f,
       }
 }
 
 function Error_NonExhaustiveTypeMismatch() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           e: string => 0,
       }
 }
 
 function Error_PartialArmTypeMismatch(x: bool) -> string {
-      throw <missing> catch {
+      throw 42 catch {
           e: int => {
-              if (x {  }) {
+              if (x) {
+                  "ok"
+              } else {
                   e
               }
           },
@@ -126,7 +130,7 @@ function Error_PartialArmTypeMismatch(x: bool) -> string {
 }
 
 function Error_MultipleUnreachable() -> int {
-      throw <missing> catch {
+      throw 42 catch {
           _ => 0,
           a => a,
           b: int => b,
@@ -140,7 +144,7 @@ function Error_NonExhaustiveUnion() -> string {
 }
 
 function Error_CatchArmTypeMismatch() -> string {
-      throw <missing> catch {
+      throw 42 catch {
           e: int => e,
       }
 }

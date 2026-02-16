@@ -1106,6 +1106,96 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 self.builder.set_current_block(join_block);
             }
 
+            Expr::Throw(value_expr) => {
+                let value_ty = body.ty(*value_expr).clone();
+                let value_local = self.builder.temp(value_ty);
+                self.lower_expr(*value_expr, Place::local(value_local), body);
+                self.builder.throw_(Operand::move_local(value_local));
+                // Throw diverges — create a dead block for any subsequent code
+                let dead_block = self.builder.create_block();
+                self.builder.set_current_block(dead_block);
+            }
+
+            Expr::Catch { body: catch_body, arms } => {
+                // Create the main control flow blocks
+                let body_entry = self.builder.create_block();
+                let handler_entry = self.builder.create_block();
+                let join_block = self.builder.create_block();
+
+                // Jump into the protected body
+                self.builder.goto(body_entry);
+
+                // === Lower the protected body ===
+                self.builder.set_current_block(body_entry);
+                let body_start_block_count = self.builder.block_count();
+                self.lower_expr(*catch_body, dest.clone(), body);
+                let body_end_block_count = self.builder.block_count();
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(join_block);
+                }
+
+                // Collect all blocks emitted during body lowering for the protected region
+                let mut protected_blocks = Vec::new();
+                for i in (body_start_block_count - 1)..body_end_block_count {
+                    protected_blocks.push(BlockId(i));
+                }
+
+                // Register the protected region
+                self.builder.add_protected_region(
+                    protected_blocks,
+                    handler_entry,
+                    0, // depth 0 (outermost); nested catches would need incrementing
+                );
+
+                // === Lower the handler ===
+                self.builder.set_current_block(handler_entry);
+
+                // The VM pushes the exception onto the operand stack before jumping here.
+                // Store it into a local for pattern matching.
+                let exc_ty = Ty::Null; // Exception type is dynamic at compile time
+                let exc_local = self.builder.temp(exc_ty.clone());
+                self.builder.store_exception(exc_local);
+
+                // Pattern-match the exception against catch arms (same structure as Match)
+                let last_arm_idx = arms.len().saturating_sub(1);
+                for (i, arm) in arms.iter().enumerate() {
+                    let is_last_arm = i == last_arm_idx;
+                    let arm_block = self.builder.create_block();
+                    let next_block = if is_last_arm {
+                        // Last arm fallthrough: rethrow
+                        let rethrow_block = self.builder.create_block();
+                        rethrow_block
+                    } else {
+                        self.builder.create_block()
+                    };
+
+                    // Generate pattern test
+                    self.lower_pattern_test(
+                        arm.pattern,
+                        exc_local,
+                        &exc_ty,
+                        arm_block,
+                        next_block,
+                        body,
+                    );
+
+                    // Arm body
+                    self.builder.set_current_block(arm_block);
+                    self.lower_expr(arm.body, dest.clone(), body);
+                    if !self.builder.is_current_terminated() {
+                        self.builder.goto(join_block);
+                    }
+
+                    self.builder.set_current_block(next_block);
+                }
+
+                // Fallthrough after last arm: rethrow the exception
+                // (HIR appends a wildcard rethrow arm, so this is typically unreachable)
+                self.builder.throw_(Operand::copy_local(exc_local));
+
+                self.builder.set_current_block(join_block);
+            }
+
             Expr::NotifyBlock { name, level } => {
                 // Set pending header for control flow visualization.
                 // If an if/while follows, it will emit VizEnter/VizExit.

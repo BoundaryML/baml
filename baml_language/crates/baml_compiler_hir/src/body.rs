@@ -1593,13 +1593,30 @@ impl LoweringContext {
     /// Lower a throw expression from CST to HIR.
     ///
     /// `THROW_EXPR` structure: `throw <expr>`
+    ///
+    /// The inner expression can be either a child node (e.g., CATCH_EXPR, PAREN_EXPR)
+    /// or a bare token (e.g., INTEGER_LITERAL `42`, WORD `e`).
     fn lower_throw_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
         let span = self.span_from_node(node);
-        let inner = node
-            .children()
-            .next()
-            .map(|child| self.lower_expr(&child))
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
+        let mut inner = None;
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child_node) => {
+                    if inner.is_none() {
+                        inner = Some(self.lower_expr(&child_node));
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    if inner.is_none() {
+                        if let Some(expr_id) = self.lower_value_token(&token) {
+                            inner = Some(expr_id);
+                        }
+                    }
+                }
+            }
+        }
+        let inner =
+            inner.unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
         let expr_id = self.exprs.alloc(Expr::Throw { expr: inner });
         self.source_map.insert_expr(expr_id, span);
         expr_id
@@ -1618,28 +1635,43 @@ impl LoweringContext {
         let mut arm_ids = Vec::new();
         let mut is_catch_all = false;
 
-        for child in node.children() {
-            match child.kind() {
-                SyntaxKind::CATCH_BLOCK => {
-                    // Check if this is catch_all via the keyword token
-                    is_catch_all = child
-                        .children_with_tokens()
-                        .filter_map(rowan::NodeOrToken::into_token)
-                        .any(|t| t.kind() == SyntaxKind::KW_CATCH_ALL);
+        // Use children_with_tokens() to handle both node and token children.
+        // The inner expression can be a child node (PAREN_EXPR, STRING_LITERAL, etc.)
+        // or a bare token (INTEGER_LITERAL `42`, WORD `e`).
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    match child.kind() {
+                        SyntaxKind::CATCH_BLOCK => {
+                            // Check if this is catch_all via the keyword token
+                            is_catch_all = child
+                                .children_with_tokens()
+                                .filter_map(rowan::NodeOrToken::into_token)
+                                .any(|t| t.kind() == SyntaxKind::KW_CATCH_ALL);
 
-                    // Lower the catch block's arms
-                    for arm_node in child.children() {
-                        if arm_node.kind() == SyntaxKind::CATCH_ARM {
-                            let (arm, spans) = self.lower_catch_arm(&arm_node);
-                            let arm_id = self.alloc_catch_arm(arm, spans);
-                            arm_ids.push(arm_id);
+                            // Lower the catch block's arms
+                            for arm_node in child.children() {
+                                if arm_node.kind() == SyntaxKind::CATCH_ARM {
+                                    let (arm, spans) = self.lower_catch_arm(&arm_node);
+                                    let arm_id = self.alloc_catch_arm(arm, spans);
+                                    arm_ids.push(arm_id);
+                                }
+                            }
+                        }
+                        _ => {
+                            // The inner expression being caught (as a node)
+                            if inner_expr.is_none() {
+                                inner_expr = Some(self.lower_expr(&child));
+                            }
                         }
                     }
                 }
-                _ => {
-                    // The inner expression being caught
+                rowan::NodeOrToken::Token(token) => {
+                    // The inner expression being caught (as a bare token)
                     if inner_expr.is_none() {
-                        inner_expr = Some(self.lower_expr(&child));
+                        if let Some(expr_id) = self.lower_value_token(&token) {
+                            inner_expr = Some(expr_id);
+                        }
                     }
                 }
             }

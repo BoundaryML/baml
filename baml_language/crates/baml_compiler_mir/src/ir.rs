@@ -206,6 +206,13 @@ pub enum StatementKind {
     /// Assert that a condition is true.
     /// Evaluates the operand and panics if it's false.
     Assert(Operand),
+
+    /// Store the current exception (on top of stack) into a local.
+    ///
+    /// Emitted at the start of a catch handler block. The VM pushes the
+    /// exception value onto the operand stack before jumping to the handler;
+    /// this statement pops it into a local for pattern matching.
+    StoreException(Local),
 }
 
 // ============================================================================

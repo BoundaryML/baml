@@ -328,6 +328,25 @@ impl<'a> PrettyPrinter<'a> {
                 self.output.push_str(name.as_ref());
                 self.output.push('\n');
             }
+            Expr::Throw(value) => {
+                self.indent(level);
+                self.output.push_str("throw ");
+                self.print_expr(*value, 0);
+            }
+            Expr::Catch { body, arms } => {
+                self.print_expr(*body, level);
+                self.indent(level);
+                self.output.push_str("catch {\n");
+                for arm in arms {
+                    self.indent(level + 1);
+                    let pat_str = self.format_pattern(arm.pattern);
+                    write!(self.output, "{pat_str}").unwrap();
+                    self.output.push_str(" =>\n");
+                    self.print_expr(arm.body, level + 2);
+                }
+                self.indent(level);
+                self.output.push_str("}\n");
+            }
         }
     }
 

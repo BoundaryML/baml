@@ -504,6 +504,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_operand_pull(operand, mir);
                 self.emit(Instruction::Assert);
             }
+            StatementKind::StoreException(local) => {
+                // The VM has already pushed the exception value onto the operand stack
+                // before jumping to the handler. Store it into the local's slot.
+                if let Some(&slot) = self.local_slots.get(local) {
+                    self.emit(Instruction::StoreVar(slot));
+                }
+            }
         }
     }
 

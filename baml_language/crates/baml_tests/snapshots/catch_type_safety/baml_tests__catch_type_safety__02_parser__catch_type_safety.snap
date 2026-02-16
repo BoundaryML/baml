@@ -484,11 +484,15 @@ SOURCE_FILE
                   L_BRACE "{"
                   IF_EXPR
                     KW_IF "if"
-                    OBJECT_LITERAL
+                    PAREN_EXPR "(x)"
+                      L_PAREN "("
                       WORD "x"
+                      R_PAREN ")"
+                    BLOCK_EXPR "{
+                e
+            }"
                       L_BRACE "{"
-                      OBJECT_FIELD "e"
-                        WORD "e"
+                      WORD "e"
                       R_BRACE "}"
                     KW_ELSE "else"
                     BLOCK_EXPR
@@ -502,22 +506,4 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected ':', found '}'
-     ╭─[ catch_type_safety.baml:132:13 ]
-     │
- 132 │             } else {
-     │             ┬  
-     │             ╰── Expected ':', found '}'
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: Expected block after if condition, found else
-     ╭─[ catch_type_safety.baml:132:15 ]
-     │
- 132 │             } else {
-     │               ──┬─  
-     │                 ╰─── Expected block after if condition, found else
-     │ 
-     │ Note: Error code: E0010
-─────╯
+None

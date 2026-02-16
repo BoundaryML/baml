@@ -252,11 +252,21 @@ fn rpo_dfs(
 }
 
 /// Compute reverse postorder (depth-first, postorder reversed).
+///
+/// Seeds traversal from both the entry block and all exception handler blocks
+/// (which are only reachable via the exception table, not through normal CFG edges).
 fn compute_rpo(mir: &MirFunction) -> Vec<BlockId> {
     let mut visited = HashSet::new();
     let mut postorder = Vec::new();
 
     rpo_dfs(mir, mir.entry, &mut visited, &mut postorder);
+
+    // Exception handler blocks are reachable only via the exception table,
+    // not through Terminator::successors(). Seed traversal from each handler.
+    for region in &mir.protected_regions {
+        rpo_dfs(mir, region.handler_block, &mut visited, &mut postorder);
+    }
+
     postorder.reverse();
     postorder
 }
@@ -522,6 +532,16 @@ fn collect_def_use(mir: &MirFunction) -> HashMap<Local, LocalDefUse> {
                 StatementKind::Assert(operand) => {
                     // Assert uses the condition operand
                     collect_uses_in_operand(operand, block.id, stmt_idx, &mut def_use);
+                }
+                StatementKind::StoreException(local) => {
+                    // StoreException defines the local (stores the exception value into it)
+                    if let Some(du) = def_use.get_mut(local) {
+                        du.def = Some(DefLocation {
+                            block: block.id,
+                            statement_idx: stmt_idx,
+                            rvalue: Rvalue::Use(Operand::Constant(Constant::Null)), // placeholder
+                        });
+                    }
                 }
             }
         }
@@ -958,6 +978,8 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
         StatementKind::Drop(_) => false,
         // Assert pushes condition then pops it
         StatementKind::Assert(_) => false,
+        // StoreException pops the exception from the stack
+        StatementKind::StoreException(_) => false,
     }
 }
 
@@ -1363,6 +1385,7 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
         StatementKind::VizEnter(_) | StatementKind::VizExit(_) => true, // VizEnter/VizExit emit notifications
         StatementKind::Nop => false,
         StatementKind::Assert(_) => true, // Assert has side effects (can throw)
+        StatementKind::StoreException(_) => true, // StoreException pops from stack (side effect)
     }
 }
 

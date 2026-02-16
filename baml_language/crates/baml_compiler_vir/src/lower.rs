@@ -30,8 +30,8 @@ use la_arena::Arena;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, PatId, Pattern, SpreadField, Ty,
-    UnaryOp,
+    AssignOp, BinaryOp, CatchArm, Expr, ExprBody, ExprId, Literal, MatchArm, PatId, Pattern,
+    SpreadField, Ty, UnaryOp,
 };
 
 /// Error that occurs when lowering HIR to VIR.
@@ -555,15 +555,30 @@ impl<'a> LoweringContext<'a> {
                 ))
             }
 
-            HirExpr::Catch { .. } => {
-                // TODO: Lower catch expressions to VIR once backend support is added.
-                // For now, catch is only represented in HIR/TIR.
-                todo!("catch expression lowering to VIR is not yet implemented")
+            HirExpr::Catch { expr, arms } => {
+                let body_id = self.lower_expr(*expr, hir_body)?;
+                let mut lowered_arms = Vec::with_capacity(arms.len());
+                for &arm_id in arms {
+                    let arm = &hir_body.catch_arms[arm_id];
+                    let pattern = self.lower_pattern(arm.pattern, hir_body)?;
+                    let arm_body = self.lower_expr(arm.body, hir_body)?;
+                    lowered_arms.push(CatchArm {
+                        pattern,
+                        body: arm_body,
+                    });
+                }
+                Ok(self.builder.alloc(
+                    Expr::Catch {
+                        body: body_id,
+                        arms: lowered_arms,
+                    },
+                    ty,
+                ))
             }
 
-            HirExpr::Throw { .. } => {
-                // TODO: Lower throw expressions to VIR once backend support is added.
-                todo!("throw expression lowering to VIR is not yet implemented")
+            HirExpr::Throw { expr } => {
+                let inner = self.lower_expr(*expr, hir_body)?;
+                Ok(self.builder.alloc(Expr::Throw(inner), ty))
             }
         }
     }
