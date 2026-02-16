@@ -42,12 +42,12 @@ fn derive_serde_union(data: &DataEnum, ident: &Ident) -> Result<TokenStream> {
                     pub fn serialize<S: serde::Serializer>(serializer: S) -> Result<S::Ok, S::Error> {
                         serializer.serialize_str(#literal_string)
                     }
-                    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<(), D::Error> {
+                    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> ::std::result::Result<(), D::Error> {
                         let __value: String = serde::Deserialize::deserialize(deserializer)?;
                         if __value == #literal_string {
-                            Ok(())
+                            ::std::result::Result::Ok(())
                         } else {
-                            Err(serde::de::Error::custom("invalid literal"))
+                            ::std::result::Result::Err(serde::de::Error::custom("invalid literal"))
                         }
                     }
                 }
@@ -56,15 +56,15 @@ fn derive_serde_union(data: &DataEnum, ident: &Ident) -> Result<TokenStream> {
             literal_serde.push(quote! {
                 pub mod #variant_ident {
                     use ::baml::__internal::serde;
-                    pub fn serialize<S: serde::Serializer>(serializer: S) -> Result<S::Ok, S::Error> {
+                    pub fn serialize<S: serde::Serializer>(serializer: S) -> ::std::result::Result<S::Ok, S::Error> {
                         serializer.serialize_i64(#literal_int)
                     }
-                    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<(), D::Error> {
+                    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> ::std::result::Result<(), D::Error> {
                         let __value: i64 = serde::Deserialize::deserialize(deserializer)?;
                         if __value == #literal_int {
-                            Ok(())
+                            ::std::result::Result::Ok(())
                         } else {
-                            Err(serde::de::Error::custom("invalid literal"))
+                            ::std::result::Result::Err(serde::de::Error::custom("invalid literal"))
                         }
                     }
                 }
@@ -73,15 +73,15 @@ fn derive_serde_union(data: &DataEnum, ident: &Ident) -> Result<TokenStream> {
             literal_serde.push(quote! {
                 pub mod #variant_ident {
                     use ::baml::__internal::serde;
-                    pub fn serialize<S: serde::Serializer>(serializer: S) -> Result<S::Ok, S::Error> {
+                    pub fn serialize<S: serde::Serializer>(serializer: S) -> ::std::result::Result<S::Ok, S::Error> {
                         serializer.serialize_bool(#literal_bool)
                         }
-                    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<(), D::Error> {
+                    pub fn deserialize<'de, D: serde::Deserializer<'de>>(deserializer: D) -> ::std::result::Result<(), D::Error> {
                         let __value: bool = serde::Deserialize::deserialize(deserializer)?;
                         if __value == #literal_bool {
-                            Ok(())
+                            ::std::result::Result::Ok(())
                         } else {
-                            Err(serde::de::Error::custom("invalid literal"))
+                            ::std::result::Result::Err(serde::de::Error::custom("invalid literal"))
                         }
                     }
                 }
