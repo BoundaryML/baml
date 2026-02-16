@@ -2108,6 +2108,10 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 baml_base::QualifiedName::from_builtin_path(def.path),
                             ),
                         );
+                        // Propagate thrown type from the builtin signature
+                        if let Some(thrown_ty) = builtins::thrown_type(def, &bindings) {
+                            ctx.set_thrown_type(expr_id, thrown_ty);
+                        }
                         callee_ty
                     } else {
                         // Fall back to normal field access inference (which may find a class field)
@@ -2225,6 +2229,14 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 baml_base::QualifiedName::from_builtin_path(def.path),
                             ),
                         );
+                        // Propagate thrown type from the builtin signature
+                        if let Some(thrown_ty) = if bindings.is_empty() {
+                            builtins::thrown_type_unknown(def)
+                        } else {
+                            builtins::thrown_type(def, &bindings)
+                        } {
+                            ctx.set_thrown_type(expr_id, thrown_ty);
+                        }
                         (callee_ty, arg_types_with_spans)
                     } else if ctx.lookup(&Name::new(&full_path)).is_some() {
                         // BAML-defined function in a namespace (e.g., baml.llm.call_llm_function).
@@ -2280,6 +2292,31 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         };
 
                         let callee_ty = infer_expr(ctx, *callee, body);
+
+                        // Propagate thrown type if the callee resolved to a builtin
+                        if let Some(ResolvedValue::BuiltinFunction(fqn)) =
+                            ctx.expr_resolutions.get(callee)
+                        {
+                            if let Some(def) =
+                                builtins::lookup_builtin_by_path(&fqn.display())
+                            {
+                                // Try to match receiver to get bindings
+                                let thrown_ty = if let Some(ref recv_pat) = def.receiver {
+                                    if let Some(bindings) =
+                                        builtins::match_pattern(recv_pat, &receiver_ty)
+                                    {
+                                        builtins::thrown_type(def, &bindings)
+                                    } else {
+                                        builtins::thrown_type_unknown(def)
+                                    }
+                                } else {
+                                    builtins::thrown_type_unknown(def)
+                                };
+                                if let Some(thrown_ty) = thrown_ty {
+                                    ctx.set_thrown_type(expr_id, thrown_ty);
+                                }
+                            }
+                        }
 
                         // Build effective args: [(receiver_type, None), ...explicit_args with spans]
                         let mut effective_args = vec![(receiver_ty, None)];
@@ -2492,6 +2529,25 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 Ty::Void
             };
 
+            // Propagate thrown types from sub-expressions up to the block
+            let mut thrown_types = Vec::new();
+            for &stmt_id in stmts {
+                collect_thrown_types_from_stmt(ctx, stmt_id, body, &mut thrown_types);
+            }
+            if let Some(tail) = tail_expr {
+                if let Some(t) = ctx.get_thrown_type(*tail) {
+                    thrown_types.push(t.clone());
+                }
+            }
+            if !thrown_types.is_empty() {
+                let combined = if thrown_types.len() == 1 {
+                    thrown_types.into_iter().next().unwrap()
+                } else {
+                    Ty::Union(thrown_types)
+                };
+                ctx.set_thrown_type(expr_id, combined);
+            }
+
             ctx.pop_scope();
             result
         }
@@ -2531,6 +2587,30 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             } else {
                 Ty::Void
             };
+
+            // Propagate thrown types from condition and branches
+            {
+                let mut thrown = Vec::new();
+                if let Some(t) = ctx.get_thrown_type(*condition) {
+                    thrown.push(t.clone());
+                }
+                if let Some(t) = ctx.get_thrown_type(*then_branch) {
+                    thrown.push(t.clone());
+                }
+                if let Some(else_expr) = else_branch {
+                    if let Some(t) = ctx.get_thrown_type(*else_expr) {
+                        thrown.push(t.clone());
+                    }
+                }
+                if !thrown.is_empty() {
+                    let combined = if thrown.len() == 1 {
+                        thrown.into_iter().next().unwrap()
+                    } else {
+                        Ty::Union(thrown)
+                    };
+                    ctx.set_thrown_type(expr_id, combined);
+                }
+            }
 
             // Generalize literal types for the result, similar to arrays.
             // This ensures `if (c) { 1 } else { 2 }` is `int` not `1 | 2`.
@@ -2729,6 +2809,25 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                 // This is fine - the function might return via explicit return statements
                 Ty::Void
             };
+
+            // Propagate thrown types from sub-expressions up to the block
+            let mut thrown_types = Vec::new();
+            for &stmt_id in stmts {
+                collect_thrown_types_from_stmt(ctx, stmt_id, body, &mut thrown_types);
+            }
+            if let Some(tail) = tail_expr {
+                if let Some(t) = ctx.get_thrown_type(*tail) {
+                    thrown_types.push(t.clone());
+                }
+            }
+            if !thrown_types.is_empty() {
+                let combined = if thrown_types.len() == 1 {
+                    thrown_types.into_iter().next().unwrap()
+                } else {
+                    Ty::Union(thrown_types)
+                };
+                ctx.set_thrown_type(expr_id, combined);
+            }
 
             ctx.pop_scope();
             result
@@ -3589,6 +3688,62 @@ fn infer_index_access(
 }
 
 /// Type check a statement.
+/// Collect thrown types from the expressions inside a statement.
+///
+/// This is used by `Expr::Block` to propagate thrown types upward.
+fn collect_thrown_types_from_stmt(
+    ctx: &TypeContext<'_>,
+    stmt_id: StmtId,
+    body: &ExprBody,
+    out: &mut Vec<Ty>,
+) {
+    use baml_compiler_hir::Stmt;
+    let stmt = &body.stmts[stmt_id];
+    match stmt {
+        Stmt::Expr(e) => {
+            if let Some(t) = ctx.get_thrown_type(*e) {
+                out.push(t.clone());
+            }
+        }
+        Stmt::Let { initializer, .. } => {
+            if let Some(init) = initializer {
+                if let Some(t) = ctx.get_thrown_type(*init) {
+                    out.push(t.clone());
+                }
+            }
+        }
+        Stmt::Return(Some(e)) => {
+            if let Some(t) = ctx.get_thrown_type(*e) {
+                out.push(t.clone());
+            }
+        }
+        Stmt::Assign { value, .. } | Stmt::AssignOp { value, .. } => {
+            if let Some(t) = ctx.get_thrown_type(*value) {
+                out.push(t.clone());
+            }
+        }
+        Stmt::While {
+            condition, body: loop_body, after, ..
+        } => {
+            if let Some(t) = ctx.get_thrown_type(*condition) {
+                out.push(t.clone());
+            }
+            if let Some(t) = ctx.get_thrown_type(*loop_body) {
+                out.push(t.clone());
+            }
+            if let Some(after_id) = after {
+                collect_thrown_types_from_stmt(ctx, *after_id, body, out);
+            }
+        }
+        Stmt::Assert { condition } => {
+            if let Some(t) = ctx.get_thrown_type(*condition) {
+                out.push(t.clone());
+            }
+        }
+        Stmt::Return(None) | Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
+    }
+}
+
 fn check_stmt(ctx: &mut TypeContext<'_>, stmt_id: StmtId, body: &ExprBody) {
     check_stmt_with_return(ctx, stmt_id, body, None);
 }

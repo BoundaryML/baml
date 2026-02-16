@@ -287,6 +287,20 @@ pub fn method_return_type(receiver_ty: &Ty, method_name: &str) -> Option<Ty> {
     Some(substitute(&def.returns, &bindings))
 }
 
+/// Get the thrown type of a built-in function with concrete type bindings.
+///
+/// Returns `Some(Ty)` if the function has a `throws` clause, `None` if infallible.
+pub fn thrown_type(def: &BuiltinSignature, bindings: &Bindings) -> Option<Ty> {
+    def.throws.as_ref().map(|pat| substitute(pat, bindings))
+}
+
+/// Get the thrown type of a built-in function using `Ty::Unknown` for unbound variables.
+///
+/// Returns `Some(Ty)` if the function has a `throws` clause, `None` if infallible.
+pub fn thrown_type_unknown(def: &BuiltinSignature) -> Option<Ty> {
+    def.throws.as_ref().map(|pat| substitute_unknown(pat))
+}
+
 /// Get the expected parameter types of a built-in method for a specific receiver type.
 ///
 /// Returns the parameter types after substituting type variables.

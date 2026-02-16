@@ -40,10 +40,12 @@ impl Default for NativeSysOps {
 // ============================================================================
 
 impl SysOpEnv for NativeSysOps {
-    fn env_get(&self, key: String) -> SysOpOutput<Option<String>> {
+    fn env_get(&self, key: String) -> SysOpOutput<String> {
         match std::env::var(&key) {
-            Ok(val) => SysOpOutput::ok(Some(val)),
-            Err(std::env::VarError::NotPresent) => SysOpOutput::ok(None),
+            Ok(val) => SysOpOutput::ok(val),
+            Err(std::env::VarError::NotPresent) => SysOpOutput::err(OpErrorKind::Other(format!(
+                "Environment variable '{key}' not found",
+            ))),
             Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(OpErrorKind::Other(
                 format!("Environment variable '{key}' is not valid UTF-8"),
             )),

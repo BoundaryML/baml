@@ -639,6 +639,9 @@ fn collect_uses_in_terminator(
 ) {
     match term {
         Terminator::Goto { .. } | Terminator::Unreachable => {}
+        Terminator::Throw { value } => {
+            collect_uses_in_operand(value, block, TERMINATOR_IDX, def_use);
+        }
         Terminator::Return => {
             // Return implicitly uses _0 (the return value local)
             let return_local = Local(0);

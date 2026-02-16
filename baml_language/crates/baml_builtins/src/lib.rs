@@ -125,6 +125,10 @@ pub struct BuiltinSignature {
     /// Return type.
     pub returns: TypePattern,
 
+    /// Error type this function can throw, if fallible.
+    /// Used by the type checker for exhaustive catch checking.
+    pub throws: Option<TypePattern>,
+
     /// Whether this is a `sys_op` function (runs async outside VM).
     /// `Sys_op` functions use DispatchFuture/Await instead of Call.
     pub is_sys_op: bool,
@@ -155,12 +159,24 @@ macro_rules! with_builtins {
         $callback! {
             mod baml {
                 // =====================================================================
+                // Error types
+                // =====================================================================
+                mod error {
+                    #[builtin] struct IndexError   { message: String, }
+                    #[builtin] struct ValueError   { message: String, }
+                    #[builtin] struct EnvError     { message: String, }
+                    #[builtin] struct IOError      { message: String, }
+                    #[builtin] struct NetworkError { message: String, }
+                    #[builtin] struct LlmError     { message: String, }
+                }
+
+                // =====================================================================
                 // Array methods
                 // =====================================================================
                 struct Array<T> {
                     fn length(self: Array<T>) -> i64;
                     fn push(self: mut Array<T>, item: T);
-                    fn at(self: Array<T>, index: i64) -> Result<T>;
+                    fn at(self: Array<T>, index: i64) -> T throws IndexError;
                     fn concat(self: Array<T>, other: Array<T>) -> Array<T>;
                 }
 
@@ -197,13 +213,13 @@ macro_rules! with_builtins {
                 // Free functions
                 // =====================================================================
                 #[uses(vm)]
-                fn deep_copy<T>(value: T) -> Result<T>;
+                fn deep_copy<T>(value: T) -> T throws ValueError;
                 #[uses(vm)]
                 fn deep_equals<T>(a: T, b: T) -> bool;
 
                 mod unstable {
                     #[uses(vm)]
-                    fn string<T>(value: T) -> Result<String>;
+                    fn string<T>(value: T) -> String throws ValueError;
                 }
 
                 // =====================================================================
@@ -224,13 +240,13 @@ macro_rules! with_builtins {
                     struct File {
                         private _handle: ResourceHandle,
                         #[sys_op]
-                        fn read(self: File) -> String;
+                        fn read(self: File) -> String throws IOError;
                         #[sys_op]
-                        fn close(self: File);
+                        fn close(self: File) throws IOError;
                     }
 
                     #[sys_op]
-                    fn open(path: String) -> File;
+                    fn open(path: String) -> File throws IOError;
                 }
 
                 // =====================================================================
@@ -239,7 +255,7 @@ macro_rules! with_builtins {
                 mod sys {
                     /// Execute a shell command and return stdout.
                     #[sys_op]
-                    fn shell(command: String) -> String;
+                    fn shell(command: String) -> String throws IOError;
                 }
 
                 // =====================================================================
@@ -251,15 +267,15 @@ macro_rules! with_builtins {
                         private _handle: ResourceHandle,
                         /// Read data from the socket as a string.
                         #[sys_op]
-                        fn read(self: Socket) -> String;
+                        fn read(self: Socket) -> String throws NetworkError;
                         /// Close the socket.
                         #[sys_op]
-                        fn close(self: Socket);
+                        fn close(self: Socket) throws NetworkError;
                     }
 
                     /// Connect to a TCP address (host:port).
                     #[sys_op]
-                    fn connect(addr: String) -> Socket;
+                    fn connect(addr: String) -> Socket throws NetworkError;
                 }
 
                 // =====================================================================
@@ -283,7 +299,7 @@ macro_rules! with_builtins {
                         url: String,
                         /// Get response body as text (consumes body).
                         #[sys_op]
-                        fn text(self: Response) -> String;
+                        fn text(self: Response) -> String throws IOError;
                         /// Check if status is 2xx.
                         #[sys_op]
                         fn ok(self: Response) -> bool;
@@ -291,11 +307,11 @@ macro_rules! with_builtins {
 
                     /// Fetch a URL via HTTP GET.
                     #[sys_op]
-                    fn fetch(url: String) -> Response;
+                    fn fetch(url: String) -> Response throws NetworkError;
 
                     /// Send an HTTP request and return the response.
                     #[sys_op]
-                    fn send(request: Request) -> Response;
+                    fn send(request: Request) -> Response throws NetworkError;
                 }
 
                 // =====================================================================
@@ -322,29 +338,29 @@ macro_rules! with_builtins {
                         /// Render a Jinja template with the given arguments.
                         /// Returns a structured PromptAst that can be sent to an LLM.
                         #[sys_op]
-                        fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Unknown>) -> PromptAst;
+                        fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Unknown>) -> PromptAst throws LlmError;
 
                         /// Specialize a prompt for this client's provider.
                         /// Applies provider-specific transformations (message merging, system prompt
                         /// consolidation, metadata filtering).
                         #[sys_op]
-                        fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst;
+                        fn specialize_prompt(self: PrimitiveClient, prompt: PromptAst) -> PromptAst throws LlmError;
 
                         /// Build an HTTP request from a specialized prompt.
                         /// Creates a provider-specific HTTP request ready to be sent.
                         #[sys_op]
-                        fn build_request(self: PrimitiveClient, prompt: PromptAst) -> Request;
+                        fn build_request(self: PrimitiveClient, prompt: PromptAst) -> Request throws LlmError;
 
                         /// Parse an HTTP response into a BAML value.
                         /// Interprets the provider-specific response format and parses the output.
                         #[sys_op]
-                        fn parse(self: PrimitiveClient, http_response_body: String, type_def: Type) -> Any;
+                        fn parse(self: PrimitiveClient, http_response_body: String, type_def: Type) -> Any throws LlmError;
                     }
 
                     /// Get the Jinja template for an LLM function.
                     #[sys_op]
                     #[uses(engine_ctx)]
-                    fn get_jinja_template(function_name: String) -> String;
+                    fn get_jinja_template(function_name: String) -> String throws LlmError;
 
                     /// Build a PrimitiveClient from evaluated options.
                     /// Called after options have been evaluated by bytecode.
@@ -355,13 +371,13 @@ macro_rules! with_builtins {
                         default_role: String,
                         allowed_roles: Array<String>,
                         options: Map<String, Unknown>
-                    ) -> PrimitiveClient;
+                    ) -> PrimitiveClient throws LlmError;
 
                     /// Get the client resolve function for an LLM function.
                     /// Returns a function that, when called, returns a PrimitiveClient.
                     #[sys_op]
                     #[uses(engine_ctx)]
-                    fn get_client_function(function_name: String) -> fn() -> PrimitiveClient;
+                    fn get_client_function(function_name: String) -> fn() -> PrimitiveClient throws LlmError;
 
                     /// Get the return type for an LLM function.
                     /// Returns a Type value that can be passed to parse().
@@ -373,7 +389,8 @@ macro_rules! with_builtins {
 
             mod env {
                 #[sys_op]
-                fn get(key: String) -> Option<String>;
+                #[uses(vm)]
+                fn get(key: String) -> String throws EnvError;
                 #[sys_op]
                 fn get_or_panic(key: String) -> String;
             }
@@ -481,6 +498,31 @@ static PRELUDE: &[PreludeEntry] = &[
     PreludeEntry {
         short_name: "Socket",
         qualified_path: "baml.net.Socket",
+    },
+    // Error types
+    PreludeEntry {
+        short_name: "IndexError",
+        qualified_path: "baml.error.IndexError",
+    },
+    PreludeEntry {
+        short_name: "ValueError",
+        qualified_path: "baml.error.ValueError",
+    },
+    PreludeEntry {
+        short_name: "EnvError",
+        qualified_path: "baml.error.EnvError",
+    },
+    PreludeEntry {
+        short_name: "IOError",
+        qualified_path: "baml.error.IOError",
+    },
+    PreludeEntry {
+        short_name: "NetworkError",
+        qualified_path: "baml.error.NetworkError",
+    },
+    PreludeEntry {
+        short_name: "LlmError",
+        qualified_path: "baml.error.LlmError",
     },
 ];
 

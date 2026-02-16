@@ -47,9 +47,12 @@ impl WasmEnv {
 }
 
 impl SysOpEnv for WasmEnv {
-    fn env_get(&self, key: String) -> SysOpOutput<Option<String>> {
+    fn env_get(&self, key: String) -> SysOpOutput<String> {
         match self.get(&key) {
-            Ok(v) => SysOpOutput::ok(v),
+            Ok(Some(v)) => SysOpOutput::ok(v),
+            Ok(None) => SysOpOutput::err(OpErrorKind::Other(format!(
+                "Environment variable '{key}' not found",
+            ))),
             Err(e) => SysOpOutput::err(e),
         }
     }

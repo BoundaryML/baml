@@ -66,6 +66,10 @@ pub enum RuntimeError {
 
     #[error("{0}")]
     Other(String),
+
+    /// User-thrown exception that was not caught by any handler.
+    #[error("unhandled exception: {0:?}")]
+    UnhandledException(Value),
 }
 
 /// Any kind of virtual machine error.

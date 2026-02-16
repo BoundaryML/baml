@@ -368,4 +368,5 @@ pub enum Instruction {
     Discriminant,
     TypeTag,
     Unreachable,
+    Throw,
 }

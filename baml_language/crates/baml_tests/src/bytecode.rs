@@ -288,6 +288,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             constants: input.constants,
             resolved_constants: Vec::new(), // Populated by BexHeap at load time
             jump_tables: Vec::new(),
+            exception_table: Vec::new(),
         },
         kind: bex_vm_types::FunctionKind::Bytecode,
         locals_in_scope: {

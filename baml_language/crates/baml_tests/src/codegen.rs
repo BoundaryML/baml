@@ -146,6 +146,7 @@ fn convert_instruction(
         bex_vm_types::Instruction::Discriminant => Instruction::Discriminant,
         bex_vm_types::Instruction::TypeTag => Instruction::TypeTag,
         bex_vm_types::Instruction::Unreachable => Instruction::Unreachable,
+        bex_vm_types::Instruction::Throw => Instruction::Throw,
     })
 }
 

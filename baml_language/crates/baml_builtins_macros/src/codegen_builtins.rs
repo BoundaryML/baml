@@ -43,6 +43,10 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                 .map(|(name, ty)| quote!((#name, #ty)))
                 .collect();
             let returns = &d.returns;
+            let throws = match &d.throws {
+                Some(t) => quote!(Some(#t)),
+                None => quote!(None),
+            };
             let is_sys_op = d.is_sys_op;
 
             quote! {
@@ -51,6 +55,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                     receiver: #receiver,
                     params: vec![#(#params),*],
                     returns: #returns,
+                    throws: #throws,
                     is_sys_op: #is_sys_op,
                 }
             }

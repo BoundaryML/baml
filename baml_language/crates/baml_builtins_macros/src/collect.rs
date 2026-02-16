@@ -11,7 +11,7 @@ use crate::{
     parse::{FunctionItem, ModuleContent, ModuleItem, StructItem, StructMember},
     util::{
         is_generic_type, path_to_rust_ident, to_screaming_snake_case, to_snake_case,
-        type_to_pattern, type_to_simple_name, unwrap_result_type,
+        type_to_pattern, type_to_simple_name,
     },
 };
 
@@ -31,6 +31,8 @@ pub(crate) struct BuiltinDef {
     pub params: Vec<(String, TokenStream2)>,
     /// Return type pattern.
     pub returns: TokenStream2,
+    /// Error type pattern this function can throw (`None` if infallible).
+    pub throws: Option<TokenStream2>,
     /// Whether this is a `sys_op` function (runs async outside VM).
     pub is_sys_op: bool,
 }
@@ -419,8 +421,12 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             })
             .collect();
 
-        let (inner_return_ty, _) = unwrap_result_type(&method.return_type);
-        let returns = type_to_pattern(inner_return_ty, &all_generics, ctx.builtin_types);
+        let returns = type_to_pattern(&method.return_type, &all_generics, ctx.builtin_types);
+
+        let throws = method
+            .throws_type
+            .as_ref()
+            .map(|ty| type_to_pattern(ty, &all_generics, ctx.builtin_types));
 
         if !ctx.is_hidden {
             ctx.defs.push(BuiltinDef {
@@ -429,6 +435,7 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
                 receiver,
                 params,
                 returns,
+                throws,
                 is_sys_op: method.is_sys_op,
             });
         }
@@ -452,10 +459,10 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             .collect();
 
         let native_returns = {
-            let (inner_ty, is_fallible) = unwrap_result_type(&method.return_type);
+            let is_fallible = method.throws_type.is_some();
             ReturnInfo {
-                type_name: type_to_simple_name(inner_ty),
-                is_generic: is_generic_type(inner_ty, &all_generics),
+                type_name: type_to_simple_name(&method.return_type),
+                is_generic: is_generic_type(&method.return_type, &all_generics),
                 is_fallible,
             }
         };
@@ -511,8 +518,12 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         })
         .collect();
 
-    let (inner_return_ty, _) = unwrap_result_type(&f.return_type);
-    let returns = type_to_pattern(inner_return_ty, &fn_generics, ctx.builtin_types);
+    let returns = type_to_pattern(&f.return_type, &fn_generics, ctx.builtin_types);
+
+    let throws = f
+        .throws_type
+        .as_ref()
+        .map(|ty| type_to_pattern(ty, &fn_generics, ctx.builtin_types));
 
     if !ctx.is_hidden {
         ctx.defs.push(BuiltinDef {
@@ -521,6 +532,7 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
             receiver,
             params,
             returns,
+            throws,
             is_sys_op: f.is_sys_op,
         });
     }
@@ -543,10 +555,10 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         .collect();
 
     let native_returns = {
-        let (inner_ty, is_fallible) = unwrap_result_type(&f.return_type);
+        let is_fallible = f.throws_type.is_some();
         ReturnInfo {
-            type_name: type_to_simple_name(inner_ty),
-            is_generic: is_generic_type(inner_ty, &fn_generics),
+            type_name: type_to_simple_name(&f.return_type),
+            is_generic: is_generic_type(&f.return_type, &fn_generics),
             is_fallible,
         }
     };

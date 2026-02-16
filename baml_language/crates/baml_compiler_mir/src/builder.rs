@@ -31,8 +31,8 @@ use baml_type::Ty;
 use text_size::TextRange;
 
 use crate::{
-    BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunction, Operand, Place, Rvalue,
-    Statement, StatementKind, Terminator, VizNode,
+    BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunction, Operand, Place,
+    ProtectedRegion, Rvalue, Statement, StatementKind, Terminator, VizNode,
 };
 
 /// Builder for constructing MIR functions.
@@ -44,6 +44,7 @@ pub(crate) struct MirBuilder {
     current_block: Option<BlockId>,
     span: Option<TextRange>,
     viz_nodes: Vec<VizNode>,
+    protected_regions: Vec<ProtectedRegion>,
 }
 
 #[allow(dead_code)]
@@ -58,6 +59,7 @@ impl MirBuilder {
             current_block: None,
             span: None,
             viz_nodes: Vec::new(),
+            protected_regions: Vec::new(),
         }
     }
 
@@ -303,6 +305,25 @@ impl MirBuilder {
         });
     }
 
+    /// Emit a throw terminator.
+    pub fn throw_(&mut self, value: Operand) {
+        self.set_terminator(Terminator::Throw { value });
+    }
+
+    /// Register a protected region for exception handling.
+    pub fn add_protected_region(
+        &mut self,
+        protected_blocks: Vec<BlockId>,
+        handler_block: BlockId,
+        depth: usize,
+    ) {
+        self.protected_regions.push(ProtectedRegion {
+            protected_blocks,
+            handler_block,
+            depth,
+        });
+    }
+
     // ========================================================================
     // Convenience Helpers
     // ========================================================================
@@ -357,6 +378,7 @@ impl MirBuilder {
             locals: self.locals,
             span: self.span,
             viz_nodes: self.viz_nodes,
+            protected_regions: self.protected_regions,
         }
     }
 
@@ -370,6 +392,7 @@ impl MirBuilder {
             locals: self.locals,
             span: self.span,
             viz_nodes: self.viz_nodes,
+            protected_regions: self.protected_regions,
         }
     }
 

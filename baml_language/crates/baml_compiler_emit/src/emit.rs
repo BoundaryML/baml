@@ -204,6 +204,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.patch_jumps();
         self.patch_jump_tables();
 
+        // 3b. Build exception table from MIR protected regions
+        self.build_exception_table(mir);
+
         // 4. Convert MIR VizNodes to VM VizNodeMeta
         let viz_nodes = mir
             .viz_nodes
@@ -944,6 +947,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_store_place(destination, mir);
                 self.emit_jump_unless_fallthrough(*target);
             }
+
+            Terminator::Throw { value } => {
+                self.emit_operand_pull(value, mir);
+                self.emit(Instruction::Throw);
+            }
         }
     }
 
@@ -1013,6 +1021,65 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             // Store the completed table
             self.bytecode.jump_tables.push(table);
         }
+    }
+
+    // ========================================================================
+    // Exception Table Construction
+    // ========================================================================
+
+    /// Build the bytecode exception table from MIR protected regions.
+    #[allow(clippy::cast_possible_wrap)]
+    fn build_exception_table(&mut self, mir: &MirFunction) {
+        use bex_vm_types::bytecode::ExceptionTableEntry;
+
+        let bytecode_len = self.bytecode.instructions.len();
+        let mut entries: Vec<(ExceptionTableEntry, usize)> = Vec::new();
+
+        for region in &mir.protected_regions {
+            let mut min_pc = usize::MAX;
+            let mut max_pc = 0usize;
+
+            for &block_id in &region.protected_blocks {
+                if let Some(&block_start) = self.block_addresses.get(&block_id) {
+                    min_pc = min_pc.min(block_start);
+                    let block_end = self.block_end_pc(block_id, bytecode_len);
+                    max_pc = max_pc.max(block_end);
+                }
+            }
+
+            if min_pc >= max_pc {
+                continue;
+            }
+
+            let handler_pc = self.block_addresses[&region.handler_block];
+            let stack_depth = 1 + mir.arity + self.local_slots.len();
+
+            entries.push((
+                ExceptionTableEntry {
+                    start_pc: min_pc,
+                    end_pc: max_pc,
+                    handler_pc,
+                    stack_depth,
+                },
+                region.depth,
+            ));
+        }
+
+        // Sort innermost-first (higher depth first, then by start_pc).
+        entries.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.start_pc.cmp(&b.0.start_pc)));
+
+        self.bytecode.exception_table = entries.into_iter().map(|(entry, _)| entry).collect();
+    }
+
+    /// Get the end PC of a block (one past the last instruction).
+    fn block_end_pc(&self, block_id: BlockId, bytecode_len: usize) -> usize {
+        let block_start = self.block_addresses[&block_id];
+        self.block_addresses
+            .values()
+            .filter(|&&addr| addr > block_start)
+            .min()
+            .copied()
+            .unwrap_or(bytecode_len)
     }
 
     // ========================================================================

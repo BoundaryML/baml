@@ -78,6 +78,8 @@ pub(crate) struct FunctionItem {
     pub(crate) params: Vec<(Ident, Type)>,
     /// Return type.
     pub(crate) return_type: Type,
+    /// Error type this function can throw (parsed from `throws ErrorType`).
+    pub(crate) throws_type: Option<Type>,
     /// Whether this function uses the VM (marked with #[uses(vm)]).
     pub(crate) uses_vm: bool,
     /// Whether this function is a `sys_op` (marked with #[`sys_op`]).
@@ -272,6 +274,20 @@ impl FunctionItem {
             ReturnType::Type(_, ty) => *ty,
         };
 
+        // Parse optional `throws ErrorType` clause
+        let throws_type = if input.peek(Ident) {
+            let fork = input.fork();
+            let ident: Ident = fork.parse()?;
+            if ident == "throws" {
+                input.parse::<Ident>()?; // consume "throws"
+                Some(input.parse::<Type>()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         input.parse::<Token![;]>()?;
 
         Ok(FunctionItem {
@@ -280,6 +296,7 @@ impl FunctionItem {
             receiver,
             params,
             return_type,
+            throws_type,
             uses_vm,
             is_sys_op,
             uses_engine_ctx,

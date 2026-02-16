@@ -30,6 +30,25 @@ pub struct MirFunction {
     pub span: Option<TextRange>,
     /// Visualization nodes for control flow visualization.
     pub viz_nodes: Vec<VizNode>,
+    /// Protected regions for exception handling.
+    /// Populated during catch lowering. The emitter uses these to build
+    /// the bytecode exception table.
+    pub protected_regions: Vec<ProtectedRegion>,
+}
+
+/// A region of blocks protected by an exception handler.
+///
+/// If an exception occurs while executing any instruction in any of the
+/// `protected_blocks`, control transfers to `handler_block`.
+#[derive(Debug, Clone)]
+pub struct ProtectedRegion {
+    /// Blocks whose emitted instructions are protected.
+    pub protected_blocks: Vec<BlockId>,
+    /// The handler block (where the catch pattern-match begins).
+    pub handler_block: BlockId,
+    /// Nesting depth (0 = outermost). Used to order exception table
+    /// entries innermost-first.
+    pub depth: usize,
 }
 
 impl MirFunction {
@@ -274,6 +293,15 @@ pub enum Terminator {
         /// Block to jump to if the future fails (for catch).
         unwind: Option<BlockId>,
     },
+
+    /// Throw an exception value.
+    ///
+    /// No successors — control transfers via the exception table
+    /// (or unwinds if no handler exists).
+    Throw {
+        /// The value to throw.
+        value: Operand,
+    },
 }
 
 impl Terminator {
@@ -301,7 +329,7 @@ impl Terminator {
                 }
                 succs
             }
-            Terminator::Unreachable => vec![],
+            Terminator::Unreachable | Terminator::Throw { .. } => vec![],
             Terminator::DispatchFuture { resume, .. } => vec![*resume],
             Terminator::Await { target, unwind, .. } => {
                 let mut succs = vec![*target];
