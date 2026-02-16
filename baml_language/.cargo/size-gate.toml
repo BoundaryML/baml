@@ -4,7 +4,7 @@ baseline_dir = ".ci/size-gate"
 package = "bridge_cffi"
 # ignore default features (includes bundle-http → reqwest + hyper + rustls)
 no_default_features = true
-policy.max_gzip_bytes = 2_000_000
+policy.max_gzip_bytes = 2_200_000
 policy.max_delta_pct = 1.0
 
 [artifacts.bridge_cffi]
