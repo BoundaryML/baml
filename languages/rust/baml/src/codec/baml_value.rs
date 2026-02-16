@@ -346,12 +346,7 @@ impl<T: KnownTypes + serde::Serialize, S: KnownTypes + serde::Serialize> serde::
             BamlValue::Map(map) => map.serialize(serializer),
             BamlValue::DynamicClass(dc) => dc.fields.serialize(serializer),
             BamlValue::DynamicEnum(de) => serializer.serialize_str(&de.value),
-            BamlValue::DynamicUnion(du) => {
-                // externally tagged union
-                let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry(&du.variant_name, &*du.value)?;
-                map.end()
-            }
+            BamlValue::DynamicUnion(du) => du.serialize(serializer),
             BamlValue::Known(known) => known.serialize(serializer),
             BamlValue::StreamKnown(known) => known.serialize(serializer),
             BamlValue::Checked(c) => c.serialize(serializer),

@@ -151,10 +151,7 @@ impl<T: KnownTypes + serde::Serialize, S: KnownTypes + serde::Serialize> serde::
     for DynamicUnion<T, S>
 {
     fn serialize<Ser: serde::Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
-        // Using externally tagged union
-        let mut map = serializer.serialize_map(Some(1))?;
-        map.serialize_entry(&self.variant_name, &self.value)?;
-        map.end()
+        self.value.serialize(serializer)
     }
 }
 
