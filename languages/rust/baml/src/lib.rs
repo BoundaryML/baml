@@ -103,7 +103,7 @@ pub mod __internal {
     pub use crate::{ffi::callbacks, proto::baml_cffi_v1::*};
     /// re-export
     pub use serde;
-
+    
     /// Decode a class from a `CffiValueHolder`.
     /// Used by derive macros to implement `BamlDecode` for structs.
     pub fn decode_class<T: BamlClass>(holder: &CffiValueHolder) -> Result<T, BamlError> {

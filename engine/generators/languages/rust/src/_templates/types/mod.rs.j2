@@ -13,10 +13,12 @@ pub use type_aliases::*;
 // Re-export types from baml runtime
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
+use baml::__internal::serde as serde;
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
 {% for class in classes %}
     {{ class.name }}({{ class.name }}),
@@ -49,5 +51,11 @@ impl baml::KnownTypes for Types {
             _ => unreachable!("Types has no variants"),
 {% endif %}
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom("Types is not deserializable, as we cannot disambiguate the type."))
     }
 }

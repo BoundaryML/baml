@@ -5,10 +5,13 @@
 
 //! Generated enum types.
 
-use baml::{BamlDecode, BamlEncode, BamlSerde};
+use baml::{
+    __internal::serde::{Deserialize, Serialize},
+    BamlDecode, BamlEncode,
+};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum AliasedEnum {
     KEY_ONE,
 
@@ -51,8 +54,8 @@ impl AsRef<AliasedEnum> for AliasedEnum {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Category {
     Refund,
 
@@ -113,8 +116,8 @@ impl AsRef<Category> for Category {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Category2 {
     Refund,
 
@@ -175,8 +178,8 @@ impl AsRef<Category2> for Category2 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Category3 {
     Refund,
 
@@ -237,9 +240,9 @@ impl AsRef<Category3> for Category3 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Color {
     RED,
 
@@ -255,6 +258,7 @@ pub enum Color {
 
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
+    #[serde(untagged)]
     _Dynamic(String),
 }
 
@@ -312,8 +316,8 @@ impl AsRef<Color> for Color {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum DataType {
     Resume,
 
@@ -356,12 +360,13 @@ impl AsRef<DataType> for DataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum DynEnumOne {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
+    #[serde(untagged)]
     _Dynamic(String),
 }
 
@@ -397,9 +402,9 @@ impl AsRef<DynEnumOne> for DynEnumOne {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum DynEnumThree {
     TRICYCLE,
 
@@ -407,6 +412,7 @@ pub enum DynEnumThree {
 
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
+    #[serde(untagged)]
     _Dynamic(String),
 }
 
@@ -448,12 +454,13 @@ impl AsRef<DynEnumThree> for DynEnumThree {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum DynEnumTwo {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
+    #[serde(untagged)]
     _Dynamic(String),
 }
 
@@ -489,8 +496,8 @@ impl AsRef<DynEnumTwo> for DynEnumTwo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum EnumInClass {
     ONE,
 
@@ -536,8 +543,8 @@ impl AsRef<EnumInClass> for EnumInClass {
 /// An enum with three values,
 /// ONE, TWO and THREE.
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum EnumOutput {
     /// The first enum.
     ONE,
@@ -588,9 +595,9 @@ impl AsRef<EnumOutput> for EnumOutput {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Hobby {
     SPORTS,
 
@@ -600,6 +607,7 @@ pub enum Hobby {
 
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
+    #[serde(untagged)]
     _Dynamic(String),
 }
 
@@ -645,8 +653,8 @@ impl AsRef<Hobby> for Hobby {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum MapKey {
     A,
 
@@ -695,8 +703,8 @@ impl AsRef<MapKey> for MapKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum NamedArgsSingleEnum {
     ONE,
 
@@ -739,8 +747,8 @@ impl AsRef<NamedArgsSingleEnum> for NamedArgsSingleEnum {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum NamedArgsSingleEnumList {
     ONE,
 
@@ -783,8 +791,8 @@ impl AsRef<NamedArgsSingleEnumList> for NamedArgsSingleEnumList {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum OptionalTest_CategoryType {
     Aleph,
 
@@ -833,8 +841,8 @@ impl AsRef<OptionalTest_CategoryType> for OptionalTest_CategoryType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum OrderStatus {
     ORDERED,
 
@@ -889,9 +897,9 @@ impl AsRef<OrderStatus> for OrderStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum RenderStatusEnum {
     ACTIVE,
 
@@ -899,6 +907,7 @@ pub enum RenderStatusEnum {
 
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
+    #[serde(untagged)]
     _Dynamic(String),
 }
 
@@ -940,9 +949,9 @@ impl AsRef<RenderStatusEnum> for RenderStatusEnum {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum RenderTestEnum {
     BIKE,
 
@@ -950,6 +959,7 @@ pub enum RenderTestEnum {
 
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
+    #[serde(untagged)]
     _Dynamic(String),
 }
 
@@ -991,8 +1001,8 @@ impl AsRef<RenderTestEnum> for RenderTestEnum {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Tag {
     Security,
 
@@ -1041,8 +1051,8 @@ impl AsRef<Tag> for Tag {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, BamlSerde)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum TestEnum {
     A,
 

@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{__internal::serde::Serialize, BamlDecode};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct AddTodoItem {
     #[baml(name = "type")]
     pub r#type: String,
@@ -31,8 +31,8 @@ impl AsRef<AddTodoItem> for AddTodoItem {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct AddressWithMeta {
     pub street: Option<String>,
 
@@ -47,8 +47,8 @@ impl AsRef<AddressWithMeta> for AddressWithMeta {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct AnotherObject {
     pub id: Option<String>,
 
@@ -63,8 +63,8 @@ impl AsRef<AnotherObject> for AnotherObject {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct BigNumbers {
     pub a: Option<i64>,
 
@@ -77,8 +77,8 @@ impl AsRef<BigNumbers> for BigNumbers {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct BinaryNode {
     pub data: Option<i64>,
 
@@ -93,8 +93,8 @@ impl AsRef<BinaryNode> for BinaryNode {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Blah {
     pub prop4: Option<String>,
 }
@@ -105,8 +105,8 @@ impl AsRef<Blah> for Blah {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct BlockConstraint {
     pub foo: Option<i64>,
 
@@ -119,8 +119,8 @@ impl AsRef<BlockConstraint> for BlockConstraint {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct BlockConstraintForParam {
     pub bcfp: Option<i64>,
 
@@ -133,8 +133,8 @@ impl AsRef<BlockConstraintForParam> for BlockConstraintForParam {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct BookOrder {
     pub orderId: Option<String>,
 
@@ -151,8 +151,8 @@ impl AsRef<BookOrder> for BookOrder {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassForNullLiteral {
     pub a: Option<String>,
 }
@@ -163,8 +163,8 @@ impl AsRef<ClassForNullLiteral> for ClassForNullLiteral {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassOptionalOutput {
     pub prop1: Option<String>,
 
@@ -177,8 +177,8 @@ impl AsRef<ClassOptionalOutput> for ClassOptionalOutput {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassOptionalOutput2 {
     pub prop1: Option<String>,
 
@@ -193,8 +193,8 @@ impl AsRef<ClassOptionalOutput2> for ClassOptionalOutput2 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassToRecAlias {
     pub list: Option<LinkedListAliasNode>,
 }
@@ -205,8 +205,8 @@ impl AsRef<ClassToRecAlias> for ClassToRecAlias {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithBlockDone {
     pub i_16_digits: i64,
 
@@ -219,8 +219,8 @@ impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithImage {
     pub myImage: Option<types::Image>,
 
@@ -235,8 +235,8 @@ impl AsRef<ClassWithImage> for ClassWithImage {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithoutDone {
     pub i_16_digits: Option<i64>,
 
@@ -249,8 +249,8 @@ impl AsRef<ClassWithoutDone> for ClassWithoutDone {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClientDetails1559 {
     pub client_name: Option<String>,
 
@@ -273,8 +273,8 @@ impl AsRef<ClientDetails1559> for ClientDetails1559 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ComplexMemoryObject {
     pub id: Option<String>,
 
@@ -291,8 +291,8 @@ impl AsRef<ComplexMemoryObject> for ComplexMemoryObject {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct CompoundBigNumbers {
     pub big: Option<BigNumbers>,
 
@@ -307,8 +307,8 @@ impl AsRef<CompoundBigNumbers> for CompoundBigNumbers {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ContactInfo {
     pub primary: Option<Union2EmailAddressOrPhoneNumber>,
 
@@ -321,8 +321,8 @@ impl AsRef<ContactInfo> for ContactInfo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct CustomStory {
     pub title: Option<String>,
 
@@ -337,8 +337,8 @@ impl AsRef<CustomStory> for CustomStory {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct CustomTaskResult {
     pub bookOrder: Option<BookOrder>,
 
@@ -353,8 +353,8 @@ impl AsRef<CustomTaskResult> for CustomTaskResult {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Document1559 {
     pub client_details: Option<ClientDetails1559>,
 
@@ -367,8 +367,8 @@ impl AsRef<Document1559> for Document1559 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DummyJsonTodo {
     pub id: Option<i64>,
 
@@ -385,9 +385,9 @@ impl AsRef<DummyJsonTodo> for DummyJsonTodo {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DummyOutput {
     pub nonce: Option<String>,
 
@@ -395,6 +395,7 @@ pub struct DummyOutput {
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -460,14 +461,15 @@ impl AsRef<DummyOutput> for DummyOutput {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DynInputOutput {
     pub testKey: Option<String>,
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -531,12 +533,13 @@ impl AsRef<DynInputOutput> for DynInputOutput {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DynamicClassOne {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -598,9 +601,9 @@ impl AsRef<DynamicClassOne> for DynamicClassOne {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DynamicClassTwo {
     pub hi: Option<String>,
 
@@ -610,6 +613,7 @@ pub struct DynamicClassTwo {
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -677,12 +681,13 @@ impl AsRef<DynamicClassTwo> for DynamicClassTwo {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DynamicOutput {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -744,12 +749,13 @@ impl AsRef<DynamicOutput> for DynamicOutput {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DynamicSchema {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -811,8 +817,8 @@ impl AsRef<DynamicSchema> for DynamicSchema {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Earthling {
     pub age: Option<types::Checked<i64>>,
 }
@@ -823,8 +829,8 @@ impl AsRef<Earthling> for Earthling {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Education {
     pub institution: Option<String>,
 
@@ -843,8 +849,8 @@ impl AsRef<Education> for Education {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Email {
     pub subject: Option<String>,
 
@@ -859,8 +865,8 @@ impl AsRef<Email> for Email {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct EmailAddress {
     pub value: Option<String>,
 }
@@ -871,8 +877,8 @@ impl AsRef<EmailAddress> for EmailAddress {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Event {
     pub title: Option<String>,
 
@@ -889,8 +895,8 @@ impl AsRef<Event> for Event {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct FakeImage {
     pub url: Option<String>,
 }
@@ -901,8 +907,8 @@ impl AsRef<FakeImage> for FakeImage {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct FlightConfirmation {
     pub confirmationNumber: Option<String>,
 
@@ -921,8 +927,8 @@ impl AsRef<FlightConfirmation> for FlightConfirmation {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct FooAny {
     pub planetary_age: Option<Union2EarthlingOrMartian>,
 
@@ -937,8 +943,8 @@ impl AsRef<FooAny> for FooAny {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Forest {
     pub trees: Vec<Box<Tree>>,
 }
@@ -949,8 +955,8 @@ impl AsRef<Forest> for Forest {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct FormatterTest0 {
     pub lorem: Option<String>,
 
@@ -963,8 +969,8 @@ impl AsRef<FormatterTest0> for FormatterTest0 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct FormatterTest1 {
     pub lorem: Option<String>,
 
@@ -977,8 +983,8 @@ impl AsRef<FormatterTest1> for FormatterTest1 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct FormatterTest2 {
     pub lorem: Option<String>,
 
@@ -991,8 +997,8 @@ impl AsRef<FormatterTest2> for FormatterTest2 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct FormatterTest3 {
     pub lorem: Option<String>,
 
@@ -1005,8 +1011,8 @@ impl AsRef<FormatterTest3> for FormatterTest3 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct GroceryReceipt {
     pub receiptId: Option<String>,
 
@@ -1023,8 +1029,8 @@ impl AsRef<GroceryReceipt> for GroceryReceipt {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Haiku {
     pub line1: Option<String>,
 
@@ -1039,8 +1045,8 @@ impl AsRef<Haiku> for Haiku {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct InnerClass {
     pub prop1: Option<String>,
 
@@ -1055,8 +1061,8 @@ impl AsRef<InnerClass> for InnerClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct InnerClass2 {
     pub prop2: Option<i64>,
 
@@ -1069,8 +1075,8 @@ impl AsRef<InnerClass2> for InnerClass2 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct InputClass {
     pub key: Option<String>,
 
@@ -1083,8 +1089,8 @@ impl AsRef<InputClass> for InputClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct InputClassNested {
     pub key: Option<String>,
 
@@ -1097,8 +1103,8 @@ impl AsRef<InputClassNested> for InputClassNested {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct LinkedList {
     pub head: Option<Node>,
 
@@ -1111,8 +1117,8 @@ impl AsRef<LinkedList> for LinkedList {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct LinkedListAliasNode {
     pub value: Option<i64>,
 
@@ -1125,8 +1131,8 @@ impl AsRef<LinkedListAliasNode> for LinkedListAliasNode {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct LiteralClassHello {
     pub prop: Option<String>,
 }
@@ -1137,8 +1143,8 @@ impl AsRef<LiteralClassHello> for LiteralClassHello {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct LiteralClassOne {
     pub prop: Option<String>,
 }
@@ -1149,8 +1155,8 @@ impl AsRef<LiteralClassOne> for LiteralClassOne {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct LiteralClassTwo {
     pub prop: Option<String>,
 }
@@ -1161,8 +1167,8 @@ impl AsRef<LiteralClassTwo> for LiteralClassTwo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MaintainFieldOrder {
     pub c: Option<String>,
 
@@ -1177,8 +1183,8 @@ impl AsRef<MaintainFieldOrder> for MaintainFieldOrder {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MalformedConstraints {
     pub foo: Option<types::Checked<i64>>,
 }
@@ -1189,8 +1195,8 @@ impl AsRef<MalformedConstraints> for MalformedConstraints {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MalformedConstraints2 {
     pub foo: Option<i64>,
 }
@@ -1204,8 +1210,8 @@ impl AsRef<MalformedConstraints2> for MalformedConstraints2 {
 /// A Martian organism with an age.
 /// Such a nice type.
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Martian {
     /// The age of the Martian in Mars years.
     /// So many Mars years.
@@ -1218,8 +1224,8 @@ impl AsRef<Martian> for Martian {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MemoryObject {
     pub id: Option<String>,
 
@@ -1234,8 +1240,8 @@ impl AsRef<MemoryObject> for MemoryObject {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MergeAttrs {
     pub amount: Option<types::Checked<i64>>,
 }
@@ -1246,8 +1252,8 @@ impl AsRef<MergeAttrs> for MergeAttrs {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NamedArgsSingleClass {
     pub key: Option<String>,
 
@@ -1262,8 +1268,8 @@ impl AsRef<NamedArgsSingleClass> for NamedArgsSingleClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Nested {
     pub prop3: Option<String>,
 
@@ -1278,8 +1284,8 @@ impl AsRef<Nested> for Nested {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Nested2 {
     pub prop11: Option<String>,
 
@@ -1292,8 +1298,8 @@ impl AsRef<Nested2> for Nested2 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NestedBlockConstraint {
     pub nbc: Option<types::Checked<BlockConstraint>>,
 }
@@ -1304,8 +1310,8 @@ impl AsRef<NestedBlockConstraint> for NestedBlockConstraint {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NestedBlockConstraintForParam {
     pub nbcfp: Option<BlockConstraintForParam>,
 }
@@ -1316,8 +1322,8 @@ impl AsRef<NestedBlockConstraintForParam> for NestedBlockConstraintForParam {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Node {
     pub data: Option<i64>,
 
@@ -1330,8 +1336,8 @@ impl AsRef<Node> for Node {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NodeWithAliasIndirection {
     pub value: Option<i64>,
 
@@ -1344,8 +1350,8 @@ impl AsRef<NodeWithAliasIndirection> for NodeWithAliasIndirection {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Note1599 {
     pub note_title: Option<String>,
 
@@ -1360,8 +1366,8 @@ impl AsRef<Note1599> for Note1599 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalListAndMap {
     pub p: Option<Vec<String>>,
 
@@ -1374,8 +1380,8 @@ impl AsRef<OptionalListAndMap> for OptionalListAndMap {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalTest_Prop1 {
     pub omega_a: Option<String>,
 
@@ -1388,8 +1394,8 @@ impl AsRef<OptionalTest_Prop1> for OptionalTest_Prop1 {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalTest_ReturnType {
     pub omega_1: Option<OptionalTest_Prop1>,
 
@@ -1404,8 +1410,8 @@ impl AsRef<OptionalTest_ReturnType> for OptionalTest_ReturnType {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OrderInfo {
     pub order_status: Option<types::OrderStatus>,
 
@@ -1420,8 +1426,8 @@ impl AsRef<OrderInfo> for OrderInfo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OriginalA {
     pub value: Option<i64>,
 }
@@ -1432,14 +1438,15 @@ impl AsRef<OriginalA> for OriginalA {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OriginalB {
     pub value: Option<i64>,
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -1503,9 +1510,9 @@ impl AsRef<OriginalB> for OriginalB {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Person {
     pub name: Option<String>,
 
@@ -1513,6 +1520,7 @@ pub struct Person {
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -1578,8 +1586,8 @@ impl AsRef<Person> for Person {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PersonWithMeta {
     pub name: Option<String>,
 
@@ -1596,8 +1604,8 @@ impl AsRef<PersonWithMeta> for PersonWithMeta {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PhoneNumber {
     pub value: Option<String>,
 }
@@ -1608,8 +1616,8 @@ impl AsRef<PhoneNumber> for PhoneNumber {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Quantity {
     pub amount: Option<types::Union2FloatOrInt>,
 
@@ -1622,8 +1630,8 @@ impl AsRef<Quantity> for Quantity {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct RaysData {
     pub dataType: Option<types::DataType>,
 
@@ -1636,8 +1644,8 @@ impl AsRef<RaysData> for RaysData {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ReceiptInfo {
     pub items: Vec<ReceiptItem>,
 
@@ -1652,8 +1660,8 @@ impl AsRef<ReceiptInfo> for ReceiptInfo {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ReceiptItem {
     pub name: Option<String>,
 
@@ -1670,8 +1678,8 @@ impl AsRef<ReceiptItem> for ReceiptItem {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Recipe {
     pub ingredients: std::collections::HashMap<String, Quantity>,
 
@@ -1684,8 +1692,8 @@ impl AsRef<Recipe> for Recipe {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct RecursiveAliasDependency {
     pub value: Option<JsonValue>,
 }
@@ -1696,14 +1704,15 @@ impl AsRef<RecursiveAliasDependency> for RecursiveAliasDependency {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct RenderEnumInput {
     pub testKey: Option<String>,
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -1767,9 +1776,9 @@ impl AsRef<RenderEnumInput> for RenderEnumInput {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct RenderTestClass {
     pub name: Option<String>,
 
@@ -1777,6 +1786,7 @@ pub struct RenderTestClass {
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -1842,8 +1852,8 @@ impl AsRef<RenderTestClass> for RenderTestClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Resume {
     pub name: Option<String>,
 
@@ -1864,8 +1874,8 @@ impl AsRef<Resume> for Resume {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Schema {
     pub prop1: Option<String>,
 
@@ -1888,8 +1898,8 @@ impl AsRef<Schema> for Schema {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SearchParams {
     pub dateRange: Option<i64>,
 
@@ -1910,8 +1920,8 @@ impl AsRef<SearchParams> for SearchParams {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SemanticContainer {
     pub sixteen_digit_number: Option<i64>,
 
@@ -1936,8 +1946,8 @@ impl AsRef<SemanticContainer> for SemanticContainer {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SimpleTag {
     pub field: Option<String>,
 }
@@ -1948,9 +1958,9 @@ impl AsRef<SimpleTag> for SimpleTag {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SkipDynamicClass {
     pub value: Option<String>,
 
@@ -1958,6 +1968,7 @@ pub struct SkipDynamicClass {
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -2023,8 +2034,8 @@ impl AsRef<SkipDynamicClass> for SkipDynamicClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SkipNonDynamicClass {
     pub name: Option<String>,
 
@@ -2039,8 +2050,8 @@ impl AsRef<SkipNonDynamicClass> for SkipNonDynamicClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SmallThing {
     pub i_16_digits: i64,
 
@@ -2053,14 +2064,15 @@ impl AsRef<SmallThing> for SmallThing {
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SomeClassNestedDynamic {
     pub hi: Option<String>,
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<
         String,
         baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
@@ -2124,8 +2136,8 @@ impl AsRef<SomeClassNestedDynamic> for SomeClassNestedDynamic {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct StringToClassEntry {
     pub word: Option<String>,
 }
@@ -2136,8 +2148,8 @@ impl AsRef<StringToClassEntry> for StringToClassEntry {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TestClassAlias {
     pub key: Option<String>,
 
@@ -2156,8 +2168,8 @@ impl AsRef<TestClassAlias> for TestClassAlias {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TestClassNested {
     pub prop1: Option<String>,
 
@@ -2170,8 +2182,8 @@ impl AsRef<TestClassNested> for TestClassNested {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TestClassWithEnum {
     pub prop1: Option<String>,
 
@@ -2184,8 +2196,8 @@ impl AsRef<TestClassWithEnum> for TestClassWithEnum {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TestMemoryOutput {
     pub items: Vec<Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject>,
 
@@ -2198,8 +2210,8 @@ impl AsRef<TestMemoryOutput> for TestMemoryOutput {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TestOutputClass {
     pub prop1: Option<String>,
 
@@ -2212,8 +2224,8 @@ impl AsRef<TestOutputClass> for TestOutputClass {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TodoMessageToUser {
     #[baml(name = "type")]
     pub r#type: String,
@@ -2227,8 +2239,8 @@ impl AsRef<TodoMessageToUser> for TodoMessageToUser {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Tree {
     pub data: Option<i64>,
 
@@ -2241,8 +2253,8 @@ impl AsRef<Tree> for Tree {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TwoStoriesOneTitle {
     pub title: Option<String>,
 
@@ -2257,8 +2269,8 @@ impl AsRef<TwoStoriesOneTitle> for TwoStoriesOneTitle {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TwoStoriesOneTitleCheck {
     pub title: Option<String>,
 
@@ -2273,8 +2285,8 @@ impl AsRef<TwoStoriesOneTitleCheck> for TwoStoriesOneTitleCheck {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UnionTest_ReturnType {
     pub prop1: Option<types::Union2BoolOrString>,
 
@@ -2291,8 +2303,8 @@ impl AsRef<UnionTest_ReturnType> for UnionTest_ReturnType {
 
 /// my docs
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UniverseQuestion {
     pub question: Option<String>,
 
@@ -2305,8 +2317,8 @@ impl AsRef<UniverseQuestion> for UniverseQuestion {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UniverseQuestionInput {
     pub question: Option<String>,
 }
@@ -2317,8 +2329,8 @@ impl AsRef<UniverseQuestionInput> for UniverseQuestionInput {
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct WithReasoning {
     pub value: Option<String>,
 

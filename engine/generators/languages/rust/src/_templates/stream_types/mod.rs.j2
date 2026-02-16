@@ -10,8 +10,11 @@ pub use classes::*;
 pub use unions::*;
 pub use type_aliases::*;
 
+use baml::__internal::serde as serde;
+
 /// Streaming variants of types (all fields Optional).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum StreamTypes {
 {% for class in classes %}
     {{ class.name }}({{ class.name }}),
@@ -38,5 +41,11 @@ impl baml::KnownTypes for StreamTypes {
             _ => unreachable!("StreamTypes has no variants"),
 {% endif %}
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for StreamTypes {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom("StreamTypes is not deserializable, as we cannot disambiguate the type."))
     }
 }

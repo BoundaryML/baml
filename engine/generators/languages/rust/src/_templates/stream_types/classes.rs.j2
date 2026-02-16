@@ -6,7 +6,7 @@
 //! These types are used during streaming to hold partial results.
 //! Field types are already wrapped appropriately (Option, StreamState, etc.)
 
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 use crate::baml_client::types;
 use super::*;
 
@@ -16,11 +16,12 @@ use super::*;
 {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
 {% if class.dynamic %}
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
 {% else %}
-#[derive(Debug, Clone, Default, BamlDecode)]
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
 {% endif %}
+#[serde(crate = "::baml::__internal::serde")]
 pub struct {{ class.name }} {
 {% for field in class.fields %}
 {% if let Some(docstring) = field.docstring %}
@@ -34,6 +35,7 @@ pub struct {{ class.name }} {
 {% if class.dynamic %}
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<String, baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>>,
 {% endif %}
 }

@@ -3,7 +3,7 @@
 {% else %}
 //! Generated streaming union types.
 
-use baml::BamlDecode;
+use baml::{BamlDecode, BamlSerde, __internal::serde::{Serialize, Deserialize}};
 use crate::baml_client::types;
 use super::*;
 {% for u in unions %}
@@ -11,15 +11,17 @@ use super::*;
 {% if let Some(docstring) = u.docstring -%}
 {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
-#[derive(Debug, Clone, BamlDecode{% if u.is_all_literals() %}, PartialEq, Eq, Hash{% endif %})]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize{% if u.is_all_literals() %}, PartialEq, Eq, Hash{% endif %})]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum {{ u.name }} {
 {% for variant in u.variants %}
     {% if let Some(literal_repr) = variant.literal_repr -%}
     #[baml(name = "{{ variant.cffi_name }}", literal_{{ variant.cffi_name.split("_").next().unwrap() }} = {{ literal_repr }})]
+    #[serde(with = "__baml_serde_union_literal_{{ u.name }}::{{ variant.name }}")]
     {{ variant.name }},
     {% else -%}
-    #[baml(name = "{{ variant.cffi_name }}",)]
+    #[baml(name = "{{ variant.cffi_name }}")]
     {{ variant.name }}({{ variant.type_str }}),
     {% endif -%}
 {% endfor %}

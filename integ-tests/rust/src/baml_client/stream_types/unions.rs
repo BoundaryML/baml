@@ -7,11 +7,15 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{
+    __internal::serde::{Deserialize, Serialize},
+    BamlDecode, BamlSerde,
+};
 
 /// Generated from: (Streaming.AddTodoItem | Streaming.TodoMessageToUser | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2AddTodoItemOrTodoMessageToUser {
     #[baml(name = "AddTodoItem")]
     AddTodoItem(AddTodoItem),
@@ -33,8 +37,9 @@ impl Default for Union2AddTodoItemOrTodoMessageToUser {
 }
 
 /// Generated from: (Streaming.Martian | Streaming.Earthling | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2EarthlingOrMartian {
     #[baml(name = "Martian")]
     Martian(Martian),
@@ -56,8 +61,9 @@ impl Default for Union2EarthlingOrMartian {
 }
 
 /// Generated from: (Streaming.PhoneNumber | Streaming.EmailAddress | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2EmailAddressOrPhoneNumber {
     #[baml(name = "PhoneNumber")]
     PhoneNumber(PhoneNumber),
@@ -79,8 +85,9 @@ impl Default for Union2EmailAddressOrPhoneNumber {
 }
 
 /// Generated from: (Streaming.Resume | Streaming.Event | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2EventOrResume {
     #[baml(name = "Resume")]
     Resume(Resume),
@@ -102,8 +109,9 @@ impl Default for Union2EventOrResume {
 }
 
 /// Generated from: (Streaming.SimpleTag | Streaming.JsonTemplate | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2JsonTemplateOrSimpleTag {
     #[baml(name = "SimpleTag")]
     SimpleTag(SimpleTag),
@@ -125,8 +133,9 @@ impl Default for Union2JsonTemplateOrSimpleTag {
 }
 
 /// Generated from: (string | Streaming.Nested[] | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ListNestedOrString {
     #[baml(name = "string")]
     String(String),
@@ -148,8 +157,9 @@ impl Default for Union2ListNestedOrString {
 }
 
 /// Generated from: (Streaming.LiteralClassOne | Streaming.LiteralClassTwo | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2LiteralClassOneOrLiteralClassTwo {
     #[baml(name = "LiteralClassOne")]
     LiteralClassOne(LiteralClassOne),
@@ -171,8 +181,9 @@ impl Default for Union2LiteralClassOneOrLiteralClassTwo {
 }
 
 /// Generated from: (string | map<string, Streaming.RecursiveUnion> | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2MapStringKeyRecursiveUnionValueOrString {
     #[baml(name = "string")]
     String(String),
@@ -196,8 +207,9 @@ impl Default for Union2MapStringKeyRecursiveUnionValueOrString {
 }
 
 /// Generated from: (Streaming.Nested | string | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2NestedOrString {
     #[baml(name = "Nested")]
     Nested(Nested),
@@ -219,8 +231,9 @@ impl Default for Union2NestedOrString {
 }
 
 /// Generated from: (Streaming.OriginalA | Streaming.OriginalB)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2OriginalAOrOriginalB {
     #[baml(name = "OriginalA")]
     OriginalA(OriginalA),
@@ -242,8 +255,9 @@ impl Default for Union2OriginalAOrOriginalB {
 }
 
 /// Generated from: (Streaming.MemoryObject | Streaming.ComplexMemoryObject | Streaming.AnotherObject)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
     #[baml(name = "MemoryObject")]
     MemoryObject(MemoryObject),
@@ -270,8 +284,9 @@ impl Default for Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
 }
 
 /// Generated from: (Streaming.BookOrder | Streaming.FlightConfirmation | Streaming.GroceryReceipt)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
     #[baml(name = "BookOrder")]
     BookOrder(BookOrder),
@@ -298,8 +313,9 @@ impl Default for Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
 }
 
 /// Generated from: (int @stream.done | string | bool @stream.done | float @stream.done | Streaming.JsonObject | Streaming.JsonArray | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
     #[baml(name = "int")]
     Int(i64),

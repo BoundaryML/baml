@@ -3,7 +3,7 @@
 {% else %}
 //! Generated class types.
 
-use baml::{BamlEncode, BamlDecode, BamlSerde};
+use baml::{BamlEncode, BamlDecode, __internal::serde::{Serialize, Deserialize}};
 use super::*;
 {% for class in classes %}
 
@@ -11,11 +11,12 @@ use super::*;
 {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
 {% if class.dynamic %}
-#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
 {%- else %}
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, BamlSerde)]
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
 {%- endif %}
+#[serde(crate = "::baml::__internal::serde")]
 pub struct {{ class.name }} {
 {% for field in class.fields %}
 {%- if let Some(docstring) = field.docstring %}
@@ -23,12 +24,14 @@ pub struct {{ class.name }} {
 {%- endif %}
 {%- if let Some(cffi_name) = field.cffi_name %}
     #[baml(name = "{{ cffi_name }}")]
+    #[serde(rename = "{{ cffi_name }}")]
 {%- endif %}
     pub {{ field.name }}: {{ field.type_str }},
 {%- endfor %}
 {% if class.dynamic %}
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
+    #[serde(flatten)]
     pub __dynamic: std::collections::HashMap<String, baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>>,
 {% endif %}
 }

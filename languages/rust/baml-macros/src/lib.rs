@@ -97,8 +97,9 @@ pub fn derive_baml_decode(input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Implements [`serde::Serialize`] and [`serde::Deserialize`]
-/// for baml-generated types.
+/// Helper for serde support.
+/// 
+/// Currently only adds helpers for deserializing unions with literal values.
 #[proc_macro_derive(BamlSerde, attributes(baml))]
 pub fn derive_baml_serde(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

@@ -3,20 +3,21 @@
 {% else %}
 //! Generated union types.
 
-use baml::{BamlEncode, BamlDecode, __internal::serde::{Serialize, Deserialize}};
+use baml::{BamlEncode, BamlDecode, BamlSerde, __internal::serde::{Serialize, Deserialize}};
 use super::*;
 {% for u in unions %}
 
 {% if let Some(docstring) = u.docstring -%}
 {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
-#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize{% if u.is_all_literals() %}, PartialEq, Eq, Hash{% endif %})]
-#[serde(crate = "::baml::__internal::serde", tag = "_baml_type")]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize{% if u.is_all_literals() %}, PartialEq, Eq, Hash{% endif %})]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum {{ u.name }} {
 {% for variant in u.variants %}
     {% if let Some(literal_repr) = variant.literal_repr -%}
     #[baml(name = "{{ variant.cffi_name }}", literal_{{ variant.cffi_name.split("_").next().unwrap() }} = {{ literal_repr }})]
+    #[serde(with = "__baml_serde_union_literal_{{ u.name }}::{{ variant.name }}")]
     {{ variant.name }},
     {% else -%}
     #[baml(name = "{{ variant.cffi_name }}")]

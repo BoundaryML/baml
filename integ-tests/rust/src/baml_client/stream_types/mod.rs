@@ -15,8 +15,11 @@ pub use classes::*;
 pub use type_aliases::*;
 pub use unions::*;
 
+use baml::__internal::serde;
+
 /// Streaming variants of types (all fields Optional).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum StreamTypes {
     AddTodoItem(AddTodoItem),
 
@@ -528,5 +531,13 @@ impl baml::KnownTypes for StreamTypes {
                 "Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString"
             }
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for StreamTypes {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "StreamTypes is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }
