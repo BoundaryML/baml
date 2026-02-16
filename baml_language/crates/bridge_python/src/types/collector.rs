@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use bridge_ctypes::external_to_cffi_value;
+use prost::Message;
 use pyo3::prelude::*;
 
 /// Python-facing Collector that tracks BAML function call logs.
@@ -15,7 +17,7 @@ use pyo3::prelude::*;
 /// print(collector.logs)
 /// print(collector.usage)
 /// ```
-#[pyclass]
+#[pyclass(subclass)]
 pub struct Collector {
     inner: Arc<bex_events::Collector>,
 }
@@ -134,14 +136,14 @@ impl FunctionLog {
         self.inner.tags.clone()
     }
 
-    /// The result value, or None if the function hasn't completed.
+    /// The result value as protobuf-encoded bytes, or None if not yet complete.
     #[getter]
-    fn result(&self, py: Python<'_>) -> PyObject {
-        match &self.inner.result {
-            Some(val) => crate::pythonize_value::bex_value_to_py(py, val.clone())
-                .unwrap_or_else(|_| py.None()),
-            None => py.None(),
-        }
+    fn result(&self) -> Option<Vec<u8>> {
+        self.inner.result.as_ref().and_then(|val| {
+            external_to_cffi_value(val)
+                .ok()
+                .map(|cffi| cffi.encode_to_vec())
+        })
     }
 
     fn __repr__(&self) -> String {

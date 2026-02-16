@@ -21,7 +21,7 @@ import threading
 
 import pytest
 
-from baml_py import BamlRuntime, BamlCtxManager, Collector, FunctionLog
+from baml_py import BamlRuntime, BamlCtxManager, Collector, FunctionLog, call_function, call_function_sync
 
 
 # ============================================================================
@@ -237,7 +237,7 @@ class TestBasicCollection:
         Ported from: test_collector_async_no_stream_success.
         Verifies: logs count, function_name, timing, calls."""
         collector = Collector("test")
-        result = await llm_rt.call_function(
+        result = await call_function(llm_rt,
             "TestLLM", {"msg": "hi there"}, collectors=[collector]
         )
         assert "mocked" in result.result()
@@ -271,7 +271,7 @@ class TestBasicCollection:
         """Sync LLM call with collector.
         Mirrors test_collector_async_no_stream_success but sync."""
         collector = Collector("test")
-        result = llm_rt.call_function_sync(
+        result = call_function_sync(llm_rt,
             "TestLLM", {"msg": "hi there"}, collectors=[collector]
         )
         assert "mocked" in result.result()
@@ -286,13 +286,13 @@ class TestBasicCollection:
     def test_collector_captures_function_name(self, rt):
         """log.function_name matches the called BAML function."""
         collector = Collector("test")
-        rt.call_function_sync("AddNumbers", {"a": 1, "b": 2}, collectors=[collector])
+        call_function_sync(rt,"AddNumbers", {"a": 1, "b": 2}, collectors=[collector])
         assert collector.last.function_name == "AddNumbers"
 
     def test_collector_captures_timing(self, rt):
         """log.timing has positive start_time and duration."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
 
         log = collector.last
         assert log.timing.start_time_utc_ms > 0
@@ -302,14 +302,14 @@ class TestBasicCollection:
     def test_collector_captures_result(self, rt):
         """log.result contains the return value."""
         collector = Collector("test")
-        rt.call_function_sync("AddNumbers", {"a": 3, "b": 4}, collectors=[collector])
+        call_function_sync(rt,"AddNumbers", {"a": 3, "b": 4}, collectors=[collector])
         assert collector.last.result == 7
 
     def test_collector_id_lookup(self, rt):
         """Can look up a specific log by its span ID.
         Ported from: collector.id() usage in integ-tests."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
 
         log = collector.last
         found = collector.id(log.id)
@@ -326,14 +326,14 @@ class TestBasicCollection:
     async def test_collector_basic_async_expr(self, rt):
         """Async expression function call with collector."""
         collector = Collector("test")
-        result = await rt.call_function("ReturnOne", {}, collectors=[collector])
+        result = await call_function(rt,"ReturnOne", {}, collectors=[collector])
         assert result.result() == 1
         assert len(collector.logs) == 1
 
     def test_collector_basic_sync_expr(self, rt):
         """Sync expression function call with collector."""
         collector = Collector("test")
-        result = rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        result = call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         assert result.result() == 1
         assert len(collector.logs) == 1
         assert collector.last.function_name == "ReturnOne"
@@ -357,7 +357,7 @@ class TestCollectorClear:
         assert len(collector.logs) == 0
 
         # Call and verify log exists
-        llm_rt.call_function_sync(
+        call_function_sync(llm_rt,
             "TestLLM", {"msg": "hi there"}, collectors=[collector]
         )
         assert len(collector.logs) == 1
@@ -371,18 +371,18 @@ class TestCollectorClear:
     def test_collector_clear_returns_count(self, rt):
         """clear() returns the number of tracked roots that were removed."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         assert collector.clear() == 2
 
     def test_collector_clear_then_reuse(self, rt):
         """After clear(), collector can track new calls.
         Ported from: test_collector_clear reuse pattern."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         collector.clear()
 
-        rt.call_function_sync("AddNumbers", {"a": 5, "b": 6}, collectors=[collector])
+        call_function_sync(rt,"AddNumbers", {"a": 5, "b": 6}, collectors=[collector])
         assert len(collector.logs) == 1
         assert collector.last.function_name == "AddNumbers"
 
@@ -401,7 +401,7 @@ class TestNoLogAccess:
         """Ported from: test_collector_async_no_stream_no_getting_logs.
         Collector tracks calls even if .logs is never accessed."""
         collector = Collector("test")
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "hi there"}, collectors=[collector]
         )
         # Don't access logs yet...
@@ -424,12 +424,12 @@ class TestMultipleCallsAndUsage:
         Multiple LLM calls accumulate in the same collector."""
         collector = Collector("test")
 
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "First call"}, collectors=[collector]
         )
         assert len(collector.logs) == 1
 
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "Second call"}, collectors=[collector]
         )
         assert len(collector.logs) == 2
@@ -441,8 +441,8 @@ class TestMultipleCallsAndUsage:
     def test_collector_sequential_calls_ordered(self, rt):
         """Logs are in insertion order for sequential calls."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
-        rt.call_function_sync("AddNumbers", {"a": 1, "b": 2}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"AddNumbers", {"a": 1, "b": 2}, collectors=[collector])
 
         logs = collector.logs
         assert len(logs) == 2
@@ -461,7 +461,7 @@ class TestMultipleCallsAndUsage:
     def test_collector_usage_after_expr_call(self, rt):
         """Expression function call has no token usage."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         usage = collector.usage
         assert usage.input_tokens is None
         assert usage.output_tokens is None
@@ -482,7 +482,7 @@ class TestMultipleCollectors:
         c1 = Collector("c1")
         c2 = Collector("c2")
 
-        llm_rt.call_function_sync(
+        call_function_sync(llm_rt,
             "TestLLM", {"msg": "hello"}, collectors=[c1, c2]
         )
 
@@ -498,12 +498,12 @@ class TestMultipleCollectors:
         c2 = Collector("c2")
 
         # First call: both collectors
-        llm_rt.call_function_sync(
+        call_function_sync(llm_rt,
             "TestLLM", {"msg": "first"}, collectors=[c1, c2]
         )
 
         # Second call: only c1
-        llm_rt.call_function_sync(
+        call_function_sync(llm_rt,
             "TestLLM", {"msg": "second"}, collectors=[c1]
         )
 
@@ -515,8 +515,8 @@ class TestMultipleCollectors:
         c1 = Collector("c1")
         c2 = Collector("c2")
 
-        rt.call_function_sync("ReturnOne", {}, collectors=[c1])
-        rt.call_function_sync("AddNumbers", {"a": 1, "b": 2}, collectors=[c2])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[c1])
+        call_function_sync(rt,"AddNumbers", {"a": 1, "b": 2}, collectors=[c2])
 
         assert len(c1.logs) == 1
         assert c1.logs[0].function_name == "ReturnOne"
@@ -526,7 +526,7 @@ class TestMultipleCollectors:
     def test_collector_list_single_element(self, rt):
         """[collector] works same as passing collector directly."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         assert len(collector.logs) == 1
 
 
@@ -546,13 +546,13 @@ class TestMixedAsyncSync:
         collector = Collector("test")
 
         # Async call
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "async call"}, collectors=[collector]
         )
         assert len(collector.logs) == 1
 
         # Sync call on same collector
-        llm_rt.call_function_sync(
+        call_function_sync(llm_rt,
             "TestLLM", {"msg": "sync call"}, collectors=[collector]
         )
         assert len(collector.logs) == 2
@@ -585,10 +585,10 @@ class TestParallelAsyncCalls:
         collector = Collector("test")
 
         r1, r2 = await asyncio.gather(
-            llm_rt.call_function(
+            call_function(llm_rt,
                 "TestLLM", {"msg": "call 1"}, collectors=[collector]
             ),
-            llm_rt.call_function(
+            call_function(llm_rt,
                 "TestLLM", {"msg": "call 2"}, collectors=[collector]
             ),
         )
@@ -610,8 +610,8 @@ class TestParallelAsyncCalls:
         collector = Collector("test")
 
         r1, r2 = await asyncio.gather(
-            rt.call_function("ReturnOne", {}, collectors=[collector]),
-            rt.call_function(
+            call_function(rt,"ReturnOne", {}, collectors=[collector]),
+            call_function(rt,
                 "AddNumbers", {"a": 10, "b": 20}, collectors=[collector]
             ),
         )
@@ -640,7 +640,7 @@ class TestLLMCallDetails:
         """Pipeline with 2 LLM calls: verify log.calls has entries.
         Ported from: test_collector_async_no_stream_success call inspection."""
         collector = Collector("test")
-        result = await pipeline_rt.call_function(
+        result = await call_function(pipeline_rt,
             "OuterPipeline", {"input": "hello"}, collectors=[collector]
         )
         assert "mocked" in result.result()
@@ -659,7 +659,7 @@ class TestLLMCallDetails:
     async def test_collector_llm_call_function_names(self, pipeline_rt):
         """LLM call.function_name matches the LLM function names."""
         collector = Collector("test")
-        await pipeline_rt.call_function(
+        await call_function(pipeline_rt,
             "OuterPipeline", {"input": "hello"}, collectors=[collector]
         )
 
@@ -672,7 +672,7 @@ class TestLLMCallDetails:
     async def test_collector_llm_call_timing(self, pipeline_rt):
         """Each LLM call has its own timing separate from parent."""
         collector = Collector("test")
-        await pipeline_rt.call_function(
+        await call_function(pipeline_rt,
             "OuterPipeline", {"input": "hello"}, collectors=[collector]
         )
 
@@ -685,7 +685,7 @@ class TestLLMCallDetails:
     def test_collector_llm_call_sync(self, pipeline_rt):
         """Sync LLM pipeline call also captures child LLM calls."""
         collector = Collector("test")
-        result = pipeline_rt.call_function_sync(
+        result = call_function_sync(pipeline_rt,
             "OuterPipeline", {"input": "hello"}, collectors=[collector]
         )
         assert "mocked" in result.result()
@@ -696,7 +696,7 @@ class TestLLMCallDetails:
     async def test_collector_single_llm_call(self, llm_rt):
         """Single LLM function has no child calls (it IS the leaf call)."""
         collector = Collector("test")
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "hello"}, collectors=[collector]
         )
         log = collector.last
@@ -719,13 +719,13 @@ class TestTags:
     def test_collector_tags_empty_for_expr_function(self, rt):
         """Expression function logs have empty tags."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         assert collector.last.tags == {}
 
     def test_collector_tags_empty_for_llm_function(self, llm_rt):
         """LLM function logs have empty tags by default."""
         collector = Collector("test")
-        llm_rt.call_function_sync(
+        call_function_sync(llm_rt,
             "TestLLM", {"msg": "hello"}, collectors=[collector]
         )
         assert collector.last.tags == {}
@@ -754,7 +754,7 @@ class TestGCAndCleanup:
     def test_collector_drop_releases_events(self, rt):
         """Deleting collector + gc.collect() releases events."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         log_id = collector.last.id
         assert log_id is not None
 
@@ -770,7 +770,7 @@ class TestGCAndCleanup:
         Ported from: general GC pattern in integ-tests."""
         for _ in range(100):
             collector = Collector("loop")
-            rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+            call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
             assert len(collector.logs) == 1
 
         gc.collect()
@@ -782,7 +782,7 @@ class TestGCAndCleanup:
         c1 = Collector("c1")
         c2 = Collector("c2")
 
-        rt.call_function_sync("ReturnOne", {}, collectors=[c1, c2])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[c1, c2])
 
         assert len(c1.logs) == 1
         assert len(c2.logs) == 1
@@ -799,7 +799,7 @@ class TestGCAndCleanup:
         c1 = Collector("c1")
         c2 = Collector("c2")
 
-        rt.call_function_sync("ReturnOne", {}, collectors=[c1, c2])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[c1, c2])
 
         del c1
         gc.collect()
@@ -814,7 +814,7 @@ class TestGCAndCleanup:
     async def test_collector_gc_after_async_calls(self, llm_rt):
         """GC after async LLM calls releases events properly."""
         collector = Collector("test")
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "hello"}, collectors=[collector]
         )
         assert len(collector.logs) == 1
@@ -823,7 +823,7 @@ class TestGCAndCleanup:
         assert len(collector.logs) == 0
 
         # Can still track new calls
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "world"}, collectors=[collector]
         )
         assert len(collector.logs) == 1
@@ -831,7 +831,7 @@ class TestGCAndCleanup:
     def test_collector_clear_multiple_times(self, rt):
         """Calling clear() multiple times is safe."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         assert collector.clear() == 1
         assert collector.clear() == 0
         assert collector.clear() == 0
@@ -852,18 +852,18 @@ class TestErrorCases:
         """Call to missing function doesn't create a log."""
         collector = Collector("test")
         with pytest.raises(Exception):
-            rt.call_function_sync("NonExistent", {}, collectors=[collector])
+            call_function_sync(rt,"NonExistent", {}, collectors=[collector])
         # Function not found before root span is created
         assert len(collector.logs) == 0
 
     def test_collector_no_collectors_param(self, rt):
         """Calling without collectors works normally."""
-        result = rt.call_function_sync("ReturnOne", {})
+        result = call_function_sync(rt,"ReturnOne", {})
         assert result.result() == 1
 
     def test_collector_no_collectors_none(self, rt):
         """Passing collectors=None works normally."""
-        result = rt.call_function_sync("ReturnOne", {}, collectors=None)
+        result = call_function_sync(rt,"ReturnOne", {}, collectors=None)
         assert result.result() == 1
 
     # NOTE: test_collector_failures_arg_type (invalid arg type errors) and
@@ -892,7 +892,7 @@ class TestNestedTraceWithCollector:
 
         @trace
         async def inner_call(msg: str) -> str:
-            result = await llm_rt.call_function(
+            result = await call_function(llm_rt,
                 "TestLLM",
                 {"msg": msg},
                 ctx=llm_ctx.get(),
@@ -919,7 +919,7 @@ class TestNestedTraceWithCollector:
 
         @trace
         def inner_call(msg: str) -> str:
-            result = llm_rt.call_function_sync(
+            result = call_function_sync(llm_rt,
                 "TestLLM",
                 {"msg": msg},
                 ctx=llm_ctx.get(),
@@ -943,12 +943,12 @@ class TestNestedTraceWithCollector:
         collector = Collector("test")
 
         r1, r2 = await asyncio.gather(
-            llm_rt.call_function(
+            call_function(llm_rt,
                 "TestLLM",
                 {"msg": "call 1"},
                 collectors=[collector],
             ),
-            llm_rt.call_function(
+            call_function(llm_rt,
                 "TestLLM",
                 {"msg": "call 2"},
                 collectors=[collector],
@@ -971,13 +971,13 @@ class TestNestedTraceWithCollector:
         @trace
         async def parallel_calls() -> list:
             r1, r2 = await asyncio.gather(
-                llm_rt.call_function(
+                call_function(llm_rt,
                     "TestLLM",
                     {"msg": "call 1"},
                     ctx=llm_ctx.get(),
                     collectors=[collector],
                 ),
-                llm_rt.call_function(
+                call_function(llm_rt,
                     "TestLLM",
                     {"msg": "call 2"},
                     ctx=llm_ctx.get(),
@@ -1011,7 +1011,7 @@ class TestCrossBoundaryTracing:
 
         @trace
         async def traced_call() -> int:
-            result = await rt.call_function(
+            result = await call_function(rt,
                 "AddNumbers", {"a": 10, "b": 20}, ctx=ctx.get(), collectors=[collector]
             )
             return result.result()
@@ -1023,7 +1023,7 @@ class TestCrossBoundaryTracing:
     def test_collector_without_trace_decorator(self, rt):
         """Collector works without @trace (no host context)."""
         collector = Collector("test")
-        result = rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        result = call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
         assert result.result() == 1
         assert len(collector.logs) == 1
 
@@ -1036,7 +1036,7 @@ class TestCrossBoundaryTracing:
 
         @trace
         async def traced_pipeline() -> str:
-            result = await pipeline_rt.call_function(
+            result = await call_function(pipeline_rt,
                 "OuterPipeline",
                 {"input": "hello"},
                 ctx=pipeline_ctx.get(),
@@ -1077,7 +1077,7 @@ class TestContextManagerPattern:
         messages = ["hello", "world", "test"]
         results = []
         for msg in messages:
-            result = await llm_rt.call_function(
+            result = await call_function(llm_rt,
                 "TestLLM", {"msg": msg}, collectors=[collector]
             )
             results.append(result.result())
@@ -1100,13 +1100,13 @@ class TestContextManagerPattern:
         Ported from: test_collector_context_manager_pattern isolation."""
         # Request 1
         c1 = Collector("request-1")
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "request 1"}, collectors=[c1]
         )
 
         # Request 2
         c2 = Collector("request-2")
-        await llm_rt.call_function(
+        await call_function(llm_rt,
             "TestLLM", {"msg": "request 2"}, collectors=[c2]
         )
 
@@ -1122,13 +1122,13 @@ class TestContextManagerPattern:
 
         # Run 3 calls in parallel
         results = await asyncio.gather(
-            llm_rt.call_function(
+            call_function(llm_rt,
                 "TestLLM", {"msg": "p1"}, collectors=[collector]
             ),
-            llm_rt.call_function(
+            call_function(llm_rt,
                 "TestLLM", {"msg": "p2"}, collectors=[collector]
             ),
-            llm_rt.call_function(
+            call_function(llm_rt,
                 "TestLLM", {"msg": "p3"}, collectors=[collector]
             ),
         )
@@ -1150,8 +1150,8 @@ class TestTimingOrdering:
         """Sequential calls have increasing start times.
         Ported from: test_collector_mixed_async_sync_calls timing check."""
         collector = Collector("test")
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
-        rt.call_function_sync("ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
+        call_function_sync(rt,"ReturnOne", {}, collectors=[collector])
 
         logs = collector.logs
         assert len(logs) == 2
@@ -1162,7 +1162,7 @@ class TestTimingOrdering:
         """LLM child call timing is within parent timing.
         Ported from: test_collector_async_no_stream_success timing checks."""
         collector = Collector("test")
-        await pipeline_rt.call_function(
+        await call_function(pipeline_rt,
             "OuterPipeline", {"input": "hello"}, collectors=[collector]
         )
 

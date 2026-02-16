@@ -5,12 +5,16 @@ description = "BAML python bindings (new system, bex_engine)"
 authors = [{ "name" = "Boundary", "email" = "contact@boundaryml.com" }]
 license = "Apache-2.0"
 requires-python = ">=3.8"
+dependencies = [
+    "protobuf>=4.21",
+]
 
 [dependency-groups]
 dev = [
     "pytest>=7",
     "pytest-asyncio>=0.21",
     "maturin>=1.0,<2.0",
+    "grpcio-tools>=1.50",
 ]
 
 [build-system]

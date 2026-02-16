@@ -37,7 +37,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from baml_py import BamlRuntime, BamlCtxManager, FunctionResult, HostSpanManager
+from baml_py import BamlRuntime, BamlCtxManager, FunctionResult, HostSpanManager, call_function, call_function_sync
 
 
 # ============================================================================
@@ -558,7 +558,7 @@ class TestTraceDecoratorBasics:
 
         @trace
         def call_baml() -> int:
-            result = rt.call_function_sync("AddNumbers", {"a": 10, "b": 32})
+            result = call_function_sync(rt,"AddNumbers", {"a": 10, "b": 32})
             return result.result()
 
         assert call_baml() == 42
@@ -569,7 +569,7 @@ class TestTraceDecoratorBasics:
 
         @trace
         async def call_baml_async() -> int:
-            result = await rt.call_function("AddNumbers", {"a": 100, "b": 200})
+            result = await call_function(rt,"AddNumbers", {"a": 100, "b": 200})
             return result.result()
 
         assert await call_baml_async() == 300
@@ -770,7 +770,7 @@ class TestTraceComplexAsync:
 
         @trace
         async def child_with_baml(n: int) -> int:
-            result = await rt.call_function("ReturnNumber", {"n": n})
+            result = await call_function(rt,"ReturnNumber", {"n": n})
             return result.result()
 
         @trace
@@ -1627,7 +1627,7 @@ class TestCrossBoundaryTracing:
 
         @trace
         async def child_py(x: int, y: int) -> int:
-            result = await rt.call_function(
+            result = await call_function(rt,
                 "OuterExprFunc", {"x": x, "y": y}, ctx.get()
             )
             return result.result()
@@ -1690,7 +1690,7 @@ class TestCrossBoundaryTracing:
 
         @trace
         def child_py(x: int, y: int) -> int:
-            result = rt.call_function_sync("OuterExprFunc", {"x": x, "y": y}, ctx.get())
+            result = call_function_sync(rt,"OuterExprFunc", {"x": x, "y": y}, ctx.get())
             return result.result()
 
         @trace
@@ -1788,7 +1788,7 @@ class TestCrossBoundaryLLMTracing:
 
         @trace
         async def child_py(text: str) -> str:
-            result = await llm_rt.call_function(
+            result = await call_function(llm_rt,
                 "OuterPipeline", {"input": text}, llm_ctx.get()
             )
             return result.result()
@@ -1864,7 +1864,7 @@ class TestCrossBoundaryLLMTracing:
 
         @trace
         def child_py(text: str) -> str:
-            result = llm_rt.call_function_sync(
+            result = call_function_sync(llm_rt,
                 "OuterPipeline", {"input": text}, llm_ctx.get()
             )
             return result.result()

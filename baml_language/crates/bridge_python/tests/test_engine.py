@@ -16,7 +16,7 @@ import tempfile
 
 import pytest
 
-from baml_py import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version
+from baml_py import BamlRuntime, FunctionResult, HostSpanManager, flush_events, get_version, call_function, call_function_sync
 
 
 # ============================================================================
@@ -114,19 +114,19 @@ class TestCallFunctionSync:
 
     def test_return_one(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = rt.call_function_sync("ReturnOne", {})
+        result = call_function_sync(rt,"ReturnOne", {})
         assert isinstance(result, FunctionResult)
         assert result.result() == 1
 
     def test_return_number(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = rt.call_function_sync("ReturnNumber", {"n": 42})
+        result = call_function_sync(rt,"ReturnNumber", {"n": 42})
         assert result.result() == 42
 
     def test_call_return_one(self):
         """Function calling another function."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = rt.call_function_sync("CallReturnOne", {})
+        result = call_function_sync(rt,"CallReturnOne", {})
         assert result.result() == 1
 
     @pytest.mark.xfail(
@@ -135,50 +135,50 @@ class TestCallFunctionSync:
     def test_chained_calls(self):
         """Chained function calls: ReturnNumber(CallReturnOne())."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = rt.call_function_sync("ChainedCalls", {})
+        result = call_function_sync(rt,"ChainedCalls", {})
         assert result.result() == 1
 
     def test_add_numbers(self):
         """Multiple arguments in correct order."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = rt.call_function_sync("AddNumbers", {"a": 10, "b": 32})
+        result = call_function_sync(rt,"AddNumbers", {"a": 10, "b": 32})
         assert result.result() == 42
 
     def test_bool_to_int(self):
         """Boolean argument → int result via if/else."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        assert rt.call_function_sync("BoolToInt", {"b": True}).result() == 1
-        assert rt.call_function_sync("BoolToInt", {"b": False}).result() == 0
+        assert call_function_sync(rt,"BoolToInt", {"b": True}).result() == 1
+        assert call_function_sync(rt,"BoolToInt", {"b": False}).result() == 0
 
     def test_identity_string(self):
         """String argument round-trip."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = rt.call_function_sync("Identity", {"s": "hello world"})
+        result = call_function_sync(rt,"Identity", {"s": "hello world"})
         assert result.result() == "hello world"
 
     def test_return_null(self):
         """Null return type."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = rt.call_function_sync("ReturnNull", {})
+        result = call_function_sync(rt,"ReturnNull", {})
         assert result.result() is None
 
     def test_return_float(self):
         """Float argument round-trip."""
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = rt.call_function_sync("ReturnFloat", {"f": 3.14})
+        result = call_function_sync(rt,"ReturnFloat", {"f": 3.14})
         assert abs(result.result() - 3.14) < 0.001
 
     def test_missing_argument_raises(self):
         """Missing required argument raises an error."""
         rt = make_runtime(EXPR_FUNCS_BAML)
         with pytest.raises(Exception, match="Missing argument"):
-            rt.call_function_sync("ReturnNumber", {})
+            call_function_sync(rt,"ReturnNumber", {})
 
     def test_function_not_found_raises(self):
         """Calling a nonexistent function raises an error."""
         rt = make_runtime(EXPR_FUNCS_BAML)
         with pytest.raises(Exception, match="not found"):
-            rt.call_function_sync("NoSuchFunction", {})
+            call_function_sync(rt,"NoSuchFunction", {})
 
 
 # ============================================================================
@@ -192,20 +192,20 @@ class TestCallFunctionAsync:
     @pytest.mark.asyncio
     async def test_return_one_async(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = await rt.call_function("ReturnOne", {})
+        result = await call_function(rt,"ReturnOne", {})
         assert isinstance(result, FunctionResult)
         assert result.result() == 1
 
     @pytest.mark.asyncio
     async def test_add_numbers_async(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = await rt.call_function("AddNumbers", {"a": 100, "b": 200})
+        result = await call_function(rt,"AddNumbers", {"a": 100, "b": 200})
         assert result.result() == 300
 
     @pytest.mark.asyncio
     async def test_identity_string_async(self):
         rt = make_runtime(EXPR_FUNCS_BAML)
-        result = await rt.call_function("Identity", {"s": "async hello"})
+        result = await call_function(rt,"Identity", {"s": "async hello"})
         assert result.result() == "async hello"
 
 

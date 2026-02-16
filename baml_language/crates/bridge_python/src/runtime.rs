@@ -3,6 +3,8 @@
 use std::sync::Arc;
 
 use bex_engine::BexEngine;
+use bridge_ctypes::{external_to_cffi_value, kwargs_to_bex_values};
+use prost::Message;
 use pyo3::{
     prelude::{pymethods, PyResult},
     pyclass, PyObject, Python,
@@ -11,9 +13,7 @@ use sys_native::SysOpsExt;
 
 use crate::{
     errors::{engine_error_to_py, BamlInvalidArgumentError},
-    parse_py_type::{parse_py_kwargs, py_to_bex_value},
-    pythonize_value::bex_value_to_py,
-    types::{collector::Collector, FunctionResult},
+    types::collector::Collector,
 };
 
 /// The main BAML runtime, wrapping a `BexEngine` instance.
@@ -47,33 +47,48 @@ impl BamlRuntime {
     ///
     /// # Arguments
     /// * `function_name` - Name of the BAML function to call
-    /// * `args` - Python dict of keyword arguments
+    /// * `args_proto` - Protobuf-encoded HostFunctionArguments bytes
     /// * `ctx` - Host span manager; if active spans exist, nests under host trace
     /// * `collectors` - Optional list of Collector objects to track this call
-    #[pyo3(signature = (function_name, args, ctx=None, collectors=None))]
+    #[pyo3(signature = (function_name, args_proto, ctx=None, collectors=None))]
     fn call_function<'py>(
         &self,
         py: Python<'py>,
         function_name: String,
-        args: PyObject,
+        args_proto: Vec<u8>,
         ctx: Option<&crate::types::HostSpanManager>,
         collectors: Option<Vec<pyo3::PyRef<'py, Collector>>>,
     ) -> PyResult<PyObject> {
-        let kwargs = parse_py_kwargs(py, &args)?;
         let engine = self.engine.clone();
+
+        // Decode protobuf arguments
+        let args =
+            bridge_ctypes::baml::cffi::HostFunctionArguments::decode(args_proto.as_slice())
+                .map_err(|e| {
+                    pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                        "Failed to decode arguments: {e}"
+                    ))
+                })?;
+
+        // Convert kwargs to BexExternalValue HashMap
+        let kwargs = kwargs_to_bex_values(args.kwargs).map_err(|e| {
+            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                "Failed to convert arguments: {e}"
+            ))
+        })?;
 
         // Look up function params to get the correct argument order
         let params = engine
             .function_params(&function_name)
             .map_err(engine_error_to_py)?;
 
-        // Convert Python args to BexExternalValue in parameter order
+        // Order args by parameter names
         let mut ordered_args = Vec::with_capacity(params.len());
         for (param_name, _param_ty) in &params {
             let param_name_str = *param_name;
             match kwargs.get(param_name_str) {
-                Some(py_val) => {
-                    ordered_args.push(py_to_bex_value(py, py_val)?);
+                Some(val) => {
+                    ordered_args.push(val.clone());
                 }
                 None => {
                     return Err(pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
@@ -98,10 +113,14 @@ impl BamlRuntime {
                 .await
                 .map_err(engine_error_to_py)?;
 
-            Python::with_gil(|py| {
-                let py_result = bex_value_to_py(py, result)?;
-                Ok(FunctionResult::new(py_result))
-            })
+            // Encode result as protobuf
+            let cffi_value = external_to_cffi_value(&result).map_err(|e| {
+                pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                    "Failed to encode result: {e}"
+                ))
+            })?;
+
+            Ok(cffi_value.encode_to_vec())
         })
         .map(pyo3::Bound::into)
     }
@@ -110,33 +129,48 @@ impl BamlRuntime {
     ///
     /// # Arguments
     /// * `function_name` - Name of the BAML function to call
-    /// * `args` - Python dict of keyword arguments
+    /// * `args_proto` - Protobuf-encoded HostFunctionArguments bytes
     /// * `ctx` - Host span manager; if active spans exist, nests under host trace
     /// * `collectors` - Optional list of Collector objects to track this call
-    #[pyo3(signature = (function_name, args, ctx=None, collectors=None))]
+    #[pyo3(signature = (function_name, args_proto, ctx=None, collectors=None))]
     fn call_function_sync(
         &self,
         py: Python<'_>,
         function_name: String,
-        args: PyObject,
+        args_proto: Vec<u8>,
         ctx: Option<&crate::types::HostSpanManager>,
         collectors: Option<Vec<pyo3::PyRef<'_, Collector>>>,
-    ) -> PyResult<FunctionResult> {
-        let kwargs = parse_py_kwargs(py, &args)?;
+    ) -> PyResult<Vec<u8>> {
         let engine = self.engine.clone();
+
+        // Decode protobuf arguments
+        let args =
+            bridge_ctypes::baml::cffi::HostFunctionArguments::decode(args_proto.as_slice())
+                .map_err(|e| {
+                    pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                        "Failed to decode arguments: {e}"
+                    ))
+                })?;
+
+        // Convert kwargs to BexExternalValue HashMap
+        let kwargs = kwargs_to_bex_values(args.kwargs).map_err(|e| {
+            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                "Failed to convert arguments: {e}"
+            ))
+        })?;
 
         // Look up function params to get the correct argument order
         let params = engine
             .function_params(&function_name)
             .map_err(engine_error_to_py)?;
 
-        // Convert Python args to BexExternalValue in parameter order
+        // Order args by parameter names
         let mut ordered_args = Vec::with_capacity(params.len());
         for (param_name, _param_ty) in &params {
             let param_name_str = *param_name;
             match kwargs.get(param_name_str) {
-                Some(py_val) => {
-                    ordered_args.push(py_to_bex_value(py, py_val)?);
+                Some(val) => {
+                    ordered_args.push(val.clone());
                 }
                 None => {
                     return Err(pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
@@ -166,8 +200,13 @@ impl BamlRuntime {
         })
         .map_err(engine_error_to_py)?;
 
-        let py_result = bex_value_to_py(py, result)?;
-        Ok(FunctionResult::new(py_result))
-    }
+        // Encode result as protobuf
+        let cffi_value = external_to_cffi_value(&result).map_err(|e| {
+            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                "Failed to encode result: {e}"
+            ))
+        })?;
 
+        Ok(cffi_value.encode_to_vec())
+    }
 }

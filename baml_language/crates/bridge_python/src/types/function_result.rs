@@ -18,6 +18,12 @@ impl FunctionResult {
 
 #[pymethods]
 impl FunctionResult {
+    /// Construct a FunctionResult from a Python value.
+    #[new]
+    pub fn py_new(value: PyObject) -> Self {
+        Self { value }
+    }
+
     /// Get the result value.
     fn result(&self, py: Python<'_>) -> PyResult<PyObject> {
         Ok(self.value.clone_ref(py))

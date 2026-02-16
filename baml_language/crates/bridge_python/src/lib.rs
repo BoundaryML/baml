@@ -4,8 +4,6 @@
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
 mod errors;
-mod parse_py_type;
-mod pythonize_value;
 mod runtime;
 mod types;
 
