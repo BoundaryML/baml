@@ -2150,28 +2150,6 @@ impl BexVm {
                     // Pop the result from the eval stack.
                     let result = self.stack.ensure_pop()?;
 
-                    // Clean up any emittable variables in the function's scope
-                    for i in self.frames[frame_idx].locals_offset.into_raw()..self.stack.len() {
-                        let index = StackIndex::from_raw(i);
-                        if self.watched_vars.remove(&index).is_some() {
-                            let var_node = NodeId::LocalVar(index);
-
-                            // Unregister the root since the variable is going out of scope
-                            self.watch.unregister_root(var_node);
-
-                            // Also unlink any edge from this variable
-                            if i < self.stack.len() {
-                                if let Value::Object(obj) = self.stack[index] {
-                                    self.watch.unlink_edge(
-                                        var_node,
-                                        watch::Path::Binding,
-                                        NodeId::HeapObject(obj),
-                                    );
-                                }
-                            }
-                        }
-                    }
-
                     // Check if this frame was traced.
                     // Capture function name before popping the frame.
                     let span_exit = if self.traced_frames.last() == Some(&frame_idx) {
