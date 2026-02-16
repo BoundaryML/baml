@@ -1,6 +1,5 @@
 ---
 source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
-assertion_line: 6119
 expression: output
 ---
 === FORMATTER ERROR ===
