@@ -1300,6 +1300,71 @@ impl BexVm {
                             })
                         }
 
+                        // Mixed int/float: promote int to float.
+                        #[allow(clippy::cast_precision_loss)]
+                        (Value::Int(left), Value::Float(right)) => {
+                            let left = left as f64;
+                            Value::Float(match op {
+                                BinOp::Div if right == 0.0 => {
+                                    return Err(RuntimeError::DivisionByZero {
+                                        left: Value::Float(left),
+                                        right: Value::Float(right),
+                                    }
+                                    .into());
+                                }
+
+                                BinOp::Add => left + right,
+                                BinOp::Sub => left - right,
+                                BinOp::Mul => left * right,
+                                BinOp::Div => left / right,
+                                BinOp::Mod => left % right,
+
+                                BinOp::BitAnd
+                                | BinOp::BitOr
+                                | BinOp::BitXor
+                                | BinOp::Shl
+                                | BinOp::Shr => {
+                                    return Err(VmError::from(InternalError::CannotApplyBinOp {
+                                        left: Type::Int,
+                                        right: Type::Float,
+                                        op,
+                                    }));
+                                }
+                            })
+                        }
+
+                        #[allow(clippy::cast_precision_loss)]
+                        (Value::Float(left), Value::Int(right)) => {
+                            let right = right as f64;
+                            Value::Float(match op {
+                                BinOp::Div if right == 0.0 => {
+                                    return Err(RuntimeError::DivisionByZero {
+                                        left: Value::Float(left),
+                                        right: Value::Float(right),
+                                    }
+                                    .into());
+                                }
+
+                                BinOp::Add => left + right,
+                                BinOp::Sub => left - right,
+                                BinOp::Mul => left * right,
+                                BinOp::Div => left / right,
+                                BinOp::Mod => left % right,
+
+                                BinOp::BitAnd
+                                | BinOp::BitOr
+                                | BinOp::BitXor
+                                | BinOp::Shl
+                                | BinOp::Shr => {
+                                    return Err(VmError::from(InternalError::CannotApplyBinOp {
+                                        left: Type::Float,
+                                        right: Type::Int,
+                                        op,
+                                    }));
+                                }
+                            })
+                        }
+
                         (Value::Object(_), Value::Object(_)) if op == BinOp::Add => {
                             let left = self.as_string(&left)?;
                             let right = self.as_string(&right)?;
@@ -1364,6 +1429,51 @@ impl BexVm {
                                 .into());
                             }
                         }),
+
+                        // Mixed int/float comparisons: promote int to float.
+                        #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
+                        (Value::Int(left), Value::Float(right)) => {
+                            let left = left as f64;
+                            Value::Bool(match op {
+                                CmpOp::Eq => left == right,
+                                CmpOp::NotEq => left != right,
+                                CmpOp::Lt => left < right,
+                                CmpOp::LtEq => left <= right,
+                                CmpOp::Gt => left > right,
+                                CmpOp::GtEq => left >= right,
+
+                                CmpOp::InstanceOf => {
+                                    return Err(InternalError::CannotApplyCmpOp {
+                                        left: Type::Int,
+                                        right: Type::Float,
+                                        op,
+                                    }
+                                    .into());
+                                }
+                            })
+                        }
+
+                        #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
+                        (Value::Float(left), Value::Int(right)) => {
+                            let right = right as f64;
+                            Value::Bool(match op {
+                                CmpOp::Eq => left == right,
+                                CmpOp::NotEq => left != right,
+                                CmpOp::Lt => left < right,
+                                CmpOp::LtEq => left <= right,
+                                CmpOp::Gt => left > right,
+                                CmpOp::GtEq => left >= right,
+
+                                CmpOp::InstanceOf => {
+                                    return Err(InternalError::CannotApplyCmpOp {
+                                        left: Type::Float,
+                                        right: Type::Int,
+                                        op,
+                                    }
+                                    .into());
+                                }
+                            })
+                        }
 
                         (Value::Object(left_index), Value::Object(right_index))
                             if matches!(self.get_object(left_index), Object::String(_))
