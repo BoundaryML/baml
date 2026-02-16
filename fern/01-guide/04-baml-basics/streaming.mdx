@@ -851,6 +851,46 @@ class Person {
 }
 ```
 
+#### Atomic list items with union types
+
+A common pattern is streaming a list of items where each item can be one of
+several types (e.g. tool calls and messages). You can use `@stream.done` on
+the list element type to ensure each item only appears once it's fully complete:
+
+```baml
+class ToolCall {
+  name string
+  parameters string
+}
+
+class Message {
+  role string
+  content string
+}
+
+type OutputItem = ToolCall | Message
+
+// Each list element appears only when fully complete.
+// The list grows incrementally as items finish.
+function Run(input: string) -> (OutputItem @stream.done)[] {
+  client MyClient
+  prompt #"
+    {{ input }}
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+When `@stream.done` is applied to a union type, it propagates to all variants.
+This means you don't need to add `@@stream.done` to each class individually —
+annotating the union is sufficient.
+
+<Tip>
+You can also achieve the same behavior by adding `@@stream.done` to each
+class in the union. The `(T @stream.done)[]` syntax is more concise when
+the classes are used in other contexts where you don't want `@@stream.done`.
+</Tip>
+
 ### `@stream.not_null`
 This attribute ensures a containing object is only streamed when this field has a value. It's particularly useful for discriminator fields or required metadata.
 
