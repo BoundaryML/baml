@@ -1,14 +1,18 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
 expression: first
 ---
+// Test file system operations typecheck correctly
+
 function ReadFile() -> string {
     let f = baml.fs.open("example.txt");
     f.read()
 }
+
 function ReadFileInline() -> string {
     baml.fs.open("data.json").read()
 }
+
 function ReadMultipleFiles() -> string {
     let f1 = baml.fs.open("file1.txt");
     let f2 = baml.fs.open("file2.txt");
@@ -16,6 +20,7 @@ function ReadMultipleFiles() -> string {
     let content2 = f2.read();
     content1 + content2
 }
+
 function ReadAndClose() -> string {
     let f = baml.fs.open("example.txt");
     let content = f.read();

@@ -1,5 +1,7 @@
 //! Reference: [baml_compiler_syntax::ast::MatchPattern] and [baml_compiler_hir::body::Pattern]
 
+use std::iter::chain;
+
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
@@ -34,7 +36,7 @@ impl FromCST for MatchPattern {
         if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
             let UnionPatternMember::Word(binding_name) = first_elem else {
                 return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "PIPE".into(),
+                    expected_desc: "WORD".into(),
                     found: colon.kind(),
                     at: colon.text_range(),
                 });
@@ -177,6 +179,7 @@ pub struct UnionPattern {
 impl PrintMultiLine for UnionPattern {
     /// Multi-line layout: first member stays on the current line, each subsequent
     /// member starts with `|` on its own indented line. Same layout as [`super::UnionType`].
+    /// Trailing comments on members are preserved.
     ///
     /// ```baml
     /// FirstPattern
@@ -185,6 +188,7 @@ impl PrintMultiLine for UnionPattern {
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut info = printer.print(&*self.first, shape.clone());
+        printer.print_trivia_all_trailing_for(self.first.rightmost_token());
         for (pipe, pattern) in &self.rest {
             info.multi_lined = true;
             printer.print_newline();
@@ -192,6 +196,7 @@ impl PrintMultiLine for UnionPattern {
             printer.print_raw_token(pipe);
             printer.print_str(" ");
             printer.print(pattern, shape.clone());
+            printer.print_trivia_all_trailing_for(pattern.rightmost_token());
         }
         info
     }
@@ -199,6 +204,33 @@ impl PrintMultiLine for UnionPattern {
 
 impl Printable for UnionPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // Check if trailing trivia on any member forces multi-line
+        let (_, first_trailing) = printer
+            .trivia
+            .get_for_range_split(self.first.rightmost_token());
+        let mut has_line_trivia = first_trailing
+            .iter()
+            .any(|t| t.single_line_len(printer.input).is_none());
+
+        if !has_line_trivia {
+            for (_, pattern) in &self.rest {
+                let (_, trailing) = printer
+                    .trivia
+                    .get_for_range_split(pattern.rightmost_token());
+                if trailing
+                    .iter()
+                    .any(|t| t.single_line_len(printer.input).is_none())
+                {
+                    has_line_trivia = true;
+                    break;
+                }
+            }
+        }
+
+        if has_line_trivia {
+            return Self::print_multi_line(self, shape, printer);
+        }
+
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         let mut multi_lined = false;
@@ -338,6 +370,23 @@ pub struct NestedPattern {
     pub close_paren: t::RParen,
 }
 
+impl NestedPattern {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
+        printer.print_raw_token(&self.open_paren);
+        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_newline();
+
+        printer.print_standalone_with_trivia(&*self.pattern, inner_indent);
+
+        printer.print_trivia_all_leading_with_newline_for(self.close_paren.span(), inner_indent);
+        printer.print_newline();
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
+    }
+}
+
 impl Printable for NestedPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut inner_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
@@ -348,18 +397,45 @@ impl Printable for NestedPattern {
         };
         let inner_info = inner_printer.print(&*self.pattern, inner_shape);
 
-        if inner_info.multi_lined || inner_printer.output.len() > shape.width {
-            printer.print_raw_token(&self.open_paren);
-            printer.print_newline();
-            printer.print_spaces(shape.indent + printer.config.indent_width);
-            printer.append_from_printer(inner_printer);
-            printer.print_newline();
-            printer.print_spaces(shape.indent);
-            printer.print_raw_token(&self.close_paren);
-            PrintInfo::default_multi_lined()
+        // Check trivia between parens and inner pattern
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        let (pattern_leading, _) = printer
+            .trivia
+            .get_for_range_split(self.pattern.leftmost_token());
+        let (_, pattern_trailing) = printer
+            .trivia
+            .get_for_range_split(self.pattern.rightmost_token());
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        let single_line_len: usize = chain(
+            chain(open_trailing, pattern_leading),
+            chain(pattern_trailing, close_leading),
+        )
+        .map(|t| t.single_line_len(printer.input))
+        .sum::<Option<usize>>()
+        .map(|sum| sum + inner_printer.len() + const { "()".len() })
+        .unwrap_or(usize::MAX);
+
+        if inner_info.multi_lined || single_line_len > shape.width {
+            self.print_multi_line(shape, printer)
         } else {
             printer.print_raw_token(&self.open_paren);
+            for t in open_trailing {
+                printer.print_trivia(t);
+            }
+            for t in pattern_leading {
+                if t.is_comment() {
+                    printer.print_trivia(t);
+                }
+            }
             printer.append_from_printer(inner_printer);
+            for t in pattern_trailing {
+                printer.print_trivia(t);
+            }
+            for t in close_leading {
+                if t.is_comment() {
+                    printer.print_trivia(t);
+                }
+            }
             printer.print_raw_token(&self.close_paren);
             PrintInfo::default_single_line()
         }

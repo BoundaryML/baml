@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
 expression: first
 ---
 function simple_while_loop() -> int {
@@ -10,6 +10,7 @@ function simple_while_loop() -> int {
     ;
     return i;
 }
+
 function nested_while_loop() -> int {
     let i = 0;
     while (i < 10) {

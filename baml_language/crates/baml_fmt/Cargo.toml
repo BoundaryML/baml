@@ -23,6 +23,7 @@ baml_compiler_lexer = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_compiler_syntax = { workspace = true }
 baml_project = { workspace = true }
+ouroboros = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
 thiserror = { workspace = true }

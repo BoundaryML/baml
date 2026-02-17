@@ -881,6 +881,10 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                 }
             };
 
+            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                assert_snapshot!(#snapshot_name, first);
+            });
+
             // Format a second time – the output must be identical (idempotency).
             let second = match baml_fmt::format(&first, &options) {
                 Ok(formatted) => formatted,
@@ -899,10 +903,6 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                  === second pass ===\n{}",
                 #relative_path, first, second
             );
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
-                assert_snapshot!(#snapshot_name, first);
-            });
         }
     }
 }

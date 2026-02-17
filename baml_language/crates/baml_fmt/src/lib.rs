@@ -6,7 +6,7 @@ use baml_compiler_diagnostics::ParseError;
 use baml_compiler_syntax::{SyntaxElement, SyntaxNode};
 use baml_project::ProjectDatabase;
 
-pub use trivia_classifier::{EmittableTrivia, classify_trivia};
+pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
 use crate::{
     ast::FromCST as _,
@@ -32,7 +32,7 @@ pub fn format_salsa(
     }
 
     let cst = SyntaxNode::new_root(parsed);
-    let trivia = classify_trivia(&cst);
+    let trivia = TriviaInfo::classify_trivia(&cst);
     let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
 
     let mut printer = Printer::new_empty(file.text(db), &options, &trivia);

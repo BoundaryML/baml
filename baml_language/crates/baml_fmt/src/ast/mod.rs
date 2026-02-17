@@ -346,7 +346,11 @@ impl Printable for SourceFile {
         assert_eq!(shape.width, printer.config.line_width);
 
         for decl in &self.items {
-            let _ = printer.print(decl, shape.clone());
+            printer.print_standalone_with_trivia(decl, 0);
+            printer.print_newline();
+        }
+        for trivia in printer.trivia.get_for_eof() {
+            printer.print_trivia(trivia);
             printer.print_newline();
         }
 

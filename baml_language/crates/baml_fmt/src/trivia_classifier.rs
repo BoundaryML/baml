@@ -1,113 +1,240 @@
+use std::collections::HashMap;
+
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
-use rowan::TextRange;
+use ouroboros::self_referencing;
+use rowan::{TextRange, TextSize};
 
-/// We walk through the syntax tree and classify trivia tokens.
-///
-/// The output will always be sorted with regard to the range they are attached to (with EOF being later than everything else),
-/// then ordered by the location of the order the trivia should be emitted (based on the order in the input).
-pub fn classify_trivia(root: &SyntaxNode) -> Vec<EmittableTrivia> {
-    let mut found_trivia = Vec::new();
+use crate::printer::Printable;
 
-    let mut prev_non_trivia_on_line: Option<TextRange> = None;
-    let mut has_comment_on_line = false;
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    enum AttachTriviaToNext {
-        LineComment(TextRange),
-        BlockComment(TextRange),
-        Newline,
-    }
-    let mut trivia_to_attach_next = Vec::new();
+/// Represents all the trivia attached to tokens or EOF.
+pub struct TriviaInfo {
+    inner: TriviaInfoInner,
+}
 
-    let mut next = root.first_token();
-    while let Some(token) = next {
-        next = token.next_token();
-        match token.kind() {
-            SyntaxKind::NEWLINE => {
-                if !has_comment_on_line && prev_non_trivia_on_line.is_none() {
-                    // terminated line is empty except for maybe whitespace
-                    if !trivia_to_attach_next.ends_with(&[AttachTriviaToNext::Newline]) {
-                        trivia_to_attach_next.push(AttachTriviaToNext::Newline);
+#[self_referencing]
+struct TriviaInfoInner {
+    trivia: Vec<EmittableTrivia>,
+    #[borrows(trivia)]
+    #[covariant]
+    token_trivia: HashMap<TextRange, &'this [EmittableTrivia]>,
+    #[borrows(trivia)]
+    eof_trivia: &'this [EmittableTrivia],
+}
+
+impl TriviaInfo {
+    /// We walk through the syntax tree and classify trivia tokens.
+    ///
+    /// The output will always be sorted with regard to the range they are attached to (with EOF being later than everything else),
+    /// then ordered by the location of the order the trivia should be emitted (based on the order in the input).
+    pub fn classify_trivia(root: &SyntaxNode) -> Self {
+        let mut found_trivia = Vec::new();
+
+        let mut prev_non_trivia_on_line: Option<TextRange> = None;
+        let mut has_comment_on_line = false;
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum AttachTriviaToNext {
+            LineComment(TextRange),
+            BlockComment(TextRange),
+            Newline,
+        }
+        let mut trivia_to_attach_next = Vec::new();
+
+        let mut next = root.first_token();
+        while let Some(token) = next {
+            next = token.next_token();
+            match token.kind() {
+                SyntaxKind::NEWLINE => {
+                    if !has_comment_on_line && prev_non_trivia_on_line.is_none() {
+                        // terminated line is empty except for maybe whitespace
+                        if !trivia_to_attach_next.ends_with(&[AttachTriviaToNext::Newline]) {
+                            trivia_to_attach_next.push(AttachTriviaToNext::Newline);
+                        }
                     }
+                    has_comment_on_line = false;
+                    prev_non_trivia_on_line = None;
                 }
-                has_comment_on_line = false;
-                prev_non_trivia_on_line = None;
-            }
-            SyntaxKind::LINE_COMMENT => {
-                if let Some(prev) = prev_non_trivia_on_line {
+                SyntaxKind::LINE_COMMENT => {
+                    if let Some(prev) = prev_non_trivia_on_line {
+                        debug_assert!(
+                            next.is_none()
+                                || next
+                                    .as_ref()
+                                    .is_some_and(|next| next.kind() == SyntaxKind::NEWLINE),
+                            "We expect a newline after a line comment",
+                        );
+                        found_trivia.push(EmittableTrivia::TrailingLineComment {
+                            comment: token.text_range(),
+                            after: prev,
+                        });
+                    } else {
+                        trivia_to_attach_next
+                            .push(AttachTriviaToNext::LineComment(token.text_range()));
+                    }
+                    has_comment_on_line = true;
+                }
+                SyntaxKind::BLOCK_COMMENT => {
+                    if let Some(prev) = prev_non_trivia_on_line {
+                        found_trivia.push(EmittableTrivia::TrailingBlockComment {
+                            comment: token.text_range(),
+                            after: prev,
+                        });
+                    } else {
+                        trivia_to_attach_next
+                            .push(AttachTriviaToNext::BlockComment(token.text_range()));
+                    }
+                    has_comment_on_line = true;
+                }
+                SyntaxKind::WHITESPACE => {}
+                kind => {
                     debug_assert!(
-                        next.is_none()
-                            || next
-                                .as_ref()
-                                .is_some_and(|next| next.kind() == SyntaxKind::NEWLINE),
-                        "We expect a newline after a line comment",
+                        !kind.is_trivia(),
+                        "Unexpected trivia token kind {kind:?} in the catch-all non-trivia branch. This means a new trivia token kind was added without updating this match statement."
                     );
-                    found_trivia.push(EmittableTrivia::TrailingLineComment {
-                        comment: token.text_range(),
-                        after: prev,
-                    });
-                } else {
-                    trivia_to_attach_next.push(AttachTriviaToNext::LineComment(token.text_range()));
-                }
-                has_comment_on_line = true;
-            }
-            SyntaxKind::BLOCK_COMMENT => {
-                if let Some(prev) = prev_non_trivia_on_line {
-                    found_trivia.push(EmittableTrivia::TrailingBlockComment {
-                        comment: token.text_range(),
-                        after: prev,
-                    });
-                } else {
-                    trivia_to_attach_next
-                        .push(AttachTriviaToNext::BlockComment(token.text_range()));
-                }
-                has_comment_on_line = true;
-            }
-            SyntaxKind::WHITESPACE => {}
-            kind => {
-                debug_assert!(
-                    !kind.is_trivia(),
-                    "Unexpected trivia token kind {kind:?} in the catch-all non-trivia branch. This means a new trivia token kind was added without updating this match statement."
-                );
-                prev_non_trivia_on_line = Some(token.text_range());
-                for trivia in trivia_to_attach_next.drain(..) {
-                    match trivia {
-                        AttachTriviaToNext::LineComment(comment) => {
-                            found_trivia.push(EmittableTrivia::LeadingLineComment {
-                                comment,
-                                before: token.text_range(),
-                            });
-                        }
-                        AttachTriviaToNext::BlockComment(comment) => {
-                            found_trivia.push(EmittableTrivia::LeadingBlockComment {
-                                comment,
-                                before: token.text_range(),
-                            });
-                        }
-                        AttachTriviaToNext::Newline => {
-                            found_trivia.push(EmittableTrivia::EmptyLine {
-                                before: token.text_range(),
-                            });
+                    prev_non_trivia_on_line = Some(token.text_range());
+                    for trivia in trivia_to_attach_next.drain(..) {
+                        match trivia {
+                            AttachTriviaToNext::LineComment(comment) => {
+                                found_trivia.push(EmittableTrivia::LeadingLineComment {
+                                    comment,
+                                    before: token.text_range(),
+                                });
+                            }
+                            AttachTriviaToNext::BlockComment(comment) => {
+                                found_trivia.push(EmittableTrivia::LeadingBlockComment {
+                                    comment,
+                                    before: token.text_range(),
+                                });
+                            }
+                            AttachTriviaToNext::Newline => {
+                                found_trivia.push(EmittableTrivia::EmptyLine {
+                                    before: token.text_range(),
+                                });
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    // trivia at end:
-    for trivia in trivia_to_attach_next {
-        match trivia {
-            AttachTriviaToNext::LineComment(comment)
-            | AttachTriviaToNext::BlockComment(comment) => {
-                found_trivia.push(EmittableTrivia::CommentBeforeEOF { comment });
+        // trivia at end:
+        for trivia in trivia_to_attach_next {
+            match trivia {
+                AttachTriviaToNext::LineComment(comment)
+                | AttachTriviaToNext::BlockComment(comment) => {
+                    found_trivia.push(EmittableTrivia::CommentBeforeEOF { comment });
+                }
+                AttachTriviaToNext::Newline => {
+                    found_trivia.push(EmittableTrivia::EmptyLineBeforeEOF);
+                }
             }
-            AttachTriviaToNext::Newline => {
-                found_trivia.push(EmittableTrivia::EmptyLineBeforeEOF);
-            }
+        }
+
+        assert!(found_trivia.is_sorted_by_key(|trivia| trivia.attached_to().start()));
+
+        let found_trivia = TriviaInfoInner::new(
+            found_trivia,
+            |found_trivia| {
+                let mut token_trivia = HashMap::new();
+
+                let mut it = found_trivia.iter().enumerate().peekable();
+                'outer_loop: while let Some((start_idx, trivia)) = it.next() {
+                    let range = trivia.attached_to();
+                    if range.start() == TextSize::new(u32::MAX) {
+                        // EOF trivia, there are no more token-attached trivia
+                        break;
+                    }
+                    while let Some(&(idx, trivia)) = it.peek() {
+                        if trivia.attached_to() == range {
+                            it.next();
+                        } else {
+                            // found something not attached to the same range, so we can stop
+                            token_trivia.insert(range, &found_trivia[start_idx..idx]);
+                            continue 'outer_loop;
+                        }
+                    }
+                    // we reached the end of trivia without finding a token not attached to the same range
+                    // so we can add the entire rest of the trivia to the token trivia
+                    token_trivia.insert(range, &found_trivia[start_idx..]);
+                }
+
+                token_trivia
+            },
+            |found_trivia| {
+                if let Some((idx, _)) = found_trivia
+                    .iter()
+                    .enumerate()
+                    .rfind(|(_, trivia)| !trivia.is_at_eof())
+                {
+                    &found_trivia[(idx + 1)..]
+                } else {
+                    // all trivia is attached to EOF (or there is not trivia)
+                    &found_trivia
+                }
+            },
+        );
+
+        TriviaInfo {
+            inner: found_trivia,
         }
     }
 
-    found_trivia
+    pub fn all_trivia(&self) -> &[EmittableTrivia] {
+        &self.inner.borrow_trivia()
+    }
+
+    /// Returns all trivia attached to the token at the given range.
+    pub fn get_for_range(&self, range: TextRange) -> &[EmittableTrivia] {
+        self.inner
+            .borrow_token_trivia()
+            .get(&range)
+            .cloned()
+            .unwrap_or(&[])
+    }
+
+    /// Returns all trivia attached to the token at the given range, split into leading and trailing trivia.
+    pub fn get_for_range_split(
+        &self,
+        range: TextRange,
+    ) -> (&[EmittableTrivia], &[EmittableTrivia]) {
+        let trivia = self.get_for_range(range);
+        debug_assert!(trivia.iter().all(|t| t.attached_to() == range));
+        let split_idx = trivia
+            .iter()
+            .enumerate()
+            .find(|(_, t)| !t.is_leading())
+            .map(|(idx, _)| idx)
+            .unwrap_or(trivia.len());
+        let leading = &trivia[..split_idx];
+        let trailing = &trivia[split_idx..];
+        debug_assert!(leading.iter().all(|t| t.is_leading()), "{leading:?}");
+        debug_assert!(trailing.iter().all(|t| !t.is_leading()), "{trailing:?}");
+        (leading, trailing)
+    }
+
+    /// Returns the leading trivia for [`Printable::leftmost_token`] and the trailing trivia for [`Printable::rightmost_token`].
+    ///
+    /// This can be more efficient than calling [`Self::get_for_range_split`] on each separately,
+    /// since it will only split the trivia for the element once if has only one token (leftmost == rightmost).
+    /// It is also often cleaner.
+    pub fn get_for_element(
+        &self,
+        printable: &impl Printable,
+    ) -> (&[EmittableTrivia], &[EmittableTrivia]) {
+        let leftmost = printable.leftmost_token();
+        let rightmost = printable.rightmost_token();
+        if leftmost == rightmost {
+            self.get_for_range_split(leftmost)
+        } else {
+            let (leading, _) = self.get_for_range_split(leftmost);
+            let (_, trailing) = self.get_for_range_split(rightmost);
+            (leading, trailing)
+        }
+    }
+
+    /// Returns all trivia attached to EOF.
+    pub fn get_for_eof(&self) -> &[EmittableTrivia] {
+        self.inner.borrow_eof_trivia()
+    }
 }
 
 /// Represents a trivia token that can be emitted by the formatter printer.
@@ -169,7 +296,8 @@ pub enum EmittableTrivia {
     /// a += 2;
     /// ```
     ///
-    /// Attached to the following non-trivia token (this is important because )
+    /// Attached to the following non-trivia token
+    /// (this is important because we want to retain information on whether there is a newline between two elements or not).
     EmptyLine { before: TextRange },
     /// There is a newline with no other non-whitespace tokens on the same line,
     /// and no non-trivia tokens after it in the file.
@@ -186,6 +314,89 @@ pub enum EmittableTrivia {
     ///
     /// ```
     EmptyLineBeforeEOF,
+}
+
+impl EmittableTrivia {
+    /// `true` is the trivia represents a comment.
+    /// `false` if it represents an empty line.
+    pub fn is_comment(&self) -> bool {
+        matches!(
+            self,
+            EmittableTrivia::CommentBeforeEOF { .. }
+                | EmittableTrivia::LeadingBlockComment { .. }
+                | EmittableTrivia::LeadingLineComment { .. }
+                | EmittableTrivia::TrailingBlockComment { .. }
+                | EmittableTrivia::TrailingLineComment { .. }
+        )
+    }
+    /// `true` if the trivia is attached to the following non-trivia token (or EOF),
+    /// `false` if it is attached to the previous non-trivia token (on same line).
+    pub fn is_leading(&self) -> bool {
+        matches!(
+            self,
+            EmittableTrivia::EmptyLine { .. }
+                | EmittableTrivia::EmptyLineBeforeEOF
+                | EmittableTrivia::CommentBeforeEOF { .. }
+                | EmittableTrivia::LeadingBlockComment { .. }
+                | EmittableTrivia::LeadingLineComment { .. }
+        )
+    }
+    /// Anything at EOF has TextRange with u32::MAX as start and end.
+    pub fn attached_to(&self) -> TextRange {
+        match self {
+            EmittableTrivia::EmptyLine { before } => *before,
+            EmittableTrivia::EmptyLineBeforeEOF => {
+                TextRange::new(TextSize::new(u32::MAX), TextSize::new(u32::MAX))
+            }
+            EmittableTrivia::CommentBeforeEOF { .. } => {
+                TextRange::new(TextSize::new(u32::MAX), TextSize::new(u32::MAX))
+            }
+            EmittableTrivia::LeadingBlockComment { before, .. } => *before,
+            EmittableTrivia::LeadingLineComment { before, .. } => *before,
+            EmittableTrivia::TrailingBlockComment { after, .. } => *after,
+            EmittableTrivia::TrailingLineComment { after, .. } => *after,
+        }
+    }
+    /// `true` if the trivia is attached to EOF.
+    /// `false` if it is attached to some other token.
+    pub fn is_at_eof(&self) -> bool {
+        matches!(
+            self,
+            EmittableTrivia::CommentBeforeEOF { .. } | EmittableTrivia::EmptyLineBeforeEOF
+        )
+    }
+
+    /// Returns the length of the trivia when trying to print its parent as a single line.
+    ///
+    /// - Block comments return their length if they contain no newlines.
+    /// - Line comments (and block comments with newlines) return `None` as they cannot be included in a single line.
+    /// - Empty lines return `Some(0)` as they get ignored when printing in a single line.
+    /// - EOF comments return `None`. Generally, they should not be passed into this function as they are not between any tokens.
+    ///
+    /// `input` is needed to determine whether a block comment contains newlines.
+    pub fn single_line_len(&self, input: &str) -> Option<usize> {
+        match self {
+            EmittableTrivia::TrailingBlockComment { comment, .. } => {
+                if input[*comment].contains('\n') {
+                    None
+                } else {
+                    Some(comment.len().into())
+                }
+            }
+            EmittableTrivia::TrailingLineComment { .. } => None,
+            EmittableTrivia::LeadingBlockComment { comment, .. } => {
+                if input[*comment].contains('\n') {
+                    None
+                } else {
+                    Some(comment.len().into())
+                }
+            }
+            EmittableTrivia::LeadingLineComment { .. } => None,
+            EmittableTrivia::CommentBeforeEOF { .. } => None,
+            EmittableTrivia::EmptyLine { .. } => Some(0),
+            EmittableTrivia::EmptyLineBeforeEOF => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -219,7 +430,8 @@ function MyFunction() -> int {
         let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
         assert!(errors.is_empty());
         let ast = SyntaxNode::new_root(parsed);
-        let trivia = classify_trivia(&ast);
+        let trivia = TriviaInfo::classify_trivia(&ast);
+        let trivia = trivia.all_trivia();
 
         assert_eq!(
             trivia,

@@ -1,24 +1,30 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
 expression: first
 ---
 function Bar() -> int {
     let x = Foo(1);
     x
 }
+
 function Foo(x: int) -> int {
     x + 1
 }
+
 function GreetBaz(n: string) -> string {
     let baz = Baz { name: n };
     baz.Greeting()
 }
+
 class Baz {
     name string
+
     function Greeting(self) -> string {
         "Hello, " + self.name + "!"
     }
 }
+
+// Simple param in if statement.
 function param_in_if_statement(b: bool) -> int {
     if (b) {
         1

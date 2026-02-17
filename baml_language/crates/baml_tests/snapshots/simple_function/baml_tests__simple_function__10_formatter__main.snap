@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
 expression: first
 ---
 function HelloWorld(name: string) -> string {
@@ -8,7 +8,9 @@ function HelloWorld(name: string) -> string {
     Say hello to {{name}}
   "#
 }
+
 class User {
     name string
     age int
-}
+} // Added comment
+// Test comment

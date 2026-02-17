@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
 expression: first
 ---
 function c_style_for_loop() -> int {
@@ -10,6 +10,7 @@ function c_style_for_loop() -> int {
     ;
     return result;
 }
+
 function iterator_style_for_loop() -> int {
     let result = 0;
     for (let i in [1, 2, 3]) {
@@ -18,6 +19,7 @@ function iterator_style_for_loop() -> int {
     ;
     return result;
 }
+
 function nested_for_loop() -> int {
     let result = 0;
     for (let i in [1, 2, 3]) {

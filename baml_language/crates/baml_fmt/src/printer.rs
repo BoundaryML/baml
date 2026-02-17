@@ -1,21 +1,17 @@
 pub use crate::EmittableTrivia;
-use crate::{FormatOptions, ast::Token};
+use crate::{FormatOptions, TriviaInfo, ast::Token};
 use rowan::TextRange;
 
 pub struct Printer<'a> {
     pub input: &'a str,
     pub config: &'a FormatOptions,
     pub output: String,
-    pub trivia: &'a [EmittableTrivia],
+    pub trivia: &'a TriviaInfo,
     pub warnings: Vec<PrinterWarning>,
 }
 impl<'a> Printer<'a> {
     #[inline]
-    pub fn new_empty(
-        input: &'a str,
-        config: &'a FormatOptions,
-        trivia: &'a [EmittableTrivia],
-    ) -> Self {
+    pub fn new_empty(input: &'a str, config: &'a FormatOptions, trivia: &'a TriviaInfo) -> Self {
         Printer {
             input,
             config,
@@ -30,7 +26,7 @@ impl<'a> Printer<'a> {
         input: &'a str,
         config: &'a FormatOptions,
         output: String,
-        trivia: &'a [EmittableTrivia],
+        trivia: &'a TriviaInfo,
     ) -> Self {
         Printer {
             input,
@@ -79,6 +75,146 @@ impl<'a> Printer<'a> {
     pub fn print_input_range(&mut self, range: TextRange) {
         let text = &self.input[range];
         self.output.push_str(text);
+    }
+
+    /// Prints an emittable trivia, without a newline.
+    ///
+    /// Empty lines print nothing, while the comments print their comment.
+    pub fn print_trivia(&mut self, trivia: &EmittableTrivia) {
+        match trivia {
+            EmittableTrivia::EmptyLine { .. } => {}
+            EmittableTrivia::EmptyLineBeforeEOF => {}
+            EmittableTrivia::CommentBeforeEOF { comment } => {
+                self.print_input_range(*comment);
+            }
+            EmittableTrivia::LeadingBlockComment { comment, .. } => {
+                self.print_input_range(*comment);
+            }
+            EmittableTrivia::LeadingLineComment { comment, .. } => {
+                self.print_input_range(*comment);
+            }
+            EmittableTrivia::TrailingBlockComment { comment, .. } => {
+                self.print_input_range(*comment);
+            }
+            EmittableTrivia::TrailingLineComment { comment, .. } => {
+                self.print_input_range(*comment);
+            }
+        };
+    }
+
+    /// Prints an emittable trivia, followed by a newline.
+    pub fn print_trivia_with_newline(&mut self, trivia: &EmittableTrivia) {
+        self.print_trivia(trivia);
+        self.print_newline();
+    }
+
+    /// Prints all leading emittable trivia for the given range.
+    /// intended for comments each on their own lines.
+    ///
+    /// Newlines are printed between each trivia (except empty lines).
+    /// Each non-empty line is indented by `indent` spaces.
+    ///
+    /// Example with indent 4:
+    /// ```baml
+    ///    // <-- added indent but not newline
+    ///    // second comment
+    ///
+    ///    // ^^ no indent on empty line
+    ///    // includes trailing newline (if anything was printed) vvv
+    ///
+    /// ```
+    ///
+    /// Returns the number of trivia items printed.
+    #[allow(unused_must_use)]
+    pub fn print_trivia_all_leading_with_newline_for(
+        &mut self,
+        range: TextRange,
+        indent: usize,
+    ) -> usize {
+        let (leading, _) = self.trivia.get_for_range_split(range);
+        if let Some((first, rest)) = leading.split_first() {
+            if first.is_comment() {
+                self.print_spaces(indent);
+            }
+            self.print_trivia(first);
+            self.print_newline();
+
+            for trivia in rest {
+                if trivia.is_comment() {
+                    self.print_spaces(indent);
+                }
+                self.print_trivia(trivia);
+                self.print_newline();
+            }
+        }
+        leading.len()
+    }
+
+    /// Prints all trailing trivia attached to the given range.
+    /// Each trivia gets one space before it.
+    ///
+    /// This is useful for printing trailing trivia at the end of a line.
+    ///
+    /// ```baml
+    /// let x; /* first trivia */ /* second trivia */ // third trivia
+    /// ```
+    pub fn print_trivia_all_trailing_for(&mut self, range: TextRange) {
+        let (_, trailing) = self.trivia.get_for_range_split(range);
+        for trivia in trailing {
+            self.print_spaces(1);
+            self.print_trivia(trivia);
+        }
+    }
+
+    /// For standalone items which are fully on their own line (and may be multiline), print them with all their trivia.
+    /// For example, a function definition or a statement in a block.
+    ///
+    /// This is basically the combination of
+    /// - [`Self::print_trivia_all_leading_with_newline_for`]
+    /// - [`Self::print`]
+    /// - [`Self::print_trivia_all_trailing_for`]
+    ///
+    /// Example:
+    /// ```baml
+    ///     // leading trivia
+    ///     // <- note the indent
+    ///     let x = {
+    ///         "printable may be multiline, or not"
+    ///     }; // trailing trivia, no newline at end -->
+    /// ```
+    pub fn print_standalone_with_trivia(&mut self, printable: &impl Printable, indent: usize) {
+        self.print_trivia_all_leading_with_newline_for(printable.leftmost_token(), indent);
+        self.print_spaces(indent);
+        let shape = Shape {
+            width: self.config.line_width.saturating_sub(indent),
+            indent,
+            first_line_offset: 0,
+        };
+        self.print(printable, shape);
+        self.print_trivia_all_trailing_for(printable.rightmost_token());
+    }
+
+    /// Checks that all the trivia can fit on a single line (no line comments or block comments containing newlines).
+    /// If so, prints all the trivia with no spaces between and returns the length of the trivia.
+    ///
+    /// Returns `None` if the trivia cannot fit on a single line.
+    ///
+    /// It uses [`EmittableTrivia::single_line_len`], and similarly does not count or print empty lines.
+    #[allow(unused_must_use)]
+    pub fn print_trivia_single_line_squished(
+        &mut self,
+        trivia: &[EmittableTrivia],
+    ) -> Option<usize> {
+        let trivia_len = trivia
+            .iter()
+            .map(|t| t.single_line_len(self.input))
+            .sum::<Option<usize>>()?;
+        for t in trivia {
+            if t.is_comment() {
+                self.print_trivia(t);
+            }
+        }
+        Some(trivia_len)
     }
 
     /// Append the output and warnings from another printer to this one.
@@ -170,12 +306,12 @@ impl PrintInfo {
 }
 
 /// Main trait for printing elements.
-/// 
+///
 /// ## Trivia
 /// A node should print its internal trivia, but not the outer trivia
 /// (leading trivia on `Self::leftmost_token` and trailing trivia on `Self::rightmost_token`).
 /// The outer trivia is handled by whichever parent node has it as internal trivia.
-/// 
+///
 /// The only exception is [`crate::ast::SourceFile`]: it can print EOF-attached trivia.
 pub trait Printable {
     /// Prints to the printer.
