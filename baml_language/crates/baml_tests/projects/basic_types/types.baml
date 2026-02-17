@@ -35,3 +35,6 @@ type MixedMap = map<string, int | string>
 
 // Union of arrays (different from array of union)
 type UnionOfArrays = int[] | string[]
+
+// A really long type that should wrap to multiple lines
+type ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | string | bool | float | int[] | string[] | map<string, int | string> | map<string, map<string, int | string>> | map<string, map<string, map<string, int | string>>> | map<string, map<string, map<string, map<string, int | string>>>>>

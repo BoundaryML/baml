@@ -1486,6 +1486,11 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
             p.parse_type_primary();
 
+            if p.pending_greaters > 0 {
+                // Don't parse modifiers until we've used all
+                // pending `>`
+                return;
+            }
             // Type modifiers
             loop {
                 if p.at(TokenKind::LBracket) {
