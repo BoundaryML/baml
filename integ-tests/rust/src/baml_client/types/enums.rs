@@ -18,14 +18,14 @@ pub enum AliasedEnum {
     KEY_TWO,
 }
 
-impl Default for AliasedEnum {
+impl ::std::default::Default for AliasedEnum {
     fn default() -> Self {
         Self::KEY_ONE
     }
 }
 
-impl std::fmt::Display for AliasedEnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for AliasedEnum {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::KEY_ONE => write!(f, "KEY_ONE"),
 
@@ -34,21 +34,21 @@ impl std::fmt::Display for AliasedEnum {
     }
 }
 
-impl std::str::FromStr for AliasedEnum {
+impl ::std::str::FromStr for AliasedEnum {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "KEY_ONE" => Ok(Self::KEY_ONE),
+            "KEY_ONE" => ::std::result::Result::Ok(Self::KEY_ONE),
 
-            "KEY_TWO" => Ok(Self::KEY_TWO),
+            "KEY_TWO" => ::std::result::Result::Ok(Self::KEY_TWO),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<AliasedEnum> for AliasedEnum {
+impl ::std::convert::AsRef<AliasedEnum> for AliasedEnum {
     fn as_ref(&self) -> &AliasedEnum {
         self
     }
@@ -68,14 +68,14 @@ pub enum Category {
     Question,
 }
 
-impl Default for Category {
+impl ::std::default::Default for Category {
     fn default() -> Self {
         Self::Refund
     }
 }
 
-impl std::fmt::Display for Category {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Category {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Refund => write!(f, "Refund"),
 
@@ -90,27 +90,27 @@ impl std::fmt::Display for Category {
     }
 }
 
-impl std::str::FromStr for Category {
+impl ::std::str::FromStr for Category {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Refund" => Ok(Self::Refund),
+            "Refund" => ::std::result::Result::Ok(Self::REFUND),
 
-            "CancelOrder" => Ok(Self::CancelOrder),
+            "CancelOrder" => ::std::result::Result::Ok(Self::CANCELORDER),
 
-            "TechnicalSupport" => Ok(Self::TechnicalSupport),
+            "TechnicalSupport" => ::std::result::Result::Ok(Self::TECHNICALSUPPORT),
 
-            "AccountIssue" => Ok(Self::AccountIssue),
+            "AccountIssue" => ::std::result::Result::Ok(Self::ACCOUNTISSUE),
 
-            "Question" => Ok(Self::Question),
+            "Question" => ::std::result::Result::Ok(Self::QUESTION),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<Category> for Category {
+impl ::std::convert::AsRef<Category> for Category {
     fn as_ref(&self) -> &Category {
         self
     }
@@ -130,14 +130,14 @@ pub enum Category2 {
     Question,
 }
 
-impl Default for Category2 {
+impl ::std::default::Default for Category2 {
     fn default() -> Self {
         Self::Refund
     }
 }
 
-impl std::fmt::Display for Category2 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Category2 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Refund => write!(f, "Refund"),
 
@@ -152,27 +152,27 @@ impl std::fmt::Display for Category2 {
     }
 }
 
-impl std::str::FromStr for Category2 {
+impl ::std::str::FromStr for Category2 {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Refund" => Ok(Self::Refund),
+            "Refund" => ::std::result::Result::Ok(Self::REFUND),
 
-            "CancelOrder" => Ok(Self::CancelOrder),
+            "CancelOrder" => ::std::result::Result::Ok(Self::CANCELORDER),
 
-            "TechnicalSupport" => Ok(Self::TechnicalSupport),
+            "TechnicalSupport" => ::std::result::Result::Ok(Self::TECHNICALSUPPORT),
 
-            "AccountIssue" => Ok(Self::AccountIssue),
+            "AccountIssue" => ::std::result::Result::Ok(Self::ACCOUNTISSUE),
 
-            "Question" => Ok(Self::Question),
+            "Question" => ::std::result::Result::Ok(Self::QUESTION),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<Category2> for Category2 {
+impl ::std::convert::AsRef<Category2> for Category2 {
     fn as_ref(&self) -> &Category2 {
         self
     }
@@ -192,14 +192,14 @@ pub enum Category3 {
     Question,
 }
 
-impl Default for Category3 {
+impl ::std::default::Default for Category3 {
     fn default() -> Self {
         Self::Refund
     }
 }
 
-impl std::fmt::Display for Category3 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Category3 {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Refund => write!(f, "Refund"),
 
@@ -214,27 +214,27 @@ impl std::fmt::Display for Category3 {
     }
 }
 
-impl std::str::FromStr for Category3 {
+impl ::std::str::FromStr for Category3 {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Refund" => Ok(Self::Refund),
+            "Refund" => ::std::result::Result::Ok(Self::REFUND),
 
-            "CancelOrder" => Ok(Self::CancelOrder),
+            "CancelOrder" => ::std::result::Result::Ok(Self::CANCELORDER),
 
-            "TechnicalSupport" => Ok(Self::TechnicalSupport),
+            "TechnicalSupport" => ::std::result::Result::Ok(Self::TECHNICALSUPPORT),
 
-            "AccountIssue" => Ok(Self::AccountIssue),
+            "AccountIssue" => ::std::result::Result::Ok(Self::ACCOUNTISSUE),
 
-            "Question" => Ok(Self::Question),
+            "Question" => ::std::result::Result::Ok(Self::QUESTION),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<Category3> for Category3 {
+impl ::std::convert::AsRef<Category3> for Category3 {
     fn as_ref(&self) -> &Category3 {
         self
     }
@@ -259,17 +259,17 @@ pub enum Color {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
     #[serde(untagged)]
-    _Dynamic(String),
+    _Dynamic(::std::string::String),
 }
 
-impl Default for Color {
+impl ::std::default::Default for Color {
     fn default() -> Self {
         Self::RED
     }
 }
 
-impl std::fmt::Display for Color {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Color {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::RED => write!(f, "RED"),
 
@@ -288,29 +288,29 @@ impl std::fmt::Display for Color {
     }
 }
 
-impl std::str::FromStr for Color {
+impl ::std::str::FromStr for Color {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "RED" => Ok(Self::RED),
+            "RED" => ::std::result::Result::Ok(Self::RED),
 
-            "BLUE" => Ok(Self::BLUE),
+            "BLUE" => ::std::result::Result::Ok(Self::BLUE),
 
-            "GREEN" => Ok(Self::GREEN),
+            "GREEN" => ::std::result::Result::Ok(Self::GREEN),
 
-            "YELLOW" => Ok(Self::YELLOW),
+            "YELLOW" => ::std::result::Result::Ok(Self::YELLOW),
 
-            "BLACK" => Ok(Self::BLACK),
+            "BLACK" => ::std::result::Result::Ok(Self::BLACK),
 
-            "WHITE" => Ok(Self::WHITE),
+            "WHITE" => ::std::result::Result::Ok(Self::WHITE),
 
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<Color> for Color {
+impl ::std::convert::AsRef<Color> for Color {
     fn as_ref(&self) -> &Color {
         self
     }
@@ -324,14 +324,14 @@ pub enum DataType {
     Event,
 }
 
-impl Default for DataType {
+impl ::std::default::Default for DataType {
     fn default() -> Self {
         Self::Resume
     }
 }
 
-impl std::fmt::Display for DataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for DataType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Resume => write!(f, "Resume"),
 
@@ -340,21 +340,21 @@ impl std::fmt::Display for DataType {
     }
 }
 
-impl std::str::FromStr for DataType {
+impl ::std::str::FromStr for DataType {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Resume" => Ok(Self::Resume),
+            "Resume" => ::std::result::Result::Ok(Self::RESUME),
 
-            "Event" => Ok(Self::Event),
+            "Event" => ::std::result::Result::Ok(Self::EVENT),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<DataType> for DataType {
+impl ::std::convert::AsRef<DataType> for DataType {
     fn as_ref(&self) -> &DataType {
         self
     }
@@ -367,10 +367,10 @@ pub enum DynEnumOne {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
     #[serde(untagged)]
-    _Dynamic(String),
+    _Dynamic(::std::string::String),
 }
 
-impl Default for DynEnumOne {
+impl ::std::default::Default for DynEnumOne {
     fn default() -> Self {
         // Eventually, we will remove the default trait for enums with no values
         // But as a temporary solution, we will panic if the enum has no values
@@ -378,25 +378,25 @@ impl Default for DynEnumOne {
     }
 }
 
-impl std::fmt::Display for DynEnumOne {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for DynEnumOne {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::_Dynamic(s) => write!(f, "{}", s),
         }
     }
 }
 
-impl std::str::FromStr for DynEnumOne {
+impl ::std::str::FromStr for DynEnumOne {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<DynEnumOne> for DynEnumOne {
+impl ::std::convert::AsRef<DynEnumOne> for DynEnumOne {
     fn as_ref(&self) -> &DynEnumOne {
         self
     }
@@ -413,17 +413,17 @@ pub enum DynEnumThree {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
     #[serde(untagged)]
-    _Dynamic(String),
+    _Dynamic(::std::string::String),
 }
 
-impl Default for DynEnumThree {
+impl ::std::default::Default for DynEnumThree {
     fn default() -> Self {
         Self::TRICYCLE
     }
 }
 
-impl std::fmt::Display for DynEnumThree {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for DynEnumThree {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::TRICYCLE => write!(f, "TRICYCLE"),
 
@@ -434,21 +434,21 @@ impl std::fmt::Display for DynEnumThree {
     }
 }
 
-impl std::str::FromStr for DynEnumThree {
+impl ::std::str::FromStr for DynEnumThree {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "TRICYCLE" => Ok(Self::TRICYCLE),
+            "TRICYCLE" => ::std::result::Result::Ok(Self::TRICYCLE),
 
-            "TRIANGLE" => Ok(Self::TRIANGLE),
+            "TRIANGLE" => ::std::result::Result::Ok(Self::TRIANGLE),
 
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<DynEnumThree> for DynEnumThree {
+impl ::std::convert::AsRef<DynEnumThree> for DynEnumThree {
     fn as_ref(&self) -> &DynEnumThree {
         self
     }
@@ -461,10 +461,10 @@ pub enum DynEnumTwo {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
     #[serde(untagged)]
-    _Dynamic(String),
+    _Dynamic(::std::string::String),
 }
 
-impl Default for DynEnumTwo {
+impl ::std::default::Default for DynEnumTwo {
     fn default() -> Self {
         // Eventually, we will remove the default trait for enums with no values
         // But as a temporary solution, we will panic if the enum has no values
@@ -472,25 +472,25 @@ impl Default for DynEnumTwo {
     }
 }
 
-impl std::fmt::Display for DynEnumTwo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for DynEnumTwo {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::_Dynamic(s) => write!(f, "{}", s),
         }
     }
 }
 
-impl std::str::FromStr for DynEnumTwo {
+impl ::std::str::FromStr for DynEnumTwo {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<DynEnumTwo> for DynEnumTwo {
+impl ::std::convert::AsRef<DynEnumTwo> for DynEnumTwo {
     fn as_ref(&self) -> &DynEnumTwo {
         self
     }
@@ -504,14 +504,14 @@ pub enum EnumInClass {
     TWO,
 }
 
-impl Default for EnumInClass {
+impl ::std::default::Default for EnumInClass {
     fn default() -> Self {
         Self::ONE
     }
 }
 
-impl std::fmt::Display for EnumInClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for EnumInClass {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::ONE => write!(f, "ONE"),
 
@@ -520,21 +520,21 @@ impl std::fmt::Display for EnumInClass {
     }
 }
 
-impl std::str::FromStr for EnumInClass {
+impl ::std::str::FromStr for EnumInClass {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "ONE" => Ok(Self::ONE),
+            "ONE" => ::std::result::Result::Ok(Self::ONE),
 
-            "TWO" => Ok(Self::TWO),
+            "TWO" => ::std::result::Result::Ok(Self::TWO),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<EnumInClass> for EnumInClass {
+impl ::std::convert::AsRef<EnumInClass> for EnumInClass {
     fn as_ref(&self) -> &EnumInClass {
         self
     }
@@ -555,14 +555,14 @@ pub enum EnumOutput {
     THREE,
 }
 
-impl Default for EnumOutput {
+impl ::std::default::Default for EnumOutput {
     fn default() -> Self {
         Self::ONE
     }
 }
 
-impl std::fmt::Display for EnumOutput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for EnumOutput {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::ONE => write!(f, "ONE"),
 
@@ -573,23 +573,23 @@ impl std::fmt::Display for EnumOutput {
     }
 }
 
-impl std::str::FromStr for EnumOutput {
+impl ::std::str::FromStr for EnumOutput {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "ONE" => Ok(Self::ONE),
+            "ONE" => ::std::result::Result::Ok(Self::ONE),
 
-            "TWO" => Ok(Self::TWO),
+            "TWO" => ::std::result::Result::Ok(Self::TWO),
 
-            "THREE" => Ok(Self::THREE),
+            "THREE" => ::std::result::Result::Ok(Self::THREE),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<EnumOutput> for EnumOutput {
+impl ::std::convert::AsRef<EnumOutput> for EnumOutput {
     fn as_ref(&self) -> &EnumOutput {
         self
     }
@@ -608,17 +608,17 @@ pub enum Hobby {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
     #[serde(untagged)]
-    _Dynamic(String),
+    _Dynamic(::std::string::String),
 }
 
-impl Default for Hobby {
+impl ::std::default::Default for Hobby {
     fn default() -> Self {
         Self::SPORTS
     }
 }
 
-impl std::fmt::Display for Hobby {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Hobby {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::SPORTS => write!(f, "SPORTS"),
 
@@ -631,23 +631,23 @@ impl std::fmt::Display for Hobby {
     }
 }
 
-impl std::str::FromStr for Hobby {
+impl ::std::str::FromStr for Hobby {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "SPORTS" => Ok(Self::SPORTS),
+            "SPORTS" => ::std::result::Result::Ok(Self::SPORTS),
 
-            "MUSIC" => Ok(Self::MUSIC),
+            "MUSIC" => ::std::result::Result::Ok(Self::MUSIC),
 
-            "READING" => Ok(Self::READING),
+            "READING" => ::std::result::Result::Ok(Self::READING),
 
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<Hobby> for Hobby {
+impl ::std::convert::AsRef<Hobby> for Hobby {
     fn as_ref(&self) -> &Hobby {
         self
     }
@@ -663,14 +663,14 @@ pub enum MapKey {
     C,
 }
 
-impl Default for MapKey {
+impl ::std::default::Default for MapKey {
     fn default() -> Self {
         Self::A
     }
 }
 
-impl std::fmt::Display for MapKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for MapKey {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::A => write!(f, "A"),
 
@@ -681,23 +681,23 @@ impl std::fmt::Display for MapKey {
     }
 }
 
-impl std::str::FromStr for MapKey {
+impl ::std::str::FromStr for MapKey {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "A" => Ok(Self::A),
+            "A" => ::std::result::Result::Ok(Self::A),
 
-            "B" => Ok(Self::B),
+            "B" => ::std::result::Result::Ok(Self::B),
 
-            "C" => Ok(Self::C),
+            "C" => ::std::result::Result::Ok(Self::C),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<MapKey> for MapKey {
+impl ::std::convert::AsRef<MapKey> for MapKey {
     fn as_ref(&self) -> &MapKey {
         self
     }
@@ -711,14 +711,14 @@ pub enum NamedArgsSingleEnum {
     TWO,
 }
 
-impl Default for NamedArgsSingleEnum {
+impl ::std::default::Default for NamedArgsSingleEnum {
     fn default() -> Self {
         Self::ONE
     }
 }
 
-impl std::fmt::Display for NamedArgsSingleEnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for NamedArgsSingleEnum {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::ONE => write!(f, "ONE"),
 
@@ -727,21 +727,21 @@ impl std::fmt::Display for NamedArgsSingleEnum {
     }
 }
 
-impl std::str::FromStr for NamedArgsSingleEnum {
+impl ::std::str::FromStr for NamedArgsSingleEnum {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "ONE" => Ok(Self::ONE),
+            "ONE" => ::std::result::Result::Ok(Self::ONE),
 
-            "TWO" => Ok(Self::TWO),
+            "TWO" => ::std::result::Result::Ok(Self::TWO),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<NamedArgsSingleEnum> for NamedArgsSingleEnum {
+impl ::std::convert::AsRef<NamedArgsSingleEnum> for NamedArgsSingleEnum {
     fn as_ref(&self) -> &NamedArgsSingleEnum {
         self
     }
@@ -755,14 +755,14 @@ pub enum NamedArgsSingleEnumList {
     TWO,
 }
 
-impl Default for NamedArgsSingleEnumList {
+impl ::std::default::Default for NamedArgsSingleEnumList {
     fn default() -> Self {
         Self::ONE
     }
 }
 
-impl std::fmt::Display for NamedArgsSingleEnumList {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for NamedArgsSingleEnumList {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::ONE => write!(f, "ONE"),
 
@@ -771,21 +771,21 @@ impl std::fmt::Display for NamedArgsSingleEnumList {
     }
 }
 
-impl std::str::FromStr for NamedArgsSingleEnumList {
+impl ::std::str::FromStr for NamedArgsSingleEnumList {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "ONE" => Ok(Self::ONE),
+            "ONE" => ::std::result::Result::Ok(Self::ONE),
 
-            "TWO" => Ok(Self::TWO),
+            "TWO" => ::std::result::Result::Ok(Self::TWO),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<NamedArgsSingleEnumList> for NamedArgsSingleEnumList {
+impl ::std::convert::AsRef<NamedArgsSingleEnumList> for NamedArgsSingleEnumList {
     fn as_ref(&self) -> &NamedArgsSingleEnumList {
         self
     }
@@ -801,14 +801,14 @@ pub enum OptionalTest_CategoryType {
     Gamma,
 }
 
-impl Default for OptionalTest_CategoryType {
+impl ::std::default::Default for OptionalTest_CategoryType {
     fn default() -> Self {
         Self::Aleph
     }
 }
 
-impl std::fmt::Display for OptionalTest_CategoryType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for OptionalTest_CategoryType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Aleph => write!(f, "Aleph"),
 
@@ -819,23 +819,23 @@ impl std::fmt::Display for OptionalTest_CategoryType {
     }
 }
 
-impl std::str::FromStr for OptionalTest_CategoryType {
+impl ::std::str::FromStr for OptionalTest_CategoryType {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Aleph" => Ok(Self::Aleph),
+            "Aleph" => ::std::result::Result::Ok(Self::ALEPH),
 
-            "Beta" => Ok(Self::Beta),
+            "Beta" => ::std::result::Result::Ok(Self::BETA),
 
-            "Gamma" => Ok(Self::Gamma),
+            "Gamma" => ::std::result::Result::Ok(Self::GAMMA),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<OptionalTest_CategoryType> for OptionalTest_CategoryType {
+impl ::std::convert::AsRef<OptionalTest_CategoryType> for OptionalTest_CategoryType {
     fn as_ref(&self) -> &OptionalTest_CategoryType {
         self
     }
@@ -853,14 +853,14 @@ pub enum OrderStatus {
     CANCELLED,
 }
 
-impl Default for OrderStatus {
+impl ::std::default::Default for OrderStatus {
     fn default() -> Self {
         Self::ORDERED
     }
 }
 
-impl std::fmt::Display for OrderStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for OrderStatus {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::ORDERED => write!(f, "ORDERED"),
 
@@ -873,25 +873,25 @@ impl std::fmt::Display for OrderStatus {
     }
 }
 
-impl std::str::FromStr for OrderStatus {
+impl ::std::str::FromStr for OrderStatus {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "ORDERED" => Ok(Self::ORDERED),
+            "ORDERED" => ::std::result::Result::Ok(Self::ORDERED),
 
-            "SHIPPED" => Ok(Self::SHIPPED),
+            "SHIPPED" => ::std::result::Result::Ok(Self::SHIPPED),
 
-            "DELIVERED" => Ok(Self::DELIVERED),
+            "DELIVERED" => ::std::result::Result::Ok(Self::DELIVERED),
 
-            "CANCELLED" => Ok(Self::CANCELLED),
+            "CANCELLED" => ::std::result::Result::Ok(Self::CANCELLED),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<OrderStatus> for OrderStatus {
+impl ::std::convert::AsRef<OrderStatus> for OrderStatus {
     fn as_ref(&self) -> &OrderStatus {
         self
     }
@@ -908,17 +908,17 @@ pub enum RenderStatusEnum {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
     #[serde(untagged)]
-    _Dynamic(String),
+    _Dynamic(::std::string::String),
 }
 
-impl Default for RenderStatusEnum {
+impl ::std::default::Default for RenderStatusEnum {
     fn default() -> Self {
         Self::ACTIVE
     }
 }
 
-impl std::fmt::Display for RenderStatusEnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for RenderStatusEnum {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::ACTIVE => write!(f, "ACTIVE"),
 
@@ -929,21 +929,21 @@ impl std::fmt::Display for RenderStatusEnum {
     }
 }
 
-impl std::str::FromStr for RenderStatusEnum {
+impl ::std::str::FromStr for RenderStatusEnum {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "ACTIVE" => Ok(Self::ACTIVE),
+            "ACTIVE" => ::std::result::Result::Ok(Self::ACTIVE),
 
-            "INACTIVE" => Ok(Self::INACTIVE),
+            "INACTIVE" => ::std::result::Result::Ok(Self::INACTIVE),
 
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<RenderStatusEnum> for RenderStatusEnum {
+impl ::std::convert::AsRef<RenderStatusEnum> for RenderStatusEnum {
     fn as_ref(&self) -> &RenderStatusEnum {
         self
     }
@@ -960,17 +960,17 @@ pub enum RenderTestEnum {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
     #[serde(untagged)]
-    _Dynamic(String),
+    _Dynamic(::std::string::String),
 }
 
-impl Default for RenderTestEnum {
+impl ::std::default::Default for RenderTestEnum {
     fn default() -> Self {
         Self::BIKE
     }
 }
 
-impl std::fmt::Display for RenderTestEnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for RenderTestEnum {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::BIKE => write!(f, "BIKE"),
 
@@ -981,21 +981,21 @@ impl std::fmt::Display for RenderTestEnum {
     }
 }
 
-impl std::str::FromStr for RenderTestEnum {
+impl ::std::str::FromStr for RenderTestEnum {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "BIKE" => Ok(Self::BIKE),
+            "BIKE" => ::std::result::Result::Ok(Self::BIKE),
 
-            "SCOOTER" => Ok(Self::SCOOTER),
+            "SCOOTER" => ::std::result::Result::Ok(Self::SCOOTER),
 
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<RenderTestEnum> for RenderTestEnum {
+impl ::std::convert::AsRef<RenderTestEnum> for RenderTestEnum {
     fn as_ref(&self) -> &RenderTestEnum {
         self
     }
@@ -1011,14 +1011,14 @@ pub enum Tag {
     Blockchain,
 }
 
-impl Default for Tag {
+impl ::std::default::Default for Tag {
     fn default() -> Self {
         Self::Security
     }
 }
 
-impl std::fmt::Display for Tag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Tag {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Security => write!(f, "Security"),
 
@@ -1029,23 +1029,23 @@ impl std::fmt::Display for Tag {
     }
 }
 
-impl std::str::FromStr for Tag {
+impl ::std::str::FromStr for Tag {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Security" => Ok(Self::Security),
+            "Security" => ::std::result::Result::Ok(Self::SECURITY),
 
-            "AI" => Ok(Self::AI),
+            "AI" => ::std::result::Result::Ok(Self::AI),
 
-            "Blockchain" => Ok(Self::Blockchain),
+            "Blockchain" => ::std::result::Result::Ok(Self::BLOCKCHAIN),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<Tag> for Tag {
+impl ::std::convert::AsRef<Tag> for Tag {
     fn as_ref(&self) -> &Tag {
         self
     }
@@ -1069,14 +1069,14 @@ pub enum TestEnum {
     G,
 }
 
-impl Default for TestEnum {
+impl ::std::default::Default for TestEnum {
     fn default() -> Self {
         Self::A
     }
 }
 
-impl std::fmt::Display for TestEnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for TestEnum {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::A => write!(f, "A"),
 
@@ -1095,31 +1095,31 @@ impl std::fmt::Display for TestEnum {
     }
 }
 
-impl std::str::FromStr for TestEnum {
+impl ::std::str::FromStr for TestEnum {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "A" => Ok(Self::A),
+            "A" => ::std::result::Result::Ok(Self::A),
 
-            "B" => Ok(Self::B),
+            "B" => ::std::result::Result::Ok(Self::B),
 
-            "C" => Ok(Self::C),
+            "C" => ::std::result::Result::Ok(Self::C),
 
-            "D" => Ok(Self::D),
+            "D" => ::std::result::Result::Ok(Self::D),
 
-            "E" => Ok(Self::E),
+            "E" => ::std::result::Result::Ok(Self::E),
 
-            "F" => Ok(Self::F),
+            "F" => ::std::result::Result::Ok(Self::F),
 
-            "G" => Ok(Self::G),
+            "G" => ::std::result::Result::Ok(Self::G),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<TestEnum> for TestEnum {
+impl ::std::convert::AsRef<TestEnum> for TestEnum {
     fn as_ref(&self) -> &TestEnum {
         self
     }

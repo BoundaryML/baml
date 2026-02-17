@@ -15,8 +15,11 @@ pub use classes::*;
 pub use type_aliases::*;
 pub use unions::*;
 
+use baml::__internal::serde;
+
 /// Streaming variants of types (all fields Optional).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum StreamTypes {
     Address(Address),
 
@@ -80,7 +83,7 @@ pub enum StreamTypes {
 }
 
 impl baml::KnownTypes for StreamTypes {
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
@@ -146,5 +149,15 @@ impl baml::KnownTypes for StreamTypes {
 
             StreamTypes::UserSettings(_) => "UserSettings",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for StreamTypes {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "StreamTypes is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

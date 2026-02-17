@@ -6,11 +6,15 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (Example | Example2)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ExampleOrExample2 {
     #[baml(name = "Example")]
     Example(Example),
@@ -19,14 +23,14 @@ pub enum Union2ExampleOrExample2 {
     Example2(Example2),
 }
 
-impl AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
+impl ::std::convert::AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
     fn as_ref(&self) -> &Union2ExampleOrExample2 {
         self
     }
 }
 
-impl Default for Union2ExampleOrExample2 {
+impl ::std::default::Default for Union2ExampleOrExample2 {
     fn default() -> Self {
-        Self::Example(Default::default())
+        Self::Example(::std::default::Default::default())
     }
 }

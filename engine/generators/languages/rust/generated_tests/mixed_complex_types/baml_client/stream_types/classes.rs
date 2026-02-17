@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Action {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -23,14 +23,14 @@ pub struct Action {
     pub async_: Option<bool>,
 }
 
-impl AsRef<Action> for Action {
+impl ::std::convert::AsRef<Action> for Action {
     fn as_ref(&self) -> &Action {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Asset {
     pub id: Option<i64>,
 
@@ -42,14 +42,14 @@ pub struct Asset {
     pub tags: Vec<String>,
 }
 
-impl AsRef<Asset> for Asset {
+impl ::std::convert::AsRef<Asset> for Asset {
     fn as_ref(&self) -> &Asset {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct AssetMetadata {
     pub filename: Option<String>,
 
@@ -62,14 +62,14 @@ pub struct AssetMetadata {
     pub checksum: Option<String>,
 }
 
-impl AsRef<AssetMetadata> for AssetMetadata {
+impl ::std::convert::AsRef<AssetMetadata> for AssetMetadata {
     fn as_ref(&self) -> &AssetMetadata {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ButtonWidget {
     pub label: Option<String>,
 
@@ -78,14 +78,14 @@ pub struct ButtonWidget {
     pub style: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<ButtonWidget> for ButtonWidget {
+impl ::std::convert::AsRef<ButtonWidget> for ButtonWidget {
     fn as_ref(&self) -> &ButtonWidget {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ComplexData {
     pub primary: Option<PrimaryData>,
 
@@ -94,14 +94,14 @@ pub struct ComplexData {
     pub tertiary: Option<TertiaryData>,
 }
 
-impl AsRef<ComplexData> for ComplexData {
+impl ::std::convert::AsRef<ComplexData> for ComplexData {
     fn as_ref(&self) -> &ComplexData {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Condition {
     #[baml(name = "type")]
     pub r#type: Option<types::Union3KandOrKnotOrKor>,
@@ -109,14 +109,14 @@ pub struct Condition {
     pub conditions: Vec<Union2ConditionOrSimpleCondition>,
 }
 
-impl AsRef<Condition> for Condition {
+impl ::std::convert::AsRef<Condition> for Condition {
     fn as_ref(&self) -> &Condition {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Configuration {
     pub version: Option<String>,
 
@@ -127,14 +127,14 @@ pub struct Configuration {
     pub rules: Vec<Rule>,
 }
 
-impl AsRef<Configuration> for Configuration {
+impl ::std::convert::AsRef<Configuration> for Configuration {
     fn as_ref(&self) -> &Configuration {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ContainerWidget {
     pub layout: Option<types::Union3KflexOrKgridOrKstack>,
 
@@ -143,14 +143,14 @@ pub struct ContainerWidget {
     pub style: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<ContainerWidget> for ContainerWidget {
+impl ::std::convert::AsRef<ContainerWidget> for ContainerWidget {
     fn as_ref(&self) -> &ContainerWidget {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DataObject {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -158,28 +158,28 @@ pub struct DataObject {
     pub value: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<DataObject> for DataObject {
+impl ::std::convert::AsRef<DataObject> for DataObject {
     fn as_ref(&self) -> &DataObject {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Dimensions {
     pub width: Option<i64>,
 
     pub height: Option<i64>,
 }
 
-impl AsRef<Dimensions> for Dimensions {
+impl ::std::convert::AsRef<Dimensions> for Dimensions {
     fn as_ref(&self) -> &Dimensions {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Environment {
     pub name: Option<String>,
 
@@ -190,14 +190,14 @@ pub struct Environment {
     pub secrets: Option<std::collections::HashMap<String, String>>,
 }
 
-impl AsRef<Environment> for Environment {
+impl ::std::convert::AsRef<Environment> for Environment {
     fn as_ref(&self) -> &Environment {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Error {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -207,14 +207,14 @@ pub struct Error {
     pub code: Option<i64>,
 }
 
-impl AsRef<Error> for Error {
+impl ::std::convert::AsRef<Error> for Error {
     fn as_ref(&self) -> &Error {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ErrorDetail {
     pub code: Option<String>,
 
@@ -223,14 +223,14 @@ pub struct ErrorDetail {
     pub details: Option<std::collections::HashMap<String, String>>,
 }
 
-impl AsRef<ErrorDetail> for ErrorDetail {
+impl ::std::convert::AsRef<ErrorDetail> for ErrorDetail {
     fn as_ref(&self) -> &ErrorDetail {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Feature {
     pub name: Option<String>,
 
@@ -241,28 +241,28 @@ pub struct Feature {
     pub dependencies: Vec<String>,
 }
 
-impl AsRef<Feature> for Feature {
+impl ::std::convert::AsRef<Feature> for Feature {
     fn as_ref(&self) -> &Feature {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ImageWidget {
     pub alt: Option<String>,
 
     pub dimensions: Option<Dimensions>,
 }
 
-impl AsRef<ImageWidget> for ImageWidget {
+impl ::std::convert::AsRef<ImageWidget> for ImageWidget {
     fn as_ref(&self) -> &ImageWidget {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Item {
     pub id: Option<i64>,
 
@@ -273,14 +273,14 @@ pub struct Item {
     pub attributes: std::collections::HashMap<String, types::Union4BoolOrFloatOrIntOrString>,
 }
 
-impl AsRef<Item> for Item {
+impl ::std::convert::AsRef<Item> for Item {
     fn as_ref(&self) -> &Item {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct KitchenSink {
     pub id: Option<i64>,
 
@@ -321,14 +321,14 @@ pub struct KitchenSink {
     pub config: Option<Configuration>,
 }
 
-impl AsRef<KitchenSink> for KitchenSink {
+impl ::std::convert::AsRef<KitchenSink> for KitchenSink {
     fn as_ref(&self) -> &KitchenSink {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Node {
     pub id: Option<i64>,
 
@@ -340,14 +340,14 @@ pub struct Node {
     pub metadata: Option<NodeMetadata>,
 }
 
-impl AsRef<Node> for Node {
+impl ::std::convert::AsRef<Node> for Node {
     fn as_ref(&self) -> &Node {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NodeMetadata {
     pub created: Option<String>,
 
@@ -358,14 +358,14 @@ pub struct NodeMetadata {
     pub attributes: std::collections::HashMap<String, Option<types::Union3BoolOrIntOrString>>,
 }
 
-impl AsRef<NodeMetadata> for NodeMetadata {
+impl ::std::convert::AsRef<NodeMetadata> for NodeMetadata {
     fn as_ref(&self) -> &NodeMetadata {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrimaryData {
     pub values: Vec<types::Union3FloatOrIntOrString>,
 
@@ -374,14 +374,14 @@ pub struct PrimaryData {
     pub flags: Vec<bool>,
 }
 
-impl AsRef<PrimaryData> for PrimaryData {
+impl ::std::convert::AsRef<PrimaryData> for PrimaryData {
     fn as_ref(&self) -> &PrimaryData {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Record {
     pub id: Option<i64>,
 
@@ -390,14 +390,14 @@ pub struct Record {
     pub related: Option<Vec<Box<Record>>>,
 }
 
-impl AsRef<Record> for Record {
+impl ::std::convert::AsRef<Record> for Record {
     fn as_ref(&self) -> &Record {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ResponseMetadata {
     pub timestamp: Option<String>,
 
@@ -408,14 +408,14 @@ pub struct ResponseMetadata {
     pub retries: Option<i64>,
 }
 
-impl AsRef<ResponseMetadata> for ResponseMetadata {
+impl ::std::convert::AsRef<ResponseMetadata> for ResponseMetadata {
     fn as_ref(&self) -> &ResponseMetadata {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Rule {
     pub id: Option<i64>,
 
@@ -428,28 +428,28 @@ pub struct Rule {
     pub priority: Option<i64>,
 }
 
-impl AsRef<Rule> for Rule {
+impl ::std::convert::AsRef<Rule> for Rule {
     fn as_ref(&self) -> &Rule {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SecondaryData {
     pub records: Vec<Record>,
 
     pub index: std::collections::HashMap<String, Record>,
 }
 
-impl AsRef<SecondaryData> for SecondaryData {
+impl ::std::convert::AsRef<SecondaryData> for SecondaryData {
     fn as_ref(&self) -> &SecondaryData {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Setting {
     pub key: Option<String>,
 
@@ -458,14 +458,14 @@ pub struct Setting {
     pub metadata: Option<std::collections::HashMap<String, String>>,
 }
 
-impl AsRef<Setting> for Setting {
+impl ::std::convert::AsRef<Setting> for Setting {
     fn as_ref(&self) -> &Setting {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SimpleCondition {
     pub field: Option<String>,
 
@@ -474,14 +474,14 @@ pub struct SimpleCondition {
     pub value: Option<types::Union4BoolOrFloatOrIntOrString>,
 }
 
-impl AsRef<SimpleCondition> for SimpleCondition {
+impl ::std::convert::AsRef<SimpleCondition> for SimpleCondition {
     fn as_ref(&self) -> &SimpleCondition {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Success {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -489,14 +489,14 @@ pub struct Success {
     pub data: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<Success> for Success {
+impl ::std::convert::AsRef<Success> for Success {
     fn as_ref(&self) -> &Success {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TertiaryData {
     pub raw: Option<String>,
 
@@ -505,14 +505,14 @@ pub struct TertiaryData {
     pub valid: Option<bool>,
 }
 
-impl AsRef<TertiaryData> for TertiaryData {
+impl ::std::convert::AsRef<TertiaryData> for TertiaryData {
     fn as_ref(&self) -> &TertiaryData {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct TextWidget {
     pub content: Option<String>,
 
@@ -521,14 +521,14 @@ pub struct TextWidget {
     pub style: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<TextWidget> for TextWidget {
+impl ::std::convert::AsRef<TextWidget> for TextWidget {
     fn as_ref(&self) -> &TextWidget {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UltraComplex {
     pub tree: Option<Node>,
 
@@ -541,14 +541,14 @@ pub struct UltraComplex {
     pub assets: Vec<Asset>,
 }
 
-impl AsRef<UltraComplex> for UltraComplex {
+impl ::std::convert::AsRef<UltraComplex> for UltraComplex {
     fn as_ref(&self) -> &UltraComplex {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct User {
     pub id: Option<i64>,
 
@@ -557,14 +557,14 @@ pub struct User {
     pub settings: std::collections::HashMap<String, Setting>,
 }
 
-impl AsRef<User> for User {
+impl ::std::convert::AsRef<User> for User {
     fn as_ref(&self) -> &User {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UserProfile {
     pub name: Option<String>,
 
@@ -575,14 +575,14 @@ pub struct UserProfile {
     pub links: Vec<String>,
 }
 
-impl AsRef<UserProfile> for UserProfile {
+impl ::std::convert::AsRef<UserProfile> for UserProfile {
     fn as_ref(&self) -> &UserProfile {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UserResponse {
     pub status: Option<types::Union2KerrorOrKsuccess>,
 
@@ -593,14 +593,14 @@ pub struct UserResponse {
     pub metadata: Option<ResponseMetadata>,
 }
 
-impl AsRef<UserResponse> for UserResponse {
+impl ::std::convert::AsRef<UserResponse> for UserResponse {
     fn as_ref(&self) -> &UserResponse {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Variant {
     pub sku: Option<String>,
 
@@ -611,14 +611,14 @@ pub struct Variant {
     pub options: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<Variant> for Variant {
+impl ::std::convert::AsRef<Variant> for Variant {
     fn as_ref(&self) -> &Variant {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Widget {
     #[baml(name = "type")]
     pub r#type: Option<types::Union4KbuttonOrKcontainerOrKimageOrKtext>,
@@ -632,7 +632,7 @@ pub struct Widget {
     pub container: Option<Box<ContainerWidget>>,
 }
 
-impl AsRef<Widget> for Widget {
+impl ::std::convert::AsRef<Widget> for Widget {
     fn as_ref(&self) -> &Widget {
         self
     }

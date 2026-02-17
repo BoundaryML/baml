@@ -24,15 +24,17 @@ pub enum Union2AddTodoItemOrTodoMessageToUser {
     TodoMessageToUser(TodoMessageToUser),
 }
 
-impl AsRef<Union2AddTodoItemOrTodoMessageToUser> for Union2AddTodoItemOrTodoMessageToUser {
+impl ::std::convert::AsRef<Union2AddTodoItemOrTodoMessageToUser>
+    for Union2AddTodoItemOrTodoMessageToUser
+{
     fn as_ref(&self) -> &Union2AddTodoItemOrTodoMessageToUser {
         self
     }
 }
 
-impl Default for Union2AddTodoItemOrTodoMessageToUser {
+impl ::std::default::Default for Union2AddTodoItemOrTodoMessageToUser {
     fn default() -> Self {
-        Self::AddTodoItem(Default::default())
+        Self::AddTodoItem(::std::default::Default::default())
     }
 }
 
@@ -48,15 +50,15 @@ pub enum Union2EarthlingOrMartian {
     Earthling(Earthling),
 }
 
-impl AsRef<Union2EarthlingOrMartian> for Union2EarthlingOrMartian {
+impl ::std::convert::AsRef<Union2EarthlingOrMartian> for Union2EarthlingOrMartian {
     fn as_ref(&self) -> &Union2EarthlingOrMartian {
         self
     }
 }
 
-impl Default for Union2EarthlingOrMartian {
+impl ::std::default::Default for Union2EarthlingOrMartian {
     fn default() -> Self {
-        Self::Martian(Default::default())
+        Self::Martian(::std::default::Default::default())
     }
 }
 
@@ -72,15 +74,15 @@ pub enum Union2EmailAddressOrPhoneNumber {
     EmailAddress(EmailAddress),
 }
 
-impl AsRef<Union2EmailAddressOrPhoneNumber> for Union2EmailAddressOrPhoneNumber {
+impl ::std::convert::AsRef<Union2EmailAddressOrPhoneNumber> for Union2EmailAddressOrPhoneNumber {
     fn as_ref(&self) -> &Union2EmailAddressOrPhoneNumber {
         self
     }
 }
 
-impl Default for Union2EmailAddressOrPhoneNumber {
+impl ::std::default::Default for Union2EmailAddressOrPhoneNumber {
     fn default() -> Self {
-        Self::PhoneNumber(Default::default())
+        Self::PhoneNumber(::std::default::Default::default())
     }
 }
 
@@ -96,15 +98,15 @@ pub enum Union2EventOrResume {
     Event(Event),
 }
 
-impl AsRef<Union2EventOrResume> for Union2EventOrResume {
+impl ::std::convert::AsRef<Union2EventOrResume> for Union2EventOrResume {
     fn as_ref(&self) -> &Union2EventOrResume {
         self
     }
 }
 
-impl Default for Union2EventOrResume {
+impl ::std::default::Default for Union2EventOrResume {
     fn default() -> Self {
-        Self::Resume(Default::default())
+        Self::Resume(::std::default::Default::default())
     }
 }
 
@@ -120,15 +122,15 @@ pub enum Union2JsonTemplateOrSimpleTag {
     JsonTemplate(JsonTemplate),
 }
 
-impl AsRef<Union2JsonTemplateOrSimpleTag> for Union2JsonTemplateOrSimpleTag {
+impl ::std::convert::AsRef<Union2JsonTemplateOrSimpleTag> for Union2JsonTemplateOrSimpleTag {
     fn as_ref(&self) -> &Union2JsonTemplateOrSimpleTag {
         self
     }
 }
 
-impl Default for Union2JsonTemplateOrSimpleTag {
+impl ::std::default::Default for Union2JsonTemplateOrSimpleTag {
     fn default() -> Self {
-        Self::SimpleTag(Default::default())
+        Self::SimpleTag(::std::default::Default::default())
     }
 }
 
@@ -144,15 +146,15 @@ pub enum Union2ListNestedOrString {
     ListNested(Vec<Nested>),
 }
 
-impl AsRef<Union2ListNestedOrString> for Union2ListNestedOrString {
+impl ::std::convert::AsRef<Union2ListNestedOrString> for Union2ListNestedOrString {
     fn as_ref(&self) -> &Union2ListNestedOrString {
         self
     }
 }
 
-impl Default for Union2ListNestedOrString {
+impl ::std::default::Default for Union2ListNestedOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
@@ -168,15 +170,17 @@ pub enum Union2LiteralClassOneOrLiteralClassTwo {
     LiteralClassTwo(LiteralClassTwo),
 }
 
-impl AsRef<Union2LiteralClassOneOrLiteralClassTwo> for Union2LiteralClassOneOrLiteralClassTwo {
+impl ::std::convert::AsRef<Union2LiteralClassOneOrLiteralClassTwo>
+    for Union2LiteralClassOneOrLiteralClassTwo
+{
     fn as_ref(&self) -> &Union2LiteralClassOneOrLiteralClassTwo {
         self
     }
 }
 
-impl Default for Union2LiteralClassOneOrLiteralClassTwo {
+impl ::std::default::Default for Union2LiteralClassOneOrLiteralClassTwo {
     fn default() -> Self {
-        Self::LiteralClassOne(Default::default())
+        Self::LiteralClassOne(::std::default::Default::default())
     }
 }
 
@@ -192,7 +196,7 @@ pub enum Union2MapStringKeyRecursiveUnionValueOrString {
     MapStringKeyRecursiveUnionValue(std::collections::HashMap<String, RecursiveUnion>),
 }
 
-impl AsRef<Union2MapStringKeyRecursiveUnionValueOrString>
+impl ::std::convert::AsRef<Union2MapStringKeyRecursiveUnionValueOrString>
     for Union2MapStringKeyRecursiveUnionValueOrString
 {
     fn as_ref(&self) -> &Union2MapStringKeyRecursiveUnionValueOrString {
@@ -200,9 +204,9 @@ impl AsRef<Union2MapStringKeyRecursiveUnionValueOrString>
     }
 }
 
-impl Default for Union2MapStringKeyRecursiveUnionValueOrString {
+impl ::std::default::Default for Union2MapStringKeyRecursiveUnionValueOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
@@ -218,15 +222,15 @@ pub enum Union2NestedOrString {
     String(String),
 }
 
-impl AsRef<Union2NestedOrString> for Union2NestedOrString {
+impl ::std::convert::AsRef<Union2NestedOrString> for Union2NestedOrString {
     fn as_ref(&self) -> &Union2NestedOrString {
         self
     }
 }
 
-impl Default for Union2NestedOrString {
+impl ::std::default::Default for Union2NestedOrString {
     fn default() -> Self {
-        Self::Nested(Default::default())
+        Self::Nested(::std::default::Default::default())
     }
 }
 
@@ -242,15 +246,15 @@ pub enum Union2OriginalAOrOriginalB {
     OriginalB(OriginalB),
 }
 
-impl AsRef<Union2OriginalAOrOriginalB> for Union2OriginalAOrOriginalB {
+impl ::std::convert::AsRef<Union2OriginalAOrOriginalB> for Union2OriginalAOrOriginalB {
     fn as_ref(&self) -> &Union2OriginalAOrOriginalB {
         self
     }
 }
 
-impl Default for Union2OriginalAOrOriginalB {
+impl ::std::default::Default for Union2OriginalAOrOriginalB {
     fn default() -> Self {
-        Self::OriginalA(Default::default())
+        Self::OriginalA(::std::default::Default::default())
     }
 }
 
@@ -269,7 +273,7 @@ pub enum Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
     AnotherObject(AnotherObject),
 }
 
-impl AsRef<Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject>
+impl ::std::convert::AsRef<Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject>
     for Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject
 {
     fn as_ref(&self) -> &Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
@@ -277,9 +281,9 @@ impl AsRef<Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject>
     }
 }
 
-impl Default for Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
+impl ::std::default::Default for Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject {
     fn default() -> Self {
-        Self::MemoryObject(Default::default())
+        Self::MemoryObject(::std::default::Default::default())
     }
 }
 
@@ -298,7 +302,7 @@ pub enum Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
     GroceryReceipt(GroceryReceipt),
 }
 
-impl AsRef<Union3BookOrderOrFlightConfirmationOrGroceryReceipt>
+impl ::std::convert::AsRef<Union3BookOrderOrFlightConfirmationOrGroceryReceipt>
     for Union3BookOrderOrFlightConfirmationOrGroceryReceipt
 {
     fn as_ref(&self) -> &Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
@@ -306,9 +310,9 @@ impl AsRef<Union3BookOrderOrFlightConfirmationOrGroceryReceipt>
     }
 }
 
-impl Default for Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
+impl ::std::default::Default for Union3BookOrderOrFlightConfirmationOrGroceryReceipt {
     fn default() -> Self {
-        Self::BookOrder(Default::default())
+        Self::BookOrder(::std::default::Default::default())
     }
 }
 
@@ -336,7 +340,7 @@ pub enum Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
     JsonArray(JsonArray),
 }
 
-impl AsRef<Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString>
+impl ::std::convert::AsRef<Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString>
     for Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString
 {
     fn as_ref(&self) -> &Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
@@ -344,8 +348,8 @@ impl AsRef<Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString>
     }
 }
 
-impl Default for Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
+impl ::std::default::Default for Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString {
     fn default() -> Self {
-        Self::Int(Default::default())
+        Self::Int(::std::default::Default::default())
     }
 }

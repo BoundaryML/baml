@@ -6,11 +6,15 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (bool | string)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2BoolOrString {
     #[baml(name = "bool")]
     Bool(bool),
@@ -19,21 +23,22 @@ pub enum Union2BoolOrString {
     String(String),
 }
 
-impl AsRef<Union2BoolOrString> for Union2BoolOrString {
+impl ::std::convert::AsRef<Union2BoolOrString> for Union2BoolOrString {
     fn as_ref(&self) -> &Union2BoolOrString {
         self
     }
 }
 
-impl Default for Union2BoolOrString {
+impl ::std::default::Default for Union2BoolOrString {
     fn default() -> Self {
-        Self::Bool(Default::default())
+        Self::Bool(::std::default::Default::default())
     }
 }
 
 /// Generated from: (DataResponse | ErrorResponse)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2DataResponseOrErrorResponse {
     #[baml(name = "DataResponse")]
     DataResponse(DataResponse),
@@ -42,21 +47,24 @@ pub enum Union2DataResponseOrErrorResponse {
     ErrorResponse(ErrorResponse),
 }
 
-impl AsRef<Union2DataResponseOrErrorResponse> for Union2DataResponseOrErrorResponse {
+impl ::std::convert::AsRef<Union2DataResponseOrErrorResponse>
+    for Union2DataResponseOrErrorResponse
+{
     fn as_ref(&self) -> &Union2DataResponseOrErrorResponse {
         self
     }
 }
 
-impl Default for Union2DataResponseOrErrorResponse {
+impl ::std::default::Default for Union2DataResponseOrErrorResponse {
     fn default() -> Self {
-        Self::DataResponse(Default::default())
+        Self::DataResponse(::std::default::Default::default())
     }
 }
 
 /// Generated from: (int | float)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2FloatOrInt {
     #[baml(name = "int")]
     Int(i64),
@@ -65,21 +73,22 @@ pub enum Union2FloatOrInt {
     Float(f64),
 }
 
-impl AsRef<Union2FloatOrInt> for Union2FloatOrInt {
+impl ::std::convert::AsRef<Union2FloatOrInt> for Union2FloatOrInt {
     fn as_ref(&self) -> &Union2FloatOrInt {
         self
     }
 }
 
-impl Default for Union2FloatOrInt {
+impl ::std::default::Default for Union2FloatOrInt {
     fn default() -> Self {
-        Self::Int(Default::default())
+        Self::Int(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | float)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2FloatOrString {
     #[baml(name = "string")]
     String(String),
@@ -88,21 +97,22 @@ pub enum Union2FloatOrString {
     Float(f64),
 }
 
-impl AsRef<Union2FloatOrString> for Union2FloatOrString {
+impl ::std::convert::AsRef<Union2FloatOrString> for Union2FloatOrString {
     fn as_ref(&self) -> &Union2FloatOrString {
         self
     }
 }
 
-impl Default for Union2FloatOrString {
+impl ::std::default::Default for Union2FloatOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2IntOrString {
     #[baml(name = "string")]
     String(String),
@@ -111,21 +121,22 @@ pub enum Union2IntOrString {
     Int(i64),
 }
 
-impl AsRef<Union2IntOrString> for Union2IntOrString {
+impl ::std::convert::AsRef<Union2IntOrString> for Union2IntOrString {
     fn as_ref(&self) -> &Union2IntOrString {
         self
     }
 }
 
-impl Default for Union2IntOrString {
+impl ::std::default::Default for Union2IntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int[])
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ListIntOrString {
     #[baml(name = "string")]
     String(String),
@@ -134,21 +145,22 @@ pub enum Union2ListIntOrString {
     ListInt(Vec<i64>),
 }
 
-impl AsRef<Union2ListIntOrString> for Union2ListIntOrString {
+impl ::std::convert::AsRef<Union2ListIntOrString> for Union2ListIntOrString {
     fn as_ref(&self) -> &Union2ListIntOrString {
         self
     }
 }
 
-impl Default for Union2ListIntOrString {
+impl ::std::default::Default for Union2ListIntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (User | Product)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ProductOrUser {
     #[baml(name = "User")]
     User(User),
@@ -157,21 +169,22 @@ pub enum Union2ProductOrUser {
     Product(Product),
 }
 
-impl AsRef<Union2ProductOrUser> for Union2ProductOrUser {
+impl ::std::convert::AsRef<Union2ProductOrUser> for Union2ProductOrUser {
     fn as_ref(&self) -> &Union2ProductOrUser {
         self
     }
 }
 
-impl Default for Union2ProductOrUser {
+impl ::std::default::Default for Union2ProductOrUser {
     fn default() -> Self {
-        Self::User(Default::default())
+        Self::User(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | RecursiveUnion)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2RecursiveUnionOrString {
     #[baml(name = "string")]
     String(String),
@@ -180,21 +193,22 @@ pub enum Union2RecursiveUnionOrString {
     RecursiveUnion(Box<RecursiveUnion>),
 }
 
-impl AsRef<Union2RecursiveUnionOrString> for Union2RecursiveUnionOrString {
+impl ::std::convert::AsRef<Union2RecursiveUnionOrString> for Union2RecursiveUnionOrString {
     fn as_ref(&self) -> &Union2RecursiveUnionOrString {
         self
     }
 }
 
-impl Default for Union2RecursiveUnionOrString {
+impl ::std::default::Default for Union2RecursiveUnionOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (User | Product | Admin)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3AdminOrProductOrUser {
     #[baml(name = "User")]
     User(User),
@@ -206,21 +220,22 @@ pub enum Union3AdminOrProductOrUser {
     Admin(Admin),
 }
 
-impl AsRef<Union3AdminOrProductOrUser> for Union3AdminOrProductOrUser {
+impl ::std::convert::AsRef<Union3AdminOrProductOrUser> for Union3AdminOrProductOrUser {
     fn as_ref(&self) -> &Union3AdminOrProductOrUser {
         self
     }
 }
 
-impl Default for Union3AdminOrProductOrUser {
+impl ::std::default::Default for Union3AdminOrProductOrUser {
     fn default() -> Self {
-        Self::User(Default::default())
+        Self::User(::std::default::Default::default())
     }
 }
 
 /// Generated from: (ApiSuccess | ApiError | ApiPending)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3ApiErrorOrApiPendingOrApiSuccess {
     #[baml(name = "ApiSuccess")]
     ApiSuccess(ApiSuccess),
@@ -232,21 +247,24 @@ pub enum Union3ApiErrorOrApiPendingOrApiSuccess {
     ApiPending(ApiPending),
 }
 
-impl AsRef<Union3ApiErrorOrApiPendingOrApiSuccess> for Union3ApiErrorOrApiPendingOrApiSuccess {
+impl ::std::convert::AsRef<Union3ApiErrorOrApiPendingOrApiSuccess>
+    for Union3ApiErrorOrApiPendingOrApiSuccess
+{
     fn as_ref(&self) -> &Union3ApiErrorOrApiPendingOrApiSuccess {
         self
     }
 }
 
-impl Default for Union3ApiErrorOrApiPendingOrApiSuccess {
+impl ::std::default::Default for Union3ApiErrorOrApiPendingOrApiSuccess {
     fn default() -> Self {
-        Self::ApiSuccess(Default::default())
+        Self::ApiSuccess(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Dog | Cat | Bird)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3BirdOrCatOrDog {
     #[baml(name = "Dog")]
     Dog(Dog),
@@ -258,21 +276,22 @@ pub enum Union3BirdOrCatOrDog {
     Bird(Bird),
 }
 
-impl AsRef<Union3BirdOrCatOrDog> for Union3BirdOrCatOrDog {
+impl ::std::convert::AsRef<Union3BirdOrCatOrDog> for Union3BirdOrCatOrDog {
     fn as_ref(&self) -> &Union3BirdOrCatOrDog {
         self
     }
 }
 
-impl Default for Union3BirdOrCatOrDog {
+impl ::std::default::Default for Union3BirdOrCatOrDog {
     fn default() -> Self {
-        Self::Dog(Default::default())
+        Self::Dog(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Circle | Rectangle | Triangle)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3CircleOrRectangleOrTriangle {
     #[baml(name = "Circle")]
     Circle(Circle),
@@ -284,21 +303,24 @@ pub enum Union3CircleOrRectangleOrTriangle {
     Triangle(Triangle),
 }
 
-impl AsRef<Union3CircleOrRectangleOrTriangle> for Union3CircleOrRectangleOrTriangle {
+impl ::std::convert::AsRef<Union3CircleOrRectangleOrTriangle>
+    for Union3CircleOrRectangleOrTriangle
+{
     fn as_ref(&self) -> &Union3CircleOrRectangleOrTriangle {
         self
     }
 }
 
-impl Default for Union3CircleOrRectangleOrTriangle {
+impl ::std::default::Default for Union3CircleOrRectangleOrTriangle {
     fn default() -> Self {
-        Self::Circle(Default::default())
+        Self::Circle(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Success | Warning | Error)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3ErrorOrSuccessOrWarning {
     #[baml(name = "Success")]
     Success(Success),
@@ -310,21 +332,22 @@ pub enum Union3ErrorOrSuccessOrWarning {
     Error(Error),
 }
 
-impl AsRef<Union3ErrorOrSuccessOrWarning> for Union3ErrorOrSuccessOrWarning {
+impl ::std::convert::AsRef<Union3ErrorOrSuccessOrWarning> for Union3ErrorOrSuccessOrWarning {
     fn as_ref(&self) -> &Union3ErrorOrSuccessOrWarning {
         self
     }
 }
 
-impl Default for Union3ErrorOrSuccessOrWarning {
+impl ::std::default::Default for Union3ErrorOrSuccessOrWarning {
     fn default() -> Self {
-        Self::Success(Default::default())
+        Self::Success(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int | float)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3FloatOrIntOrString {
     #[baml(name = "string")]
     String(String),
@@ -336,21 +359,22 @@ pub enum Union3FloatOrIntOrString {
     Float(f64),
 }
 
-impl AsRef<Union3FloatOrIntOrString> for Union3FloatOrIntOrString {
+impl ::std::convert::AsRef<Union3FloatOrIntOrString> for Union3FloatOrIntOrString {
     fn as_ref(&self) -> &Union3FloatOrIntOrString {
         self
     }
 }
 
-impl Default for Union3FloatOrIntOrString {
+impl ::std::default::Default for Union3FloatOrIntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int | RecursiveUnion)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3IntOrRecursiveUnionOrString {
     #[baml(name = "string")]
     String(String),
@@ -362,21 +386,24 @@ pub enum Union3IntOrRecursiveUnionOrString {
     RecursiveUnion(Box<RecursiveUnion>),
 }
 
-impl AsRef<Union3IntOrRecursiveUnionOrString> for Union3IntOrRecursiveUnionOrString {
+impl ::std::convert::AsRef<Union3IntOrRecursiveUnionOrString>
+    for Union3IntOrRecursiveUnionOrString
+{
     fn as_ref(&self) -> &Union3IntOrRecursiveUnionOrString {
         self
     }
 }
 
-impl Default for Union3IntOrRecursiveUnionOrString {
+impl ::std::default::Default for Union3IntOrRecursiveUnionOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int | float | bool)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4BoolOrFloatOrIntOrString {
     #[baml(name = "string")]
     String(String),
@@ -391,14 +418,14 @@ pub enum Union4BoolOrFloatOrIntOrString {
     Bool(bool),
 }
 
-impl AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
+impl ::std::convert::AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
     fn as_ref(&self) -> &Union4BoolOrFloatOrIntOrString {
         self
     }
 }
 
-impl Default for Union4BoolOrFloatOrIntOrString {
+impl ::std::default::Default for Union4BoolOrFloatOrIntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }

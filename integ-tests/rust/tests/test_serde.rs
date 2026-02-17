@@ -97,10 +97,7 @@ fn test_recursive_class() {
     assert_eq!(rt.data, 1);
     assert_eq!(rt.left.as_ref().unwrap().data, 2);
     assert_eq!(rt.right.as_ref().unwrap().data, 3);
-    assert_eq!(
-        rt.right.as_ref().unwrap().right.as_ref().unwrap().data,
-        4
-    );
+    assert_eq!(rt.right.as_ref().unwrap().right.as_ref().unwrap().data, 4);
     assert!(rt.left.as_ref().unwrap().left.is_none());
 }
 
@@ -377,16 +374,15 @@ fn test_union_of_distinguishable_classes() {
         Union3BookOrderOrFlightConfirmationOrGroceryReceipt::BookOrder(b) if b.orderId == "123"
     ));
 
-    let flight =
-        Union3BookOrderOrFlightConfirmationOrGroceryReceipt::FlightConfirmation(
-            FlightConfirmation {
-                confirmationNumber: "ABC".into(),
-                flightNumber: "UA100".into(),
-                departureTime: "08:00".into(),
-                arrivalTime: "12:00".into(),
-                seatNumber: "14A".into(),
-            },
-        );
+    let flight = Union3BookOrderOrFlightConfirmationOrGroceryReceipt::FlightConfirmation(
+        FlightConfirmation {
+            confirmationNumber: "ABC".into(),
+            flightNumber: "UA100".into(),
+            departureTime: "08:00".into(),
+            arrivalTime: "12:00".into(),
+            seatNumber: "14A".into(),
+        },
+    );
     let json = serde_json::to_string(&flight).unwrap();
     let rt: Union3BookOrderOrFlightConfirmationOrGroceryReceipt =
         serde_json::from_str(&json).unwrap();
@@ -433,8 +429,7 @@ fn test_union_with_map_variant() {
     );
     let u = Union2MapStringKeyRecursiveUnionValueOrString::MapStringKeyRecursiveUnionValue(map);
     let json = serde_json::to_string(&u).unwrap();
-    let rt: Union2MapStringKeyRecursiveUnionValueOrString =
-        serde_json::from_str(&json).unwrap();
+    let rt: Union2MapStringKeyRecursiveUnionValueOrString = serde_json::from_str(&json).unwrap();
     assert!(matches!(
         rt,
         Union2MapStringKeyRecursiveUnionValueOrString::MapStringKeyRecursiveUnionValue(_)
@@ -698,9 +693,7 @@ fn test_fully_dynamic_class_no_static_fields() {
     let mut dynamic = HashMap::new();
     dynamic.insert("a".into(), baml::BamlValue::String("x".into()));
     dynamic.insert("b".into(), baml::BamlValue::Int(1));
-    let d = DynamicClassOne {
-        __dynamic: dynamic,
-    };
+    let d = DynamicClassOne { __dynamic: dynamic };
     let json = serde_json::to_string(&d).unwrap();
     let v: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(v["a"], "x");
@@ -832,8 +825,7 @@ fn test_union_with_dynamic_class_variant() {
     // Let's just verify it doesn't error:
     assert!(matches!(
         rt,
-        Union2OriginalAOrOriginalB::OriginalA(_)
-            | Union2OriginalAOrOriginalB::OriginalB(_)
+        Union2OriginalAOrOriginalB::OriginalA(_) | Union2OriginalAOrOriginalB::OriginalB(_)
     ));
 }
 
@@ -871,10 +863,7 @@ fn test_checked_type_deserialize() {
     let rt: Checked<i64> = serde_json::from_str(json).unwrap();
     assert_eq!(rt.value, 42);
     assert!(rt.checks.contains_key("my_check"));
-    assert_eq!(
-        rt.checks["my_check"].status,
-        baml::CheckStatus::Succeeded
-    );
+    assert_eq!(rt.checks["my_check"].status, baml::CheckStatus::Succeeded);
 }
 
 #[test]
@@ -1117,21 +1106,24 @@ fn test_baml_value_dynamic_union_serialize() {
 fn test_types_enum_cannot_deserialize() {
     let result = serde_json::from_str::<Types>(r#"{"a":1,"b":2.0}"#);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("not deserializable"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("not deserializable")
+    );
 }
 
 #[test]
 fn test_stream_types_cannot_deserialize() {
-    let result =
-        serde_json::from_str::<rust::baml_client::stream_types::StreamTypes>(r#"{"a":1}"#);
+    let result = serde_json::from_str::<rust::baml_client::stream_types::StreamTypes>(r#"{"a":1}"#);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("not deserializable"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("not deserializable")
+    );
 }
 
 #[test]
@@ -1238,30 +1230,36 @@ fn test_media_repr_deserialize_base64() {
 fn test_image_cannot_deserialize_directly() {
     let result = serde_json::from_str::<Image>(r#"{"url":"https://example.com/img.png"}"#);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Cannot deserialize Image directly"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot deserialize Image directly")
+    );
 }
 
 #[test]
 fn test_audio_cannot_deserialize_directly() {
     let result = serde_json::from_str::<Audio>(r#"{"url":"https://example.com/audio.mp3"}"#);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Cannot deserialize Audio directly"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot deserialize Audio directly")
+    );
 }
 
 #[test]
 fn test_pdf_cannot_deserialize_directly() {
     let result = serde_json::from_str::<Pdf>(r#"{"url":"https://example.com/doc.pdf"}"#);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Cannot deserialize Pdf directly"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot deserialize Pdf directly")
+    );
 }
 
 // =============================================================================
@@ -1270,36 +1268,42 @@ fn test_pdf_cannot_deserialize_directly() {
 
 #[test]
 fn test_dynamic_class_standalone_cannot_deserialize() {
-    let result = serde_json::from_str::<baml::DynamicClass<Types, rust::baml_client::stream_types::StreamTypes>>(
-        r#"{"x": 1}"#,
-    );
+    let result = serde_json::from_str::<
+        baml::DynamicClass<Types, rust::baml_client::stream_types::StreamTypes>,
+    >(r#"{"x": 1}"#);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("DynamicClass cannot be deserialized"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("DynamicClass cannot be deserialized")
+    );
 }
 
 #[test]
 fn test_dynamic_enum_standalone_cannot_deserialize() {
     let result = serde_json::from_str::<baml::DynamicEnum>(r#""happy""#);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("DynamicEnum cannot be deserialized"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("DynamicEnum cannot be deserialized")
+    );
 }
 
 #[test]
 fn test_dynamic_union_standalone_cannot_deserialize() {
-    let result = serde_json::from_str::<baml::DynamicUnion<Types, rust::baml_client::stream_types::StreamTypes>>(
-        r#""value""#,
-    );
+    let result = serde_json::from_str::<
+        baml::DynamicUnion<Types, rust::baml_client::stream_types::StreamTypes>,
+    >(r#""value""#);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("DynamicUnion cannot be deserialized"));
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("DynamicUnion cannot be deserialized")
+    );
 }
 
 // =============================================================================
@@ -1459,10 +1463,7 @@ fn test_large_numbers() {
 
 #[test]
 fn test_negative_numbers() {
-    let bn = BigNumbers {
-        a: -999,
-        b: -0.001,
-    };
+    let bn = BigNumbers { a: -999, b: -0.001 };
     let json = serde_json::to_string(&bn).unwrap();
     let rt: BigNumbers = serde_json::from_str(&json).unwrap();
     assert_eq!(rt.a, -999);
@@ -1546,9 +1547,7 @@ fn test_dynamic_class_multiple_dynamic_value_types_serialize() {
         baml::BamlValue::List(vec![baml::BamlValue::String("x".into())]),
     );
 
-    let d = DynamicClassOne {
-        __dynamic: dynamic,
-    };
+    let d = DynamicClassOne { __dynamic: dynamic };
     let json = serde_json::to_string(&d).unwrap();
     let v: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(v["str_field"], "val");

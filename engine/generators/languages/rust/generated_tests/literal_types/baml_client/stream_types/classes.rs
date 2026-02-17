@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct BooleanLiterals {
     pub alwaysTrue: Option<bool>,
 
@@ -22,14 +22,14 @@ pub struct BooleanLiterals {
     pub eitherBool: Option<types::Union2BoolKFalseOrBoolKTrue>,
 }
 
-impl AsRef<BooleanLiterals> for BooleanLiterals {
+impl ::std::convert::AsRef<BooleanLiterals> for BooleanLiterals {
     fn as_ref(&self) -> &BooleanLiterals {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ComplexLiterals {
     pub state: Option<types::Union4KarchivedOrKdeletedOrKdraftOrKpublished>,
 
@@ -42,14 +42,14 @@ pub struct ComplexLiterals {
     pub codes: Vec<types::Union3IntK200OrIntK404OrIntK500>,
 }
 
-impl AsRef<ComplexLiterals> for ComplexLiterals {
+impl ::std::convert::AsRef<ComplexLiterals> for ComplexLiterals {
     fn as_ref(&self) -> &ComplexLiterals {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct IntegerLiterals {
     pub priority: Option<types::Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5>,
 
@@ -58,14 +58,14 @@ pub struct IntegerLiterals {
     pub maxRetries: Option<types::Union4IntK0OrIntK1OrIntK3OrIntK5>,
 }
 
-impl AsRef<IntegerLiterals> for IntegerLiterals {
+impl ::std::convert::AsRef<IntegerLiterals> for IntegerLiterals {
     fn as_ref(&self) -> &IntegerLiterals {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedLiterals {
     pub id: Option<i64>,
 
@@ -79,14 +79,14 @@ pub struct MixedLiterals {
     pub apiVersion: Option<types::Union3Kv1OrKv2OrKv3>,
 }
 
-impl AsRef<MixedLiterals> for MixedLiterals {
+impl ::std::convert::AsRef<MixedLiterals> for MixedLiterals {
     fn as_ref(&self) -> &MixedLiterals {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct StringLiterals {
     pub status: Option<types::Union3KactiveOrKinactiveOrKpending>,
 
@@ -95,7 +95,7 @@ pub struct StringLiterals {
     pub method: Option<types::Union4KDELETEOrKGETOrKPOSTOrKPUT>,
 }
 
-impl AsRef<StringLiterals> for StringLiterals {
+impl ::std::convert::AsRef<StringLiterals> for StringLiterals {
     fn as_ref(&self) -> &StringLiterals {
         self
     }

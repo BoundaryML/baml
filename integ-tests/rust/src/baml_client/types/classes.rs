@@ -22,7 +22,7 @@ pub struct AddTodoItem {
     pub description: String,
 }
 
-impl AsRef<AddTodoItem> for AddTodoItem {
+impl ::std::convert::AsRef<AddTodoItem> for AddTodoItem {
     fn as_ref(&self) -> &AddTodoItem {
         self
     }
@@ -36,7 +36,7 @@ pub struct AddressWithMeta {
     pub zipcode: String,
 }
 
-impl AsRef<AddressWithMeta> for AddressWithMeta {
+impl ::std::convert::AsRef<AddressWithMeta> for AddressWithMeta {
     fn as_ref(&self) -> &AddressWithMeta {
         self
     }
@@ -50,7 +50,7 @@ pub struct AnotherObject {
     pub thingy3: String,
 }
 
-impl AsRef<AnotherObject> for AnotherObject {
+impl ::std::convert::AsRef<AnotherObject> for AnotherObject {
     fn as_ref(&self) -> &AnotherObject {
         self
     }
@@ -63,7 +63,7 @@ pub struct BigNumbers {
     pub b: f64,
 }
 
-impl AsRef<BigNumbers> for BigNumbers {
+impl ::std::convert::AsRef<BigNumbers> for BigNumbers {
     fn as_ref(&self) -> &BigNumbers {
         self
     }
@@ -77,7 +77,7 @@ pub struct BinaryNode {
     pub right: Option<Box<BinaryNode>>,
 }
 
-impl AsRef<BinaryNode> for BinaryNode {
+impl ::std::convert::AsRef<BinaryNode> for BinaryNode {
     fn as_ref(&self) -> &BinaryNode {
         self
     }
@@ -89,7 +89,7 @@ pub struct Blah {
     pub prop4: Option<String>,
 }
 
-impl AsRef<Blah> for Blah {
+impl ::std::convert::AsRef<Blah> for Blah {
     fn as_ref(&self) -> &Blah {
         self
     }
@@ -102,7 +102,7 @@ pub struct BlockConstraint {
     pub bar: String,
 }
 
-impl AsRef<BlockConstraint> for BlockConstraint {
+impl ::std::convert::AsRef<BlockConstraint> for BlockConstraint {
     fn as_ref(&self) -> &BlockConstraint {
         self
     }
@@ -115,7 +115,7 @@ pub struct BlockConstraintForParam {
     pub bcfp2: String,
 }
 
-impl AsRef<BlockConstraintForParam> for BlockConstraintForParam {
+impl ::std::convert::AsRef<BlockConstraintForParam> for BlockConstraintForParam {
     fn as_ref(&self) -> &BlockConstraintForParam {
         self
     }
@@ -130,7 +130,7 @@ pub struct BookOrder {
     pub price: f64,
 }
 
-impl AsRef<BookOrder> for BookOrder {
+impl ::std::convert::AsRef<BookOrder> for BookOrder {
     fn as_ref(&self) -> &BookOrder {
         self
     }
@@ -142,7 +142,7 @@ pub struct ClassForNullLiteral {
     pub a: String,
 }
 
-impl AsRef<ClassForNullLiteral> for ClassForNullLiteral {
+impl ::std::convert::AsRef<ClassForNullLiteral> for ClassForNullLiteral {
     fn as_ref(&self) -> &ClassForNullLiteral {
         self
     }
@@ -155,7 +155,7 @@ pub struct ClassOptionalOutput {
     pub prop2: String,
 }
 
-impl AsRef<ClassOptionalOutput> for ClassOptionalOutput {
+impl ::std::convert::AsRef<ClassOptionalOutput> for ClassOptionalOutput {
     fn as_ref(&self) -> &ClassOptionalOutput {
         self
     }
@@ -169,7 +169,7 @@ pub struct ClassOptionalOutput2 {
     pub prop3: Option<Blah>,
 }
 
-impl AsRef<ClassOptionalOutput2> for ClassOptionalOutput2 {
+impl ::std::convert::AsRef<ClassOptionalOutput2> for ClassOptionalOutput2 {
     fn as_ref(&self) -> &ClassOptionalOutput2 {
         self
     }
@@ -181,7 +181,7 @@ pub struct ClassToRecAlias {
     pub list: LinkedListAliasNode,
 }
 
-impl AsRef<ClassToRecAlias> for ClassToRecAlias {
+impl ::std::convert::AsRef<ClassToRecAlias> for ClassToRecAlias {
     fn as_ref(&self) -> &ClassToRecAlias {
         self
     }
@@ -194,7 +194,7 @@ pub struct ClassWithBlockDone {
     pub s_20_words: String,
 }
 
-impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
+impl ::std::convert::AsRef<ClassWithBlockDone> for ClassWithBlockDone {
     fn as_ref(&self) -> &ClassWithBlockDone {
         self
     }
@@ -203,12 +203,13 @@ impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithImage {
+    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_image")]
     pub myImage: Image,
     pub param2: String,
     pub fake_image: FakeImage,
 }
 
-impl AsRef<ClassWithImage> for ClassWithImage {
+impl ::std::convert::AsRef<ClassWithImage> for ClassWithImage {
     fn as_ref(&self) -> &ClassWithImage {
         self
     }
@@ -221,7 +222,7 @@ pub struct ClassWithoutDone {
     pub s_20_words: String,
 }
 
-impl AsRef<ClassWithoutDone> for ClassWithoutDone {
+impl ::std::convert::AsRef<ClassWithoutDone> for ClassWithoutDone {
     fn as_ref(&self) -> &ClassWithoutDone {
         self
     }
@@ -239,7 +240,7 @@ pub struct ClientDetails1559 {
     pub client_email: Option<String>,
 }
 
-impl AsRef<ClientDetails1559> for ClientDetails1559 {
+impl ::std::convert::AsRef<ClientDetails1559> for ClientDetails1559 {
     fn as_ref(&self) -> &ClientDetails1559 {
         self
     }
@@ -254,7 +255,7 @@ pub struct ComplexMemoryObject {
     pub metadata: Vec<Union3FloatOrIntOrString>,
 }
 
-impl AsRef<ComplexMemoryObject> for ComplexMemoryObject {
+impl ::std::convert::AsRef<ComplexMemoryObject> for ComplexMemoryObject {
     fn as_ref(&self) -> &ComplexMemoryObject {
         self
     }
@@ -268,7 +269,7 @@ pub struct CompoundBigNumbers {
     pub another: BigNumbers,
 }
 
-impl AsRef<CompoundBigNumbers> for CompoundBigNumbers {
+impl ::std::convert::AsRef<CompoundBigNumbers> for CompoundBigNumbers {
     fn as_ref(&self) -> &CompoundBigNumbers {
         self
     }
@@ -281,7 +282,7 @@ pub struct ContactInfo {
     pub secondary: Option<Union2EmailAddressOrPhoneNumber>,
 }
 
-impl AsRef<ContactInfo> for ContactInfo {
+impl ::std::convert::AsRef<ContactInfo> for ContactInfo {
     fn as_ref(&self) -> &ContactInfo {
         self
     }
@@ -295,7 +296,7 @@ pub struct CustomStory {
     pub content: String,
 }
 
-impl AsRef<CustomStory> for CustomStory {
+impl ::std::convert::AsRef<CustomStory> for CustomStory {
     fn as_ref(&self) -> &CustomStory {
         self
     }
@@ -309,7 +310,7 @@ pub struct CustomTaskResult {
     pub groceryReceipt: Option<GroceryReceipt>,
 }
 
-impl AsRef<CustomTaskResult> for CustomTaskResult {
+impl ::std::convert::AsRef<CustomTaskResult> for CustomTaskResult {
     fn as_ref(&self) -> &CustomTaskResult {
         self
     }
@@ -322,7 +323,7 @@ pub struct Document1559 {
     pub notes: Vec<Note1599>,
 }
 
-impl AsRef<Document1559> for Document1559 {
+impl ::std::convert::AsRef<Document1559> for Document1559 {
     fn as_ref(&self) -> &Document1559 {
         self
     }
@@ -337,7 +338,7 @@ pub struct DummyJsonTodo {
     pub userId: i64,
 }
 
-impl AsRef<DummyJsonTodo> for DummyJsonTodo {
+impl ::std::convert::AsRef<DummyJsonTodo> for DummyJsonTodo {
     fn as_ref(&self) -> &DummyJsonTodo {
         self
     }
@@ -349,27 +350,26 @@ impl AsRef<DummyJsonTodo> for DummyJsonTodo {
 pub struct DummyOutput {
     pub nonce: String,
     pub nonce2: String,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl DummyOutput {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -378,7 +378,9 @@ impl DummyOutput {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -390,7 +392,7 @@ impl DummyOutput {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -400,17 +402,17 @@ impl DummyOutput {
     }
 }
 
-impl Default for DummyOutput {
+impl ::std::default::Default for DummyOutput {
     fn default() -> Self {
         Self {
-            nonce: Default::default(),
-            nonce2: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            nonce: ::std::default::Default::default(),
+            nonce2: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<DummyOutput> for DummyOutput {
+impl ::std::convert::AsRef<DummyOutput> for DummyOutput {
     fn as_ref(&self) -> &DummyOutput {
         self
     }
@@ -421,27 +423,26 @@ impl AsRef<DummyOutput> for DummyOutput {
 #[serde(crate = "::baml::__internal::serde")]
 pub struct DynInputOutput {
     pub testKey: String,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl DynInputOutput {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -450,7 +451,9 @@ impl DynInputOutput {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -462,7 +465,7 @@ impl DynInputOutput {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -472,16 +475,16 @@ impl DynInputOutput {
     }
 }
 
-impl Default for DynInputOutput {
+impl ::std::default::Default for DynInputOutput {
     fn default() -> Self {
         Self {
-            testKey: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            testKey: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<DynInputOutput> for DynInputOutput {
+impl ::std::convert::AsRef<DynInputOutput> for DynInputOutput {
     fn as_ref(&self) -> &DynInputOutput {
         self
     }
@@ -494,23 +497,23 @@ pub struct DynamicClassOne {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl DynamicClassOne {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -519,7 +522,9 @@ impl DynamicClassOne {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -531,7 +536,7 @@ impl DynamicClassOne {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -541,15 +546,15 @@ impl DynamicClassOne {
     }
 }
 
-impl Default for DynamicClassOne {
+impl ::std::default::Default for DynamicClassOne {
     fn default() -> Self {
         Self {
-            __dynamic: std::collections::HashMap::new(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<DynamicClassOne> for DynamicClassOne {
+impl ::std::convert::AsRef<DynamicClassOne> for DynamicClassOne {
     fn as_ref(&self) -> &DynamicClassOne {
         self
     }
@@ -562,27 +567,26 @@ pub struct DynamicClassTwo {
     pub hi: String,
     pub some_class: SomeClassNestedDynamic,
     pub status: DynEnumOne,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl DynamicClassTwo {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -591,7 +595,9 @@ impl DynamicClassTwo {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -603,7 +609,7 @@ impl DynamicClassTwo {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -613,18 +619,18 @@ impl DynamicClassTwo {
     }
 }
 
-impl Default for DynamicClassTwo {
+impl ::std::default::Default for DynamicClassTwo {
     fn default() -> Self {
         Self {
-            hi: Default::default(),
-            some_class: Default::default(),
-            status: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            hi: ::std::default::Default::default(),
+            some_class: ::std::default::Default::default(),
+            status: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<DynamicClassTwo> for DynamicClassTwo {
+impl ::std::convert::AsRef<DynamicClassTwo> for DynamicClassTwo {
     fn as_ref(&self) -> &DynamicClassTwo {
         self
     }
@@ -637,23 +643,23 @@ pub struct DynamicOutput {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl DynamicOutput {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -662,7 +668,9 @@ impl DynamicOutput {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -674,7 +682,7 @@ impl DynamicOutput {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -684,15 +692,15 @@ impl DynamicOutput {
     }
 }
 
-impl Default for DynamicOutput {
+impl ::std::default::Default for DynamicOutput {
     fn default() -> Self {
         Self {
-            __dynamic: std::collections::HashMap::new(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<DynamicOutput> for DynamicOutput {
+impl ::std::convert::AsRef<DynamicOutput> for DynamicOutput {
     fn as_ref(&self) -> &DynamicOutput {
         self
     }
@@ -705,23 +713,23 @@ pub struct DynamicSchema {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl DynamicSchema {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -730,7 +738,9 @@ impl DynamicSchema {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -742,7 +752,7 @@ impl DynamicSchema {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -752,15 +762,15 @@ impl DynamicSchema {
     }
 }
 
-impl Default for DynamicSchema {
+impl ::std::default::Default for DynamicSchema {
     fn default() -> Self {
         Self {
-            __dynamic: std::collections::HashMap::new(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<DynamicSchema> for DynamicSchema {
+impl ::std::convert::AsRef<DynamicSchema> for DynamicSchema {
     fn as_ref(&self) -> &DynamicSchema {
         self
     }
@@ -772,7 +782,7 @@ pub struct Earthling {
     pub age: Checked<i64>,
 }
 
-impl AsRef<Earthling> for Earthling {
+impl ::std::convert::AsRef<Earthling> for Earthling {
     fn as_ref(&self) -> &Earthling {
         self
     }
@@ -788,7 +798,7 @@ pub struct Education {
     pub graduation_date: Option<String>,
 }
 
-impl AsRef<Education> for Education {
+impl ::std::convert::AsRef<Education> for Education {
     fn as_ref(&self) -> &Education {
         self
     }
@@ -802,7 +812,7 @@ pub struct Email {
     pub from_address: String,
 }
 
-impl AsRef<Email> for Email {
+impl ::std::convert::AsRef<Email> for Email {
     fn as_ref(&self) -> &Email {
         self
     }
@@ -814,7 +824,7 @@ pub struct EmailAddress {
     pub value: String,
 }
 
-impl AsRef<EmailAddress> for EmailAddress {
+impl ::std::convert::AsRef<EmailAddress> for EmailAddress {
     fn as_ref(&self) -> &EmailAddress {
         self
     }
@@ -829,7 +839,7 @@ pub struct Event {
     pub description: String,
 }
 
-impl AsRef<Event> for Event {
+impl ::std::convert::AsRef<Event> for Event {
     fn as_ref(&self) -> &Event {
         self
     }
@@ -841,7 +851,7 @@ pub struct FakeImage {
     pub url: String,
 }
 
-impl AsRef<FakeImage> for FakeImage {
+impl ::std::convert::AsRef<FakeImage> for FakeImage {
     fn as_ref(&self) -> &FakeImage {
         self
     }
@@ -857,7 +867,7 @@ pub struct FlightConfirmation {
     pub seatNumber: String,
 }
 
-impl AsRef<FlightConfirmation> for FlightConfirmation {
+impl ::std::convert::AsRef<FlightConfirmation> for FlightConfirmation {
     fn as_ref(&self) -> &FlightConfirmation {
         self
     }
@@ -871,7 +881,7 @@ pub struct FooAny {
     pub species: Checked<String>,
 }
 
-impl AsRef<FooAny> for FooAny {
+impl ::std::convert::AsRef<FooAny> for FooAny {
     fn as_ref(&self) -> &FooAny {
         self
     }
@@ -883,7 +893,7 @@ pub struct Forest {
     pub trees: Vec<Box<Tree>>,
 }
 
-impl AsRef<Forest> for Forest {
+impl ::std::convert::AsRef<Forest> for Forest {
     fn as_ref(&self) -> &Forest {
         self
     }
@@ -896,7 +906,7 @@ pub struct FormatterTest0 {
     pub ipsum: String,
 }
 
-impl AsRef<FormatterTest0> for FormatterTest0 {
+impl ::std::convert::AsRef<FormatterTest0> for FormatterTest0 {
     fn as_ref(&self) -> &FormatterTest0 {
         self
     }
@@ -909,7 +919,7 @@ pub struct FormatterTest1 {
     pub ipsum: String,
 }
 
-impl AsRef<FormatterTest1> for FormatterTest1 {
+impl ::std::convert::AsRef<FormatterTest1> for FormatterTest1 {
     fn as_ref(&self) -> &FormatterTest1 {
         self
     }
@@ -922,7 +932,7 @@ pub struct FormatterTest2 {
     pub ipsum: String,
 }
 
-impl AsRef<FormatterTest2> for FormatterTest2 {
+impl ::std::convert::AsRef<FormatterTest2> for FormatterTest2 {
     fn as_ref(&self) -> &FormatterTest2 {
         self
     }
@@ -935,7 +945,7 @@ pub struct FormatterTest3 {
     pub ipsum: String,
 }
 
-impl AsRef<FormatterTest3> for FormatterTest3 {
+impl ::std::convert::AsRef<FormatterTest3> for FormatterTest3 {
     fn as_ref(&self) -> &FormatterTest3 {
         self
     }
@@ -950,7 +960,7 @@ pub struct GroceryReceipt {
     pub totalAmount: f64,
 }
 
-impl AsRef<GroceryReceipt> for GroceryReceipt {
+impl ::std::convert::AsRef<GroceryReceipt> for GroceryReceipt {
     fn as_ref(&self) -> &GroceryReceipt {
         self
     }
@@ -964,7 +974,7 @@ pub struct Haiku {
     pub line3: String,
 }
 
-impl AsRef<Haiku> for Haiku {
+impl ::std::convert::AsRef<Haiku> for Haiku {
     fn as_ref(&self) -> &Haiku {
         self
     }
@@ -978,7 +988,7 @@ pub struct InnerClass {
     pub inner: InnerClass2,
 }
 
-impl AsRef<InnerClass> for InnerClass {
+impl ::std::convert::AsRef<InnerClass> for InnerClass {
     fn as_ref(&self) -> &InnerClass {
         self
     }
@@ -991,7 +1001,7 @@ pub struct InnerClass2 {
     pub prop3: f64,
 }
 
-impl AsRef<InnerClass2> for InnerClass2 {
+impl ::std::convert::AsRef<InnerClass2> for InnerClass2 {
     fn as_ref(&self) -> &InnerClass2 {
         self
     }
@@ -1004,7 +1014,7 @@ pub struct InputClass {
     pub key2: String,
 }
 
-impl AsRef<InputClass> for InputClass {
+impl ::std::convert::AsRef<InputClass> for InputClass {
     fn as_ref(&self) -> &InputClass {
         self
     }
@@ -1017,7 +1027,7 @@ pub struct InputClassNested {
     pub nested: InputClass,
 }
 
-impl AsRef<InputClassNested> for InputClassNested {
+impl ::std::convert::AsRef<InputClassNested> for InputClassNested {
     fn as_ref(&self) -> &InputClassNested {
         self
     }
@@ -1030,7 +1040,7 @@ pub struct LinkedList {
     pub len: i64,
 }
 
-impl AsRef<LinkedList> for LinkedList {
+impl ::std::convert::AsRef<LinkedList> for LinkedList {
     fn as_ref(&self) -> &LinkedList {
         self
     }
@@ -1043,7 +1053,7 @@ pub struct LinkedListAliasNode {
     pub next: Option<Box<LinkedListAliasNode>>,
 }
 
-impl AsRef<LinkedListAliasNode> for LinkedListAliasNode {
+impl ::std::convert::AsRef<LinkedListAliasNode> for LinkedListAliasNode {
     fn as_ref(&self) -> &LinkedListAliasNode {
         self
     }
@@ -1055,7 +1065,7 @@ pub struct LiteralClassHello {
     pub prop: String,
 }
 
-impl AsRef<LiteralClassHello> for LiteralClassHello {
+impl ::std::convert::AsRef<LiteralClassHello> for LiteralClassHello {
     fn as_ref(&self) -> &LiteralClassHello {
         self
     }
@@ -1067,7 +1077,7 @@ pub struct LiteralClassOne {
     pub prop: String,
 }
 
-impl AsRef<LiteralClassOne> for LiteralClassOne {
+impl ::std::convert::AsRef<LiteralClassOne> for LiteralClassOne {
     fn as_ref(&self) -> &LiteralClassOne {
         self
     }
@@ -1079,7 +1089,7 @@ pub struct LiteralClassTwo {
     pub prop: String,
 }
 
-impl AsRef<LiteralClassTwo> for LiteralClassTwo {
+impl ::std::convert::AsRef<LiteralClassTwo> for LiteralClassTwo {
     fn as_ref(&self) -> &LiteralClassTwo {
         self
     }
@@ -1093,7 +1103,7 @@ pub struct MaintainFieldOrder {
     pub a: String,
 }
 
-impl AsRef<MaintainFieldOrder> for MaintainFieldOrder {
+impl ::std::convert::AsRef<MaintainFieldOrder> for MaintainFieldOrder {
     fn as_ref(&self) -> &MaintainFieldOrder {
         self
     }
@@ -1105,7 +1115,7 @@ pub struct MalformedConstraints {
     pub foo: Checked<i64>,
 }
 
-impl AsRef<MalformedConstraints> for MalformedConstraints {
+impl ::std::convert::AsRef<MalformedConstraints> for MalformedConstraints {
     fn as_ref(&self) -> &MalformedConstraints {
         self
     }
@@ -1117,7 +1127,7 @@ pub struct MalformedConstraints2 {
     pub foo: i64,
 }
 
-impl AsRef<MalformedConstraints2> for MalformedConstraints2 {
+impl ::std::convert::AsRef<MalformedConstraints2> for MalformedConstraints2 {
     fn as_ref(&self) -> &MalformedConstraints2 {
         self
     }
@@ -1134,7 +1144,7 @@ pub struct Martian {
     pub age: Checked<i64>,
 }
 
-impl AsRef<Martian> for Martian {
+impl ::std::convert::AsRef<Martian> for Martian {
     fn as_ref(&self) -> &Martian {
         self
     }
@@ -1148,7 +1158,7 @@ pub struct MemoryObject {
     pub description: String,
 }
 
-impl AsRef<MemoryObject> for MemoryObject {
+impl ::std::convert::AsRef<MemoryObject> for MemoryObject {
     fn as_ref(&self) -> &MemoryObject {
         self
     }
@@ -1160,7 +1170,7 @@ pub struct MergeAttrs {
     pub amount: Checked<i64>,
 }
 
-impl AsRef<MergeAttrs> for MergeAttrs {
+impl ::std::convert::AsRef<MergeAttrs> for MergeAttrs {
     fn as_ref(&self) -> &MergeAttrs {
         self
     }
@@ -1174,7 +1184,7 @@ pub struct NamedArgsSingleClass {
     pub key_three: i64,
 }
 
-impl AsRef<NamedArgsSingleClass> for NamedArgsSingleClass {
+impl ::std::convert::AsRef<NamedArgsSingleClass> for NamedArgsSingleClass {
     fn as_ref(&self) -> &NamedArgsSingleClass {
         self
     }
@@ -1188,7 +1198,7 @@ pub struct Nested {
     pub prop20: Nested2,
 }
 
-impl AsRef<Nested> for Nested {
+impl ::std::convert::AsRef<Nested> for Nested {
     fn as_ref(&self) -> &Nested {
         self
     }
@@ -1201,7 +1211,7 @@ pub struct Nested2 {
     pub prop12: Option<String>,
 }
 
-impl AsRef<Nested2> for Nested2 {
+impl ::std::convert::AsRef<Nested2> for Nested2 {
     fn as_ref(&self) -> &Nested2 {
         self
     }
@@ -1213,7 +1223,7 @@ pub struct NestedBlockConstraint {
     pub nbc: Checked<BlockConstraint>,
 }
 
-impl AsRef<NestedBlockConstraint> for NestedBlockConstraint {
+impl ::std::convert::AsRef<NestedBlockConstraint> for NestedBlockConstraint {
     fn as_ref(&self) -> &NestedBlockConstraint {
         self
     }
@@ -1225,7 +1235,7 @@ pub struct NestedBlockConstraintForParam {
     pub nbcfp: BlockConstraintForParam,
 }
 
-impl AsRef<NestedBlockConstraintForParam> for NestedBlockConstraintForParam {
+impl ::std::convert::AsRef<NestedBlockConstraintForParam> for NestedBlockConstraintForParam {
     fn as_ref(&self) -> &NestedBlockConstraintForParam {
         self
     }
@@ -1238,7 +1248,7 @@ pub struct Node {
     pub next: Option<Box<Node>>,
 }
 
-impl AsRef<Node> for Node {
+impl ::std::convert::AsRef<Node> for Node {
     fn as_ref(&self) -> &Node {
         self
     }
@@ -1251,7 +1261,7 @@ pub struct NodeWithAliasIndirection {
     pub next: Option<Box<NodeWithAliasIndirection>>,
 }
 
-impl AsRef<NodeWithAliasIndirection> for NodeWithAliasIndirection {
+impl ::std::convert::AsRef<NodeWithAliasIndirection> for NodeWithAliasIndirection {
     fn as_ref(&self) -> &NodeWithAliasIndirection {
         self
     }
@@ -1265,7 +1275,7 @@ pub struct Note1599 {
     pub note_amount: Option<String>,
 }
 
-impl AsRef<Note1599> for Note1599 {
+impl ::std::convert::AsRef<Note1599> for Note1599 {
     fn as_ref(&self) -> &Note1599 {
         self
     }
@@ -1278,7 +1288,7 @@ pub struct OptionalListAndMap {
     pub q: Option<std::collections::HashMap<String, String>>,
 }
 
-impl AsRef<OptionalListAndMap> for OptionalListAndMap {
+impl ::std::convert::AsRef<OptionalListAndMap> for OptionalListAndMap {
     fn as_ref(&self) -> &OptionalListAndMap {
         self
     }
@@ -1291,7 +1301,7 @@ pub struct OptionalTest_Prop1 {
     pub omega_b: i64,
 }
 
-impl AsRef<OptionalTest_Prop1> for OptionalTest_Prop1 {
+impl ::std::convert::AsRef<OptionalTest_Prop1> for OptionalTest_Prop1 {
     fn as_ref(&self) -> &OptionalTest_Prop1 {
         self
     }
@@ -1305,7 +1315,7 @@ pub struct OptionalTest_ReturnType {
     pub omega_3: Vec<Option<OptionalTest_CategoryType>>,
 }
 
-impl AsRef<OptionalTest_ReturnType> for OptionalTest_ReturnType {
+impl ::std::convert::AsRef<OptionalTest_ReturnType> for OptionalTest_ReturnType {
     fn as_ref(&self) -> &OptionalTest_ReturnType {
         self
     }
@@ -1319,7 +1329,7 @@ pub struct OrderInfo {
     pub estimated_arrival_date: Option<String>,
 }
 
-impl AsRef<OrderInfo> for OrderInfo {
+impl ::std::convert::AsRef<OrderInfo> for OrderInfo {
     fn as_ref(&self) -> &OrderInfo {
         self
     }
@@ -1331,7 +1341,7 @@ pub struct OriginalA {
     pub value: i64,
 }
 
-impl AsRef<OriginalA> for OriginalA {
+impl ::std::convert::AsRef<OriginalA> for OriginalA {
     fn as_ref(&self) -> &OriginalA {
         self
     }
@@ -1342,27 +1352,26 @@ impl AsRef<OriginalA> for OriginalA {
 #[serde(crate = "::baml::__internal::serde")]
 pub struct OriginalB {
     pub value: i64,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl OriginalB {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -1371,7 +1380,9 @@ impl OriginalB {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -1383,7 +1394,7 @@ impl OriginalB {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -1393,16 +1404,16 @@ impl OriginalB {
     }
 }
 
-impl Default for OriginalB {
+impl ::std::default::Default for OriginalB {
     fn default() -> Self {
         Self {
-            value: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            value: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<OriginalB> for OriginalB {
+impl ::std::convert::AsRef<OriginalB> for OriginalB {
     fn as_ref(&self) -> &OriginalB {
         self
     }
@@ -1414,27 +1425,26 @@ impl AsRef<OriginalB> for OriginalB {
 pub struct Person {
     pub name: Option<String>,
     pub hair_color: Option<Color>,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl Person {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -1443,7 +1453,9 @@ impl Person {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -1455,7 +1467,7 @@ impl Person {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -1465,17 +1477,17 @@ impl Person {
     }
 }
 
-impl Default for Person {
+impl ::std::default::Default for Person {
     fn default() -> Self {
         Self {
-            name: Default::default(),
-            hair_color: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            name: ::std::default::Default::default(),
+            hair_color: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<Person> for Person {
+impl ::std::convert::AsRef<Person> for Person {
     fn as_ref(&self) -> &Person {
         self
     }
@@ -1490,7 +1502,7 @@ pub struct PersonWithMeta {
     pub tags: Vec<String>,
 }
 
-impl AsRef<PersonWithMeta> for PersonWithMeta {
+impl ::std::convert::AsRef<PersonWithMeta> for PersonWithMeta {
     fn as_ref(&self) -> &PersonWithMeta {
         self
     }
@@ -1502,7 +1514,7 @@ pub struct PhoneNumber {
     pub value: String,
 }
 
-impl AsRef<PhoneNumber> for PhoneNumber {
+impl ::std::convert::AsRef<PhoneNumber> for PhoneNumber {
     fn as_ref(&self) -> &PhoneNumber {
         self
     }
@@ -1515,7 +1527,7 @@ pub struct Quantity {
     pub unit: Option<String>,
 }
 
-impl AsRef<Quantity> for Quantity {
+impl ::std::convert::AsRef<Quantity> for Quantity {
     fn as_ref(&self) -> &Quantity {
         self
     }
@@ -1528,7 +1540,7 @@ pub struct RaysData {
     pub value: Union2EventOrResume,
 }
 
-impl AsRef<RaysData> for RaysData {
+impl ::std::convert::AsRef<RaysData> for RaysData {
     fn as_ref(&self) -> &RaysData {
         self
     }
@@ -1542,7 +1554,7 @@ pub struct ReceiptInfo {
     pub venue: Union2KbarisaOrKox_burger,
 }
 
-impl AsRef<ReceiptInfo> for ReceiptInfo {
+impl ::std::convert::AsRef<ReceiptInfo> for ReceiptInfo {
     fn as_ref(&self) -> &ReceiptInfo {
         self
     }
@@ -1557,7 +1569,7 @@ pub struct ReceiptItem {
     pub price: f64,
 }
 
-impl AsRef<ReceiptItem> for ReceiptItem {
+impl ::std::convert::AsRef<ReceiptItem> for ReceiptItem {
     fn as_ref(&self) -> &ReceiptItem {
         self
     }
@@ -1570,7 +1582,7 @@ pub struct Recipe {
     pub recipe_type: Union2KbreakfastOrKdinner,
 }
 
-impl AsRef<Recipe> for Recipe {
+impl ::std::convert::AsRef<Recipe> for Recipe {
     fn as_ref(&self) -> &Recipe {
         self
     }
@@ -1582,7 +1594,7 @@ pub struct RecursiveAliasDependency {
     pub value: JsonValue,
 }
 
-impl AsRef<RecursiveAliasDependency> for RecursiveAliasDependency {
+impl ::std::convert::AsRef<RecursiveAliasDependency> for RecursiveAliasDependency {
     fn as_ref(&self) -> &RecursiveAliasDependency {
         self
     }
@@ -1593,27 +1605,26 @@ impl AsRef<RecursiveAliasDependency> for RecursiveAliasDependency {
 #[serde(crate = "::baml::__internal::serde")]
 pub struct RenderEnumInput {
     pub testKey: String,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl RenderEnumInput {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -1622,7 +1633,9 @@ impl RenderEnumInput {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -1634,7 +1647,7 @@ impl RenderEnumInput {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -1644,16 +1657,16 @@ impl RenderEnumInput {
     }
 }
 
-impl Default for RenderEnumInput {
+impl ::std::default::Default for RenderEnumInput {
     fn default() -> Self {
         Self {
-            testKey: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            testKey: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<RenderEnumInput> for RenderEnumInput {
+impl ::std::convert::AsRef<RenderEnumInput> for RenderEnumInput {
     fn as_ref(&self) -> &RenderEnumInput {
         self
     }
@@ -1665,27 +1678,26 @@ impl AsRef<RenderEnumInput> for RenderEnumInput {
 pub struct RenderTestClass {
     pub name: String,
     pub status: RenderStatusEnum,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl RenderTestClass {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -1694,7 +1706,9 @@ impl RenderTestClass {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -1706,7 +1720,7 @@ impl RenderTestClass {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -1716,17 +1730,17 @@ impl RenderTestClass {
     }
 }
 
-impl Default for RenderTestClass {
+impl ::std::default::Default for RenderTestClass {
     fn default() -> Self {
         Self {
-            name: Default::default(),
-            status: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            name: ::std::default::Default::default(),
+            status: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<RenderTestClass> for RenderTestClass {
+impl ::std::convert::AsRef<RenderTestClass> for RenderTestClass {
     fn as_ref(&self) -> &RenderTestClass {
         self
     }
@@ -1743,7 +1757,7 @@ pub struct Resume {
     pub skills: Vec<String>,
 }
 
-impl AsRef<Resume> for Resume {
+impl ::std::convert::AsRef<Resume> for Resume {
     fn as_ref(&self) -> &Resume {
         self
     }
@@ -1761,7 +1775,7 @@ pub struct Schema {
     pub other_group: Union2IntOrString,
 }
 
-impl AsRef<Schema> for Schema {
+impl ::std::convert::AsRef<Schema> for Schema {
     fn as_ref(&self) -> &Schema {
         self
     }
@@ -1778,7 +1792,7 @@ pub struct SearchParams {
     pub tags: Vec<Union2StringOrTag>,
 }
 
-impl AsRef<SearchParams> for SearchParams {
+impl ::std::convert::AsRef<SearchParams> for SearchParams {
     fn as_ref(&self) -> &SearchParams {
         self
     }
@@ -1797,7 +1811,7 @@ pub struct SemanticContainer {
     pub final_string: String,
 }
 
-impl AsRef<SemanticContainer> for SemanticContainer {
+impl ::std::convert::AsRef<SemanticContainer> for SemanticContainer {
     fn as_ref(&self) -> &SemanticContainer {
         self
     }
@@ -1809,7 +1823,7 @@ pub struct SimpleTag {
     pub field: String,
 }
 
-impl AsRef<SimpleTag> for SimpleTag {
+impl ::std::convert::AsRef<SimpleTag> for SimpleTag {
     fn as_ref(&self) -> &SimpleTag {
         self
     }
@@ -1821,27 +1835,26 @@ impl AsRef<SimpleTag> for SimpleTag {
 pub struct SkipDynamicClass {
     pub value: String,
     pub internal_id: Option<String>,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl SkipDynamicClass {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -1850,7 +1863,9 @@ impl SkipDynamicClass {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -1862,7 +1877,7 @@ impl SkipDynamicClass {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -1872,17 +1887,17 @@ impl SkipDynamicClass {
     }
 }
 
-impl Default for SkipDynamicClass {
+impl ::std::default::Default for SkipDynamicClass {
     fn default() -> Self {
         Self {
-            value: Default::default(),
-            internal_id: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            value: ::std::default::Default::default(),
+            internal_id: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<SkipDynamicClass> for SkipDynamicClass {
+impl ::std::convert::AsRef<SkipDynamicClass> for SkipDynamicClass {
     fn as_ref(&self) -> &SkipDynamicClass {
         self
     }
@@ -1896,7 +1911,7 @@ pub struct SkipNonDynamicClass {
     pub metadata: Option<String>,
 }
 
-impl AsRef<SkipNonDynamicClass> for SkipNonDynamicClass {
+impl ::std::convert::AsRef<SkipNonDynamicClass> for SkipNonDynamicClass {
     fn as_ref(&self) -> &SkipNonDynamicClass {
         self
     }
@@ -1909,7 +1924,7 @@ pub struct SmallThing {
     pub i_8_digits: i64,
 }
 
-impl AsRef<SmallThing> for SmallThing {
+impl ::std::convert::AsRef<SmallThing> for SmallThing {
     fn as_ref(&self) -> &SmallThing {
         self
     }
@@ -1920,27 +1935,26 @@ impl AsRef<SmallThing> for SmallThing {
 #[serde(crate = "::baml::__internal::serde")]
 pub struct SomeClassNestedDynamic {
     pub hi: String,
-
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
     #[serde(flatten)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
     >,
 }
 
 impl SomeClassNestedDynamic {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -1949,7 +1963,9 @@ impl SomeClassNestedDynamic {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -1961,7 +1977,7 @@ impl SomeClassNestedDynamic {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
             &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
@@ -1971,16 +1987,16 @@ impl SomeClassNestedDynamic {
     }
 }
 
-impl Default for SomeClassNestedDynamic {
+impl ::std::default::Default for SomeClassNestedDynamic {
     fn default() -> Self {
         Self {
-            hi: Default::default(),
-            __dynamic: std::collections::HashMap::new(),
+            hi: ::std::default::Default::default(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<SomeClassNestedDynamic> for SomeClassNestedDynamic {
+impl ::std::convert::AsRef<SomeClassNestedDynamic> for SomeClassNestedDynamic {
     fn as_ref(&self) -> &SomeClassNestedDynamic {
         self
     }
@@ -1992,7 +2008,7 @@ pub struct StringToClassEntry {
     pub word: String,
 }
 
-impl AsRef<StringToClassEntry> for StringToClassEntry {
+impl ::std::convert::AsRef<StringToClassEntry> for StringToClassEntry {
     fn as_ref(&self) -> &StringToClassEntry {
         self
     }
@@ -2008,7 +2024,7 @@ pub struct TestClassAlias {
     pub key5: String,
 }
 
-impl AsRef<TestClassAlias> for TestClassAlias {
+impl ::std::convert::AsRef<TestClassAlias> for TestClassAlias {
     fn as_ref(&self) -> &TestClassAlias {
         self
     }
@@ -2021,7 +2037,7 @@ pub struct TestClassNested {
     pub prop2: InnerClass,
 }
 
-impl AsRef<TestClassNested> for TestClassNested {
+impl ::std::convert::AsRef<TestClassNested> for TestClassNested {
     fn as_ref(&self) -> &TestClassNested {
         self
     }
@@ -2034,7 +2050,7 @@ pub struct TestClassWithEnum {
     pub prop2: EnumInClass,
 }
 
-impl AsRef<TestClassWithEnum> for TestClassWithEnum {
+impl ::std::convert::AsRef<TestClassWithEnum> for TestClassWithEnum {
     fn as_ref(&self) -> &TestClassWithEnum {
         self
     }
@@ -2047,7 +2063,7 @@ pub struct TestMemoryOutput {
     pub more_items: Vec<Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject>,
 }
 
-impl AsRef<TestMemoryOutput> for TestMemoryOutput {
+impl ::std::convert::AsRef<TestMemoryOutput> for TestMemoryOutput {
     fn as_ref(&self) -> &TestMemoryOutput {
         self
     }
@@ -2060,7 +2076,7 @@ pub struct TestOutputClass {
     pub prop2: i64,
 }
 
-impl AsRef<TestOutputClass> for TestOutputClass {
+impl ::std::convert::AsRef<TestOutputClass> for TestOutputClass {
     fn as_ref(&self) -> &TestOutputClass {
         self
     }
@@ -2075,7 +2091,7 @@ pub struct TodoMessageToUser {
     pub message: String,
 }
 
-impl AsRef<TodoMessageToUser> for TodoMessageToUser {
+impl ::std::convert::AsRef<TodoMessageToUser> for TodoMessageToUser {
     fn as_ref(&self) -> &TodoMessageToUser {
         self
     }
@@ -2088,7 +2104,7 @@ pub struct Tree {
     pub children: Box<Forest>,
 }
 
-impl AsRef<Tree> for Tree {
+impl ::std::convert::AsRef<Tree> for Tree {
     fn as_ref(&self) -> &Tree {
         self
     }
@@ -2102,7 +2118,7 @@ pub struct TwoStoriesOneTitle {
     pub story_b: String,
 }
 
-impl AsRef<TwoStoriesOneTitle> for TwoStoriesOneTitle {
+impl ::std::convert::AsRef<TwoStoriesOneTitle> for TwoStoriesOneTitle {
     fn as_ref(&self) -> &TwoStoriesOneTitle {
         self
     }
@@ -2116,7 +2132,7 @@ pub struct TwoStoriesOneTitleCheck {
     pub story_b: Checked<String>,
 }
 
-impl AsRef<TwoStoriesOneTitleCheck> for TwoStoriesOneTitleCheck {
+impl ::std::convert::AsRef<TwoStoriesOneTitleCheck> for TwoStoriesOneTitleCheck {
     fn as_ref(&self) -> &TwoStoriesOneTitleCheck {
         self
     }
@@ -2130,7 +2146,7 @@ pub struct UnionTest_ReturnType {
     pub prop3: Union2ListBoolOrListInt,
 }
 
-impl AsRef<UnionTest_ReturnType> for UnionTest_ReturnType {
+impl ::std::convert::AsRef<UnionTest_ReturnType> for UnionTest_ReturnType {
     fn as_ref(&self) -> &UnionTest_ReturnType {
         self
     }
@@ -2145,7 +2161,7 @@ pub struct UniverseQuestion {
     pub answer: String,
 }
 
-impl AsRef<UniverseQuestion> for UniverseQuestion {
+impl ::std::convert::AsRef<UniverseQuestion> for UniverseQuestion {
     fn as_ref(&self) -> &UniverseQuestion {
         self
     }
@@ -2157,7 +2173,7 @@ pub struct UniverseQuestionInput {
     pub question: String,
 }
 
-impl AsRef<UniverseQuestionInput> for UniverseQuestionInput {
+impl ::std::convert::AsRef<UniverseQuestionInput> for UniverseQuestionInput {
     fn as_ref(&self) -> &UniverseQuestionInput {
         self
     }
@@ -2170,7 +2186,7 @@ pub struct WithReasoning {
     pub reasoning: String,
 }
 
-impl AsRef<WithReasoning> for WithReasoning {
+impl ::std::convert::AsRef<WithReasoning> for WithReasoning {
     fn as_ref(&self) -> &WithReasoning {
         self
     }

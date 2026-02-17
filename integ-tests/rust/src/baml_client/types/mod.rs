@@ -349,7 +349,7 @@ pub enum Types {
 }
 
 impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn ::std::any::Any {
         self
     }
 
@@ -689,8 +689,10 @@ impl baml::KnownTypes for Types {
 }
 
 impl<'de> serde::Deserialize<'de> for Types {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Err(serde::de::Error::custom(
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
             "Types is not deserializable, as we cannot disambiguate the type.",
         ))
     }

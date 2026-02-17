@@ -6,143 +6,124 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ArrayWithConstraints {
     pub nonEmptyStrings: Vec<String>,
-
     pub limitedInts: Vec<i64>,
-
     pub positiveFloats: Vec<f64>,
 }
 
-impl AsRef<ArrayWithConstraints> for ArrayWithConstraints {
+impl ::std::convert::AsRef<ArrayWithConstraints> for ArrayWithConstraints {
     fn as_ref(&self) -> &ArrayWithConstraints {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedArrays {
     pub primitiveArray: Vec<Union4BoolOrFloatOrIntOrString>,
-
     pub nullableArray: Vec<Option<String>>,
-
     pub optionalItems: Vec<Option<String>>,
-
     pub arrayOfArrays: Vec<Vec<String>>,
-
     pub complexMixed: Vec<Union3ProductOrTagOrUser>,
 }
 
-impl AsRef<MixedArrays> for MixedArrays {
+impl ::std::convert::AsRef<MixedArrays> for MixedArrays {
     fn as_ref(&self) -> &MixedArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NestedArrays {
     pub matrix: Vec<Vec<i64>>,
-
     pub stringMatrix: Vec<Vec<String>>,
-
     pub threeDimensional: Vec<Vec<Vec<f64>>>,
 }
 
-impl AsRef<NestedArrays> for NestedArrays {
+impl ::std::convert::AsRef<NestedArrays> for NestedArrays {
     fn as_ref(&self) -> &NestedArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ObjectArrays {
     pub users: Vec<User>,
-
     pub products: Vec<Product>,
-
     pub tags: Vec<Tag>,
 }
 
-impl AsRef<ObjectArrays> for ObjectArrays {
+impl ::std::convert::AsRef<ObjectArrays> for ObjectArrays {
     fn as_ref(&self) -> &ObjectArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Product {
     pub id: i64,
-
     pub name: String,
-
     pub price: f64,
-
     pub tags: Vec<String>,
-
     pub inStock: bool,
 }
 
-impl AsRef<Product> for Product {
+impl ::std::convert::AsRef<Product> for Product {
     fn as_ref(&self) -> &Product {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SimpleArrays {
     pub strings: Vec<String>,
-
     pub integers: Vec<i64>,
-
     pub floats: Vec<f64>,
-
     pub booleans: Vec<bool>,
 }
 
-impl AsRef<SimpleArrays> for SimpleArrays {
+impl ::std::convert::AsRef<SimpleArrays> for SimpleArrays {
     fn as_ref(&self) -> &SimpleArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Tag {
     pub id: i64,
-
     pub name: String,
-
     pub color: String,
 }
 
-impl AsRef<Tag> for Tag {
+impl ::std::convert::AsRef<Tag> for Tag {
     fn as_ref(&self) -> &Tag {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct User {
     pub id: i64,
-
     pub name: String,
-
     pub email: String,
-
     pub isActive: bool,
 }
 
-impl AsRef<User> for User {
+impl ::std::convert::AsRef<User> for User {
     fn as_ref(&self) -> &User {
         self
     }

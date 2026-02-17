@@ -10,17 +10,17 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Person {
     pub name: Option<String>,
 
     pub age: Option<i64>,
 }
 
-impl AsRef<Person> for Person {
+impl ::std::convert::AsRef<Person> for Person {
     fn as_ref(&self) -> &Person {
         self
     }

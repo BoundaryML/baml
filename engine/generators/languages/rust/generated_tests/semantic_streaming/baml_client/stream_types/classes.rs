@@ -10,38 +10,38 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithBlockDone {
     pub i_16_digits: i64,
 
     pub s_20_words: String,
 }
 
-impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
+impl ::std::convert::AsRef<ClassWithBlockDone> for ClassWithBlockDone {
     fn as_ref(&self) -> &ClassWithBlockDone {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithoutDone {
     pub i_16_digits: Option<i64>,
 
     pub s_20_words: baml::StreamState<Option<String>>,
 }
 
-impl AsRef<ClassWithoutDone> for ClassWithoutDone {
+impl ::std::convert::AsRef<ClassWithoutDone> for ClassWithoutDone {
     fn as_ref(&self) -> &ClassWithoutDone {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SemanticContainer {
     pub sixteen_digit_number: Option<i64>,
 
@@ -60,21 +60,21 @@ pub struct SemanticContainer {
     pub final_string: Option<String>,
 }
 
-impl AsRef<SemanticContainer> for SemanticContainer {
+impl ::std::convert::AsRef<SemanticContainer> for SemanticContainer {
     fn as_ref(&self) -> &SemanticContainer {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SmallThing {
     pub i_16_digits: i64,
 
     pub i_8_digits: Option<i64>,
 }
 
-impl AsRef<SmallThing> for SmallThing {
+impl ::std::convert::AsRef<SmallThing> for SmallThing {
     fn as_ref(&self) -> &SmallThing {
         self
     }

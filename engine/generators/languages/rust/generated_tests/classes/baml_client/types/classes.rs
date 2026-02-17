@@ -6,17 +6,19 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SimpleClass {
     pub digits: i64,
-
     pub words: String,
 }
 
-impl AsRef<SimpleClass> for SimpleClass {
+impl ::std::convert::AsRef<SimpleClass> for SimpleClass {
     fn as_ref(&self) -> &SimpleClass {
         self
     }

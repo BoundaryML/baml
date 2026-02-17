@@ -6,11 +6,15 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (int | Recursive1[])
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2IntOrListRecursive1 {
     #[baml(name = "int")]
     Int(i64),
@@ -19,21 +23,22 @@ pub enum Union2IntOrListRecursive1 {
     ListRecursive1(Vec<Recursive1>),
 }
 
-impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
+impl ::std::convert::AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
     fn as_ref(&self) -> &Union2IntOrListRecursive1 {
         self
     }
 }
 
-impl Default for Union2IntOrListRecursive1 {
+impl ::std::default::Default for Union2IntOrListRecursive1 {
     fn default() -> Self {
-        Self::Int(Default::default())
+        Self::Int(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Recursive1 | int | string | null)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3IntOrRecursive1OrString {
     #[baml(name = "Recursive1")]
     Recursive1(Recursive1),
@@ -45,21 +50,22 @@ pub enum Union3IntOrRecursive1OrString {
     String(String),
 }
 
-impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
+impl ::std::convert::AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
     fn as_ref(&self) -> &Union3IntOrRecursive1OrString {
         self
     }
 }
 
-impl Default for Union3IntOrRecursive1OrString {
+impl ::std::default::Default for Union3IntOrRecursive1OrString {
     fn default() -> Self {
-        Self::Recursive1(Default::default())
+        Self::Recursive1(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int | float | map<string, JSON> | JSON[] | null)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
     #[baml(name = "string")]
     String(String),
@@ -77,7 +83,7 @@ pub enum Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
     ListJSON(Vec<JSON>),
 }
 
-impl AsRef<Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString>
+impl ::std::convert::AsRef<Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString>
     for Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString
 {
     fn as_ref(&self) -> &Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
@@ -85,8 +91,8 @@ impl AsRef<Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString>
     }
 }
 
-impl Default for Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
+impl ::std::default::Default for Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }

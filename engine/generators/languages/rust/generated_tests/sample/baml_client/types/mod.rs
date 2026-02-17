@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     Example(Example),
 
@@ -31,7 +33,7 @@ pub enum Types {
 }
 
 impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
@@ -43,5 +45,15 @@ impl baml::KnownTypes for Types {
 
             Types::Union2ExampleOrExample2(_) => "Union2ExampleOrExample2",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

@@ -10,38 +10,38 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MediaAnalysisResult {
     pub topics: Vec<String>,
 
     pub analysisText: Option<String>,
 }
 
-impl AsRef<MediaAnalysisResult> for MediaAnalysisResult {
+impl ::std::convert::AsRef<MediaAnalysisResult> for MediaAnalysisResult {
     fn as_ref(&self) -> &MediaAnalysisResult {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MediaArrayAnalysisResult {
     pub analysisText: Option<String>,
 
     pub mediaCount: Option<i64>,
 }
 
-impl AsRef<MediaArrayAnalysisResult> for MediaArrayAnalysisResult {
+impl ::std::convert::AsRef<MediaArrayAnalysisResult> for MediaArrayAnalysisResult {
     fn as_ref(&self) -> &MediaArrayAnalysisResult {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MediaMapAnalysisResult {
     pub analysisText: Option<String>,
 
@@ -50,14 +50,14 @@ pub struct MediaMapAnalysisResult {
     pub keys: Vec<String>,
 }
 
-impl AsRef<MediaMapAnalysisResult> for MediaMapAnalysisResult {
+impl ::std::convert::AsRef<MediaMapAnalysisResult> for MediaMapAnalysisResult {
     fn as_ref(&self) -> &MediaMapAnalysisResult {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedMediaAnalysisResult {
     pub title: Option<String>,
 
@@ -76,14 +76,14 @@ pub struct MixedMediaAnalysisResult {
     pub metadataKeys: Vec<String>,
 }
 
-impl AsRef<MixedMediaAnalysisResult> for MixedMediaAnalysisResult {
+impl ::std::convert::AsRef<MixedMediaAnalysisResult> for MixedMediaAnalysisResult {
     fn as_ref(&self) -> &MixedMediaAnalysisResult {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalMediaAnalysisResult {
     pub analysisText: Option<String>,
 
@@ -92,7 +92,7 @@ pub struct OptionalMediaAnalysisResult {
     pub missingMediaTypes: Vec<String>,
 }
 
-impl AsRef<OptionalMediaAnalysisResult> for OptionalMediaAnalysisResult {
+impl ::std::convert::AsRef<OptionalMediaAnalysisResult> for OptionalMediaAnalysisResult {
     fn as_ref(&self) -> &OptionalMediaAnalysisResult {
         self
     }

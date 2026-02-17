@@ -6,87 +6,72 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedPrimitives {
     pub name: String,
-
     pub age: i64,
-
     pub height: f64,
-
     pub isActive: bool,
-
     pub metadata: (),
-
     pub tags: Vec<String>,
-
     pub scores: Vec<i64>,
-
     pub measurements: Vec<f64>,
-
     pub flags: Vec<bool>,
 }
 
-impl AsRef<MixedPrimitives> for MixedPrimitives {
+impl ::std::convert::AsRef<MixedPrimitives> for MixedPrimitives {
     fn as_ref(&self) -> &MixedPrimitives {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrimitiveArrays {
     pub stringArray: Vec<String>,
-
     pub intArray: Vec<i64>,
-
     pub floatArray: Vec<f64>,
-
     pub boolArray: Vec<bool>,
 }
 
-impl AsRef<PrimitiveArrays> for PrimitiveArrays {
+impl ::std::convert::AsRef<PrimitiveArrays> for PrimitiveArrays {
     fn as_ref(&self) -> &PrimitiveArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrimitiveMaps {
     pub stringMap: std::collections::HashMap<String, String>,
-
     pub intMap: std::collections::HashMap<String, i64>,
-
     pub floatMap: std::collections::HashMap<String, f64>,
-
     pub boolMap: std::collections::HashMap<String, bool>,
 }
 
-impl AsRef<PrimitiveMaps> for PrimitiveMaps {
+impl ::std::convert::AsRef<PrimitiveMaps> for PrimitiveMaps {
     fn as_ref(&self) -> &PrimitiveMaps {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrimitiveTypes {
     pub stringField: String,
-
     pub intField: i64,
-
     pub floatField: f64,
-
     pub boolField: bool,
-
     pub nullField: (),
 }
 
-impl AsRef<PrimitiveTypes> for PrimitiveTypes {
+impl ::std::convert::AsRef<PrimitiveTypes> for PrimitiveTypes {
     fn as_ref(&self) -> &PrimitiveTypes {
         self
     }

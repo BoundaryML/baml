@@ -271,7 +271,7 @@ pub enum StreamTypes {
 }
 
 impl baml::KnownTypes for StreamTypes {
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn ::std::any::Any {
         self
     }
 
@@ -535,8 +535,10 @@ impl baml::KnownTypes for StreamTypes {
 }
 
 impl<'de> serde::Deserialize<'de> for StreamTypes {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Err(serde::de::Error::custom(
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
             "StreamTypes is not deserializable, as we cannot disambiguate the type.",
         ))
     }
