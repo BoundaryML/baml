@@ -46,32 +46,32 @@ pub enum Types {
     Union3BoolOrIntOrString(Union3BoolOrIntOrString),
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::ComplexMaps(_) => "ComplexMaps",
+            Self::ComplexMaps(_) => "ComplexMaps",
 
-            Types::Config(_) => "Config",
+            Self::Config(_) => "Config",
 
-            Types::EdgeCaseMaps(_) => "EdgeCaseMaps",
+            Self::EdgeCaseMaps(_) => "EdgeCaseMaps",
 
-            Types::MixedKeyMaps(_) => "MixedKeyMaps",
+            Self::MixedKeyMaps(_) => "MixedKeyMaps",
 
-            Types::NestedMaps(_) => "NestedMaps",
+            Self::NestedMaps(_) => "NestedMaps",
 
-            Types::Product(_) => "Product",
+            Self::Product(_) => "Product",
 
-            Types::SimpleMaps(_) => "SimpleMaps",
+            Self::SimpleMaps(_) => "SimpleMaps",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::Status(_) => "Status",
+            Self::Status(_) => "Status",
 
-            Types::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
+            Self::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
         }
     }
 }

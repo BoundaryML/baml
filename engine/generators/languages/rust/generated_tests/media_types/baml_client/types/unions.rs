@@ -17,19 +17,19 @@ use baml::{
 #[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4AudioOrImageOrPDFOrVideo {
     #[baml(name = "image")]
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_image")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_image")]
     Image(Image),
 
     #[baml(name = "audio")]
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_audio")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_audio")]
     Audio(Audio),
 
     #[baml(name = "pdf")]
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_pdf")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_pdf")]
     PDF(Pdf),
 
     #[baml(name = "video")]
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_video")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_video")]
     Video(Video),
 }
 

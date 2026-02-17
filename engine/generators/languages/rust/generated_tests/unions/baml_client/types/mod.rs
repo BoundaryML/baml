@@ -36,22 +36,22 @@ pub enum Types {
     Union3IntOrRecursive1OrString(Union3IntOrRecursive1OrString),
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::ExistingSystemComponent(_) => "ExistingSystemComponent",
+            Self::ExistingSystemComponent(_) => "ExistingSystemComponent",
 
-            Types::UseMyUnion(_) => "UseMyUnion",
+            Self::UseMyUnion(_) => "UseMyUnion",
 
-            Types::Union2IntOrListRecursive1(_) => "Union2IntOrListRecursive1",
+            Self::Union2IntOrListRecursive1(_) => "Union2IntOrListRecursive1",
 
-            Types::Union2KresourceOrKservice(_) => "Union2KresourceOrKservice",
+            Self::Union2KresourceOrKservice(_) => "Union2KresourceOrKservice",
 
-            Types::Union3IntOrRecursive1OrString(_) => "Union3IntOrRecursive1OrString",
+            Self::Union3IntOrRecursive1OrString(_) => "Union3IntOrRecursive1OrString",
         }
     }
 }

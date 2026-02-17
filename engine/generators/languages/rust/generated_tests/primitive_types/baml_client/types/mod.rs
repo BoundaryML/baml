@@ -34,20 +34,20 @@ pub enum Types {
     PrimitiveTypes(PrimitiveTypes),
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::MixedPrimitives(_) => "MixedPrimitives",
+            Self::MixedPrimitives(_) => "MixedPrimitives",
 
-            Types::PrimitiveArrays(_) => "PrimitiveArrays",
+            Self::PrimitiveArrays(_) => "PrimitiveArrays",
 
-            Types::PrimitiveMaps(_) => "PrimitiveMaps",
+            Self::PrimitiveMaps(_) => "PrimitiveMaps",
 
-            Types::PrimitiveTypes(_) => "PrimitiveTypes",
+            Self::PrimitiveTypes(_) => "PrimitiveTypes",
         }
     }
 }

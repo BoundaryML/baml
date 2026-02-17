@@ -45,7 +45,7 @@ pub struct Article {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -127,7 +127,7 @@ pub struct Person {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -201,7 +201,7 @@ pub struct PureDynamic {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 

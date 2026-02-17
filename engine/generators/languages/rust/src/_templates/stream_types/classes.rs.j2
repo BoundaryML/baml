@@ -38,7 +38,7 @@ pub struct {{ class.name }} {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 {% endif %}
 }

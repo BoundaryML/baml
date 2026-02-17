@@ -62,7 +62,7 @@ impl ::std::str::FromStr for {{ enum_.name }} {
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
 {% for (value, _) in enum_.values %}
-            "{{ value }}" => ::std::result::Result::Ok(Self::{{ value | upper }}),
+            "{{ value }}" => ::std::result::Result::Ok(Self::{{ value }}),
 {% endfor %}
 {% if enum_.dynamic %}
             other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),

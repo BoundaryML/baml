@@ -50,36 +50,36 @@ pub enum Types {
     Union2ProductOrUser(Union2ProductOrUser),
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::ComplexOptional(_) => "ComplexOptional",
+            Self::ComplexOptional(_) => "ComplexOptional",
 
-            Types::MixedOptionalNullable(_) => "MixedOptionalNullable",
+            Self::MixedOptionalNullable(_) => "MixedOptionalNullable",
 
-            Types::NullableTypes(_) => "NullableTypes",
+            Self::NullableTypes(_) => "NullableTypes",
 
-            Types::OptionalData(_) => "OptionalData",
+            Self::OptionalData(_) => "OptionalData",
 
-            Types::OptionalFields(_) => "OptionalFields",
+            Self::OptionalFields(_) => "OptionalFields",
 
-            Types::OptionalItem(_) => "OptionalItem",
+            Self::OptionalItem(_) => "OptionalItem",
 
-            Types::OptionalValue(_) => "OptionalValue",
+            Self::OptionalValue(_) => "OptionalValue",
 
-            Types::Product(_) => "Product",
+            Self::Product(_) => "Product",
 
-            Types::UnionWithNull(_) => "UnionWithNull",
+            Self::UnionWithNull(_) => "UnionWithNull",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::Union2IntOrString(_) => "Union2IntOrString",
+            Self::Union2IntOrString(_) => "Union2IntOrString",
 
-            Types::Union2ProductOrUser(_) => "Union2ProductOrUser",
+            Self::Union2ProductOrUser(_) => "Union2ProductOrUser",
         }
     }
 }

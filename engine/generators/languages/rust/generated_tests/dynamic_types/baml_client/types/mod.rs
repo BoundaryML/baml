@@ -40,26 +40,26 @@ pub enum Types {
     Status(Status),
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::Address(_) => "Address",
+            Self::Address(_) => "Address",
 
-            Types::Article(_) => "Article",
+            Self::Article(_) => "Article",
 
-            Types::Person(_) => "Person",
+            Self::Person(_) => "Person",
 
-            Types::PureDynamic(_) => "PureDynamic",
+            Self::PureDynamic(_) => "PureDynamic",
 
-            Types::Category(_) => "Category",
+            Self::Category(_) => "Category",
 
-            Types::Priority(_) => "Priority",
+            Self::Priority(_) => "Priority",
 
-            Types::Status(_) => "Status",
+            Self::Status(_) => "Status",
         }
     }
 }

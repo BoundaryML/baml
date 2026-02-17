@@ -51,11 +51,11 @@ impl ::std::str::FromStr for Category {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Technology" => ::std::result::Result::Ok(Self::TECHNOLOGY),
+            "Technology" => ::std::result::Result::Ok(Self::Technology),
 
-            "Science" => ::std::result::Result::Ok(Self::SCIENCE),
+            "Science" => ::std::result::Result::Ok(Self::Science),
 
-            "Arts" => ::std::result::Result::Ok(Self::ARTS),
+            "Arts" => ::std::result::Result::Ok(Self::Arts),
 
             other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
@@ -109,11 +109,11 @@ impl ::std::str::FromStr for Priority {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "High" => ::std::result::Result::Ok(Self::HIGH),
+            "High" => ::std::result::Result::Ok(Self::High),
 
-            "Medium" => ::std::result::Result::Ok(Self::MEDIUM),
+            "Medium" => ::std::result::Result::Ok(Self::Medium),
 
-            "Low" => ::std::result::Result::Ok(Self::LOW),
+            "Low" => ::std::result::Result::Ok(Self::Low),
 
             other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
@@ -159,11 +159,11 @@ impl ::std::str::FromStr for Status {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Active" => ::std::result::Result::Ok(Self::ACTIVE),
+            "Active" => ::std::result::Result::Ok(Self::Active),
 
-            "Inactive" => ::std::result::Result::Ok(Self::INACTIVE),
+            "Inactive" => ::std::result::Result::Ok(Self::Inactive),
 
-            "Pending" => ::std::result::Result::Ok(Self::PENDING),
+            "Pending" => ::std::result::Result::Ok(Self::Pending),
 
             _ => ::std::result::Result::Err(()),
         }

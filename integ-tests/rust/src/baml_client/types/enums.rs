@@ -95,15 +95,15 @@ impl ::std::str::FromStr for Category {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Refund" => ::std::result::Result::Ok(Self::REFUND),
+            "Refund" => ::std::result::Result::Ok(Self::Refund),
 
-            "CancelOrder" => ::std::result::Result::Ok(Self::CANCELORDER),
+            "CancelOrder" => ::std::result::Result::Ok(Self::CancelOrder),
 
-            "TechnicalSupport" => ::std::result::Result::Ok(Self::TECHNICALSUPPORT),
+            "TechnicalSupport" => ::std::result::Result::Ok(Self::TechnicalSupport),
 
-            "AccountIssue" => ::std::result::Result::Ok(Self::ACCOUNTISSUE),
+            "AccountIssue" => ::std::result::Result::Ok(Self::AccountIssue),
 
-            "Question" => ::std::result::Result::Ok(Self::QUESTION),
+            "Question" => ::std::result::Result::Ok(Self::Question),
 
             _ => ::std::result::Result::Err(()),
         }
@@ -157,15 +157,15 @@ impl ::std::str::FromStr for Category2 {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Refund" => ::std::result::Result::Ok(Self::REFUND),
+            "Refund" => ::std::result::Result::Ok(Self::Refund),
 
-            "CancelOrder" => ::std::result::Result::Ok(Self::CANCELORDER),
+            "CancelOrder" => ::std::result::Result::Ok(Self::CancelOrder),
 
-            "TechnicalSupport" => ::std::result::Result::Ok(Self::TECHNICALSUPPORT),
+            "TechnicalSupport" => ::std::result::Result::Ok(Self::TechnicalSupport),
 
-            "AccountIssue" => ::std::result::Result::Ok(Self::ACCOUNTISSUE),
+            "AccountIssue" => ::std::result::Result::Ok(Self::AccountIssue),
 
-            "Question" => ::std::result::Result::Ok(Self::QUESTION),
+            "Question" => ::std::result::Result::Ok(Self::Question),
 
             _ => ::std::result::Result::Err(()),
         }
@@ -219,15 +219,15 @@ impl ::std::str::FromStr for Category3 {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Refund" => ::std::result::Result::Ok(Self::REFUND),
+            "Refund" => ::std::result::Result::Ok(Self::Refund),
 
-            "CancelOrder" => ::std::result::Result::Ok(Self::CANCELORDER),
+            "CancelOrder" => ::std::result::Result::Ok(Self::CancelOrder),
 
-            "TechnicalSupport" => ::std::result::Result::Ok(Self::TECHNICALSUPPORT),
+            "TechnicalSupport" => ::std::result::Result::Ok(Self::TechnicalSupport),
 
-            "AccountIssue" => ::std::result::Result::Ok(Self::ACCOUNTISSUE),
+            "AccountIssue" => ::std::result::Result::Ok(Self::AccountIssue),
 
-            "Question" => ::std::result::Result::Ok(Self::QUESTION),
+            "Question" => ::std::result::Result::Ok(Self::Question),
 
             _ => ::std::result::Result::Err(()),
         }
@@ -345,9 +345,9 @@ impl ::std::str::FromStr for DataType {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Resume" => ::std::result::Result::Ok(Self::RESUME),
+            "Resume" => ::std::result::Result::Ok(Self::Resume),
 
-            "Event" => ::std::result::Result::Ok(Self::EVENT),
+            "Event" => ::std::result::Result::Ok(Self::Event),
 
             _ => ::std::result::Result::Err(()),
         }
@@ -824,11 +824,11 @@ impl ::std::str::FromStr for OptionalTest_CategoryType {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Aleph" => ::std::result::Result::Ok(Self::ALEPH),
+            "Aleph" => ::std::result::Result::Ok(Self::Aleph),
 
-            "Beta" => ::std::result::Result::Ok(Self::BETA),
+            "Beta" => ::std::result::Result::Ok(Self::Beta),
 
-            "Gamma" => ::std::result::Result::Ok(Self::GAMMA),
+            "Gamma" => ::std::result::Result::Ok(Self::Gamma),
 
             _ => ::std::result::Result::Err(()),
         }
@@ -1034,11 +1034,11 @@ impl ::std::str::FromStr for Tag {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Security" => ::std::result::Result::Ok(Self::SECURITY),
+            "Security" => ::std::result::Result::Ok(Self::Security),
 
             "AI" => ::std::result::Result::Ok(Self::AI),
 
-            "Blockchain" => ::std::result::Result::Ok(Self::BLOCKCHAIN),
+            "Blockchain" => ::std::result::Result::Ok(Self::Blockchain),
 
             _ => ::std::result::Result::Err(()),
         }

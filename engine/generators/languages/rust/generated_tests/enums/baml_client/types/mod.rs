@@ -28,14 +28,14 @@ pub enum Types {
     TestEnum(TestEnum),
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::TestEnum(_) => "TestEnum",
+            Self::TestEnum(_) => "TestEnum",
         }
     }
 }

@@ -34,20 +34,20 @@ pub enum Types {
     SmallThing(SmallThing),
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::ClassWithBlockDone(_) => "ClassWithBlockDone",
+            Self::ClassWithBlockDone(_) => "ClassWithBlockDone",
 
-            Types::ClassWithoutDone(_) => "ClassWithoutDone",
+            Self::ClassWithoutDone(_) => "ClassWithoutDone",
 
-            Types::SemanticContainer(_) => "SemanticContainer",
+            Self::SemanticContainer(_) => "SemanticContainer",
 
-            Types::SmallThing(_) => "SmallThing",
+            Self::SmallThing(_) => "SmallThing",
         }
     }
 }

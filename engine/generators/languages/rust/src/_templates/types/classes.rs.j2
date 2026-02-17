@@ -29,13 +29,13 @@ pub struct {{ class.name }} {
 {%- if let Some(media_type) = field.media_type %}
 {%- match media_type %}
 {%- when MediaTypeRust::Image %}
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_image")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_image")]
 {%- when MediaTypeRust::Audio %}
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_audio")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_audio")]
 {%- when MediaTypeRust::Pdf %}
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_pdf")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_pdf")]
 {%- when MediaTypeRust::Video %}
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_video")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_video")]
 {%- endmatch %}
 {%- endif %}
     pub {{ field.name }}: {{ field.type_str }},

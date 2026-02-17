@@ -59,19 +59,19 @@ impl ::std::str::FromStr for TestEnum {
 
     fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Angry" => ::std::result::Result::Ok(Self::ANGRY),
+            "Angry" => ::std::result::Result::Ok(Self::Angry),
 
-            "Happy" => ::std::result::Result::Ok(Self::HAPPY),
+            "Happy" => ::std::result::Result::Ok(Self::Happy),
 
-            "Sad" => ::std::result::Result::Ok(Self::SAD),
+            "Sad" => ::std::result::Result::Ok(Self::Sad),
 
-            "Confused" => ::std::result::Result::Ok(Self::CONFUSED),
+            "Confused" => ::std::result::Result::Ok(Self::Confused),
 
-            "Excited" => ::std::result::Result::Ok(Self::EXCITED),
+            "Excited" => ::std::result::Result::Ok(Self::Excited),
 
-            "Exclamation" => ::std::result::Result::Ok(Self::EXCLAMATION),
+            "Exclamation" => ::std::result::Result::Ok(Self::Exclamation),
 
-            "Bored" => ::std::result::Result::Ok(Self::BORED),
+            "Bored" => ::std::result::Result::Ok(Self::Bored),
 
             _ => ::std::result::Result::Err(()),
         }

@@ -616,18 +616,18 @@ impl ::std::default::Default for Union3FloatOrIntOrString {
 #[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4AudioOrImageOrPDFOrString {
     #[baml(name = "image")]
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_image")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_image")]
     Image(Image),
 
     #[baml(name = "string")]
     String(String),
 
     #[baml(name = "pdf")]
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_pdf")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_pdf")]
     PDF(Pdf),
 
     #[baml(name = "audio")]
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_audio")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_audio")]
     Audio(Audio),
 }
 

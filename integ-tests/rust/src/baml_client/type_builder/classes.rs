@@ -1246,7 +1246,7 @@ impl DummyOutputClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1304,7 +1304,7 @@ impl DynInputOutputClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1355,7 +1355,7 @@ impl DynamicClassOneClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1399,7 +1399,7 @@ impl DynamicClassTwoClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1463,7 +1463,7 @@ impl DynamicOutputClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1507,7 +1507,7 @@ impl DynamicSchemaClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -3560,7 +3560,7 @@ impl OriginalBClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -3611,7 +3611,7 @@ impl PersonClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -4057,7 +4057,7 @@ impl RenderEnumInputClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -4108,7 +4108,7 @@ impl RenderTestClassClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -4516,7 +4516,7 @@ impl SkipDynamicClassClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -4670,7 +4670,7 @@ impl SomeClassNestedDynamicClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 

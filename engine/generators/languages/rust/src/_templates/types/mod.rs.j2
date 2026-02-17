@@ -31,7 +31,7 @@ pub enum Types {
 {% endfor %}
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn ::std::any::Any {
         self
     }
@@ -39,13 +39,13 @@ impl baml::KnownTypes for Types {
     fn type_name(&self) -> &'static str {
         match self {
 {% for class in classes %}
-            Types::{{ class.name }}(_) => "{{ class.name }}",
+            Self::{{ class.name }}(_) => "{{ class.name }}",
 {% endfor %}
 {% for enum_ in enums %}
-            Types::{{ enum_.name }}(_) => "{{ enum_.name }}",
+            Self::{{ enum_.name }}(_) => "{{ enum_.name }}",
 {% endfor %}
 {% for union_ in unions %}
-            Types::{{ union_.name }}(_) => "{{ union_.name }}",
+            Self::{{ union_.name }}(_) => "{{ union_.name }}",
 {% endfor %}
 {% if classes.is_empty() && enums.is_empty() && unions.is_empty() %}
             _ => unreachable!("Types has no variants"),

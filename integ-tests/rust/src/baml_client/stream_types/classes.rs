@@ -398,7 +398,7 @@ pub struct DummyOutput {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -474,7 +474,7 @@ pub struct DynInputOutput {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -546,7 +546,7 @@ pub struct DynamicClassOne {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -622,7 +622,7 @@ pub struct DynamicClassTwo {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -698,7 +698,7 @@ pub struct DynamicOutput {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -768,7 +768,7 @@ pub struct DynamicSchema {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -1461,7 +1461,7 @@ pub struct OriginalB {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -1537,7 +1537,7 @@ pub struct Person {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -1731,7 +1731,7 @@ pub struct RenderEnumInput {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -1807,7 +1807,7 @@ pub struct RenderTestClass {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -1991,7 +1991,7 @@ pub struct SkipDynamicClass {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
@@ -2097,7 +2097,7 @@ pub struct SomeClassNestedDynamic {
     #[serde(flatten)]
     pub __dynamic: ::std::collections::HashMap<
         ::std::string::String,
-        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 

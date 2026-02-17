@@ -32,18 +32,18 @@ pub enum Types {
     Union2ExampleOrExample2(Union2ExampleOrExample2),
 }
 
-impl baml::KnownTypes for Types {
+impl ::baml::KnownTypes for Types {
     fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::Example(_) => "Example",
+            Self::Example(_) => "Example",
 
-            Types::Example2(_) => "Example2",
+            Self::Example2(_) => "Example2",
 
-            Types::Union2ExampleOrExample2(_) => "Union2ExampleOrExample2",
+            Self::Union2ExampleOrExample2(_) => "Union2ExampleOrExample2",
         }
     }
 }

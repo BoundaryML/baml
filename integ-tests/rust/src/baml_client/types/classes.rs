@@ -203,7 +203,7 @@ impl ::std::convert::AsRef<ClassWithBlockDone> for ClassWithBlockDone {
 #[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithImage {
-    #[serde(deserialize_with = "super::__internal_media_serde::deserialize_image")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_image")]
     pub myImage: Image,
     pub param2: String,
     pub fake_image: FakeImage,

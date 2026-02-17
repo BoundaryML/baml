@@ -93,7 +93,7 @@ impl ArticleClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -165,7 +165,7 @@ impl PersonClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -223,7 +223,7 @@ impl PureDynamicClassBuilder {
         &self,
         name: &str,
         field_type: &::baml::TypeDef,
-    ) -> ::std::result::Result<&mut Self, ::baml::BamlError> {
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
