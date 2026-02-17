@@ -269,6 +269,10 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        debug_assert!(
+            matches!(destination, Place::Local(_)),
+            "Call destination must be a local place"
+        );
         self.set_terminator(Terminator::Call {
             callee,
             args,
@@ -291,6 +295,10 @@ impl MirBuilder {
         future: Place,
         resume: BlockId,
     ) {
+        debug_assert!(
+            matches!(future, Place::Local(_)),
+            "DispatchFuture future handle place must be local"
+        );
         self.set_terminator(Terminator::DispatchFuture {
             callee,
             args,
@@ -307,6 +315,14 @@ impl MirBuilder {
         target: BlockId,
         unwind: Option<BlockId>,
     ) {
+        debug_assert!(
+            matches!(future, Place::Local(_)),
+            "Await future place must be local"
+        );
+        debug_assert!(
+            matches!(destination, Place::Local(_)),
+            "Await destination must be a local place"
+        );
         self.set_terminator(Terminator::Await {
             future,
             destination,
