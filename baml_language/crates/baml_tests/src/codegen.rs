@@ -179,7 +179,10 @@ fn compile_source_with_opt(source: &str, opt: baml_compiler_emit::OptLevel) -> C
 
     let project = db.get_project().unwrap();
     let all_files = project.files(&db).clone();
-    let program = baml_compiler_emit::compile_files(&db, &all_files, opt)
+    let options = baml_compiler_emit::CompileOptions {
+        emit_test_cases: false,
+    };
+    let program = baml_compiler_emit::compile_files(&db, &all_files, opt, &options)
         .expect("compile_files should succeed for valid test source");
 
     // Extract functions from the program

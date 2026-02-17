@@ -491,7 +491,7 @@ pub enum TestArgValue {
 /// A compiled test case, ready for execution.
 #[derive(Clone, Debug)]
 pub struct TestCase {
-    /// Test name (e.g., "TestAddOne").
+    /// Test name (e.g., "`TestAddOne`").
     pub name: String,
     /// Function names this test targets.
     pub function_names: Vec<String>,

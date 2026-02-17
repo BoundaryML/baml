@@ -793,7 +793,8 @@ fn generate_codegen_test(
             let mut output = String::new();
 
             // Pass all files (builtins + user) to compile_files
-            match baml_compiler_emit::compile_files(&db, &all_files, baml_compiler_emit::OptLevel::One) {
+            let options = baml_compiler_emit::CompileOptions { emit_test_cases: false };
+            match baml_compiler_emit::compile_files(&db, &all_files, baml_compiler_emit::OptLevel::One, &options) {
                 Ok(program) => {
                     // Collect sorted functions, excluding builtins (baml.*)
                     // which are snapshotted separately in baml_std.

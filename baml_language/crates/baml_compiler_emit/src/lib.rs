@@ -72,6 +72,16 @@ pub use bex_vm_types::{
 #[salsa::db]
 pub trait Db: baml_compiler_mir::Db {}
 
+/// Options for controlling bytecode compilation.
+#[derive(Debug, Clone, Copy)]
+pub struct CompileOptions {
+    /// Include test cases in the compiled program.
+    ///
+    /// When true, `test { ... }` blocks are compiled into `Program::test_cases`.
+    /// Only the CLI test runner needs this; SDK runtimes can leave it off.
+    pub emit_test_cases: bool,
+}
+
 /// Generate bytecode for all functions in a project.
 ///
 /// This is the main entry point for project-wide code generation.
@@ -79,9 +89,9 @@ pub trait Db: baml_compiler_mir::Db {}
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
-pub fn generate_project_bytecode(db: &dyn Db) -> Result<Program, LoweringError> {
+pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db, options: &CompileOptions) -> Result<Program, LoweringError> {
     let project = db.project();
-    compile_files(db, project.files(db), OptLevel::One)
+    compile_files(db, project.files(db), OptLevel::One, options)
 }
 
 /// Generate bytecode for a list of source files.
@@ -93,6 +103,7 @@ pub fn compile_files(
     db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
     opt: OptLevel,
+    options: CompileOptions,
 ) -> Result<Program, LoweringError> {
     // Note: Builtin BAML files (like llm.baml) are now loaded at project setup time
     // in ProjectDatabase::set_project_root(), so they're already in the files list.
@@ -668,6 +679,29 @@ pub fn compile_files(
                     function_names: test.function_refs.iter().map(|n| n.to_string()).collect(),
                     args,
                 });
+    // --- Pass: Emit test cases (only when requested) ---
+    if options.emit_test_cases {
+        for file in files {
+            let item_tree = baml_compiler_hir::file_item_tree(db, *file);
+            let items_struct = baml_compiler_hir::file_items(db, *file);
+            for item in items_struct.items(db) {
+                if let ItemId::Test(test_loc) = item {
+                    let test = &item_tree[test_loc.id(db)];
+                    let args = test
+                        .args
+                        .iter()
+                        .map(|(k, v)| (k.clone(), convert_hir_test_arg(v)))
+                        .collect();
+                    program.test_cases.push(bex_vm_types::TestCase {
+                        name: test.name.to_string(),
+                        function_names: test
+                            .function_refs
+                            .iter()
+                            .map(std::string::ToString::to_string)
+                            .collect(),
+                        args,
+                    });
+                }
             }
         }
     }

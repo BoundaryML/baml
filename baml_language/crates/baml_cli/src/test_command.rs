@@ -115,8 +115,11 @@ impl TestArgs {
             return Ok(crate::ExitCode::Other);
         }
 
-        // Compile to bytecode.
-        let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
+        // Compile to bytecode (with test cases included).
+        let compile_options = baml_compiler_emit::CompileOptions {
+            emit_test_cases: true,
+        };
+        let bytecode = baml_compiler_emit::generate_project_bytecode(&db, compile_options)
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         // Create the engine with native (tokio-based) sys ops.
@@ -131,7 +134,7 @@ impl TestArgs {
         let mut passed = 0usize;
         let mut failed = 0usize;
 
-        for ((func_name, test_name), _path) in &selected {
+        for (func_name, test_name) in selected.keys() {
             // Look up the compiled test case from the engine.
             let test_case = match engine.test_case(test_name) {
                 Some(tc) => tc,

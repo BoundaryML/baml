@@ -1370,6 +1370,9 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
+            baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
         ) {
             Ok(p) => p,
             Err(err) => {
@@ -1475,6 +1478,9 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
+            baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
         ) {
             Ok(p) => p,
             Err(err) => {
@@ -1627,6 +1633,9 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
+            baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
         ) {
             Ok(p) => p,
             Err(err) => {
