@@ -381,14 +381,15 @@ impl Printable for ParenExpr {
             .trivia
             .get_for_range_split(self.expr.leftmost_token());
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        let single_line_len: usize = chain(
-            chain(open_trailing, expr_leading),
-            chain(expr_trailing, close_leading),
-        )
-        .map(|t| t.single_line_len(printer.input))
-        .sum::<Option<usize>>()
-        .map(|sum| sum + inner_printer.len() + const { "()".len() })
-        .unwrap_or(usize::MAX);
+        let single_line_len: usize = open_trailing
+            .iter()
+            .chain(expr_leading)
+            .chain(expr_trailing)
+            .chain(close_leading)
+            .map(|t| t.single_line_len(printer.input))
+            .sum::<Option<usize>>()
+            .map(|sum| sum + inner_printer.len() + const { "()".len() })
+            .unwrap_or(usize::MAX);
 
         if inner_info.multi_lined || single_line_len > shape.width {
             self.print_multi_line(shape, printer)
@@ -2347,14 +2348,14 @@ impl Printable for ObjectFieldKey {
 /// Only used for printing chained expressions.
 ///
 /// Needed to re-organize before printing from a hierarchical structure to a flat-ish one.
-struct PrintChain<'a> {
+pub struct PrintChain<'a> {
     /// May be a [`PathExpr`] in which case only the first item is used (the rest are included in [`PrintChain::chain_members`]).
     first: &'a Expression,
     /// Will always start with a field access (if not empty), since calls/indexes will be included in `first` if not following a field access.
     chain_members: Vec<PrintChainItem<'a>>,
 }
 impl<'a> PrintChain<'a> {
-    fn new(from: &'a Expression) -> Self {
+    pub fn new(from: &'a Expression) -> Self {
         match from {
             Expression::Path(path_expr) => Self {
                 first: from,
