@@ -22,11 +22,20 @@ use baml_compiler_mir::{
 // Data Structures
 // ============================================================================
 
+/// A reference to either a statement or a terminator within a block.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StatementRef {
+    /// A statement at the given index.
+    Statement(usize),
+    /// The block's terminator.
+    Terminator,
+}
+
 /// Where a local is defined.
 #[derive(Clone, Debug)]
 pub(crate) struct DefLocation {
     pub block: BlockId,
-    pub statement_idx: usize,
+    pub statement_ref: StatementRef,
     /// The rvalue that produces this local's value (for inlining).
     pub rvalue: Rvalue,
 }
@@ -35,21 +44,19 @@ pub(crate) struct DefLocation {
 #[derive(Clone, Debug)]
 pub(crate) struct UseLocation {
     pub block: BlockId,
-    pub statement_idx: usize,
+    pub statement_ref: StatementRef,
 }
-
-/// Sentinel value for uses in terminators.
-pub(crate) const TERMINATOR_IDX: usize = usize::MAX;
 
 /// Def-use information for a single local.
 #[derive(Clone, Debug)]
 pub(crate) struct LocalDefUse {
-    #[allow(dead_code)] // Kept for debugging and future use
-    pub local: Local,
     /// Definition site (None for parameters, which are defined at entry).
     pub def: Option<DefLocation>,
     /// All use sites.
     pub uses: Vec<UseLocation>,
+    /// All definition sites as `(block, statement_ref)` pairs.
+    /// Empty for parameters that are never reassigned.
+    pub all_defs: Vec<(BlockId, StatementRef)>,
 }
 
 /// Classification of a local variable.
@@ -88,8 +95,10 @@ pub(crate) enum LocalClassification {
 pub(crate) struct Dominators {
     /// Immediate dominator of each block (entry has None).
     pub idom: HashMap<BlockId, Option<BlockId>>,
-    /// Reverse postorder indices for faster intersection.
-    #[allow(dead_code)] // Used in dominator computation, kept for future optimizations
+    /// Reverse postorder indices used by `intersect()` during dominator computation.
+    /// The `dead_code` lint fires because the field is only read via a free function,
+    /// not through a method on `Dominators`.
+    #[allow(dead_code)]
     rpo_idx: HashMap<BlockId, usize>,
 }
 
@@ -119,14 +128,8 @@ pub(crate) struct AnalysisResult {
     pub classifications: HashMap<Local, LocalClassification>,
     /// Def-use information for each local.
     pub def_use: HashMap<Local, LocalDefUse>,
-    /// Dominator tree.
-    #[allow(dead_code)] // Kept for future scope-aware codegen
-    pub dominators: Dominators,
     /// Reverse postorder of blocks (for iteration).
     pub rpo: Vec<BlockId>,
-    /// Predecessor map for each block.
-    #[allow(dead_code)] // Kept for future scope-aware codegen
-    pub predecessors: HashMap<BlockId, Vec<BlockId>>,
     /// Jump threading: maps empty goto-only blocks to their final target.
     /// Used during emission to skip intermediate jumps.
     pub redirect_targets: HashMap<BlockId, BlockId>,
@@ -164,9 +167,7 @@ impl AnalysisResult {
         Self {
             classifications,
             def_use,
-            dominators,
             rpo,
-            predecessors,
             redirect_targets,
             copy_sources,
         }
@@ -410,9 +411,9 @@ fn collect_def_use(mir: &MirFunction) -> HashMap<Local, LocalDefUse> {
         def_use.insert(
             local,
             LocalDefUse {
-                local,
                 def: None,
                 uses: Vec::new(),
+                all_defs: Vec::new(),
             },
         );
     }
@@ -421,6 +422,7 @@ fn collect_def_use(mir: &MirFunction) -> HashMap<Local, LocalDefUse> {
     for block in &mir.blocks {
         // Walk statements
         for (stmt_idx, stmt) in block.statements.iter().enumerate() {
+            let stmt_ref = StatementRef::Statement(stmt_idx);
             match &stmt.kind {
                 StatementKind::Assign { destination, value } => {
                     // Record definition
@@ -428,9 +430,10 @@ fn collect_def_use(mir: &MirFunction) -> HashMap<Local, LocalDefUse> {
                         if let Some(du) = def_use.get_mut(local) {
                             du.def = Some(DefLocation {
                                 block: block.id,
-                                statement_idx: stmt_idx,
+                                statement_ref: stmt_ref,
                                 rvalue: value.clone(),
                             });
+                            du.all_defs.push((block.id, stmt_ref));
                         }
                     }
 
@@ -439,81 +442,49 @@ fn collect_def_use(mir: &MirFunction) -> HashMap<Local, LocalDefUse> {
                     // classified as Virtual.
                     match destination {
                         Place::Field { base, .. } => {
-                            collect_uses_in_place(base, block.id, stmt_idx, &mut def_use);
+                            collect_uses_in_place(base, block.id, stmt_ref, &mut def_use);
                         }
                         Place::Index { base, index, .. } => {
-                            collect_uses_in_place(base, block.id, stmt_idx, &mut def_use);
+                            collect_uses_in_place(base, block.id, stmt_ref, &mut def_use);
                             // The index is also used - we need to load it for the Store*Element
-                            def_use
-                                .entry(*index)
-                                .or_insert_with(|| LocalDefUse {
-                                    local: *index,
-                                    def: None,
-                                    uses: Vec::new(),
-                                })
-                                .uses
-                                .push(UseLocation {
-                                    block: block.id,
-                                    statement_idx: stmt_idx,
-                                });
+                            def_use.get_mut(index).unwrap().uses.push(UseLocation {
+                                block: block.id,
+                                statement_ref: stmt_ref,
+                            });
                         }
                         Place::Local(_) => {}
                     }
 
                     // Record uses in the rvalue
-                    collect_uses_in_rvalue(value, block.id, stmt_idx, &mut def_use);
+                    collect_uses_in_rvalue(value, block.id, stmt_ref, &mut def_use);
                 }
                 StatementKind::Drop(place) => {
-                    collect_uses_in_place(place, block.id, stmt_idx, &mut def_use);
+                    collect_uses_in_place(place, block.id, stmt_ref, &mut def_use);
                 }
                 StatementKind::Unwatch(local) => {
                     // Unwatch uses the local (we need to read its value to unlink from watch graph)
-                    def_use
-                        .entry(*local)
-                        .or_insert_with(|| LocalDefUse {
-                            local: *local,
-                            def: None,
-                            uses: Vec::new(),
-                        })
-                        .uses
-                        .push(UseLocation {
-                            block: block.id,
-                            statement_idx: stmt_idx,
-                        });
+                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
+                        block: block.id,
+                        statement_ref: stmt_ref,
+                    });
                 }
                 StatementKind::NotifyBlock { .. } => {
                     // NotifyBlock doesn't use any locals - it's a pure side effect
                 }
                 StatementKind::WatchOptions { local, filter } => {
                     // WatchOptions uses the local and the filter operand
-                    def_use
-                        .entry(*local)
-                        .or_insert_with(|| LocalDefUse {
-                            local: *local,
-                            def: None,
-                            uses: Vec::new(),
-                        })
-                        .uses
-                        .push(UseLocation {
-                            block: block.id,
-                            statement_idx: stmt_idx,
-                        });
-                    collect_uses_in_operand(filter, block.id, stmt_idx, &mut def_use);
+                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
+                        block: block.id,
+                        statement_ref: stmt_ref,
+                    });
+                    collect_uses_in_operand(filter, block.id, stmt_ref, &mut def_use);
                 }
                 StatementKind::WatchNotify(local) => {
                     // WatchNotify uses the local
-                    def_use
-                        .entry(*local)
-                        .or_insert_with(|| LocalDefUse {
-                            local: *local,
-                            def: None,
-                            uses: Vec::new(),
-                        })
-                        .uses
-                        .push(UseLocation {
-                            block: block.id,
-                            statement_idx: stmt_idx,
-                        });
+                    def_use.get_mut(local).unwrap().uses.push(UseLocation {
+                        block: block.id,
+                        statement_ref: stmt_ref,
+                    });
                 }
                 StatementKind::VizEnter(_) | StatementKind::VizExit(_) => {
                     // VizEnter/VizExit don't use any locals
@@ -521,7 +492,7 @@ fn collect_def_use(mir: &MirFunction) -> HashMap<Local, LocalDefUse> {
                 StatementKind::Nop => {}
                 StatementKind::Assert(operand) => {
                     // Assert uses the condition operand
-                    collect_uses_in_operand(operand, block.id, stmt_idx, &mut def_use);
+                    collect_uses_in_operand(operand, block.id, stmt_ref, &mut def_use);
                 }
             }
         }
@@ -535,100 +506,111 @@ fn collect_def_use(mir: &MirFunction) -> HashMap<Local, LocalDefUse> {
     def_use
 }
 
-/// Collect uses in an rvalue.
-fn collect_uses_in_rvalue(
-    rvalue: &Rvalue,
-    block: BlockId,
-    stmt_idx: usize,
-    def_use: &mut HashMap<Local, LocalDefUse>,
-) {
-    match rvalue {
-        Rvalue::Use(operand) => {
-            collect_uses_in_operand(operand, block, stmt_idx, def_use);
-        }
-        Rvalue::BinaryOp { left, right, .. } => {
-            collect_uses_in_operand(left, block, stmt_idx, def_use);
-            collect_uses_in_operand(right, block, stmt_idx, def_use);
-        }
-        Rvalue::UnaryOp { operand, .. } => {
-            collect_uses_in_operand(operand, block, stmt_idx, def_use);
-        }
-        Rvalue::Array(elements) => {
-            for elem in elements {
-                collect_uses_in_operand(elem, block, stmt_idx, def_use);
-            }
-        }
-        Rvalue::Map(entries) => {
-            for (key, value) in entries {
-                collect_uses_in_operand(key, block, stmt_idx, def_use);
-                collect_uses_in_operand(value, block, stmt_idx, def_use);
-            }
-        }
-        Rvalue::Aggregate { fields, .. } => {
-            for field in fields {
-                collect_uses_in_operand(field, block, stmt_idx, def_use);
-            }
-        }
-        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-            collect_uses_in_place(place, block, stmt_idx, def_use);
-        }
-        Rvalue::IsType { operand, .. } => {
-            collect_uses_in_operand(operand, block, stmt_idx, def_use);
+// ---------------------------------------------------------------------------
+// Generic local walkers: single source of truth for traversing MIR trees.
+// ---------------------------------------------------------------------------
+
+/// Walk all locals referenced by a place expression, calling `f` for each.
+fn walk_place_locals(place: &Place, f: &mut impl FnMut(Local)) {
+    match place {
+        Place::Local(local) => f(*local),
+        Place::Field { base, .. } => walk_place_locals(base, f),
+        Place::Index { base, index, .. } => {
+            walk_place_locals(base, f);
+            f(*index);
         }
     }
 }
 
-/// Collect uses in an operand.
-fn collect_uses_in_operand(
-    operand: &Operand,
-    block: BlockId,
-    stmt_idx: usize,
-    def_use: &mut HashMap<Local, LocalDefUse>,
-) {
+/// Walk all locals referenced by an operand, calling `f` for each.
+fn walk_operand_locals(operand: &Operand, f: &mut impl FnMut(Local)) {
     match operand {
-        Operand::Copy(place) | Operand::Move(place) => {
-            collect_uses_in_place(place, block, stmt_idx, def_use);
-        }
+        Operand::Copy(place) | Operand::Move(place) => walk_place_locals(place, f),
         Operand::Constant(_) => {}
     }
 }
 
-/// Collect uses in a place.
-///
-/// This recursively walks the place structure to find all used locals,
-/// including index locals in nested `Place::Index` projections.
+/// Walk all locals referenced by an rvalue, calling `f` for each.
+fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
+    match rvalue {
+        Rvalue::Use(operand) => walk_operand_locals(operand, f),
+        Rvalue::BinaryOp { left, right, .. } => {
+            walk_operand_locals(left, f);
+            walk_operand_locals(right, f);
+        }
+        Rvalue::UnaryOp { operand, .. } => walk_operand_locals(operand, f),
+        Rvalue::Array(elements) => {
+            for elem in elements {
+                walk_operand_locals(elem, f);
+            }
+        }
+        Rvalue::Map(entries) => {
+            for (key, value) in entries {
+                walk_operand_locals(key, f);
+                walk_operand_locals(value, f);
+            }
+        }
+        Rvalue::Aggregate { fields, .. } => {
+            for field in fields {
+                walk_operand_locals(field, f);
+            }
+        }
+        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+            walk_place_locals(place, f);
+        }
+        Rvalue::IsType { operand, .. } => walk_operand_locals(operand, f),
+    }
+}
+
+/// Record a use of every local referenced by an rvalue.
+fn collect_uses_in_rvalue(
+    rvalue: &Rvalue,
+    block: BlockId,
+    stmt_ref: StatementRef,
+    def_use: &mut HashMap<Local, LocalDefUse>,
+) {
+    walk_rvalue_locals(rvalue, &mut |local| {
+        if let Some(du) = def_use.get_mut(&local) {
+            du.uses.push(UseLocation {
+                block,
+                statement_ref: stmt_ref,
+            });
+        }
+    });
+}
+
+/// Record a use of every local referenced by an operand.
+fn collect_uses_in_operand(
+    operand: &Operand,
+    block: BlockId,
+    stmt_ref: StatementRef,
+    def_use: &mut HashMap<Local, LocalDefUse>,
+) {
+    walk_operand_locals(operand, &mut |local| {
+        if let Some(du) = def_use.get_mut(&local) {
+            du.uses.push(UseLocation {
+                block,
+                statement_ref: stmt_ref,
+            });
+        }
+    });
+}
+
+/// Record a use of every local referenced by a place.
 fn collect_uses_in_place(
     place: &Place,
     block: BlockId,
-    stmt_idx: usize,
+    stmt_ref: StatementRef,
     def_use: &mut HashMap<Local, LocalDefUse>,
 ) {
-    match place {
-        Place::Local(local) => {
-            // Base case: a simple local reference
-            if let Some(du) = def_use.get_mut(local) {
-                du.uses.push(UseLocation {
-                    block,
-                    statement_idx: stmt_idx,
-                });
-            }
+    walk_place_locals(place, &mut |local| {
+        if let Some(du) = def_use.get_mut(&local) {
+            du.uses.push(UseLocation {
+                block,
+                statement_ref: stmt_ref,
+            });
         }
-        Place::Field { base, .. } => {
-            // Recurse into the base to find all used locals
-            collect_uses_in_place(base, block, stmt_idx, def_use);
-        }
-        Place::Index { base, index, .. } => {
-            // Recurse into the base to find all used locals
-            collect_uses_in_place(base, block, stmt_idx, def_use);
-            // The index local is also used
-            if let Some(du) = def_use.get_mut(index) {
-                du.uses.push(UseLocation {
-                    block,
-                    statement_idx: stmt_idx,
-                });
-            }
-        }
-    }
+    });
 }
 
 /// Collect uses (and defs for Call/Await) in a terminator.
@@ -645,15 +627,15 @@ fn collect_uses_in_terminator(
             if let Some(du) = def_use.get_mut(&return_local) {
                 du.uses.push(UseLocation {
                     block,
-                    statement_idx: TERMINATOR_IDX,
+                    statement_ref: StatementRef::Terminator,
                 });
             }
         }
         Terminator::Branch { condition, .. } => {
-            collect_uses_in_operand(condition, block, TERMINATOR_IDX, def_use);
+            collect_uses_in_operand(condition, block, StatementRef::Terminator, def_use);
         }
         Terminator::Switch { discriminant, .. } => {
-            collect_uses_in_operand(discriminant, block, TERMINATOR_IDX, def_use);
+            collect_uses_in_operand(discriminant, block, StatementRef::Terminator, def_use);
         }
         Terminator::Call {
             callee,
@@ -661,9 +643,9 @@ fn collect_uses_in_terminator(
             destination,
             ..
         } => {
-            collect_uses_in_operand(callee, block, TERMINATOR_IDX, def_use);
+            collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
-                collect_uses_in_operand(arg, block, TERMINATOR_IDX, def_use);
+                collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the destination (where call result is stored)
             if let Place::Local(local) = destination {
@@ -673,9 +655,10 @@ fn collect_uses_in_terminator(
                     // we just need to know there's a def here
                     du.def = Some(DefLocation {
                         block,
-                        statement_idx: TERMINATOR_IDX,
+                        statement_ref: StatementRef::Terminator,
                         rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
                     });
+                    du.all_defs.push((block, StatementRef::Terminator));
                 }
             }
         }
@@ -685,18 +668,19 @@ fn collect_uses_in_terminator(
             future,
             ..
         } => {
-            collect_uses_in_operand(callee, block, TERMINATOR_IDX, def_use);
+            collect_uses_in_operand(callee, block, StatementRef::Terminator, def_use);
             for arg in args {
-                collect_uses_in_operand(arg, block, TERMINATOR_IDX, def_use);
+                collect_uses_in_operand(arg, block, StatementRef::Terminator, def_use);
             }
             // Record the def for the future place
             if let Place::Local(local) = future {
                 if let Some(du) = def_use.get_mut(local) {
                     du.def = Some(DefLocation {
                         block,
-                        statement_idx: TERMINATOR_IDX,
+                        statement_ref: StatementRef::Terminator,
                         rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
                     });
+                    du.all_defs.push((block, StatementRef::Terminator));
                 }
             }
         }
@@ -705,15 +689,16 @@ fn collect_uses_in_terminator(
             destination,
             ..
         } => {
-            collect_uses_in_place(future, block, TERMINATOR_IDX, def_use);
+            collect_uses_in_place(future, block, StatementRef::Terminator, def_use);
             // Record the def for the destination
             if let Place::Local(local) = destination {
                 if let Some(du) = def_use.get_mut(local) {
                     du.def = Some(DefLocation {
                         block,
-                        statement_idx: TERMINATOR_IDX,
+                        statement_ref: StatementRef::Terminator,
                         rvalue: Rvalue::Use(Operand::Constant(Constant::Null)),
                     });
+                    du.all_defs.push((block, StatementRef::Terminator));
                 }
             }
         }
@@ -734,8 +719,6 @@ fn classify_locals(
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     redirect_targets: &HashMap<BlockId, BlockId>,
 ) -> (HashMap<Local, LocalClassification>, HashMap<Local, Local>) {
-    let all_defs = collect_all_definitions(mir);
-
     let mut classifications = HashMap::new();
     let mut copy_sources: HashMap<Local, Local> = HashMap::new();
 
@@ -766,19 +749,19 @@ fn classify_locals(
             // Dead local: either an unused compiler temp, or an unused wildcard binding.
             // Skip _0 which is implicitly used by return.
             LocalClassification::Dead
-        } else if let Some(source) = get_copy_source(local, du, mir, &all_defs) {
+        } else if let Some(source) = get_copy_source(du, mir, def_use) {
             // Copy propagation: this local is just `_X = copy _Y` where _Y is suitable.
             // We can eliminate _X and use _Y directly at all use sites.
             copy_sources.insert(local, source);
             LocalClassification::CopyOf
-        } else if can_be_virtual(local, du, dominators, mir, def_use, predecessors, &all_defs) {
+        } else if can_be_virtual(du, dominators, mir, def_use, predecessors) {
             LocalClassification::Virtual
-        } else if is_phi_like(local, du, mir, predecessors, &all_defs) {
+        } else if is_phi_like(local, du, mir, predecessors, def_use) {
             // Phi-like: assigned in each predecessor, used once at join point.
             // At def sites: emit rvalue but NOT StoreVar (leave on stack).
             // At use site: don't emit LoadVar (value already on stack).
             LocalClassification::PhiLike
-        } else if is_return_phi(local, mir, &all_defs, redirect_targets) {
+        } else if is_return_phi(local, mir, def_use, redirect_targets) {
             // Return-phi: _0 is assigned immediately before Return in each defining block.
             // At def sites: emit rvalue but NOT StoreVar (leave on stack).
             // At Return: don't emit LoadVar for _0 (value already on stack).
@@ -798,57 +781,6 @@ fn classify_locals(
     (classifications, copy_sources)
 }
 
-/// Collect all definition sites for each local.
-///
-/// Unlike `def_use` which only tracks the "last" definition, this tracks ALL
-/// assignments to each local across all blocks.
-fn collect_all_definitions(mir: &MirFunction) -> HashMap<Local, Vec<(BlockId, usize)>> {
-    let mut all_defs: HashMap<Local, Vec<(BlockId, usize)>> = HashMap::new();
-
-    for block in &mir.blocks {
-        // Collect definitions from statements
-        for (stmt_idx, stmt) in block.statements.iter().enumerate() {
-            if let StatementKind::Assign {
-                destination: Place::Local(local),
-                ..
-            } = &stmt.kind
-            {
-                all_defs
-                    .entry(*local)
-                    .or_default()
-                    .push((block.id, stmt_idx));
-            }
-        }
-
-        // Collect definitions from terminators (Call, DispatchFuture, Await)
-        if let Some(terminator) = &block.terminator {
-            let dest_local = match terminator {
-                Terminator::Call {
-                    destination: Place::Local(local),
-                    ..
-                } => Some(*local),
-                Terminator::DispatchFuture {
-                    future: Place::Local(local),
-                    ..
-                } => Some(*local),
-                Terminator::Await {
-                    destination: Place::Local(local),
-                    ..
-                } => Some(*local),
-                _ => None,
-            };
-            if let Some(local) = dest_local {
-                all_defs
-                    .entry(local)
-                    .or_default()
-                    .push((block.id, TERMINATOR_IDX));
-            }
-        }
-    }
-
-    all_defs
-}
-
 /// Check if a local is "phi-like": assigned in each predecessor of a join block,
 /// used exactly once at that join block.
 ///
@@ -861,7 +793,7 @@ fn is_phi_like(
     du: &LocalDefUse,
     mir: &MirFunction,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
-    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
+    def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
     // Must have exactly one use
     if du.uses.len() != 1 {
@@ -883,9 +815,10 @@ fn is_phi_like(
     }
 
     // Get all definitions of this local
-    let Some(defs) = all_defs.get(&local) else {
+    let defs = &def_use[&local].all_defs;
+    if defs.is_empty() {
         return false;
-    };
+    }
 
     // Check that each predecessor:
     // 1. Defines this local
@@ -923,7 +856,7 @@ fn is_phi_like(
         // Verify this definition is in our defs list
         let has_def = defs
             .iter()
-            .any(|&(b, s)| b == pred_id && s == last_stmt_idx);
+            .any(|&(b, s)| b == pred_id && s == StatementRef::Statement(last_stmt_idx));
         if !has_def {
             return false;
         }
@@ -970,7 +903,7 @@ fn is_stack_neutral_statement(kind: &StatementKind) -> bool {
 fn is_return_phi(
     local: Local,
     mir: &MirFunction,
-    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
+    def_use: &HashMap<Local, LocalDefUse>,
     redirect_targets: &HashMap<BlockId, BlockId>,
 ) -> bool {
     // Only applies to _0 (the return place)
@@ -979,9 +912,7 @@ fn is_return_phi(
     }
 
     // Get all definitions of _0
-    let Some(defs) = all_defs.get(&local) else {
-        return false;
-    };
+    let defs = &def_use[&local].all_defs;
 
     // Must have at least one definition
     if defs.is_empty() {
@@ -1025,24 +956,26 @@ fn is_return_phi(
     // Each definition block must:
     // 1. Have the definition followed only by stack-neutral statements (or be a terminator definition)
     // 2. End with Return OR lead to Return through only stack-neutral blocks
-    for &(block_id, stmt_idx) in defs {
+    for &(block_id, stmt_ref) in defs {
         let block = mir.block(block_id);
 
-        // Handle terminator definitions (Call, DispatchFuture, Await)
-        if stmt_idx == TERMINATOR_IDX {
-            // For terminator definitions, check if the continuation leads to return safely
-            let continuation = match &block.terminator {
-                Some(Terminator::Call { target, .. }) => Some(*target),
-                Some(Terminator::DispatchFuture { resume, .. }) => Some(*resume),
-                Some(Terminator::Await { target, .. }) => Some(*target),
-                _ => None,
-            };
-            let valid = continuation.is_some_and(leads_to_return_safely);
-            if !valid {
-                return false;
+        let stmt_idx = match stmt_ref {
+            StatementRef::Terminator => {
+                // For terminator definitions, check if the continuation leads to return safely
+                let continuation = match &block.terminator {
+                    Some(Terminator::Call { target, .. }) => Some(*target),
+                    Some(Terminator::DispatchFuture { resume, .. }) => Some(*resume),
+                    Some(Terminator::Await { target, .. }) => Some(*target),
+                    _ => None,
+                };
+                let valid = continuation.is_some_and(leads_to_return_safely);
+                if !valid {
+                    return false;
+                }
+                continue;
             }
-            continue;
-        }
+            StatementRef::Statement(idx) => idx,
+        };
 
         // For regular Assign statements: all statements after the definition must be stack-neutral
         let statements_after_def_are_neutral = block.statements[stmt_idx + 1..]
@@ -1072,13 +1005,11 @@ fn is_return_phi(
 
 /// Check if a local can be classified as Virtual.
 fn can_be_virtual(
-    local: Local,
     du: &LocalDefUse,
     dominators: &Dominators,
     mir: &MirFunction,
     def_use: &HashMap<Local, LocalDefUse>,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
-    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
 ) -> bool {
     // Must have exactly one definition
     let Some(def) = &du.def else {
@@ -1087,7 +1018,7 @@ fn can_be_virtual(
 
     // Definitions in terminators (Call/Await/DispatchFuture) cannot be inlined
     // because the value comes from the operation itself, not from a re-emittable rvalue
-    if def.statement_idx == TERMINATOR_IDX {
+    if def.statement_ref == StatementRef::Terminator {
         return false;
     }
 
@@ -1095,7 +1026,7 @@ fn can_be_virtual(
     // They have no side effects and always produce the same value.
     // If there are multiple definitions (e.g., from if-else branches), we can't inline
     // because we'd inline the wrong definition for some execution paths.
-    let has_single_def = all_defs.get(&local).is_some_and(|defs| defs.len() == 1);
+    let has_single_def = du.all_defs.len() == 1;
     if has_single_def && is_pure_constant(&def.rvalue) {
         // Just need at least one use to not be dead
         return !du.uses.is_empty();
@@ -1113,64 +1044,86 @@ fn can_be_virtual(
         return false;
     }
 
+    // The def must be a statement (terminator defs were rejected above).
+    let StatementRef::Statement(def_idx) = def.statement_ref else {
+        unreachable!("terminator defs already rejected");
+    };
+
     // If in same block, use must come after def
     if def.block == use_loc.block {
-        // Handle terminator uses (TERMINATOR_IDX)
-        if use_loc.statement_idx == TERMINATOR_IDX {
-            // Terminator always comes after all statements, so this is fine
-            // But check for side effects between def and end of block
-            if has_side_effects_between(
-                mir,
-                def.block,
-                def.statement_idx,
-                mir.block(def.block).statements.len(),
-                &def.rvalue,
-                def_use,
-            ) {
-                return false;
+        match use_loc.statement_ref {
+            StatementRef::Terminator => {
+                // Terminator always comes after all statements, so this is fine
+                // But check for side effects between def and end of block
+                if has_side_effects_between(
+                    mir,
+                    def.block,
+                    def_idx,
+                    mir.block(def.block).statements.len(),
+                    &def.rvalue,
+                    def_use,
+                ) {
+                    return false;
+                }
             }
-        } else if use_loc.statement_idx <= def.statement_idx {
-            return false;
-        } else {
-            // Check for intervening side effects
-            if has_side_effects_between(
-                mir,
-                def.block,
-                def.statement_idx,
-                use_loc.statement_idx,
-                &def.rvalue,
-                def_use,
-            ) {
-                return false;
+            StatementRef::Statement(use_idx) => {
+                if use_idx <= def_idx {
+                    return false;
+                }
+                // Check for intervening side effects
+                if has_side_effects_between(mir, def.block, def_idx, use_idx, &def.rvalue, def_use)
+                {
+                    return false;
+                }
             }
         }
     } else {
-        // Cross-block def-use
+        // Cross-block def-use: the rvalue will be re-evaluated at the use site,
+        // so we must ensure no path from def to use modifies any dependency.
+        //
+        // Rather than walking all intermediate blocks (which requires full path
+        // enumeration), we use a sound conservative check: if any local read by
+        // the rvalue (including transitive same-block deps) has multiple
+        // definitions, it may be modified on some path between def and use, so
+        // we refuse to virtualize.
+        let reads = collect_transitive_reads(&def.rvalue, def_use, def.block, def_idx);
+
+        for read_local in &reads {
+            if let Some(read_du) = def_use.get(read_local) {
+                // Parameters have an implicit entry definition not tracked
+                // in all_defs, so any explicit def means multiple definitions.
+                let is_param = read_local.0 > 0 && read_local.0 <= mir.arity;
+                let has_multiple_defs = if is_param {
+                    !read_du.all_defs.is_empty()
+                } else {
+                    read_du.all_defs.len() > 1
+                };
+                if has_multiple_defs {
+                    return false;
+                }
+            }
+        }
+
         // Check if the use block is a loop header (has back-edge predecessors)
         // If so, be conservative and don't inline
         let use_preds = predecessors
             .get(&use_loc.block)
             .map_or(&[] as &[_], |v| v.as_slice());
 
-        // Check for back-edges: a predecessor that the use block dominates
-        // indicates a loop, which means the code between def and use might
-        // execute multiple times
         let has_back_edge = use_preds
             .iter()
             .any(|&pred| dominators.dominates(use_loc.block, pred));
 
         if has_back_edge {
-            // Loop detected - be conservative
             return false;
         }
 
-        // For non-loop cross-block, we're more permissive:
-        // The rvalue will be re-evaluated at the use site, so we need to ensure
-        // no intervening modifications. Check the def block from def to end.
+        // Still check the def block (from def to end) and the use block
+        // (from start to use) for same-block side effects.
         if has_side_effects_between(
             mir,
             def.block,
-            def.statement_idx,
+            def_idx,
             mir.block(def.block).statements.len(),
             &def.rvalue,
             def_use,
@@ -1178,33 +1131,16 @@ fn can_be_virtual(
             return false;
         }
 
-        // Check the use block from start to use
-        if use_loc.statement_idx != TERMINATOR_IDX
-            && use_loc.statement_idx > 0
-            && has_side_effects_between(
-                mir,
-                use_loc.block,
-                0,
-                use_loc.statement_idx,
-                &def.rvalue,
-                def_use,
-            )
-        {
-            return false;
+        if let StatementRef::Statement(use_idx) = use_loc.statement_ref {
+            if use_idx > 0
+                && has_side_effects_between(mir, use_loc.block, 0, use_idx, &def.rvalue, def_use)
+            {
+                return false;
+            }
         }
-
-        // Note: We're NOT checking intermediate blocks between def and use.
-        // This is safe because:
-        // 1. Def dominates use (checked earlier)
-        // 2. No back-edges to use block (checked above)
-        // 3. The transitive read set includes all dependencies
-        // If any intermediate block modified a dependency, that would require
-        // the variable to appear on a path the VM takes, but since we only
-        // inline single-use variables, the value at use is the value at def.
     }
 
-    // Check if the rvalue is inlinable
-    is_inlinable_rvalue(&def.rvalue)
+    true
 }
 
 /// Check for side effects between two statement indices in a block.
@@ -1254,7 +1190,7 @@ fn collect_transitive_reads(
     let mut worklist: Vec<Local> = Vec::new();
 
     // First, collect direct reads
-    collect_rvalue_reads(rvalue, &mut worklist);
+    walk_rvalue_locals(rvalue, &mut |local| worklist.push(local));
 
     // Then, transitively expand
     while let Some(local) = worklist.pop() {
@@ -1265,8 +1201,10 @@ fn collect_transitive_reads(
                 if let Some(def) = &du.def {
                     // Only follow if definition is earlier in the same block
                     // This ensures we don't include dependencies on values computed later
-                    if def.block == def_block && def.statement_idx < def_stmt_idx {
-                        collect_rvalue_reads(&def.rvalue, &mut worklist);
+                    if let StatementRef::Statement(idx) = def.statement_ref {
+                        if def.block == def_block && idx < def_stmt_idx {
+                            walk_rvalue_locals(&def.rvalue, &mut |local| worklist.push(local));
+                        }
                     }
                 }
             }
@@ -1274,68 +1212,6 @@ fn collect_transitive_reads(
     }
 
     locals
-}
-
-/// Collect locals directly read by an rvalue (non-transitive).
-fn collect_rvalue_reads(rvalue: &Rvalue, locals: &mut Vec<Local>) {
-    match rvalue {
-        Rvalue::Use(operand) => collect_operand_reads(operand, locals),
-        Rvalue::BinaryOp { left, right, .. } => {
-            collect_operand_reads(left, locals);
-            collect_operand_reads(right, locals);
-        }
-        Rvalue::UnaryOp { operand, .. } => {
-            collect_operand_reads(operand, locals);
-        }
-        Rvalue::Array(elements) => {
-            for op in elements {
-                collect_operand_reads(op, locals);
-            }
-        }
-        Rvalue::Map(entries) => {
-            for (key, value) in entries {
-                collect_operand_reads(key, locals);
-                collect_operand_reads(value, locals);
-            }
-        }
-        Rvalue::Aggregate { fields, .. } => {
-            for op in fields {
-                collect_operand_reads(op, locals);
-            }
-        }
-        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-            collect_place_reads(place, locals);
-        }
-        Rvalue::IsType { operand, .. } => {
-            collect_operand_reads(operand, locals);
-        }
-    }
-}
-
-/// Collect locals read by an operand.
-fn collect_operand_reads(operand: &Operand, locals: &mut Vec<Local>) {
-    match operand {
-        Operand::Copy(place) | Operand::Move(place) => {
-            collect_place_reads(place, locals);
-        }
-        Operand::Constant(_) => {}
-    }
-}
-
-/// Collect locals read by a place.
-fn collect_place_reads(place: &Place, locals: &mut Vec<Local>) {
-    match place {
-        Place::Local(local) => {
-            locals.push(*local);
-        }
-        Place::Field { base, .. } => {
-            collect_place_reads(base, locals);
-        }
-        Place::Index { base, index, .. } => {
-            collect_place_reads(base, locals);
-            locals.push(*index); // The index variable is also read
-        }
-    }
 }
 
 /// Check if a statement has side effects that would prevent inlining.
@@ -1372,13 +1248,6 @@ fn get_base_local(place: &Place) -> Local {
     }
 }
 
-/// Check if an rvalue can be inlined.
-fn is_inlinable_rvalue(_rvalue: &Rvalue) -> bool {
-    // All current rvalues can be inlined
-    // May want to exclude complex aggregates in the future
-    true
-}
-
 /// Check if an rvalue is a pure constant that can be safely duplicated.
 ///
 /// Pure constants have no side effects and always produce the same value,
@@ -1413,7 +1282,7 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -
     };
 
     // Definition must be in a terminator
-    if def.statement_idx != TERMINATOR_IDX {
+    if def.statement_ref != StatementRef::Terminator {
         return false;
     }
 
@@ -1421,10 +1290,10 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -
 
     // The use must be at the very start of the continuation block:
     // - statement index 0 (first statement), OR
-    // - TERMINATOR_IDX if the block has no statements (use is directly in terminator)
+    // - Terminator if the block has no statements (use is directly in terminator)
     let use_block = mir.block(use_loc.block);
-    let is_first_use = use_loc.statement_idx == 0
-        || (use_loc.statement_idx == TERMINATOR_IDX && use_block.statements.is_empty());
+    let is_first_use = use_loc.statement_ref == StatementRef::Statement(0)
+        || (use_loc.statement_ref == StatementRef::Terminator && use_block.statements.is_empty());
     if !is_first_use {
         return false;
     }
@@ -1504,22 +1373,20 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -
 /// This optimization is particularly useful for match expressions where the
 /// scrutinee is copied into a temporary before comparisons.
 fn get_copy_source(
-    local: Local,
     du: &LocalDefUse,
     mir: &MirFunction,
-    all_defs: &HashMap<Local, Vec<(BlockId, usize)>>,
+    def_use: &HashMap<Local, LocalDefUse>,
 ) -> Option<Local> {
     // Must have exactly one definition
     let def = du.def.as_ref()?;
 
     // Definition must not be from a terminator (Call/Await results aren't copies)
-    if def.statement_idx == TERMINATOR_IDX {
+    if def.statement_ref == StatementRef::Terminator {
         return None;
     }
 
     // Must have exactly one definition site
-    let defs = all_defs.get(&local)?;
-    if defs.len() != 1 {
+    if du.all_defs.len() != 1 {
         return None;
     }
 
@@ -1530,7 +1397,7 @@ fn get_copy_source(
         _ => return None,
     };
 
-    // The source must be a parameter (parameters are never reassigned in MIR)
+    // The source must be a parameter that is never reassigned.
     // We only propagate copies of parameters to keep the analysis simple and safe.
     // Propagating copies of other locals would require verifying the source isn't
     // modified between the copy and all uses of the copy.
@@ -1538,6 +1405,16 @@ fn get_copy_source(
     if source_idx == 0 || source_idx > mir.arity {
         // Source is not a parameter (_0 is return value, > arity are locals)
         return None;
+    }
+
+    // The source parameter must not be reassigned anywhere in the function.
+    // BAML allows parameter mutation (e.g., `x = 3` where x is a param),
+    // so we must verify the parameter has no explicit defs.
+    if let Some(source_du) = def_use.get(&source) {
+        if !source_du.all_defs.is_empty() {
+            // Parameter is reassigned somewhere — not safe to propagate.
+            return None;
+        }
     }
 
     Some(source)
