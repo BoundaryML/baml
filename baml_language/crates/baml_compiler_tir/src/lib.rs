@@ -2108,9 +2108,21 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 baml_base::QualifiedName::from_builtin_path(def.path),
                             ),
                         );
-                        // Propagate thrown type from the builtin signature
-                        if let Some(thrown_ty) = builtins::thrown_type(def, &bindings) {
-                            ctx.set_thrown_type(expr_id, thrown_ty);
+                        // Propagate thrown types from receiver + args + builtin signature
+                        let mut thrown = Vec::new();
+                        if let Some(t) = ctx.get_thrown_type(*base) {
+                            thrown.push(t.clone());
+                        }
+                        if let Some(sig_thrown) = builtins::thrown_type(def, &bindings) {
+                            thrown.push(sig_thrown);
+                        }
+                        if !thrown.is_empty() {
+                            let combined = if thrown.len() == 1 {
+                                thrown.into_iter().next().unwrap()
+                            } else {
+                                Ty::Union(thrown)
+                            };
+                            ctx.set_thrown_type(expr_id, combined);
                         }
                         callee_ty
                     } else {
@@ -2122,6 +2134,14 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     let mut effective_args = vec![(receiver_ty, None)];
                     for arg in args {
                         let arg_ty = infer_expr(ctx, *arg, body);
+                        // Propagate thrown type from arg
+                        if let Some(t) = ctx.get_thrown_type(*arg) {
+                            let combined = match ctx.get_thrown_type(expr_id).cloned() {
+                                Some(existing) => Ty::Union(vec![existing, t.clone()]),
+                                None => t.clone(),
+                            };
+                            ctx.set_thrown_type(expr_id, combined);
+                        }
                         let arg_location = Some(ErrorLocation::Expr(*arg));
                         effective_args.push((arg_ty, arg_location));
                     }
@@ -2229,13 +2249,27 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 baml_base::QualifiedName::from_builtin_path(def.path),
                             ),
                         );
-                        // Propagate thrown type from the builtin signature
-                        if let Some(thrown_ty) = if bindings.is_empty() {
+                        // Propagate thrown types from args + builtin signature
+                        let mut thrown = Vec::new();
+                        for arg in args.iter() {
+                            if let Some(t) = ctx.get_thrown_type(*arg) {
+                                thrown.push(t.clone());
+                            }
+                        }
+                        if let Some(sig_thrown) = if bindings.is_empty() {
                             builtins::thrown_type_unknown(def)
                         } else {
                             builtins::thrown_type(def, &bindings)
                         } {
-                            ctx.set_thrown_type(expr_id, thrown_ty);
+                            thrown.push(sig_thrown);
+                        }
+                        if !thrown.is_empty() {
+                            let combined = if thrown.len() == 1 {
+                                thrown.into_iter().next().unwrap()
+                            } else {
+                                Ty::Union(thrown)
+                            };
+                            ctx.set_thrown_type(expr_id, combined);
                         }
                         (callee_ty, arg_types_with_spans)
                     } else if ctx.lookup(&Name::new(&full_path)).is_some() {
@@ -2265,6 +2299,24 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 (ty, arg_location)
                             })
                             .collect();
+                        // Propagate thrown types from callee + args
+                        let mut thrown = Vec::new();
+                        if let Some(t) = ctx.get_thrown_type(*callee) {
+                            thrown.push(t.clone());
+                        }
+                        for arg in args.iter() {
+                            if let Some(t) = ctx.get_thrown_type(*arg) {
+                                thrown.push(t.clone());
+                            }
+                        }
+                        if !thrown.is_empty() {
+                            let combined = if thrown.len() == 1 {
+                                thrown.into_iter().next().unwrap()
+                            } else {
+                                Ty::Union(thrown)
+                            };
+                            ctx.set_thrown_type(expr_id, combined);
+                        }
                         (callee_ty, arg_types_with_spans)
                     } else {
                         // Method call via Path: `receiver.method(args)`
@@ -2322,6 +2374,14 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let mut effective_args = vec![(receiver_ty, None)];
                         for arg in args {
                             let arg_ty = infer_expr(ctx, *arg, body);
+                            // Propagate thrown type from arg
+                            if let Some(t) = ctx.get_thrown_type(*arg) {
+                                let combined = match ctx.get_thrown_type(expr_id).cloned() {
+                                    Some(existing) => Ty::Union(vec![existing, t.clone()]),
+                                    None => t.clone(),
+                                };
+                                ctx.set_thrown_type(expr_id, combined);
+                            }
                             let arg_location = Some(ErrorLocation::Expr(*arg));
                             effective_args.push((arg_ty, arg_location));
                         }
@@ -2339,6 +2399,24 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             (ty, arg_location)
                         })
                         .collect();
+                    // Propagate thrown types from callee + args
+                    let mut thrown: Vec<Ty> = Vec::new();
+                    if let Some(t) = ctx.get_thrown_type(*callee) {
+                        thrown.push(t.clone());
+                    }
+                    for arg in args.iter() {
+                        if let Some(t) = ctx.get_thrown_type(*arg) {
+                            thrown.push(t.clone());
+                        }
+                    }
+                    if !thrown.is_empty() {
+                        let combined = if thrown.len() == 1 {
+                            thrown.into_iter().next().unwrap()
+                        } else {
+                            Ty::Union(thrown)
+                        };
+                        ctx.set_thrown_type(expr_id, combined);
+                    }
                     (callee_ty, arg_types_with_spans)
                 }
             };
