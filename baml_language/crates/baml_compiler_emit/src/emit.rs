@@ -509,6 +509,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // before jumping to the handler. Store it into the local's slot.
                 if let Some(&slot) = self.local_slots.get(local) {
                     self.emit(Instruction::StoreVar(slot));
+                } else {
+                    debug_assert!(false, "StoreException local must have a stack slot");
+                    self.emit(Instruction::Pop(1));
                 }
             }
         }
@@ -1059,7 +1062,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
 
             let handler_pc = self.block_addresses[&region.handler_block];
-            let stack_depth = 1 + mir.arity + self.local_slots.len();
+            let stack_depth = 1 + self.local_slots.len();
 
             entries.push((
                 ExceptionTableEntry {

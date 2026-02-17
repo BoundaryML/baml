@@ -887,6 +887,21 @@ impl BexVm {
                 // Handler found — restore stack, push exception, jump.
                 let restore_to =
                     self.frames[*frame_idx].locals_offset.into_raw() + entry.stack_depth;
+                // Remove watched vars above the restore point.
+                for i in restore_to..self.stack.len() {
+                    let index = StackIndex::from_raw(i);
+                    if self.watched_vars.remove(&index).is_some() {
+                        let var_node = NodeId::LocalVar(index);
+                        self.watch.unregister_root(var_node);
+                        if let Value::Object(obj) = self.stack[index] {
+                            self.watch.unlink_edge(
+                                var_node,
+                                watch::Path::Binding,
+                                NodeId::HeapObject(obj),
+                            );
+                        }
+                    }
+                }
                 self.stack.truncate(restore_to);
                 self.stack.push(exception);
                 self.frames[*frame_idx].instruction_ptr = entry.handler_pc;
@@ -897,11 +912,16 @@ impl BexVm {
             self.cleanup_watched_vars_in_frame(*frame_idx);
             self.stack.drain(self.frames[*frame_idx].locals_offset..);
             self.frames.pop();
+            if let Some(interrupt_idx) = self.interrupt_frame {
+                if self.frames.len() <= interrupt_idx {
+                    self.interrupt_frame = None;
+                }
+            }
 
             if self.frames.is_empty() {
-                return Err(VmError::RuntimeError(
-                    RuntimeError::UnhandledException(exception),
-                ));
+                return Err(VmError::RuntimeError(RuntimeError::UnhandledException(
+                    exception,
+                )));
             }
 
             *frame_idx = self.frames.len() - 1;
@@ -2531,11 +2551,7 @@ impl BexVm {
 
                 Instruction::Throw => {
                     let exception = self.stack.ensure_pop()?;
-                    self.dispatch_exception(
-                        exception,
-                        &mut frame_idx,
-                        &mut function,
-                    )?;
+                    self.dispatch_exception(exception, &mut frame_idx, &mut function)?;
                     // dispatch_exception redirected IP; continue the exec loop.
                 }
             }

@@ -2523,12 +2523,16 @@ impl<'a> Parser<'a> {
             }
             p.expect(TokenKind::LBrace);
 
-            while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword() {
-                    break;
+            if p.at(TokenKind::RBrace) {
+                p.error_unexpected_token("at least one catch arm".to_string());
+            } else {
+                while !p.at(TokenKind::RBrace) && !p.at_end() {
+                    // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                    if p.at_top_level_keyword() {
+                        break;
+                    }
+                    p.parse_catch_arm();
                 }
-                p.parse_catch_arm();
             }
 
             p.expect(TokenKind::RBrace);

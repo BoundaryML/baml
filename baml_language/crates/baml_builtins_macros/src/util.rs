@@ -232,21 +232,3 @@ pub(crate) fn is_generic_type(ty: &Type, generic_params: &[String]) -> bool {
         _ => false,
     }
 }
-
-/// Check if a type is `Result<T>` and return the inner type if so.
-///
-/// Returns (`inner_type`, `is_result`) where `inner_type` is `T` from `Result<T>`
-/// or the original type.
-pub(crate) fn unwrap_result_type(ty: &Type) -> (&Type, bool) {
-    if let Type::Path(type_path) = ty {
-        let segment = type_path.path.segments.last().unwrap();
-        if segment.ident == "Result" {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                    return (inner, true);
-                }
-            }
-        }
-    }
-    (ty, false)
-}

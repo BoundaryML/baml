@@ -286,7 +286,7 @@ impl<'a> ExhaustivenessChecker<'a> {
     ///
     /// # Returns
     /// An `ExhaustivenessResult` with coverage info and any issues found.
-    pub fn check_catch(
+    pub(crate) fn check_catch(
         &self,
         thrown_ty: &Ty,
         arm_ids: &[CatchArmId],

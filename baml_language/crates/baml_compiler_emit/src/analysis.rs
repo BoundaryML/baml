@@ -1116,6 +1116,14 @@ fn can_be_virtual(
         return false;
     }
 
+    // Never inline values produced by StoreException
+    if matches!(
+        mir.block(def.block).statements[def.statement_idx].kind,
+        StatementKind::StoreException(_)
+    ) {
+        return false;
+    }
+
     // Pure constants with a SINGLE definition can be inlined even with multiple uses.
     // They have no side effects and always produce the same value.
     // If there are multiple definitions (e.g., from if-else branches), we can't inline

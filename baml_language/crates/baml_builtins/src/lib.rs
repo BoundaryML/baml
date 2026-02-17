@@ -389,7 +389,6 @@ macro_rules! with_builtins {
 
             mod env {
                 #[sys_op]
-                #[uses(vm)]
                 fn get(key: String) -> String throws EnvError;
                 #[sys_op]
                 fn get_or_panic(key: String) -> String;

@@ -208,8 +208,8 @@ impl DiagnosticId {
             // Pattern matching errors
             DiagnosticId::NonExhaustiveMatch => "E0062",
             DiagnosticId::UnreachableArm => "E0063",
-            DiagnosticId::NonExhaustiveCatch => "E0088",
-            DiagnosticId::UnreachableCatchArm => "E0089",
+            DiagnosticId::NonExhaustiveCatch => "E0090",
+            DiagnosticId::UnreachableCatchArm => "E0091",
             DiagnosticId::UnknownEnumVariant => "E0064",
             DiagnosticId::WatchOnNonVariable => "E0065",
             DiagnosticId::WatchOnUnwatchedVariable => "E0066",

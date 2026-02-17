@@ -47,9 +47,9 @@ function ArrayAtTypedBinding() -> string {
 // deep_copy — throws ValueError
 // ============================================================================
 
-// Catch deep_copy (normally succeeds for simple values)
+// Catch deep_copy error path (uses circular reference to trigger ValueError)
 function DeepCopyCatch() -> int {
-    baml.deep_copy(42) catch {
+    baml.deep_copy({"circular": "reference"}) catch {
         e: ValueError => -1
     }
 }
@@ -63,8 +63,8 @@ function NestedBuiltinCatch() -> int {
     let arr = [1, 2, 3];
     baml.Array.at(arr, 100) catch {
         e: IndexError => {
-            // Handle the error — try a valid access in the handler
-            baml.Array.at(arr, 0) catch {
+            // Handle the error — try another out-of-bounds access in the handler
+            baml.Array.at(arr, 999) catch {
                 f: IndexError => -1
             }
         }

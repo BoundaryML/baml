@@ -1110,13 +1110,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 let value_ty = body.ty(*value_expr).clone();
                 let value_local = self.builder.temp(value_ty);
                 self.lower_expr(*value_expr, Place::local(value_local), body);
+                if self.builder.is_current_terminated() {
+                    return;
+                }
                 self.builder.throw_(Operand::move_local(value_local));
                 // Throw diverges — create a dead block for any subsequent code
                 let dead_block = self.builder.create_block();
                 self.builder.set_current_block(dead_block);
             }
 
-            Expr::Catch { body: catch_body, arms } => {
+            Expr::Catch {
+                body: catch_body,
+                arms,
+            } => {
                 // Create the main control flow blocks
                 let body_entry = self.builder.create_block();
                 let handler_entry = self.builder.create_block();
@@ -1136,7 +1142,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
                 // Collect all blocks emitted during body lowering for the protected region
                 let mut protected_blocks = Vec::new();
-                for i in (body_start_block_count - 1)..body_end_block_count {
+                protected_blocks.push(body_entry);
+                for i in body_start_block_count..body_end_block_count {
                     protected_blocks.push(BlockId(i));
                 }
 
@@ -1152,7 +1159,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
                 // The VM pushes the exception onto the operand stack before jumping here.
                 // Store it into a local for pattern matching.
-                let exc_ty = Ty::Null; // Exception type is dynamic at compile time
+                // Use BuiltinUnknown since the exception type is dynamic at compile time
+                let exc_ty = Ty::BuiltinUnknown;
                 let exc_local = self.builder.temp(exc_ty.clone());
                 self.builder.store_exception(exc_local);
 

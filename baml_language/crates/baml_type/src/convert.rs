@@ -137,7 +137,7 @@ pub fn convert_tir_ty(
             })
         }
 
-        // Unknown, Error, and Never are TIR-only types.
+        // Unknown, Error, and NoReturn are TIR-only types.
         // All real type checking happens in TIR; by the time we convert to
         // baml_type, these just mean "no meaningful type" → map to Null.
         baml_compiler_tir::Ty::Unknown => Ok(Ty::Null),

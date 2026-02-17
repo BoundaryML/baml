@@ -31,8 +31,8 @@ use baml_type::Ty;
 use text_size::TextRange;
 
 use crate::{
-    BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunction, Operand, Place,
-    ProtectedRegion, Rvalue, Statement, StatementKind, Terminator, VizNode,
+    BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunction, Operand, Place, ProtectedRegion,
+    Rvalue, Statement, StatementKind, Terminator, VizNode,
 };
 
 /// Builder for constructing MIR functions.
@@ -144,7 +144,7 @@ impl MirBuilder {
     }
 
     /// Get the current number of blocks.
-    pub fn block_count(&self) -> usize {
+    pub(crate) fn block_count(&self) -> usize {
         self.blocks.len()
     }
 
@@ -208,7 +208,7 @@ impl MirBuilder {
     }
 
     /// Emit a store_exception statement (pop exception from stack into local).
-    pub fn store_exception(&mut self, local: Local) {
+    pub(crate) fn store_exception(&mut self, local: Local) {
         self.push_statement(StatementKind::StoreException(local), None);
     }
 
@@ -316,12 +316,12 @@ impl MirBuilder {
     }
 
     /// Emit a throw terminator.
-    pub fn throw_(&mut self, value: Operand) {
+    pub(crate) fn throw_(&mut self, value: Operand) {
         self.set_terminator(Terminator::Throw { value });
     }
 
     /// Register a protected region for exception handling.
-    pub fn add_protected_region(
+    pub(crate) fn add_protected_region(
         &mut self,
         protected_blocks: Vec<BlockId>,
         handler_block: BlockId,

@@ -424,10 +424,7 @@ pub enum Expr {
     ///
     /// Wraps an expression with error-handler arms. The arms match error types
     /// and provide fallback expressions.
-    Catch {
-        expr: ExprId,
-        arms: Vec<CatchArmId>,
-    },
+    Catch { expr: ExprId, arms: Vec<CatchArmId> },
 
     /// Throw expression: `throw expr`
     ///
@@ -1615,8 +1612,7 @@ impl LoweringContext {
                 }
             }
         }
-        let inner =
-            inner.unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
+        let inner = inner.unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
         let expr_id = self.exprs.alloc(Expr::Throw { expr: inner });
         self.source_map.insert_expr(expr_id, span);
         expr_id
@@ -1682,8 +1678,8 @@ impl LoweringContext {
             self.append_wildcard_rethrow_arm(&mut arm_ids, catch_span);
         }
 
-        let inner = inner_expr
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
+        let inner =
+            inner_expr.unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
 
         let expr_id = self.exprs.alloc(Expr::Catch {
             expr: inner,
@@ -1752,10 +1748,10 @@ impl LoweringContext {
             }
         }
 
-        let pat_id = pattern
-            .unwrap_or_else(|| self.alloc_pattern(Pattern::Binding(Name::new("_")), TextRange::default()));
-        let body_id = body
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
+        let pat_id = pattern.unwrap_or_else(|| {
+            self.alloc_pattern(Pattern::Binding(Name::new("_")), TextRange::default())
+        });
+        let body_id = body.unwrap_or_else(|| self.alloc_expr(Expr::Missing, TextRange::default()));
 
         let arm = CatchHandlerArm {
             pattern: pat_id,
@@ -1769,7 +1765,10 @@ impl LoweringContext {
     }
 
     /// Try to lower a token directly to an expression (for simple arm bodies).
-    fn try_lower_token_as_expr(&mut self, token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>) -> Option<ExprId> {
+    fn try_lower_token_as_expr(
+        &mut self,
+        token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
+    ) -> Option<ExprId> {
         use baml_compiler_syntax::SyntaxKind;
         let range = token.text_range();
         match token.kind() {
@@ -1780,6 +1779,10 @@ impl LoweringContext {
             SyntaxKind::FLOAT_LITERAL => {
                 let text = token.text().to_string();
                 Some(self.alloc_expr(Expr::Literal(Literal::Float(text)), range))
+            }
+            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                let content = strip_string_delimiters(token.text());
+                Some(self.alloc_expr(Expr::Literal(Literal::String(content.to_string())), range))
             }
             SyntaxKind::WORD => {
                 let text = token.text();

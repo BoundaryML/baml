@@ -330,11 +330,12 @@ impl<'a> PrettyPrinter<'a> {
             }
             Expr::Throw(value) => {
                 self.indent(level);
-                self.output.push_str("throw ");
-                self.print_expr(*value, 0);
+                self.output.push_str("throw\n");
+                self.print_expr(*value, level + 1);
             }
             Expr::Catch { body, arms } => {
                 self.print_expr(*body, level);
+                self.output.push('\n');
                 self.indent(level);
                 self.output.push_str("catch {\n");
                 for arm in arms {
@@ -343,9 +344,10 @@ impl<'a> PrettyPrinter<'a> {
                     write!(self.output, "{pat_str}").unwrap();
                     self.output.push_str(" =>\n");
                     self.print_expr(arm.body, level + 2);
+                    self.output.push('\n');
                 }
                 self.indent(level);
-                self.output.push_str("}\n");
+                self.output.push('}');
             }
         }
     }
