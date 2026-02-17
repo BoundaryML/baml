@@ -198,7 +198,7 @@ mod tests {
     use super::*;
     use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};
 
-    /// Global lock to guard BAML_TRACE_FILE env var mutations against parallel test races.
+    /// Global lock to guard `BAML_TRACE_FILE` env var mutations against parallel test races.
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     /// Create an event whose `span_id` matches the given ID (function's own event).

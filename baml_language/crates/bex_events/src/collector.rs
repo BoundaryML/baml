@@ -52,8 +52,8 @@ impl Collector {
 
     /// Get all function logs (one per tracked call), in insertion order.
     pub fn logs(&self) -> Vec<FunctionLog> {
-        let spans = self.tracked_spans.lock().unwrap();
-        spans
+        let span_ids: Vec<SpanId> = self.tracked_spans.lock().unwrap().iter().cloned().collect();
+        span_ids
             .iter()
             .filter_map(|span_id| {
                 let events = event_store::events_for_span(span_id)?;
@@ -64,10 +64,9 @@ impl Collector {
 
     /// Get the most recent function log.
     pub fn last(&self) -> Option<FunctionLog> {
-        let spans = self.tracked_spans.lock().unwrap();
-        let last = spans.last()?;
-        let events = event_store::events_for_span(last)?;
-        Some(FunctionLog::from_events(last.clone(), &events))
+        let last = self.tracked_spans.lock().unwrap().last().cloned()?;
+        let events = event_store::events_for_span(&last)?;
+        Some(FunctionLog::from_events(last, &events))
     }
 
     /// Aggregate usage across all tracked calls.
@@ -90,14 +89,13 @@ impl Collector {
 
     /// Look up a specific log by its engine span ID string.
     pub fn id(&self, span_id_str: &str) -> Option<FunctionLog> {
-        let spans = self.tracked_spans.lock().unwrap();
-        for span_id in spans.iter() {
-            if span_id.to_string() == span_id_str {
-                let events = event_store::events_for_span(span_id)?;
-                return Some(FunctionLog::from_events(span_id.clone(), &events));
-            }
-        }
-        None
+        let matched = {
+            let spans = self.tracked_spans.lock().unwrap();
+            spans.iter().find(|s| s.to_string() == span_id_str).cloned()
+        };
+        let span_id = matched?;
+        let events = event_store::events_for_span(&span_id)?;
+        Some(FunctionLog::from_events(span_id, &events))
     }
 }
 

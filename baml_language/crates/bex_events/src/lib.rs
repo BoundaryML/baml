@@ -5,5 +5,5 @@ mod span_id;
 mod types;
 
 pub use collector::{Collector, FunctionLog, LLMCall, Timing, Usage};
-pub use span_id::{SpanContext, SpanId};
+pub use span_id::{HostSpanContext, SpanContext, SpanId};
 pub use types::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, RuntimeEvent, TraceTags};

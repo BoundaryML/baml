@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use bex_engine::BexEngine;
+use bex_factory::BexEngine;
 use bridge_ctypes::{external_to_cffi_value, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{

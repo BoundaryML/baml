@@ -1735,6 +1735,8 @@ class TestCrossBoundaryLLMTracing:
         thread.start()
         yield port
         server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
     @pytest.fixture
     def llm_rt(self, mock_server):

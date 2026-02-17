@@ -21,9 +21,9 @@ pub fn register_errors(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-/// Convert a `bex_engine::EngineError` into a Python exception.
-pub fn engine_error_to_py(err: bex_engine::EngineError) -> PyErr {
-    use bex_engine::EngineError;
+/// Convert a `bex_factory::EngineError` into a Python exception.
+pub fn engine_error_to_py(err: bex_factory::EngineError) -> PyErr {
+    use bex_factory::EngineError;
 
     match &err {
         EngineError::FunctionNotFound { .. } => {

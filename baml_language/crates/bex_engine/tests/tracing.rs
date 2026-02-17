@@ -223,14 +223,17 @@ async fn trace_captures_root_args() {
     assert_eq!(value, BexExternalValue::Int(7));
 
     // Check that the root start event captured args
-    if let EventKind::Function(FunctionEvent::Start(start)) = &events[0].event {
-        assert_eq!(start.name, "add");
-        assert_eq!(start.args.len(), 2);
-        assert_eq!(start.args[0], BexExternalValue::Int(3));
-        assert_eq!(start.args[1], BexExternalValue::Int(4));
-    } else {
-        panic!("Expected FunctionStart event");
-    }
+    let start = events
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Function(FunctionEvent::Start(s)) => Some(s),
+            _ => None,
+        })
+        .expect("Expected FunctionStart event");
+    assert_eq!(start.name, "add");
+    assert_eq!(start.args.len(), 2);
+    assert_eq!(start.args[0], BexExternalValue::Int(3));
+    assert_eq!(start.args[1], BexExternalValue::Int(4));
 }
 
 #[tokio::test]
@@ -259,12 +262,15 @@ async fn trace_captures_root_result() {
     assert_eq!(value, BexExternalValue::Int(10));
 
     // Check that the root end event captured the result
-    if let EventKind::Function(FunctionEvent::End(end)) = &events[1].event {
-        assert_eq!(end.name, "double");
-        assert_eq!(end.result, BexExternalValue::Int(10));
-    } else {
-        panic!("Expected FunctionEnd event for 'double'");
-    }
+    let end = events
+        .iter()
+        .find_map(|e| match &e.event {
+            EventKind::Function(FunctionEvent::End(e)) => Some(e),
+            _ => None,
+        })
+        .expect("Expected FunctionEnd event for 'double'");
+    assert_eq!(end.name, "double");
+    assert_eq!(end.result, BexExternalValue::Int(10));
 }
 
 /// Verify that LLM functions have `trace: true` and expression functions have `trace: false`.

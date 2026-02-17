@@ -11,7 +11,6 @@ name = "baml_cffi"
 crate-type = [ "cdylib", "lib" ]
 
 [dependencies]
-bex_engine = { workspace = true }
 bex_events = { workspace = true }
 bex_external_types = { workspace = true }
 bex_factory = { workspace = true }

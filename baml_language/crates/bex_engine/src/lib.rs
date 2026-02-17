@@ -64,6 +64,7 @@ use std::{
     time::{Instant, SystemTime},
 };
 
+pub use bex_events::HostSpanContext;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 // Re-export event types for callers.
 pub use bex_events::{RuntimeEvent, SpanId};
@@ -76,20 +77,6 @@ use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
-
-/// Host-side span context passed from the bridge to the engine.
-///
-/// When the host language (Python/TS) has active `@trace` spans, this struct
-/// allows the engine's trace events to be nested under the host's span tree,
-/// maintaining a unified call stack across the host/engine boundary.
-pub struct HostSpanContext {
-    /// The host's root span ID (top-level @trace span).
-    pub root_span_id: SpanId,
-    /// The innermost active host span (will be parent of the engine's root span).
-    pub parent_span_id: SpanId,
-    /// The full host call stack (list of `SpanId`s from root to tip).
-    pub call_stack: Vec<SpanId>,
-}
 
 // ============================================================================
 // Engine Types

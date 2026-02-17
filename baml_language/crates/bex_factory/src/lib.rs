@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
 use baml_compiler_emit::LoweringError;
 use baml_project::ProjectDatabase;
-use bex_engine::BexEngine;
+pub use bex_engine::{BexEngine, EngineError};
 pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 use bex_heap::BexValue;
 pub use bex_heap::builtin_types;

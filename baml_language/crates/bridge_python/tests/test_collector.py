@@ -140,6 +140,8 @@ def mock_server():
     thread.start()
     yield f"http://127.0.0.1:{port}"
     server.shutdown()
+    server.server_close()
+    thread.join(timeout=5)
 
 
 @pytest.fixture

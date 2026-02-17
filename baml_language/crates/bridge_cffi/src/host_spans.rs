@@ -139,9 +139,9 @@ impl HostSpanManager {
     /// Build a `HostSpanContext` for passing to `call_function`.
     ///
     /// Returns `None` if there are no active host spans.
-    pub fn host_span_context(&self) -> Option<bex_engine::HostSpanContext> {
+    pub fn host_span_context(&self) -> Option<bex_events::HostSpanContext> {
         let current = self.stack.last()?;
-        Some(bex_engine::HostSpanContext {
+        Some(bex_events::HostSpanContext {
             root_span_id: current.root_span_id.clone(),
             parent_span_id: current.span_id.clone(),
             call_stack: self.call_stack(),

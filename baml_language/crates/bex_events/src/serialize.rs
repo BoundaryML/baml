@@ -1,6 +1,6 @@
 //! JSONL serialization for `RuntimeEvent`.
 
-use bex_external_types::BexExternalValue;
+use bex_external_types::{BexExternalAdt, BexExternalValue};
 
 use crate::{EventKind, FunctionEvent, RuntimeEvent};
 
@@ -126,7 +126,15 @@ fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
         BexExternalValue::FunctionRef { global_index } => {
             serde_json::json!({"__function_ref": global_index})
         }
-        BexExternalValue::Adt(_) => serde_json::Value::String("<adt>".into()),
+        BexExternalValue::Adt(BexExternalAdt::Media(_)) => {
+            serde_json::json!({"__adt": "Media"})
+        }
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
+            serde_json::json!({"__adt": "PromptAst"})
+        }
+        BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
+            serde_json::json!({"__adt": "Collector"})
+        }
     }
 }
 

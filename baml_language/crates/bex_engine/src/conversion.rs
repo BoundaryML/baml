@@ -322,7 +322,13 @@ impl BexEngine {
                 .with_gc_protection(|protected| {
                     BexValue::HeapPtr(ptr).as_owned_but_very_slow(&protected)
                 })
-                .unwrap_or(BexExternalValue::Null),
+                .unwrap_or_else(|_| {
+                    #[allow(clippy::print_stderr)]
+                    {
+                        eprintln!("Failed to deep-copy VM value for trace payload");
+                    }
+                    BexExternalValue::Null
+                }),
         }
     }
 

@@ -873,7 +873,6 @@ checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
- "bex_engine",
  "bex_events",
  "bex_external_types",
  "bex_factory",
@@ -907,7 +906,6 @@ name = "bridge_python"
 version = "0.0.0"
 dependencies = [
  "baml_type",
- "bex_engine",
  "bex_events",
  "bex_external_types",
  "bex_factory",
