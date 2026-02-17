@@ -439,7 +439,7 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
                         // For LLM functions, use FunctionBody::Llm for type inference
                         // (Jinja validation + declared return type).
                         let body = if let Some(llm_meta) = baml_compiler_hir::llm_function_meta(&db, *func_id) {
-                            std::sync::Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone()))
+                            std::sync::Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone(), None))
                         } else if baml_compiler_hir::is_llm_function(&db, *func_id) {
                             std::sync::Arc::new(baml_compiler_hir::FunctionBody::Missing)
                         } else {

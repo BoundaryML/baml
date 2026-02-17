@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+source: target/debug/build/baml_tests-7d70f780e0809cb8/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 106
-Objects: 1270
-Globals: 152
+Objects: 1472
+Globals: 153
 
 Function BodyTorture (arity: 0, kind: Bytecode):
      0    INIT_LOCALS 1          
@@ -54,304 +54,904 @@ Function DeepExpression (arity: 0, kind: Bytecode):
      19   RETURN         
 
 Function Process1 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process1")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process10 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process10")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process100 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process100")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process11 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process11")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process12 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process12")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process13 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process13")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process14 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process14")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process15 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process15")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process16 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process16")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process17 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process17")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process18 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process18")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process19 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process19")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process2 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process2")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process20 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process20")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process21 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process21")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process22 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process22")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process23 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process23")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process24 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process24")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process25 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process25")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process26 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process26")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process27 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process27")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process28 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process28")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process29 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process29")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process3 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process3")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process30 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process30")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process31 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process31")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process32 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process32")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process33 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process33")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process34 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process34")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process35 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process35")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process36 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process36")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process37 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process37")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process38 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process38")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process39 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process39")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process4 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process4")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process40 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process40")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process41 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process41")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process42 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process42")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process43 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process43")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process44 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process44")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process45 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process45")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process46 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process46")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process47 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process47")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process48 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process48")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process49 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process49")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process5 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process5")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process50 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process50")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process51 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process51")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process52 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process52")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process53 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process53")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process54 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process54")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process55 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process55")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process56 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process56")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process57 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process57")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process58 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process58")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process59 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process59")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process6 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process6")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process60 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process60")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process61 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process61")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process62 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process62")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process63 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process63")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process64 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process64")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process65 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process65")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process66 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process66")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process67 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process67")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process68 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process68")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process69 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process69")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process7 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process7")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process70 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process70")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process71 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process71")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process72 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process72")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process73 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process73")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process74 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process74")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process75 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process75")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process76 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process76")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process77 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process77")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process78 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process78")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process79 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process79")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process8 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process8")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process80 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process80")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process81 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process81")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process82 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process82")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process83 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process83")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process84 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process84")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process85 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process85")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process86 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process86")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process87 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process87")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process88 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process88")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process89 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process89")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process9 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process9")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process90 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process90")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process91 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process91")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process92 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process92")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process93 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process93")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process94 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process94")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process95 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process95")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process96 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process96")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process97 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process97")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process98 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process98")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function Process99 (arity: 1, kind: Bytecode):
-  (no bytecode)
+     0   LOAD_GLOBAL 49   (<fn baml.llm.call_llm_function>)
+     1   LOAD_CONST 0     ("Process99")
+     2   LOAD_VAR 1       (input)
+     3   LOAD_CONST 1     ("input")
+     4   ALLOC_MAP 1      
+     5   CALL 2           
+     6   RETURN           
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):
 <<<<<<< HEAD
@@ -383,18 +983,18 @@ Function baml.llm.build_request (arity: 2, kind: Bytecode):
      1    LOAD_CONST 0        (null)
      2    LOAD_CONST 0        (null)
      3    LOAD_CONST 0        (null)
-     4    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     4    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      5    LOAD_VAR 1          (function_name)
      6    DISPATCH_FUTURE 1   
      7    AWAIT               
      8    STORE_VAR 3         (jinja_string)
-     9    LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     9    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      10   LOAD_VAR 1          (function_name)
      11   DISPATCH_FUTURE 1   
      12   AWAIT               
      13   CALL 0              
      14   STORE_VAR 4         (primitive_client)
-     15   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     15   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      16   LOAD_VAR 4          (primitive_client)
      17   LOAD_VAR 3          (jinja_string)
      18   LOAD_VAR 2          (args)
@@ -422,18 +1022,18 @@ Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
      4    LOAD_CONST 0        (null)
      5    LOAD_CONST 0        (null)
      6    LOAD_CONST 0        (null)
-     7    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     7    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      8    LOAD_VAR 1          (function_name)
      9    DISPATCH_FUTURE 1   
      10   AWAIT               
      11   STORE_VAR 3         (jinja_string)
-     12   LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     12   LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      13   LOAD_VAR 1          (function_name)
      14   DISPATCH_FUTURE 1   
      15   AWAIT               
      16   CALL 0              
      17   STORE_VAR 4         (primitive_client)
-     18   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     18   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      19   LOAD_VAR 4          (primitive_client)
      20   LOAD_VAR 3          (jinja_string)
      21   LOAD_VAR 2          (args)
@@ -529,18 +1129,18 @@ Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
      0    LOAD_CONST 0        (null)
      1    LOAD_CONST 0        (null)
      2    LOAD_CONST 0        (null)
-     3    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      4    LOAD_VAR 1          (function_name)
      5    DISPATCH_FUTURE 1   
      6    AWAIT               
      7    STORE_VAR 3         (jinja_string)
-     8    LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     8    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      9    LOAD_VAR 1          (function_name)
      10   DISPATCH_FUTURE 1   
      11   AWAIT               
      12   CALL 0              
      13   STORE_VAR 4         (primitive_client)
-     14   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      15   LOAD_VAR 4          (primitive_client)
      16   LOAD_VAR 3          (jinja_string)
      17   LOAD_VAR 2          (args)

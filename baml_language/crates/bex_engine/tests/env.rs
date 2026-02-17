@@ -48,43 +48,30 @@ async fn env_get_existing_var() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
-            function main() -> string? {
+            function main() -> string {
                 env.get("BAML_TEST_ENV_GET")
             }
         "#,
         entry: "main",
         inputs: vec![],
-        // env.get returns string? — the engine wraps in Union metadata
-        expected: Ok(BexExternalValue::Union {
-            value: Box::new(BexExternalValue::String("hello_env".to_string())),
-            metadata: bex_engine::UnionMetadata::new(
-                bex_engine::Ty::Optional(Box::new(bex_engine::Ty::String)),
-                bex_engine::Ty::String,
-            ),
-        }),
+        expected: Ok(BexExternalValue::String("hello_env".to_string())),
     })
     .await
 }
 
 #[tokio::test]
-async fn env_get_missing_var_returns_null() -> anyhow::Result<()> {
+async fn env_get_missing_var_throws() -> anyhow::Result<()> {
     unsafe { std::env::remove_var("BAML_TEST_NONEXISTENT_VAR") };
     assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
-            function main() -> string? {
+            function main() -> string {
                 env.get("BAML_TEST_NONEXISTENT_VAR")
             }
         "#,
         entry: "main",
         inputs: vec![],
-        expected: Ok(BexExternalValue::Union {
-            value: Box::new(BexExternalValue::Null),
-            metadata: bex_engine::UnionMetadata::new(
-                bex_engine::Ty::Optional(Box::new(bex_engine::Ty::String)),
-                bex_engine::Ty::Null,
-            ),
-        }),
+        expected: Err("not found"),
     })
     .await
 }

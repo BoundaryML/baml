@@ -1,11 +1,11 @@
 ---
-source: target/debug/build/baml_tests-8b981ade6c4f74ec/out/generated_tests.rs
+source: target/debug/build/baml_tests-7d70f780e0809cb8/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
 Functions: 89
-Objects: 317
-Globals: 135
+Objects: 319
+Globals: 136
 
 Function BoolLiteralAfterTypedBool (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (b)
@@ -419,19 +419,19 @@ Function ExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
 Function ExhaustiveNullableEnum (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
      1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 14       (<enum Status>)
+     2    ALLOC_VARIANT 15       (<enum Status>)
      3    CMP_OP ==              
      4    POP_JUMP_IF_FALSE +2   (to 6)
      5    JUMP +20               (to 25)
      6    LOAD_VAR 1             (s)
      7    LOAD_CONST 1           (1)
-     8    ALLOC_VARIANT 14       (<enum Status>)
+     8    ALLOC_VARIANT 15       (<enum Status>)
      9    CMP_OP ==              
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +12               (to 23)
      12   LOAD_VAR 1             (s)
      13   LOAD_CONST 2           (2)
-     14   ALLOC_VARIANT 14       (<enum Status>)
+     14   ALLOC_VARIANT 15       (<enum Status>)
      15   CMP_OP ==              
      16   POP_JUMP_IF_FALSE +2   (to 18)
      17   JUMP +4                (to 21)
@@ -601,7 +601,7 @@ Function ExhaustiveWithUnderscore (arity: 1, kind: Bytecode):
 
 Function GetStatus (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0       (0)
-     1   ALLOC_VARIANT 14   (<enum Status>)
+     1   ALLOC_VARIANT 15   (<enum Status>)
      2   RETURN             
 
 Function GuardedOnlyNonExhaustive (arity: 1, kind: Bytecode):
@@ -787,7 +787,7 @@ Function MatchComplexScrutinee (arity: 1, kind: Bytecode):
      23   RETURN                 
 
 Function MatchFunctionCallScrutinee (arity: 0, kind: Bytecode):
-     0    LOAD_GLOBAL 90         (<fn GetStatus>)
+     0    LOAD_GLOBAL 91         (<fn GetStatus>)
      1    CALL 0                 
      2    DISCRIMINANT           
      3    COPY 0                 
@@ -1280,13 +1280,13 @@ Function NonExhaustiveNullableEnumMissingNull (arity: 1, kind: Bytecode):
 Function NonExhaustiveNullableEnumMissingVariant (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
      1    LOAD_CONST 0           (0)
-     2    ALLOC_VARIANT 14       (<enum Status>)
+     2    ALLOC_VARIANT 15       (<enum Status>)
      3    CMP_OP ==              
      4    POP_JUMP_IF_FALSE +2   (to 6)
      5    JUMP +17               (to 22)
      6    LOAD_VAR 1             (s)
      7    LOAD_CONST 1           (1)
-     8    ALLOC_VARIANT 14       (<enum Status>)
+     8    ALLOC_VARIANT 15       (<enum Status>)
      9    CMP_OP ==              
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   JUMP +9                (to 20)
@@ -1598,18 +1598,18 @@ Function baml.llm.build_request (arity: 2, kind: Bytecode):
      1    LOAD_CONST 0        (null)
      2    LOAD_CONST 0        (null)
      3    LOAD_CONST 0        (null)
-     4    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     4    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      5    LOAD_VAR 1          (function_name)
      6    DISPATCH_FUTURE 1   
      7    AWAIT               
      8    STORE_VAR 3         (jinja_string)
-     9    LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     9    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      10   LOAD_VAR 1          (function_name)
      11   DISPATCH_FUTURE 1   
      12   AWAIT               
      13   CALL 0              
      14   STORE_VAR 4         (primitive_client)
-     15   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     15   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      16   LOAD_VAR 4          (primitive_client)
      17   LOAD_VAR 3          (jinja_string)
      18   LOAD_VAR 2          (args)
@@ -1637,18 +1637,18 @@ Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
      4    LOAD_CONST 0        (null)
      5    LOAD_CONST 0        (null)
      6    LOAD_CONST 0        (null)
-     7    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     7    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      8    LOAD_VAR 1          (function_name)
      9    DISPATCH_FUTURE 1   
      10   AWAIT               
      11   STORE_VAR 3         (jinja_string)
-     12   LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     12   LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      13   LOAD_VAR 1          (function_name)
      14   DISPATCH_FUTURE 1   
      15   AWAIT               
      16   CALL 0              
      17   STORE_VAR 4         (primitive_client)
-     18   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     18   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      19   LOAD_VAR 4          (primitive_client)
      20   LOAD_VAR 3          (jinja_string)
      21   LOAD_VAR 2          (args)
@@ -1744,18 +1744,18 @@ Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
      0    LOAD_CONST 0        (null)
      1    LOAD_CONST 0        (null)
      2    LOAD_CONST 0        (null)
-     3    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
+     3    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
      4    LOAD_VAR 1          (function_name)
      5    DISPATCH_FUTURE 1   
      6    AWAIT               
      7    STORE_VAR 3         (jinja_string)
-     8    LOAD_GLOBAL 45      (<fn baml.llm.get_client_function>)
+     8    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
      9    LOAD_VAR 1          (function_name)
      10   DISPATCH_FUTURE 1   
      11   AWAIT               
      12   CALL 0              
      13   STORE_VAR 4         (primitive_client)
-     14   LOAD_GLOBAL 44      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     14   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
      15   LOAD_VAR 4          (primitive_client)
      16   LOAD_VAR 3          (jinja_string)
      17   LOAD_VAR 2          (args)
