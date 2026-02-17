@@ -99,26 +99,23 @@ macro_rules! define_media_type {
             }
         }
 
-        impl From<&$name> for BamlMediaRepr {
-            fn from(media: &$name) -> Self {
-                let content = if let Some(base64) = media.as_base64() {
-                        BamlMediaReprContent::Base64 { base64 }
-                    } else if let Some(url) = media.as_url() {
-                        BamlMediaReprContent::Url { url }
-                    } else {
-                        panic!("Media cannot be serialized: was not URL or Base64");
-                    };
-                BamlMediaRepr {
-                    mime_type: media.mime_type(),
-                    content,
-                }
-            }
-        }
         impl serde::Serialize for $name {
             /// See https://github.com/BoundaryML/baml/blob/canary/engine/language_client_python/src/types/media_repr.rs
             fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                let repr: BamlMediaRepr = self.into();
-                repr.serialize(serializer)
+                let content = if let Some(base64) = self.as_base64() {
+                    BamlMediaReprContent::Base64 { base64 }
+                } else if let Some(url) = self.as_url() {
+                    BamlMediaReprContent::Url { url }
+                } else {
+                    return Err(serde::ser::Error::custom(
+                        "media cannot be serialized: was not URL or base64",
+                    ));
+                };
+                BamlMediaRepr {
+                    mime_type: self.mime_type(),
+                    content,
+                }
+                .serialize(serializer)
             }
         }
         impl<'de> serde::Deserialize<'de> for $name {

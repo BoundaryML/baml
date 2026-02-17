@@ -37,6 +37,7 @@ fn derive_serde_union(data: &DataEnum, ident: &Ident) -> Result<TokenStream> {
 
         if let Some(ref literal_string) = variant_attrs.literal_string {
             literal_serde.push(quote! {
+                #[allow(non_snake_case)]
                 pub mod #variant_ident {
                     use ::baml::__internal::serde;
                     pub fn serialize<S: serde::Serializer>(serializer: S) -> Result<S::Ok, S::Error> {
