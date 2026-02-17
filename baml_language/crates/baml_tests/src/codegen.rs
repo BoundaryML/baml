@@ -138,6 +138,7 @@ fn convert_instruction(
         bex_vm_types::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
         bex_vm_types::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
         bex_vm_types::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
+        bex_vm_types::Instruction::InitLocals(n) => Instruction::InitLocals(*n),
         bex_vm_types::Instruction::JumpTable { table_idx, default } => Instruction::JumpTable {
             table_idx: *table_idx,
             default: *default,

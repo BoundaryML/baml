@@ -1110,6 +1110,11 @@ impl BexVm {
                     self.stack.push(value);
                 }
 
+                Instruction::InitLocals(count) => {
+                    let new_len = self.stack.len() + count;
+                    self.stack.resize(new_len, Value::Null);
+                }
+
                 Instruction::LoadVar(index) => {
                     let value = self.stack[self.frames[frame_idx].locals_offset + index];
                     self.stack.push(value);

@@ -180,7 +180,7 @@ fn match_typed_pattern_single_class() -> anyhow::Result<()> {
             // Wildcard elimination: _ binding is unused so eliminated
             // Scrutinee optimization: result is reused directly (no temp created)
             vec![
-                Instruction::LoadConst(Value::Null), // slot for result
+                Instruction::InitLocals(1), // slot for result
                 // let result = Success { data: "hello" }
                 Instruction::AllocInstance(Value::class("Success")),
                 Instruction::Copy(0),
@@ -231,7 +231,7 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
             // because else_block is unreachable (we know it must be Failure)
             // Scrutinee optimization: result is reused directly (no temp created)
             vec![
-                Instruction::LoadConst(Value::Null), // slot for result
+                Instruction::InitLocals(1), // slot for result
                 // let result = Success { data: "ok" }
                 Instruction::AllocInstance(Value::class("Success")),
                 Instruction::Copy(0),

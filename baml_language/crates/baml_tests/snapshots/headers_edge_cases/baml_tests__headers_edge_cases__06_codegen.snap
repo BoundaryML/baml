@@ -48,73 +48,70 @@ Function HeadersAndComments (arity: 0, kind: Bytecode):
      4   RETURN           
 
 Function HeadersAroundExpressions (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0           (null)
-     1    LOAD_CONST 0           (null)
-     2    LOAD_CONST 0           (null)
-     3    LOAD_CONST 0           (null)
-     4    NOTIFY_BLOCK 0         (BeforeLet)
-     5    NOTIFY_BLOCK 1         (AfterLet)
-     6    NOTIFY_BLOCK 2         (BeforeIf)
-     7    VIZ_ENTER 0            (BeforeIf)
-     8    LOAD_CONST 1           (5)
-     9    LOAD_CONST 2           (0)
-     10   CMP_OP >               
-     11   POP_JUMP_IF_FALSE +2   (to 13)
-     12   JUMP +3                (to 15)
-     13   NOTIFY_BLOCK 3         (InsideElse)
-     14   JUMP +2                (to 16)
-     15   NOTIFY_BLOCK 4         (InsideIf)
-     16   VIZ_EXIT 0             (BeforeIf)
-     17   NOTIFY_BLOCK 5         (AfterIf)
-     18   NOTIFY_BLOCK 6         (BeforeFor)
-     19   LOAD_CONST 3           (1)
-     20   LOAD_CONST 4           (2)
-     21   LOAD_CONST 5           (3)
-     22   ALLOC_ARRAY 3          
-     23   STORE_VAR 1            (_iter)
-     24   LOAD_GLOBAL 0          (<fn baml.Array.length>)
-     25   LOAD_VAR 1             (_iter)
-     26   CALL 1                 
-     27   STORE_VAR 2            (_len)
-     28   LOAD_CONST 2           (0)
-     29   STORE_VAR 3            (_i)
-     30   VIZ_ENTER 1            (BeforeFor)
-     31   LOAD_VAR 3             (_i)
-     32   LOAD_VAR 2             (_len)
-     33   CMP_OP <               
-     34   POP_JUMP_IF_FALSE +2   (to 36)
-     35   JUMP +6                (to 41)
-     36   VIZ_EXIT 1             (BeforeFor)
-     37   NOTIFY_BLOCK 7         (AfterFor)
-     38   NOTIFY_BLOCK 8         (FinalSection)
-     39   LOAD_CONST 1           (5)
-     40   RETURN                 
-     41   LOAD_VAR 1             (_iter)
+     0    INIT_LOCALS 4          
+     1    NOTIFY_BLOCK 0         (BeforeLet)
+     2    NOTIFY_BLOCK 1         (AfterLet)
+     3    NOTIFY_BLOCK 2         (BeforeIf)
+     4    VIZ_ENTER 0            (BeforeIf)
+     5    LOAD_CONST 0           (5)
+     6    LOAD_CONST 1           (0)
+     7    CMP_OP >               
+     8    POP_JUMP_IF_FALSE +2   (to 10)
+     9    JUMP +3                (to 12)
+     10   NOTIFY_BLOCK 3         (InsideElse)
+     11   JUMP +2                (to 13)
+     12   NOTIFY_BLOCK 4         (InsideIf)
+     13   VIZ_EXIT 0             (BeforeIf)
+     14   NOTIFY_BLOCK 5         (AfterIf)
+     15   NOTIFY_BLOCK 6         (BeforeFor)
+     16   LOAD_CONST 2           (1)
+     17   LOAD_CONST 3           (2)
+     18   LOAD_CONST 4           (3)
+     19   ALLOC_ARRAY 3          
+     20   STORE_VAR 1            (_iter)
+     21   LOAD_GLOBAL 0          (<fn baml.Array.length>)
+     22   LOAD_VAR 1             (_iter)
+     23   CALL 1                 
+     24   STORE_VAR 2            (_len)
+     25   LOAD_CONST 1           (0)
+     26   STORE_VAR 3            (_i)
+     27   VIZ_ENTER 1            (BeforeFor)
+     28   LOAD_VAR 3             (_i)
+     29   LOAD_VAR 2             (_len)
+     30   CMP_OP <               
+     31   POP_JUMP_IF_FALSE +2   (to 33)
+     32   JUMP +6                (to 38)
+     33   VIZ_EXIT 1             (BeforeFor)
+     34   NOTIFY_BLOCK 7         (AfterFor)
+     35   NOTIFY_BLOCK 8         (FinalSection)
+     36   LOAD_CONST 0           (5)
+     37   RETURN                 
+     38   LOAD_VAR 1             (_iter)
+     39   LOAD_VAR 3             (_i)
+     40   LOAD_ARRAY_ELEMENT     
+     41   STORE_VAR 4            (i)
      42   LOAD_VAR 3             (_i)
-     43   LOAD_ARRAY_ELEMENT     
-     44   STORE_VAR 4            (i)
-     45   LOAD_VAR 3             (_i)
-     46   LOAD_CONST 3           (1)
-     47   BIN_OP +               
-     48   STORE_VAR 3            (_i)
-     49   NOTIFY_BLOCK 9         (InsideFor)
-     50   JUMP -19               (to 31)
+     43   LOAD_CONST 2           (1)
+     44   BIN_OP +               
+     45   STORE_VAR 3            (_i)
+     46   NOTIFY_BLOCK 9         (InsideFor)
+     47   JUMP -19               (to 28)
 
 Function HeadersInComplexNesting (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0           (null)
+     0    INIT_LOCALS 1          
      1    NOTIFY_BLOCK 0         (MainFunction)
      2    NOTIFY_BLOCK 1         (InsideBlockExpression)
      3    VIZ_ENTER 0            (InsideBlockExpression)
-     4    LOAD_CONST 1           (true)
+     4    LOAD_CONST 0           (true)
      5    POP_JUMP_IF_FALSE +2   (to 7)
      6    JUMP +4                (to 10)
      7    NOTIFY_BLOCK 2         (InsideElse)
-     8    LOAD_CONST 2           ("else value")
+     8    LOAD_CONST 1           ("else value")
      9    JUMP +5                (to 14)
      10   NOTIFY_BLOCK 3         (InsideIfTrue)
      11   NOTIFY_BLOCK 4         (VeryDeepBlock)
      12   NOTIFY_BLOCK 5         (BacktoIfLevel)
-     13   LOAD_CONST 3           ("deep value")
+     13   LOAD_CONST 2           ("deep value")
      14   VIZ_EXIT 0             (InsideBlockExpression)
      15   NOTIFY_BLOCK 6         (BacktoBlockLevel)
      16   STORE_VAR 1            (result)
@@ -155,122 +152,111 @@ Function VeryLongHeaderTitle (arity: 0, kind: Bytecode):
      3   RETURN           
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_CONST 0        (null)
-     3    LOAD_CONST 0        (null)
-     4    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
-     5    LOAD_VAR 1          (function_name)
-     6    DISPATCH_FUTURE 1   
-     7    AWAIT               
-     8    STORE_VAR 3         (jinja_string)
-     9    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
-     10   LOAD_VAR 1          (function_name)
-     11   DISPATCH_FUTURE 1   
-     12   AWAIT               
-     13   CALL 0              
-     14   STORE_VAR 4         (primitive_client)
-     15   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
-     16   LOAD_VAR 4          (primitive_client)
-     17   LOAD_VAR 3          (jinja_string)
-     18   LOAD_VAR 2          (args)
-     19   DISPATCH_FUTURE 3   
-     20   AWAIT               
-     21   STORE_VAR 5         (prompt)
-     22   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
-     23   LOAD_VAR 4          (primitive_client)
-     24   LOAD_VAR 5          (prompt)
-     25   DISPATCH_FUTURE 2   
-     26   AWAIT               
-     27   STORE_VAR 6         (specialized_prompt)
-     28   LOAD_GLOBAL 36      (<fn baml.llm.PrimitiveClient.build_request>)
-     29   LOAD_VAR 4          (primitive_client)
-     30   LOAD_VAR 6          (specialized_prompt)
-     31   DISPATCH_FUTURE 2   
-     32   AWAIT               
-     33   RETURN              
-
-Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_CONST 0        (null)
-     3    LOAD_CONST 0        (null)
-     4    LOAD_CONST 0        (null)
-     5    LOAD_CONST 0        (null)
-     6    LOAD_CONST 0        (null)
-     7    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
-     8    LOAD_VAR 1          (function_name)
-     9    DISPATCH_FUTURE 1   
-     10   AWAIT               
-     11   STORE_VAR 3         (jinja_string)
-     12   LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
-     13   LOAD_VAR 1          (function_name)
-     14   DISPATCH_FUTURE 1   
-     15   AWAIT               
-     16   CALL 0              
-     17   STORE_VAR 4         (primitive_client)
-     18   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
-     19   LOAD_VAR 4          (primitive_client)
-     20   LOAD_VAR 3          (jinja_string)
-     21   LOAD_VAR 2          (args)
-     22   DISPATCH_FUTURE 3   
+     0    INIT_LOCALS 4       
+     1    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
+     2    LOAD_VAR 1          (function_name)
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 3         (jinja_string)
+     6    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
+     7    LOAD_VAR 1          (function_name)
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   CALL 0              
+     11   STORE_VAR 4         (primitive_client)
+     12   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     13   LOAD_VAR 4          (primitive_client)
+     14   LOAD_VAR 3          (jinja_string)
+     15   LOAD_VAR 2          (args)
+     16   DISPATCH_FUTURE 3   
+     17   AWAIT               
+     18   STORE_VAR 5         (prompt)
+     19   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     20   LOAD_VAR 4          (primitive_client)
+     21   LOAD_VAR 5          (prompt)
+     22   DISPATCH_FUTURE 2   
      23   AWAIT               
-     24   STORE_VAR 5         (prompt)
-     25   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     24   STORE_VAR 6         (specialized_prompt)
+     25   LOAD_GLOBAL 36      (<fn baml.llm.PrimitiveClient.build_request>)
      26   LOAD_VAR 4          (primitive_client)
-     27   LOAD_VAR 5          (prompt)
+     27   LOAD_VAR 6          (specialized_prompt)
      28   DISPATCH_FUTURE 2   
      29   AWAIT               
-     30   STORE_VAR 6         (specialized_prompt)
-     31   LOAD_GLOBAL 36      (<fn baml.llm.PrimitiveClient.build_request>)
-     32   LOAD_VAR 4          (primitive_client)
-     33   LOAD_VAR 6          (specialized_prompt)
-     34   DISPATCH_FUTURE 2   
-     35   AWAIT               
-     36   STORE_VAR 7         (http_request)
-     37   LOAD_GLOBAL 33      (<fn baml.http.send>)
-     38   LOAD_VAR 7          (http_request)
-     39   DISPATCH_FUTURE 1   
-     40   AWAIT               
-     41   STORE_VAR 8         (http_response)
-     42   LOAD_GLOBAL 30      (<fn baml.http.Response.text>)
-     43   LOAD_VAR 8          (http_response)
-     44   DISPATCH_FUTURE 1   
-     45   AWAIT               
-     46   STORE_VAR 9         (result)
-     47   LOAD_GLOBAL 37      (<fn baml.llm.PrimitiveClient.parse>)
-     48   LOAD_VAR 4          (primitive_client)
-     49   LOAD_VAR 9          (result)
-     50   LOAD_VAR 1          (function_name)
-     51   DISPATCH_FUTURE 3   
-     52   AWAIT               
-     53   RETURN              
+     30   RETURN              
+
+Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
+     0    INIT_LOCALS 7       
+     1    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
+     2    LOAD_VAR 1          (function_name)
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 3         (jinja_string)
+     6    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
+     7    LOAD_VAR 1          (function_name)
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   CALL 0              
+     11   STORE_VAR 4         (primitive_client)
+     12   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     13   LOAD_VAR 4          (primitive_client)
+     14   LOAD_VAR 3          (jinja_string)
+     15   LOAD_VAR 2          (args)
+     16   DISPATCH_FUTURE 3   
+     17   AWAIT               
+     18   STORE_VAR 5         (prompt)
+     19   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     20   LOAD_VAR 4          (primitive_client)
+     21   LOAD_VAR 5          (prompt)
+     22   DISPATCH_FUTURE 2   
+     23   AWAIT               
+     24   STORE_VAR 6         (specialized_prompt)
+     25   LOAD_GLOBAL 36      (<fn baml.llm.PrimitiveClient.build_request>)
+     26   LOAD_VAR 4          (primitive_client)
+     27   LOAD_VAR 6          (specialized_prompt)
+     28   DISPATCH_FUTURE 2   
+     29   AWAIT               
+     30   STORE_VAR 7         (http_request)
+     31   LOAD_GLOBAL 33      (<fn baml.http.send>)
+     32   LOAD_VAR 7          (http_request)
+     33   DISPATCH_FUTURE 1   
+     34   AWAIT               
+     35   STORE_VAR 8         (http_response)
+     36   LOAD_GLOBAL 30      (<fn baml.http.Response.text>)
+     37   LOAD_VAR 8          (http_response)
+     38   DISPATCH_FUTURE 1   
+     39   AWAIT               
+     40   STORE_VAR 9         (result)
+     41   LOAD_GLOBAL 37      (<fn baml.llm.PrimitiveClient.parse>)
+     42   LOAD_VAR 4          (primitive_client)
+     43   LOAD_VAR 9          (result)
+     44   LOAD_VAR 1          (function_name)
+     45   DISPATCH_FUTURE 3   
+     46   AWAIT               
+     47   RETURN              
 
 Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_CONST 0        (null)
-     3    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
-     4    LOAD_VAR 1          (function_name)
-     5    DISPATCH_FUTURE 1   
-     6    AWAIT               
-     7    STORE_VAR 3         (jinja_string)
-     8    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
-     9    LOAD_VAR 1          (function_name)
-     10   DISPATCH_FUTURE 1   
-     11   AWAIT               
-     12   CALL 0              
-     13   STORE_VAR 4         (primitive_client)
-     14   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
-     15   LOAD_VAR 4          (primitive_client)
-     16   LOAD_VAR 3          (jinja_string)
-     17   LOAD_VAR 2          (args)
-     18   DISPATCH_FUTURE 3   
-     19   AWAIT               
-     20   STORE_VAR 5         (prompt)
-     21   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
-     22   LOAD_VAR 4          (primitive_client)
-     23   LOAD_VAR 5          (prompt)
-     24   DISPATCH_FUTURE 2   
-     25   AWAIT               
-     26   RETURN
+     0    INIT_LOCALS 3       
+     1    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
+     2    LOAD_VAR 1          (function_name)
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 3         (jinja_string)
+     6    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
+     7    LOAD_VAR 1          (function_name)
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   CALL 0              
+     11   STORE_VAR 4         (primitive_client)
+     12   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     13   LOAD_VAR 4          (primitive_client)
+     14   LOAD_VAR 3          (jinja_string)
+     15   LOAD_VAR 2          (args)
+     16   DISPATCH_FUTURE 3   
+     17   AWAIT               
+     18   STORE_VAR 5         (prompt)
+     19   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     20   LOAD_VAR 4          (primitive_client)
+     21   LOAD_VAR 5          (prompt)
+     22   DISPATCH_FUTURE 2   
+     23   AWAIT               
+     24   RETURN

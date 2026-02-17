@@ -337,6 +337,17 @@ pub enum Instruction {
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
 
+    /// Initialize local variable slots by pushing `n` null values onto the stack.
+    ///
+    /// Format: `INIT_LOCALS n` where `n` is the number of local variable slots
+    /// to allocate. Each slot is initialized to [`Value::Null`].
+    ///
+    /// This is emitted once at the start of a function's bytecode to reserve
+    /// stack space for all "Real" local variables (i.e., those that aren't
+    /// virtual, phi-like, or dead). Parameters are not included since they
+    /// are already on the stack after [`Instruction::Call`].
+    InitLocals(usize),
+
     /// Halt execution with an unreachable code error.
     ///
     /// This instruction should never be executed at runtime. If it is,
@@ -542,6 +553,7 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::InitLocals(n) => write!(f, "INIT_LOCALS {n}"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
         }
     }

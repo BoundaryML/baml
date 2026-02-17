@@ -8,29 +8,28 @@ Objects: 82
 Globals: 61
 
 Function ChainCommands (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_GLOBAL 26      (<fn baml.sys.shell>)
-     3    LOAD_CONST 1        ("pwd")
-     4    DISPATCH_FUTURE 1   
-     5    AWAIT               
-     6    STORE_VAR 1         (result1)
-     7    LOAD_GLOBAL 26      (<fn baml.sys.shell>)
-     8    LOAD_CONST 2        ("whoami")
-     9    DISPATCH_FUTURE 1   
-     10   AWAIT               
-     11   STORE_VAR 2         (result2)
-     12   LOAD_VAR 1          (result1)
-     13   LOAD_CONST 3        (" - ")
-     14   BIN_OP +            
-     15   LOAD_VAR 2          (result2)
-     16   BIN_OP +            
-     17   RETURN              
+     0    INIT_LOCALS 2       
+     1    LOAD_GLOBAL 26      (<fn baml.sys.shell>)
+     2    LOAD_CONST 0        ("pwd")
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 1         (result1)
+     6    LOAD_GLOBAL 26      (<fn baml.sys.shell>)
+     7    LOAD_CONST 1        ("whoami")
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   STORE_VAR 2         (result2)
+     11   LOAD_VAR 1          (result1)
+     12   LOAD_CONST 2        (" - ")
+     13   BIN_OP +            
+     14   LOAD_VAR 2          (result2)
+     15   BIN_OP +            
+     16   RETURN              
 
 Function ConnectAndRead (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
+     0    INIT_LOCALS 1       
      1    LOAD_GLOBAL 29      (<fn baml.net.connect>)
-     2    LOAD_CONST 1        ("127.0.0.1:8080")
+     2    LOAD_CONST 0        ("127.0.0.1:8080")
      3    DISPATCH_FUTURE 1   
      4    AWAIT               
      5    STORE_VAR 1         (sock)
@@ -41,9 +40,9 @@ Function ConnectAndRead (arity: 0, kind: Bytecode):
      10   RETURN              
 
 Function ConnectAndReadInline (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
+     0    INIT_LOCALS 1       
      1    LOAD_GLOBAL 29      (<fn baml.net.connect>)
-     2    LOAD_CONST 1        ("localhost:3000")
+     2    LOAD_CONST 0        ("localhost:3000")
      3    DISPATCH_FUTURE 1   
      4    AWAIT               
      5    STORE_VAR 1         (_1)
@@ -54,81 +53,76 @@ Function ConnectAndReadInline (arity: 0, kind: Bytecode):
      10   RETURN              
 
 Function ConnectReadAndClose (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_GLOBAL 29      (<fn baml.net.connect>)
-     3    LOAD_CONST 1        ("127.0.0.1:8080")
-     4    DISPATCH_FUTURE 1   
-     5    AWAIT               
-     6    STORE_VAR 1         (sock)
-     7    LOAD_GLOBAL 27      (<fn baml.net.Socket.read>)
-     8    LOAD_VAR 1          (sock)
-     9    DISPATCH_FUTURE 1   
-     10   AWAIT               
-     11   STORE_VAR 2         (data)
-     12   LOAD_GLOBAL 28      (<fn baml.net.Socket.close>)
-     13   LOAD_VAR 1          (sock)
-     14   DISPATCH_FUTURE 1   
-     15   AWAIT               
-     16   POP 1               
-     17   LOAD_VAR 2          (data)
-     18   RETURN              
+     0    INIT_LOCALS 2       
+     1    LOAD_GLOBAL 29      (<fn baml.net.connect>)
+     2    LOAD_CONST 0        ("127.0.0.1:8080")
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 1         (sock)
+     6    LOAD_GLOBAL 27      (<fn baml.net.Socket.read>)
+     7    LOAD_VAR 1          (sock)
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   STORE_VAR 2         (data)
+     11   LOAD_GLOBAL 28      (<fn baml.net.Socket.close>)
+     12   LOAD_VAR 1          (sock)
+     13   DISPATCH_FUTURE 1   
+     14   AWAIT               
+     15   POP 1               
+     16   LOAD_VAR 2          (data)
+     17   RETURN              
 
 Function MultipleConnections (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_CONST 0        (null)
-     3    LOAD_CONST 0        (null)
-     4    LOAD_GLOBAL 29      (<fn baml.net.connect>)
-     5    LOAD_CONST 1        ("server1:80")
-     6    DISPATCH_FUTURE 1   
-     7    AWAIT               
-     8    STORE_VAR 1         (s1)
-     9    LOAD_GLOBAL 29      (<fn baml.net.connect>)
-     10   LOAD_CONST 2        ("server2:80")
-     11   DISPATCH_FUTURE 1   
-     12   AWAIT               
-     13   STORE_VAR 2         (s2)
-     14   LOAD_GLOBAL 27      (<fn baml.net.Socket.read>)
-     15   LOAD_VAR 1          (s1)
-     16   DISPATCH_FUTURE 1   
-     17   AWAIT               
-     18   STORE_VAR 3         (data1)
-     19   LOAD_GLOBAL 27      (<fn baml.net.Socket.read>)
-     20   LOAD_VAR 2          (s2)
-     21   DISPATCH_FUTURE 1   
-     22   AWAIT               
-     23   STORE_VAR 4         (data2)
-     24   LOAD_VAR 3          (data1)
-     25   LOAD_VAR 4          (data2)
-     26   BIN_OP +            
-     27   RETURN              
+     0    INIT_LOCALS 4       
+     1    LOAD_GLOBAL 29      (<fn baml.net.connect>)
+     2    LOAD_CONST 0        ("server1:80")
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 1         (s1)
+     6    LOAD_GLOBAL 29      (<fn baml.net.connect>)
+     7    LOAD_CONST 1        ("server2:80")
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   STORE_VAR 2         (s2)
+     11   LOAD_GLOBAL 27      (<fn baml.net.Socket.read>)
+     12   LOAD_VAR 1          (s1)
+     13   DISPATCH_FUTURE 1   
+     14   AWAIT               
+     15   STORE_VAR 3         (data1)
+     16   LOAD_GLOBAL 27      (<fn baml.net.Socket.read>)
+     17   LOAD_VAR 2          (s2)
+     18   DISPATCH_FUTURE 1   
+     19   AWAIT               
+     20   STORE_VAR 4         (data2)
+     21   LOAD_VAR 3          (data1)
+     22   LOAD_VAR 4          (data2)
+     23   BIN_OP +            
+     24   RETURN              
 
 Function ReadAndClose (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_GLOBAL 25      (<fn baml.fs.open>)
-     3    LOAD_CONST 1        ("example.txt")
-     4    DISPATCH_FUTURE 1   
-     5    AWAIT               
-     6    STORE_VAR 1         (f)
-     7    LOAD_GLOBAL 23      (<fn baml.fs.File.read>)
-     8    LOAD_VAR 1          (f)
-     9    DISPATCH_FUTURE 1   
-     10   AWAIT               
-     11   STORE_VAR 2         (content)
-     12   LOAD_GLOBAL 24      (<fn baml.fs.File.close>)
-     13   LOAD_VAR 1          (f)
-     14   DISPATCH_FUTURE 1   
-     15   AWAIT               
-     16   POP 1               
-     17   LOAD_VAR 2          (content)
-     18   RETURN              
+     0    INIT_LOCALS 2       
+     1    LOAD_GLOBAL 25      (<fn baml.fs.open>)
+     2    LOAD_CONST 0        ("example.txt")
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 1         (f)
+     6    LOAD_GLOBAL 23      (<fn baml.fs.File.read>)
+     7    LOAD_VAR 1          (f)
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   STORE_VAR 2         (content)
+     11   LOAD_GLOBAL 24      (<fn baml.fs.File.close>)
+     12   LOAD_VAR 1          (f)
+     13   DISPATCH_FUTURE 1   
+     14   AWAIT               
+     15   POP 1               
+     16   LOAD_VAR 2          (content)
+     17   RETURN              
 
 Function ReadFile (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
+     0    INIT_LOCALS 1       
      1    LOAD_GLOBAL 25      (<fn baml.fs.open>)
-     2    LOAD_CONST 1        ("example.txt")
+     2    LOAD_CONST 0        ("example.txt")
      3    DISPATCH_FUTURE 1   
      4    AWAIT               
      5    STORE_VAR 1         (f)
@@ -139,9 +133,9 @@ Function ReadFile (arity: 0, kind: Bytecode):
      10   RETURN              
 
 Function ReadFileInline (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
+     0    INIT_LOCALS 1       
      1    LOAD_GLOBAL 25      (<fn baml.fs.open>)
-     2    LOAD_CONST 1        ("data.json")
+     2    LOAD_CONST 0        ("data.json")
      3    DISPATCH_FUTURE 1   
      4    AWAIT               
      5    STORE_VAR 1         (_1)
@@ -152,34 +146,31 @@ Function ReadFileInline (arity: 0, kind: Bytecode):
      10   RETURN              
 
 Function ReadMultipleFiles (arity: 0, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_CONST 0        (null)
-     3    LOAD_CONST 0        (null)
-     4    LOAD_GLOBAL 25      (<fn baml.fs.open>)
-     5    LOAD_CONST 1        ("file1.txt")
-     6    DISPATCH_FUTURE 1   
-     7    AWAIT               
-     8    STORE_VAR 1         (f1)
-     9    LOAD_GLOBAL 25      (<fn baml.fs.open>)
-     10   LOAD_CONST 2        ("file2.txt")
-     11   DISPATCH_FUTURE 1   
-     12   AWAIT               
-     13   STORE_VAR 2         (f2)
-     14   LOAD_GLOBAL 23      (<fn baml.fs.File.read>)
-     15   LOAD_VAR 1          (f1)
-     16   DISPATCH_FUTURE 1   
-     17   AWAIT               
-     18   STORE_VAR 3         (content1)
-     19   LOAD_GLOBAL 23      (<fn baml.fs.File.read>)
-     20   LOAD_VAR 2          (f2)
-     21   DISPATCH_FUTURE 1   
-     22   AWAIT               
-     23   STORE_VAR 4         (content2)
-     24   LOAD_VAR 3          (content1)
-     25   LOAD_VAR 4          (content2)
-     26   BIN_OP +            
-     27   RETURN              
+     0    INIT_LOCALS 4       
+     1    LOAD_GLOBAL 25      (<fn baml.fs.open>)
+     2    LOAD_CONST 0        ("file1.txt")
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 1         (f1)
+     6    LOAD_GLOBAL 25      (<fn baml.fs.open>)
+     7    LOAD_CONST 1        ("file2.txt")
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   STORE_VAR 2         (f2)
+     11   LOAD_GLOBAL 23      (<fn baml.fs.File.read>)
+     12   LOAD_VAR 1          (f1)
+     13   DISPATCH_FUTURE 1   
+     14   AWAIT               
+     15   STORE_VAR 3         (content1)
+     16   LOAD_GLOBAL 23      (<fn baml.fs.File.read>)
+     17   LOAD_VAR 2          (f2)
+     18   DISPATCH_FUTURE 1   
+     19   AWAIT               
+     20   STORE_VAR 4         (content2)
+     21   LOAD_VAR 3          (content1)
+     22   LOAD_VAR 4          (content2)
+     23   BIN_OP +            
+     24   RETURN              
 
 Function RunCommand (arity: 0, kind: Bytecode):
      0   LOAD_GLOBAL 26      (<fn baml.sys.shell>)
@@ -196,122 +187,111 @@ Function RunCommandWithVar (arity: 0, kind: Bytecode):
      4   RETURN              
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_CONST 0        (null)
-     3    LOAD_CONST 0        (null)
-     4    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
-     5    LOAD_VAR 1          (function_name)
-     6    DISPATCH_FUTURE 1   
-     7    AWAIT               
-     8    STORE_VAR 3         (jinja_string)
-     9    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
-     10   LOAD_VAR 1          (function_name)
-     11   DISPATCH_FUTURE 1   
-     12   AWAIT               
-     13   CALL 0              
-     14   STORE_VAR 4         (primitive_client)
-     15   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
-     16   LOAD_VAR 4          (primitive_client)
-     17   LOAD_VAR 3          (jinja_string)
-     18   LOAD_VAR 2          (args)
-     19   DISPATCH_FUTURE 3   
-     20   AWAIT               
-     21   STORE_VAR 5         (prompt)
-     22   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
-     23   LOAD_VAR 4          (primitive_client)
-     24   LOAD_VAR 5          (prompt)
-     25   DISPATCH_FUTURE 2   
-     26   AWAIT               
-     27   STORE_VAR 6         (specialized_prompt)
-     28   LOAD_GLOBAL 36      (<fn baml.llm.PrimitiveClient.build_request>)
-     29   LOAD_VAR 4          (primitive_client)
-     30   LOAD_VAR 6          (specialized_prompt)
-     31   DISPATCH_FUTURE 2   
-     32   AWAIT               
-     33   RETURN              
-
-Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_CONST 0        (null)
-     3    LOAD_CONST 0        (null)
-     4    LOAD_CONST 0        (null)
-     5    LOAD_CONST 0        (null)
-     6    LOAD_CONST 0        (null)
-     7    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
-     8    LOAD_VAR 1          (function_name)
-     9    DISPATCH_FUTURE 1   
-     10   AWAIT               
-     11   STORE_VAR 3         (jinja_string)
-     12   LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
-     13   LOAD_VAR 1          (function_name)
-     14   DISPATCH_FUTURE 1   
-     15   AWAIT               
-     16   CALL 0              
-     17   STORE_VAR 4         (primitive_client)
-     18   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
-     19   LOAD_VAR 4          (primitive_client)
-     20   LOAD_VAR 3          (jinja_string)
-     21   LOAD_VAR 2          (args)
-     22   DISPATCH_FUTURE 3   
+     0    INIT_LOCALS 4       
+     1    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
+     2    LOAD_VAR 1          (function_name)
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 3         (jinja_string)
+     6    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
+     7    LOAD_VAR 1          (function_name)
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   CALL 0              
+     11   STORE_VAR 4         (primitive_client)
+     12   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     13   LOAD_VAR 4          (primitive_client)
+     14   LOAD_VAR 3          (jinja_string)
+     15   LOAD_VAR 2          (args)
+     16   DISPATCH_FUTURE 3   
+     17   AWAIT               
+     18   STORE_VAR 5         (prompt)
+     19   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     20   LOAD_VAR 4          (primitive_client)
+     21   LOAD_VAR 5          (prompt)
+     22   DISPATCH_FUTURE 2   
      23   AWAIT               
-     24   STORE_VAR 5         (prompt)
-     25   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     24   STORE_VAR 6         (specialized_prompt)
+     25   LOAD_GLOBAL 36      (<fn baml.llm.PrimitiveClient.build_request>)
      26   LOAD_VAR 4          (primitive_client)
-     27   LOAD_VAR 5          (prompt)
+     27   LOAD_VAR 6          (specialized_prompt)
      28   DISPATCH_FUTURE 2   
      29   AWAIT               
-     30   STORE_VAR 6         (specialized_prompt)
-     31   LOAD_GLOBAL 36      (<fn baml.llm.PrimitiveClient.build_request>)
-     32   LOAD_VAR 4          (primitive_client)
-     33   LOAD_VAR 6          (specialized_prompt)
-     34   DISPATCH_FUTURE 2   
-     35   AWAIT               
-     36   STORE_VAR 7         (http_request)
-     37   LOAD_GLOBAL 33      (<fn baml.http.send>)
-     38   LOAD_VAR 7          (http_request)
-     39   DISPATCH_FUTURE 1   
-     40   AWAIT               
-     41   STORE_VAR 8         (http_response)
-     42   LOAD_GLOBAL 30      (<fn baml.http.Response.text>)
-     43   LOAD_VAR 8          (http_response)
-     44   DISPATCH_FUTURE 1   
-     45   AWAIT               
-     46   STORE_VAR 9         (result)
-     47   LOAD_GLOBAL 37      (<fn baml.llm.PrimitiveClient.parse>)
-     48   LOAD_VAR 4          (primitive_client)
-     49   LOAD_VAR 9          (result)
-     50   LOAD_VAR 1          (function_name)
-     51   DISPATCH_FUTURE 3   
-     52   AWAIT               
-     53   RETURN              
+     30   RETURN              
+
+Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
+     0    INIT_LOCALS 7       
+     1    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
+     2    LOAD_VAR 1          (function_name)
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 3         (jinja_string)
+     6    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
+     7    LOAD_VAR 1          (function_name)
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   CALL 0              
+     11   STORE_VAR 4         (primitive_client)
+     12   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     13   LOAD_VAR 4          (primitive_client)
+     14   LOAD_VAR 3          (jinja_string)
+     15   LOAD_VAR 2          (args)
+     16   DISPATCH_FUTURE 3   
+     17   AWAIT               
+     18   STORE_VAR 5         (prompt)
+     19   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     20   LOAD_VAR 4          (primitive_client)
+     21   LOAD_VAR 5          (prompt)
+     22   DISPATCH_FUTURE 2   
+     23   AWAIT               
+     24   STORE_VAR 6         (specialized_prompt)
+     25   LOAD_GLOBAL 36      (<fn baml.llm.PrimitiveClient.build_request>)
+     26   LOAD_VAR 4          (primitive_client)
+     27   LOAD_VAR 6          (specialized_prompt)
+     28   DISPATCH_FUTURE 2   
+     29   AWAIT               
+     30   STORE_VAR 7         (http_request)
+     31   LOAD_GLOBAL 33      (<fn baml.http.send>)
+     32   LOAD_VAR 7          (http_request)
+     33   DISPATCH_FUTURE 1   
+     34   AWAIT               
+     35   STORE_VAR 8         (http_response)
+     36   LOAD_GLOBAL 30      (<fn baml.http.Response.text>)
+     37   LOAD_VAR 8          (http_response)
+     38   DISPATCH_FUTURE 1   
+     39   AWAIT               
+     40   STORE_VAR 9         (result)
+     41   LOAD_GLOBAL 37      (<fn baml.llm.PrimitiveClient.parse>)
+     42   LOAD_VAR 4          (primitive_client)
+     43   LOAD_VAR 9          (result)
+     44   LOAD_VAR 1          (function_name)
+     45   DISPATCH_FUTURE 3   
+     46   AWAIT               
+     47   RETURN              
 
 Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
-     0    LOAD_CONST 0        (null)
-     1    LOAD_CONST 0        (null)
-     2    LOAD_CONST 0        (null)
-     3    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
-     4    LOAD_VAR 1          (function_name)
-     5    DISPATCH_FUTURE 1   
-     6    AWAIT               
-     7    STORE_VAR 3         (jinja_string)
-     8    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
-     9    LOAD_VAR 1          (function_name)
-     10   DISPATCH_FUTURE 1   
-     11   AWAIT               
-     12   CALL 0              
-     13   STORE_VAR 4         (primitive_client)
-     14   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
-     15   LOAD_VAR 4          (primitive_client)
-     16   LOAD_VAR 3          (jinja_string)
-     17   LOAD_VAR 2          (args)
-     18   DISPATCH_FUTURE 3   
-     19   AWAIT               
-     20   STORE_VAR 5         (prompt)
-     21   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
-     22   LOAD_VAR 4          (primitive_client)
-     23   LOAD_VAR 5          (prompt)
-     24   DISPATCH_FUTURE 2   
-     25   AWAIT               
-     26   RETURN
+     0    INIT_LOCALS 3       
+     1    LOAD_GLOBAL 43      (<fn baml.llm.get_jinja_template>)
+     2    LOAD_VAR 1          (function_name)
+     3    DISPATCH_FUTURE 1   
+     4    AWAIT               
+     5    STORE_VAR 3         (jinja_string)
+     6    LOAD_GLOBAL 46      (<fn baml.llm.get_client_function>)
+     7    LOAD_VAR 1          (function_name)
+     8    DISPATCH_FUTURE 1   
+     9    AWAIT               
+     10   CALL 0              
+     11   STORE_VAR 4         (primitive_client)
+     12   LOAD_GLOBAL 45      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     13   LOAD_VAR 4          (primitive_client)
+     14   LOAD_VAR 3          (jinja_string)
+     15   LOAD_VAR 2          (args)
+     16   DISPATCH_FUTURE 3   
+     17   AWAIT               
+     18   STORE_VAR 5         (prompt)
+     19   LOAD_GLOBAL 35      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     20   LOAD_VAR 4          (primitive_client)
+     21   LOAD_VAR 5          (prompt)
+     22   DISPATCH_FUTURE 2   
+     23   AWAIT               
+     24   RETURN

@@ -291,10 +291,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Pre-allocate only the real locals (not virtuals)
         if slots_to_allocate > 0 {
-            let null_idx = self.add_constant(ConstValue::Null);
-            for _ in 0..slots_to_allocate {
-                self.emit(Instruction::LoadConst(null_idx));
-            }
+            self.emit(Instruction::InitLocals(slots_to_allocate));
         }
     }
 
