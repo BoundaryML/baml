@@ -1,10 +1,14 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
+use baml_db::baml_compiler_diagnostics::Severity;
+use baml_db::baml_compiler_emit;
 use baml_db::baml_compiler_hir::{ItemId, file_item_tree, project_items};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
+use bex_engine::{BexEngine, BexExternalValue, test_arg_to_external};
 use clap::Args;
+use sys_native::SysOpsExt;
 
 use crate::test_filter::TestFilter;
 
@@ -96,17 +100,107 @@ impl TestArgs {
             return Ok(crate::ExitCode::Success);
         }
 
-        // TODO: Actual test execution (runtime invocation) goes here.
-        println!(
-            "Would run {} test(s), but runtime execution is not yet implemented.",
-            selected.len()
-        );
-        for ((func, test), _) in &selected {
-            println!("  {func}::{test}");
+        // Check for diagnostic errors before compiling.
+        let source_files = db.get_source_files();
+        let diagnostics = baml_project::collect_diagnostics(&db, project, &source_files);
+        let errors: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .collect();
+        if !errors.is_empty() {
+            eprintln!("Compilation errors found ({}):", errors.len());
+            for diag in &errors {
+                eprintln!("  error: {}", diag.message);
+            }
+            return Ok(crate::ExitCode::Other);
         }
 
-        Ok(crate::ExitCode::Success)
+        // Compile to bytecode.
+        let bytecode = baml_compiler_emit::generate_project_bytecode(&db)
+            .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
+
+        // Create the engine with native (tokio-based) sys ops.
+        let engine = BexEngine::new(bytecode, sys_native::SysOps::native())
+            .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
+
+        // Create a tokio runtime for async execution.
+        let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+
+        // Run tests sequentially.
+        let total = selected.len();
+        let mut passed = 0usize;
+        let mut failed = 0usize;
+
+        for ((func_name, test_name), _path) in &selected {
+            // Look up the compiled test case from the engine.
+            let test_case = match engine.test_case(test_name) {
+                Some(tc) => tc,
+                None => {
+                    eprintln!(
+                        "FAIL {func_name}::{test_name} - test case not found in compiled program"
+                    );
+                    failed += 1;
+                    continue;
+                }
+            };
+
+            // Convert TestArgValue -> BexExternalValue and order by function params.
+            let ordered_args = match build_ordered_args(&engine, func_name, test_case) {
+                Ok(args) => args,
+                Err(e) => {
+                    eprintln!("FAIL {func_name}::{test_name} - {e}");
+                    failed += 1;
+                    continue;
+                }
+            };
+
+            // Execute the function.
+            match rt.block_on(engine.call_function(func_name, ordered_args, None, &[])) {
+                Ok(result) => {
+                    println!("PASS {func_name}::{test_name}");
+                    println!("  => {result:?}");
+                    passed += 1;
+                }
+                Err(e) => {
+                    eprintln!("FAIL {func_name}::{test_name}");
+                    eprintln!("  => {e:?}");
+                    failed += 1;
+                }
+            }
+        }
+
+        println!("\nResults: {passed} passed, {failed} failed, {total} total");
+
+        if failed > 0 {
+            Ok(crate::ExitCode::TestFailure)
+        } else {
+            Ok(crate::ExitCode::Success)
+        }
     }
+}
+
+/// Build ordered args Vec from a test case, matching the function's parameter order.
+fn build_ordered_args(
+    engine: &BexEngine,
+    function_name: &str,
+    test_case: &bex_vm_types::TestCase,
+) -> Result<Vec<BexExternalValue>> {
+    let params = engine
+        .function_params(function_name)
+        .map_err(|e| anyhow!("failed to get params for {function_name}: {e:?}"))?;
+
+    let ordered: Vec<BexExternalValue> = params
+        .into_iter()
+        .map(|(name, _ty)| {
+            test_case
+                .args
+                .get(name)
+                .map(test_arg_to_external)
+                .ok_or_else(|| anyhow!("missing argument '{name}' for function {function_name}"))
+        })
+        .collect::<Result<_>>()?;
+
+    Ok(ordered)
 }
 
 /// Walk the HIR to discover all (function_name, test_name) pairs.

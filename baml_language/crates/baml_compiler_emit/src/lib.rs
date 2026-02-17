@@ -651,6 +651,27 @@ pub fn compile_files(
         }
     }
 
+    // --- Pass: Emit test cases ---
+    for file in files {
+        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
+        let items_struct = baml_compiler_hir::file_items(db, *file);
+        for item in items_struct.items(db) {
+            if let ItemId::Test(test_loc) = item {
+                let test = &item_tree[test_loc.id(db)];
+                let args = test
+                    .args
+                    .iter()
+                    .map(|(k, v)| (k.clone(), convert_hir_test_arg(v)))
+                    .collect();
+                program.test_cases.push(bex_vm_types::TestCase {
+                    name: test.name.to_string(),
+                    function_names: test.function_refs.iter().map(|n| n.to_string()).collect(),
+                    args,
+                });
+            }
+        }
+    }
+
     Ok(program)
 }
 
@@ -674,6 +695,25 @@ where
                 value: value.to_string(),
                 reason: e.to_string(),
             }),
+    }
+}
+
+/// Convert an HIR `TestArgValue` to a `bex_vm_types::TestArgValue`.
+fn convert_hir_test_arg(v: &baml_compiler_hir::TestArgValue) -> bex_vm_types::TestArgValue {
+    match v {
+        baml_compiler_hir::TestArgValue::Null => bex_vm_types::TestArgValue::Null,
+        baml_compiler_hir::TestArgValue::Int(i) => bex_vm_types::TestArgValue::Int(*i),
+        baml_compiler_hir::TestArgValue::Float(f) => bex_vm_types::TestArgValue::Float(*f),
+        baml_compiler_hir::TestArgValue::Bool(b) => bex_vm_types::TestArgValue::Bool(*b),
+        baml_compiler_hir::TestArgValue::String(s) => bex_vm_types::TestArgValue::String(s.clone()),
+        baml_compiler_hir::TestArgValue::Array(arr) => {
+            bex_vm_types::TestArgValue::Array(arr.iter().map(convert_hir_test_arg).collect())
+        }
+        baml_compiler_hir::TestArgValue::Map(map) => bex_vm_types::TestArgValue::Map(
+            map.iter()
+                .map(|(k, v)| (k.clone(), convert_hir_test_arg(v)))
+                .collect(),
+        ),
     }
 }
 

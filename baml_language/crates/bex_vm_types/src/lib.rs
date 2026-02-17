@@ -24,6 +24,6 @@ pub use indexable::{GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, StackIndex
 pub use types::{
     Class, ClassField, ClientBuildMeta, ClientBuildType, CollectorRef, ConstValue, Enum,
     EnumVariant, Function, FunctionKind, FunctionMeta, Future, Instance, MediaValue, Object,
-    ObjectType, PendingFuture, Program, PromptAst, RetryPolicyMeta, SysOp, Value, Variant,
-    sys_op_for_path, type_tags,
+    ObjectType, PendingFuture, Program, PromptAst, RetryPolicyMeta, SysOp, TestArgValue, TestCase,
+    Value, Variant, sys_op_for_path, type_tags,
 };
