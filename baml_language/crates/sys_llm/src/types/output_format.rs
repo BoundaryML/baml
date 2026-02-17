@@ -197,9 +197,7 @@ impl OutputFormatContent {
             Ty::Literal(lit) => Ok(Some(render_literal(lit))),
 
             // Runtime-only variants that shouldn't appear in LLM prompts
-            Ty::Resource => Err(RenderError::UnsupportedType("resource".to_string())),
-            Ty::PromptAst => Err(RenderError::UnsupportedType("prompt_ast".to_string())),
-            Ty::Type => Err(RenderError::UnsupportedType("type".to_string())),
+            Ty::Opaque(tn) => Err(RenderError::UnsupportedType(tn.to_string())),
 
             // Compiler-only variants should never reach runtime
             Ty::TypeAlias(_)
@@ -560,5 +558,12 @@ mod tests {
             rendered,
             Some("Answer using this specific value:\ntrue".to_string())
         );
+    }
+
+    #[test]
+    fn test_render_opaque_unsupported() {
+        let content = OutputFormatContent::new(Ty::big_t_type());
+        let err = content.render(&RenderOptions::default()).unwrap_err();
+        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "big_t_type"));
     }
 }

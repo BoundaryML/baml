@@ -417,9 +417,17 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
             enum_name.as_str() == tn.display_name.as_str()
         }
         (BexExternalValue::Adt(BexExternalAdt::Media(_)), Ty::Media(_)) => true,
-        (BexExternalValue::Adt(BexExternalAdt::PromptAst(_)), Ty::PromptAst) => true,
+        (BexExternalValue::Adt(BexExternalAdt::PromptAst(_)), ty)
+            if ty.is_opaque("baml.llm.PromptAst") =>
+        {
+            true
+        }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
-        (BexExternalValue::Adt(BexExternalAdt::Type(_)), Ty::Type) => true,
+        (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
+            if ty.is_opaque("baml.reflect.Type") =>
+        {
+            true
+        }
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         // Handle nested unions/optionals in the type
         (value, Ty::Union(members)) => members.iter().any(|m| value_matches_type(value, m)),
@@ -498,7 +506,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 }
                 Object::Map(_) => members.iter().find(|m| matches!(m, Ty::Map { .. })),
                 Object::Media(_) => members.iter().find(|m| matches!(m, Ty::Media(_))),
-                Object::PromptAst(_) => members.iter().find(|m| matches!(m, Ty::PromptAst)),
+                Object::PromptAst(_) => members.iter().find(|m| m.is_opaque("baml.llm.PromptAst")),
                 _ => None,
             }
         }

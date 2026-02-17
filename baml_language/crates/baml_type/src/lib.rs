@@ -95,13 +95,20 @@ pub enum Ty {
     Union(Vec<Ty>),
 
     // --- Runtime-only: present at runtime, not in user-facing type syntax ---
-    /// Opaque resource handle (file, socket, HTTP response body).
-    Resource,
-    /// Opaque structured prompt tree for LLM calls.
-    PromptAst,
-    /// Meta-type — a runtime value that wraps a `Ty`.
-    /// Used by `baml.llm.parse()` to accept a type descriptor.
-    Type,
+    /// Opaque runtime-only type, identified by its qualified name.
+    ///
+    /// Used for types that the type system treats generically (nominal equality,
+    /// no structural decomposition, infinite for exhaustiveness) but whose
+    /// *values* are concrete Rust types on the VM heap.
+    ///
+    /// Well-known opaque types:
+    /// - `baml.llm.Resource` — file/socket/HTTP response handles
+    /// - `baml.llm.PromptAst` — structured prompt trees for LLM calls
+    /// - `big_t_type` — meta-type wrapping a `Ty` for reflection
+    ///
+    /// Use the convenience constructors `Ty::resource()`, `Ty::prompt_ast()`,
+    /// `Ty::big_t_type()` instead of constructing directly.
+    Opaque(TypeName),
 
     // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
     /// Only recursive aliases survive lower_ty; non-recursive are expanded.
@@ -141,6 +148,67 @@ pub enum Ty {
 //   produces `Void` directly instead of `Never`.
 
 impl Ty {
+    // --- Opaque type constructors ---
+
+    /// Helper to build a TypeName for a builtin opaque type.
+    ///
+    /// `qualified_name`: dotted path like `"baml.llm.Resource"` — the last
+    /// segment becomes `name`, everything before it becomes `module_path`.
+    ///
+    /// `display`: the user-facing display string (may differ from the
+    /// qualified name).
+    fn opaque_builtin(qualified_name: &str, display: &str) -> Self {
+        let segments: Vec<&str> = qualified_name.split('.').collect();
+        let name = Name::new(*segments.last().expect("qualified_name must be non-empty"));
+        let module_path = segments[..segments.len() - 1]
+            .iter()
+            .map(Name::new)
+            .collect();
+        Ty::Opaque(TypeName {
+            name,
+            module_path,
+            display_name: Name::new(display),
+        })
+    }
+
+    /// Opaque resource handle type (file, socket, HTTP response body).
+    pub fn resource() -> Self {
+        Self::opaque_builtin("baml.llm.Resource", "baml.llm.Resource")
+    }
+
+    /// Opaque structured prompt tree type for LLM calls.
+    pub fn prompt_ast() -> Self {
+        Self::opaque_builtin("baml.llm.PromptAst", "baml.llm.PromptAst")
+    }
+
+    /// Meta-type — a runtime value that wraps a `Ty`.
+    pub fn big_t_type() -> Self {
+        Self::opaque_builtin("baml.reflect.Type", "big_t_type")
+    }
+
+    /// Check if this is an opaque type with the given qualified name
+    /// (e.g. `"baml.llm.PromptAst"`).
+    pub fn is_opaque(&self, qualified_name: &str) -> bool {
+        match self {
+            Ty::Opaque(tn) => {
+                // Build "module.path.Name" and compare.
+                let mut parts: Vec<&str> = tn.module_path.iter().map(|n| n.as_str()).collect();
+                parts.push(tn.name.as_str());
+                let full = parts.join(".");
+                full == qualified_name
+            }
+            _ => false,
+        }
+    }
+
+    /// If this is an opaque type, return its TypeName.
+    pub fn as_opaque(&self) -> Option<&TypeName> {
+        match self {
+            Ty::Opaque(tn) => Some(tn),
+            _ => None,
+        }
+    }
+
     /// Check if this is the void type.
     pub fn is_void(&self) -> bool {
         matches!(self, Ty::Void)
@@ -263,9 +331,7 @@ impl Ty {
             | Ty::Literal(_)
             | Ty::Class(_)
             | Ty::Enum(_)
-            | Ty::Resource
-            | Ty::PromptAst
-            | Ty::Type => Ok(()),
+            | Ty::Opaque(_) => Ok(()),
         }
     }
 }
@@ -287,9 +353,7 @@ impl fmt::Display for Ty {
             },
             Ty::Class(tn) => write!(f, "{tn}"),
             Ty::Enum(tn) => write!(f, "{tn}"),
-            Ty::Resource => write!(f, "resource"),
-            Ty::PromptAst => write!(f, "prompt_ast"),
-            Ty::Type => write!(f, "type"),
+            Ty::Opaque(tn) => write!(f, "{tn}"),
             Ty::TypeAlias(tn) => write!(f, "{tn}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),
@@ -400,14 +464,27 @@ mod tests {
 
     #[test]
     fn test_validate_runtime_accepts_opaque_types() {
-        assert!(Ty::Resource.validate_runtime().is_ok());
-        assert!(Ty::PromptAst.validate_runtime().is_ok());
+        assert!(Ty::resource().validate_runtime().is_ok());
+        assert!(Ty::prompt_ast().validate_runtime().is_ok());
+        assert!(Ty::big_t_type().validate_runtime().is_ok());
     }
 
     #[test]
     fn test_display_opaque_types() {
-        assert_eq!(Ty::Resource.to_string(), "resource");
-        assert_eq!(Ty::PromptAst.to_string(), "prompt_ast");
+        assert_eq!(Ty::resource().to_string(), "baml.llm.Resource");
+        assert_eq!(Ty::prompt_ast().to_string(), "baml.llm.PromptAst");
+        assert_eq!(Ty::big_t_type().to_string(), "big_t_type");
+    }
+
+    #[test]
+    fn test_opaque_helpers() {
+        assert!(Ty::resource().is_opaque("baml.llm.Resource"));
+        assert!(!Ty::resource().is_opaque("baml.reflect.Type"));
+        assert_eq!(
+            Ty::prompt_ast().as_opaque().map(|tn| tn.name.as_str()),
+            Some("PromptAst"),
+        );
+        assert_eq!(Ty::Int.as_opaque(), None);
     }
 
     #[test]

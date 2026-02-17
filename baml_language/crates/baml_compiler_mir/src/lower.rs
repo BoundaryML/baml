@@ -1917,7 +1917,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             // Works for both builtin class types and primitive types with methods
             let type_name = match &base_ty {
                 Ty::Class(tn) if !tn.module_path.is_empty() => Some(tn.display_name.to_string()),
-                Ty::PromptAst => Some("baml.llm.PromptAst".to_string()),
+                Ty::Opaque(tn) => Some(tn.display_name.to_string()),
                 Ty::List(_) => Some("baml.Array".to_string()),
                 Ty::String => Some("baml.String".to_string()),
                 Ty::Map { .. } => Some("baml.Map".to_string()),

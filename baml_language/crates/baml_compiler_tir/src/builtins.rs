@@ -415,19 +415,27 @@ mod tests {
     #[test]
     fn test_match_opaque_types() {
         assert!(match_pattern(&TypePattern::Resource, &Ty::Resource).is_some());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Type).is_some());
 
-        // Resource should not match other types
+        // Type also matches error recovery types
+        assert!(match_pattern(&TypePattern::Type, &Ty::Unknown).is_some());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Error).is_some());
+
+        // Neither matches unrelated types
         assert!(match_pattern(&TypePattern::Resource, &Ty::Int).is_none());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Int).is_none());
     }
 
     #[test]
     fn test_substitute_opaque_types() {
         let bindings = HashMap::new();
         assert_eq!(substitute(&TypePattern::Resource, &bindings), Ty::Resource);
+        assert_eq!(substitute(&TypePattern::Type, &bindings), Ty::Type);
     }
 
     #[test]
     fn test_substitute_unknown_opaque_types() {
         assert_eq!(substitute_unknown(&TypePattern::Resource), Ty::Resource);
+        assert_eq!(substitute_unknown(&TypePattern::Type), Ty::Type);
     }
 }

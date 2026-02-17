@@ -83,7 +83,7 @@ pub fn convert_tir_ty(
             // Most builtins are Object::Instance, but PromptAst wraps an opaque
             // Rust ADT and has its own Object variant.
             if baml_compiler_tir::is_prompt_ast_class(fqn) {
-                return Ok(Ty::PromptAst);
+                return Ok(Ty::prompt_ast());
             }
             Ok(Ty::Class(fqn_to_type_name(fqn)))
         }
@@ -143,10 +143,10 @@ pub fn convert_tir_ty(
         baml_compiler_tir::Ty::Unknown => Ok(Ty::Null),
         baml_compiler_tir::Ty::Error => Ok(Ty::Null),
         baml_compiler_tir::Ty::Void => Ok(Ty::Void),
-        baml_compiler_tir::Ty::Resource => Ok(Ty::Resource),
+        baml_compiler_tir::Ty::Resource => Ok(Ty::resource()),
         // BuiltinUnknown is preserved for VIR type checking at call sites.
         baml_compiler_tir::Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
-        baml_compiler_tir::Ty::Type => Ok(Ty::Type),
+        baml_compiler_tir::Ty::Type => Ok(Ty::big_t_type()),
 
         baml_compiler_tir::Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(
             convert_tir_ty(inner, aliases, recursive_aliases)?,

@@ -150,8 +150,8 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
             value: Some(Box::new(ty_to_field_type(inner))),
         }))),
         Ty::Media(_) | Ty::Literal(_) => Some(FieldType::AnyType(CffiFieldTypeAny {})),
-        Ty::Resource | Ty::PromptAst | Ty::Type => {
-            unreachable!("runtime-only variant should not reach FFI type encoding")
+        Ty::Opaque(tn) => {
+            unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
         Ty::TypeAlias(_)
         | Ty::Function { .. }
