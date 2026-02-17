@@ -497,6 +497,9 @@ pub enum Object {
     /// Collector object (opaque handle to `bex_events::Collector`).
     Collector(CollectorRef),
 
+    /// A type descriptor value — wraps a `baml_type::Ty`.
+    Type(baml_type::Ty),
+
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
     // TODO: Figure out how to handle this here.
@@ -518,6 +521,7 @@ impl std::fmt::Display for Object {
             Object::Media(media) => media.fmt(f),
             Object::Resource(r) => write!(f, "<{r}>"),
             Object::Collector(_) => write!(f, "<collector>"),
+            Object::Type(ty) => write!(f, "<type: {ty}>"),
             Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
@@ -617,6 +621,7 @@ pub enum ObjectType {
     Resource,
     PromptAst,
     Collector,
+    Type,
 }
 
 impl ObjectType {
@@ -634,6 +639,7 @@ impl ObjectType {
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
             Object::Collector(_) => Self::Collector,
+            Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
@@ -671,6 +677,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
             ObjectType::Collector => write!(f, "collector"),
+            ObjectType::Type => write!(f, "type"),
         }
     }
 }

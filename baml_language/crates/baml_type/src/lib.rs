@@ -99,6 +99,9 @@ pub enum Ty {
     Resource,
     /// Opaque structured prompt tree for LLM calls.
     PromptAst,
+    /// Meta-type — a runtime value that wraps a `Ty`.
+    /// Used by `baml.llm.parse()` to accept a type descriptor.
+    Type,
 
     // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
     /// Only recursive aliases survive lower_ty; non-recursive are expanded.
@@ -261,7 +264,8 @@ impl Ty {
             | Ty::Class(_)
             | Ty::Enum(_)
             | Ty::Resource
-            | Ty::PromptAst => Ok(()),
+            | Ty::PromptAst
+            | Ty::Type => Ok(()),
         }
     }
 }
@@ -285,6 +289,7 @@ impl fmt::Display for Ty {
             Ty::Enum(tn) => write!(f, "{tn}"),
             Ty::Resource => write!(f, "resource"),
             Ty::PromptAst => write!(f, "prompt_ast"),
+            Ty::Type => write!(f, "type"),
             Ty::TypeAlias(tn) => write!(f, "{tn}"),
             Ty::Optional(inner) => write!(f, "{inner}?"),
             Ty::List(inner) => write!(f, "{inner}[]"),

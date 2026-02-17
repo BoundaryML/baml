@@ -289,6 +289,7 @@ fn deep_copy_value_recursive(
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
                 Object::PromptAst(ast) => vm.tlab.alloc(Object::PromptAst(ast)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
+                Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };
@@ -528,6 +529,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Future(_) => Ok("<future>".to_string()),
             Object::PromptAst(_) => Ok("<prompt_ast>".to_string()),
             Object::Collector(_) => Ok("<collector>".to_string()),
+            Object::Type(ty) => Ok(format!("<type: {ty}>")),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },

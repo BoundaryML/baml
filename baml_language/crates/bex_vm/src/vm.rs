@@ -375,6 +375,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Resource(_) => type_tags::RESOURCE,
                 Object::PromptAst(_) => type_tags::PROMPT_AST,
                 Object::Collector(_) => type_tags::COLLECTOR,
+                Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
@@ -787,6 +788,11 @@ impl BexVm {
 
     pub fn alloc_media(&mut self, media: bex_vm_types::types::MediaValue) -> Value {
         Value::Object(self.tlab.alloc(Object::Media(media)))
+    }
+
+    /// Allocate a type descriptor object on the heap.
+    pub fn alloc_type(&mut self, ty: baml_type::Ty) -> Value {
+        Value::Object(self.tlab.alloc(Object::Type(ty)))
     }
 
     /// Builds a stack trace for the given error.

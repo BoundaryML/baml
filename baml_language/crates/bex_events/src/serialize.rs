@@ -135,6 +135,9 @@ fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
         BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
             serde_json::json!({"__adt": "Collector"})
         }
+        BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
+            serde_json::json!({"__adt": "Type", "value": format!("{ty}")})
+        }
     }
 }
 

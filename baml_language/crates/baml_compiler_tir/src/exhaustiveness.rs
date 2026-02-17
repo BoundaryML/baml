@@ -369,6 +369,7 @@ impl<'a> ExhaustivenessChecker<'a> {
             Ty::Float => vec![ValueSet::OfType(Name::new("float"))],
             Ty::String => vec![ValueSet::OfType(Name::new("string"))],
             Ty::Resource => vec![ValueSet::OfType(Name::new("resource"))],
+            Ty::Type => vec![ValueSet::OfType(Name::new("type"))],
             Ty::Media(kind) => vec![ValueSet::OfType(Name::new(kind.to_string()))],
 
             // User-defined class and enum types (resolved by FQN).

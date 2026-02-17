@@ -320,7 +320,8 @@ impl BexHeap {
             | Object::Media(_)
             | Object::PromptAst(_)
             | Object::Resource(_)
-            | Object::Collector(_) => {}
+            | Object::Collector(_)
+            | Object::Type(_) => {}
         }
     }
 
@@ -390,7 +391,8 @@ impl BexHeap {
             | Object::Media(_)
             | Object::PromptAst(_)
             | Object::Resource(_)
-            | Object::Collector(_) => {}
+            | Object::Collector(_)
+            | Object::Type(_) => {}
         }
     }
 

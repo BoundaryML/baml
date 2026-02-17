@@ -85,6 +85,7 @@ pub enum BexExternalAdt {
     Media(bex_vm_types::MediaValue),
     PromptAst(bex_vm_types::PromptAst),
     Collector(bex_vm_types::CollectorRef),
+    Type(baml_type::Ty),
 }
 
 /// A deep-copied value tree with no heap references.
@@ -192,6 +193,7 @@ impl BexExternalAdt {
             },
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Collector(_) => "collector",
+            BexExternalAdt::Type(_) => "type",
         }
     }
 }
@@ -296,6 +298,12 @@ impl AsBexExternalValue for bool {
 impl AsBexExternalValue for bex_vm_types::PromptAst {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
+    }
+}
+
+impl AsBexExternalValue for baml_type::Ty {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::Type(self))
     }
 }
 
