@@ -33,16 +33,14 @@ impl FromCST for MatchPattern {
 
         let first_elem = UnionPatternMember::take(&mut it)?;
 
-        if let Some(colon) = it.next_if_kind(SyntaxKind::COLON) {
-            let UnionPatternMember::Word(binding_name) = first_elem else {
-                return Err(StrongAstError::UnexpectedKindDesc {
-                    expected_desc: "WORD".into(),
-                    found: colon.kind(),
-                    at: colon.text_range(),
-                });
-            };
+        if let Some(colon) = it.next_if_kind(SyntaxKind::COLON)
+            && let UnionPatternMember::Word(binding_name) = first_elem
+        {
             let colon = t::Colon::from_cst(colon)?;
             let ty = it.expect_parse()?;
+
+            it.expect_end()?;
+
             return Ok(MatchPattern::Binding(BindingPattern {
                 name: binding_name,
                 ty: Some((colon, ty)),
@@ -51,12 +49,9 @@ impl FromCST for MatchPattern {
 
         let mut rest = Vec::new();
         while let Some(pipe) = it.next() {
-            let pipe = StrongAstError::assert_is_token(pipe)?;
-            StrongAstError::assert_kind_token(&pipe, SyntaxKind::PIPE)?;
-
+            let pipe = t::Pipe::from_cst(pipe)?;
             let next = UnionPatternMember::take(&mut it)?;
-
-            rest.push((t::Pipe::new_from_span(pipe.text_range()), next));
+            rest.push((pipe, next));
         }
 
         let ty = if rest.is_empty() {
@@ -396,6 +391,9 @@ impl Printable for NestedPattern {
             first_line_offset: 0,
         };
         let inner_info = inner_printer.print(&*self.pattern, inner_shape);
+        if inner_info.multi_lined {
+            return self.print_multi_line(shape, printer);
+        }
 
         // Check trivia between parens and inner pattern
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
@@ -415,7 +413,7 @@ impl Printable for NestedPattern {
         .map(|sum| sum + inner_printer.len() + const { "()".len() })
         .unwrap_or(usize::MAX);
 
-        if inner_info.multi_lined || single_line_len > shape.width {
+        if single_line_len > shape.width {
             self.print_multi_line(shape, printer)
         } else {
             printer.print_raw_token(&self.open_paren);

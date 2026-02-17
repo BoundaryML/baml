@@ -26,11 +26,14 @@ pub trait FromCST: Sized {
 }
 
 /// This AST node only ever has exactly one [`SyntaxKind`].
+///
+/// Helps with conveniently printing error messages.
 pub trait KnownKind {
     /// Should be constant, but we can't use `const` because it's a trait.
     fn kind() -> SyntaxKind;
 }
 
+/// Errors that can occur when parsing from a [`SyntaxNode`] with [`FromCST`].
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum StrongAstError {
     /// When an element is expected (of a specific [`SyntaxKind`]) but was found to be of a different kind.
@@ -137,6 +140,7 @@ pub struct SyntaxNodeIter {
     peeked: Option<SyntaxElement>,
 }
 impl SyntaxNodeIter {
+    /// Creates a new iterator to walk through the non-trivia children of a [`SyntaxNode`].
     pub fn new(parent_node: SyntaxNode) -> SyntaxNodeIter {
         let it = parent_node
             .children_with_tokens()
@@ -311,6 +315,9 @@ impl Iterator for SyntaxNodeIter {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::SOURCE_FILE`] node.
+///
+/// This is the root node of the AST.
 #[derive(Debug)]
 pub struct SourceFile {
     pub items: Vec<TopLevelDeclaration>,

@@ -604,7 +604,7 @@ impl<'a> Parser<'a> {
     /// Returns true if a '>' was consumed (either standalone or as part of '>>').
     fn expect_greater(&mut self) -> bool {
         // First check if we have a pending '>' from a previous '>>' split.
-        // Don't emit anything - the '>>' token is already in the tree.
+        // Emit that pending `>` as a new token.
         if self.pending_greaters > 0 {
             self.pending_greaters -= 1;
             if self.pending_greaters == 0 {

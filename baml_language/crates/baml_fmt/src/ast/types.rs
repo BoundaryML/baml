@@ -11,7 +11,7 @@ use crate::{
     ast::{Literal, SyntaxNodeIter, Token},
     printer::*,
 };
-use rowan::TextRange;
+use rowan::{TextRange, TextSize};
 
 /// Corresponds to a [`SyntaxKind::TYPE_EXPR`] node.
 #[derive(Debug)]
@@ -104,7 +104,9 @@ impl Printable for Type {
             Type::Function(function) => function.print(shape, printer),
             Type::Constrained(range) | Type::Unknown(range) => {
                 printer.print_input_range(*range);
-                PrintInfo::default_single_line()
+                PrintInfo {
+                    multi_lined: printer.input[*range].contains('\n'),
+                }
             }
         }
     }
@@ -181,9 +183,7 @@ impl Printable for ParenType {
 
         // Check trivia between parens and inner type
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        let (ty_leading, _) = printer
-            .trivia
-            .get_for_range_split(self.ty.leftmost_token());
+        let (ty_leading, _) = printer.trivia.get_for_range_split(self.ty.leftmost_token());
         let (_, ty_trailing) = printer
             .trivia
             .get_for_range_split(self.ty.rightmost_token());
@@ -309,9 +309,7 @@ impl Printable for UnionType {
 
         if !has_line_trivia {
             for (_, ty) in &self.rest {
-                let (_, trailing) = printer
-                    .trivia
-                    .get_for_range_split(ty.rightmost_token());
+                let (_, trailing) = printer.trivia.get_for_range_split(ty.rightmost_token());
                 if trailing
                     .iter()
                     .any(|t| t.single_line_len(printer.input).is_none())
@@ -530,9 +528,8 @@ impl From<UnionTypeMember> for Type {
             UnionTypeMember::Array(array) => Type::Array(array),
             UnionTypeMember::Generic(generic) => Type::Generic(generic),
             UnionTypeMember::Function(function) => Type::Function(function),
-            UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => {
-                Type::Unknown(range)
-            }
+            UnionTypeMember::Constrained(range) => Type::Constrained(range),
+            UnionTypeMember::Unknown(range) => Type::Unknown(range),
         }
     }
 }
@@ -549,7 +546,7 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Function(function) => function.print(shape, printer),
             UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => {
                 printer.print_input_range(*range);
-                PrintInfo::default_single_line()
+                PrintInfo { multi_lined: false }
             }
         }
     }
@@ -586,7 +583,10 @@ pub struct OptionalType {
 }
 
 impl Printable for OptionalType {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+    fn print(&self, mut shape: Shape, printer: &mut Printer) -> PrintInfo {
+        shape.width = shape
+            .width
+            .saturating_sub(usize::from(self.question.span().len()));
         let info = printer.print(&*self.ty, shape);
         printer.print_raw_token(&self.question);
         info
@@ -595,7 +595,7 @@ impl Printable for OptionalType {
         self.ty.leftmost_token()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.ty.rightmost_token()
+        self.question.span()
     }
 }
 
@@ -606,7 +606,13 @@ pub struct ArrayType {
 }
 
 impl Printable for ArrayType {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+    fn print(&self, mut shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let brackets_width: TextSize = self
+            .brackets
+            .iter()
+            .map(|(l, r)| l.span().len() + r.span().len())
+            .sum();
+        shape.width = shape.width.saturating_sub(usize::from(brackets_width));
         let info = printer.print(&*self.ty, shape);
         for (open, close) in &self.brackets {
             printer.print_raw_token(open);
@@ -673,15 +679,12 @@ impl FromCST for TypeArgs {
             };
             match elem.kind() {
                 SyntaxKind::COMMA => {
-                    let comma = StrongAstError::assert_is_token(elem)?;
-                    let comma = t::Comma::new_from_span(comma.text_range());
+                    let comma = t::Comma::from_cst(elem)?;
                     let next: Type = it.expect_parse()?;
                     rest.push((comma, next));
                 }
                 SyntaxKind::GREATER => {
-                    let token = StrongAstError::assert_is_token(elem)?;
-                    let close_angle = t::Greater::new_from_span(token.text_range());
-                    break close_angle;
+                    break t::Greater::from_cst(elem)?;
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
@@ -746,10 +749,8 @@ impl PrintMultiLine for TypeArgs {
         printer.print_newline();
 
         for (i, (_comma, ty)) in self.rest.iter().enumerate() {
-            printer.print_trivia_all_leading_with_newline_for(
-                ty.leftmost_token(),
-                inner_shape.indent,
-            );
+            printer
+                .print_trivia_all_leading_with_newline_for(ty.leftmost_token(), inner_shape.indent);
             printer.print_spaces(inner_shape.indent);
             printer.print(ty, inner_shape.clone());
             if i + 1 < self.rest.len() {
@@ -759,10 +760,8 @@ impl PrintMultiLine for TypeArgs {
             printer.print_newline();
         }
 
-        printer.print_trivia_all_leading_with_newline_for(
-            self.close_angle.span(),
-            inner_shape.indent,
-        );
+        printer
+            .print_trivia_all_leading_with_newline_for(self.close_angle.span(), inner_shape.indent);
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_angle);
         PrintInfo::default_multi_lined()
@@ -770,17 +769,17 @@ impl PrintMultiLine for TypeArgs {
 }
 
 impl TypeArgs {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the type args on a single line.
     fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        single_line_printer.print_raw_token(&self.open_angle);
+        printer.print_raw_token(&self.open_angle);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_angle.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
 
         // First element
         let (first_leading, first_trailing) = printer.trivia.get_for_element(&*self.first);
         printer.print_trivia_single_line_squished(first_leading)?;
-        if single_line_printer
+        if printer
             .print(&*self.first, Shape::unlimited_single_line())
             .multi_lined
         {
@@ -789,15 +788,14 @@ impl TypeArgs {
         printer.print_trivia_single_line_squished(first_trailing)?;
 
         for (comma, ty) in &self.rest {
-            let (comma_leading, comma_trailing) =
-                printer.trivia.get_for_range_split(comma.span());
+            let (comma_leading, comma_trailing) = printer.trivia.get_for_range_split(comma.span());
             printer.print_trivia_single_line_squished(comma_leading)?;
-            single_line_printer.print_raw_token(comma);
+            printer.print_raw_token(comma);
             printer.print_trivia_single_line_squished(comma_trailing)?;
-            single_line_printer.print_str(" ");
+            printer.print_str(" ");
             let (ty_leading, ty_trailing) = printer.trivia.get_for_element(ty);
             printer.print_trivia_single_line_squished(ty_leading)?;
-            if single_line_printer
+            if printer
                 .print(ty, Shape::unlimited_single_line())
                 .multi_lined
             {
@@ -808,12 +806,11 @@ impl TypeArgs {
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_angle.span());
         printer.print_trivia_single_line_squished(close_leading)?;
-        single_line_printer.print_raw_token(&self.close_angle);
+        printer.print_raw_token(&self.close_angle);
 
-        if single_line_printer.output.len() > shape.width {
+        if printer.output.len() > shape.width {
             None
         } else {
-            printer.append_from_printer(single_line_printer);
             Some(PrintInfo::default_single_line())
         }
     }
@@ -821,7 +818,8 @@ impl TypeArgs {
 
 impl Printable for TypeArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(shape.clone(), p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -879,10 +877,8 @@ impl PrintMultiLine for FunctionType {
             printer.print_newline();
         }
 
-        printer.print_trivia_all_leading_with_newline_for(
-            self.close_paren.span(),
-            inner_shape.indent,
-        );
+        printer
+            .print_trivia_all_leading_with_newline_for(self.close_paren.span(), inner_shape.indent);
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_paren);
         printer.print_str(" ");
@@ -894,20 +890,20 @@ impl PrintMultiLine for FunctionType {
 }
 
 impl FunctionType {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the function type on a single line.
     fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        single_line_printer.print_raw_token(&self.open_paren);
+        printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (param, comma)) in self.params.iter().enumerate() {
-            if single_line_printer.output.len() > shape.width {
+            if printer.output.len() > shape.width {
                 return None;
             }
             let (p_leading, p_trailing) = printer.trivia.get_for_element(param);
             printer.print_trivia_single_line_squished(p_leading)?;
-            if single_line_printer
+            if printer
                 .print(param, Shape::unlimited_single_line())
                 .multi_lined
             {
@@ -919,12 +915,12 @@ impl FunctionType {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
                     printer.print_trivia_single_line_squished(comma_leading)?;
-                    single_line_printer.print_raw_token(comma);
+                    printer.print_raw_token(comma);
                     printer.print_trivia_single_line_squished(comma_trailing)?;
                 } else {
-                    single_line_printer.print_str(",");
+                    printer.print_str(",");
                 }
-                single_line_printer.print_str(" ");
+                printer.print_str(" ");
             } else if let Some(comma) = comma {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
@@ -936,21 +932,20 @@ impl FunctionType {
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
         printer.print_trivia_single_line_squished(close_leading)?;
-        single_line_printer.print_raw_token(&self.close_paren);
-        single_line_printer.print_str(" ");
-        single_line_printer.print_raw_token(&self.arrow);
-        single_line_printer.print_str(" ");
-        if single_line_printer
+        printer.print_raw_token(&self.close_paren);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.arrow);
+        printer.print_str(" ");
+        if printer
             .print(&*self.return_type, Shape::unlimited_single_line())
             .multi_lined
         {
             return None;
         }
 
-        if single_line_printer.output.len() > shape.width {
+        if printer.output.len() > shape.width {
             None
         } else {
-            printer.append_from_printer(single_line_printer);
             Some(PrintInfo::default_single_line())
         }
     }
@@ -958,7 +953,8 @@ impl FunctionType {
 
 impl Printable for FunctionType {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(shape.clone(), p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1020,8 +1016,7 @@ impl Printable for FunctionTypeParam {
             }
             printer.print_str(" ");
         }
-        printer.print(&*self.ty, shape);
-        PrintInfo::default_single_line()
+        printer.print(&*self.ty, shape)
     }
     fn leftmost_token(&self) -> TextRange {
         self.name

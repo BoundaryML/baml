@@ -108,6 +108,8 @@ impl FromCST for Attribute {
             }
         };
 
+        it.expect_end()?;
+
         let name = AttributeName {
             first: name_first,
             rest: name_rest,
@@ -490,7 +492,7 @@ impl Printable for AttributeArg {
             AttributeArg::QuotedString(s) => s.rightmost_token(),
             AttributeArg::RawString(s) => s.rightmost_token(),
             AttributeArg::AttrExpr(range) => {
-                TextRange::new(range.start(), range.start() + TextSize::from(1))
+                TextRange::new(range.end(), range.end() + TextSize::from(1))
             }
             AttributeArg::UnquotedString(s) => s.span(),
         }

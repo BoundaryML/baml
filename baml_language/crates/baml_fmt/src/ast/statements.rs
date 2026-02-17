@@ -11,6 +11,7 @@ use crate::{
 
 use super::tokens as t;
 
+/// Does not correspond to a specific [`SyntaxKind`], but contains all possible statements.
 #[derive(Debug)]
 pub enum Statement {
     /// Assignment operations are parsed as binary expressions.
@@ -109,7 +110,7 @@ impl Printable for Statement {
     }
 }
 
-/// Does not correspond to a [`SyntaxKind`].
+/// Does not correspond to a [`SyntaxKind`], but parses some [`Expression`] as a statement.
 ///
 /// Unlike most implementations of `FromCST`, this will never parse the semicolon, as it is not a child of the node.
 /// Instead, the caller should check for a semicolon after the expression and add it to the `ExpressionStmt` if present.
@@ -215,12 +216,6 @@ impl FromCST for LetStmt {
             initializer,
             semicolon,
         })
-    }
-}
-
-impl KnownKind for LetStmt {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::LET_STMT
     }
 }
 
@@ -366,7 +361,8 @@ impl FromCST for ForStmt {
 
         let open_paren = it.expect_parse()?;
 
-        let let_stmt = it.expect_parse()?;
+        let let_stmt = it.expect_node_of_kind(SyntaxKind::LET_STMT)?; // does not allow WATCH_LET
+        let let_stmt = LetStmt::from_cst(SyntaxElement::Node(let_stmt))?;
 
         let args = if let Some(kw_in) = it.next_if_kind(SyntaxKind::KW_IN) {
             // for-in
@@ -600,8 +596,9 @@ impl Printable for ForIteratorArgs {
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.open_paren);
         if let Some(watch) = &self.let_stmt.watch {
-            printer.print_raw_token(watch);
-            printer.print_spaces(1);
+            // I don't think watch is valid here, but re-emit it just in case
+            single_line_printer.print_raw_token(watch);
+            single_line_printer.print_spaces(1);
         }
         single_line_printer.print_raw_token(&self.let_stmt.keyword);
         single_line_printer.print_str(" ");
@@ -629,6 +626,7 @@ impl Printable for ForIteratorArgs {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::RETURN_STMT`] node.
 #[derive(Debug)]
 pub struct ReturnStmt {
     pub keyword: t::Return,

@@ -296,6 +296,7 @@ impl Printable for PathExpr {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::PAREN_EXPR`] node.
 #[derive(Debug)]
 pub struct ParenExpr {
     pub open_paren: t::LParen,
@@ -374,12 +375,7 @@ impl Printable for ParenExpr {
         let inner_info = inner_printer.print(&*self.expr, inner_shape_single_line);
 
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        let (expr_leading, _) = printer
-            .trivia
-            .get_for_range_split(self.expr.rightmost_token());
-        let (_, expr_trailing) = printer
-            .trivia
-            .get_for_range_split(self.expr.leftmost_token());
+        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(&*self.expr);
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
         let single_line_len: usize = open_trailing
             .iter()
@@ -424,6 +420,7 @@ impl Printable for ParenExpr {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::BINARY_EXPR`] node.
 #[derive(Debug)]
 pub struct BinaryExpr {
     pub op: BinaryOp,
@@ -621,6 +618,7 @@ impl Printable for BinaryExpr {
     }
 }
 
+/// Categories for grouping binary operators for nested chaining
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BinaryOpChainingGroup {
     AddSubtract,
@@ -646,6 +644,7 @@ impl BinaryOpChainingGroup {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::UNARY_EXPR`] node.
 #[derive(Debug)]
 pub struct UnaryExpr {
     pub op: UnaryOp,
@@ -795,6 +794,7 @@ impl Printable for IfExpr {
     }
 }
 
+/// Used in [`IfExpr`] to represent the else/else-if branch.
 #[derive(Debug)]
 pub enum ElseExpr {
     /// else if
@@ -1365,20 +1365,20 @@ impl PrintMultiLine for CallArgs {
 }
 
 impl CallArgs {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the call args on a single line.
     fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        single_line_printer.print_raw_token(&self.open_paren);
+        printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (arg, comma)) in self.args.iter().enumerate() {
-            if single_line_printer.output.len() > shape.width {
+            if printer.output.len() > shape.width {
                 return None;
             }
             let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
             printer.print_trivia_single_line_squished(arg_leading)?;
-            if single_line_printer
+            if printer
                 .print(arg, Shape::unlimited_single_line())
                 .multi_lined
             {
@@ -1390,12 +1390,12 @@ impl CallArgs {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
                     printer.print_trivia_single_line_squished(comma_leading)?;
-                    single_line_printer.print_raw_token(comma);
+                    printer.print_raw_token(comma);
                     printer.print_trivia_single_line_squished(comma_trailing)?;
                 } else {
-                    single_line_printer.print_str(",");
+                    printer.print_str(",");
                 }
-                single_line_printer.print_str(" ");
+                printer.print_str(" ");
             } else if let Some(comma) = comma {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
@@ -1407,12 +1407,11 @@ impl CallArgs {
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
         printer.print_trivia_single_line_squished(close_leading)?;
-        single_line_printer.print_raw_token(&self.close_paren);
+        printer.print_raw_token(&self.close_paren);
 
-        if single_line_printer.output.len() > shape.width {
+        if printer.output.len() > shape.width {
             None
         } else {
-            printer.append_from_printer(single_line_printer);
             Some(PrintInfo::default_single_line())
         }
     }
@@ -1420,7 +1419,8 @@ impl CallArgs {
 
 impl Printable for CallArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(shape.clone(), p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1431,6 +1431,7 @@ impl Printable for CallArgs {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::INDEX_EXPR`] node.
 #[derive(Debug)]
 pub struct IndexExpr {
     pub base: Box<Expression>,
@@ -1518,6 +1519,7 @@ impl Printable for IndexExpr {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::FIELD_ACCESS_EXPR`] node.
 #[derive(Debug)]
 pub struct FieldAccessExpr {
     pub base: Box<Expression>,
@@ -1710,6 +1712,7 @@ impl Printable for BlockExpr {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::ARRAY_LITERAL`] node.
 #[derive(Debug)]
 pub struct ArrayInitializer {
     pub open_bracket: t::LBracket,
@@ -1753,11 +1756,11 @@ impl FromCST for ArrayInitializer {
             }
         };
 
-        return Ok(ArrayInitializer {
+        Ok(ArrayInitializer {
             open_bracket,
             elements,
             close_bracket,
-        });
+        })
     }
 }
 
@@ -2286,10 +2289,12 @@ impl KnownKind for ObjectField {
 
 impl Printable for ObjectField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&self.name, shape.clone());
+        let mut multi_lined = false;
+        multi_lined |= printer.print(&self.name, shape.clone()).multi_lined;
         printer.print_raw_token(&self.colon);
         printer.print_str(" ");
-        printer.print(&self.value, shape)
+        multi_lined |= printer.print(&self.value, shape).multi_lined;
+        PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
         self.name.leftmost_token()
@@ -2299,6 +2304,7 @@ impl Printable for ObjectField {
     }
 }
 
+/// Represents the a valid key for an [`ObjectField`].
 #[derive(Debug)]
 pub enum ObjectFieldKey {
     Word(t::Word),

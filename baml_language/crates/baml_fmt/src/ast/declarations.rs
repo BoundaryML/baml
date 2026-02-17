@@ -7,6 +7,7 @@ use crate::ast::{
 };
 use crate::printer::*;
 
+/// Any of the valid top-level declarations in a [`super::SourceFile`].
 #[derive(Debug)]
 pub enum TopLevelDeclaration {
     Function(FunctionDecl),
@@ -98,6 +99,7 @@ impl Printable for TopLevelDeclaration {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::FUNCTION_DEF`] node.
 #[derive(Debug)]
 pub struct FunctionDecl {
     pub keyword: t::Function,
@@ -219,6 +221,7 @@ impl Printable for FunctionDecl {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::PARAMETER_LIST`] node.
 #[derive(Debug)]
 pub struct FunctionParamList {
     pub open_paren: t::LParen,
@@ -391,11 +394,13 @@ impl Printable for FunctionParamList {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::PARAMETER`] node.
 #[derive(Debug)]
 pub struct FunctionParam {
     pub name: t::Word,
     pub ty: Option<(Option<t::Colon>, Type)>,
 }
+
 impl FromCST for FunctionParam {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
@@ -443,9 +448,10 @@ impl Printable for FunctionParam {
                 printer.print_str(":");
             }
             printer.print_str(" ");
-            printer.print(ty, shape);
+            printer.print(ty, shape)
+        } else {
+            PrintInfo::default_single_line()
         }
-        PrintInfo::default_single_line()
     }
     fn leftmost_token(&self) -> TextRange {
         self.name.span()
@@ -458,6 +464,7 @@ impl Printable for FunctionParam {
     }
 }
 
+/// Any of the valid function bodies in a [`FunctionDecl`].
 #[derive(Debug)]
 pub enum FunctionDeclBody {
     Llm(LlmFunctionBody),
@@ -550,12 +557,12 @@ impl FromCST for LlmFunctionBody {
 
         it.expect_end()?;
 
-        return Ok(LlmFunctionBody {
+        Ok(LlmFunctionBody {
             open_brace,
             client,
             prompt,
             close_brace,
-        });
+        })
     }
 }
 
@@ -627,7 +634,7 @@ impl FromCST for ClientField {
             found => {
                 return Err(StrongAstError::UnexpectedKindDesc {
                     expected_desc: "STRING_LITERAL, WORD, or PATH_EXPR".into(),
-                    found: found,
+                    found,
                     at: name.text_range(),
                 });
             }
@@ -744,6 +751,7 @@ impl Printable for PromptField {
     }
 }
 
+/// Any of the valid values in a [`PromptField`].
 #[derive(Debug)]
 pub enum PromptValue {
     RawString(t::RawString),
@@ -771,6 +779,7 @@ impl Printable for PromptValue {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::CLASS_DEF`] node.
 #[derive(Debug)]
 pub struct ClassDecl {
     pub keyword: t::Class,
@@ -1010,6 +1019,7 @@ impl Printable for ClassField {
     }
 }
 
+/// Any of the valid items in a [`ClassDecl`].
 #[derive(Debug)]
 pub enum ClassItem {
     Field(ClassField),
@@ -1061,6 +1071,7 @@ impl Printable for ClassItem {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::ENUM_DEF`] node.
 #[derive(Debug)]
 pub struct EnumDecl {
     pub keyword: t::Enum,
@@ -1173,6 +1184,7 @@ impl Printable for EnumDecl {
     }
 }
 
+/// Any of the valid items in an [`EnumDecl`].
 #[derive(Debug)]
 pub enum EnumItem {
     Variant(EnumVariant, Option<t::Comma>),
@@ -1214,6 +1226,7 @@ impl Printable for EnumItem {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::ENUM_VARIANT`] node.
 #[derive(Debug)]
 pub struct EnumVariant {
     pub name: t::Word,
@@ -1310,12 +1323,13 @@ impl Printable for EnumVariant {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::CLIENT_DEF`] node.
 #[derive(Debug)]
 pub struct ClientDecl {
     pub keyword: t::Client,
-    pub rangle: t::Less,
+    pub langle: t::Less,
     pub generic: t::Word,
-    pub langle: t::Greater,
+    pub rangle: t::Greater,
     pub name: t::Word,
     pub config_block: ConfigBlock,
 }
@@ -1351,9 +1365,9 @@ impl FromCST for ClientDecl {
 
         Ok(ClientDecl {
             keyword,
-            rangle,
+            langle: rangle,
             generic,
-            langle,
+            rangle: langle,
             name,
             config_block,
         })
@@ -1369,9 +1383,9 @@ impl KnownKind for ClientDecl {
 impl Printable for ClientDecl {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
-        printer.print_raw_token(&self.rangle);
-        printer.print_raw_token(&self.generic);
         printer.print_raw_token(&self.langle);
+        printer.print_raw_token(&self.generic);
+        printer.print_raw_token(&self.rangle);
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
         printer.print_str(" ");
@@ -1488,10 +1502,7 @@ impl Printable for ConfigBlock {
         printer.print_newline();
 
         for (item, comma) in &self.items {
-            printer.print_trivia_all_leading_with_newline_for(
-                item.leftmost_token(),
-                inner_indent,
-            );
+            printer.print_trivia_all_leading_with_newline_for(item.leftmost_token(), inner_indent);
             printer.print_spaces(inner_indent);
             printer.print(item, inner_shape.clone());
             if let Some(comma) = comma {
@@ -1616,6 +1627,7 @@ impl Printable for ConfigItem {
     }
 }
 
+/// Any of the valid keys in a [`ConfigItem`].
 #[derive(Debug)]
 pub enum ConfigItemKey {
     Word(t::Word),
@@ -1682,7 +1694,7 @@ impl Printable for ConfigItemKey {
     }
 }
 
-/// Does not correspond to a specific [`SyntaxKind`].
+/// Any of the valid values in a [`ConfigItem`].
 #[derive(Debug)]
 pub enum ConfigItemValue {
     Value(Expression),
@@ -1984,6 +1996,7 @@ impl Printable for TypeBuilderBlock {
     }
 }
 
+/// Any of the valid items in a [`TypeBuilderBlock`].
 #[derive(Debug)]
 pub enum TypeBuilderItem {
     /// Corresponds to a [`SyntaxKind::DYNAMIC_TYPE_DEF`] node that containins a class definition.
@@ -2080,6 +2093,7 @@ impl Printable for TypeBuilderItem {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::TEST_DEF`] node.
 #[derive(Debug)]
 pub struct TestDecl {
     pub keyword: t::Test,
@@ -2136,6 +2150,7 @@ impl Printable for TestDecl {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::RETRY_POLICY_DEF`] node.
 #[derive(Debug)]
 pub struct RetryPolicyDecl {
     pub keyword: t::RetryPolicy,
@@ -2191,6 +2206,7 @@ impl Printable for RetryPolicyDecl {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::TEMPLATE_STRING_DEF`] node.
 #[derive(Debug)]
 pub struct TemplateStringDecl {
     pub keyword: t::TemplateString,
@@ -2258,6 +2274,7 @@ impl Printable for TemplateStringDecl {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::TYPE_ALIAS_DEF`] node.
 #[derive(Debug)]
 pub struct TypeAliasDecl {
     /// For some reason, type is not currently a keyword
