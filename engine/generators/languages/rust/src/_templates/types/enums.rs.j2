@@ -27,11 +27,11 @@ pub enum {{ enum_.name }} {
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
     #[serde(untagged)]
-    _Dynamic(String),
+    _Dynamic(::std::string::String),
 {% endif %}
 }
 
-impl Default for {{ enum_.name }} {
+impl ::std::default::Default for {{ enum_.name }} {
     fn default() -> Self {
         {% if enum_.values.is_empty() %}
         // Eventually, we will remove the default trait for enums with no values
@@ -43,8 +43,8 @@ impl Default for {{ enum_.name }} {
     }
 }
 
-impl std::fmt::Display for {{ enum_.name }} {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for {{ enum_.name }} {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
 {% for (value, _) in enum_.values %}
             Self::{{ value }} => write!(f, "{{ value }}"),
@@ -56,24 +56,24 @@ impl std::fmt::Display for {{ enum_.name }} {
     }
 }
 
-impl std::str::FromStr for {{ enum_.name }} {
+impl ::std::str::FromStr for {{ enum_.name }} {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
 {% for (value, _) in enum_.values %}
-            "{{ value }}" => Ok(Self::{{ value }}),
+            "{{ value }}" => ::std::result::Result::Ok(Self::{{ value | upper }}),
 {% endfor %}
 {% if enum_.dynamic %}
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
 {% else %}
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
 {% endif %}
         }
     }
 }
 
-impl AsRef<{{ enum_.name }}> for {{ enum_.name }} {
+impl ::std::convert::AsRef<{{ enum_.name }}> for {{ enum_.name }} {
     fn as_ref(&self) -> &{{ enum_.name }} {
         self
     }

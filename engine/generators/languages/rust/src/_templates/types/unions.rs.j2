@@ -38,19 +38,19 @@ pub enum {{ u.name }} {
 {%- endfor %}
 }
 
-impl AsRef<{{ u.name }}> for {{ u.name }} {
+impl ::std::convert::AsRef<{{ u.name }}> for {{ u.name }} {
     fn as_ref(&self) -> &{{ u.name }} {
         self
     }
 }
 
-impl Default for {{ u.name }} {
+impl ::std::default::Default for {{ u.name }} {
     fn default() -> Self {
         {% if u.variants.is_empty() %}
           panic!("{{ u.name }} has no variants")
         {% else %}
            {% let first_variant = u.variants[0] %}
-            Self::{{ first_variant.name }}{% if first_variant.literal_repr.is_none() %}(Default::default()){% endif %}
+            Self::{{ first_variant.name }}{% if first_variant.literal_repr.is_none() %}(::std::default::Default::default()){% endif %}
         {% endif %}
     }
 }
