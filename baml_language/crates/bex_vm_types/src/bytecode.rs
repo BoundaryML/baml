@@ -340,7 +340,7 @@ pub enum Instruction {
     /// Initialize local variable slots by pushing `n` null values onto the stack.
     ///
     /// Format: `INIT_LOCALS n` where `n` is the number of local variable slots
-    /// to allocate. Each slot is initialized to [`Value::Null`].
+    /// to allocate. Each slot is initialized to null.
     ///
     /// This is emitted once at the start of a function's bytecode to reserve
     /// stack space for all "Real" local variables (i.e., those that aren't
