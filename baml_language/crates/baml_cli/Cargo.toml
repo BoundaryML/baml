@@ -17,12 +17,16 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_db = { workspace = true }
 baml_fmt = { workspace = true }
 baml_lsp_server = { workspace = true }
+baml_project = { workspace = true }
+baml_workspace = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true, features = [ "color", "env" ] }
 clap-cargo = { workspace = true }
 ctrlc = { workspace = true }
+regex = { workspace = true }
 
 [features]
 default = [ "native-tls" ]
@@ -49,4 +53,3 @@ path = "src/main.rs"
 
 [package.metadata.ci]
 wasm_support = false
-

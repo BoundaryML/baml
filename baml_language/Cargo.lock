@@ -356,11 +356,15 @@ name = "baml_cli"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_db",
  "baml_fmt",
  "baml_lsp_server",
+ "baml_project",
+ "baml_workspace",
  "clap",
  "clap-cargo",
  "ctrlc",
+ "regex",
 ]
 
 [[package]]
