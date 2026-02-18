@@ -6,7 +6,7 @@ mod statements;
 mod tokens;
 mod types;
 
-use std::borrow::Cow;
+use std::{borrow::Cow, path::Path};
 
 use crate::printer::*;
 pub use attributes::*;
@@ -128,6 +128,106 @@ impl StrongAstError {
                 at: node.text_range(),
             }),
             SyntaxElement::Token(token) => Ok(token),
+        }
+    }
+
+    /// A more human-readable error message.
+    /// Includes file name and line/column numbers instead of just byte offsets.
+    pub fn print_with_file_context(&self, file_path: impl AsRef<Path>, source: &str) -> String {
+        fn get_line_and_column(source: &str, byte_offset: usize) -> Option<(usize, usize)> {
+            let (before, _) = source.split_at_checked(byte_offset)?;
+            let line = before.lines().count();
+            let column = before.lines().last()?.len();
+            Some((line, column))
+        }
+        match self {
+            StrongAstError::UnexpectedKind {
+                expected,
+                found,
+                at,
+            } => {
+                let Some((line, column)) = get_line_and_column(source, at.start().into()) else {
+                    return self.to_string(); // Fallback to default error message
+                };
+                format!(
+                    "Expected token/node of kind {expected:?}, but found {found:?} at {}:{}:{}",
+                    file_path.as_ref().display(),
+                    line,
+                    column
+                )
+            }
+            StrongAstError::UnexpectedKindDesc {
+                expected_desc,
+                found,
+                at,
+            } => {
+                let Some((line, column)) = get_line_and_column(source, at.start().into()) else {
+                    return self.to_string(); // Fallback to default error message
+                };
+                format!(
+                    "Expected token/node {expected_desc}, but found {found:?} at {}:{}:{}",
+                    file_path.as_ref().display(),
+                    line,
+                    column
+                )
+            }
+            StrongAstError::MissingExpectedElement { expected, parent } => {
+                let Some((line, column)) = get_line_and_column(source, parent.start().into())
+                else {
+                    return self.to_string(); // Fallback to default error message
+                };
+                format!(
+                    "Expected token/node {expected:?}, but was unable to find it in {}:{}:{}",
+                    file_path.as_ref().display(),
+                    line,
+                    column
+                )
+            }
+            StrongAstError::MissingExpectedElementDesc { desc, parent } => {
+                let Some((line, column)) = get_line_and_column(source, parent.start().into())
+                else {
+                    return self.to_string(); // Fallback to default error message
+                };
+                format!(
+                    "Expected token/node {desc}, but was unable to find it in {}:{}:{}",
+                    file_path.as_ref().display(),
+                    line,
+                    column
+                )
+            }
+            StrongAstError::UnexpectedAdditionalElement { at, .. } => {
+                let Some((line, column)) = get_line_and_column(source, at.start().into()) else {
+                    return self.to_string(); // Fallback to default error message
+                };
+                format!(
+                    "Unexpected additional element at {}:{}:{}",
+                    file_path.as_ref().display(),
+                    line,
+                    column,
+                )
+            }
+            StrongAstError::ShouldBeNode { at } => {
+                let Some((line, column)) = get_line_and_column(source, at.start().into()) else {
+                    return self.to_string(); // Fallback to default error message
+                };
+                format!(
+                    "An element at {}:{}:{} was a node when it should have been a token.",
+                    file_path.as_ref().display(),
+                    line,
+                    column,
+                )
+            }
+            StrongAstError::ShouldBeToken { at } => {
+                let Some((line, column)) = get_line_and_column(source, at.start().into()) else {
+                    return self.to_string(); // Fallback to default error message
+                };
+                format!(
+                    "An element at {}:{}:{} was a token when it should have been a node.",
+                    file_path.as_ref().display(),
+                    line,
+                    column,
+                )
+            }
         }
     }
 }

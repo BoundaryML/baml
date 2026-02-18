@@ -356,6 +356,7 @@ name = "baml_cli"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "baml_fmt",
  "baml_lsp_server",
  "clap",
  "clap-cargo",
