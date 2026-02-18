@@ -1,5 +1,6 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 === HIR ITEMS ===
 function Foo() -> <unknown> {
@@ -39,8 +40,8 @@ class Partial {
   field1: str
   field2: <unknown>
   field3: string
+  field4: string
   string: <unknown>
-  alias: field5
 }
 
 enum ValidEnum {

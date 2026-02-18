@@ -127,6 +127,25 @@ impl KnownKind for Attribute {
     }
 }
 
+impl Attribute {
+    /// The length of the `@`, name, and `(` (if present).
+    pub fn non_wrappable_len(&self) -> usize {
+        (const { "@".len() })
+            + self.name.first.len()
+            + self
+                .name
+                .rest
+                .iter()
+                .map(|(_, part)| const { ".".len() } + part.len())
+                .sum::<usize>()
+            + if self.args.is_some() {
+                const { "(".len() }
+            } else {
+                0
+            }
+    }
+}
+
 impl Printable for Attribute {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.at);
@@ -169,6 +188,16 @@ impl FromCST for AttributeNamePart {
                 found: token.kind(),
                 at: token.text_range(),
             }),
+        }
+    }
+}
+
+impl AttributeNamePart {
+    #[allow(clippy::len_without_is_empty, reason = "should never be empty")]
+    pub fn len(&self) -> usize {
+        match self {
+            AttributeNamePart::Word(word) => word.span().len().into(),
+            AttributeNamePart::Keyword(range) => range.len().into(),
         }
     }
 }

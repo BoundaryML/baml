@@ -7,7 +7,7 @@ use rowan::{TextRange, TextSize};
 
 use super::{FromCST, KnownKind, StrongAstError, tokens as t};
 use crate::{
-    ast::{Literal, SyntaxNodeIter, Token},
+    ast::{Attribute, Literal, SyntaxNodeIter, Token},
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
 };
 
@@ -25,7 +25,7 @@ pub enum Type {
     Generic(GenericType),
     Function(FunctionType),
     /// Types constrained by attributes.
-    Constrained(TextRange), // TODO
+    Constrained(ConstrainedType<Type>), // TODO
     Unknown(TextRange),
 }
 
@@ -67,20 +67,36 @@ impl FromCST for Type {
 
         let mut rest = Vec::new();
         while let Some(pipe) = it.next_if_kind(SyntaxKind::PIPE) {
-            let pipe = StrongAstError::assert_is_token(pipe)?;
+            let pipe = t::Pipe::from_cst(pipe)?;
             let next = UnionTypeMember::take(&mut it)?;
-            rest.push((t::Pipe::new_from_span(pipe.text_range()), next));
+            rest.push((pipe, next));
         }
 
         it.expect_end()?;
 
-        if rest.is_empty() {
-            Ok(first.into())
-        } else {
-            Ok(Type::Union(UnionType {
-                first: Box::new(first),
-                rest,
-            }))
+        match rest.pop() {
+            None => Ok(first.into()),
+            Some((pipe, UnionTypeMember::Constrained(constrained))) => {
+                // is a union and last member is constrained
+                // so we need to lift the last member's attributes to the union
+                let ConstrainedType { ty, attrs } = constrained;
+                rest.push((pipe, *ty));
+                Ok(Type::Constrained(ConstrainedType {
+                    ty: Box::new(Type::Union(UnionType {
+                        first: Box::new(first),
+                        rest,
+                    })),
+                    attrs,
+                }))
+            }
+            Some(other) => {
+                rest.push(other); // put it back
+                // last is not constrained, keep it a normal union
+                Ok(Type::Union(UnionType {
+                    first: Box::new(first),
+                    rest,
+                }))
+            }
         }
     }
 }
@@ -102,7 +118,8 @@ impl Printable for Type {
             Type::Array(array) => array.print(shape, printer),
             Type::Generic(generic) => generic.print(shape, printer),
             Type::Function(function) => function.print(shape, printer),
-            Type::Constrained(range) | Type::Unknown(range) => {
+            Type::Constrained(constrained) => constrained.print(shape, printer),
+            Type::Unknown(range) => {
                 printer.print_input_range(*range);
                 PrintInfo {
                     multi_lined: printer.input[*range].contains('\n'),
@@ -120,7 +137,8 @@ impl Printable for Type {
             Type::Array(array) => array.leftmost_token(),
             Type::Generic(generic) => generic.leftmost_token(),
             Type::Function(function) => function.leftmost_token(),
-            Type::Constrained(range) | Type::Unknown(range) => *range,
+            Type::Constrained(constrained) => constrained.leftmost_token(),
+            Type::Unknown(range) => *range,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -133,7 +151,8 @@ impl Printable for Type {
             Type::Array(array) => array.rightmost_token(),
             Type::Generic(generic) => generic.rightmost_token(),
             Type::Function(function) => function.rightmost_token(),
-            Type::Constrained(range) | Type::Unknown(range) => *range,
+            Type::Constrained(constrained) => constrained.rightmost_token(),
+            Type::Unknown(range) => *range,
         }
     }
 }
@@ -285,13 +304,19 @@ impl PrintMultiLine for UnionType {
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut info = printer.print(&*self.first, shape.clone());
         printer.print_trivia_all_trailing_for(self.first.rightmost_token());
+        let inner_indent = shape.indent + printer.config.indent_width;
+        let inner_shape = Shape {
+            width: printer.config.line_width.saturating_sub(inner_indent),
+            indent: inner_indent,
+            first_line_offset: 0,
+        };
         for (pipe, ty) in &self.rest {
             info.multi_lined = true;
             printer.print_newline();
             printer.print_spaces(shape.indent + printer.config.indent_width);
             printer.print_raw_token(pipe);
             printer.print_str(" ");
-            printer.print(ty, shape.clone());
+            printer.print(ty, inner_shape.clone());
             printer.print_trivia_all_trailing_for(ty.rightmost_token());
         }
         info
@@ -369,7 +394,7 @@ pub enum UnionTypeMember {
     Generic(GenericType),
     Function(FunctionType),
     /// Types constrained by attributes.
-    Constrained(TextRange), // TODO
+    Constrained(ConstrainedType<UnionTypeMember>),
     Unknown(TextRange),
 }
 
@@ -475,7 +500,7 @@ impl UnionTypeMember {
     pub fn take(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let mut ty = Self::take_base_type(it)?;
 
-        // Handle non-union postfix operators: `[][][][]...`, `?`, `<...>`
+        // Handle non-union postfix operators: `[][][][]...`, `?`, `<...>`, `@attr`
         loop {
             if it
                 .peek()
@@ -509,6 +534,18 @@ impl UnionTypeMember {
                     args: type_args,
                 });
                 continue;
+            } else if let Some(attr) = it.next_if_kind(SyntaxKind::ATTRIBUTE) {
+                // Attributes
+                let mut attrs = Vec::new();
+                attrs.push(Attribute::from_cst(attr)?);
+                while let Some(attr) = it.next_if_kind(SyntaxKind::ATTRIBUTE) {
+                    attrs.push(Attribute::from_cst(attr)?);
+                }
+                ty = UnionTypeMember::Constrained(ConstrainedType {
+                    ty: Box::new(ty),
+                    attrs,
+                });
+                break; // we can't have other postfix operators after attributes
             }
             // Done with postfix operators
             break;
@@ -528,7 +565,7 @@ impl From<UnionTypeMember> for Type {
             UnionTypeMember::Array(array) => Type::Array(array),
             UnionTypeMember::Generic(generic) => Type::Generic(generic),
             UnionTypeMember::Function(function) => Type::Function(function),
-            UnionTypeMember::Constrained(range) => Type::Constrained(range),
+            UnionTypeMember::Constrained(constrained) => Type::Constrained(constrained.into()),
             UnionTypeMember::Unknown(range) => Type::Unknown(range),
         }
     }
@@ -544,7 +581,8 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Array(array) => array.print(shape, printer),
             UnionTypeMember::Generic(generic) => generic.print(shape, printer),
             UnionTypeMember::Function(function) => function.print(shape, printer),
-            UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => {
+            UnionTypeMember::Constrained(constrained) => constrained.print(shape, printer),
+            UnionTypeMember::Unknown(range) => {
                 printer.print_input_range(*range);
                 PrintInfo { multi_lined: false }
             }
@@ -559,7 +597,8 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Array(array) => array.leftmost_token(),
             UnionTypeMember::Generic(generic) => generic.leftmost_token(),
             UnionTypeMember::Function(function) => function.leftmost_token(),
-            UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => *range,
+            UnionTypeMember::Constrained(constrained) => constrained.leftmost_token(),
+            UnionTypeMember::Unknown(range) => *range,
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -571,7 +610,8 @@ impl Printable for UnionTypeMember {
             UnionTypeMember::Array(array) => array.rightmost_token(),
             UnionTypeMember::Generic(generic) => generic.rightmost_token(),
             UnionTypeMember::Function(function) => function.rightmost_token(),
-            UnionTypeMember::Constrained(range) | UnionTypeMember::Unknown(range) => *range,
+            UnionTypeMember::Constrained(constrained) => constrained.rightmost_token(),
+            UnionTypeMember::Unknown(range) => *range,
         }
     }
 }
@@ -1024,5 +1064,108 @@ impl Printable for FunctionTypeParam {
     }
     fn rightmost_token(&self) -> TextRange {
         self.ty.rightmost_token()
+    }
+}
+
+/// The type argument is what type enumeration is being constrained.
+/// Generally either use [`Type`] or [`UnionTypeMember`].
+#[derive(Debug)]
+pub struct ConstrainedType<T: Printable> {
+    pub ty: Box<T>,
+    /// Should not be empty: if it is, just use the inner type
+    pub attrs: Vec<Attribute>,
+}
+
+impl<T: Printable> PrintMultiLine for ConstrainedType<T> {
+    /// Multi-line layout: each attribute is indented one layer and is on a new line.
+    ///
+    /// ```baml
+    /// map<string, int>
+    ///     @assert(...)
+    /// ```
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let ty_info = printer.print(&*self.ty, shape.clone());
+        let ty_trailing = printer.print_trivia_all_trailing_for(self.ty.rightmost_token());
+        if !ty_info.multi_lined
+            && ty_trailing == 0
+            && let [attr] = self.attrs.as_slice()
+            && let remaining_width = printer.current_line_remaining_width().saturating_sub(1)
+            && attr.non_wrappable_len() <= remaining_width
+        {
+            // only one attribute and type was single line.
+            // we can start the attribute on the same line as the type
+            // ```baml
+            // MyReallyReallyLongTypeButOnOneLine
+            // ```
+            printer.print_spaces(1);
+            let attr_shape = Shape {
+                width: remaining_width,
+                indent: shape.indent,
+                first_line_offset: printer
+                    .config
+                    .line_width
+                    .saturating_sub(shape.indent + remaining_width),
+            };
+            return printer.print(attr, attr_shape);
+        }
+
+        let attr_indent = shape.indent + printer.config.indent_width;
+        let attr_shape = Shape {
+            width: printer.config.line_width.saturating_sub(attr_indent),
+            indent: attr_indent,
+            first_line_offset: 0,
+        };
+        for attr in &self.attrs {
+            printer.print_newline();
+            printer.print_spaces(attr_indent);
+            printer.print(attr, attr_shape.clone());
+        }
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl<T: Printable> ConstrainedType<T> {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the type alias on a single line.
+    pub fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        if printer.print(&*self.ty, shape.clone()).multi_lined {
+            return None;
+        }
+
+        for attr in &self.attrs {
+            printer.print_spaces(1);
+            if printer.print(attr, shape.clone()).multi_lined {
+                return None;
+            }
+        }
+
+        if printer.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
+impl<T: Printable> Printable for ConstrainedType<T> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.ty.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.ty.rightmost_token()
+    }
+}
+
+impl From<ConstrainedType<UnionTypeMember>> for ConstrainedType<Type> {
+    fn from(member: ConstrainedType<UnionTypeMember>) -> Self {
+        ConstrainedType {
+            ty: Box::new((*member.ty).into()),
+            attrs: member.attrs,
+        }
     }
 }

@@ -1,5 +1,6 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 === DIAGNOSTICS ===
   [parse] Error: Expected class name, found integer
@@ -142,42 +143,32 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: field 'string' is missing a type annotation
-   ╭─[ partial_input.baml:6:10 ]
+  [parse] Error: Attribute is missing a name
+   ╭─[ partial_input.baml:5:17 ]
    │
- 6 │   field4 string @alias(  // Unclosed attribute
-   │          ───┬──  
-   │             ╰──── field 'string' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [parse] Error: Expected Unexpected token in class body, found '@'
-   ╭─[ partial_input.baml:6:17 ]
-   │
- 6 │   field4 string @alias(  // Unclosed attribute
+ 5 │   field3 string @  // Incomplete attribute
    │                 ┬  
-   │                 ╰── Expected Unexpected token in class body, found '@'
+   │                 ╰── Attribute is missing a name
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Unexpected 'string' in type expression
+  [parse] Error: Expected ')', found identifier
    ╭─[ partial_input.baml:7:10 ]
    │
- 7 │   field5 string  // This should parse correctly
+ 7 │   field5 string  // This should break as `field5` is treated as part of the attribute
    │          ───┬──  
-   │             ╰──── Unexpected 'string' in type expression
+   │             ╰──── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected ')', found '}'
-   ╭─[ partial_input.baml:8:1 ]
+  [parse] Error: field 'string' is missing a type annotation
+   ╭─[ partial_input.baml:7:10 ]
    │
- 8 │ }
-   │ ┬  
-   │ ╰── Expected ')', found '}'
+ 7 │   field5 string  // This should break as `field5` is treated as part of the attribute
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -283,6 +274,19 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0026
 ────╯
 
+  [hir] Error: Expected @alias("..."), but got an expression `  // Unclosed attribute
+  field5`
+   ╭─[ partial_input.baml:6:23 ]
+   │
+ 6 │ ╭─▶   field4 string @alias(  // Unclosed attribute
+ 7 │ ├─▶   field5 string  // This should break as `field5` is treated as part of the attribute
+   │ │                                                                                           
+   │ ╰─────────────────────────────────────────────────────────────────────────────────────────── Expected @alias("..."), but got an expression `  // Unclosed attribute
+  field5`
+   │     
+   │     Note: Error code: E0037
+───╯
+
   [type] Error: Unknown type `str`
    ╭─[ partial_input.baml:3:9 ]
    │
@@ -291,17 +295,6 @@ source: crates/baml_tests/src/generated_tests.rs
    │           ╰─── Unknown type `str`
    │ 
    │ Note: Error code: E0002
-───╯
-
-  [type] Error: Unknown type `field5`
-   ╭─[ partial_input.baml:6:23 ]
-   │
- 6 │ ╭─▶   field4 string @alias(  // Unclosed attribute
- 7 │ ├─▶   field5 string  // This should parse correctly
-   │ │                                                     
-   │ ╰───────────────────────────────────────────────────── Unknown type `field5`
-   │     
-   │     Note: Error code: E0002
 ───╯
 
   [type] Error: Unknown type `closed`

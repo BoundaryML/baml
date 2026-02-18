@@ -1345,7 +1345,16 @@ impl<'a> Parser<'a> {
     /// Parse a field attribute: @alias("name") or @stream.done
     pub(crate) fn parse_field_attribute(&mut self) {
         self.with_node(SyntaxKind::ATTRIBUTE, |p| {
+            let at_span = p.current().map(|t| t.span);
             p.expect(TokenKind::At);
+
+            if p.has_newline_ahead() {
+                // if the attribute name is not on the same line as the @, that's an error
+                if let Some(at_span) = at_span {
+                    p.error("Attribute is missing a name".to_string(), at_span);
+                }
+                return;
+            }
 
             // Attribute name (can be dotted like stream.done)
             // Allow keywords like 'assert' as attribute names (for @assert)
@@ -1430,7 +1439,7 @@ impl<'a> Parser<'a> {
         // - String: @alias("user_name")
         // - Raw string: @description(#"Multi-line\ndescription"#)
         // - Expression: @assert({{ this > 0 }})
-        // - Unquoted string: @description(User is happy) - consumes until ) or ,
+        // - Unquoted string: @alias(my_alias) - one WORD token
 
         if self.parse_any_string() {
             // String argument parsed
@@ -1443,11 +1452,9 @@ impl<'a> Parser<'a> {
             // Expression block: {{ }}
             self.parse_expression_block();
         } else if self.at(TokenKind::Word) {
-            // Unquoted string: consume all tokens until ) or ,
+            // Unquoted string: only permit one word
             self.with_node(SyntaxKind::UNQUOTED_STRING, |p| {
-                while !p.at(TokenKind::RParen) && !p.at(TokenKind::Comma) && !p.at_end() {
-                    p.bump();
-                }
+                p.bump();
             });
         } else {
             self.error_unexpected_token("attribute argument".to_string());
@@ -1504,6 +1511,21 @@ impl<'a> Parser<'a> {
                     // Union type: string | int | "user" | "assistant"
                     p.bump();
                     p.parse_type_primary();
+                } else if p.at(TokenKind::At) {
+                    // An attribute
+                    let Some(attr_name_first) = p.peek(1) else {
+                        break; // attribute goes on a parent node or something
+                    };
+                    if attr_name_first.kind == TokenKind::Word
+                        && matches!(
+                            attr_name_first.text.as_str(),
+                            "alias" | "description" | "skip"
+                        )
+                    {
+                        // attribute applies to a field, not the type
+                        break;
+                    }
+                    p.parse_field_attribute();
                 } else {
                     break;
                 }

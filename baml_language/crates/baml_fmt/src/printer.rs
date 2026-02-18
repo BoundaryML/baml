@@ -152,12 +152,14 @@ impl<'a> Printer<'a> {
     /// ```baml
     /// let x; /* first trivia */ /* second trivia */ // third trivia
     /// ```
-    pub fn print_trivia_all_trailing_for(&mut self, range: TextRange) {
+    #[allow(unused_must_use)]
+    pub fn print_trivia_all_trailing_for(&mut self, range: TextRange) -> usize {
         let (_, trailing) = self.trivia.get_for_range_split(range);
         for trivia in trailing {
             self.print_spaces(1);
             self.print_trivia(trivia);
         }
+        trailing.len()
     }
 
     /// For standalone items which are fully on their own line (and may be multiline), print them with all their trivia.

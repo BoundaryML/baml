@@ -1,5 +1,6 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -16,24 +17,24 @@ SOURCE_FILE
       WORD "field2"
     FIELD
       WORD "field3"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@"
+          AT "@"
+    FIELD
+      WORD "field4"
       TYPE_EXPR "string"
         WORD "string"
-      ATTRIBUTE "@  // Incomplete attribute
-  field4"
+      ATTRIBUTE
         AT "@"
-        WORD "field4"
-    FIELD "string"
-      WORD "string"
-    AT "@"
-    FIELD
-      WORD "alias"
-      TYPE_EXPR
-        L_PAREN "("
-        FUNCTION_TYPE_PARAM
-          TYPE_EXPR "// Unclosed attribute
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "// Unclosed attribute
   field5"
             WORD "field5"
-        WORD "string"
+    FIELD "string"
+      WORD "string"
     R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -91,42 +92,32 @@ Error: field 'field2' is missing a type annotation
    │ Note: Error code: E0010
 ───╯
 
-Error: field 'string' is missing a type annotation
-   ╭─[ partial_input.baml:6:10 ]
+Error: Attribute is missing a name
+   ╭─[ partial_input.baml:5:17 ]
    │
- 6 │   field4 string @alias(  // Unclosed attribute
-   │          ───┬──  
-   │             ╰──── field 'string' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found '@'
-   ╭─[ partial_input.baml:6:17 ]
-   │
- 6 │   field4 string @alias(  // Unclosed attribute
+ 5 │   field3 string @  // Incomplete attribute
    │                 ┬  
-   │                 ╰── Expected Unexpected token in class body, found '@'
+   │                 ╰── Attribute is missing a name
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Unexpected 'string' in type expression
+Error: Expected ')', found identifier
    ╭─[ partial_input.baml:7:10 ]
    │
- 7 │   field5 string  // This should parse correctly
+ 7 │   field5 string  // This should break as `field5` is treated as part of the attribute
    │          ───┬──  
-   │             ╰──── Unexpected 'string' in type expression
+   │             ╰──── Expected ')', found identifier
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected ')', found '}'
-   ╭─[ partial_input.baml:8:1 ]
+Error: field 'string' is missing a type annotation
+   ╭─[ partial_input.baml:7:10 ]
    │
- 8 │ }
-   │ ┬  
-   │ ╰── Expected ')', found '}'
+ 7 │   field5 string  // This should break as `field5` is treated as part of the attribute
+   │          ───┬──  
+   │             ╰──── field 'string' is missing a type annotation
    │ 
    │ Note: Error code: E0010
 ───╯
