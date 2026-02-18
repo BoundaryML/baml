@@ -1327,9 +1327,7 @@ impl Printable for EnumVariant {
 #[derive(Debug)]
 pub struct ClientDecl {
     pub keyword: t::Client,
-    pub langle: t::Less,
-    pub generic: t::Word,
-    pub rangle: t::Greater,
+    pub client_type: Option<ClientType>,
     pub name: t::Word,
     pub config_block: ConfigBlock,
 }
@@ -1345,15 +1343,10 @@ impl FromCST for ClientDecl {
         let keyword = it.expect_parse()?;
 
         // client type: <llm>
-        let client_type_node = it.expect_node_of_kind(SyntaxKind::CLIENT_TYPE)?;
-
-        // Parse client type to get <, generic, >
-        let mut ct_visitor = SyntaxNodeIter::new(client_type_node.clone());
-
-        let rangle = ct_visitor.expect_parse()?;
-        let generic = ct_visitor.expect_parse()?;
-        let langle = ct_visitor.expect_parse()?;
-        ct_visitor.expect_end()?;
+        let client_type = it
+            .next_if_kind(SyntaxKind::CLIENT_TYPE)
+            .map(ClientType::from_cst)
+            .transpose()?;
 
         // name
         let name = it.expect_parse()?;
@@ -1365,9 +1358,7 @@ impl FromCST for ClientDecl {
 
         Ok(ClientDecl {
             keyword,
-            langle: rangle,
-            generic,
-            rangle: langle,
+            client_type,
             name,
             config_block,
         })
@@ -1383,9 +1374,9 @@ impl KnownKind for ClientDecl {
 impl Printable for ClientDecl {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.keyword);
-        printer.print_raw_token(&self.langle);
-        printer.print_raw_token(&self.generic);
-        printer.print_raw_token(&self.rangle);
+        if let Some(client_type) = &self.client_type {
+            printer.print(client_type, Shape::unlimited_single_line());
+        }
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
         printer.print_str(" ");
@@ -1397,6 +1388,56 @@ impl Printable for ClientDecl {
     }
     fn rightmost_token(&self) -> TextRange {
         self.config_block.rightmost_token()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::CLIENT_TYPE`] node.
+#[derive(Debug)]
+pub struct ClientType {
+    pub langle: t::Less,
+    pub generic: t::Word,
+    pub rangle: t::Greater,
+}
+
+impl FromCST for ClientType {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_TYPE)?;
+
+        let mut it = SyntaxNodeIter::new(node);
+
+        let langle = it.expect_parse()?;
+        let generic = it.expect_parse()?;
+        let rangle = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(ClientType {
+            langle,
+            generic,
+            rangle,
+        })
+    }
+}
+
+impl KnownKind for ClientType {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::CLIENT_TYPE
+    }
+}
+
+impl Printable for ClientType {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.langle);
+        printer.print_raw_token(&self.generic);
+        printer.print_raw_token(&self.rangle);
+        PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.langle.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.rangle.span()
     }
 }
 
@@ -1419,7 +1460,8 @@ impl FromCST for ConfigBlock {
 
         let mut items = Vec::new();
         let close_brace = loop {
-            let elem = it.expect_next("CONFIG_ITEM, TYPE_BUILDER_BLOCK, or R_BRACE")?;
+            let elem =
+                it.expect_next("CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE")?;
 
             let item = match elem.kind() {
                 SyntaxKind::R_BRACE => break t::RBrace::from_cst(elem)?,
@@ -1427,9 +1469,14 @@ impl FromCST for ConfigBlock {
                 SyntaxKind::TYPE_BUILDER_BLOCK => {
                     ConfigBlockMember::TypeBuilder(TypeBuilderBlock::from_cst(elem)?)
                 }
+                SyntaxKind::BLOCK_ATTRIBUTE => {
+                    ConfigBlockMember::BlockAttribute(BlockAttribute::from_cst(elem)?)
+                    // idk if commas are allowed after block attributes, but I'll allow it here for now
+                }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
-                        expected_desc: "CONFIG_ITEM, TYPE_BUILDER_BLOCK, or R_BRACE".into(),
+                        expected_desc:
+                            "CONFIG_ITEM, TYPE_BUILDER_BLOCK, BLOCK_ATTRIBUTE, or R_BRACE".into(),
                         found: elem.kind(),
                         at: elem.text_range(),
                     });
@@ -1533,6 +1580,7 @@ impl Printable for ConfigBlock {
 pub enum ConfigBlockMember {
     Item(ConfigItem),
     TypeBuilder(TypeBuilderBlock),
+    BlockAttribute(BlockAttribute),
 }
 
 impl Printable for ConfigBlockMember {
@@ -1540,18 +1588,21 @@ impl Printable for ConfigBlockMember {
         match self {
             ConfigBlockMember::Item(item) => item.print(shape, printer),
             ConfigBlockMember::TypeBuilder(block) => block.print(shape, printer),
+            ConfigBlockMember::BlockAttribute(attr) => attr.print(shape, printer),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ConfigBlockMember::Item(item) => item.leftmost_token(),
             ConfigBlockMember::TypeBuilder(block) => block.leftmost_token(),
+            ConfigBlockMember::BlockAttribute(attr) => attr.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ConfigBlockMember::Item(item) => item.rightmost_token(),
             ConfigBlockMember::TypeBuilder(block) => block.rightmost_token(),
+            ConfigBlockMember::BlockAttribute(attr) => attr.rightmost_token(),
         }
     }
 }
@@ -1628,11 +1679,17 @@ impl Printable for ConfigItem {
 }
 
 /// Any of the valid keys in a [`ConfigItem`].
+///
+/// See `Parser::parse_config_item` in [`baml_compiler_parser`]
 #[derive(Debug)]
 pub enum ConfigItemKey {
     Word(t::Word),
     String(t::QuotedString),
+    // parser allows raw strings as keys, but that's not a good idea
+    // RawString(t::RawString),
     RetryPolicy(t::RetryPolicy),
+    Enum(t::Enum),
+    Class(t::Class),
 }
 
 impl ConfigItemKey {
@@ -1641,6 +1698,8 @@ impl ConfigItemKey {
             ConfigItemKey::Word(word) => word.span(),
             ConfigItemKey::String(string) => string.span(),
             ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
+            ConfigItemKey::Enum(enum_) => enum_.span(),
+            ConfigItemKey::Class(class) => class.span(),
         }
     }
 }
@@ -1655,8 +1714,10 @@ impl FromCST for ConfigItemKey {
             SyntaxKind::KW_RETRY_POLICY => {
                 t::RetryPolicy::from_cst(elem).map(ConfigItemKey::RetryPolicy)
             }
+            SyntaxKind::KW_ENUM => t::Enum::from_cst(elem).map(ConfigItemKey::Enum),
+            SyntaxKind::KW_CLASS => t::Class::from_cst(elem).map(ConfigItemKey::Class),
             _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "WORD or KW_RETRY_POLICY".into(),
+                expected_desc: "WORD, STRING_LITERAL, KW_RETRY_POLICY, KW_ENUM, or KW_CLASS".into(),
                 found: elem.kind(),
                 at: elem.text_range(),
             }),
@@ -1676,6 +1737,14 @@ impl Printable for ConfigItemKey {
                 printer.print_raw_token(retry_policy);
                 PrintInfo::default_single_line()
             }
+            ConfigItemKey::Enum(enum_) => {
+                printer.print_raw_token(enum_);
+                PrintInfo::default_single_line()
+            }
+            ConfigItemKey::Class(class) => {
+                printer.print_raw_token(class);
+                PrintInfo::default_single_line()
+            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1683,6 +1752,8 @@ impl Printable for ConfigItemKey {
             ConfigItemKey::Word(word) => word.span(),
             ConfigItemKey::String(string) => string.leftmost_token(),
             ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
+            ConfigItemKey::Enum(enum_) => enum_.span(),
+            ConfigItemKey::Class(class) => class.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
@@ -1690,6 +1761,8 @@ impl Printable for ConfigItemKey {
             ConfigItemKey::Word(word) => word.span(),
             ConfigItemKey::String(string) => string.rightmost_token(),
             ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
+            ConfigItemKey::Enum(enum_) => enum_.span(),
+            ConfigItemKey::Class(class) => class.span(),
         }
     }
 }
