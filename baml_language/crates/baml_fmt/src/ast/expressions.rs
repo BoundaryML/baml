@@ -1,6 +1,6 @@
-//! Reference: [baml_compiler_syntax::ast::Expr] and [baml_compiler_hir::body]
+//! Reference: [`baml_db::baml_compiler_syntax::ast::Expr`] and [`baml_db::baml_compiler_hir::body`]
 
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
 use crate::{
@@ -34,13 +34,12 @@ pub enum Expression {
 }
 
 impl Expression {
+    #[must_use]
     pub const fn statement_needs_semicolon(&self) -> bool {
-        match self {
-            Expression::If(_) => false,
-            Expression::Match(_) => false,
-            Expression::Unknown(_) => false,
-            _ => true,
-        }
+        !matches!(
+            self,
+            Expression::If(_) | Expression::Match(_) | Expression::Unknown(_)
+        )
     }
 }
 
@@ -230,7 +229,7 @@ impl FromCST for PathExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::PATH_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // First WORD
         let first = it.expect_parse()?;
@@ -289,8 +288,8 @@ impl Printable for PathExpr {
     fn rightmost_token(&self) -> TextRange {
         self.rest
             .last()
-            .map(|(_, word)| word.span())
-            .unwrap_or(self.first.span())
+            .map_or(&self.first, |(_, word)| word)
+            .span()
     }
 }
 
@@ -307,7 +306,7 @@ impl FromCST for ParenExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::PAREN_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_paren = it.expect_parse()?;
 
@@ -382,8 +381,9 @@ impl Printable for ParenExpr {
             .chain(close_leading)
             .map(|t| t.single_line_len(printer.input))
             .sum::<Option<usize>>()
-            .map(|sum| sum + inner_printer.len() + const { "()".len() })
-            .unwrap_or(usize::MAX);
+            .map_or(usize::MAX, |sum| {
+                sum + inner_printer.len() + const { "()".len() }
+            });
 
         if inner_info.multi_lined || single_line_len > shape.width {
             self.print_multi_line(shape, printer)
@@ -430,7 +430,7 @@ impl FromCST for BinaryExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::BINARY_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // Get left expression
         let left = it.expect_next("left expression")?;
@@ -464,7 +464,7 @@ impl BinaryExpr {
     /// For ops that are not in any chaining groups, return will be the same as the original.
     ///
     /// The vec will never be empty.
-    fn get_chaining_members<'s>(&'s self) -> (&'s Expression, Vec<(&'s BinaryOp, &'s Expression)>) {
+    fn get_chaining_members(&self) -> (&Expression, Vec<(&BinaryOp, &Expression)>) {
         let mut members = Vec::new();
         let Some(chaining_group) = BinaryOpChainingGroup::group_for_op(&self.op) else {
             members.push((&self.op, &self.sides.1));
@@ -546,7 +546,7 @@ impl PrintMultiLine for BinaryExpr {
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
         let (first, chain_members) = self.get_chaining_members();
-        printer.print(first, shape.clone());
+        printer.print(first, shape);
         printer.print_trivia_all_trailing_for(first.rightmost_token());
         for (op, right) in chain_members {
             printer.print_newline();
@@ -627,16 +627,12 @@ enum BinaryOpChainingGroup {
 impl BinaryOpChainingGroup {
     fn group_for_op(op: &BinaryOp) -> Option<Self> {
         match op {
-            BinaryOp::Plus(_) => Some(Self::AddSubtract),
-            BinaryOp::Minus(_) => Some(Self::AddSubtract),
-            BinaryOp::Star(_) => Some(Self::MultiplyDivide),
-            BinaryOp::Slash(_) => Some(Self::MultiplyDivide),
-            BinaryOp::Percent(_) => Some(Self::MultiplyDivide),
-            BinaryOp::And(_) => Some(Self::Bitwise),
-            BinaryOp::Pipe(_) => Some(Self::Bitwise),
-            BinaryOp::Caret(_) => Some(Self::Bitwise),
-            BinaryOp::AndAnd(_) => Some(Self::Logical),
-            BinaryOp::OrOr(_) => Some(Self::Logical),
+            BinaryOp::Plus(_) | BinaryOp::Minus(_) => Some(Self::AddSubtract),
+            BinaryOp::Star(_) | BinaryOp::Slash(_) | BinaryOp::Percent(_) => {
+                Some(Self::MultiplyDivide)
+            }
+            BinaryOp::And(_) | BinaryOp::Pipe(_) | BinaryOp::Caret(_) => Some(Self::Bitwise),
+            BinaryOp::AndAnd(_) | BinaryOp::OrOr(_) => Some(Self::Logical),
             _ => None,
         }
     }
@@ -654,11 +650,11 @@ impl FromCST for UnaryExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::UNARY_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // Get operator
-        let op_token = it.expect_token("unary operator")?;
-        let op = UnaryOp::from_cst_token(op_token)?;
+        let op = it.expect_next("unary operator")?;
+        let op = UnaryOp::from_cst(op)?;
 
         // Get expression
         let expr_node = it.expect_next("expression")?;
@@ -709,7 +705,7 @@ impl FromCST for IfExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::IF_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // KW_IF
         let keyword = it.expect_parse()?;
@@ -839,7 +835,7 @@ impl FromCST for MatchExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::MATCH_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // KW_MATCH
         let keyword = it.expect_parse()?;
@@ -1021,7 +1017,7 @@ impl FromCST for MatchArm {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::MATCH_ARM)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // MATCH_PATTERN
         let pattern: MatchPattern = it.expect_parse()?;
@@ -1184,7 +1180,7 @@ impl FromCST for MatchGuard {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::MATCH_GUARD)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let if_token = it.expect_parse()?;
 
@@ -1236,7 +1232,7 @@ impl FromCST for CallExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CALL_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // Callee expression
         let callee_node = it.expect_next("callee expression")?;
@@ -1283,7 +1279,7 @@ impl FromCST for CallArgs {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CALL_ARGS)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_paren = it.expect_parse()?;
 
@@ -1292,19 +1288,17 @@ impl FromCST for CallArgs {
             let Some(elem) = it.next() else {
                 return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
             };
-            match elem.kind() {
-                SyntaxKind::R_PAREN => {
-                    break t::RParen::from_cst(elem)?;
-                }
-                _ => {
-                    let expr = Expression::from_cst(elem)?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    args.push((expr, comma));
-                }
+
+            if elem.kind() == SyntaxKind::R_PAREN {
+                break t::RParen::from_cst(elem)?;
             }
+
+            let expr = Expression::from_cst(elem)?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+            args.push((expr, comma));
         };
 
         it.expect_end()?;
@@ -1337,7 +1331,7 @@ impl PrintMultiLine for CallArgs {
         printer.print_trivia_all_trailing_for(self.open_paren.span());
         printer.print_newline();
 
-        for (arg, comma) in self.args.iter() {
+        for (arg, comma) in &self.args {
             printer.print_trivia_all_leading_with_newline_for(
                 arg.leftmost_token(),
                 inner_shape.indent,
@@ -1366,7 +1360,7 @@ impl PrintMultiLine for CallArgs {
 impl CallArgs {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the call args on a single line.
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
@@ -1419,7 +1413,7 @@ impl CallArgs {
 impl Printable for CallArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
-            .try_sub_printer(|p| self.try_print_single_line(shape.clone(), p))
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1444,7 +1438,7 @@ impl FromCST for IndexExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::INDEX_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // Base expression
         let base_node = it.expect_next("base expression")?;
@@ -1531,7 +1525,7 @@ impl FromCST for FieldAccessExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::FIELD_ACCESS_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // Base expression
         let base_node = it.expect_next("base expression")?;
@@ -1568,7 +1562,7 @@ impl FromCST for EnvAccessExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::ENV_ACCESS_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let keyword = it.expect_parse()?;
 
@@ -1623,7 +1617,7 @@ impl FromCST for BlockExpr {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::BLOCK_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_brace = it.expect_parse()?;
 
@@ -1729,7 +1723,7 @@ impl FromCST for ArrayInitializer {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::ARRAY_LITERAL)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_bracket = it.expect_parse()?;
 
@@ -1739,20 +1733,18 @@ impl FromCST for ArrayInitializer {
             let Some(elem) = it.next() else {
                 return Err(StrongAstError::missing(SyntaxKind::R_BRACKET, it.parent));
             };
-            match elem.kind() {
-                SyntaxKind::R_BRACKET => {
-                    break t::RBracket::from_cst(elem)?;
-                }
-                _ => {
-                    let expr = Expression::from_cst(elem)?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
 
-                    elements.push((expr, comma));
-                }
+            if elem.kind() == SyntaxKind::R_BRACKET {
+                break t::RBracket::from_cst(elem)?;
             }
+
+            let expr = Expression::from_cst(elem)?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+
+            elements.push((expr, comma));
         };
 
         Ok(ArrayInitializer {
@@ -1800,11 +1792,11 @@ impl PrintMultiLine for ArrayInitializer {
             printer.print(elem, inner_shape.clone());
             if let Some(comma) = comma {
                 printer.print_raw_token(comma);
-                printer.print_trivia_all_trailing_for(comma.span())
+                printer.print_trivia_all_trailing_for(comma.span());
             } else {
                 printer.print_str(",");
-                printer.print_trivia_all_trailing_for(elem.rightmost_token())
-            };
+                printer.print_trivia_all_trailing_for(elem.rightmost_token());
+            }
             printer.print_newline();
         }
 
@@ -1822,7 +1814,7 @@ impl ArrayInitializer {
     /// Tries to print the array initializer as a single line.
     ///
     /// If successful, returns the info.
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.open_bracket);
@@ -1880,7 +1872,7 @@ impl ArrayInitializer {
 
 impl Printable for ArrayInitializer {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        self.try_print_single_line(&shape, printer)
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1905,7 +1897,7 @@ impl FromCST for ObjectInitializer {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::OBJECT_LITERAL)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // WORD (object type name)
         let name = it.expect_parse()?;
@@ -1989,10 +1981,10 @@ impl PrintMultiLine for ObjectInitializer {
             printer.print(field, inner_shape.clone());
             if let Some(comma) = comma {
                 printer.print_raw_token(comma);
-                printer.print_trivia_all_trailing_for(comma.span())
+                printer.print_trivia_all_trailing_for(comma.span());
             } else {
                 printer.print_str(",");
-                printer.print_trivia_all_trailing_for(field.rightmost_token())
+                printer.print_trivia_all_trailing_for(field.rightmost_token());
             }
             printer.print_newline();
         }
@@ -2008,7 +2000,7 @@ impl ObjectInitializer {
     /// Tries to print the object initializer as a single line.
     ///
     /// If successful, returns the info.
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.name);
@@ -2066,7 +2058,7 @@ impl ObjectInitializer {
 
 impl Printable for ObjectInitializer {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        self.try_print_single_line(&shape, printer)
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2090,7 +2082,7 @@ impl FromCST for MapLiteral {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::MAP_LITERAL)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_brace = it.expect_parse()?;
 
@@ -2184,7 +2176,7 @@ impl PrintMultiLine for MapLiteral {
 }
 
 impl MapLiteral {
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.open_brace);
@@ -2240,7 +2232,7 @@ impl MapLiteral {
 
 impl Printable for MapLiteral {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        self.try_print_single_line(&shape, printer)
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2264,7 +2256,7 @@ impl FromCST for ObjectField {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::OBJECT_FIELD)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let name = it.expect_next("WORD or STRING_LITERAL")?;
         let name = ObjectFieldKey::from_cst(name)?;
@@ -2360,6 +2352,7 @@ pub struct PrintChain<'a> {
     chain_members: Vec<PrintChainItem<'a>>,
 }
 impl<'a> PrintChain<'a> {
+    #[must_use]
     pub fn new(from: &'a Expression) -> Self {
         match from {
             Expression::Path(path_expr) => Self {
@@ -2418,7 +2411,7 @@ impl<'a> PrintChain<'a> {
     }
 }
 
-impl<'a> PrintMultiLine for PrintChain<'a> {
+impl PrintMultiLine for PrintChain<'_> {
     /// Prints the chained expression, with each field member on a new line.
     ///
     /// Uses similar rules to rustfmt
@@ -2429,11 +2422,11 @@ impl<'a> PrintMultiLine for PrintChain<'a> {
                 true
             }
             Expression::Call(call_expr) => {
-                let first_info = printer.print(&*call_expr, shape.clone());
+                let first_info = printer.print(call_expr, shape.clone());
                 !first_info.multi_lined
             }
             Expression::Index(index_expr) => {
-                let first_info = printer.print(&*index_expr, shape.clone());
+                let first_info = printer.print(index_expr, shape.clone());
                 !first_info.multi_lined
             }
             _ => {
@@ -2549,7 +2542,7 @@ impl<'a> PrintMultiLine for PrintChain<'a> {
     }
 }
 
-impl<'a> Printable for PrintChain<'a> {
+impl Printable for PrintChain<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);

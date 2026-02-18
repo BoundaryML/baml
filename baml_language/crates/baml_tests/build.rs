@@ -221,15 +221,6 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
         #[cfg(test)]
         mod #module_name {
             use baml_db::*;
-            use baml_db::baml_compiler_lexer;
-            use baml_db::baml_compiler_parser;
-            use baml_db::baml_compiler_hir;
-            use baml_db::baml_compiler_tir;
-            use baml_db::baml_compiler_vir;
-            use baml_db::baml_compiler_mir;
-            use baml_db::baml_compiler_emit;
-            use baml_db::baml_compiler_syntax::SyntaxElement;
-            use baml_fmt::ast::FromCST as _;
             use baml_compiler_hir::{function_body, function_signature, function_signature_source_map};
             use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
             use baml_compiler_tir::pretty::short_display;

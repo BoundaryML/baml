@@ -1,12 +1,12 @@
-//! Reference: [baml_compiler_syntax::ast::MatchPattern] and [baml_compiler_hir::body::Pattern]
+//! Reference: [`baml_db::baml_compiler_syntax::ast::MatchPattern`] and [`baml_db::baml_compiler_hir::body::Pattern`]
 
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
-use crate::ast::{
-    FromCST, KnownKind, Literal, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
+use crate::{
+    ast::{FromCST, KnownKind, Literal, StrongAstError, SyntaxNodeIter, Token, Type, tokens as t},
+    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
 };
-use crate::printer::*;
 
 /// Corresponds to a [`SyntaxKind::MATCH_PATTERN`] node.
 ///
@@ -27,7 +27,7 @@ impl FromCST for MatchPattern {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::MATCH_PATTERN)?;
 
-        let mut it = SyntaxNodeIter::new(node.clone());
+        let mut it = SyntaxNodeIter::new(&node);
 
         let first_elem = UnionPatternMember::take(&mut it)?;
 
@@ -254,8 +254,8 @@ impl Printable for UnionPattern {
     fn rightmost_token(&self) -> TextRange {
         self.rest
             .last()
-            .map(|(_, member)| member.rightmost_token())
-            .unwrap_or(self.first.rightmost_token())
+            .map_or(&*self.first, |(_, member)| member)
+            .rightmost_token()
     }
 }
 
@@ -363,7 +363,7 @@ pub struct NestedPattern {
     pub close_paren: t::RParen,
 }
 
-impl NestedPattern {
+impl PrintMultiLine for NestedPattern {
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
         printer.print_raw_token(&self.open_paren);
@@ -409,8 +409,9 @@ impl Printable for NestedPattern {
             .chain(close_leading)
             .map(|t| t.single_line_len(printer.input))
             .sum::<Option<usize>>()
-            .map(|sum| sum + inner_printer.len() + const { "()".len() })
-            .unwrap_or(usize::MAX);
+            .map_or(usize::MAX, |sum| {
+                sum + inner_printer.len() + const { "()".len() }
+            });
 
         if single_line_len > shape.width {
             self.print_multi_line(shape, printer)

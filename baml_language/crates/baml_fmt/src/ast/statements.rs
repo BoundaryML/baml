@@ -1,15 +1,14 @@
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
+use super::tokens as t;
 use crate::{
     ast::{
         BlockExpr, Expression, FromCST, HeaderComment, KnownKind, ParenExpr, StrongAstError,
         SyntaxNodeIter, Token, Type,
     },
-    printer::*,
+    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
 };
-
-use super::tokens as t;
 
 /// Does not correspond to a specific [`SyntaxKind`], but contains all possible statements.
 #[derive(Debug)]
@@ -73,7 +72,7 @@ impl Printable for Statement {
                 PrintInfo::default_single_line()
             }
             Statement::Unknown(range) => {
-                printer.print_input_range(range.clone());
+                printer.print_input_range(*range);
                 PrintInfo::default_multi_lined()
             }
         }
@@ -173,7 +172,7 @@ impl FromCST for LetStmt {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
         let node_kind = node.kind();
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let watch = if node_kind == SyntaxKind::WATCH_LET {
             Some(it.expect_parse()?)
@@ -284,7 +283,7 @@ impl FromCST for WhileStmt {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::WHILE_STMT)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // KW_WHILE
         let keyword = it.expect_parse()?;
@@ -354,7 +353,7 @@ impl FromCST for ForStmt {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::FOR_EXPR)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // KW_FOR
         let keyword = it.expect_parse()?;
@@ -639,7 +638,7 @@ impl FromCST for ReturnStmt {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::RETURN_STMT)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // KW_RETURN
         let keyword = it.expect_parse()?;
@@ -719,7 +718,7 @@ impl FromCST for BreakStmt {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::BREAK_STMT)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let keyword = it.expect_parse()?;
 
@@ -762,8 +761,7 @@ impl Printable for BreakStmt {
     fn rightmost_token(&self) -> TextRange {
         self.semicolon
             .as_ref()
-            .map(|s| s.span())
-            .unwrap_or(self.keyword.span())
+            .map_or(self.keyword.span(), Token::span)
     }
 }
 
@@ -779,7 +777,7 @@ impl FromCST for ContinueStmt {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CONTINUE_STMT)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let keyword = it.expect_parse()?;
 
@@ -820,8 +818,7 @@ impl Printable for ContinueStmt {
     fn rightmost_token(&self) -> TextRange {
         self.semicolon
             .as_ref()
-            .map(|s| s.span())
-            .unwrap_or(self.keyword.span())
+            .map_or(self.keyword.span(), Token::span)
     }
 }
 
@@ -838,7 +835,7 @@ impl FromCST for AssertStmt {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::ASSERT_STMT)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let keyword = it.expect_parse()?;
 

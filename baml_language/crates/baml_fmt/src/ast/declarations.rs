@@ -1,11 +1,14 @@
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
-use crate::ast::{
-    Attribute, BlockAttribute, BlockExpr, Expression, FromCST, KnownKind, PathExpr, StrongAstError,
-    SyntaxNodeIter, Token, Type, tokens as t,
+use crate::{
+    EmittableTrivia,
+    ast::{
+        Attribute, BlockAttribute, BlockExpr, Expression, FromCST, KnownKind, PathExpr,
+        StrongAstError, SyntaxNodeIter, Token, Type, tokens as t,
+    },
+    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
 };
-use crate::printer::*;
 
 /// Any of the valid top-level declarations in a [`super::SourceFile`].
 #[derive(Debug)]
@@ -114,7 +117,7 @@ impl FromCST for FunctionDecl {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::FUNCTION_DEF)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let keyword = it.expect_parse()?;
 
@@ -233,7 +236,7 @@ impl FromCST for FunctionParamList {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::PARAMETER_LIST)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_paren = it.expect_parse()?;
 
@@ -328,7 +331,7 @@ impl PrintMultiLine for FunctionParamList {
 }
 
 impl FunctionParamList {
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.open_paren);
@@ -383,7 +386,7 @@ impl FunctionParamList {
 
 impl Printable for FunctionParamList {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        self.try_print_single_line(&shape, printer)
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -406,7 +409,7 @@ impl FromCST for FunctionParam {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::PARAMETER)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let name = it.expect_parse()?;
 
@@ -459,8 +462,7 @@ impl Printable for FunctionParam {
     fn rightmost_token(&self) -> TextRange {
         self.ty
             .as_ref()
-            .map(|(_, ty)| ty.rightmost_token())
-            .unwrap_or(self.name.span())
+            .map_or(self.name.span(), |(_, ty)| ty.rightmost_token())
     }
 }
 
@@ -478,7 +480,7 @@ impl FromCST for FunctionDeclBody {
                 SyntaxElement::Node(node),
             )?)),
             SyntaxKind::EXPR_FUNCTION_BODY => {
-                let mut visitor = SyntaxNodeIter::new(node);
+                let mut visitor = SyntaxNodeIter::new(&node);
                 let block: BlockExpr = visitor.expect_parse()?;
                 visitor.expect_end()?;
                 Ok(FunctionDeclBody::Block(block))
@@ -528,7 +530,7 @@ impl FromCST for LlmFunctionBody {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::LLM_FUNCTION_BODY)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_brace = it.expect_parse()?;
 
@@ -612,7 +614,7 @@ impl FromCST for ClientField {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_FIELD)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let keyword = it.expect_parse()?;
 
@@ -705,7 +707,7 @@ impl FromCST for PromptField {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::PROMPT_FIELD)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // It's a word, but we should never be in a `PROMPT_FIELD` context if it's not a prompt
         let prompt = it.expect_parse()?;
@@ -794,7 +796,7 @@ impl FromCST for ClassDecl {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CLASS_DEF)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let keyword = it.expect_parse()?;
 
@@ -888,7 +890,7 @@ impl FromCST for ClassField {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::FIELD)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let name = it.expect_parse()?;
 
@@ -958,7 +960,7 @@ impl PrintMultiLine for ClassField {
 
         printer.print_raw_token(&self.name);
         printer.print_str(" ");
-        printer.print(&self.ty, shape.clone());
+        printer.print(&self.ty, shape);
         printer.print_trivia_all_trailing_for(self.ty.rightmost_token());
         for attr in &self.attributes {
             printer.print_newline();
@@ -1087,7 +1089,7 @@ impl FromCST for EnumDecl {
         StrongAstError::assert_kind_node(&node, SyntaxKind::ENUM_DEF)?;
 
         let enum_range = node.text_range();
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // keyword: "enum"
         let keyword = it.expect_parse()?;
@@ -1238,7 +1240,7 @@ impl FromCST for EnumVariant {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::ENUM_VARIANT)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let name = it.expect_parse()?;
 
@@ -1318,8 +1320,7 @@ impl Printable for EnumVariant {
     fn rightmost_token(&self) -> TextRange {
         self.attributes
             .last()
-            .map(|attr| attr.rightmost_token())
-            .unwrap_or(self.name.span())
+            .map_or(self.name.span(), Printable::rightmost_token)
     }
 }
 
@@ -1337,7 +1338,7 @@ impl FromCST for ClientDecl {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_DEF)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // keyword: "client"
         let keyword = it.expect_parse()?;
@@ -1404,7 +1405,7 @@ impl FromCST for ClientType {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CLIENT_TYPE)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let langle = it.expect_parse()?;
         let generic = it.expect_parse()?;
@@ -1454,7 +1455,7 @@ impl FromCST for ConfigBlock {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CONFIG_BLOCK)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_brace = it.expect_parse()?;
 
@@ -1518,7 +1519,7 @@ impl Printable for ConfigBlock {
             let has_comments = open_trailing
                 .iter()
                 .chain(close_leading.iter())
-                .any(|t| t.is_comment());
+                .any(EmittableTrivia::is_comment);
 
             if has_comments {
                 printer.print_raw_token(&self.open_brace);
@@ -1621,7 +1622,7 @@ impl FromCST for ConfigItem {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::CONFIG_ITEM)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let key = it.expect_next("a CONFIG_ITEM key")?;
         let key = ConfigItemKey::from_cst(key)?;
@@ -1680,7 +1681,7 @@ impl Printable for ConfigItem {
 
 /// Any of the valid keys in a [`ConfigItem`].
 ///
-/// See `Parser::parse_config_item` in [`baml_compiler_parser`]
+/// See `Parser::parse_config_item` in [`baml_db::baml_compiler_parser`]
 #[derive(Debug)]
 pub enum ConfigItemKey {
     Word(t::Word),
@@ -1690,18 +1691,6 @@ pub enum ConfigItemKey {
     RetryPolicy(t::RetryPolicy),
     Enum(t::Enum),
     Class(t::Class),
-}
-
-impl ConfigItemKey {
-    pub fn span(&self) -> TextRange {
-        match self {
-            ConfigItemKey::Word(word) => word.span(),
-            ConfigItemKey::String(string) => string.span(),
-            ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
-            ConfigItemKey::Enum(enum_) => enum_.span(),
-            ConfigItemKey::Class(class) => class.span(),
-        }
-    }
 }
 
 impl FromCST for ConfigItemKey {
@@ -1780,7 +1769,7 @@ impl FromCST for ConfigItemValue {
         let node = StrongAstError::assert_is_node(elem)?;
         match node.kind() {
             SyntaxKind::CONFIG_VALUE => {
-                let mut it = SyntaxNodeIter::new(node);
+                let mut it = SyntaxNodeIter::new(&node);
                 let expr = it.expect_next("an expression")?;
                 if expr.kind() == SyntaxKind::ARRAY_LITERAL {
                     let array = ConfigArray::from_cst(expr)?;
@@ -1843,7 +1832,7 @@ impl FromCST for ConfigArray {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::ARRAY_LITERAL)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_bracket = it.expect_parse()?;
 
@@ -1852,19 +1841,17 @@ impl FromCST for ConfigArray {
             let Some(elem) = it.next() else {
                 return Err(StrongAstError::missing(SyntaxKind::R_BRACKET, it.parent));
             };
-            match elem.kind() {
-                SyntaxKind::R_BRACKET => {
-                    break t::RBracket::from_cst(elem)?;
-                }
-                _ => {
-                    let next = ConfigItemValue::from_cst(elem)?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    elements.push((next, comma));
-                }
+
+            if elem.kind() == SyntaxKind::R_BRACKET {
+                break t::RBracket::from_cst(elem)?;
             }
+
+            let next = ConfigItemValue::from_cst(elem)?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+            elements.push((next, comma));
         };
 
         it.expect_end()?;
@@ -1926,7 +1913,7 @@ impl PrintMultiLine for ConfigArray {
 }
 
 impl ConfigArray {
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.open_bracket);
@@ -1983,7 +1970,7 @@ impl ConfigArray {
 
 impl Printable for ConfigArray {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        self.try_print_single_line(&shape, printer)
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2008,7 +1995,7 @@ impl FromCST for TypeBuilderBlock {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_BUILDER_BLOCK)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let keyword = it.expect_parse()?;
 
@@ -2086,7 +2073,7 @@ impl FromCST for TypeBuilderItem {
         match elem.kind() {
             SyntaxKind::DYNAMIC_TYPE_DEF => {
                 let node = StrongAstError::assert_is_node(elem)?;
-                let mut it = SyntaxNodeIter::new(node);
+                let mut it = SyntaxNodeIter::new(&node);
                 let dynamic = it.expect_parse()?;
                 let class_or_enum = it.expect_next("CLASS_DEF or ENUM_DEF")?;
                 match class_or_enum.kind() {
@@ -2179,7 +2166,7 @@ impl FromCST for TestDecl {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::TEST_DEF)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // keyword: "test"
         let keyword = it.expect_parse()?;
@@ -2236,7 +2223,7 @@ impl FromCST for RetryPolicyDecl {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::RETRY_POLICY_DEF)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // keyword: "retry_policy"
         let keyword = it.expect_parse()?;
@@ -2293,7 +2280,7 @@ impl FromCST for TemplateStringDecl {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::TEMPLATE_STRING_DEF)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // keyword: "template_string"
         let keyword = it.expect_parse()?;
@@ -2332,7 +2319,7 @@ impl Printable for TemplateStringDecl {
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
         printer.print_str(" ");
-        multi_lined |= printer.print(&self.args, shape.clone()).multi_lined;
+        multi_lined |= printer.print(&self.args, shape).multi_lined;
         printer.print_str(" ");
         multi_lined |= printer
             .print(&self.raw_string, Shape::unlimited_single_line())
@@ -2363,7 +2350,7 @@ impl FromCST for TypeAliasDecl {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_ALIAS_DEF)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // keyword: "type" (it's actually just a WORD, not a keyword)
         let keyword = it.expect_parse()?;

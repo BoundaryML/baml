@@ -1,6 +1,7 @@
+use rowan::TextRange;
+
 pub use crate::EmittableTrivia;
 use crate::{FormatOptions, TriviaInfo, ast::Token};
-use rowan::TextRange;
 
 pub struct Printer<'a> {
     pub input: &'a str,
@@ -11,6 +12,7 @@ pub struct Printer<'a> {
 }
 impl<'a> Printer<'a> {
     #[inline]
+    #[must_use]
     pub fn new_empty(input: &'a str, config: &'a FormatOptions, trivia: &'a TriviaInfo) -> Self {
         Printer {
             input,
@@ -22,6 +24,7 @@ impl<'a> Printer<'a> {
     }
 
     #[inline]
+    #[must_use]
     pub fn new(
         input: &'a str,
         config: &'a FormatOptions,
@@ -82,24 +85,15 @@ impl<'a> Printer<'a> {
     /// Empty lines print nothing, while the comments print their comment.
     pub fn print_trivia(&mut self, trivia: &EmittableTrivia) {
         match trivia {
-            EmittableTrivia::EmptyLine { .. } => {}
-            EmittableTrivia::EmptyLineBeforeEOF => {}
-            EmittableTrivia::CommentBeforeEOF { comment } => {
+            EmittableTrivia::EmptyLine { .. } | EmittableTrivia::EmptyLineBeforeEOF => {}
+            EmittableTrivia::CommentBeforeEOF { comment }
+            | EmittableTrivia::LeadingBlockComment { comment, .. }
+            | EmittableTrivia::LeadingLineComment { comment, .. }
+            | EmittableTrivia::TrailingBlockComment { comment, .. }
+            | EmittableTrivia::TrailingLineComment { comment, .. } => {
                 self.print_input_range(*comment);
             }
-            EmittableTrivia::LeadingBlockComment { comment, .. } => {
-                self.print_input_range(*comment);
-            }
-            EmittableTrivia::LeadingLineComment { comment, .. } => {
-                self.print_input_range(*comment);
-            }
-            EmittableTrivia::TrailingBlockComment { comment, .. } => {
-                self.print_input_range(*comment);
-            }
-            EmittableTrivia::TrailingLineComment { comment, .. } => {
-                self.print_input_range(*comment);
-            }
-        };
+        }
     }
 
     /// Prints an emittable trivia, followed by a newline.
@@ -225,6 +219,7 @@ impl<'a> Printer<'a> {
         self.warnings.extend(other.warnings);
     }
 
+    #[must_use]
     pub fn sub_printer<'s>(&'s self) -> Printer<'a>
     where
         'a: 's,
@@ -263,6 +258,7 @@ impl<'a> Printer<'a> {
 
     /// The current line length of the current line.
     /// Includes indentation.
+    #[must_use]
     pub fn current_line_len(&self) -> usize {
         // TODO: we can probably sometimes cache this
 
@@ -275,6 +271,7 @@ impl<'a> Printer<'a> {
     /// The remaining width of the current line.
     ///
     /// Equivalent to `self.config.line_width - self.current_line_len()`.
+    #[must_use]
     pub fn current_line_remaining_width(&self) -> usize {
         self.config
             .line_width
@@ -282,8 +279,14 @@ impl<'a> Printer<'a> {
     }
 
     /// The current length of the output.
+    #[must_use]
     pub const fn len(&self) -> usize {
         self.output.len()
+    }
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.output.is_empty()
     }
 }
 
@@ -296,10 +299,12 @@ pub struct PrintInfo {
 }
 
 impl PrintInfo {
+    #[must_use]
     pub fn default_single_line() -> Self {
         Self { multi_lined: false }
     }
 
+    #[must_use]
     pub fn default_multi_lined() -> Self {
         Self { multi_lined: true }
     }
@@ -381,6 +386,7 @@ impl Shape {
     /// A shape that has no width limit and no indentation.
     ///
     /// Useful for trying to print single-lined with no chance that we will use the output if it is multi-lined
+    #[must_use]
     pub const fn unlimited_single_line() -> Self {
         Shape {
             width: usize::MAX,

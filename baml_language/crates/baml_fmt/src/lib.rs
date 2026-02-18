@@ -2,10 +2,12 @@ pub mod ast;
 pub mod printer;
 mod trivia_classifier;
 
-use baml_compiler_diagnostics::ParseError;
-use baml_compiler_syntax::{SyntaxElement, SyntaxNode};
+use baml_db::{
+    baml_compiler_diagnostics::ParseError,
+    baml_compiler_lexer, baml_compiler_parser,
+    baml_compiler_syntax::{SyntaxElement, SyntaxNode},
+};
 use baml_project::ProjectDatabase;
-
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
 use crate::{
@@ -13,17 +15,23 @@ use crate::{
     printer::{Printer, Shape},
 };
 
+/// Runs the formatter on the given source code.
+///
+/// Also see [`format_salsa`] if you already have a [`salsa::Database`] with the source files in it.
+///
+/// # Errors
+/// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
     let mut db = ProjectDatabase::new();
     let source_file = db.add_file("file.baml", source);
-    format_salsa(&db, source_file, options.clone())
+    format_salsa(&db, source_file, options)
 }
 
 #[salsa::tracked]
 pub fn format_salsa(
     db: &dyn salsa::Database,
-    file: baml_base::SourceFile,
-    options: FormatOptions,
+    file: baml_db::SourceFile,
+    options: &'_ FormatOptions,
 ) -> Result<String, FormatterError> {
     let tokens = baml_compiler_lexer::lex_file(db, file);
     let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
@@ -35,7 +43,7 @@ pub fn format_salsa(
     let trivia = TriviaInfo::classify_trivia(&cst);
     let strong_ast = ast::SourceFile::from_cst(SyntaxElement::Node(cst))?;
 
-    let mut printer = Printer::new_empty(file.text(db), &options, &trivia);
+    let mut printer = Printer::new_empty(file.text(db), options, &trivia);
     printer.print(
         &strong_ast,
         Shape {

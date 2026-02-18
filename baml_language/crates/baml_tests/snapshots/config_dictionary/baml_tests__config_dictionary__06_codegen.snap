@@ -3,9 +3,9 @@ source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 === BYTECODE ===
-Functions: 4
-Objects: 115
-Globals: 52
+Functions: 13
+Objects: 134
+Globals: 63
 
 Function MyClient.resolve (arity: 0, kind: Bytecode):
      0    LOAD_GLOBAL 42      (<fn baml.llm.build_primitive_client>)

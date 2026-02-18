@@ -1,8 +1,10 @@
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
 use rowan::{TextRange, TextSize};
 
-use crate::ast::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, Token, tokens as t};
-use crate::printer::*;
+use crate::{
+    ast::{FromCST, KnownKind, StrongAstError, SyntaxNodeIter, Token, tokens as t},
+    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
+};
 
 /// Corresponds to a [`SyntaxKind::BLOCK_ATTRIBUTE`] node.
 #[derive(Debug)]
@@ -17,7 +19,7 @@ impl FromCST for BlockAttribute {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::BLOCK_ATTRIBUTE)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // @@
         let atat = it.expect_parse()?;
@@ -74,7 +76,7 @@ impl FromCST for Attribute {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::ATTRIBUTE)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         // @
         let at = it.expect_parse()?;
@@ -232,8 +234,8 @@ impl Printable for AttributeName {
     fn rightmost_token(&self) -> TextRange {
         self.rest
             .last()
-            .map(|(_, part)| part.rightmost_token())
-            .unwrap_or(self.first.rightmost_token())
+            .map_or(&self.first, |(_, part)| part)
+            .rightmost_token()
     }
 }
 
@@ -249,7 +251,7 @@ impl FromCST for AttributeArgs {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::ATTRIBUTE_ARGS)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_paren = it.expect_parse()?;
 
@@ -258,19 +260,17 @@ impl FromCST for AttributeArgs {
             let Some(elem) = it.next() else {
                 return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
             };
-            match elem.kind() {
-                SyntaxKind::R_PAREN => {
-                    break t::RParen::from_cst(elem)?;
-                }
-                _ => {
-                    let next = AttributeArg::from_cst(elem)?;
-                    let comma = it
-                        .next_if_kind(SyntaxKind::COMMA)
-                        .map(t::Comma::from_cst)
-                        .transpose()?;
-                    args.push((next, comma));
-                }
+
+            if elem.kind() == SyntaxKind::R_PAREN {
+                break t::RParen::from_cst(elem)?;
             }
+
+            let next = AttributeArg::from_cst(elem)?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+            args.push((next, comma));
         };
 
         it.expect_end()?;
@@ -338,7 +338,7 @@ impl PrintMultiLine for AttributeArgs {
 }
 
 impl AttributeArgs {
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.open_paren);
@@ -393,7 +393,7 @@ impl AttributeArgs {
 
 impl Printable for AttributeArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(shape.clone(), printer)
+        self.try_print_single_line(&shape, printer)
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -444,7 +444,7 @@ impl FromCST for AttributeArg {
             }
             SyntaxKind::UNQUOTED_STRING => {
                 let node = StrongAstError::assert_is_node(elem)?;
-                let mut it = SyntaxNodeIter::new(node);
+                let mut it = SyntaxNodeIter::new(&node);
                 let word = it.expect_parse()?;
                 it.expect_end()?; // multi-word unquoted strings are not valid in the new engine
 

@@ -1,15 +1,15 @@
-//! Reference: [baml_compiler_syntax::type_ref], though many of the types are grouped into [`Type::Path`] for us,
+//! Reference: [`baml_db::baml_compiler_syntax::type_ref`], though many of the types are grouped into [`Type::Path`] for us,
 //! since we shouldn't need special treatment for things like `string` and `int` during formatting.
 //! If this ever gets used for something else, we can split it up into multiple types.
 
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind};
+use rowan::{TextRange, TextSize};
 
 use super::{FromCST, KnownKind, StrongAstError, tokens as t};
 use crate::{
     ast::{Literal, SyntaxNodeIter, Token},
-    printer::*,
+    printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
 };
-use rowan::{TextRange, TextSize};
 
 /// Corresponds to a [`SyntaxKind::TYPE_EXPR`] node.
 #[derive(Debug)]
@@ -35,6 +35,8 @@ impl Type {
     /// For example, multi-lined paths and unions are indented,
     /// while generics and parenthesized types are not.
     /// Optional types and array types follow their inner type.
+    #[allow(unused_must_use)]
+    #[must_use]
     pub const fn multi_line_is_indented(&self) -> bool {
         match self {
             Type::Paren(_) => false,
@@ -59,7 +61,7 @@ impl FromCST for Type {
         // TYPE_EXPR contains tokens and nodes directly in a flat structure
         // We need to parse them into the appropriate Type variant
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let first = UnionTypeMember::take(&mut it)?;
 
@@ -193,8 +195,9 @@ impl Printable for ParenType {
             .chain(close_leading)
             .map(|t| t.single_line_len(printer.input))
             .sum::<Option<usize>>()
-            .map(|sum| sum + inner_printer.len() + const { "()".len() })
-            .unwrap_or(usize::MAX);
+            .map_or(usize::MAX, |sum| {
+                sum + inner_printer.len() + const { "()".len() }
+            });
 
         if inner_info.multi_lined || single_line_len > shape.width {
             self.print_multi_line(shape, printer)
@@ -251,8 +254,7 @@ impl Printable for PathType {
     fn rightmost_token(&self) -> TextRange {
         self.rest
             .last()
-            .map(|(_, word)| word)
-            .unwrap_or(&self.first)
+            .map_or(&self.first, |(_, word)| word)
             .span()
     }
 }
@@ -352,8 +354,7 @@ impl Printable for UnionType {
     fn rightmost_token(&self) -> TextRange {
         self.rest
             .last()
-            .map(|(_, ty)| ty)
-            .unwrap_or(&self.first)
+            .map_or(&*self.first, |(_, ty)| ty)
             .rightmost_token()
     }
 }
@@ -625,8 +626,7 @@ impl Printable for ArrayType {
     fn rightmost_token(&self) -> TextRange {
         self.brackets
             .last()
-            .map(|(_, close)| close.span())
-            .unwrap_or(self.ty.rightmost_token())
+            .map_or(self.ty.rightmost_token(), |(_, close)| close.span())
     }
 }
 
@@ -665,7 +665,7 @@ impl FromCST for TypeArgs {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_ARGS)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let open_angle: t::Less = it.expect_parse()?;
 
@@ -770,7 +770,7 @@ impl PrintMultiLine for TypeArgs {
 impl TypeArgs {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the type args on a single line.
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_angle);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_angle.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
@@ -818,7 +818,7 @@ impl TypeArgs {
 impl Printable for TypeArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
-            .try_sub_printer(|p| self.try_print_single_line(shape.clone(), p))
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -891,7 +891,7 @@ impl PrintMultiLine for FunctionType {
 impl FunctionType {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the function type on a single line.
-    fn try_print_single_line(&self, shape: Shape, printer: &mut Printer) -> Option<PrintInfo> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
@@ -953,7 +953,7 @@ impl FunctionType {
 impl Printable for FunctionType {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer
-            .try_sub_printer(|p| self.try_print_single_line(shape.clone(), p))
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -977,7 +977,7 @@ impl FromCST for FunctionTypeParam {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
 
-        let mut it = SyntaxNodeIter::new(node);
+        let mut it = SyntaxNodeIter::new(&node);
 
         let name = if let Some(name) = it.next_if_kind(SyntaxKind::WORD) {
             let name = t::Word::new_from_span(name.text_range());
@@ -1020,8 +1020,7 @@ impl Printable for FunctionTypeParam {
     fn leftmost_token(&self) -> TextRange {
         self.name
             .as_ref()
-            .map(|(name, _)| name.span())
-            .unwrap_or(self.ty.leftmost_token())
+            .map_or(self.ty.leftmost_token(), |(name, _)| name.span())
     }
     fn rightmost_token(&self) -> TextRange {
         self.ty.rightmost_token()

@@ -8,9 +8,8 @@ mod types;
 
 use std::{borrow::Cow, path::Path};
 
-use crate::printer::*;
 pub use attributes::*;
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};
 pub use declarations::*;
 pub use expressions::*;
 pub use pattern::*;
@@ -19,7 +18,7 @@ pub use statements::*;
 pub use tokens::*;
 pub use types::*;
 
-use crate::printer::Printable;
+use crate::printer::{PrintInfo, Printable, Printer, Shape};
 
 pub trait FromCST: Sized {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError>;
@@ -74,6 +73,8 @@ pub enum StrongAstError {
 }
 impl StrongAstError {
     /// Checks that the given node is of the specified [`SyntaxKind`].
+    ///
+    /// # Errors
     /// Returns [`StrongAstError::UnexpectedKind`] if the element not the expected kind.
     pub fn assert_kind_node(node: &SyntaxNode, expected: SyntaxKind) -> Result<(), Self> {
         if node.kind() == expected {
@@ -87,7 +88,10 @@ impl StrongAstError {
         }
     }
     /// Checks that the given token is of the specified [`SyntaxKind`].
+    ///
+    /// # Errors
     /// Returns [`StrongAstError::UnexpectedKind`] if the element not the expected kind.
+    #[allow(unused_must_use)]
     pub fn assert_kind_token(token: &SyntaxToken, expected: SyntaxKind) -> Result<(), Self> {
         if token.kind() == expected {
             Ok(())
@@ -100,17 +104,20 @@ impl StrongAstError {
         }
     }
     /// Easy way to create a [`StrongAstError::MissingExpectedElementDesc`] error.
+    #[must_use]
     pub fn missing_desc(desc: impl Into<Cow<'static, str>>, parent: TextRange) -> Self {
         let desc = desc.into();
         Self::MissingExpectedElementDesc { desc, parent }
     }
     /// Easy way to create a [`StrongAstError::MissingExpectedElement`] error.
+    #[must_use]
     pub const fn missing(expected: SyntaxKind, parent: TextRange) -> Self {
         Self::MissingExpectedElement { expected, parent }
     }
     /// Checks that the given element is a node.
     /// - Returns [`StrongAstError::ShouldBeNode`] if the element is a token.
     /// - Otherwise returns the node.
+    #[allow(unused_must_use)]
     pub fn assert_is_node(element: SyntaxElement) -> Result<SyntaxNode, Self> {
         match element {
             SyntaxElement::Node(node) => Ok(node),
@@ -241,7 +248,8 @@ pub struct SyntaxNodeIter {
 }
 impl SyntaxNodeIter {
     /// Creates a new iterator to walk through the non-trivia children of a [`SyntaxNode`].
-    pub fn new(parent_node: SyntaxNode) -> SyntaxNodeIter {
+    #[must_use]
+    pub fn new(parent_node: &SyntaxNode) -> SyntaxNodeIter {
         let it = parent_node
             .children_with_tokens()
             .by_kind(|kind| !kind.is_trivia());
@@ -346,6 +354,9 @@ impl SyntaxNodeIter {
     /// Returns [`StrongAstError::UnexpectedAdditionalElement`] if there are.
     ///
     /// If it returns an error, the next element has been consumed.
+    ///
+    /// # Errors
+    /// Returns [`StrongAstError::UnexpectedAdditionalElement`] if there is any more elements.
     pub fn expect_end(&mut self) -> Result<(), StrongAstError> {
         let Some(elem) = self.next() else {
             return Ok(());
@@ -373,10 +384,10 @@ impl SyntaxNodeIter {
     /// - Calls the given function with the next element, if it returns `true` then the element is consumed and `Some(next)` is returned.
     /// - Otherwise, the next element is not consumed and `None` is returned.
     pub fn next_if<F: FnOnce(&SyntaxElement) -> bool>(&mut self, f: F) -> Option<SyntaxElement> {
-        if let Some(ref peeked) = self.peek() {
-            if f(peeked) {
-                return self.peeked.take();
-            }
+        if let Some(peeked) = self.peek()
+            && f(peeked)
+        {
+            return self.peeked.take();
         }
         None
     }
@@ -399,11 +410,9 @@ impl SyntaxNodeIter {
         &mut self,
         f: F,
     ) -> Option<T> {
-        if let Some(ref peeked) = self.peek() {
-            if let Some(t) = f(peeked) {
-                self.peeked = None;
-                return Some(t);
-            }
+        if let Some(peeked) = self.peek().and_then(f) {
+            self.peeked = None;
+            return Some(peeked);
         }
         None
     }
@@ -428,10 +437,8 @@ impl FromCST for SourceFile {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::SOURCE_FILE)?;
 
-        let mut it = SyntaxNodeIter::new(node);
-
         let mut items = Vec::new();
-        while let Some(elem) = it.next() {
+        for elem in SyntaxNodeIter::new(&node) {
             let item = TopLevelDeclaration::from_cst(elem)?;
             items.push(item);
         }
@@ -467,22 +474,21 @@ impl Printable for SourceFile {
     fn leftmost_token(&self) -> TextRange {
         self.items
             .first()
-            .map(|item| item.leftmost_token())
-            .unwrap_or(TextRange::default())
+            .map(Printable::leftmost_token)
+            .unwrap_or_default()
     }
     /// May return [`TextRange::default()`] if there are no items.
     fn rightmost_token(&self) -> TextRange {
         self.items
             .last()
-            .map(|item| item.rightmost_token())
-            .unwrap_or(TextRange::default())
+            .map(Printable::rightmost_token)
+            .unwrap_or_default()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler_parser::parse_green;
-    use baml_compiler_syntax::SyntaxNode;
+    use baml_db::{baml_compiler_parser::parse_green, baml_compiler_syntax::SyntaxNode};
     use baml_project::ProjectDatabase;
 
     use super::*;
@@ -505,7 +511,7 @@ mod tests {
 
         let mut db = ProjectDatabase::new();
         let file = db.add_file("test.baml", source);
-        let parsed = parse_green(&mut db, file);
+        let parsed = parse_green(&db, file);
         let syntax_tree = SyntaxNode::new_root(parsed);
         let source_file = SourceFile::from_cst(SyntaxElement::Node(syntax_tree)).unwrap();
 

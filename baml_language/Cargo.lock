@@ -544,11 +544,7 @@ dependencies = [
 name = "baml_fmt"
 version = "0.0.0"
 dependencies = [
- "baml_base",
- "baml_compiler_diagnostics",
- "baml_compiler_lexer",
- "baml_compiler_parser",
- "baml_compiler_syntax",
+ "baml_db",
  "baml_project",
  "ouroboros",
  "rowan 0.16.1",

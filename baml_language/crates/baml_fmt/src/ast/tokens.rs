@@ -1,9 +1,10 @@
+use baml_db::baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
+use rowan::{TextRange, TextSize};
+
 use crate::{
     ast::{FromCST, KnownKind, StrongAstError},
-    printer::*,
+    printer::{PrintInfo, Printable, Printer, Shape},
 };
-use baml_compiler_syntax::{SyntaxElement, SyntaxKind, SyntaxNodeExt};
-use rowan::{TextRange, TextSize};
 
 pub trait Token {
     fn span(&self) -> TextRange;
@@ -224,6 +225,7 @@ pub enum BinaryOp {
 }
 
 impl BinaryOp {
+    #[must_use]
     pub fn span(&self) -> TextRange {
         match self {
             BinaryOp::EqualsEquals(t) => t.span(),
@@ -392,20 +394,15 @@ pub enum UnaryOp {
     Minus(Minus),
 }
 
-impl UnaryOp {
-    pub fn from_cst_token(
-        token: baml_compiler_syntax::SyntaxToken,
-    ) -> Result<Self, super::StrongAstError> {
-        use baml_compiler_syntax::SyntaxKind;
-        let span = token.text_range();
-
-        match token.kind() {
-            SyntaxKind::NOT => Ok(UnaryOp::Not(Not::new_from_span(span))),
-            SyntaxKind::MINUS => Ok(UnaryOp::Minus(Minus::new_from_span(span))),
-            _ => Err(super::StrongAstError::UnexpectedKindDesc {
+impl FromCST for UnaryOp {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        match elem.kind() {
+            SyntaxKind::NOT => Not::from_cst(elem).map(UnaryOp::Not),
+            SyntaxKind::MINUS => Minus::from_cst(elem).map(UnaryOp::Minus),
+            _ => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc: "unary operator".into(),
-                found: token.kind(),
-                at: span,
+                found: elem.kind(),
+                at: elem.text_range(),
             }),
         }
     }
@@ -442,6 +439,7 @@ pub struct IntegerLiteral {
 }
 impl IntegerLiteral {
     /// Does not verify that the span is actually a integer literal token.
+    #[must_use]
     pub fn new_from_span(token_span: TextRange) -> Self {
         Self { token_span }
     }
@@ -470,6 +468,7 @@ pub struct FloatLiteral {
 }
 impl FloatLiteral {
     /// Does not verify that the span is actually a float literal token.
+    #[must_use]
     pub fn new_from_span(token_span: TextRange) -> Self {
         Self { token_span }
     }
@@ -498,6 +497,7 @@ pub struct Word {
 }
 impl Word {
     /// Does not verify that the span is actually a word token.
+    #[must_use]
     pub fn new_from_span(token_span: TextRange) -> Self {
         Self { token_span }
     }
@@ -526,6 +526,7 @@ pub struct QuotedString {
 }
 impl QuotedString {
     /// Does not verify that the span is actually a quoted string token.
+    #[must_use]
     pub fn new_from_span(token_span: TextRange) -> Self {
         Self { token_span }
     }
@@ -648,7 +649,7 @@ impl Printable for RawString {
             .unwrap_or(0);
 
         let inner_base_indent = shape.indent + printer.config.indent_width;
-        printer.print_str(&text[..start_quote + 1]);
+        printer.print_str(&text[..=start_quote]);
         printer.print_newline();
         printer.print_spaces(inner_base_indent);
         printer.print_str(first_line.trim_start_matches(' '));
@@ -697,6 +698,7 @@ pub struct HeaderComment {
 }
 impl HeaderComment {
     /// Does not verify that the span is actually a header comment token.
+    #[must_use]
     pub fn new_from_span(token_span: TextRange) -> Self {
         Self { token_span }
     }

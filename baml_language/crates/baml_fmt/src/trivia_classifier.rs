@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+use baml_db::baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use ouroboros::self_referencing;
 use rowan::{TextRange, TextSize};
 
@@ -26,17 +26,18 @@ impl TriviaInfo {
     ///
     /// The output will always be sorted with regard to the range they are attached to (with EOF being later than everything else),
     /// then ordered by the location of the order the trivia should be emitted (based on the order in the input).
+    #[must_use]
     pub fn classify_trivia(root: &SyntaxNode) -> Self {
-        let mut found_trivia = Vec::new();
-
-        let mut prev_non_trivia_on_line: Option<TextRange> = None;
-        let mut has_comment_on_line = false;
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         enum AttachTriviaToNext {
             LineComment(TextRange),
             BlockComment(TextRange),
             Newline,
         }
+        let mut found_trivia = Vec::new();
+
+        let mut prev_non_trivia_on_line: Option<TextRange> = None;
+        let mut has_comment_on_line = false;
         let mut trivia_to_attach_next = Vec::new();
 
         let mut next = root.first_token();
@@ -129,7 +130,7 @@ impl TriviaInfo {
             }
         }
 
-        assert!(found_trivia.is_sorted_by_key(|trivia| trivia.attached_to().start()));
+        debug_assert!(found_trivia.is_sorted_by_key(|trivia| trivia.attached_to().start()));
 
         let found_trivia = TriviaInfoInner::new(
             found_trivia,
@@ -168,7 +169,7 @@ impl TriviaInfo {
                     &found_trivia[(idx + 1)..]
                 } else {
                     // all trivia is attached to EOF (or there is not trivia)
-                    &found_trivia
+                    found_trivia
                 }
             },
         );
@@ -178,20 +179,23 @@ impl TriviaInfo {
         }
     }
 
+    #[must_use]
     pub fn all_trivia(&self) -> &[EmittableTrivia] {
-        &self.inner.borrow_trivia()
+        self.inner.borrow_trivia()
     }
 
     /// Returns all trivia attached to the token at the given range.
+    #[must_use]
     pub fn get_for_range(&self, range: TextRange) -> &[EmittableTrivia] {
         self.inner
             .borrow_token_trivia()
             .get(&range)
-            .cloned()
+            .copied()
             .unwrap_or(&[])
     }
 
     /// Returns all trivia attached to the token at the given range, split into leading and trailing trivia.
+    #[must_use]
     pub fn get_for_range_split(
         &self,
         range: TextRange,
@@ -202,11 +206,13 @@ impl TriviaInfo {
             .iter()
             .enumerate()
             .find(|(_, t)| !t.is_leading())
-            .map(|(idx, _)| idx)
-            .unwrap_or(trivia.len());
+            .map_or(trivia.len(), |(idx, _)| idx);
         let leading = &trivia[..split_idx];
         let trailing = &trivia[split_idx..];
-        debug_assert!(leading.iter().all(|t| t.is_leading()), "{leading:?}");
+        debug_assert!(
+            leading.iter().all(EmittableTrivia::is_leading),
+            "{leading:?}"
+        );
         debug_assert!(trailing.iter().all(|t| !t.is_leading()), "{trailing:?}");
         (leading, trailing)
     }
@@ -216,6 +222,7 @@ impl TriviaInfo {
     /// This can be more efficient than calling [`Self::get_for_range_split`] on each separately,
     /// since it will only split the trivia for the element once if has only one token (leftmost == rightmost).
     /// It is also often cleaner.
+    #[must_use]
     pub fn get_for_element(
         &self,
         printable: &impl Printable,
@@ -232,6 +239,7 @@ impl TriviaInfo {
     }
 
     /// Returns all trivia attached to EOF.
+    #[must_use]
     pub fn get_for_eof(&self) -> &[EmittableTrivia] {
         self.inner.borrow_eof_trivia()
     }
@@ -319,6 +327,7 @@ pub enum EmittableTrivia {
 impl EmittableTrivia {
     /// `true` is the trivia represents a comment.
     /// `false` if it represents an empty line.
+    #[must_use]
     pub fn is_comment(&self) -> bool {
         matches!(
             self,
@@ -331,6 +340,7 @@ impl EmittableTrivia {
     }
     /// `true` if the trivia is attached to the following non-trivia token (or EOF),
     /// `false` if it is attached to the previous non-trivia token (on same line).
+    #[must_use]
     pub fn is_leading(&self) -> bool {
         matches!(
             self,
@@ -341,24 +351,25 @@ impl EmittableTrivia {
                 | EmittableTrivia::LeadingLineComment { .. }
         )
     }
-    /// Anything at EOF has TextRange with u32::MAX as start and end.
+    /// Anything at EOF has `TextRange` with `u32::MAX` as start and end.
+    #[must_use]
     pub fn attached_to(&self) -> TextRange {
         match self {
-            EmittableTrivia::EmptyLine { before } => *before,
-            EmittableTrivia::EmptyLineBeforeEOF => {
+            Self::EmptyLine { before } => *before,
+            Self::EmptyLineBeforeEOF | Self::CommentBeforeEOF { .. } => {
                 TextRange::new(TextSize::new(u32::MAX), TextSize::new(u32::MAX))
             }
-            EmittableTrivia::CommentBeforeEOF { .. } => {
-                TextRange::new(TextSize::new(u32::MAX), TextSize::new(u32::MAX))
+            Self::LeadingBlockComment { before, .. } | Self::LeadingLineComment { before, .. } => {
+                *before
             }
-            EmittableTrivia::LeadingBlockComment { before, .. } => *before,
-            EmittableTrivia::LeadingLineComment { before, .. } => *before,
-            EmittableTrivia::TrailingBlockComment { after, .. } => *after,
-            EmittableTrivia::TrailingLineComment { after, .. } => *after,
+            Self::TrailingBlockComment { after, .. } | Self::TrailingLineComment { after, .. } => {
+                *after
+            }
         }
     }
     /// `true` if the trivia is attached to EOF.
     /// `false` if it is attached to some other token.
+    #[must_use]
     pub fn is_at_eof(&self) -> bool {
         matches!(
             self,
@@ -374,34 +385,29 @@ impl EmittableTrivia {
     /// - EOF comments return `None`. Generally, they should not be passed into this function as they are not between any tokens.
     ///
     /// `input` is needed to determine whether a block comment contains newlines.
+    #[must_use]
     pub fn single_line_len(&self, input: &str) -> Option<usize> {
         match self {
-            EmittableTrivia::TrailingBlockComment { comment, .. } => {
+            Self::TrailingBlockComment { comment, .. }
+            | Self::LeadingBlockComment { comment, .. } => {
                 if input[*comment].contains('\n') {
                     None
                 } else {
                     Some(comment.len().into())
                 }
             }
-            EmittableTrivia::TrailingLineComment { .. } => None,
-            EmittableTrivia::LeadingBlockComment { comment, .. } => {
-                if input[*comment].contains('\n') {
-                    None
-                } else {
-                    Some(comment.len().into())
-                }
-            }
-            EmittableTrivia::LeadingLineComment { .. } => None,
-            EmittableTrivia::CommentBeforeEOF { .. } => None,
-            EmittableTrivia::EmptyLine { .. } => Some(0),
-            EmittableTrivia::EmptyLineBeforeEOF => None,
+            Self::EmptyLine { .. } => Some(0),
+            Self::TrailingLineComment { .. }
+            | Self::LeadingLineComment { .. }
+            | Self::CommentBeforeEOF { .. }
+            | Self::EmptyLineBeforeEOF => None,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler_syntax::SyntaxNode;
+    use baml_db::{baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax::SyntaxNode};
     use baml_project::ProjectDatabase;
 
     use super::*;
@@ -426,7 +432,7 @@ function MyFunction() -> int {
 ";
         let mut db = ProjectDatabase::new();
         let source_file = db.add_file("file.baml", source);
-        let tokens = baml_compiler_lexer::lex_file(&mut db, source_file);
+        let tokens = baml_compiler_lexer::lex_file(&db, source_file);
         let (parsed, errors) = baml_compiler_parser::parse_file(&tokens);
         assert!(errors.is_empty());
         let ast = SyntaxNode::new_root(parsed);
@@ -483,6 +489,6 @@ function MyFunction() -> int {
                 },
                 EmittableTrivia::EmptyLineBeforeEOF,
             ]
-        )
+        );
     }
 }
