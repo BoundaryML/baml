@@ -102,6 +102,11 @@ pub enum TypeRef {
     /// Used in builtin functions like `render_prompt(args: map<string, unknown>)`.
     /// Maps to `Ty::BuiltinUnknown` in TIR.
     BuiltinUnknown,
+
+    /// The `big_t_type` type keyword — the meta-type for type values.
+    /// Used in type annotations like `let t: big_t_type = ...`.
+    /// Maps to `tir::Ty::Type` during lowering.
+    Type,
 }
 
 impl TypeRef {
@@ -393,6 +398,7 @@ impl TypeRef {
             "bool" => TypeRef::Bool,
             "null" => TypeRef::Null,
             "unknown" => TypeRef::BuiltinUnknown,
+            "big_t_type" => TypeRef::Type,
             "image" => TypeRef::Media(baml_base::MediaKind::Image),
             "audio" => TypeRef::Media(baml_base::MediaKind::Audio),
             "video" => TypeRef::Media(baml_base::MediaKind::Video),
