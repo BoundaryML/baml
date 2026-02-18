@@ -1,7 +1,5 @@
 //! Reference: [baml_compiler_syntax::ast::Expr] and [baml_compiler_hir::body]
 
-use std::iter::chain;
-
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
@@ -921,12 +919,13 @@ impl Printable for MatchExpr {
             .get_for_range_split(self.scrutinee.rightmost_token());
         let (close_paren_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
 
-        let scrutinee_trivia_single_line_len: Option<usize> = chain(
-            chain(open_trailing, scrutinee_leading),
-            chain(scrutinee_trailing, close_paren_leading),
-        )
-        .map(|t| t.single_line_len(printer.input))
-        .sum::<Option<usize>>();
+        let scrutinee_trivia_single_line_len: Option<usize> = open_trailing
+            .iter()
+            .chain(scrutinee_leading)
+            .chain(scrutinee_trailing)
+            .chain(close_paren_leading)
+            .map(|t| t.single_line_len(printer.input))
+            .sum::<Option<usize>>();
 
         // Try printing scrutinee on a single line
         let mut scrutinee_printer =

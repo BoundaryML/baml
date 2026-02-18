@@ -2,8 +2,6 @@
 //! since we shouldn't need special treatment for things like `string` and `int` during formatting.
 //! If this ever gets used for something else, we can split it up into multiple types.
 
-use std::iter::chain;
-
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 
 use super::{FromCST, KnownKind, StrongAstError, tokens as t};
@@ -188,14 +186,15 @@ impl Printable for ParenType {
             .trivia
             .get_for_range_split(self.ty.rightmost_token());
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        let single_line_len: usize = chain(
-            chain(open_trailing, ty_leading),
-            chain(ty_trailing, close_leading),
-        )
-        .map(|t| t.single_line_len(printer.input))
-        .sum::<Option<usize>>()
-        .map(|sum| sum + inner_printer.len() + const { "()".len() })
-        .unwrap_or(usize::MAX);
+        let single_line_len: usize = open_trailing
+            .iter()
+            .chain(ty_leading)
+            .chain(ty_trailing)
+            .chain(close_leading)
+            .map(|t| t.single_line_len(printer.input))
+            .sum::<Option<usize>>()
+            .map(|sum| sum + inner_printer.len() + const { "()".len() })
+            .unwrap_or(usize::MAX);
 
         if inner_info.multi_lined || single_line_len > shape.width {
             self.print_multi_line(shape, printer)

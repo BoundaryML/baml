@@ -1,7 +1,5 @@
 //! Reference: [baml_compiler_syntax::ast::MatchPattern] and [baml_compiler_hir::body::Pattern]
 
-use std::iter::chain;
-
 use baml_compiler_syntax::{SyntaxElement, SyntaxKind};
 use rowan::TextRange;
 
@@ -404,14 +402,15 @@ impl Printable for NestedPattern {
             .trivia
             .get_for_range_split(self.pattern.rightmost_token());
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        let single_line_len: usize = chain(
-            chain(open_trailing, pattern_leading),
-            chain(pattern_trailing, close_leading),
-        )
-        .map(|t| t.single_line_len(printer.input))
-        .sum::<Option<usize>>()
-        .map(|sum| sum + inner_printer.len() + const { "()".len() })
-        .unwrap_or(usize::MAX);
+        let single_line_len: usize = open_trailing
+            .iter()
+            .chain(pattern_leading)
+            .chain(pattern_trailing)
+            .chain(close_leading)
+            .map(|t| t.single_line_len(printer.input))
+            .sum::<Option<usize>>()
+            .map(|sum| sum + inner_printer.len() + const { "()".len() })
+            .unwrap_or(usize::MAX);
 
         if single_line_len > shape.width {
             self.print_multi_line(shape, printer)
