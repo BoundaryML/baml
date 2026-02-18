@@ -545,9 +545,10 @@ impl<'a> ExhaustivenessChecker<'a> {
 fn is_value_set_covered(value_set: &ValueSet, covered: &[ValueSet], required: &[ValueSet]) -> bool {
     // If the existing coverage covers all the requirements of the scrutinee, then
     // any value_set being checked is already covered.
-    let all_requirements_are_covered = required
-        .iter()
-        .all(|requirement| is_value_set_covered(requirement, covered, &[]));
+    let all_requirements_are_covered = !required.is_empty()
+        && required
+            .iter()
+            .all(|requirement| is_value_set_covered(requirement, covered, &[]));
     if all_requirements_are_covered {
         return true;
     }
@@ -731,6 +732,11 @@ mod tests {
             &covered,
             &[]
         ));
+        assert!(!is_value_set_covered(
+            &ValueSet::OfType(make_name("Failure")),
+            &covered,
+            &[]
+        ));
     }
 
     #[test]
@@ -822,6 +828,12 @@ mod tests {
         // A literal 42 should be covered by "int" type pattern
         assert!(is_value_set_covered(
             &ValueSet::Literal(Literal::Int(42)),
+            &covered,
+            &[]
+        ));
+        // But not a string literal
+        assert!(!is_value_set_covered(
+            &ValueSet::Literal(Literal::String("hello".to_string())),
             &covered,
             &[]
         ));
