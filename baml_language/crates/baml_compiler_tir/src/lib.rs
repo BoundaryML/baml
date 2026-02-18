@@ -2514,9 +2514,21 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         // Match expressions synthesize a type.
-        // TODO: we should support bidirectional type checking
-        Expr::Match { scrutinee, arms } => {
-            let scrutinee_ty = infer_expr(ctx, *scrutinee, body);
+        Expr::Match {
+            scrutinee,
+            scrutinee_type,
+            arms,
+        } => {
+            // Infer the scrutinee expression (needed for variable resolution / side effects)
+            let inferred_ty = infer_expr(ctx, *scrutinee, body);
+            // If there's an explicit type annotation, use it; otherwise use inferred type
+            let scrutinee_ty = if let Some(type_id) = scrutinee_type {
+                let type_ref = &body.types[*type_id];
+                let span = ctx.type_span(*type_id);
+                ctx.lower_type(type_ref, span)
+            } else {
+                inferred_ty
+            };
 
             if arms.is_empty() {
                 // Empty match is non-exhaustive (unless scrutinee is uninhabited).

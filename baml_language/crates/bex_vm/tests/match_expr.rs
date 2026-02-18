@@ -127,11 +127,9 @@ fn match_typed_pattern_first_arm() -> anyhow::Result<()> {
                 reason string
             }
 
-            type Res = Success | Failure
-
             function main() -> string {
-                let result: Res = Success { data: "hello" };
-                match (result: Res) {
+                let result = Success { data: "hello" };
+                match (result: Success | Failure) {
                     s: Success => "success: " + s.data,
                     _: Failure => "failure",
                 }
@@ -215,7 +213,6 @@ fn match_guard_true() -> anyhow::Result<()> {
                     x: Score if x.value >= 90 => "excellent",
                     x: Score if x.value >= 70 => "good",
                     _: Score => "needs work",
-                    _ => "unknown"
                 }
             }
         "#,
