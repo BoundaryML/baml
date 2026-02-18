@@ -1,0 +1,351 @@
+// Testing all the formatter cases for class declarations
+
+// ===== Empty class =====
+class EmptyClass {
+}
+
+// ===== Single field =====
+class SingleField {
+    name string
+}
+
+// ===== Multiple fields =====
+class MultiField {
+    name string
+    age int
+    active bool
+}
+
+// ===== Fields with colons =====
+class ColonFields {
+    name: string
+    age: int
+}
+
+// ===== Fields with trailing commas =====
+class TrailingCommaFields {
+    name string,
+    age int,
+    active bool,
+}
+
+// ===== Field with single attribute =====
+class SingleAttrField {
+    name string @description("The user's name")
+}
+
+// ===== Field with multiple attributes =====
+class MultiAttrField {
+    name string @description("The user's name") @alias("user_name")
+    summary string? @description("A summary") @alias("sum") @stream.done @stream.not_null
+}
+
+// ===== Field type + attr exceeding limit =====
+class LongAttrField {
+    name string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
+    data map<string, int | string | bool> @description("complex data") @alias("payload") @stream.done
+    config map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
+}
+
+// ===== Field name + long union type exceeding limit =====
+class LongFieldTypes {
+    very_long_field_name_that_takes_up_space int | string | bool | float | null | int[] | string[]
+    another_long_field map<string, map<string, map<string, int | string | bool | float | null>>>
+    callback_field (first_param: int, second_param: string, third_param: bool) -> map<string, int>
+    deeply_nested (int | (string | (bool | (float | null))))[]?
+}
+
+// ===== Various type expressions on fields =====
+class TypeVariety {
+    simple string
+    optional string?
+    array int[]
+    nested_array int[][]
+    union_type int | string
+    optional_union (int | string)?
+    union_array (int | string)[]
+    generic map<string, int>
+    complex_generic map<string, int | string | bool>
+    deep_generic map<string, map<string, int[]>>
+    fn_type (x: int, y: int) -> string
+    paren_union_array (int | string | bool)[]
+    triple_nested map<string, map<string, map<string, int>>>
+}
+
+// ===== Block attribute =====
+class DynamicClass {
+    name string
+    @@dynamic
+}
+
+// ===== Multiple block attributes =====
+class MultiBlockAttr {
+    name string
+    @@dynamic
+    @@streaming
+}
+
+// ===== Trivia on class declaration (line comments) =====
+// 1 class keyword leading
+class // 2 class keyword trailing
+// 3 name leading
+TriviaClass // 4 name trailing
+// 5 open brace leading
+{ // 6 open brace trailing
+    // 7 field leading
+    name // 8 field name trailing
+    // 9 type leading
+    string // 10 type trailing
+// 11 close brace leading
+} // 12 close brace trailing
+
+///////////////////
+
+// ===== Trivia on class declaration (block comments) =====
+/* 1 class keyword leading */
+class /* 2 class keyword trailing */
+/* 3 name leading */
+TriviaClassBlock /* 4 name trailing */
+/* 5 open brace leading */
+{ /* 6 open brace trailing */
+    /* 7 field leading */
+    name /* 8 field name trailing */
+    /* 9 type leading */
+    string /* 10 type trailing */
+/* 11 close brace leading */
+} /* 12 close brace trailing */
+
+///////////////////
+
+// ===== Trivia on field with attributes (line comments) =====
+class TriviaFieldAttrs {
+    // 1 field leading
+    name // 2 field name trailing
+    // 3 type leading
+    string // 4 type trailing
+    // 5 attr leading
+    @description // 6 attr name trailing
+    // 7 open paren leading
+    ( // 8 open paren trailing
+    // 9 arg leading
+    "the name" // 10 arg trailing
+    // 11 close paren leading
+    ) // 12 close paren trailing
+}
+
+// ===== Trivia on field with attributes (block comments) =====
+class TriviaFieldAttrsBlock {
+    /* 1 field leading */
+    name /* 2 field name trailing */
+    /* 3 type leading */
+    string /* 4 type trailing */
+    /* 5 attr leading */
+    @description /* 6 attr name trailing */
+    /* 7 open paren leading */
+    ( /* 8 open paren trailing */
+    /* 9 arg leading */
+    "the name" /* 10 arg trailing */
+    /* 11 close paren leading */
+    ) /* 12 close paren trailing */
+}
+
+// ===== Trivia on field with long wrapping type (line comments) =====
+class TriviaLongFieldType {
+    // 1 field leading
+    data // 2 field name trailing
+    // 3 type leading
+    map // 4 map trailing
+    < // 5 open angle trailing
+    // 6 key type leading
+    string // 7 key type trailing
+    , // 8 comma trailing
+    // 9 value type leading
+    int // 10 first trailing
+    | // 11 pipe trailing
+    // 12 second leading
+    string // 13 second trailing
+    | // 14 pipe trailing
+    // 15 third leading
+    bool // 16 third trailing
+    | // 17 pipe trailing
+    // 18 fourth leading
+    float // 19 fourth trailing
+    | // 20 pipe trailing
+    // 21 fifth leading
+    null // 22 fifth trailing
+    > // 23 close angle trailing
+    // 24 attr leading
+    @description // 25 attr name trailing
+    ( // 26 attr open trailing
+    // 27 attr arg leading
+    "a long description" // 28 attr arg trailing
+    ) // 29 attr close trailing
+}
+
+// ===== Trivia on field with long wrapping type (block comments) =====
+class TriviaLongFieldTypeBlock {
+    /* 1 field leading */
+    data /* 2 field name trailing */
+    /* 3 type leading */
+    map /* 4 map trailing */
+    < /* 5 open angle trailing */
+    /* 6 key type leading */
+    string /* 7 key type trailing */
+    , /* 8 comma trailing */
+    /* 9 value type leading */
+    int /* 10 first trailing */
+    | /* 11 pipe trailing */
+    /* 12 second leading */
+    string /* 13 second trailing */
+    | /* 14 pipe trailing */
+    /* 15 third leading */
+    bool /* 16 third trailing */
+    | /* 17 pipe trailing */
+    /* 18 fourth leading */
+    float /* 19 fourth trailing */
+    | /* 20 pipe trailing */
+    /* 21 fifth leading */
+    null /* 22 fifth trailing */
+    > /* 23 close angle trailing */
+    /* 24 attr leading */
+    @description /* 25 attr name trailing */
+    ( /* 26 attr open trailing */
+    /* 27 attr arg leading */
+    "a long description" /* 28 attr arg trailing */
+    ) /* 29 attr close trailing */
+}
+
+// ===== Trivia on field with multiple attributes (line comments) =====
+class TriviaMultiAttr {
+    // 1 field leading
+    name // 2 name trailing
+    // 3 type leading
+    string // 4 type trailing
+    // 5 first attr leading
+    @description // 6 first attr name trailing
+    ( // 7 first attr open trailing
+    // 8 arg leading
+    "name" // 9 arg trailing
+    ) // 10 first attr close trailing
+    // 11 second attr leading
+    @alias // 12 second attr name trailing
+    ( // 13 second attr open trailing
+    // 14 arg leading
+    "user_name" // 15 arg trailing
+    ) // 16 second attr close trailing
+    // 17 third attr leading
+    @stream.done // 18 third attr trailing
+}
+
+// ===== Trivia on field with multiple attributes (block comments) =====
+class TriviaMultiAttrBlock {
+    /* 1 field leading */
+    name /* 2 name trailing */
+    /* 3 type leading */
+    string /* 4 type trailing */
+    /* 5 first attr leading */
+    @description /* 6 first attr name trailing */
+    ( /* 7 first attr open trailing */
+    /* 8 arg leading */
+    "name" /* 9 arg trailing */
+    ) /* 10 first attr close trailing */
+    /* 11 second attr leading */
+    @alias /* 12 second attr name trailing */
+    ( /* 13 second attr open trailing */
+    /* 14 arg leading */
+    "user_name" /* 15 arg trailing */
+    ) /* 16 second attr close trailing */
+    /* 17 third attr leading */
+    @stream.done /* 18 third attr trailing */
+}
+
+// ===== Short class name =====
+class A {
+    x int
+}
+
+// ===== Long class name exceeding limit =====
+class ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
+    x int
+}
+
+// ===== Fields with various attribute types =====
+class AttributeVariety {
+    a string @skip
+    b string @alias("alt_name")
+    c string @description("desc")
+    d string @stream.done
+    e string @stream.not_null
+    f string @stream.with_state
+}
+
+// ===== Extraneous whitespace =====
+class    ExtraWhitespace    {
+    name     string     @description(  "name"  )     @alias(  "n"  )
+    age     int
+}
+
+// ===== Many fields =====
+class ManyFields {
+    field1 int
+    field2 int
+    field3 int
+    field4 int
+    field5 int
+    field6 int
+    field7 int
+    field8 int
+    field9 int
+    field10 int
+}
+
+// ===== Nested class types =====
+class Outer {
+    inner InnerNested
+    list InnerNested[]
+    optional InnerNested?
+    mapping map<string, InnerNested>
+}
+
+class InnerNested {
+    value int
+}
+
+// ===== Class with function member =====
+class WithMethod {
+    name string
+
+    function greet() -> string {
+        "hello"
+    }
+}
+
+// ===== Class with function member that has wrapping signature =====
+class WithLongMethod {
+    name string
+
+    function processData(first_input: map<string, int>, second_input: (int | string | bool)[], third_input: string) -> map<string, int | string | bool> {
+        {"result": 1}
+    }
+}
+
+// ===== Deeply nested class structure =====
+class DeepOuter {
+    level1 DeepLevel1
+}
+
+class DeepLevel1 {
+    level2 DeepLevel2
+    items DeepLevel2[]
+    mapping map<string, DeepLevel2>
+}
+
+class DeepLevel2 {
+    level3 DeepLevel3
+    value int | string | bool | float | null
+}
+
+class DeepLevel3 {
+    data string
+    nested map<string, map<string, int>>
+}

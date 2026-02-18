@@ -1,0 +1,989 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ChainUser"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "profile"
+      TYPE_EXPR "ChainProfile"
+        WORD "ChainProfile"
+    FIELD
+      WORD "tags"
+      TYPE_EXPR "string[]"
+        WORD "string"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "scores"
+      TYPE_EXPR "int[][]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ChainProfile"
+    L_BRACE "{"
+    FIELD
+      WORD "bio"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "settings"
+      TYPE_EXPR "ChainSettings"
+        WORD "ChainSettings"
+    FIELD
+      WORD "items"
+      TYPE_EXPR "ChainItem[]"
+        WORD "ChainItem"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ChainSettings"
+    L_BRACE "{"
+    FIELD
+      WORD "theme"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "notifications"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    FIELD
+      WORD "preferences"
+      TYPE_EXPR "ChainPreferences"
+        WORD "ChainPreferences"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ChainPreferences"
+    L_BRACE "{"
+    FIELD
+      WORD "color"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "font"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "size"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ChainItem"
+    L_BRACE "{"
+    FIELD
+      WORD "label"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "value"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "metadata"
+      TYPE_EXPR "ChainMetadata"
+        WORD "ChainMetadata"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ChainMetadata"
+    L_BRACE "{"
+    FIELD
+      WORD "created_at"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "tags"
+      TYPE_EXPR "string[]"
+        WORD "string"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ChainExprs"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "user"
+        COLON ":"
+        TYPE_EXPR "ChainUser"
+          WORD "ChainUser"
+      COMMA ","
+      PARAMETER
+        WORD "items"
+        COLON ":"
+        TYPE_EXPR "ChainItem[]"
+          WORD "ChainItem"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "m"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        WORD "user"
+        SEMICOLON ";"
+        PATH_EXPR "user.name"
+          WORD "user"
+          DOT "."
+          WORD "name"
+        SEMICOLON ";"
+        PATH_EXPR "user.profile.bio"
+          WORD "user"
+          DOT "."
+          WORD "profile"
+          DOT "."
+          WORD "bio"
+        SEMICOLON ";"
+        PATH_EXPR "user.profile.settings.theme"
+          WORD "user"
+          DOT "."
+          WORD "profile"
+          DOT "."
+          WORD "settings"
+          DOT "."
+          WORD "theme"
+        SEMICOLON ";"
+        PATH_EXPR "// ===== Deep path exceeding limit =====
+    user.profile.settings.preferences.color"
+          WORD "user"
+          DOT "."
+          WORD "profile"
+          DOT "."
+          WORD "settings"
+          DOT "."
+          WORD "preferences"
+          DOT "."
+          WORD "color"
+        SEMICOLON ";"
+        INDEX_EXPR
+          FIELD_ACCESS_EXPR
+            FIELD_ACCESS_EXPR
+              INDEX_EXPR
+                PATH_EXPR "user.profile.items"
+                  WORD "user"
+                  DOT "."
+                  WORD "profile"
+                  DOT "."
+                  WORD "items"
+                L_BRACKET "["
+                INTEGER_LITERAL "0"
+                R_BRACKET "]"
+              DOT "."
+              WORD "metadata"
+            DOT "."
+            WORD "tags"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        PATH_EXPR "user.profile.settings.preferences.font"
+          WORD "user"
+          DOT "."
+          WORD "profile"
+          DOT "."
+          WORD "settings"
+          DOT "."
+          WORD "preferences"
+          DOT "."
+          WORD "font"
+        SEMICOLON ";"
+        PATH_EXPR "// ===== Trivia in path (line comments) =====
+    // 1 first leading
+    user // 2 first trailing
+    // 3 dot leading
+    . // 4 dot trailing
+    // 5 field leading
+    name"
+          WORD "user"
+          DOT "."
+          WORD "name"
+        SEMICOLON ";"
+        PATH_EXPR "// ===== Trivia in path (block comments) =====
+    /* 1 first leading */
+    user /* 2 first trailing */
+    /* 3 dot leading */
+    . /* 4 dot trailing */
+    /* 5 field leading */
+    name"
+          WORD "user"
+          DOT "."
+          WORD "name"
+        SEMICOLON ";"
+        PATH_EXPR "// ===== Trivia in deep path (line comments) =====
+    // 1 root leading
+    user // 2 root trailing
+    . // 3 dot1 trailing
+    // 4 profile leading
+    profile // 5 profile trailing
+    . // 6 dot2 trailing
+    // 7 settings leading
+    settings // 8 settings trailing
+    . // 9 dot3 trailing
+    // 10 theme leading
+    theme"
+          WORD "user"
+          DOT "."
+          WORD "profile"
+          DOT "."
+          WORD "settings"
+          DOT "."
+          WORD "theme"
+        SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "// ===== Function calls =====
+    user.name.len"
+            WORD "user"
+            DOT "."
+            WORD "name"
+            DOT "."
+            WORD "len"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "items.len"
+            WORD "items"
+            DOT "."
+            WORD "len"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "// ===== Call with arguments =====
+    user.profile.items.get"
+            WORD "user"
+            DOT "."
+            WORD "profile"
+            DOT "."
+            WORD "items"
+            DOT "."
+            WORD "get"
+          CALL_ARGS "(0)"
+            L_PAREN "("
+            INTEGER_LITERAL "0"
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "// ===== Trivia in call (line comments) =====
+    // 1 callee leading
+    items // 2 callee trailing
+    // 3 open paren leading
+    . // 4 dot trailing
+    // 5 method leading
+    get"
+            WORD "items"
+            DOT "."
+            WORD "get"
+          CALL_ARGS "// 6 method trailing
+    ( // 7 open paren trailing
+    // 8 arg leading
+    0 // 9 arg trailing
+    // 10 close paren leading
+    )"
+            L_PAREN "("
+            INTEGER_LITERAL "0"
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "// ===== Trivia in call (block comments) =====
+    /* 1 callee leading */
+    items /* 2 callee trailing */
+    /* 3 dot leading */
+    . /* 4 dot trailing */
+    /* 5 method leading */
+    get"
+            WORD "items"
+            DOT "."
+            WORD "get"
+          CALL_ARGS "/* 6 method trailing */
+    ( /* 7 open paren trailing */
+    /* 8 arg leading */
+    0 /* 9 arg trailing */
+    /* 10 close paren leading */
+    )"
+            L_PAREN "("
+            INTEGER_LITERAL "0"
+            R_PAREN ")"
+        SEMICOLON ";"
+        INDEX_EXPR "items[0]"
+          WORD "items"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        FIELD_ACCESS_EXPR
+          INDEX_EXPR "items[0]"
+            WORD "items"
+            L_BRACKET "["
+            INTEGER_LITERAL "0"
+            R_BRACKET "]"
+          DOT "."
+          WORD "label"
+        SEMICOLON ";"
+        INDEX_EXPR
+          PATH_EXPR "user.tags"
+            WORD "user"
+            DOT "."
+            WORD "tags"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        INDEX_EXPR
+          INDEX_EXPR
+            PATH_EXPR "user.scores"
+              WORD "user"
+              DOT "."
+              WORD "scores"
+            L_BRACKET "["
+            INTEGER_LITERAL "0"
+            R_BRACKET "]"
+          L_BRACKET "["
+          INTEGER_LITERAL "1"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        INDEX_EXPR "items // 2 base trailing
+    // 3 open bracket leading
+    [ // 4 open bracket trailing
+    // 5 index leading
+    0 // 6 index trailing
+    // 7 close bracket leading
+    ]"
+          WORD "items"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        INDEX_EXPR "items /* 2 base trailing */
+    /* 3 open bracket leading */
+    [ /* 4 open bracket trailing */
+    /* 5 index leading */
+    0 /* 6 index trailing */
+    /* 7 close bracket leading */
+    ]"
+          WORD "items"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              PATH_EXPR "// ===== Chained calls =====
+    user.name.len"
+                WORD "user"
+                DOT "."
+                WORD "name"
+                DOT "."
+                WORD "len"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            DOT "."
+            WORD "to_string"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              FIELD_ACCESS_EXPR
+                CALL_EXPR
+                  FIELD_ACCESS_EXPR
+                    CALL_EXPR
+                      FIELD_ACCESS_EXPR
+                        CALL_EXPR
+                          FIELD_ACCESS_EXPR
+                            CALL_EXPR
+                              FIELD_ACCESS_EXPR
+                                CALL_EXPR
+                                  FIELD_ACCESS_EXPR
+                                    CALL_EXPR
+                                      PATH_EXPR "// ===== Long chain exceeding limit: many field accesses =====
+    user.profile.settings.preferences.color.len"
+                                        WORD "user"
+                                        DOT "."
+                                        WORD "profile"
+                                        DOT "."
+                                        WORD "settings"
+                                        DOT "."
+                                        WORD "preferences"
+                                        DOT "."
+                                        WORD "color"
+                                        DOT "."
+                                        WORD "len"
+                                      CALL_ARGS "()"
+                                        L_PAREN "("
+                                        R_PAREN ")"
+                                    DOT "."
+                                    WORD "to_string"
+                                  CALL_ARGS "()"
+                                    L_PAREN "("
+                                    R_PAREN ")"
+                                DOT "."
+                                WORD "len"
+                              CALL_ARGS "()"
+                                L_PAREN "("
+                                R_PAREN ")"
+                            DOT "."
+                            WORD "to_string"
+                          CALL_ARGS "()"
+                            L_PAREN "("
+                            R_PAREN ")"
+                        DOT "."
+                        WORD "len"
+                      CALL_ARGS "()"
+                        L_PAREN "("
+                        R_PAREN ")"
+                    DOT "."
+                    WORD "to_string"
+                  CALL_ARGS "()"
+                    L_PAREN "("
+                    R_PAREN ")"
+                DOT "."
+                WORD "len"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            DOT "."
+            WORD "to_string"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              FIELD_ACCESS_EXPR
+                CALL_EXPR
+                  FIELD_ACCESS_EXPR
+                    CALL_EXPR
+                      FIELD_ACCESS_EXPR
+                        CALL_EXPR
+                          FIELD_ACCESS_EXPR
+                            CALL_EXPR
+                              FIELD_ACCESS_EXPR
+                                INDEX_EXPR
+                                  FIELD_ACCESS_EXPR
+                                    FIELD_ACCESS_EXPR
+                                      INDEX_EXPR
+                                        PATH_EXPR "// ===== Long chain exceeding limit: deep path + call + index =====
+    user.profile.items"
+                                          WORD "user"
+                                          DOT "."
+                                          WORD "profile"
+                                          DOT "."
+                                          WORD "items"
+                                        L_BRACKET "["
+                                        INTEGER_LITERAL "0"
+                                        R_BRACKET "]"
+                                      DOT "."
+                                      WORD "metadata"
+                                    DOT "."
+                                    WORD "tags"
+                                  L_BRACKET "["
+                                  INTEGER_LITERAL "0"
+                                  R_BRACKET "]"
+                                DOT "."
+                                WORD "len"
+                              CALL_ARGS "()"
+                                L_PAREN "("
+                                R_PAREN ")"
+                            DOT "."
+                            WORD "to_string"
+                          CALL_ARGS "()"
+                            L_PAREN "("
+                            R_PAREN ")"
+                        DOT "."
+                        WORD "len"
+                      CALL_ARGS "()"
+                        L_PAREN "("
+                        R_PAREN ")"
+                    DOT "."
+                    WORD "to_string"
+                  CALL_ARGS "()"
+                    L_PAREN "("
+                    R_PAREN ")"
+                DOT "."
+                WORD "len"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            DOT "."
+            WORD "to_string"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        FIELD_ACCESS_EXPR
+          CALL_EXPR
+            PATH_EXPR "// ===== Long call args exceeding limit =====
+    user.profile.items.get"
+              WORD "user"
+              DOT "."
+              WORD "profile"
+              DOT "."
+              WORD "items"
+              DOT "."
+              WORD "get"
+            CALL_ARGS
+              L_PAREN "("
+              BINARY_EXPR
+                BINARY_EXPR
+                  BINARY_EXPR
+                    BINARY_EXPR
+                      BINARY_EXPR
+                        CALL_EXPR
+                          PATH_EXPR "user.profile.items.len"
+                            WORD "user"
+                            DOT "."
+                            WORD "profile"
+                            DOT "."
+                            WORD "items"
+                            DOT "."
+                            WORD "len"
+                          CALL_ARGS "()"
+                            L_PAREN "("
+                            R_PAREN ")"
+                        MINUS "-"
+                        INTEGER_LITERAL "1"
+                      PLUS "+"
+                      CALL_EXPR
+                        PATH_EXPR "user.profile.items.len"
+                          WORD "user"
+                          DOT "."
+                          WORD "profile"
+                          DOT "."
+                          WORD "items"
+                          DOT "."
+                          WORD "len"
+                        CALL_ARGS "()"
+                          L_PAREN "("
+                          R_PAREN ")"
+                    MINUS "-"
+                    INTEGER_LITERAL "2"
+                  PLUS "+"
+                  CALL_EXPR
+                    PATH_EXPR "user.profile.items.len"
+                      WORD "user"
+                      DOT "."
+                      WORD "profile"
+                      DOT "."
+                      WORD "items"
+                      DOT "."
+                      WORD "len"
+                    CALL_ARGS "()"
+                      L_PAREN "("
+                      R_PAREN ")"
+                MINUS "-"
+                INTEGER_LITERAL "3"
+              R_PAREN ")"
+          DOT "."
+          WORD "label"
+        SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "// ===== Call with many args exceeding limit =====
+    user.profile.items.slice"
+            WORD "user"
+            DOT "."
+            WORD "profile"
+            DOT "."
+            WORD "items"
+            DOT "."
+            WORD "slice"
+          CALL_ARGS
+            L_PAREN "("
+            INTEGER_LITERAL "0"
+            COMMA ","
+            BINARY_EXPR
+              CALL_EXPR
+                PATH_EXPR "user.profile.items.len"
+                  WORD "user"
+                  DOT "."
+                  WORD "profile"
+                  DOT "."
+                  WORD "items"
+                  DOT "."
+                  WORD "len"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              MINUS "-"
+              INTEGER_LITERAL "1"
+            COMMA ","
+            PATH_EXPR "user.profile.settings.preferences.size"
+              WORD "user"
+              DOT "."
+              WORD "profile"
+              DOT "."
+              WORD "settings"
+              DOT "."
+              WORD "preferences"
+              DOT "."
+              WORD "size"
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              FIELD_ACCESS_EXPR
+                CALL_EXPR
+                  PATH_EXPR "// ===== Trivia in long wrapping chain (line comments) =====
+    // 1 leading
+    user // 2 trailing
+    . // 3 trailing
+    // 4 leading
+    profile // 5 trailing
+    . // 6 trailing
+    // 7 leading
+    settings // 8 trailing
+    . // 9 trailing
+    // 10 leading
+    preferences // 11 trailing
+    . // 12 trailing
+    // 13 leading
+    color // 14 trailing
+    . // 15 trailing
+    // 16 leading
+    len"
+                    WORD "user"
+                    DOT "."
+                    WORD "profile"
+                    DOT "."
+                    WORD "settings"
+                    DOT "."
+                    WORD "preferences"
+                    DOT "."
+                    WORD "color"
+                    DOT "."
+                    WORD "len"
+                  CALL_ARGS "// 17 trailing
+    ( // 18 trailing
+    )"
+                    L_PAREN "("
+                    R_PAREN ")"
+                DOT "."
+                WORD "to_string"
+              CALL_ARGS "// 22 trailing
+    ( // 23 trailing
+    )"
+                L_PAREN "("
+                R_PAREN ")"
+            DOT "."
+            WORD "len"
+          CALL_ARGS "// 27 trailing
+    ( // 28 trailing
+    )"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            CALL_EXPR
+              FIELD_ACCESS_EXPR
+                CALL_EXPR
+                  PATH_EXPR "// ===== Trivia in long wrapping chain (block comments) =====
+    /* 1 leading */
+    user /* 2 trailing */
+    . /* 3 trailing */
+    /* 4 leading */
+    profile /* 5 trailing */
+    . /* 6 trailing */
+    /* 7 leading */
+    settings /* 8 trailing */
+    . /* 9 trailing */
+    /* 10 leading */
+    preferences /* 11 trailing */
+    . /* 12 trailing */
+    /* 13 leading */
+    color /* 14 trailing */
+    . /* 15 trailing */
+    /* 16 leading */
+    len"
+                    WORD "user"
+                    DOT "."
+                    WORD "profile"
+                    DOT "."
+                    WORD "settings"
+                    DOT "."
+                    WORD "preferences"
+                    DOT "."
+                    WORD "color"
+                    DOT "."
+                    WORD "len"
+                  CALL_ARGS "/* 17 trailing */
+    ( /* 18 trailing */
+    )"
+                    L_PAREN "("
+                    R_PAREN ")"
+                DOT "."
+                WORD "to_string"
+              CALL_ARGS "/* 22 trailing */
+    ( /* 23 trailing */
+    )"
+                L_PAREN "("
+                R_PAREN ")"
+            DOT "."
+            WORD "len"
+          CALL_ARGS "/* 27 trailing */
+    ( /* 28 trailing */
+    )"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        FIELD_ACCESS_EXPR
+          CALL_EXPR
+            PATH_EXPR "// ===== Trivia in call with long args (line comments) =====
+    // 1 leading
+    user // 2 trailing
+    . // 3 trailing
+    // 4 leading
+    profile // 5 trailing
+    . // 6 trailing
+    // 7 leading
+    items // 8 trailing
+    . // 9 trailing
+    // 10 leading
+    get"
+              WORD "user"
+              DOT "."
+              WORD "profile"
+              DOT "."
+              WORD "items"
+              DOT "."
+              WORD "get"
+            CALL_ARGS
+              L_PAREN "("
+              BINARY_EXPR
+                BINARY_EXPR
+                  BINARY_EXPR
+                    CALL_EXPR
+                      PATH_EXPR "// 12 trailing
+    // 13 leading
+    user.profile.items.len"
+                        WORD "user"
+                        DOT "."
+                        WORD "profile"
+                        DOT "."
+                        WORD "items"
+                        DOT "."
+                        WORD "len"
+                      CALL_ARGS "()"
+                        L_PAREN "("
+                        R_PAREN ")"
+                    MINUS "-"
+                    INTEGER_LITERAL "1"
+                  PLUS "+"
+                  CALL_EXPR
+                    PATH_EXPR "user.profile.items.len"
+                      WORD "user"
+                      DOT "."
+                      WORD "profile"
+                      DOT "."
+                      WORD "items"
+                      DOT "."
+                      WORD "len"
+                    CALL_ARGS "()"
+                      L_PAREN "("
+                      R_PAREN ")"
+                MINUS "-"
+                INTEGER_LITERAL "2"
+              R_PAREN ")"
+          DOT "."
+          WORD "label"
+        SEMICOLON ";"
+        INDEX_EXPR
+          INDEX_EXPR
+            PATH_EXPR "// ===== Deeply nested index chains =====
+    user.scores"
+              WORD "user"
+              DOT "."
+              WORD "scores"
+            L_BRACKET "["
+            INTEGER_LITERAL "0"
+            R_BRACKET "]"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        INDEX_EXPR
+          INDEX_EXPR
+            PATH_EXPR "user.scores"
+              WORD "user"
+              DOT "."
+              WORD "scores"
+            L_BRACKET "["
+            INTEGER_LITERAL "0"
+            R_BRACKET "]"
+          L_BRACKET "["
+          INTEGER_LITERAL "1"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        INDEX_EXPR
+          INDEX_EXPR
+            PATH_EXPR "user.scores"
+              WORD "user"
+              DOT "."
+              WORD "scores"
+            L_BRACKET "["
+            BINARY_EXPR
+              CALL_EXPR
+                PATH_EXPR "user.scores.len"
+                  WORD "user"
+                  DOT "."
+                  WORD "scores"
+                  DOT "."
+                  WORD "len"
+                CALL_ARGS "()"
+                  L_PAREN "("
+                  R_PAREN ")"
+              MINUS "-"
+              INTEGER_LITERAL "1"
+            R_BRACKET "]"
+          L_BRACKET "["
+          BINARY_EXPR
+            CALL_EXPR
+              FIELD_ACCESS_EXPR
+                INDEX_EXPR
+                  PATH_EXPR "user.scores"
+                    WORD "user"
+                    DOT "."
+                    WORD "scores"
+                  L_BRACKET "["
+                  INTEGER_LITERAL "0"
+                  R_BRACKET "]"
+                DOT "."
+                WORD "len"
+              CALL_ARGS "()"
+                L_PAREN "("
+                R_PAREN ")"
+            MINUS "-"
+            INTEGER_LITERAL "1"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        PATH_EXPR "// ===== Extraneous whitespace =====
+    user  .  name"
+          WORD "user"
+          DOT "."
+          WORD "name"
+        SEMICOLON ";"
+        INDEX_EXPR "items  [  0  ]"
+          WORD "items"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        CALL_EXPR
+          PATH_EXPR "items  .  get"
+            WORD "items"
+            DOT "."
+            WORD "get"
+          CALL_ARGS "(  0  )"
+            L_PAREN "("
+            INTEGER_LITERAL "0"
+            R_PAREN ")"
+        SEMICOLON ";"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            INDEX_EXPR
+              PATH_EXPR "// ===== Mixed chain: field + index + call =====
+    user.tags"
+                WORD "user"
+                DOT "."
+                WORD "tags"
+              L_BRACKET "["
+              INTEGER_LITERAL "0"
+              R_BRACKET "]"
+            DOT "."
+            WORD "len"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        INDEX_EXPR
+          INDEX_EXPR
+            PATH_EXPR "user.scores"
+              WORD "user"
+              DOT "."
+              WORD "scores"
+            L_BRACKET "["
+            INTEGER_LITERAL "0"
+            R_BRACKET "]"
+          L_BRACKET "["
+          INTEGER_LITERAL "0"
+          R_BRACKET "]"
+        SEMICOLON ";"
+        CALL_EXPR
+          FIELD_ACCESS_EXPR
+            FIELD_ACCESS_EXPR
+              INDEX_EXPR "items[0]"
+                WORD "items"
+                L_BRACKET "["
+                INTEGER_LITERAL "0"
+                R_BRACKET "]"
+              DOT "."
+              WORD "label"
+            DOT "."
+            WORD "len"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        SEMICOLON ";"
+        ENV_ACCESS_EXPR "// ===== Env access =====
+    env.API_KEY"
+          KW_ENV "env"
+          DOT "."
+          WORD "API_KEY"
+        SEMICOLON ";"
+        ENV_ACCESS_EXPR "env.DATABASE_URL"
+          KW_ENV "env"
+          DOT "."
+          WORD "DATABASE_URL"
+        SEMICOLON ";"
+        PATH_EXPR "// ===== Final expression =====
+    user.name"
+          WORD "user"
+          DOT "."
+          WORD "name"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

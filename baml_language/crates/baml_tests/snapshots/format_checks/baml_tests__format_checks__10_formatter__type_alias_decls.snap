@@ -1,0 +1,6 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== FORMATTER ERROR ===
+An element at 3998..4033 was a token when it should have been a node.

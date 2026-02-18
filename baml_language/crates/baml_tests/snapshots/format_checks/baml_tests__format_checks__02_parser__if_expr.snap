@@ -1,0 +1,114 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MyFunction"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "a > b"
+              WORD "a"
+              GREATER ">"
+              WORD "b"
+            R_PAREN ")"
+          BLOCK_EXPR "{
+        1;
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR "{
+        1;
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "a > b"
+              WORD "a"
+              GREATER ">"
+              WORD "b"
+            R_PAREN ")"
+          BLOCK_EXPR "// 4 condition trailing
+    // 5 then leading
+    { // 6 then inside
+        1;
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR "// 9 else trailing
+    // 10 else then leading
+    { // 11 else then inside
+        1;
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "a > b"
+              WORD "a"
+              GREATER ">"
+              WORD "b"
+            R_PAREN ")"
+          BLOCK_EXPR "/* 4 condition trailing */
+    /* 5 then leading */
+    { /* 6 then inside */
+        1;
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR "/* 9 else trailing */
+    /* 10 else then leading */
+    { /* 11 else then inside */
+        1;
+    }"
+            L_BRACE "{"
+            INTEGER_LITERAL "1"
+            SEMICOLON ";"
+            R_BRACE "}"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

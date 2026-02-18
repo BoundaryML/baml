@@ -1,0 +1,2891 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "BasicTemplate"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      PROMPT_TEXT "Hello,"
+        WORD "Hello"
+        COMMA ","
+      TEMPLATE_INTERPOLATION "{{ name }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "name"
+        R_BRACE "}"
+        R_BRACE "}"
+      PROMPT_TEXT "!"
+        NOT "!"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "NoParams"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      PROMPT_TEXT "A static template with no parameters."
+        WORD "A"
+        WORD "static"
+        WORD "template"
+        WORD "with"
+        WORD "no"
+        WORD "parameters"
+        DOT "."
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "MultiParam"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "last"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "age"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      PROMPT_TEXT "Name:"
+        WORD "Name"
+        COLON ":"
+      TEMPLATE_INTERPOLATION "{{ first }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "first"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ last }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "last"
+        R_BRACE "}"
+        R_BRACE "}"
+      PROMPT_TEXT "Age:"
+        WORD "Age"
+        COLON ":"
+      TEMPLATE_INTERPOLATION "{{ age }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "age"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "ComplexParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "items"
+        COLON ":"
+        TYPE_EXPR "string[]"
+          WORD "string"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "config"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      PROMPT_TEXT "Items:"
+        WORD "Items"
+        COLON ":"
+      TEMPLATE_INTERPOLATION "{{ items }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "items"
+        R_BRACE "}"
+        R_BRACE "}"
+      PROMPT_TEXT "Config:"
+        WORD "Config"
+        COLON ":"
+      TEMPLATE_INTERPOLATION "{{ config }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "config"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "SingleLine"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      PROMPT_TEXT "Value is"
+        WORD "Value"
+        WORD "is"
+      TEMPLATE_INTERPOLATION "{{ x }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "ManyParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "fourth_parameter"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ first_parameter }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "first_parameter"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ second_parameter }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "second_parameter"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ third_parameter }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "third_parameter"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ fourth_parameter }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "fourth_parameter"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "VeryLongParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "extremely_long_parameter_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "another_very_long_parameter_name"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ extremely_long_parameter_name }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "extremely_long_parameter_name"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ another_very_long_parameter_name }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "another_very_long_parameter_name"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "NoColonParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "name"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "age"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ name }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "name"
+        R_BRACE "}"
+        R_BRACE "}"
+      PROMPT_TEXT "is"
+        WORD "is"
+      TEMPLATE_INTERPOLATION "{{ age }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "age"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "WithComment"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_COMMENT "{# This is a template comment #}"
+        L_BRACE "{"
+        HASH "#"
+        WORD "This"
+        WORD "is"
+        WORD "a"
+        WORD "template"
+        WORD "comment"
+        HASH "#"
+        R_BRACE "}"
+      PROMPT_TEXT "Value:"
+        WORD "Value"
+        COLON ":"
+      TEMPLATE_INTERPOLATION "{{ x }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "TriviaTemplate"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "// 9 colon trailing
+// 10 type leading
+string"
+          WORD "string"
+      R_PAREN ")"
+  HASH "#"
+  QUOTE """
+  WORD "Hello"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "x"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "TriviaTemplateBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "/* 9 colon trailing */
+/* 10 type leading */
+string"
+          WORD "string"
+      R_PAREN ")"
+  HASH "#"
+  QUOTE """
+  WORD "Hello"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "x"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "MultiParamTrivia"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "// 3 first colon trailing
+    // 4 first type leading
+    string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "// 9 second colon trailing
+    // 10 second type leading
+    int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ a }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "a"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ b }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "b"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "MultiParamTriviaBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "/* 3 first colon trailing */
+    /* 4 first type leading */
+    string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "/* 9 second colon trailing */
+    /* 10 second type leading */
+    int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ a }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "a"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ b }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "b"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "T"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ x }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "ThisIsAnExtremelyLongTemplateStringNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ x }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "VeryLongTemplateNameWithManyParameters"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      COMMA ","
+      PARAMETER
+        WORD "fourth_parameter"
+        COLON ":"
+        TYPE_EXPR "float"
+          WORD "float"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ first_parameter }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "first_parameter"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ second_parameter }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "second_parameter"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ third_parameter }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "third_parameter"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ fourth_parameter }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "fourth_parameter"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "ComplexTypesWrap"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "items"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string | bool"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "config"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int | string"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "callback"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            WORD "x"
+            COLON ":"
+            TYPE_EXPR "int"
+              WORD "int"
+          COMMA ","
+          FUNCTION_TYPE_PARAM
+            WORD "y"
+            COLON ":"
+            TYPE_EXPR "int"
+              WORD "int"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "string"
+            WORD "string"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ items }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "items"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ config }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "config"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "VeryLongComplexParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int | string | bool"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int"
+                  WORD "int"
+                GREATER ">"
+            COMMA ","
+            TYPE_EXPR "fourth_parameter"
+              WORD "fourth_parameter"
+            GREATER ">"
+  COLON ":"
+  L_PAREN "("
+  WORD "x"
+  COLON ":"
+  WORD "int"
+  R_PAREN ")"
+  ARROW "->"
+  WORD "string"
+  R_PAREN ")"
+  HASH "#"
+  QUOTE """
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "first_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "second_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "third_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "DeepGenericParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "data"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR
+                  WORD "map"
+                  TYPE_ARGS
+                    LESS "<"
+                    TYPE_EXPR "string"
+                      WORD "string"
+                    COMMA ","
+                    TYPE_EXPR "int | string | bool | float | null"
+                      WORD "int"
+                      PIPE "|"
+                      WORD "string"
+                      PIPE "|"
+                      WORD "bool"
+                      PIPE "|"
+                      WORD "float"
+                      PIPE "|"
+                      WORD "null"
+                    GREATER ">"
+                GREATER ">"
+            GREATER ">"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ data }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "data"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "ConstrainedParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "value"
+        COLON ":"
+        TYPE_EXPR
+          WORD "int"
+          ATTRIBUTE
+            AT "@"
+            WORD "check"
+            ATTRIBUTE_ARGS
+              L_PAREN "("
+              STRING_LITERAL "positive"
+                QUOTE """
+                WORD "positive"
+                QUOTE """
+              COMMA ","
+              EXPR "{{ this > 0 }}"
+                L_BRACE "{"
+                L_BRACE "{"
+                WORD "this"
+                GREATER ">"
+                INTEGER_LITERAL "0"
+                R_BRACE "}"
+                R_BRACE "}"
+              R_PAREN ")"
+      COMMA ","
+      PARAMETER
+        WORD "name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "the name"
+              QUOTE """
+              WORD "the"
+              WORD "name"
+              QUOTE """
+            R_PAREN ")"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ value }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "value"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ name }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "name"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "UnionParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "result"
+        COLON ":"
+        TYPE_EXPR "string | int | bool | null"
+          WORD "string"
+          PIPE "|"
+          WORD "int"
+          PIPE "|"
+          WORD "bool"
+          PIPE "|"
+          WORD "null"
+      COMMA ","
+      PARAMETER
+        WORD "items"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "string | int"
+              WORD "string"
+              PIPE "|"
+              WORD "int"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ result }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "result"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ items }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "items"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "OptionalParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "name"
+        COLON ":"
+        TYPE_EXPR "string?"
+          WORD "string"
+          QUESTION "?"
+      COMMA ","
+      PARAMETER
+        WORD "age"
+        COLON ":"
+        TYPE_EXPR "int?"
+          WORD "int"
+          QUESTION "?"
+      COMMA ","
+      PARAMETER
+        WORD "items"
+        COLON ":"
+        TYPE_EXPR "string[]?"
+          WORD "string"
+          L_BRACKET "["
+          R_BRACKET "]"
+          QUESTION "?"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ name }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "name"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ age }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "age"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ items }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "items"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "FnTypeParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "transform"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            WORD "x"
+            COLON ":"
+            TYPE_EXPR "int"
+              WORD "int"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "int"
+            WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "combine"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            WORD "a"
+            COLON ":"
+            TYPE_EXPR "string"
+              WORD "string"
+          COMMA ","
+          FUNCTION_TYPE_PARAM
+            WORD "b"
+            COLON ":"
+            TYPE_EXPR "string"
+              WORD "string"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR "string"
+            WORD "string"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      PROMPT_TEXT "transformed"
+        WORD "transformed"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "ExtremelyLongNamePlusComplexParameters"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_very_long_parameter_name"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int | string | bool"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "second_very_long_parameter_name"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string | bool | float | null"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+              PIPE "|"
+              WORD "float"
+              PIPE "|"
+              WORD "null"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ first_very_long_parameter_name }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "first_very_long_parameter_name"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ second_very_long_parameter_name }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "second_very_long_parameter_name"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "SixLongParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_param"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "second_param"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "third_param"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      COMMA ","
+      PARAMETER
+        WORD "fourth_param"
+        COLON ":"
+        TYPE_EXPR "float"
+          WORD "float"
+      COMMA ","
+      PARAMETER
+        WORD "fifth_param"
+        COLON ":"
+        TYPE_EXPR "string[]"
+          WORD "string"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "sixth_param"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ first_param }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "first_param"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ second_param }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "second_param"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ third_param }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "third_param"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ fourth_param }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "fourth_param"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ fifth_param }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "fifth_param"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ sixth_param }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "sixth_param"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "TriviaWrappingParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int | string | bool"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int"
+                  WORD "int"
+                GREATER ">"
+            GREATER ">"
+      R_PAREN ")"
+  HASH "#"
+  QUOTE """
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "first_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "second_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "third_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "TriviaWrappingParamsBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int | string | bool"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int"
+                  WORD "int"
+                GREATER ">"
+            GREATER ">"
+      R_PAREN ")"
+  HASH "#"
+  QUOTE """
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "first_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "second_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "third_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "TriviaVeryLongTemplateNameWithParameters"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR "// 9 first colon trailing
+// 10 first type leading
+string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR "// 15 second colon trailing
+// 16 second type leading
+int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR "// 21 third colon trailing
+// 22 third type leading
+bool"
+          WORD "bool"
+      R_PAREN ")"
+  HASH "#"
+  QUOTE """
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "first_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "second_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "third_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "TriviaVeryLongTemplateNameWithParametersBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR "/* 9 first colon trailing */
+/* 10 first type leading */
+string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR "/* 15 second colon trailing */
+/* 16 second type leading */
+int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR "/* 21 third colon trailing */
+/* 22 third type leading */
+bool"
+          WORD "bool"
+      R_PAREN ")"
+  HASH "#"
+  QUOTE """
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "first_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "second_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  L_BRACE "{"
+  L_BRACE "{"
+  WORD "third_parameter"
+  R_BRACE "}"
+  R_BRACE "}"
+  QUOTE """
+  HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "TriviaDeepGenericParam"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "data"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "// 6 open angle trailing
+    // 7 key type leading
+    string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "// 12 inner open angle trailing
+    // 13 inner key leading
+    string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "// 15 inner comma trailing
+    // 16 inner value leading
+    int // 17 inner value trailing
+    | // 18 pipe trailing
+    // 19 union member leading
+    string"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "string"
+                GREATER ">"
+            GREATER ">"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ data }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "data"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "TriviaDeepGenericParamBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "data"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "/* 6 open angle trailing */
+    /* 7 key type leading */
+    string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "/* 12 inner open angle trailing */
+    /* 13 inner key leading */
+    string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "/* 15 inner comma trailing */
+    /* 16 inner value leading */
+    int /* 17 inner value trailing */
+    | /* 18 pipe trailing */
+    /* 19 union member leading */
+    string"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "string"
+                GREATER ">"
+            GREATER ">"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ data }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "data"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "ExtraWhitespace"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_INTERPOLATION "{{ a }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "a"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_INTERPOLATION "{{ b }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "b"
+        R_BRACE "}"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+  TEMPLATE_STRING_DEF
+    KW_TEMPLATE_STRING "template_string"
+    WORD "WithControl"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "items"
+        COLON ":"
+        TYPE_EXPR "string[]"
+          WORD "string"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    RAW_STRING_LITERAL
+      HASH "#"
+      QUOTE """
+      TEMPLATE_CONTROL "{% for item in items %}"
+        L_BRACE "{"
+        PERCENT "%"
+        KW_FOR "for"
+        WORD "item"
+        KW_IN "in"
+        WORD "items"
+        PERCENT "%"
+        R_BRACE "}"
+      PROMPT_TEXT "-"
+        MINUS "-"
+      TEMPLATE_INTERPOLATION "{{ item }}"
+        L_BRACE "{"
+        L_BRACE "{"
+        WORD "item"
+        R_BRACE "}"
+        R_BRACE "}"
+      TEMPLATE_CONTROL "{% endfor %}"
+        L_BRACE "{"
+        PERCENT "%"
+        WORD "endfor"
+        PERCENT "%"
+        R_BRACE "}"
+      QUOTE """
+      HASH "#"
+
+=== ERRORS ===
+Error: Expected template string body, found '#'
+    ╭─[ template_string_decls.baml:65:1 ]
+    │
+ 65 │ #"
+    │ ┬  
+    │ ╰── Expected template string body, found '#'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '#'
+    ╭─[ template_string_decls.baml:65:1 ]
+    │
+ 65 │ #"
+    │ ┬  
+    │ ╰── Expected top-level declaration, found '#'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '"'
+    ╭─[ template_string_decls.baml:65:2 ]
+    │
+ 65 │ #"
+    │  ┬  
+    │  ╰── Expected top-level declaration, found '"'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found identifier
+    ╭─[ template_string_decls.baml:66:5 ]
+    │
+ 66 │     Hello {{ x }}
+    │     ──┬──  
+    │       ╰──── Expected top-level declaration, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '{'
+    ╭─[ template_string_decls.baml:66:11 ]
+    │
+ 66 │     Hello {{ x }}
+    │           ┬  
+    │           ╰── Expected top-level declaration, found '{'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '{'
+    ╭─[ template_string_decls.baml:66:12 ]
+    │
+ 66 │     Hello {{ x }}
+    │            ┬  
+    │            ╰── Expected top-level declaration, found '{'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found identifier
+    ╭─[ template_string_decls.baml:66:14 ]
+    │
+ 66 │     Hello {{ x }}
+    │              ┬  
+    │              ╰── Expected top-level declaration, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '}'
+    ╭─[ template_string_decls.baml:66:16 ]
+    │
+ 66 │     Hello {{ x }}
+    │                ┬  
+    │                ╰── Expected top-level declaration, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '}'
+    ╭─[ template_string_decls.baml:66:17 ]
+    │
+ 66 │     Hello {{ x }}
+    │                 ┬  
+    │                 ╰── Expected top-level declaration, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '"'
+    ╭─[ template_string_decls.baml:67:1 ]
+    │
+ 67 │ "#
+    │ ┬  
+    │ ╰── Expected top-level declaration, found '"'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '#'
+    ╭─[ template_string_decls.baml:67:2 ]
+    │
+ 67 │ "#
+    │  ┬  
+    │  ╰── Expected top-level declaration, found '#'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected template string body, found '#'
+    ╭─[ template_string_decls.baml:86:1 ]
+    │
+ 86 │ #"
+    │ ┬  
+    │ ╰── Expected template string body, found '#'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '#'
+    ╭─[ template_string_decls.baml:86:1 ]
+    │
+ 86 │ #"
+    │ ┬  
+    │ ╰── Expected top-level declaration, found '#'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '"'
+    ╭─[ template_string_decls.baml:86:2 ]
+    │
+ 86 │ #"
+    │  ┬  
+    │  ╰── Expected top-level declaration, found '"'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found identifier
+    ╭─[ template_string_decls.baml:87:5 ]
+    │
+ 87 │     Hello {{ x }}
+    │     ──┬──  
+    │       ╰──── Expected top-level declaration, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '{'
+    ╭─[ template_string_decls.baml:87:11 ]
+    │
+ 87 │     Hello {{ x }}
+    │           ┬  
+    │           ╰── Expected top-level declaration, found '{'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '{'
+    ╭─[ template_string_decls.baml:87:12 ]
+    │
+ 87 │     Hello {{ x }}
+    │            ┬  
+    │            ╰── Expected top-level declaration, found '{'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found identifier
+    ╭─[ template_string_decls.baml:87:14 ]
+    │
+ 87 │     Hello {{ x }}
+    │              ┬  
+    │              ╰── Expected top-level declaration, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '}'
+    ╭─[ template_string_decls.baml:87:16 ]
+    │
+ 87 │     Hello {{ x }}
+    │                ┬  
+    │                ╰── Expected top-level declaration, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '}'
+    ╭─[ template_string_decls.baml:87:17 ]
+    │
+ 87 │     Hello {{ x }}
+    │                 ┬  
+    │                 ╰── Expected top-level declaration, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '"'
+    ╭─[ template_string_decls.baml:88:1 ]
+    │
+ 88 │ "#
+    │ ┬  
+    │ ╰── Expected top-level declaration, found '"'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '#'
+    ╭─[ template_string_decls.baml:88:2 ]
+    │
+ 88 │ "#
+    │  ┬  
+    │  ╰── Expected top-level declaration, found '#'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+     ╭─[ template_string_decls.baml:145:190 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                              ┬  
+     │                                                                                                                                                                                              ╰── Expected ')', found ':'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected template string body, found ':'
+     ╭─[ template_string_decls.baml:145:190 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                              ┬  
+     │                                                                                                                                                                                              ╰── Expected template string body, found ':'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found ':'
+     ╭─[ template_string_decls.baml:145:190 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                              ┬  
+     │                                                                                                                                                                                              ╰── Expected top-level declaration, found ':'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '('
+     ╭─[ template_string_decls.baml:145:192 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                ┬  
+     │                                                                                                                                                                                                ╰── Expected top-level declaration, found '('
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:145:193 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                 ┬  
+     │                                                                                                                                                                                                 ╰── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found ':'
+     ╭─[ template_string_decls.baml:145:194 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                  ┬  
+     │                                                                                                                                                                                                  ╰── Expected top-level declaration, found ':'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:145:196 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                    ─┬─  
+     │                                                                                                                                                                                                     ╰─── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found ')'
+     ╭─[ template_string_decls.baml:145:199 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                       ┬  
+     │                                                                                                                                                                                                       ╰── Expected top-level declaration, found ')'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '->'
+     ╭─[ template_string_decls.baml:145:201 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                         ─┬  
+     │                                                                                                                                                                                                          ╰── Expected top-level declaration, found '->'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:145:204 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                            ───┬──  
+     │                                                                                                                                                                                                               ╰──── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found ')'
+     ╭─[ template_string_decls.baml:145:210 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                                  ┬  
+     │                                                                                                                                                                                                                  ╰── Expected top-level declaration, found ')'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:145:212 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                                    ┬  
+     │                                                                                                                                                                                                                    ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:145:213 ]
+     │
+ 145 │ template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string) #"
+     │                                                                                                                                                                                                                     ┬  
+     │                                                                                                                                                                                                                     ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:146:5 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │     ┬  
+     │     ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:146:6 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │      ┬  
+     │      ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:146:8 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │        ───────┬───────  
+     │               ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:146:24 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                        ┬  
+     │                        ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:146:25 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                         ┬  
+     │                         ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:146:27 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                           ┬  
+     │                           ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:146:28 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                            ┬  
+     │                            ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:146:30 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                              ────────┬───────  
+     │                                      ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:146:47 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                               ┬  
+     │                                               ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:146:48 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                ┬  
+     │                                                ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:146:50 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                  ┬  
+     │                                                  ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:146:51 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                   ┬  
+     │                                                   ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:146:53 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                     ───────┬───────  
+     │                                                            ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:146:69 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                     ┬  
+     │                                                                     ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:146:70 ]
+     │
+ 146 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                      ┬  
+     │                                                                      ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:147:1 ]
+     │
+ 147 │ "#
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:147:2 ]
+     │
+ 147 │ "#
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected template string body, found '#'
+     ╭─[ template_string_decls.baml:211:1 ]
+     │
+ 211 │ #"
+     │ ┬  
+     │ ╰── Expected template string body, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:211:1 ]
+     │
+ 211 │ #"
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:211:2 ]
+     │
+ 211 │ #"
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:212:5 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │     ┬  
+     │     ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:212:6 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │      ┬  
+     │      ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:212:8 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │        ───────┬───────  
+     │               ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:212:24 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                        ┬  
+     │                        ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:212:25 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                         ┬  
+     │                         ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:212:27 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                           ┬  
+     │                           ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:212:28 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                            ┬  
+     │                            ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:212:30 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                              ────────┬───────  
+     │                                      ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:212:47 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                               ┬  
+     │                                               ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:212:48 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                ┬  
+     │                                                ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:212:50 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                  ┬  
+     │                                                  ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:212:51 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                   ┬  
+     │                                                   ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:212:53 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                     ───────┬───────  
+     │                                                            ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:212:69 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                     ┬  
+     │                                                                     ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:212:70 ]
+     │
+ 212 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                      ┬  
+     │                                                                      ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:213:1 ]
+     │
+ 213 │ "#
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:213:2 ]
+     │
+ 213 │ "#
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected template string body, found '#'
+     ╭─[ template_string_decls.baml:244:1 ]
+     │
+ 244 │ #"
+     │ ┬  
+     │ ╰── Expected template string body, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:244:1 ]
+     │
+ 244 │ #"
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:244:2 ]
+     │
+ 244 │ #"
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:245:5 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │     ┬  
+     │     ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:245:6 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │      ┬  
+     │      ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:245:8 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │        ───────┬───────  
+     │               ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:245:24 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                        ┬  
+     │                        ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:245:25 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                         ┬  
+     │                         ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:245:27 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                           ┬  
+     │                           ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:245:28 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                            ┬  
+     │                            ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:245:30 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                              ────────┬───────  
+     │                                      ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:245:47 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                               ┬  
+     │                                               ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:245:48 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                ┬  
+     │                                                ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:245:50 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                  ┬  
+     │                                                  ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:245:51 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                   ┬  
+     │                                                   ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:245:53 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                     ───────┬───────  
+     │                                                            ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:245:69 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                     ┬  
+     │                                                                     ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:245:70 ]
+     │
+ 245 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                      ┬  
+     │                                                                      ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:246:1 ]
+     │
+ 246 │ "#
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:246:2 ]
+     │
+ 246 │ "#
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected template string body, found '#'
+     ╭─[ template_string_decls.baml:277:1 ]
+     │
+ 277 │ #"
+     │ ┬  
+     │ ╰── Expected template string body, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:277:1 ]
+     │
+ 277 │ #"
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:277:2 ]
+     │
+ 277 │ #"
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:278:5 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │     ┬  
+     │     ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:278:6 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │      ┬  
+     │      ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:278:8 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │        ───────┬───────  
+     │               ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:278:24 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                        ┬  
+     │                        ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:278:25 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                         ┬  
+     │                         ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:278:27 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                           ┬  
+     │                           ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:278:28 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                            ┬  
+     │                            ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:278:30 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                              ────────┬───────  
+     │                                      ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:278:47 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                               ┬  
+     │                                               ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:278:48 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                ┬  
+     │                                                ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:278:50 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                  ┬  
+     │                                                  ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:278:51 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                   ┬  
+     │                                                   ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:278:53 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                     ───────┬───────  
+     │                                                            ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:278:69 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                     ┬  
+     │                                                                     ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:278:70 ]
+     │
+ 278 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                      ┬  
+     │                                                                      ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:279:1 ]
+     │
+ 279 │ "#
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:279:2 ]
+     │
+ 279 │ "#
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected template string body, found '#'
+     ╭─[ template_string_decls.baml:310:1 ]
+     │
+ 310 │ #"
+     │ ┬  
+     │ ╰── Expected template string body, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:310:1 ]
+     │
+ 310 │ #"
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:310:2 ]
+     │
+ 310 │ #"
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:311:5 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │     ┬  
+     │     ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:311:6 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │      ┬  
+     │      ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:311:8 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │        ───────┬───────  
+     │               ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:311:24 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                        ┬  
+     │                        ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:311:25 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                         ┬  
+     │                         ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:311:27 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                           ┬  
+     │                           ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:311:28 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                            ┬  
+     │                            ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:311:30 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                              ────────┬───────  
+     │                                      ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:311:47 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                               ┬  
+     │                                               ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:311:48 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                ┬  
+     │                                                ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:311:50 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                  ┬  
+     │                                                  ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '{'
+     ╭─[ template_string_decls.baml:311:51 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                   ┬  
+     │                                                   ╰── Expected top-level declaration, found '{'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found identifier
+     ╭─[ template_string_decls.baml:311:53 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                     ───────┬───────  
+     │                                                            ╰───────── Expected top-level declaration, found identifier
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:311:69 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                     ┬  
+     │                                                                     ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '}'
+     ╭─[ template_string_decls.baml:311:70 ]
+     │
+ 311 │     {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+     │                                                                      ┬  
+     │                                                                      ╰── Expected top-level declaration, found '}'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '"'
+     ╭─[ template_string_decls.baml:312:1 ]
+     │
+ 312 │ "#
+     │ ┬  
+     │ ╰── Expected top-level declaration, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected top-level declaration, found '#'
+     ╭─[ template_string_decls.baml:312:2 ]
+     │
+ 312 │ "#
+     │  ┬  
+     │  ╰── Expected top-level declaration, found '#'
+     │ 
+     │ Note: Error code: E0010
+─────╯

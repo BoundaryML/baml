@@ -1,0 +1,96 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== MIR ===
+fn MyFunction(a: int, b: int) -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int // a // param
+    let _2: int // b // param
+    let _3: void
+    let _4: bool
+    let _5: int
+    let _6: int
+    let _7: 1
+    let _8: 1
+    let _9: void
+    let _10: bool
+    let _11: int
+    let _12: int
+    let _13: 1
+    let _14: 1
+    let _15: void
+    let _16: bool
+    let _17: int
+    let _18: int
+    let _19: 1
+    let _20: 1
+
+    bb0: {
+        _5 = copy _1;
+        _6 = copy _2;
+        _4 = copy _5 > copy _6;
+        branch copy _4 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _7 = const 1_i64;
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _8 = const 1_i64;
+        _3 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _11 = copy _1;
+        _12 = copy _2;
+        _10 = copy _11 > copy _12;
+        branch copy _10 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _13 = const 1_i64;
+        _9 = const null;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _14 = const 1_i64;
+        _9 = const null;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _17 = copy _1;
+        _18 = copy _2;
+        _16 = copy _17 > copy _18;
+        branch copy _16 -> [bb8, bb9];
+    }
+
+    bb8: {
+        _19 = const 1_i64;
+        _15 = const null;
+        goto -> bb10;
+    }
+
+    bb9: {
+        _20 = const 1_i64;
+        _15 = const null;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+}

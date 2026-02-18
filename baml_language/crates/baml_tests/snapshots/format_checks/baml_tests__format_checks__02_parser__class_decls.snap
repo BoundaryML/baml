@@ -1,0 +1,2419 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF "// Testing all the formatter cases for class declarations
+
+// ===== Empty class =====
+class EmptyClass {
+}"
+    KW_CLASS "class"
+    WORD "EmptyClass"
+    L_BRACE "{"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "SingleField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MultiField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "active"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ColonFields"
+    L_BRACE "{"
+    FIELD "name"
+      WORD "name"
+    COLON ":"
+    FIELD "string"
+      WORD "string"
+    FIELD "age"
+      WORD "age"
+    COLON ":"
+    FIELD "int"
+      WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TrailingCommaFields"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    COMMA ","
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    COMMA ","
+    FIELD
+      WORD "active"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    COMMA ","
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "SingleAttrField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "The user's name"
+            QUOTE """
+            WORD "The"
+            WORD "user"
+            ERROR_TOKEN "'"
+            WORD "s"
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MultiAttrField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "The user's name"
+            QUOTE """
+            WORD "The"
+            WORD "user"
+            ERROR_TOKEN "'"
+            WORD "s"
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "user_name"
+            QUOTE """
+            WORD "user_name"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "summary"
+      TYPE_EXPR "string?"
+        WORD "string"
+        QUESTION "?"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "A summary"
+            QUOTE """
+            WORD "A"
+            WORD "summary"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "sum"
+            QUOTE """
+            WORD "sum"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "LongAttrField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns"
+            QUOTE """
+            WORD "This"
+            WORD "is"
+            WORD "an"
+            WORD "extremely"
+            WORD "long"
+            WORD "description"
+            WORD "attribute"
+            WORD "value"
+            WORD "that"
+            WORD "should"
+            WORD "push"
+            WORD "the"
+            WORD "field"
+            WORD "definition"
+            WORD "well"
+            WORD "past"
+            WORD "the"
+            WORD "default"
+            WORD "line"
+            WORD "width"
+            WORD "limit"
+            WORD "of"
+            WORD "one"
+            WORD "hundred"
+            WORD "columns"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "data"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int | string | bool"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+          GREATER ">"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "complex data"
+            QUOTE """
+            WORD "complex"
+            WORD "data"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "payload"
+            QUOTE """
+            WORD "payload"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+    FIELD
+      WORD "config"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR "int | string | bool | null"
+                WORD "int"
+                PIPE "|"
+                WORD "string"
+                PIPE "|"
+                WORD "bool"
+                PIPE "|"
+                WORD "null"
+              GREATER ">"
+          GREATER ">"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "deeply nested config structure for testing wrapping"
+            QUOTE """
+            WORD "deeply"
+            WORD "nested"
+            WORD "config"
+            WORD "structure"
+            KW_FOR "for"
+            WORD "testing"
+            WORD "wrapping"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "LongFieldTypes"
+    L_BRACE "{"
+    FIELD
+      WORD "very_long_field_name_that_takes_up_space"
+      TYPE_EXPR "int | string | bool | float | null | int[] | string[]"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+        PIPE "|"
+        WORD "bool"
+        PIPE "|"
+        WORD "float"
+        PIPE "|"
+        WORD "null"
+        PIPE "|"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+        PIPE "|"
+        WORD "string"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "another_long_field"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR
+                WORD "map"
+                TYPE_ARGS
+                  LESS "<"
+                  TYPE_EXPR "string"
+                    WORD "string"
+                  COMMA ","
+                  TYPE_EXPR "int | string | bool | float | null"
+                    WORD "int"
+                    PIPE "|"
+                    WORD "string"
+                    PIPE "|"
+                    WORD "bool"
+                    PIPE "|"
+                    WORD "float"
+                    PIPE "|"
+                    WORD "null"
+                  GREATER ">"
+              GREATER ">"
+          GREATER ">"
+    FIELD
+      WORD "callback_field"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          WORD "first_param"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        COMMA ","
+        FUNCTION_TYPE_PARAM
+          WORD "second_param"
+          COLON ":"
+          TYPE_EXPR "string"
+            WORD "string"
+        COMMA ","
+        FUNCTION_TYPE_PARAM
+          WORD "third_param"
+          COLON ":"
+          TYPE_EXPR "bool"
+            WORD "bool"
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+    FIELD
+      WORD "deeply_nested"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "int"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "string"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR
+                    WORD "bool"
+                    PIPE "|"
+                    L_PAREN "("
+                    FUNCTION_TYPE_PARAM
+                      TYPE_EXPR "float | null"
+                        WORD "float"
+                        PIPE "|"
+                        WORD "null"
+                    R_PAREN ")"
+                R_PAREN ")"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TypeVariety"
+    L_BRACE "{"
+    FIELD
+      WORD "simple"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "optional"
+      TYPE_EXPR "string?"
+        WORD "string"
+        QUESTION "?"
+    FIELD
+      WORD "array"
+      TYPE_EXPR "int[]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "nested_array"
+      TYPE_EXPR "int[][]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "union_type"
+      TYPE_EXPR "int | string"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+    FIELD
+      WORD "optional_union"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "int | string"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+        R_PAREN ")"
+        QUESTION "?"
+    FIELD
+      WORD "union_array"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "int | string"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "generic"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int"
+            WORD "int"
+          GREATER ">"
+    FIELD
+      WORD "complex_generic"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int | string | bool"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+          GREATER ">"
+    FIELD
+      WORD "deep_generic"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR "int[]"
+                WORD "int"
+                L_BRACKET "["
+                R_BRACKET "]"
+              GREATER ">"
+          GREATER ">"
+    FIELD
+      WORD "fn_type"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          WORD "x"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        COMMA ","
+        FUNCTION_TYPE_PARAM
+          WORD "y"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "string"
+          WORD "string"
+    FIELD
+      WORD "paren_union_array"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "int | string | bool"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "triple_nested"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR
+                WORD "map"
+                TYPE_ARGS
+                  LESS "<"
+                  TYPE_EXPR "string"
+                    WORD "string"
+                  COMMA ","
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  GREATER ">"
+              GREATER ">"
+          GREATER ">"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DynamicClass"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    BLOCK_ATTRIBUTE "@@dynamic"
+      AT_AT "@@"
+      KW_DYNAMIC "dynamic"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MultiBlockAttr"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    BLOCK_ATTRIBUTE "@@dynamic"
+      AT_AT "@@"
+      KW_DYNAMIC "dynamic"
+    BLOCK_ATTRIBUTE "@@streaming"
+      AT_AT "@@"
+      WORD "streaming"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaClass"
+    L_BRACE "{"
+    FIELD "// 6 open brace trailing
+    // 7 field leading
+    name"
+      WORD "name"
+    FIELD "// 8 field name trailing
+    // 9 type leading
+    string"
+      WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaClassBlock"
+    L_BRACE "{"
+    FIELD "/* 6 open brace trailing */
+    /* 7 field leading */
+    name"
+      WORD "name"
+    FIELD "/* 8 field name trailing */
+    /* 9 type leading */
+    string"
+      WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaFieldAttrs"
+    L_BRACE "{"
+    FIELD "// 1 field leading
+    name"
+      WORD "name"
+    FIELD "// 2 field name trailing
+    // 3 type leading
+    string"
+      WORD "string"
+    AT "@"
+    FIELD "description"
+      WORD "description"
+    L_PAREN "("
+    QUOTE """
+    FIELD
+      WORD "the"
+      TYPE_EXPR "name"
+        WORD "name"
+    QUOTE """
+    R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaFieldAttrsBlock"
+    L_BRACE "{"
+    FIELD "/* 1 field leading */
+    name"
+      WORD "name"
+    FIELD "/* 2 field name trailing */
+    /* 3 type leading */
+    string"
+      WORD "string"
+    AT "@"
+    FIELD "description"
+      WORD "description"
+    L_PAREN "("
+    QUOTE """
+    FIELD
+      WORD "the"
+      TYPE_EXPR "name"
+        WORD "name"
+    QUOTE """
+    R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaLongFieldType"
+    L_BRACE "{"
+    FIELD "// 1 field leading
+    data"
+      WORD "data"
+    FIELD "// 2 field name trailing
+    // 3 type leading
+    map"
+      WORD "map"
+    LESS "<"
+    FIELD "// 5 open angle trailing
+    // 6 key type leading
+    string"
+      WORD "string"
+    COMMA ","
+    FIELD "// 8 comma trailing
+    // 9 value type leading
+    int"
+      WORD "int"
+    PIPE "|"
+    FIELD "// 11 pipe trailing
+    // 12 second leading
+    string"
+      WORD "string"
+    PIPE "|"
+    FIELD "// 14 pipe trailing
+    // 15 third leading
+    bool"
+      WORD "bool"
+    PIPE "|"
+    FIELD "// 17 pipe trailing
+    // 18 fourth leading
+    float"
+      WORD "float"
+    PIPE "|"
+    FIELD "// 20 pipe trailing
+    // 21 fifth leading
+    null"
+      WORD "null"
+    GREATER ">"
+    AT "@"
+    FIELD "description"
+      WORD "description"
+    L_PAREN "("
+    QUOTE """
+    FIELD
+      WORD "a"
+      TYPE_EXPR "long"
+        WORD "long"
+    FIELD
+      WORD "description"
+      TYPE_EXPR
+        STRING_LITERAL " // 28 attr arg trailing
+    ) // 29 attr close trailing
+}
+
+// ===== Trivia on field with long wrapping type (block comments) =====
+class TriviaLongFieldTypeBlock {
+    /* 1 field leading */
+    data /* 2 field name trailing */
+    /* 3 type leading */
+    map /* 4 map trailing */
+    < /* 5 open angle trailing */
+    /* 6 key type leading */
+    string /* 7 key type trailing */
+    , /* 8 comma trailing */
+    /* 9 value type leading */
+    int /* 10 first trailing */
+    | /* 11 pipe trailing */
+    /* 12 second leading */
+    string /* 13 second trailing */
+    | /* 14 pipe trailing */
+    /* 15 third leading */
+    bool /* 16 third trailing */
+    | /* 17 pipe trailing */
+    /* 18 fourth leading */
+    float /* 19 fourth trailing */
+    | /* 20 pipe trailing */
+    /* 21 fifth leading */
+    null /* 22 fifth trailing */
+    > /* 23 close angle trailing */
+    /* 24 attr leading */
+    @description /* 25 attr name trailing */
+    ( /* 26 attr open trailing */
+    /* 27 attr arg leading */
+    "
+          QUOTE """
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "28"
+          WORD "attr"
+          WORD "arg"
+          WORD "trailing"
+          R_PAREN ")"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "29"
+          WORD "attr"
+          WORD "close"
+          WORD "trailing"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Trivia"
+          WORD "on"
+          WORD "field"
+          WORD "with"
+          WORD "long"
+          WORD "wrapping"
+          WORD "type"
+          L_PAREN "("
+          WORD "block"
+          WORD "comments"
+          R_PAREN ")"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "TriviaLongFieldTypeBlock"
+          L_BRACE "{"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "1"
+          WORD "field"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "data"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "2"
+          WORD "field"
+          WORD "name"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "3"
+          WORD "type"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "map"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "4"
+          WORD "map"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          LESS "<"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "5"
+          WORD "open"
+          WORD "angle"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "6"
+          WORD "key"
+          WORD "type"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "string"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "7"
+          WORD "key"
+          WORD "type"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          COMMA ","
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "8"
+          WORD "comma"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "9"
+          WORD "value"
+          WORD "type"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "int"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "10"
+          WORD "first"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          PIPE "|"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "11"
+          WORD "pipe"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "12"
+          WORD "second"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "string"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "13"
+          WORD "second"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          PIPE "|"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "14"
+          WORD "pipe"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "15"
+          WORD "third"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "bool"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "16"
+          WORD "third"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          PIPE "|"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "17"
+          WORD "pipe"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "18"
+          WORD "fourth"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "float"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "19"
+          WORD "fourth"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          PIPE "|"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "20"
+          WORD "pipe"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "21"
+          WORD "fifth"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "null"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "22"
+          WORD "fifth"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          GREATER ">"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "23"
+          WORD "close"
+          WORD "angle"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "24"
+          WORD "attr"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          AT "@"
+          WORD "description"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "25"
+          WORD "attr"
+          WORD "name"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          L_PAREN "("
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "26"
+          WORD "attr"
+          WORD "open"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "27"
+          WORD "attr"
+          WORD "arg"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          QUOTE """
+    FIELD
+      WORD "a"
+      TYPE_EXPR "long"
+        WORD "long"
+    FIELD
+      WORD "description"
+      TYPE_EXPR
+        STRING_LITERAL " /* 28 attr arg trailing */
+    ) /* 29 attr close trailing */
+}
+
+// ===== Trivia on field with multiple attributes (line comments) =====
+class TriviaMultiAttr {
+    // 1 field leading
+    name // 2 name trailing
+    // 3 type leading
+    string // 4 type trailing
+    // 5 first attr leading
+    @description // 6 first attr name trailing
+    ( // 7 first attr open trailing
+    // 8 arg leading
+    "
+          QUOTE """
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "28"
+          WORD "attr"
+          WORD "arg"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          R_PAREN ")"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "29"
+          WORD "attr"
+          WORD "close"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Trivia"
+          WORD "on"
+          WORD "field"
+          WORD "with"
+          WORD "multiple"
+          WORD "attributes"
+          L_PAREN "("
+          WORD "line"
+          WORD "comments"
+          R_PAREN ")"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "TriviaMultiAttr"
+          L_BRACE "{"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "1"
+          WORD "field"
+          WORD "leading"
+          WORD "name"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "2"
+          WORD "name"
+          WORD "trailing"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "3"
+          WORD "type"
+          WORD "leading"
+          WORD "string"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "4"
+          WORD "type"
+          WORD "trailing"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "5"
+          WORD "first"
+          WORD "attr"
+          WORD "leading"
+          AT "@"
+          WORD "description"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "6"
+          WORD "first"
+          WORD "attr"
+          WORD "name"
+          WORD "trailing"
+          L_PAREN "("
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "7"
+          WORD "first"
+          WORD "attr"
+          WORD "open"
+          WORD "trailing"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "8"
+          WORD "arg"
+          WORD "leading"
+          QUOTE """
+    FIELD
+      WORD "name"
+      TYPE_EXPR
+        STRING_LITERAL " // 9 arg trailing
+    ) // 10 first attr close trailing
+    // 11 second attr leading
+    @alias // 12 second attr name trailing
+    ( // 13 second attr open trailing
+    // 14 arg leading
+    "
+          QUOTE """
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "9"
+          WORD "arg"
+          WORD "trailing"
+          R_PAREN ")"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "10"
+          WORD "first"
+          WORD "attr"
+          WORD "close"
+          WORD "trailing"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "11"
+          WORD "second"
+          WORD "attr"
+          WORD "leading"
+          AT "@"
+          WORD "alias"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "12"
+          WORD "second"
+          WORD "attr"
+          WORD "name"
+          WORD "trailing"
+          L_PAREN "("
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "13"
+          WORD "second"
+          WORD "attr"
+          WORD "open"
+          WORD "trailing"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "14"
+          WORD "arg"
+          WORD "leading"
+          QUOTE """
+    FIELD
+      WORD "user_name"
+      TYPE_EXPR
+        STRING_LITERAL " // 15 arg trailing
+    ) // 16 second attr close trailing
+    // 17 third attr leading
+    @stream.done // 18 third attr trailing
+}
+
+// ===== Trivia on field with multiple attributes (block comments) =====
+class TriviaMultiAttrBlock {
+    /* 1 field leading */
+    name /* 2 name trailing */
+    /* 3 type leading */
+    string /* 4 type trailing */
+    /* 5 first attr leading */
+    @description /* 6 first attr name trailing */
+    ( /* 7 first attr open trailing */
+    /* 8 arg leading */
+    "
+          QUOTE """
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "15"
+          WORD "arg"
+          WORD "trailing"
+          R_PAREN ")"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "16"
+          WORD "second"
+          WORD "attr"
+          WORD "close"
+          WORD "trailing"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "17"
+          WORD "third"
+          WORD "attr"
+          WORD "leading"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+          SLASH "/"
+          SLASH "/"
+          INTEGER_LITERAL "18"
+          WORD "third"
+          WORD "attr"
+          WORD "trailing"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Trivia"
+          WORD "on"
+          WORD "field"
+          WORD "with"
+          WORD "multiple"
+          WORD "attributes"
+          L_PAREN "("
+          WORD "block"
+          WORD "comments"
+          R_PAREN ")"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "TriviaMultiAttrBlock"
+          L_BRACE "{"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "1"
+          WORD "field"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "name"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "2"
+          WORD "name"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "3"
+          WORD "type"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          WORD "string"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "4"
+          WORD "type"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "5"
+          WORD "first"
+          WORD "attr"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          AT "@"
+          WORD "description"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "6"
+          WORD "first"
+          WORD "attr"
+          WORD "name"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          L_PAREN "("
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "7"
+          WORD "first"
+          WORD "attr"
+          WORD "open"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "8"
+          WORD "arg"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          QUOTE """
+    FIELD
+      WORD "name"
+      TYPE_EXPR
+        STRING_LITERAL " /* 9 arg trailing */
+    ) /* 10 first attr close trailing */
+    /* 11 second attr leading */
+    @alias /* 12 second attr name trailing */
+    ( /* 13 second attr open trailing */
+    /* 14 arg leading */
+    "
+          QUOTE """
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "9"
+          WORD "arg"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          R_PAREN ")"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "10"
+          WORD "first"
+          WORD "attr"
+          WORD "close"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "11"
+          WORD "second"
+          WORD "attr"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          AT "@"
+          WORD "alias"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "12"
+          WORD "second"
+          WORD "attr"
+          WORD "name"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          L_PAREN "("
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "13"
+          WORD "second"
+          WORD "attr"
+          WORD "open"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "14"
+          WORD "arg"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          QUOTE """
+    FIELD
+      WORD "user_name"
+      TYPE_EXPR
+        STRING_LITERAL " /* 15 arg trailing */
+    ) /* 16 second attr close trailing */
+    /* 17 third attr leading */
+    @stream.done /* 18 third attr trailing */
+}
+
+// ===== Short class name =====
+class A {
+    x int
+}
+
+// ===== Long class name exceeding limit =====
+class ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
+    x int
+}
+
+// ===== Fields with various attribute types =====
+class AttributeVariety {
+    a string @skip
+    b string @alias("
+          QUOTE """
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "15"
+          WORD "arg"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          R_PAREN ")"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "16"
+          WORD "second"
+          WORD "attr"
+          WORD "close"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "17"
+          WORD "third"
+          WORD "attr"
+          WORD "leading"
+          STAR "*"
+          SLASH "/"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+          SLASH "/"
+          STAR "*"
+          INTEGER_LITERAL "18"
+          WORD "third"
+          WORD "attr"
+          WORD "trailing"
+          STAR "*"
+          SLASH "/"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Short"
+          KW_CLASS "class"
+          WORD "name"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "A"
+          L_BRACE "{"
+          WORD "x"
+          WORD "int"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Long"
+          KW_CLASS "class"
+          WORD "name"
+          WORD "exceeding"
+          WORD "limit"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself"
+          L_BRACE "{"
+          WORD "x"
+          WORD "int"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Fields"
+          WORD "with"
+          WORD "various"
+          WORD "attribute"
+          WORD "types"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "AttributeVariety"
+          L_BRACE "{"
+          WORD "a"
+          WORD "string"
+          AT "@"
+          WORD "skip"
+          WORD "b"
+          WORD "string"
+          AT "@"
+          WORD "alias"
+          L_PAREN "("
+          QUOTE """
+    FIELD
+      WORD "alt_name"
+      TYPE_EXPR
+        STRING_LITERAL ")
+    c string @description("
+          QUOTE """
+          R_PAREN ")"
+          WORD "c"
+          WORD "string"
+          AT "@"
+          WORD "description"
+          L_PAREN "("
+          QUOTE """
+    FIELD
+      WORD "desc"
+      TYPE_EXPR
+        STRING_LITERAL ")
+    d string @stream.done
+    e string @stream.not_null
+    f string @stream.with_state
+}
+
+// ===== Extraneous whitespace =====
+class    ExtraWhitespace    {
+    name     string     @description(  "
+          QUOTE """
+          R_PAREN ")"
+          WORD "d"
+          WORD "string"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+          WORD "e"
+          WORD "string"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+          WORD "f"
+          WORD "string"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "with_state"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Extraneous"
+          WORD "whitespace"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "ExtraWhitespace"
+          L_BRACE "{"
+          WORD "name"
+          WORD "string"
+          AT "@"
+          WORD "description"
+          L_PAREN "("
+          QUOTE """
+    FIELD
+      WORD "name"
+      TYPE_EXPR
+        STRING_LITERAL "  )     @alias(  "
+          QUOTE """
+          R_PAREN ")"
+          AT "@"
+          WORD "alias"
+          L_PAREN "("
+          QUOTE """
+    FIELD
+      WORD "n"
+      TYPE_EXPR
+        STRING_LITERAL "  )
+    age     int
+}
+
+// ===== Many fields =====
+class ManyFields {
+    field1 int
+    field2 int
+    field3 int
+    field4 int
+    field5 int
+    field6 int
+    field7 int
+    field8 int
+    field9 int
+    field10 int
+}
+
+// ===== Nested class types =====
+class Outer {
+    inner InnerNested
+    list InnerNested[]
+    optional InnerNested?
+    mapping map<string, InnerNested>
+}
+
+class InnerNested {
+    value int
+}
+
+// ===== Class with function member =====
+class WithMethod {
+    name string
+
+    function greet() -> string {
+        "
+          QUOTE """
+          R_PAREN ")"
+          WORD "age"
+          WORD "int"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Many"
+          WORD "fields"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "ManyFields"
+          L_BRACE "{"
+          WORD "field1"
+          WORD "int"
+          WORD "field2"
+          WORD "int"
+          WORD "field3"
+          WORD "int"
+          WORD "field4"
+          WORD "int"
+          WORD "field5"
+          WORD "int"
+          WORD "field6"
+          WORD "int"
+          WORD "field7"
+          WORD "int"
+          WORD "field8"
+          WORD "int"
+          WORD "field9"
+          WORD "int"
+          WORD "field10"
+          WORD "int"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Nested"
+          KW_CLASS "class"
+          WORD "types"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "Outer"
+          L_BRACE "{"
+          WORD "inner"
+          WORD "InnerNested"
+          WORD "list"
+          WORD "InnerNested"
+          L_BRACKET "["
+          R_BRACKET "]"
+          WORD "optional"
+          WORD "InnerNested"
+          QUESTION "?"
+          WORD "mapping"
+          WORD "map"
+          LESS "<"
+          WORD "string"
+          COMMA ","
+          WORD "InnerNested"
+          GREATER ">"
+          R_BRACE "}"
+          KW_CLASS "class"
+          WORD "InnerNested"
+          L_BRACE "{"
+          WORD "value"
+          WORD "int"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Class"
+          WORD "with"
+          KW_FUNCTION "function"
+          WORD "member"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "WithMethod"
+          L_BRACE "{"
+          WORD "name"
+          WORD "string"
+          KW_FUNCTION "function"
+          WORD "greet"
+          L_PAREN "("
+          R_PAREN ")"
+          ARROW "->"
+          WORD "string"
+          L_BRACE "{"
+          QUOTE """
+    FIELD
+      WORD "hello"
+      TYPE_EXPR
+        STRING_LITERAL "
+    }
+}
+
+// ===== Class with function member that has wrapping signature =====
+class WithLongMethod {
+    name string
+
+    function processData(first_input: map<string, int>, second_input: (int | string | bool)[], third_input: string) -> map<string, int | string | bool> {
+        {"
+          QUOTE """
+          R_BRACE "}"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Class"
+          WORD "with"
+          KW_FUNCTION "function"
+          WORD "member"
+          WORD "that"
+          WORD "has"
+          WORD "wrapping"
+          WORD "signature"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "WithLongMethod"
+          L_BRACE "{"
+          WORD "name"
+          WORD "string"
+          KW_FUNCTION "function"
+          WORD "processData"
+          L_PAREN "("
+          WORD "first_input"
+          COLON ":"
+          WORD "map"
+          LESS "<"
+          WORD "string"
+          COMMA ","
+          WORD "int"
+          GREATER ">"
+          COMMA ","
+          WORD "second_input"
+          COLON ":"
+          L_PAREN "("
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+          PIPE "|"
+          WORD "bool"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+          COMMA ","
+          WORD "third_input"
+          COLON ":"
+          WORD "string"
+          R_PAREN ")"
+          ARROW "->"
+          WORD "map"
+          LESS "<"
+          WORD "string"
+          COMMA ","
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+          PIPE "|"
+          WORD "bool"
+          GREATER ">"
+          L_BRACE "{"
+          L_BRACE "{"
+          QUOTE """
+    FIELD
+      WORD "result"
+      TYPE_EXPR
+        STRING_LITERAL ": 1}
+    }
+}
+
+// ===== Deeply nested class structure =====
+class DeepOuter {
+    level1 DeepLevel1
+}
+
+class DeepLevel1 {
+    level2 DeepLevel2
+    items DeepLevel2[]
+    mapping map<string, DeepLevel2>
+}
+
+class DeepLevel2 {
+    level3 DeepLevel3
+    value int | string | bool | float | null
+}
+
+class DeepLevel3 {
+    data string
+    nested map<string, map<string, int>>
+}
+          QUOTE """
+          COLON ":"
+          INTEGER_LITERAL "1"
+          R_BRACE "}"
+          R_BRACE "}"
+          R_BRACE "}"
+          SLASH "/"
+          SLASH "/"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          WORD "Deeply"
+          WORD "nested"
+          KW_CLASS "class"
+          WORD "structure"
+          EQUALS_EQUALS "=="
+          EQUALS_EQUALS "=="
+          EQUALS "="
+          KW_CLASS "class"
+          WORD "DeepOuter"
+          L_BRACE "{"
+          WORD "level1"
+          WORD "DeepLevel1"
+          R_BRACE "}"
+          KW_CLASS "class"
+          WORD "DeepLevel1"
+          L_BRACE "{"
+          WORD "level2"
+          WORD "DeepLevel2"
+          WORD "items"
+          WORD "DeepLevel2"
+          L_BRACKET "["
+          R_BRACKET "]"
+          WORD "mapping"
+          WORD "map"
+          LESS "<"
+          WORD "string"
+          COMMA ","
+          WORD "DeepLevel2"
+          GREATER ">"
+          R_BRACE "}"
+          KW_CLASS "class"
+          WORD "DeepLevel2"
+          L_BRACE "{"
+          WORD "level3"
+          WORD "DeepLevel3"
+          WORD "value"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+          PIPE "|"
+          WORD "bool"
+          PIPE "|"
+          WORD "float"
+          PIPE "|"
+          WORD "null"
+          R_BRACE "}"
+          KW_CLASS "class"
+          WORD "DeepLevel3"
+          L_BRACE "{"
+          WORD "data"
+          WORD "string"
+          WORD "nested"
+          WORD "map"
+          LESS "<"
+          WORD "string"
+          COMMA ","
+          WORD "map"
+          LESS "<"
+          WORD "string"
+          COMMA ","
+          WORD "int"
+          GREATER_GREATER ">>"
+          R_BRACE "}"
+
+=== ERRORS ===
+Error: field 'name' is missing a type annotation
+    ╭─[ class_decls.baml:21:5 ]
+    │
+ 21 │     name: string
+    │     ──┬─  
+    │       ╰─── field 'name' is missing a type annotation
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ':'
+    ╭─[ class_decls.baml:21:9 ]
+    │
+ 21 │     name: string
+    │         ┬  
+    │         ╰── Expected Unexpected token in class body, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: field 'string' is missing a type annotation
+    ╭─[ class_decls.baml:21:11 ]
+    │
+ 21 │     name: string
+    │           ───┬──  
+    │              ╰──── field 'string' is missing a type annotation
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: field 'age' is missing a type annotation
+    ╭─[ class_decls.baml:22:5 ]
+    │
+ 22 │     age: int
+    │     ─┬─  
+    │      ╰─── field 'age' is missing a type annotation
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ':'
+    ╭─[ class_decls.baml:22:8 ]
+    │
+ 22 │     age: int
+    │        ┬  
+    │        ╰── Expected Unexpected token in class body, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: field 'int' is missing a type annotation
+    ╭─[ class_decls.baml:22:10 ]
+    │
+ 22 │     age: int
+    │          ─┬─  
+    │           ╰─── field 'int' is missing a type annotation
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ','
+    ╭─[ class_decls.baml:27:16 ]
+    │
+ 27 │     name string,
+    │                ┬  
+    │                ╰── Expected Unexpected token in class body, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ','
+    ╭─[ class_decls.baml:28:12 ]
+    │
+ 28 │     age int,
+    │            ┬  
+    │            ╰── Expected Unexpected token in class body, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ','
+    ╭─[ class_decls.baml:29:16 ]
+    │
+ 29 │     active bool,
+    │                ┬  
+    │                ╰── Expected Unexpected token in class body, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: field 'name' is missing a type annotation
+    ╭─[ class_decls.baml:96:5 ]
+    │
+ 96 │     name // 8 field name trailing
+    │     ──┬─  
+    │       ╰─── field 'name' is missing a type annotation
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: field 'string' is missing a type annotation
+    ╭─[ class_decls.baml:98:5 ]
+    │
+ 98 │     string // 10 type trailing
+    │     ───┬──  
+    │        ╰──── field 'string' is missing a type annotation
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: field 'name' is missing a type annotation
+     ╭─[ class_decls.baml:112:5 ]
+     │
+ 112 │     name /* 8 field name trailing */
+     │     ──┬─  
+     │       ╰─── field 'name' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'string' is missing a type annotation
+     ╭─[ class_decls.baml:114:5 ]
+     │
+ 114 │     string /* 10 type trailing */
+     │     ───┬──  
+     │        ╰──── field 'string' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'name' is missing a type annotation
+     ╭─[ class_decls.baml:123:5 ]
+     │
+ 123 │     name // 2 field name trailing
+     │     ──┬─  
+     │       ╰─── field 'name' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'string' is missing a type annotation
+     ╭─[ class_decls.baml:125:5 ]
+     │
+ 125 │     string // 4 type trailing
+     │     ───┬──  
+     │        ╰──── field 'string' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '@'
+     ╭─[ class_decls.baml:127:5 ]
+     │
+ 127 │     @description // 6 attr name trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '@'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'description' is missing a type annotation
+     ╭─[ class_decls.baml:127:6 ]
+     │
+ 127 │     @description // 6 attr name trailing
+     │      ─────┬─────  
+     │           ╰─────── field 'description' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '('
+     ╭─[ class_decls.baml:129:5 ]
+     │
+ 129 │     ( // 8 open paren trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '('
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '"'
+     ╭─[ class_decls.baml:131:5 ]
+     │
+ 131 │     "the name" // 10 arg trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '"'
+     ╭─[ class_decls.baml:131:14 ]
+     │
+ 131 │     "the name" // 10 arg trailing
+     │              ┬  
+     │              ╰── Expected Unexpected token in class body, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found ')'
+     ╭─[ class_decls.baml:133:5 ]
+     │
+ 133 │     ) // 12 close paren trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found ')'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'name' is missing a type annotation
+     ╭─[ class_decls.baml:139:5 ]
+     │
+ 139 │     name /* 2 field name trailing */
+     │     ──┬─  
+     │       ╰─── field 'name' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'string' is missing a type annotation
+     ╭─[ class_decls.baml:141:5 ]
+     │
+ 141 │     string /* 4 type trailing */
+     │     ───┬──  
+     │        ╰──── field 'string' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '@'
+     ╭─[ class_decls.baml:143:5 ]
+     │
+ 143 │     @description /* 6 attr name trailing */
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '@'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'description' is missing a type annotation
+     ╭─[ class_decls.baml:143:6 ]
+     │
+ 143 │     @description /* 6 attr name trailing */
+     │      ─────┬─────  
+     │           ╰─────── field 'description' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '('
+     ╭─[ class_decls.baml:145:5 ]
+     │
+ 145 │     ( /* 8 open paren trailing */
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '('
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '"'
+     ╭─[ class_decls.baml:147:5 ]
+     │
+ 147 │     "the name" /* 10 arg trailing */
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '"'
+     ╭─[ class_decls.baml:147:14 ]
+     │
+ 147 │     "the name" /* 10 arg trailing */
+     │              ┬  
+     │              ╰── Expected Unexpected token in class body, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found ')'
+     ╭─[ class_decls.baml:149:5 ]
+     │
+ 149 │     ) /* 12 close paren trailing */
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found ')'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'data' is missing a type annotation
+     ╭─[ class_decls.baml:155:5 ]
+     │
+ 155 │     data // 2 field name trailing
+     │     ──┬─  
+     │       ╰─── field 'data' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'map' is missing a type annotation
+     ╭─[ class_decls.baml:157:5 ]
+     │
+ 157 │     map // 4 map trailing
+     │     ─┬─  
+     │      ╰─── field 'map' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '<'
+     ╭─[ class_decls.baml:158:5 ]
+     │
+ 158 │     < // 5 open angle trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '<'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'string' is missing a type annotation
+     ╭─[ class_decls.baml:160:5 ]
+     │
+ 160 │     string // 7 key type trailing
+     │     ───┬──  
+     │        ╰──── field 'string' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found ','
+     ╭─[ class_decls.baml:161:5 ]
+     │
+ 161 │     , // 8 comma trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found ','
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'int' is missing a type annotation
+     ╭─[ class_decls.baml:163:5 ]
+     │
+ 163 │     int // 10 first trailing
+     │     ─┬─  
+     │      ╰─── field 'int' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '|'
+     ╭─[ class_decls.baml:164:5 ]
+     │
+ 164 │     | // 11 pipe trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '|'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'string' is missing a type annotation
+     ╭─[ class_decls.baml:166:5 ]
+     │
+ 166 │     string // 13 second trailing
+     │     ───┬──  
+     │        ╰──── field 'string' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '|'
+     ╭─[ class_decls.baml:167:5 ]
+     │
+ 167 │     | // 14 pipe trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '|'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'bool' is missing a type annotation
+     ╭─[ class_decls.baml:169:5 ]
+     │
+ 169 │     bool // 16 third trailing
+     │     ──┬─  
+     │       ╰─── field 'bool' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '|'
+     ╭─[ class_decls.baml:170:5 ]
+     │
+ 170 │     | // 17 pipe trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '|'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'float' is missing a type annotation
+     ╭─[ class_decls.baml:172:5 ]
+     │
+ 172 │     float // 19 fourth trailing
+     │     ──┬──  
+     │       ╰──── field 'float' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '|'
+     ╭─[ class_decls.baml:173:5 ]
+     │
+ 173 │     | // 20 pipe trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '|'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'null' is missing a type annotation
+     ╭─[ class_decls.baml:175:5 ]
+     │
+ 175 │     null // 22 fifth trailing
+     │     ──┬─  
+     │       ╰─── field 'null' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '>'
+     ╭─[ class_decls.baml:176:5 ]
+     │
+ 176 │     > // 23 close angle trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '>'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '@'
+     ╭─[ class_decls.baml:178:5 ]
+     │
+ 178 │     @description // 25 attr name trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '@'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: field 'description' is missing a type annotation
+     ╭─[ class_decls.baml:178:6 ]
+     │
+ 178 │     @description // 25 attr name trailing
+     │      ─────┬─────  
+     │           ╰─────── field 'description' is missing a type annotation
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '('
+     ╭─[ class_decls.baml:179:5 ]
+     │
+ 179 │     ( // 26 attr open trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '('
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unexpected token in class body, found '"'
+     ╭─[ class_decls.baml:181:5 ]
+     │
+ 181 │     "a long description" // 28 attr arg trailing
+     │     ┬  
+     │     ╰── Expected Unexpected token in class body, found '"'
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected Unclosed string literal, found EOF
+     ╭─[ class_decls.baml:351:2 ]
+     │
+ 351 │ }
+     │  ┬  
+     │  ╰── Expected Unclosed string literal, found EOF
+     │ 
+     │ Note: Error code: E0010
+─────╯
+
+Error: Expected '}', found EOF
+     ╭─[ class_decls.baml:351:2 ]
+     │
+ 351 │ }
+     │  ┬  
+     │  ╰── Expected '}', found EOF
+     │ 
+     │ Note: Error code: E0010
+─────╯

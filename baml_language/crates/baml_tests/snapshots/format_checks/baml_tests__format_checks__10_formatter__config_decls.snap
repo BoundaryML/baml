@@ -1,0 +1,6 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== FORMATTER ERROR ===
+[InvalidSyntax { message: "field 'field_name' is missing a type annotation", span: Span { file_id: FileId(0), range: 16808..16818 } }, InvalidSyntax { message: "field 'int' is missing a type annotation", span: Span { file_id: FileId(0), range: 16888..16891 } }, InvalidSyntax { message: "field 'field_name' is missing a type annotation", span: Span { file_id: FileId(0), range: 18704..18714 } }, InvalidSyntax { message: "field 'int' is missing a type annotation", span: Span { file_id: FileId(0), range: 18790..18793 } }]
