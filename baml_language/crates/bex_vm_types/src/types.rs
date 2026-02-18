@@ -484,8 +484,15 @@ pub enum TestArgValue {
     Float(f64),
     Bool(bool),
     String(String),
-    Array(Vec<TestArgValue>),
-    Map(IndexMap<String, TestArgValue>),
+    Array {
+        element_type: Ty,
+        items: Vec<TestArgValue>,
+    },
+    Map {
+        key_type: Ty,
+        value_type: Ty,
+        entries: IndexMap<String, TestArgValue>,
+    },
 }
 
 /// A compiled test case, ready for execution.

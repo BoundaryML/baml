@@ -1,3 +1,5 @@
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
 use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
@@ -56,12 +58,10 @@ impl TestArgs {
 
         // Set up the compiler database and load all .baml files.
         let mut db = ProjectDatabase::new();
+        let project = db.set_project_root(&from);
         let baml_files = discover_baml_files(&from);
         if baml_files.is_empty() {
-            #[allow(clippy::print_stderr)]
-            {
-                eprintln!("No .baml files found in {}", from.display());
-            }
+            eprintln!("No .baml files found in {}", from.display());
             return Ok(crate::ExitCode::NoTestsRun);
         }
 
@@ -70,13 +70,12 @@ impl TestArgs {
                 .with_context(|| format!("Failed to read {}", file_path.display()))?;
             db.add_or_update_file(file_path, &content);
         }
-        let project = db.set_project_root(&from);
 
         // Discover all (function, test) pairs from the HIR.
         let discovered = discover_tests(&db, project);
 
         // Apply include/exclude filters.
-        let filter = TestFilter::from(
+        let filter = TestFilter::new(
             self.include.iter().map(|s| s.as_str()),
             self.exclude.iter().map(|s| s.as_str()),
         );
@@ -119,7 +118,7 @@ impl TestArgs {
         let compile_options = baml_compiler_emit::CompileOptions {
             emit_test_cases: true,
         };
-        let bytecode = baml_compiler_emit::generate_project_bytecode(&db, compile_options)
+        let bytecode = baml_compiler_emit::generate_project_bytecode(&db, &compile_options)
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         // Create the engine with native (tokio-based) sys ops.

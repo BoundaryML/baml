@@ -6,7 +6,7 @@ pub struct TestFilter {
 }
 
 impl TestFilter {
-    pub fn from<'a>(
+    pub fn new<'a>(
         include: impl Iterator<Item = &'a str>,
         exclude: impl Iterator<Item = &'a str>,
     ) -> TestFilter {
@@ -45,9 +45,13 @@ impl TestFilter {
             return true;
         }
 
-        Regex::new(&format!("^{}$", filter_expr.replace("*", ".*")))
-            .unwrap()
-            .is_match(subject)
+        Regex::new(&format!("^{}$", filter_expr.replace("*", ".*"))).map_or_else(
+            |e| {
+                eprintln!("Failed to parse filter: {e}");
+                false
+            },
+            |r| r.is_match(subject),
+        )
     }
 
     pub fn includes(&self, function_name: &str, test_name: &str) -> bool {
@@ -185,6 +189,6 @@ mod tests {
     }
 
     fn test_filters(include: &[&str], exclude: &[&str]) -> TestFilter {
-        TestFilter::from(include.iter().copied(), exclude.iter().copied())
+        TestFilter::new(include.iter().copied(), exclude.iter().copied())
     }
 }

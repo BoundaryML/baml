@@ -89,7 +89,10 @@ pub struct CompileOptions {
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
-pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db, options: &CompileOptions) -> Result<Program, LoweringError> {
+pub fn generate_project_bytecode(
+    db: &dyn baml_compiler_mir::Db,
+    options: &CompileOptions,
+) -> Result<Program, LoweringError> {
     let project = db.project();
     compile_files(db, project.files(db), OptLevel::One, options)
 }
@@ -103,7 +106,7 @@ pub fn compile_files(
     db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
     opt: OptLevel,
-    options: CompileOptions,
+    options: &CompileOptions,
 ) -> Result<Program, LoweringError> {
     // Note: Builtin BAML files (like llm.baml) are now loaded at project setup time
     // in ProjectDatabase::set_project_root(), so they're already in the files list.
@@ -662,35 +665,50 @@ pub fn compile_files(
         }
     }
 
-    // --- Pass: Emit test cases ---
-    for file in files {
-        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
-        let items_struct = baml_compiler_hir::file_items(db, *file);
-        for item in items_struct.items(db) {
-            if let ItemId::Test(test_loc) = item {
-                let test = &item_tree[test_loc.id(db)];
-                let args = test
-                    .args
-                    .iter()
-                    .map(|(k, v)| (k.clone(), convert_hir_test_arg(v)))
-                    .collect();
-                program.test_cases.push(bex_vm_types::TestCase {
-                    name: test.name.to_string(),
-                    function_names: test.function_refs.iter().map(|n| n.to_string()).collect(),
-                    args,
-                });
     // --- Pass: Emit test cases (only when requested) ---
     if options.emit_test_cases {
+        // Build a map of function name -> (param_name -> Ty) so we can
+        // annotate test arg values with their declared types.
+        let mut fn_param_types: HashMap<String, HashMap<String, baml_type::Ty>> = HashMap::new();
+        for file in files {
+            let items_struct = baml_compiler_hir::file_items(db, *file);
+            for item in items_struct.items(db) {
+                if let ItemId::Function(func_loc) = item {
+                    let signature = function_signature(db, *func_loc);
+                    let (param_names, param_types, _) = compute_function_metadata(
+                        &signature,
+                        &resolution_ctx,
+                        &type_aliases,
+                        &recursive_aliases,
+                    );
+                    let param_map: HashMap<String, baml_type::Ty> =
+                        param_names.into_iter().zip(param_types).collect();
+                    fn_param_types.insert(signature.name.to_string(), param_map);
+                }
+            }
+        }
+
         for file in files {
             let item_tree = baml_compiler_hir::file_item_tree(db, *file);
             let items_struct = baml_compiler_hir::file_items(db, *file);
             for item in items_struct.items(db) {
                 if let ItemId::Test(test_loc) = item {
                     let test = &item_tree[test_loc.id(db)];
+                    // Use the first function ref to look up param types.
+                    let param_types = test
+                        .function_refs
+                        .first()
+                        .and_then(|name| fn_param_types.get(name.as_str()));
                     let args = test
                         .args
                         .iter()
-                        .map(|(k, v)| (k.clone(), convert_hir_test_arg(v)))
+                        .map(|(k, v)| {
+                            let ty = param_types
+                                .and_then(|m| m.get(k.as_str()))
+                                .cloned()
+                                .unwrap_or(baml_type::Ty::Null);
+                            (k.clone(), convert_hir_test_arg(v, &ty))
+                        })
                         .collect();
                     program.test_cases.push(bex_vm_types::TestCase {
                         name: test.name.to_string(),
@@ -732,8 +750,12 @@ where
     }
 }
 
-/// Convert an HIR `TestArgValue` to a `bex_vm_types::TestArgValue`.
-fn convert_hir_test_arg(v: &baml_compiler_hir::TestArgValue) -> bex_vm_types::TestArgValue {
+/// Convert an HIR `TestArgValue` to a `bex_vm_types::TestArgValue`,
+/// using the declared parameter type to annotate arrays and maps.
+fn convert_hir_test_arg(
+    v: &baml_compiler_hir::TestArgValue,
+    ty: &baml_type::Ty,
+) -> bex_vm_types::TestArgValue {
     match v {
         baml_compiler_hir::TestArgValue::Null => bex_vm_types::TestArgValue::Null,
         baml_compiler_hir::TestArgValue::Int(i) => bex_vm_types::TestArgValue::Int(*i),
@@ -741,13 +763,32 @@ fn convert_hir_test_arg(v: &baml_compiler_hir::TestArgValue) -> bex_vm_types::Te
         baml_compiler_hir::TestArgValue::Bool(b) => bex_vm_types::TestArgValue::Bool(*b),
         baml_compiler_hir::TestArgValue::String(s) => bex_vm_types::TestArgValue::String(s.clone()),
         baml_compiler_hir::TestArgValue::Array(arr) => {
-            bex_vm_types::TestArgValue::Array(arr.iter().map(convert_hir_test_arg).collect())
+            let element_type = match ty {
+                baml_type::Ty::List(elem) => elem.as_ref().clone(),
+                _ => baml_type::Ty::Null,
+            };
+            bex_vm_types::TestArgValue::Array {
+                element_type: element_type.clone(),
+                items: arr
+                    .iter()
+                    .map(|item| convert_hir_test_arg(item, &element_type))
+                    .collect(),
+            }
         }
-        baml_compiler_hir::TestArgValue::Map(map) => bex_vm_types::TestArgValue::Map(
-            map.iter()
-                .map(|(k, v)| (k.clone(), convert_hir_test_arg(v)))
-                .collect(),
-        ),
+        baml_compiler_hir::TestArgValue::Map(map) => {
+            let (key_type, value_type) = match ty {
+                baml_type::Ty::Map { key, value } => (key.as_ref().clone(), value.as_ref().clone()),
+                _ => (baml_type::Ty::String, baml_type::Ty::Null),
+            };
+            bex_vm_types::TestArgValue::Map {
+                key_type: key_type.clone(),
+                value_type: value_type.clone(),
+                entries: map
+                    .iter()
+                    .map(|(k, v)| (k.clone(), convert_hir_test_arg(v, &value_type)))
+                    .collect(),
+            }
+        }
     }
 }
 
