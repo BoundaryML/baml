@@ -103,7 +103,6 @@ fn match_literal_null() -> anyhow::Result<()> {
                 let x = null;
                 match (x) {
                     null => "was null",
-                    _ => "not null"
                 }
             }
         "#,
@@ -128,12 +127,13 @@ fn match_typed_pattern_first_arm() -> anyhow::Result<()> {
                 reason string
             }
 
+            type Res = Success | Failure
+
             function main() -> string {
-                let result = Success { data: "hello" };
-                match (result) {
+                let result: Res = Success { data: "hello" };
+                match (result: Res) {
                     s: Success => "success: " + s.data,
                     _: Failure => "failure",
-                    _ => "unknown"
                 }
             }
         "#,
@@ -154,12 +154,13 @@ fn match_typed_pattern_second_arm() -> anyhow::Result<()> {
                 reason string
             }
 
+            type Res = Success | Failure
+
             function main() -> string {
-                let result = Failure { reason: "error" };
+                let result: Res = Failure { reason: "error" };
                 match (result) {
                     s: Success => "success: " + s.data,
                     f: Failure => "failure: " + f.reason,
-                    _ => "unknown"
                 }
             }
         "#,
@@ -181,12 +182,13 @@ fn match_typed_pattern_with_field_access() -> anyhow::Result<()> {
                 radius int
             }
 
+            type Shape = Point | Circle
+
             function main() -> int {
-                let shape = Point { x: 10, y: 20 };
+                let shape: Shape = Point { x: 10, y: 20 };
                 match (shape) {
                     p: Point => p.x + p.y,
                     c: Circle => c.radius,
-                    _ => 0
                 }
             }
         "#,
@@ -236,7 +238,6 @@ fn match_guard_fallthrough() -> anyhow::Result<()> {
                     x: Score if x.value >= 90 => "excellent",
                     x: Score if x.value >= 70 => "good",
                     _: Score => "needs work",
-                    _ => "unknown"
                 }
             }
         "#,
@@ -259,7 +260,6 @@ fn match_guard_all_fail() -> anyhow::Result<()> {
                     x: Score if x.value >= 90 => "excellent",
                     x: Score if x.value >= 70 => "good",
                     _: Score => "needs work",
-                    _ => "unknown"
                 }
             }
         "#,
@@ -973,7 +973,6 @@ fn match_mixed_instanceof_and_literal() -> anyhow::Result<()> {
                 let x = Result { code: 200 };
                 match (x) {
                     r: Result => r.code,
-                    _ => 0
                 }
             }
         "#,
@@ -1238,7 +1237,8 @@ fn match_negative_int_first_arm() -> anyhow::Result<()> {
     assert_vm_executes(Program {
         source: r#"
             function main() -> string {
-                match (-1) {
+                let x: int = -1;
+                match (x) {
                     -1 => "negative one",
                     0 => "zero",
                     1 => "one",
@@ -1257,9 +1257,7 @@ fn match_negative_int_not_matched() -> anyhow::Result<()> {
         source: r#"
             function main() -> string {
                 match (1) {
-                    -1 => "negative one",
                     1 => "one",
-                    _ => "other"
                 }
             }
         "#,

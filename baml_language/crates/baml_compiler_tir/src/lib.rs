@@ -19,8 +19,7 @@ use baml_base::{FileId, Name, Span};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
     ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
-    MatchArm, MatchArmId, PatId, Pattern, PromptTemplate, SignatureSourceMap, StmtId, TirContext,
-    TypeId,
+    MatchArmId, PatId, Pattern, PromptTemplate, SignatureSourceMap, StmtId, TirContext, TypeId,
 };
 use baml_workspace::Project;
 
@@ -2535,7 +2534,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             } else {
                 let arms_and_patterns: Vec<(MatchArmId, PatId)> = arms
                     .iter()
-                    .map(|arm_id| (arm_id.clone(), body.match_arms[*arm_id].pattern.clone()))
+                    .map(|arm_id| (*arm_id, body.match_arms[*arm_id].pattern))
                     .collect();
                 // Perform exhaustiveness checking and unreachable arm detection
                 check_match_exhaustiveness(ctx, &scrutinee_ty, &arms_and_patterns, body, expr_id);
@@ -2553,12 +2552,6 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let pattern = &body.patterns[arm.pattern];
                         let (binding_name, narrowed_ty) =
                             extract_pattern_binding(ctx, pattern, arm.pattern, &scrutinee_ty, body);
-
-                        if !ctx.is_subtype_of(&narrowed_ty, &scrutinee_ty) {
-                            ctx.push_error(TypeError::UnreachableArm {
-                                location: ErrorLocation::Pattern(arm.pattern),
-                            })
-                        }
 
                         // Bind the pattern variable with the narrowed type
                         if let Some(name) = binding_name {
@@ -2946,7 +2939,7 @@ fn check_match_exhaustiveness(
 
     let arms = arms_and_patterns
         .iter()
-        .map(|(arm, _)| arm.clone())
+        .map(|(arm, _)| *arm)
         .collect::<Vec<_>>();
     let result = checker.check(scrutinee_ty, &arms, body);
 

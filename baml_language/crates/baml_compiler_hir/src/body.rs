@@ -1912,13 +1912,15 @@ impl LoweringContext {
     }
 
     /// Finalize a partially-built pattern element.
+    #[allow(clippy::cast_possible_truncation)]
     fn finalize_pattern_element(&mut self, element: PatternElement) -> PatId {
         match element {
-            PatternElement::Segments(segs, _start) => {
+            PatternElement::Segments(segs, start) => {
                 if segs.len() == 1 {
                     // Single segment → binding
-                    self.patterns
-                        .alloc(Pattern::Binding(segs.into_iter().next().unwrap()))
+                    let name = segs.into_iter().next().unwrap();
+                    let end = start + TextSize::new(name.as_str().len() as u32);
+                    self.alloc_pattern(Pattern::Binding(name), TextRange::new(start, end))
                 } else {
                     // Multi-segment → enum variant (all-but-last = enum name, last = variant)
                     let enum_name = Name::new(

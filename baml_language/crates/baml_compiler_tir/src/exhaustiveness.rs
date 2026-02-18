@@ -510,7 +510,7 @@ impl<'a> ExhaustivenessChecker<'a> {
     // ========================================================================
 
     /// Check if a value set is fully covered by existing coverage.
-    /// value_set: a particular branch's `ValueSet`.
+    /// `value_set`: a particular branch's `ValueSet`.
     /// covered: `ValueSet`s covered by earlier branches.
     /// required: `ValueSet`s that need coverage, derived from the
     ///           top-level match scrutinee.
@@ -527,7 +527,7 @@ impl<'a> ExhaustivenessChecker<'a> {
     fn find_uncovered(required: &[ValueSet], covered: &[ValueSet]) -> Vec<ValueSet> {
         required
             .iter()
-            .filter(|req| !Self::is_fully_covered(req, covered, &required))
+            .filter(|req| !Self::is_fully_covered(req, covered, required))
             .cloned()
             .collect()
     }
@@ -539,7 +539,7 @@ impl<'a> ExhaustivenessChecker<'a> {
 
 /// Check if a value set is fully covered by existing coverage.
 ///
-/// value_set: the requirements of a particular match arm.
+/// `value_set`: the requirements of a particular match arm.
 /// covered: the requirements satisfied by another context (usually preceding match arms).
 /// required: the requirements imposed by the match scrutinee.
 fn is_value_set_covered(value_set: &ValueSet, covered: &[ValueSet], required: &[ValueSet]) -> bool {
