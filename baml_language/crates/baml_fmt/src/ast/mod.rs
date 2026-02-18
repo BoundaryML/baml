@@ -144,7 +144,7 @@ impl StrongAstError {
         fn get_line_and_column(source: &str, byte_offset: usize) -> Option<(usize, usize)> {
             let (before, _) = source.split_at_checked(byte_offset)?;
             let line = before.lines().count();
-            let column = before.lines().last()?.len();
+            let column = before.lines().last()?.len() + 1;
             Some((line, column))
         }
         match self {

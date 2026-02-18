@@ -650,14 +650,7 @@ impl FromCST for ReturnStmt {
             .transpose()?;
 
         // Optional semicolon
-        let semicolon = it
-            .next()
-            .map(|elem| {
-                let token = StrongAstError::assert_is_token(elem)?;
-                StrongAstError::assert_kind_token(&token, SyntaxKind::SEMICOLON)?;
-                Ok(t::Semicolon::new_from_span(token.text_range()))
-            })
-            .transpose()?;
+        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
 
         it.expect_end()?;
 
@@ -722,14 +715,7 @@ impl FromCST for BreakStmt {
 
         let keyword = it.expect_parse()?;
 
-        let semicolon = it
-            .next()
-            .map(|elem| {
-                let token = StrongAstError::assert_is_token(elem)?;
-                StrongAstError::assert_kind_token(&token, SyntaxKind::SEMICOLON)?;
-                Ok(t::Semicolon::new_from_span(token.text_range()))
-            })
-            .transpose()?;
+        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
 
         it.expect_end()?;
 
@@ -781,14 +767,7 @@ impl FromCST for ContinueStmt {
 
         let keyword = it.expect_parse()?;
 
-        let semicolon = it
-            .next()
-            .map(|elem| {
-                let token = StrongAstError::assert_is_token(elem)?;
-                StrongAstError::assert_kind_token(&token, SyntaxKind::SEMICOLON)?;
-                Ok(t::Semicolon::new_from_span(token.text_range()))
-            })
-            .transpose()?;
+        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
 
         it.expect_end()?;
 
@@ -842,14 +821,7 @@ impl FromCST for AssertStmt {
         let condition = it.expect_next("some expression")?;
         let condition = Expression::from_cst(condition)?;
 
-        let semicolon = it
-            .next()
-            .map(|elem| {
-                let token = StrongAstError::assert_is_token(elem)?;
-                StrongAstError::assert_kind_token(&token, SyntaxKind::SEMICOLON)?;
-                Ok(t::Semicolon::new_from_span(token.text_range()))
-            })
-            .transpose()?;
+        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
 
         it.expect_end()?;
 

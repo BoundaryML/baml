@@ -331,20 +331,20 @@ impl PrintMultiLine for FunctionParamList {
 }
 
 impl FunctionParamList {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the function param list on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        single_line_printer.print_raw_token(&self.open_paren);
+        printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (param, comma)) in self.params.iter().enumerate() {
-            if single_line_printer.output.len() > shape.width {
+            if printer.output.len() > shape.width {
                 return None;
             }
             let (p_leading, p_trailing) = printer.trivia.get_for_element(param);
             printer.print_trivia_single_line_squished(p_leading)?;
-            if single_line_printer
+            if printer
                 .print(param, Shape::unlimited_single_line())
                 .multi_lined
             {
@@ -356,12 +356,12 @@ impl FunctionParamList {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
                     printer.print_trivia_single_line_squished(comma_leading)?;
-                    single_line_printer.print_raw_token(comma);
+                    printer.print_raw_token(comma);
                     printer.print_trivia_single_line_squished(comma_trailing)?;
                 } else {
-                    single_line_printer.print_str(",");
+                    printer.print_str(",");
                 }
-                single_line_printer.print_str(" ");
+                printer.print_str(" ");
             } else if let Some(comma) = comma {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
@@ -373,12 +373,11 @@ impl FunctionParamList {
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
         printer.print_trivia_single_line_squished(close_leading)?;
-        single_line_printer.print_raw_token(&self.close_paren);
+        printer.print_raw_token(&self.close_paren);
 
-        if single_line_printer.output.len() > shape.width {
+        if printer.output.len() > shape.width {
             None
         } else {
-            printer.append_from_printer(single_line_printer);
             Some(PrintInfo::default_single_line())
         }
     }
@@ -386,7 +385,8 @@ impl FunctionParamList {
 
 impl Printable for FunctionParamList {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(&shape, printer)
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -1913,20 +1913,20 @@ impl PrintMultiLine for ConfigArray {
 }
 
 impl ConfigArray {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the config array on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        single_line_printer.print_raw_token(&self.open_bracket);
+        printer.print_raw_token(&self.open_bracket);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_bracket.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (elem, comma)) in self.elements.iter().enumerate() {
-            if single_line_printer.output.len() > shape.width {
+            if printer.output.len() > shape.width {
                 return None;
             }
             let (el_leading, el_trailing) = printer.trivia.get_for_element(elem);
             printer.print_trivia_single_line_squished(el_leading)?;
-            if single_line_printer
+            if printer
                 .print(elem, Shape::unlimited_single_line())
                 .multi_lined
             {
@@ -1938,12 +1938,12 @@ impl ConfigArray {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
                     printer.print_trivia_single_line_squished(comma_leading)?;
-                    single_line_printer.print_raw_token(comma);
+                    printer.print_raw_token(comma);
                     printer.print_trivia_single_line_squished(comma_trailing)?;
                 } else {
-                    single_line_printer.print_str(",");
+                    printer.print_str(",");
                 }
-                single_line_printer.print_str(" ");
+                printer.print_str(" ");
             } else if let Some(comma) = comma {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
@@ -1957,12 +1957,11 @@ impl ConfigArray {
             .trivia
             .get_for_range_split(self.close_bracket.span());
         printer.print_trivia_single_line_squished(close_leading)?;
-        single_line_printer.print_raw_token(&self.close_bracket);
+        printer.print_raw_token(&self.close_bracket);
 
-        if single_line_printer.output.len() > shape.width {
+        if printer.output.len() > shape.width {
             None
         } else {
-            printer.append_from_printer(single_line_printer);
             Some(PrintInfo::default_single_line())
         }
     }
@@ -1970,7 +1969,8 @@ impl ConfigArray {
 
 impl Printable for ConfigArray {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(&shape, printer)
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
@@ -2199,8 +2199,7 @@ impl Printable for TestDecl {
         printer.print_str(" ");
         printer.print_raw_token(&self.name);
         printer.print_str(" ");
-        printer.print(&self.config_block, shape);
-        PrintInfo::default_multi_lined()
+        printer.print(&self.config_block, shape)
     }
     fn leftmost_token(&self) -> TextRange {
         self.keyword.span()

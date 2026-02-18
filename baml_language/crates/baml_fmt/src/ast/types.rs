@@ -714,12 +714,12 @@ impl KnownKind for TypeArgs {
 
 impl PrintMultiLine for TypeArgs {
     /// Multi-line layout: each type argument on its own indented line
-    /// with trailing comma. Closing `>` on its own line.
+    /// with trailing comma except for the last one. Closing `>` on its own line.
     ///
     /// ```baml
     /// <
     ///     SomeLongType,
-    ///     AnotherType,
+    ///     AnotherType
     /// >
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {

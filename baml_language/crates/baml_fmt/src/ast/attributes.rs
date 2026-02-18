@@ -338,20 +338,20 @@ impl PrintMultiLine for AttributeArgs {
 }
 
 impl AttributeArgs {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the attribute args on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        single_line_printer.print_raw_token(&self.open_paren);
+        printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
         printer.print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (arg, comma)) in self.args.iter().enumerate() {
-            if single_line_printer.output.len() > shape.width {
+            if printer.output.len() > shape.width {
                 return None;
             }
             let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
             printer.print_trivia_single_line_squished(arg_leading)?;
-            if single_line_printer
+            if printer
                 .print(arg, Shape::unlimited_single_line())
                 .multi_lined
             {
@@ -363,12 +363,12 @@ impl AttributeArgs {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
                     printer.print_trivia_single_line_squished(comma_leading)?;
-                    single_line_printer.print_raw_token(comma);
+                    printer.print_raw_token(comma);
                     printer.print_trivia_single_line_squished(comma_trailing)?;
                 } else {
-                    single_line_printer.print_str(",");
+                    printer.print_str(",");
                 }
-                single_line_printer.print_str(" ");
+                printer.print_str(" ");
             } else if let Some(comma) = comma {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
@@ -380,12 +380,11 @@ impl AttributeArgs {
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
         printer.print_trivia_single_line_squished(close_leading)?;
-        single_line_printer.print_raw_token(&self.close_paren);
+        printer.print_raw_token(&self.close_paren);
 
-        if single_line_printer.output.len() > shape.width {
+        if printer.output.len() > shape.width {
             None
         } else {
-            printer.append_from_printer(single_line_printer);
             Some(PrintInfo::default_single_line())
         }
     }
@@ -393,7 +392,8 @@ impl AttributeArgs {
 
 impl Printable for AttributeArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        self.try_print_single_line(&shape, printer)
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {

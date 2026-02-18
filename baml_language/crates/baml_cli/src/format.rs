@@ -35,7 +35,14 @@ impl FormatArgs {
 
         let mut num_failures: usize = 0;
         for path in &self.paths {
-            let source = fs::read_to_string(path)?;
+            let source = match fs::read_to_string(path) {
+                Ok(source) => source,
+                Err(err) => {
+                    eprintln!("Failed to read {path:?}: {err}");
+                    num_failures += 1;
+                    continue;
+                }
+            };
             let options = FormatOptions::default();
             match baml_fmt::format(&source, &options) {
                 Ok(formatted) =>
@@ -43,8 +50,9 @@ impl FormatArgs {
                     #[allow(clippy::print_stdout)]
                     if self.dry_run {
                         println!("{formatted}");
-                    } else {
-                        fs::write(path, formatted)?;
+                    } else if let Err(err) = fs::write(path, formatted) {
+                        eprintln!("Failed to write formatted source to {path:?}: {err}");
+                        num_failures += 1;
                     }
                 }
                 Err(err) => {
