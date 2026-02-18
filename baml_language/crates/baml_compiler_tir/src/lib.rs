@@ -2445,9 +2445,13 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         Expr::Block { stmts, tail_expr } => {
             ctx.push_scope();
 
-            // Type check statements
+            // Type check statements, applying narrowing after early-return ifs
             for &stmt_id in stmts {
                 check_stmt(ctx, stmt_id, body);
+
+                for (var_name, narrowed_ty) in extract_early_return_narrowing(ctx, stmt_id, body) {
+                    ctx.define(var_name, narrowed_ty);
+                }
             }
 
             // Type of block is type of tail expression
@@ -2477,13 +2481,13 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 });
             }
 
-            // Check for instanceof narrowing
-            let instanceof_narrowing = extract_instanceof_narrowing(ctx, *condition, body);
-
-            // Infer then-branch with narrowed type if applicable
-            let then_ty = if let Some((var_name, narrowed_ty)) = &instanceof_narrowing {
+            // Apply true-branch narrowing (instanceof + null checks + truthiness)
+            let true_narrowings = extract_condition_narrowing(ctx, *condition, body, true);
+            let then_ty = if !true_narrowings.is_empty() {
                 ctx.push_scope();
-                ctx.define(var_name.clone(), narrowed_ty.clone());
+                for (var_name, narrowed_ty) in true_narrowings {
+                    ctx.define(var_name, narrowed_ty);
+                }
                 let ty = infer_expr(ctx, *then_branch, body);
                 ctx.pop_scope();
                 ty
@@ -2491,8 +2495,20 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 infer_expr(ctx, *then_branch, body)
             };
 
+            // Apply false-branch narrowing to else
+            let false_narrowings = extract_condition_narrowing(ctx, *condition, body, false);
             let else_ty = if let Some(else_expr) = else_branch {
-                infer_expr(ctx, *else_expr, body)
+                if !false_narrowings.is_empty() {
+                    ctx.push_scope();
+                    for (var_name, narrowed_ty) in false_narrowings {
+                        ctx.define(var_name, narrowed_ty);
+                    }
+                    let ty = infer_expr(ctx, *else_expr, body);
+                    ctx.pop_scope();
+                    ty
+                } else {
+                    infer_expr(ctx, *else_expr, body)
+                }
             } else {
                 Ty::Void
             };
@@ -2641,9 +2657,13 @@ fn check_expr_with_info_location(
         Expr::Block { stmts, tail_expr } => {
             ctx.push_scope();
 
-            // Type check statements with expected return type for better checking
+            // Type check statements, applying narrowing after early-return ifs
             for &stmt_id in stmts {
                 check_stmt_with_return(ctx, stmt_id, body, Some(expected));
+
+                for (var_name, narrowed_ty) in extract_early_return_narrowing(ctx, stmt_id, body) {
+                    ctx.define(var_name, narrowed_ty);
+                }
             }
 
             // Check tail expression against expected type
@@ -2667,13 +2687,13 @@ fn check_expr_with_info_location(
             // Check condition against Bool type (checking mode)
             check_expr(ctx, *condition, body, &Ty::Bool);
 
-            // Check for instanceof narrowing (same as infer_expr)
-            let instanceof_narrowing = extract_instanceof_narrowing(ctx, *condition, body);
-
-            // Check then-branch with narrowed type if applicable
-            let then_ty = if let Some((var_name, narrowed_ty)) = &instanceof_narrowing {
+            // Apply true-branch narrowing (instanceof + null checks + truthiness)
+            let true_narrowings = extract_condition_narrowing(ctx, *condition, body, true);
+            let then_ty = if !true_narrowings.is_empty() {
                 ctx.push_scope();
-                ctx.define(var_name.clone(), narrowed_ty.clone());
+                for (var_name, narrowed_ty) in true_narrowings {
+                    ctx.define(var_name, narrowed_ty);
+                }
                 let ty = check_expr(ctx, *then_branch, body, expected);
                 ctx.pop_scope();
                 ty
@@ -2681,8 +2701,20 @@ fn check_expr_with_info_location(
                 check_expr(ctx, *then_branch, body, expected)
             };
 
+            // Apply false-branch narrowing to else
+            let false_narrowings = extract_condition_narrowing(ctx, *condition, body, false);
             let else_ty = if let Some(else_expr) = else_branch {
-                check_expr(ctx, *else_expr, body, expected)
+                if !false_narrowings.is_empty() {
+                    ctx.push_scope();
+                    for (var_name, narrowed_ty) in false_narrowings {
+                        ctx.define(var_name, narrowed_ty);
+                    }
+                    let ty = check_expr(ctx, *else_expr, body, expected);
+                    ctx.pop_scope();
+                    ty
+                } else {
+                    check_expr(ctx, *else_expr, body, expected)
+                }
             } else {
                 Ty::Void
             };
@@ -3084,6 +3116,325 @@ fn extract_instanceof_narrowing(
     None
 }
 
+/// Check if an expression definitely diverges (return/break/continue).
+///
+/// An expression definitely diverges if:
+/// - It is a Block whose last statement is Return/Break/Continue
+/// - It is a Block whose last statement is an if where BOTH branches diverge
+///
+/// This is intentionally conservative — only checks the last statement.
+fn definitely_diverges(expr_id: ExprId, body: &ExprBody) -> bool {
+    use baml_compiler_hir::Expr;
+
+    let expr = &body.exprs[expr_id];
+    match expr {
+        Expr::Block { stmts, tail_expr } => {
+            // A block with a tail expression produces a value, doesn't diverge
+            if tail_expr.is_some() {
+                return false;
+            }
+            if let Some(&last_stmt_id) = stmts.last() {
+                stmt_definitely_diverges(last_stmt_id, body)
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
+}
+
+/// Check if a statement definitely diverges.
+fn stmt_definitely_diverges(stmt_id: StmtId, body: &ExprBody) -> bool {
+    use baml_compiler_hir::Stmt;
+
+    let stmt = &body.stmts[stmt_id];
+    match stmt {
+        Stmt::Return(_) | Stmt::Break | Stmt::Continue => true,
+        Stmt::Expr(expr_id) => {
+            match &body.exprs[*expr_id] {
+                // An if where both branches diverge
+                baml_compiler_hir::Expr::If {
+                    then_branch,
+                    else_branch: Some(else_branch),
+                    ..
+                } => {
+                    definitely_diverges(*then_branch, body)
+                        && definitely_diverges(*else_branch, body)
+                }
+                // A match where all arms diverge
+                baml_compiler_hir::Expr::Match { arms, .. } => {
+                    !arms.is_empty()
+                        && arms.iter().all(|arm_id| {
+                            let arm = &body.match_arms[*arm_id];
+                            definitely_diverges(arm.body, body)
+                        })
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// Check if a type is nullable (Optional or Union containing Null).
+fn is_nullable(ty: &Ty) -> bool {
+    match ty {
+        Ty::Optional(_) | Ty::Null => true,
+        Ty::Union(members) => members.iter().any(|m| matches!(m, Ty::Null)),
+        _ => false,
+    }
+}
+
+/// Remove null from a type, producing the non-null narrowing.
+///
+/// - `Optional(T)` → `T`
+/// - `Union([A, Null, B])` → `Union([A, B])` (or just `A` if one remains)
+/// - `Null` → `Unknown` (degenerate)
+/// - Other → unchanged
+fn remove_null(ty: &Ty) -> Ty {
+    match ty {
+        Ty::Optional(inner) => (**inner).clone(),
+        Ty::Union(members) => {
+            let non_null: Vec<Ty> = members
+                .iter()
+                .filter(|m| !matches!(m, Ty::Null))
+                .cloned()
+                .collect();
+            match non_null.len() {
+                0 => Ty::Unknown,
+                1 => non_null.into_iter().next().unwrap(),
+                _ => Ty::Union(non_null),
+            }
+        }
+        Ty::Null => Ty::Unknown,
+        other => other.clone(),
+    }
+}
+
+/// Get the simple name of a named type (Class, Enum, or TypeAlias).
+fn named_type_name(ty: &Ty) -> Option<&Name> {
+    match ty {
+        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => Some(&qn.name),
+        _ => None,
+    }
+}
+
+/// Check if two types refer to the same named type, even if one is TypeAlias
+/// and the other is Class/Enum (since instanceof returns TypeAlias).
+fn same_named_type(a: &Ty, b: &Ty) -> bool {
+    if a == b {
+        return true;
+    }
+    match (named_type_name(a), named_type_name(b)) {
+        (Some(a_name), Some(b_name)) => a_name == b_name,
+        _ => false,
+    }
+}
+
+/// Remove a specific type from a union (for instanceof false-branch narrowing).
+fn remove_type_from(ty: &Ty, to_remove: &Ty) -> Ty {
+    match ty {
+        Ty::Union(members) => {
+            let remaining: Vec<Ty> = members
+                .iter()
+                .filter(|m| !same_named_type(m, to_remove))
+                .cloned()
+                .collect();
+            match remaining.len() {
+                0 => Ty::Unknown,
+                1 => remaining.into_iter().next().unwrap(),
+                _ => Ty::Union(remaining),
+            }
+        }
+        Ty::Optional(inner) if same_named_type(inner.as_ref(), to_remove) => Ty::Null,
+        _ => ty.clone(),
+    }
+}
+
+/// Check if a binary comparison involves null on one side and a variable on the other.
+/// Returns (variable_name, variable_type) if matched.
+fn extract_null_comparison(
+    ctx: &TypeContext<'_>,
+    lhs: ExprId,
+    rhs: ExprId,
+    body: &ExprBody,
+) -> Option<(Name, Ty)> {
+    use baml_compiler_hir::{Expr, Literal};
+
+    let lhs_expr = &body.exprs[lhs];
+    let rhs_expr = &body.exprs[rhs];
+
+    // `x == null` or `null == x`
+    let var_segments = match (lhs_expr, rhs_expr) {
+        (Expr::Path(segments), Expr::Literal(Literal::Null)) => segments,
+        (Expr::Literal(Literal::Null), Expr::Path(segments)) => segments,
+        _ => return None,
+    };
+
+    if var_segments.len() != 1 {
+        return None;
+    }
+
+    let var_name = &var_segments[0];
+    let var_ty = ctx.lookup(var_name)?.clone();
+    Some((var_name.clone(), var_ty))
+}
+
+/// Extract type narrowing implications from a condition expression.
+///
+/// Returns a list of (variable_name, narrowed_type) pairs that should be
+/// applied when the condition evaluates to the given `when_true` value.
+///
+/// Supports:
+/// - `x == null` / `x != null` → null narrowing
+/// - `x instanceof Foo` → instanceof narrowing
+/// - `!cond` → flips the branch
+/// - Simple variable truthiness (`if (x)` where x is nullable)
+fn extract_condition_narrowing(
+    ctx: &TypeContext<'_>,
+    condition: ExprId,
+    body: &ExprBody,
+    when_true: bool,
+) -> Vec<(Name, Ty)> {
+    use baml_compiler_hir::{BinaryOp, Expr, UnaryOp};
+
+    let expr = &body.exprs[condition];
+
+    match expr {
+        // `!cond` → flip the branch
+        Expr::Unary {
+            op: UnaryOp::Not,
+            expr: inner,
+        } => extract_condition_narrowing(ctx, *inner, body, !when_true),
+
+        Expr::Binary { op, lhs, rhs } => match op {
+            // `x == null` / `null == x`
+            BinaryOp::Eq => {
+                if let Some((var_name, var_ty)) = extract_null_comparison(ctx, *lhs, *rhs, body) {
+                    if when_true {
+                        // condition is true → x IS null
+                        vec![(var_name, Ty::Null)]
+                    } else {
+                        // condition is false → x is NOT null
+                        vec![(var_name, remove_null(&var_ty))]
+                    }
+                } else {
+                    vec![]
+                }
+            }
+
+            // `x != null` / `null != x`
+            BinaryOp::Ne => {
+                if let Some((var_name, var_ty)) = extract_null_comparison(ctx, *lhs, *rhs, body) {
+                    if when_true {
+                        // condition is true → x is NOT null
+                        vec![(var_name, remove_null(&var_ty))]
+                    } else {
+                        // condition is false → x IS null
+                        vec![(var_name, Ty::Null)]
+                    }
+                } else {
+                    vec![]
+                }
+            }
+
+            // `x instanceof Foo`
+            BinaryOp::Instanceof => {
+                if when_true {
+                    // Reuse existing logic
+                    extract_instanceof_narrowing(ctx, condition, body)
+                        .into_iter()
+                        .collect()
+                } else {
+                    // When false: remove Foo from x's type
+                    if let Some((var_name, instanceof_ty)) =
+                        extract_instanceof_narrowing(ctx, condition, body)
+                    {
+                        if let Some(var_ty) = ctx.lookup(&var_name) {
+                            let narrowed = remove_type_from(var_ty, &instanceof_ty);
+                            vec![(var_name, narrowed)]
+                        } else {
+                            vec![]
+                        }
+                    } else {
+                        vec![]
+                    }
+                }
+            }
+
+            _ => vec![],
+        },
+
+        // Simple variable truthiness: `if (x)` where x is nullable
+        Expr::Path(segments) if segments.len() == 1 => {
+            let var_name = &segments[0];
+            if let Some(var_ty) = ctx.lookup(var_name) {
+                let var_ty = var_ty.clone();
+                if is_nullable(&var_ty) {
+                    if when_true {
+                        vec![(var_name.clone(), remove_null(&var_ty))]
+                    } else {
+                        // When falsy, we can't narrow precisely (other falsy values exist)
+                        vec![]
+                    }
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![]
+            }
+        }
+
+        _ => vec![],
+    }
+}
+
+/// Extract type narrowings that should apply after a statement,
+/// if the statement is an if-with-early-return pattern.
+///
+/// For example, given `if (x == null) { return; }`, this returns
+/// `[(x, non_null_type)]` because after this statement, x is guaranteed
+/// to be non-null.
+fn extract_early_return_narrowing(
+    ctx: &TypeContext<'_>,
+    stmt_id: StmtId,
+    body: &ExprBody,
+) -> Vec<(Name, Ty)> {
+    use baml_compiler_hir::{Expr, Stmt};
+
+    let stmt = &body.stmts[stmt_id];
+
+    // Must be an expression statement containing an if
+    let Stmt::Expr(expr_id) = stmt else {
+        return vec![];
+    };
+
+    let Expr::If {
+        condition,
+        then_branch,
+        else_branch,
+    } = &body.exprs[*expr_id]
+    else {
+        return vec![];
+    };
+
+    // Case 1: if (cond) { <diverges> } — no else
+    // After the if, cond was false.
+    if else_branch.is_none() && definitely_diverges(*then_branch, body) {
+        return extract_condition_narrowing(ctx, *condition, body, false);
+    }
+
+    // Case 2: if (cond) { ... } else { <diverges> }
+    // After the if, cond was true.
+    if let Some(else_br) = else_branch {
+        if definitely_diverges(*else_br, body) && !definitely_diverges(*then_branch, body) {
+            return extract_condition_narrowing(ctx, *condition, body, true);
+        }
+    }
+
+    vec![]
+}
+
 /// Infer the result type of a binary operation.
 fn infer_binary_op(
     ctx: &mut TypeContext<'_>,
@@ -3249,16 +3600,10 @@ fn infer_unary_op(
 
     match op {
         Not => {
-            if matches!(operand, Ty::Bool | Ty::Literal(LiteralValue::Bool(_))) {
-                Ty::Bool
-            } else {
-                ctx.push_error(TypeError::InvalidUnaryOp {
-                    op: "!".to_string(),
-                    operand: generalize(operand),
-                    location,
-                });
-                Ty::Error
-            }
+            // `!` is a truthiness check: accepts any type, returns bool.
+            // For bool operands this is logical negation; for other types
+            // it converts to bool (falsy: null, false; truthy: everything else).
+            Ty::Bool
         }
         Neg => match operand {
             Ty::Int | Ty::Literal(LiteralValue::Int(_)) => Ty::Int,
