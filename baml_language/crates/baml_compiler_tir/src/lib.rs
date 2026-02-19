@@ -2577,9 +2577,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let (binding_name, narrowed_ty) =
                             extract_pattern_binding(ctx, pattern, arm.pattern, &scrutinee_ty, body);
 
-                        // Bind the pattern variable with the narrowed type
+                        // Bind the pattern variable with the narrowed type.
+                        // `_` is a discard binding
                         if let Some(name) = binding_name {
-                            ctx.define(name, narrowed_ty);
+                            if name.as_str() != "_" {
+                                ctx.define(name, narrowed_ty);
+                            }
                         }
 
                         // Type-check the guard (if present)

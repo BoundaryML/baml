@@ -1419,16 +1419,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     self.locals.insert(name.clone(), local);
                 }
                 Pattern::TypedBinding { name, ty } => {
-                    // Typed binding - bind the variable with its specific type
-                    let pattern_ty = ty.clone();
-                    let local =
-                        self.builder
-                            .declare_local(Some(name.clone()), pattern_ty, None, false);
-                    self.builder.assign(
-                        Place::local(local),
-                        Rvalue::Use(Operand::copy_local(scrutinee_local)),
-                    );
-                    self.locals.insert(name.clone(), local);
+                    // Typed binding - bind the variable with its specific type.
+                    // `_` is a discard binding and must not be materialized.
+                    if name.as_str() != "_" {
+                        let pattern_ty = ty.clone();
+                        let local =
+                            self.builder
+                                .declare_local(Some(name.clone()), pattern_ty, None, false);
+                        self.builder.assign(
+                            Place::local(local),
+                            Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                        );
+                        self.locals.insert(name.clone(), local);
+                    }
                 }
                 _ => {
                     // No binding needed (e.g., literal patterns, enum variants, wildcards)
@@ -1457,18 +1460,21 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         let pat = body.pattern(pat_id);
         match pat {
             Pattern::Binding(name) => {
-                // Binding always matches - bind the variable and go to success
-                let local = self.builder.declare_local(
-                    Some(name.clone()),
-                    scrutinee_ty.clone(),
-                    None,
-                    false,
-                );
-                self.builder.assign(
-                    Place::local(local),
-                    Rvalue::Use(Operand::copy_local(scrutinee_local)),
-                );
-                self.locals.insert(name.clone(), local);
+                // Binding always matches. `_` is a discard binding and must not
+                // be materialized as a usable local.
+                if name.as_str() != "_" {
+                    let local = self.builder.declare_local(
+                        Some(name.clone()),
+                        scrutinee_ty.clone(),
+                        None,
+                        false,
+                    );
+                    self.builder.assign(
+                        Place::local(local),
+                        Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                    );
+                    self.locals.insert(name.clone(), local);
+                }
                 self.builder.goto(success_block);
             }
             Pattern::TypedBinding { name, ty } => {
@@ -1493,16 +1499,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 self.builder
                     .branch(Operand::copy_local(check_local), bind_block, fail_block);
 
-                // In bind block: bind the variable and go to success
+                // In bind block: bind the variable and go to success.
+                // `_` is a discard binding and must not be materialized.
                 self.builder.set_current_block(bind_block);
-                let local = self
-                    .builder
-                    .declare_local(Some(name.clone()), pattern_ty, None, false);
-                self.builder.assign(
-                    Place::local(local),
-                    Rvalue::Use(Operand::copy_local(scrutinee_local)),
-                );
-                self.locals.insert(name.clone(), local);
+                if name.as_str() != "_" {
+                    let local =
+                        self.builder
+                            .declare_local(Some(name.clone()), pattern_ty, None, false);
+                    self.builder.assign(
+                        Place::local(local),
+                        Rvalue::Use(Operand::copy_local(scrutinee_local)),
+                    );
+                    self.locals.insert(name.clone(), local);
+                }
                 self.builder.goto(success_block);
             }
             Pattern::Literal(lit) => {
