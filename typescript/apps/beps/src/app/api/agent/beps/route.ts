@@ -213,6 +213,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     searchParams.get("query") ??
     searchParams.get("q");
   const query = rawQuery?.trim() ?? "";
+  const normalizedQuery = normalize(query);
   const omitOtherVersions = isTruthy(searchParams.get("omitOtherVersions"));
   const format = (searchParams.get("format") ?? "json").toLowerCase();
 
@@ -306,13 +307,25 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   // TODO: Align getFullBepForExport's generated return type with ExportData.
   const exportData = exportDataRaw;
-  const allFiles = generateAllExportFiles(exportData).filter((file) =>
-    file.path.endsWith(".md")
-  );
-  const selectedFiles = omitOtherVersions
-    ? allFiles.filter((file) => !file.path.startsWith("history/"))
-    : allFiles;
-  const markdown = flattenMarkdownForAgents(selectedFiles);
+  let selectedFiles: ExportFile[];
+  let markdown: string;
+  try {
+    const allFiles = generateAllExportFiles(exportData).filter((file) =>
+      file.path.endsWith(".md")
+    );
+    selectedFiles = omitOtherVersions
+      ? allFiles.filter((file) => !file.path.startsWith("history/"))
+      : allFiles;
+    markdown = flattenMarkdownForAgents(selectedFiles);
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Invalid BEP export payload shape.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      502
+    );
+  }
 
   if (format === "markdown") {
     return new Response(markdown, {
@@ -327,7 +340,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   return jsonResponse({
     mode: "bep",
-    query,
+    query: normalizedQuery,
     matched: {
       id: formatBepId(bestMatch.bep.number),
       number: bestMatch.bep.number,
