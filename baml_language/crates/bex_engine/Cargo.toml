@@ -17,7 +17,7 @@ sys_types = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "sync" ] }
+tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 
