@@ -149,10 +149,13 @@ fn virtual_multiple_defs_preserve_side_effects_codegen() -> anyhow::Result<()> {
             (
                 "main",
                 vec![
+                    Instruction::InitLocals(1),
                     Instruction::LoadGlobal(Value::function("fail")),
                     Instruction::Call(0),
-                    Instruction::Pop(1),
+                    Instruction::StoreVar("x".to_string()),
                     Instruction::LoadConst(Value::Int(2)),
+                    Instruction::StoreVar("x".to_string()),
+                    Instruction::LoadVar("x".to_string()),
                     Instruction::Return,
                 ],
             ),

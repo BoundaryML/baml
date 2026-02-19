@@ -883,6 +883,27 @@ fn is_phi_like(
 
     let use_loc = &du.uses[0];
     let use_block = use_loc.block;
+    let use_block_data = mir.block(use_block);
+
+    // The value is carried on stack into the join block, so it must be consumed
+    // immediately in a stack-order-safe position.
+    let use_is_stack_safe = match use_loc.statement_ref {
+        StatementRef::Statement(0) => use_block_data
+            .statements
+            .first()
+            .is_some_and(|stmt| is_first_stack_pull_local_in_statement(local, &stmt.kind)),
+        StatementRef::Terminator => {
+            use_block_data.statements.is_empty()
+                && use_block_data
+                    .terminator
+                    .as_ref()
+                    .is_some_and(|term| is_first_stack_pull_local_in_terminator(local, term))
+        }
+        StatementRef::Statement(_) => false,
+    };
+    if !use_is_stack_safe {
+        return false;
+    }
 
     // Get predecessors of the use block
     let preds = match predecessors.get(&use_block) {
@@ -944,6 +965,104 @@ fn is_phi_like(
     }
 
     true
+}
+
+/// Whether this local is the first stack-pulled value in a statement.
+///
+/// This mirrors emitter evaluation order for the "first pull" position and is
+/// used to validate stack-carried optimizations (`PhiLike`, `CallResultImmediate`).
+fn is_first_stack_pull_local_in_statement(local: Local, kind: &StatementKind) -> bool {
+    match kind {
+        StatementKind::Assign { destination, value } => match destination {
+            // For local stores, rvalue evaluation starts immediately.
+            Place::Local(_) => is_first_stack_pull_local_in_rvalue(local, value),
+            // For field/index stores, emission pulls destination base first.
+            Place::Field { base, .. } | Place::Index { base, .. } => {
+                is_first_stack_pull_local_in_place(local, base)
+            }
+        },
+        StatementKind::Drop(place) => is_first_stack_pull_local_in_place(local, place),
+        StatementKind::Assert(operand) => is_first_stack_pull_local_in_operand(local, operand),
+
+        // No pull-based reads from the eval stack here, or there are pushes before
+        // the first pull (`WatchOptions` emits channel const first), which is unsafe
+        // for stack-carried values.
+        StatementKind::Unwatch(_)
+        | StatementKind::NotifyBlock { .. }
+        | StatementKind::WatchOptions { .. }
+        | StatementKind::WatchNotify(_)
+        | StatementKind::VizEnter(_)
+        | StatementKind::VizExit(_)
+        | StatementKind::Nop => false,
+    }
+}
+
+/// Whether this local is the first stack-pulled value in a terminator.
+fn is_first_stack_pull_local_in_terminator(local: Local, term: &Terminator) -> bool {
+    match term {
+        Terminator::Goto { .. } | Terminator::Unreachable => false,
+        Terminator::Branch { condition, .. } => {
+            is_first_stack_pull_local_in_operand(local, condition)
+        }
+        Terminator::Switch { discriminant, .. } => {
+            is_first_stack_pull_local_in_operand(local, discriminant)
+        }
+        Terminator::Return => local == Local(0),
+        Terminator::Call { callee, .. } | Terminator::DispatchFuture { callee, .. } => {
+            is_first_stack_pull_local_in_operand(local, callee)
+        }
+        Terminator::Await { future, .. } => is_first_stack_pull_local_in_place(local, future),
+    }
+}
+
+/// Whether this local is the first stack-pulled value in an rvalue.
+fn is_first_stack_pull_local_in_rvalue(local: Local, rvalue: &Rvalue) -> bool {
+    match rvalue {
+        Rvalue::Use(operand) => is_first_stack_pull_local_in_operand(local, operand),
+        Rvalue::BinaryOp { left, .. } => is_first_stack_pull_local_in_operand(local, left),
+        Rvalue::UnaryOp { operand, .. } => is_first_stack_pull_local_in_operand(local, operand),
+        Rvalue::Array(elements) => elements
+            .first()
+            .is_some_and(|elem| is_first_stack_pull_local_in_operand(local, elem)),
+        Rvalue::Map(entries) => entries
+            .first()
+            // Emitter pushes all values first, so first value is first pull.
+            .is_some_and(|(_key, value)| is_first_stack_pull_local_in_operand(local, value)),
+        Rvalue::Aggregate { kind, fields } => match kind {
+            AggregateKind::Array => fields
+                .first()
+                .is_some_and(|field| is_first_stack_pull_local_in_operand(local, field)),
+            // Emitter pushes AllocInstance/Copy before field pulls, which can bury
+            // stack-carried values.
+            AggregateKind::Class(_) => false,
+            // Emitter does not pull operands for enum-variant construction.
+            AggregateKind::EnumVariant { .. } => false,
+        },
+        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+            is_first_stack_pull_local_in_place(local, place)
+        }
+        Rvalue::IsType { operand, .. } => is_first_stack_pull_local_in_operand(local, operand),
+    }
+}
+
+/// Whether this local is the first stack-pulled value in an operand.
+fn is_first_stack_pull_local_in_operand(local: Local, operand: &Operand) -> bool {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => {
+            is_first_stack_pull_local_in_place(local, place)
+        }
+        Operand::Constant(_) => false,
+    }
+}
+
+/// Whether this local is the first stack-pulled value in a place expression.
+fn is_first_stack_pull_local_in_place(local: Local, place: &Place) -> bool {
+    match place {
+        Place::Local(l) => *l == local,
+        Place::Field { base, .. } | Place::Index { base, .. } => {
+            is_first_stack_pull_local_in_place(local, base)
+        }
+    }
 }
 
 /// Check if a MIR statement is stack-neutral (doesn't push or pop from the eval stack).
@@ -1113,6 +1232,12 @@ fn can_be_virtual(
         return !du.uses.is_empty();
     }
 
+    // For non-constant rvalues, require exactly one definition site.
+    // Virtual emission inlines `du.def` directly; multiple defs would be ambiguous.
+    if !has_single_def {
+        return false;
+    }
+
     // For non-constant rvalues, must have exactly one use
     if du.uses.len() != 1 {
         return false;
@@ -1139,7 +1264,7 @@ fn can_be_virtual(
                 if has_side_effects_between(
                     mir,
                     def.block,
-                    def_idx,
+                    def_idx + 1,
                     mir.block(def.block).statements.len(),
                     &def.rvalue,
                     def_use,
@@ -1152,8 +1277,14 @@ fn can_be_virtual(
                     return false;
                 }
                 // Check for intervening side effects
-                if has_side_effects_between(mir, def.block, def_idx, use_idx, &def.rvalue, def_use)
-                {
+                if has_side_effects_between(
+                    mir,
+                    def.block,
+                    def_idx + 1,
+                    use_idx,
+                    &def.rvalue,
+                    def_use,
+                ) {
                     return false;
                 }
             }
@@ -1161,6 +1292,13 @@ fn can_be_virtual(
     } else {
         // Cross-block def-use: the rvalue will be re-evaluated at the use site,
         // so we must ensure no path from def to use modifies any dependency.
+        //
+        // Reads through projections (field/index) are especially hard to reason about
+        // with this local-only analysis because writes to `x.field` don't appear as
+        // defs of `x`. Be conservative and avoid cross-block inlining for those.
+        if rvalue_has_projection_reads(&def.rvalue) {
+            return false;
+        }
         //
         // Rather than walking all intermediate blocks (which requires full path
         // enumeration), we use a sound conservative check: if any local read by
@@ -1204,7 +1342,7 @@ fn can_be_virtual(
         if has_side_effects_between(
             mir,
             def.block,
-            def_idx,
+            def_idx + 1,
             mir.block(def.block).statements.len(),
             &def.rvalue,
             def_use,
@@ -1224,11 +1362,51 @@ fn can_be_virtual(
     true
 }
 
+/// Whether evaluating this rvalue reads through any field/index projection.
+///
+/// Cross-block virtual inlining re-evaluates the rvalue at use site. Projection
+/// reads are difficult to prove safe with local-only def-use, so we conservatively
+/// block cross-block virtualization when they appear.
+fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
+    fn place_has_projection(place: &Place) -> bool {
+        match place {
+            Place::Local(_) => false,
+            Place::Field { .. } | Place::Index { .. } => true,
+        }
+    }
+
+    fn operand_has_projection(operand: &Operand) -> bool {
+        match operand {
+            Operand::Copy(place) | Operand::Move(place) => place_has_projection(place),
+            Operand::Constant(_) => false,
+        }
+    }
+
+    match rvalue {
+        Rvalue::Use(operand) => operand_has_projection(operand),
+        Rvalue::BinaryOp { left, right, .. } => {
+            operand_has_projection(left) || operand_has_projection(right)
+        }
+        Rvalue::UnaryOp { operand, .. } => operand_has_projection(operand),
+        Rvalue::Array(elements) => elements.iter().any(operand_has_projection),
+        Rvalue::Map(entries) => entries
+            .iter()
+            .any(|(key, value)| operand_has_projection(key) || operand_has_projection(value)),
+        Rvalue::Aggregate { fields, .. } => fields.iter().any(operand_has_projection),
+        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+            place_has_projection(place)
+        }
+        Rvalue::IsType { operand, .. } => operand_has_projection(operand),
+    }
+}
+
 /// Check for side effects between two statement indices in a block.
 ///
 /// A side effect is anything that could change the value of the rvalue when re-evaluated:
 /// - Function calls (may have side effects)
 /// - Assignments to variables that the rvalue reads from (transitively)
+///
+/// Checks the half-open range `[start, end)`.
 fn has_side_effects_between(
     mir: &MirFunction,
     block_id: BlockId,
@@ -1243,7 +1421,7 @@ fn has_side_effects_between(
     // Only follow definitions that happen BEFORE start (the current statement).
     let rvalue_reads = collect_transitive_reads(rvalue, def_use, block_id, start);
 
-    for stmt_idx in (start + 1)..end {
+    for stmt_idx in start..end {
         let stmt = &block.statements[stmt_idx];
         if has_side_effect(&stmt.kind, &rvalue_reads) {
             return true;
@@ -1376,6 +1554,25 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -
     let is_first_use = use_loc.statement_ref == StatementRef::Statement(0)
         || (use_loc.statement_ref == StatementRef::Terminator && use_block.statements.is_empty());
     if !is_first_use {
+        return false;
+    }
+
+    // The stack-carried value must be consumed in the first pull position.
+    let use_is_stack_safe = match use_loc.statement_ref {
+        StatementRef::Statement(0) => use_block
+            .statements
+            .first()
+            .is_some_and(|stmt| is_first_stack_pull_local_in_statement(local, &stmt.kind)),
+        StatementRef::Terminator => {
+            use_block.statements.is_empty()
+                && use_block
+                    .terminator
+                    .as_ref()
+                    .is_some_and(|term| is_first_stack_pull_local_in_terminator(local, term))
+        }
+        StatementRef::Statement(_) => false,
+    };
+    if !use_is_stack_safe {
         return false;
     }
 

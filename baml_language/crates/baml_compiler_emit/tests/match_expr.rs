@@ -321,8 +321,10 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Switch-based emission for integer literal match in expression
+            // Match result is materialized into a local because it is the right operand
+            // of a binary op and cannot be safely consumed stack-carried.
             vec![
+                Instruction::InitLocals(1),
                 // Scrutinee
                 Instruction::LoadConst(Value::Int(2)),
                 // Check if == 2
@@ -331,15 +333,18 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(3),
                 Instruction::Pop(1),
-                Instruction::Jump(4), // jump to 2 => 20 arm
+                Instruction::Jump(5), // jump to 2 => 20 arm
                 // Catch-all arm
                 Instruction::Pop(1),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::Jump(2), // skip to addition
+                Instruction::StoreVar("_2".to_string()),
+                Instruction::Jump(3), // skip to addition
                 // First arm: 2 => 20
                 Instruction::LoadConst(Value::Int(20)),
+                Instruction::StoreVar("_2".to_string()),
                 // Addition: 1 + match result
                 Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::BinOp(bex_vm_types::BinOp::Add),
                 Instruction::Return,
             ],
