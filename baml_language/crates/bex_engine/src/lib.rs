@@ -901,8 +901,22 @@ impl BexEngine {
         cancel: &CancellationToken,
     ) -> Result<BexExternalValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
-        // Abort handles for spawned async tasks — used to kill in-flight
-        // work (HTTP requests, sleeps) when cancellation fires.
+        // Abort handles for spawned async tasks.
+        //
+        // Cancellation design: the VM event loop uses a biased `tokio::select!`
+        // at every `Await` instruction, so cancellation is detected immediately
+        // regardless of whether the in-flight sys_op is cancel-aware. However,
+        // without abort handles the *spawned task* running the sys_op would
+        // continue as an orphan until it completes naturally. For short-lived
+        // ops (env.get, render_prompt, parse) this is irrelevant, but for
+        // long-running ops (HTTP requests burning provider tokens, multi-second
+        // sleeps) orphans waste real resources.
+        //
+        // Rather than making individual sys_ops cancel-aware (wrapping each in
+        // its own `tokio::select!`), we store abort handles here and kill all
+        // spawned tasks when cancellation fires. This keeps sys_op
+        // implementations simple — new sys_ops never need to think about
+        // cancellation.
         #[cfg(not(target_arch = "wasm32"))]
         let mut abort_handles: Vec<tokio::task::AbortHandle> = Vec::new();
 
