@@ -98,10 +98,13 @@ fn call_function_inner(
 
     // Create cancellation token and register it so cancel_function_call can fire it.
     let cancel = CancellationToken::new();
-    ACTIVE_CALLS
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(id, cancel.clone());
+    {
+        let mut calls = ACTIVE_CALLS.lock().unwrap_or_else(|e| e.into_inner());
+        if calls.contains_key(&id) {
+            return Err(BridgeError::DuplicateCallId(id));
+        }
+        calls.insert(id, cancel.clone());
+    }
 
     // Spawn async task with panic catching
     get_tokio_runtime().spawn(async move {

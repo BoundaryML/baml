@@ -176,7 +176,7 @@ impl BamlWasmRuntime {
         name: &str,
         args_proto: &[u8],
         call_id: Option<u32>,
-    ) -> Result<Vec<u8>, JsError> {
+    ) -> Result<Vec<u8>, JsValue> {
         // Decode protobuf arguments
         let args = baml::cffi::HostFunctionArguments::decode(args_proto)
             .map_err(|e| JsError::new(&format!("Failed to decode arguments: {e}")))?;
@@ -192,7 +192,8 @@ impl BamlWasmRuntime {
             if calls.contains_key(&id) {
                 return Err(JsError::new(&format!(
                     "call_id {id} is already in use by an active call"
-                )));
+                ))
+                .into());
             }
             calls.insert(id, cancel.clone());
         }
@@ -205,7 +206,18 @@ impl BamlWasmRuntime {
             self.active_calls.borrow_mut().remove(&id);
         }
 
-        let result = result.map_err(|e| JsError::new(&format!("Function call failed: {e}")))?;
+        let result = result.map_err(|e| -> JsValue {
+            if matches!(
+                e,
+                bex_factory::RuntimeError::Engine(bex_factory::EngineError::Cancelled)
+            ) {
+                let err = js_sys::Error::new("Operation cancelled");
+                err.set_name("BamlCancelledError");
+                err.into()
+            } else {
+                JsError::new(&format!("Function call failed: {e}")).into()
+            }
+        })?;
 
         // Encode result as protobuf
         let cffi_value = external_to_cffi_value(&result)
