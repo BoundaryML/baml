@@ -545,6 +545,28 @@ Schema for `mode: "bep"` JSON responses:
 }
 ```
 
+`502` (upstream Convex failure, or unrecognized export payload shape):
+
+```json
+{
+  "error": "Failed to fetch BEP list.",
+  "detail": "<error message>"
+}
+```
+
+```json
+{
+  "error": "Failed to fetch BEP export data.",
+  "detail": "<error message>"
+}
+```
+
+```json
+{
+  "error": "Invalid BEP export payload shape."
+}
+```
+
 #### CORS / Preflight
 
 - `OPTIONS /api/agent/beps` is supported for browser preflight and returns `204`.
