@@ -86,7 +86,7 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
 use crate::{
     MirCodegenContext,
     analysis::{AnalysisResult, LocalClassification},
-    pull_semantics::{self, LocalPullAction, PullSink},
+    pull_semantics::{self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink},
 };
 
 // ============================================================================
@@ -393,28 +393,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             StatementKind::Assign { destination, value } => {
                 // Check if this is an assignment to a Virtual, PhiLike, or Dead local
                 if let Place::Local(local) = destination {
-                    match self.analysis.classifications[local] {
-                        LocalClassification::Virtual => {
-                            // Skip! This will be inlined at use site
+                    let class = self.analysis.classifications[local];
+                    match pull_semantics::local_assign_behavior(class) {
+                        LocalAssignBehavior::Skip => {
+                            // Skip! Value will be inlined (Virtual/CopyOf) or discarded (Dead).
                             return;
                         }
-                        LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
-                            // Emit rvalue (leaves value on stack) but NOT the store.
-                            // PhiLike: value stays on stack until the join point uses it.
-                            // ReturnPhi: value stays on stack until Return.
+                        LocalAssignBehavior::EvalNoStore => {
+                            // PhiLike/ReturnPhi: evaluate value and keep it on stack.
                             self.emit_rvalue_pull(value, mir);
                             return;
                         }
-                        LocalClassification::CopyOf => {
-                            // Copy propagation - skip the copy entirely.
-                            // Uses of this local will load from the source instead.
-                            return;
-                        }
-                        LocalClassification::Dead => {
-                            // Dead store elimination - skip entirely
-                            return;
-                        }
-                        _ => {}
+                        LocalAssignBehavior::EvalAndStore => {}
                     }
                 }
 
@@ -631,21 +621,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         match place {
             Place::Local(local) => {
                 let classification = self.analysis.classifications[local];
-                match classification {
-                    LocalClassification::Parameter | LocalClassification::Real => {
+                match pull_semantics::local_store_behavior(classification) {
+                    LocalStoreBehavior::StoreSlot => {
                         // Real locals get stored to their slot
                         let slot = self.local_slots[local];
                         self.emit(Instruction::StoreVar(slot));
                     }
-                    LocalClassification::PhiLike
-                    | LocalClassification::ReturnPhi
-                    | LocalClassification::CallResultImmediate => {
+                    LocalStoreBehavior::KeepOnStack => {
                         // PhiLike/ReturnPhi: keep value on stack (no-op) - value goes to join/return.
                         // CallResultImmediate: keep value on stack (no-op) - value used immediately.
                     }
-                    LocalClassification::Virtual
-                    | LocalClassification::CopyOf
-                    | LocalClassification::Dead => {
+                    LocalStoreBehavior::PopValue => {
                         // Virtual, CopyOf, or Dead local - just pop the value
                         self.emit(Instruction::Pop(1));
                     }

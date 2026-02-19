@@ -98,29 +98,26 @@ Function HeadersAroundExpressions (arity: 0, kind: Bytecode):
      47   JUMP -19               (to 28)
 
 Function HeadersInComplexNesting (arity: 0, kind: Bytecode):
-     0    INIT_LOCALS 2          
+     0    INIT_LOCALS 1          
      1    NOTIFY_BLOCK 0         (MainFunction)
      2    NOTIFY_BLOCK 1         (InsideBlockExpression)
      3    VIZ_ENTER 0            (InsideBlockExpression)
      4    LOAD_CONST 0           (true)
      5    POP_JUMP_IF_FALSE +2   (to 7)
-     6    JUMP +5                (to 11)
+     6    JUMP +4                (to 10)
      7    NOTIFY_BLOCK 2         (InsideElse)
      8    LOAD_CONST 1           ("else value")
-     9    STORE_VAR 2            (inner)
-     10   JUMP +6                (to 16)
-     11   NOTIFY_BLOCK 3         (InsideIfTrue)
-     12   NOTIFY_BLOCK 4         (VeryDeepBlock)
-     13   NOTIFY_BLOCK 5         (BacktoIfLevel)
-     14   LOAD_CONST 2           ("deep value")
-     15   STORE_VAR 2            (inner)
-     16   VIZ_EXIT 0             (InsideBlockExpression)
-     17   NOTIFY_BLOCK 6         (BacktoBlockLevel)
-     18   LOAD_VAR 2             (inner)
-     19   STORE_VAR 1            (result)
-     20   NOTIFY_BLOCK 7         (BacktoFunctionLevel)
-     21   LOAD_VAR 1             (result)
-     22   RETURN                 
+     9    JUMP +5                (to 14)
+     10   NOTIFY_BLOCK 3         (InsideIfTrue)
+     11   NOTIFY_BLOCK 4         (VeryDeepBlock)
+     12   NOTIFY_BLOCK 5         (BacktoIfLevel)
+     13   LOAD_CONST 2           ("deep value")
+     14   VIZ_EXIT 0             (InsideBlockExpression)
+     15   NOTIFY_BLOCK 6         (BacktoBlockLevel)
+     16   STORE_VAR 1            (result)
+     17   NOTIFY_BLOCK 7         (BacktoFunctionLevel)
+     18   LOAD_VAR 1             (result)
+     19   RETURN                 
 
 Function HeadersWithSpecialChars (arity: 0, kind: Bytecode):
      0   NOTIFY_BLOCK 0   (Header-With-Dashes)

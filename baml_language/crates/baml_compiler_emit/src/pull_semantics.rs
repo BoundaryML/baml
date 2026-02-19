@@ -11,6 +11,8 @@ use baml_compiler_mir::{
 };
 use baml_type::Ty;
 
+use crate::analysis::LocalClassification;
+
 /// What to do when pulling a local.
 pub(crate) enum LocalPullAction {
     /// Local pull fully handled by the sink.
@@ -46,6 +48,56 @@ pub(crate) trait PullSink {
 
     fn len(&mut self) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
+}
+
+/// How a local assignment statement should be emitted/evaluated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LocalAssignBehavior {
+    /// Skip assignment entirely (no rvalue evaluation).
+    Skip,
+    /// Evaluate rvalue and keep result on stack (no store).
+    EvalNoStore,
+    /// Evaluate rvalue and perform local store semantics.
+    EvalAndStore,
+}
+
+/// How storing to a local should affect the top-of-stack value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LocalStoreBehavior {
+    /// Store into a slot (consumes value).
+    StoreSlot,
+    /// Keep value on stack (phi-like stack carry).
+    KeepOnStack,
+    /// Discard value (virtual/dead/copy local store).
+    PopValue,
+}
+
+/// Shared local-assignment classification behavior used by both emitter and simulator.
+pub(crate) fn local_assign_behavior(class: LocalClassification) -> LocalAssignBehavior {
+    match class {
+        LocalClassification::Virtual | LocalClassification::CopyOf | LocalClassification::Dead => {
+            LocalAssignBehavior::Skip
+        }
+        LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
+            LocalAssignBehavior::EvalNoStore
+        }
+        LocalClassification::Parameter
+        | LocalClassification::Real
+        | LocalClassification::CallResultImmediate => LocalAssignBehavior::EvalAndStore,
+    }
+}
+
+/// Shared local-store behavior used by both emitter and simulator.
+pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBehavior {
+    match class {
+        LocalClassification::Parameter | LocalClassification::Real => LocalStoreBehavior::StoreSlot,
+        LocalClassification::PhiLike
+        | LocalClassification::ReturnPhi
+        | LocalClassification::CallResultImmediate => LocalStoreBehavior::KeepOnStack,
+        LocalClassification::Virtual | LocalClassification::CopyOf | LocalClassification::Dead => {
+            LocalStoreBehavior::PopValue
+        }
+    }
 }
 
 /// Walk an operand in pull order.

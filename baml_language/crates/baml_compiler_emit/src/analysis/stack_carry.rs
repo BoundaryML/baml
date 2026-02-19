@@ -3,7 +3,9 @@ use std::collections::{HashMap, HashSet};
 use baml_compiler_mir::{Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator};
 
 use super::{LocalClassification, LocalDefUse, StatementRef, UseLocation};
-use crate::pull_semantics::{self, LocalPullAction, PullSink};
+use crate::pull_semantics::{
+    self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink,
+};
 
 /// Stack-carry candidate kinds validated by stack simulation before activation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -307,14 +309,12 @@ fn simulate_statement_stack(
                     .copied()
                     .unwrap_or(LocalClassification::Real);
 
-                match class {
-                    LocalClassification::Virtual
-                    | LocalClassification::CopyOf
-                    | LocalClassification::Dead => {
+                match pull_semantics::local_assign_behavior(class) {
+                    LocalAssignBehavior::Skip => {
                         // Statement skipped entirely in emitter.
                         true
                     }
-                    LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
+                    LocalAssignBehavior::EvalNoStore => {
                         // Emit value, skip store.
                         simulate_rvalue_pull_stack(
                             value,
@@ -324,9 +324,7 @@ fn simulate_statement_stack(
                             def_use,
                         )
                     }
-                    LocalClassification::Parameter
-                    | LocalClassification::Real
-                    | LocalClassification::CallResultImmediate => {
+                    LocalAssignBehavior::EvalAndStore => {
                         if !simulate_rvalue_pull_stack(
                             value,
                             sim,
@@ -337,11 +335,11 @@ fn simulate_statement_stack(
                             return false;
                         }
 
-                        // Assignment to CallResultImmediate local keeps value on stack.
-                        if !matches!(class, LocalClassification::CallResultImmediate) {
-                            sim.pop_n(1)
-                        } else {
-                            true
+                        match pull_semantics::local_store_behavior(class) {
+                            LocalStoreBehavior::StoreSlot | LocalStoreBehavior::PopValue => {
+                                sim.pop_n(1)
+                            }
+                            LocalStoreBehavior::KeepOnStack => true,
                         }
                     }
                 }
@@ -502,19 +500,16 @@ fn simulate_store_place_stack(
     classifications: &HashMap<Local, LocalClassification>,
 ) -> bool {
     match place {
-        Place::Local(local) => match classifications
-            .get(local)
-            .copied()
-            .unwrap_or(LocalClassification::Real)
-        {
-            LocalClassification::Parameter | LocalClassification::Real => sim.pop_n(1),
-            LocalClassification::PhiLike
-            | LocalClassification::ReturnPhi
-            | LocalClassification::CallResultImmediate => true,
-            LocalClassification::Virtual
-            | LocalClassification::CopyOf
-            | LocalClassification::Dead => sim.pop_n(1),
-        },
+        Place::Local(local) => {
+            let class = classifications
+                .get(local)
+                .copied()
+                .unwrap_or(LocalClassification::Real);
+            match pull_semantics::local_store_behavior(class) {
+                LocalStoreBehavior::StoreSlot | LocalStoreBehavior::PopValue => sim.pop_n(1),
+                LocalStoreBehavior::KeepOnStack => true,
+            }
+        }
         Place::Field { .. } | Place::Index { .. } => false,
     }
 }
