@@ -18,7 +18,9 @@
     "lint": {
       "dependsOn": ["^build"]
     },
+    "generate": {},
     "dev": {
+      "dependsOn": ["^generate"],
       "cache": false,
       "persistent": true
     },

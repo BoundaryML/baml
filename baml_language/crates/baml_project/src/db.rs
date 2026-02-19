@@ -354,7 +354,7 @@ impl ProjectDatabase {
             .iter()
             .any(|diag| diag.severity == baml_compiler_diagnostics::Severity::Error)
         {
-            return Err(baml_compiler_vir::LoweringError::HasDiagnosticsErrors);
+            return Err(baml_compiler_emit::LoweringError::HasDiagnosticsErrors);
         }
         baml_compiler_emit::generate_project_bytecode(self)
     }

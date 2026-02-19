@@ -60,10 +60,6 @@ struct WsState {
     env_state: Arc<PlaygroundEnvState>,
 }
 
-// SAFETY: BexLsp is Send + Sync by trait bounds; broadcast and env_state are Send + Sync.
-unsafe impl Send for WsState {}
-unsafe impl Sync for WsState {}
-
 /// Start the playground server on the given listener.
 pub async fn run(
     listener: TcpListener,

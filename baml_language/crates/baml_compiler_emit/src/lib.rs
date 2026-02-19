@@ -63,7 +63,8 @@ pub use bex_vm_types::{
 // Database Trait
 // ============================================================================
 
-/// Database trait for MIR queries. Extends `baml_compiler_vir::Db`.
+/// Salsa database for the emit phase: compiles MIR to bytecode.
+/// Extends `baml_compiler_mir::Db` so a single `Db` can run the full pipeline through codegen.
 #[salsa::db]
 pub trait Db: baml_compiler_mir::Db {}
 
