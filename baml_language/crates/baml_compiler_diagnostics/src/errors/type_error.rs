@@ -73,6 +73,7 @@ pub enum TypeError<C: ErrorContext> {
         expected: usize,
         found: usize,
         location: C::Location,
+        definition_location: Option<C::Location>,
     },
     /// Calling a non-callable type.
     NotCallable { ty: C::Ty, location: C::Location },
@@ -81,6 +82,7 @@ pub enum TypeError<C: ErrorContext> {
         ty: C::Ty,
         field: String,
         location: C::Location,
+        definition_location: Option<C::Location>,
     },
     /// Index access on non-indexable type.
     NotIndexable { ty: C::Ty, location: C::Location },

@@ -1,0 +1,93 @@
+---
+source: target/debug/build/baml_tests-8782d8c4267ae68a/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "wrong_arity_definition"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          WORD "Foo_arity"
+          CALL_ARGS "(1, 2)"
+            L_PAREN "("
+            INTEGER_LITERAL "1"
+            COMMA ","
+            INTEGER_LITERAL "2"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Foo_arity"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+  x
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "missing_field_access"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "person"
+          EQUALS "="
+          OBJECT_LITERAL
+            WORD "Person"
+            L_BRACE "{"
+            OBJECT_FIELD
+              WORD "name"
+              COLON ":"
+              STRING_LITERAL "Ada"
+                QUOTE """
+                WORD "Ada"
+                QUOTE """
+            R_BRACE "}"
+          SEMICOLON ";"
+        PATH_EXPR "person.age"
+          WORD "person"
+          DOT "."
+          WORD "age"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Person"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

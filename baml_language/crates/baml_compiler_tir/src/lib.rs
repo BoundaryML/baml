@@ -793,6 +793,35 @@ impl<'db> TypeContext<'db> {
         self.expr_resolutions.insert(expr_id, resolution);
     }
 
+    fn function_definition_location(
+        &self,
+        fqn: &baml_compiler_hir::QualifiedName,
+    ) -> Option<ErrorLocation> {
+        let project = self.db.project();
+        let symbol_table = baml_compiler_hir::symbol_table(self.db, project);
+        let def = symbol_table.lookup_value(self.db, fqn)?;
+        let span = baml_compiler_hir::definition_name_span(self.db, def);
+        Some(ErrorLocation::Span(span))
+    }
+
+    fn type_definition_location(
+        &self,
+        fqn: &baml_compiler_hir::QualifiedName,
+    ) -> Option<ErrorLocation> {
+        let project = self.db.project();
+        let symbol_table = baml_compiler_hir::symbol_table(self.db, project);
+        let def = symbol_table.lookup_type(self.db, fqn)?;
+        let span = baml_compiler_hir::definition_name_span(self.db, def);
+        Some(ErrorLocation::Span(span))
+    }
+
+    fn call_definition_location(&self, callee: ExprId) -> Option<ErrorLocation> {
+        self.expr_resolutions
+            .get(&callee)
+            .and_then(ResolvedValue::as_function)
+            .and_then(|qn| self.function_definition_location(qn))
+    }
+
     /// Define a local variable and track its definition site.
     pub fn define_with_site(&mut self, name: Name, ty: Ty, definition_site: DefinitionSite) {
         // Get the current scope (last in the stack)
@@ -2285,10 +2314,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 Ty::Function { params, ret } => {
                     // Check argument count
                     if effective_args.len() != params.len() {
+                        let definition_location = ctx.call_definition_location(*callee);
                         ctx.push_error(TypeError::ArgumentCountMismatch {
                             expected: params.len(),
                             found: effective_args.len(),
                             location: location.clone(),
+                            definition_location,
                         });
                     }
 
@@ -3304,10 +3335,15 @@ fn infer_field_access(
                 };
             }
             _ => {
+                let definition_location = match base {
+                    Ty::TypeAlias(fqn) | Ty::Class(fqn) => ctx.type_definition_location(fqn),
+                    _ => None,
+                };
                 ctx.push_error(TypeError::NoSuchField {
                     ty: base.clone(),
                     field: field.to_string(),
                     location,
+                    definition_location,
                 });
                 return Ty::Unknown;
             }
@@ -3400,10 +3436,15 @@ fn infer_field_access(
     }
 
     // Field/method not found
+    let definition_location = match base {
+        Ty::TypeAlias(fqn) | Ty::Class(fqn) => ctx.type_definition_location(fqn),
+        _ => None,
+    };
     ctx.push_error(TypeError::NoSuchField {
         ty: base.clone(),
         field: field.to_string(),
         location,
+        definition_location,
     });
     Ty::Unknown
 }

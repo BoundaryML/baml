@@ -116,11 +116,19 @@ impl<C: ErrorContext> TypeError<C> {
                 expected,
                 found,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::ArgumentCountMismatch,
-                format!("Expected {expected} arguments, found {found}"),
-            )
-            .with_primary_span(loc_fn(location)),
+                definition_location,
+            } => {
+                let diag = Diagnostic::error(
+                    DiagnosticId::ArgumentCountMismatch,
+                    format!("Expected {expected} arguments, found {found}"),
+                )
+                .with_primary_span(loc_fn(location));
+                if let Some(def_location) = definition_location {
+                    diag.with_secondary(loc_fn(def_location), "Function defined here")
+                } else {
+                    diag
+                }
+            }
 
             TypeError::NotCallable { ty, location } => Diagnostic::error(
                 DiagnosticId::NotCallable,
@@ -132,11 +140,19 @@ impl<C: ErrorContext> TypeError<C> {
                 ty,
                 field,
                 location,
-            } => Diagnostic::error(
-                DiagnosticId::NoSuchField,
-                format!("Type `{}` has no field `{field}`", ty_fn(ty)),
-            )
-            .with_primary_span(loc_fn(location)),
+                definition_location,
+            } => {
+                let diag = Diagnostic::error(
+                    DiagnosticId::NoSuchField,
+                    format!("Type `{}` has no field `{field}`", ty_fn(ty)),
+                )
+                .with_primary_span(loc_fn(location));
+                if let Some(def_location) = definition_location {
+                    diag.with_secondary(loc_fn(def_location), "Type defined here")
+                } else {
+                    diag
+                }
+            }
 
             TypeError::NotIndexable { ty, location } => Diagnostic::error(
                 DiagnosticId::NotIndexable,
