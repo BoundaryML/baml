@@ -43,5 +43,11 @@ console_error_panic = [ "console_error_panic_hook" ]
 [lints]
 workspace = true
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
 [package.metadata.ci]
 wasm_support = true

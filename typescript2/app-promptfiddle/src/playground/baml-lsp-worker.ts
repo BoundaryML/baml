@@ -331,9 +331,28 @@ self.onmessage = async (event: MessageEvent) => {
       vfs.wasmVfs,
     );
 
-    // LSP initialize is handled by the generic onRequest handler below,
-    // which forwards it to the Rust runtime. Capabilities and workspace
-    // root storage are both handled in bex_project.
+    // The LSP library dispatches "initialize" to onInitialize, not to onRequest.
+    // We must handle it here and forward to the WASM runtime so the client gets a response.
+    connection.onInitialize((params) => {
+      const id = nextRequestId++;
+      console.log("onInitialize", id, params);
+      return new Promise((resolve, reject) => {
+        requestPromises.set(id, (response: LspResponse) => {
+          if (response.error) {
+            reject(response.error);
+          } else {
+            resolve(response.result ?? undefined);
+          }
+        });
+        try {
+          runtime?.handleLspRequest({ id, method: "initialize", params });
+        } catch (e) {
+          console.error("[LSP] initialize request failed:", e);
+          requestPromises.delete(id);
+          reject(e);
+        }
+      });
+    });
 
     connection.onNotification((method: string, params: any) => {
       console.log("onNotification", method, params);

@@ -52,28 +52,16 @@ use js_sys::Function;
 use prost::Message;
 use wasm_bindgen::prelude::*;
 
-// Shadow std's println!/eprintln! inside THIS crate (wasm target)
-// Routes to `log` so it shows up in the browser console.
-#[macro_export]
-macro_rules! println {
-    ($($t:tt)*) => {{
-        ::log::debug!("prefer log over println!. {}", format_args!($($t)*));
-    }};
-}
-
-#[macro_export]
-macro_rules! eprintln {
-    ($($t:tt)*) => {{
-        ::log::error!("prefer log over eprintln!. {}", format_args!($($t)*));
-    }};
-}
+static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
 #[wasm_bindgen(start)]
 pub fn start() {
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
+    LOGGER_INIT.call_once(|| {
+        wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
+    });
 }
 
 /// Get the version of the `bridge_wasm` crate.
