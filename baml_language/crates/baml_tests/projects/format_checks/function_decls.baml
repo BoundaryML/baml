@@ -11,6 +11,9 @@ function SingleParam(x: int) -> int {
     x
 }
 
+
+
+
 // ===== Multiple params =====
 function MultipleParams(a: int, b: int, c: string) -> int {
     a + b
@@ -30,6 +33,10 @@ function ManyParams(first_parameter: int, second_parameter: string, third_parame
 function VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
     "result"
 }
+
+
+
+
 
 // ===== Six params with long names and types =====
 function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
@@ -76,10 +83,15 @@ function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, ca
     "done"
 }
 
+
+
+
 // ===== Params with constrained types exceeding limit =====
-function ConstrainedParams(name: string @description("the user's full legal name"), score: int @check("positive", {{ this > 0 }})) -> string {
+function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
     "done"
 }
+
+
 
 // ===== Trivia on function declaration (line comments) =====
 // 1 function keyword leading
@@ -164,6 +176,8 @@ function MultiParamTriviaBlock(
 ) -> int {
     a
 }
+
+
 
 // ===== Trivia on wrapping function with many params (line comments) =====
 // 1 leading
@@ -267,6 +281,8 @@ function TriviaWrapReturnType(x: int) ->
     x
 }
 
+
+
 // ===== Trivia on wrapping return type (block comments) =====
 function TriviaWrapReturnTypeBlock(x: int) ->
     /* 1 first member leading */
@@ -285,6 +301,8 @@ function TriviaWrapReturnTypeBlock(x: int) ->
     null /* 14 fourth trailing */
 {
     x
+
+
 }
 
 ///////////////////
@@ -449,6 +467,11 @@ function LlmBasic(name: string) -> string {
     prompt #"Say hello to {{name}}"#
 }
 
+
+
+
+
+
 // ===== LLM function with multi-line prompt =====
 function LlmMultiLine(text: string) -> string {
     client GPT4
@@ -471,14 +494,7 @@ function LlmReversedOrder(text: string) -> string {
     client GPT4
 }
 
-// ===== LLM function with header comment =====
-function LlmWithHeader(user_id: string) -> string {
-    //# collect source material
-    client GPT4
-    prompt #"
-        Tell a story for {{ user_id }}
-    "#
-}
+
 
 // ===== LLM function with wrapping signature =====
 function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {

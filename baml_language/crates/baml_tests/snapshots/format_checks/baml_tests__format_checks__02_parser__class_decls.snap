@@ -43,16 +43,14 @@ class EmptyClass {
     KW_CLASS "class"
     WORD "ColonFields"
     L_BRACE "{"
-    FIELD "name"
+    FIELD
       WORD "name"
-    COLON ":"
-    FIELD "string"
-      WORD "string"
-    FIELD "age"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
       WORD "age"
-    COLON ":"
-    FIELD "int"
-      WORD "int"
+      TYPE_EXPR "int"
+        WORD "int"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -62,17 +60,14 @@ class EmptyClass {
       WORD "name"
       TYPE_EXPR "string"
         WORD "string"
-    COMMA ","
     FIELD
       WORD "age"
       TYPE_EXPR "int"
         WORD "int"
-    COMMA ","
     FIELD
       WORD "active"
       TYPE_EXPR "bool"
         WORD "bool"
-    COMMA ","
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -1918,96 +1913,6 @@ class DeepLevel3 {
           R_BRACE "}"
 
 === ERRORS ===
-Error: field 'name' is missing a type annotation
-    ╭─[ class_decls.baml:21:5 ]
-    │
- 21 │     name: string
-    │     ──┬─  
-    │       ╰─── field 'name' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected Unexpected token in class body, found ':'
-    ╭─[ class_decls.baml:21:9 ]
-    │
- 21 │     name: string
-    │         ┬  
-    │         ╰── Expected Unexpected token in class body, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: field 'string' is missing a type annotation
-    ╭─[ class_decls.baml:21:11 ]
-    │
- 21 │     name: string
-    │           ───┬──  
-    │              ╰──── field 'string' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: field 'age' is missing a type annotation
-    ╭─[ class_decls.baml:22:5 ]
-    │
- 22 │     age: int
-    │     ─┬─  
-    │      ╰─── field 'age' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected Unexpected token in class body, found ':'
-    ╭─[ class_decls.baml:22:8 ]
-    │
- 22 │     age: int
-    │        ┬  
-    │        ╰── Expected Unexpected token in class body, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: field 'int' is missing a type annotation
-    ╭─[ class_decls.baml:22:10 ]
-    │
- 22 │     age: int
-    │          ─┬─  
-    │           ╰─── field 'int' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected Unexpected token in class body, found ','
-    ╭─[ class_decls.baml:27:16 ]
-    │
- 27 │     name string,
-    │                ┬  
-    │                ╰── Expected Unexpected token in class body, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected Unexpected token in class body, found ','
-    ╭─[ class_decls.baml:28:12 ]
-    │
- 28 │     age int,
-    │            ┬  
-    │            ╰── Expected Unexpected token in class body, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected Unexpected token in class body, found ','
-    ╭─[ class_decls.baml:29:16 ]
-    │
- 29 │     active bool,
-    │                ┬  
-    │                ╰── Expected Unexpected token in class body, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
-
 Error: field 'name' is missing a type annotation
     ╭─[ class_decls.baml:96:5 ]
     │

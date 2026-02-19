@@ -69,7 +69,7 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
 
     // ===== Deeply nested parens =====
     ((((a + b) * c) + d) * (((a - b) + c) - d)) + ((a * b) + (c * d));
-    (((a + b) * (c + d)) + ((a - b) * (c - d))) * (((a * c) + (b * d)) - ((a * d) + (b * c)));
+    (((a + b) * (c + d)) + ((a - b) * (c - d))) * (((a * c * d) + (b * c * d)) - ((a * d) + (b * c * d)));
 
     // ===== Trivia between operands (line comments) =====
     // 1 left leading
@@ -106,13 +106,13 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b;
 
     // ===== Long logical chain exceeding limit =====
-    a > 0 && b > 0 && c > 0 && d > 0 && a != b && b != c && c != d && a < 1000 && b < 1000 && c < 1000 && d < 1000;
+    a > 0 && b > 0 && c > 0 && d > 0 && a != b && b != c && c != d && a < 1000 * 8 + 1 * 2 && b < 1000 && c < 1000 && d < 1000 + 2 + 3;
 
     // ===== Long mixed precedence chain exceeding limit =====
-    a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d;
+    a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d;
 
     // ===== Long comparison chain exceeding limit =====
-    a + b + c + d > 0 && a * b * c * d < 10000 && a - b - c - d != 0 && (a + b) * (c + d) >= 100;
+    a + b + c + d > 0 && a * b * c * d < 10000 && a - b - c - d != 0 && (a + b) * (c + d) >= 100 || a * 1 < 2 && "aowiefjowiaj" == "jfeiowajpwoeifj";
 
     // ===== Long string concatenation exceeding limit =====
     "a very long string prefix that is already quite long" + " concatenated with " + "another very long string that together exceeds the line limit easily and comfortably";
@@ -256,7 +256,7 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     a   +   b;
     a    *    b    +    c;
     a     ==     b;
-    a       &&       b;
+    a == 2       &&       b != 3;
 
     // ===== Final expression =====
     a + b

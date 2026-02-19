@@ -215,7 +215,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Deeply nested union patterns =====
     match (x) {
-        (0 | 1) | (2 | 3) => "small",
+        (0 | 1) | (2 | (3 | (4 | 5))) => "small",
         _ => "big"
     }
 
@@ -254,7 +254,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     match (x) {
         0 => {
             let result = if (b) { "this is the true branch with a very long string" } else { "this is the false branch also very long" };
-            result;
+            result
         },
         _ => "short"
     }

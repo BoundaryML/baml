@@ -5,8 +5,6 @@ expression: output
 === TYPE INFERENCE ===
   Function BinaryExprs:
     Return: Int
-    Errors:
-      - Invalid op And for int and int
   Function ChainExprs:
     Return: String
     Errors:
@@ -267,8 +265,6 @@ expression: output
     Return: Map { key: String, value: Map { key: String, value: Map { key: String, value: Union([Int, String, Bool, Null, Float]) } } }
   Function MultiParamTrivia:
     Return: Int
-  Function LlmWithHeader:
-    Return: String
   Function F:
     Return: Literal(Int(1))
   Function MultipleParams:

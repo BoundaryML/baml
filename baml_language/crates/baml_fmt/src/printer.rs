@@ -172,7 +172,7 @@ impl<'a> Printer<'a> {
     ///
     /// Example:
     /// ```baml
-    ///     // leading trivia
+    ///     // <-- adds indentation at start
     ///     // <- note the indent
     ///     let x = {
     ///         "printable may be multiline, or not"

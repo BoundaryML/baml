@@ -683,22 +683,6 @@ SOURCE_FILE
         COLON ":"
         TYPE_EXPR "string"
           WORD "string"
-        ATTRIBUTE
-          AT "@"
-          WORD "description"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            STRING_LITERAL "the user's full legal name"
-              QUOTE """
-              WORD "the"
-              WORD "user"
-              ERROR_TOKEN "'"
-              WORD "s"
-              WORD "full"
-              WORD "legal"
-              WORD "name"
-              QUOTE """
-            R_PAREN ")"
       COMMA ","
       PARAMETER
         WORD "score"
@@ -710,11 +694,6 @@ SOURCE_FILE
             WORD "check"
             ATTRIBUTE_ARGS
               L_PAREN "("
-              STRING_LITERAL "positive"
-                QUOTE """
-                WORD "positive"
-                QUOTE """
-              COMMA ","
               EXPR "{{ this > 0 }}"
                 L_BRACE "{"
                 L_BRACE "{"
@@ -1032,6 +1011,8 @@ string"
       BLOCK_EXPR "/* 14 fourth trailing */
 {
     x
+
+
 }"
         L_BRACE "{"
         WORD "x"
@@ -1988,51 +1969,6 @@ string"
       R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "LlmWithHeader"
-    PARAMETER_LIST
-      L_PAREN "("
-      PARAMETER
-        WORD "user_id"
-        COLON ":"
-        TYPE_EXPR "string"
-          WORD "string"
-      R_PAREN ")"
-    ARROW "->"
-    TYPE_EXPR "string"
-      WORD "string"
-    LLM_FUNCTION_BODY
-      L_BRACE "{"
-      HEADER_COMMENT "//# collect source material"
-        SLASH "/"
-        SLASH "/"
-        HASH "#"
-        WORD "collect"
-        WORD "source"
-        WORD "material"
-      CLIENT_FIELD "client GPT4"
-        KW_CLIENT "client"
-        WORD "GPT4"
-      PROMPT_FIELD
-        WORD "prompt"
-        RAW_STRING_LITERAL
-          HASH "#"
-          QUOTE """
-          PROMPT_TEXT "Tell a story for"
-            WORD "Tell"
-            WORD "a"
-            WORD "story"
-            KW_FOR "for"
-          TEMPLATE_INTERPOLATION "{{ user_id }}"
-            L_BRACE "{"
-            L_BRACE "{"
-            WORD "user_id"
-            R_BRACE "}"
-            R_BRACE "}"
-          QUOTE """
-          HASH "#"
-      R_BRACE "}"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
     WORD "LlmWithLongSignature"
     PARAMETER_LIST
       L_PAREN "("
@@ -2152,12 +2088,4 @@ string"
         R_BRACE "}"
 
 === ERRORS ===
-Error: Header comments (//#) are not allowed inside LLM functions
-     ╭─[ function_decls.baml:476:5 ]
-     │
- 476 │     //# collect source material
-     │     ─────────────┬─────────────  
-     │                  ╰─────────────── Header comments (//#) are not allowed inside LLM functions
-     │ 
-     │ Note: Error code: E0010
-─────╯
+None

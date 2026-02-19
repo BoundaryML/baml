@@ -295,9 +295,10 @@ impl PrintMultiLine for FunctionParamList {
     /// )
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
         let inner_shape = Shape {
-            width: shape.width.saturating_sub(printer.config.indent_width),
-            indent: shape.indent + printer.config.indent_width,
+            width: printer.config.line_width.saturating_sub(inner_indent),
+            indent: inner_indent,
             first_line_offset: 0,
         };
 
@@ -451,7 +452,16 @@ impl Printable for FunctionParam {
                 printer.print_str(":");
             }
             printer.print_str(" ");
-            printer.print(ty, shape)
+            let ty_shape = Shape {
+                width: shape
+                    .width
+                    .saturating_sub(usize::from(self.name.span().len()) + 2),
+                indent: shape.indent,
+                first_line_offset: shape.first_line_offset
+                    + usize::from(self.name.span().len())
+                    + 2,
+            };
+            ty.print(ty_shape, printer)
         } else {
             PrintInfo::default_single_line()
         }
@@ -1273,7 +1283,9 @@ impl PrintMultiLine for EnumVariant {
         };
 
         printer.print_raw_token(&self.name);
-        printer.print_trivia_all_trailing_for(self.name.span());
+        if self.attributes.len() > 0 {
+            printer.print_trivia_all_trailing_for(self.name.span());
+        }
         for attr in &self.attributes {
             printer.print_newline();
             printer.print_spaces(attr_shape.indent);
@@ -1288,9 +1300,10 @@ impl Printable for EnumVariant {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         // Check if trailing trivia on the name forces multi-line
         let (_, name_trailing) = printer.trivia.get_for_range_split(self.name.span());
-        let trivia_forces_multi = name_trailing
-            .iter()
-            .any(|t| t.single_line_len(printer.input).is_none());
+        let trivia_forces_multi = !self.attributes.is_empty()
+            && name_trailing
+                .iter()
+                .any(|t| t.single_line_len(printer.input).is_none());
 
         if trivia_forces_multi {
             return Self::print_multi_line(self, shape, printer);

@@ -80,9 +80,9 @@ enum DynamicEnum {
 // 1 enum keyword leading
 enum TriviaEnum { // 6 open brace trailing
     // 7 first variant leading
-    A // 8 first variant trailing, // 8 first variant trailing
+    A, // 8 first variant trailing
     // 9 second variant leading
-    B // 10 second variant trailing, // 10 second variant trailing
+    B, // 10 second variant trailing
     // 11 close brace leading
 } // 12 close brace trailing
 

@@ -90,6 +90,38 @@ impl FromCST for Expression {
     }
 }
 
+impl Expression {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        match self {
+            Expression::Literal(lit) => lit.single_line_width(input),
+            Expression::Path(path) => path.single_line_width(input),
+            Expression::Paren(paren) => paren.single_line_width(input),
+            Expression::Binary(binary) => binary.single_line_width(input),
+            Expression::Unary(unary) => unary.single_line_width(input),
+            Expression::If(_) => None,
+            Expression::Match(_) => None,
+            Expression::Call(call) => call.single_line_width(input),
+            Expression::Index(index) => index.single_line_width(input),
+            Expression::FieldAccess(fa) => fa.single_line_width(input),
+            Expression::EnvAccess(env) => env.single_line_width(input),
+            Expression::Block(_) => None,
+            Expression::ArrayInitializer(array) => array.single_line_width(input),
+            Expression::MapInitializer(map) => map.single_line_width(input),
+            Expression::ObjectInitializer(obj) => obj.single_line_width(input),
+            Expression::RawString(raw) => {
+                if input[raw.span()].contains('\n') {
+                    None
+                } else {
+                    Some(usize::from(raw.span().len()))
+                }
+            }
+            Expression::Unknown(_) => None,
+        }
+    }
+}
+
 impl Printable for Expression {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
@@ -185,6 +217,24 @@ impl FromCST for Literal {
     }
 }
 
+impl Literal {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        match self {
+            Literal::String(s) => {
+                if input[s.span()].contains('\n') {
+                    None
+                } else {
+                    Some(usize::from(s.span().len()))
+                }
+            }
+            Literal::Integer(i) => Some(usize::from(i.span().len())),
+            Literal::Float(f) => Some(usize::from(f.span().len())),
+        }
+    }
+}
+
 impl Printable for Literal {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
@@ -261,6 +311,18 @@ impl KnownKind for PathExpr {
     }
 }
 
+impl PathExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, _input: &str) -> Option<usize> {
+        let mut len = usize::from(self.first.span().len());
+        for (dot, word) in &self.rest {
+            len += usize::from(dot.span().len()) + usize::from(word.span().len());
+        }
+        Some(len)
+    }
+}
+
 impl Printable for PathExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         if self.rest.is_empty() {
@@ -328,6 +390,15 @@ impl FromCST for ParenExpr {
 impl KnownKind for ParenExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::PAREN_EXPR
+    }
+}
+
+impl ParenExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let inner = self.expr.single_line_width(input)?;
+        Some(const { "()".len() } + inner)
     }
 }
 
@@ -460,6 +531,20 @@ impl KnownKind for BinaryExpr {
 }
 
 impl BinaryExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let (left, right) = &*self.sides;
+        let left = left.single_line_width(input)?;
+        let right = right.single_line_width(input)?;
+        let len = left
+            + const { " ".len() }
+            + usize::from(self.op.span().len())
+            + const { " ".len() }
+            + right;
+        Some(len)
+    }
+
     /// Recursively lifts binary expressions in the same chaining group to the top level.
     /// For ops that are not in any chaining groups, return will be the same as the original.
     ///
@@ -548,7 +633,8 @@ impl PrintMultiLine for BinaryExpr {
         let (first, chain_members) = self.get_chaining_members();
         printer.print(first, shape);
         printer.print_trivia_all_trailing_for(first.rightmost_token());
-        for (op, right) in chain_members {
+        let num_chain_members = chain_members.len();
+        for (i, (op, right)) in chain_members.into_iter().enumerate() {
             printer.print_newline();
             printer.print_spaces(inner_indent);
             printer.print(op, Shape::unlimited_single_line());
@@ -562,7 +648,9 @@ impl PrintMultiLine for BinaryExpr {
                 first_line_offset: usize::from(op.span().len()) + 1,
             };
             printer.print(right, inner_shape.clone());
-            printer.print_trivia_all_trailing_for(right.rightmost_token());
+            if i + 1 < num_chain_members {
+                printer.print_trivia_all_trailing_for(right.rightmost_token());
+            }
         }
         PrintInfo::default_multi_lined()
     }
@@ -574,11 +662,9 @@ impl Printable for BinaryExpr {
 
         // Check trailing trivia on sub-expressions for single-line compatibility
         let (_, left_trailing) = printer.trivia.get_for_range_split(left.rightmost_token());
-        let (_, right_trailing) = printer.trivia.get_for_range_split(right.rightmost_token());
 
         let trivia_single_line_len = left_trailing
             .iter()
-            .chain(right_trailing.iter())
             .map(|t| t.single_line_len(printer.input))
             .sum::<Option<usize>>();
 
@@ -672,6 +758,15 @@ impl FromCST for UnaryExpr {
 impl KnownKind for UnaryExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::UNARY_EXPR
+    }
+}
+
+impl UnaryExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let expr = self.expr.single_line_width(input)?;
+        Some(usize::from(self.op.span().len()) + expr)
     }
 }
 
@@ -1055,106 +1150,179 @@ impl KnownKind for MatchArm {
     }
 }
 
-impl Printable for MatchArm {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl MatchArm {
+    /// Prints all of the arm except the body/expression (prints up to and including the `=>`)
+    fn print_condition(&self, shape: &Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+
         let mut pattern_printer = printer.sub_printer();
         let pattern_info = pattern_printer.print(&self.pattern, shape.clone());
-
-        let condition_multi_lined;
+        multi_lined |= pattern_info.multi_lined;
+        let pattern_len = pattern_printer.len();
         printer.append_from_printer(pattern_printer);
 
         if let Some(guard) = &self.guard {
-            let guard_indent = shape.indent + printer.config.indent_width;
             if pattern_info.multi_lined {
-                // guard goes on new line
+                // Guard goes on new line
                 printer.print_newline();
-                printer.print_spaces(guard_indent);
+                printer.print_spaces(shape.indent + printer.config.indent_width);
                 let offset = usize::from(guard.keyword.token_span.len()) + const { " ".len() };
+                let guard_shape = Shape {
+                    width: printer.config.line_width.saturating_sub(
+                        shape.indent + printer.config.indent_width + offset + const { " =>".len() },
+                    ),
+                    indent: shape.indent + printer.config.indent_width,
+                    first_line_offset: offset,
+                };
+                guard.print(guard_shape, printer);
+            } else if matches!(guard.condition, Expression::Paren(_) | Expression::Block(_)) {
+                // we can delegate determining whether or not to multi-line to the guard expression
+                // since it will do so nicely
+                printer.print_spaces(1);
+                let offset = shape.first_line_offset + pattern_len + 1;
                 let guard_shape = Shape {
                     width: printer
                         .config
                         .line_width
-                        .saturating_sub(guard_indent + offset + const { " => ".len() }),
-                    indent: guard_indent,
+                        .saturating_sub(shape.indent + offset + const { " => ".len() }),
+                    indent: shape.indent,
                     first_line_offset: offset,
                 };
-                printer.print(guard, guard_shape);
-                printer.print_str(" => ");
-                condition_multi_lined = true;
+                let guard_info = guard.print(guard_shape, printer);
+                multi_lined |= guard_info.multi_lined;
             } else {
-                let mut single_line_guard_printer = printer.sub_printer();
-                single_line_guard_printer.print_str(" ");
-                single_line_guard_printer.print_raw_token(&guard.keyword);
-                single_line_guard_printer.print_str(" ");
-                let guard_info = single_line_guard_printer
-                    .print(&guard.condition, Shape::unlimited_single_line());
+                // try printing guard single-line
+                let mut guard_single_line = printer.sub_printer();
+                let guard_info =
+                    guard.print(Shape::unlimited_single_line(), &mut guard_single_line);
 
-                if guard_info.multi_lined
-                    || printer.current_line_len()
-                        + single_line_guard_printer.len()
-                        + const { " =>".len() }
-                        > printer.config.line_width
-                {
+                let single_line_len = pattern_len
+                    + const { " ".len() }
+                    + guard_single_line.len()
+                    + const { " =>".len() };
+                if guard_info.multi_lined || single_line_len > shape.width {
                     // Guard is too long to fit on a single line, so print it on the next line
                     printer.print_newline();
-                    printer.print_spaces(guard_indent);
-                    printer.print_raw_token(&guard.keyword);
-                    printer.print_str(" ");
+                    printer.print_spaces(shape.indent + printer.config.indent_width);
                     let guard_shape = Shape {
-                        width: printer.config.line_width.saturating_sub(
-                            guard_indent + usize::from(guard.keyword.span().len()) + 1,
-                        ),
-                        indent: guard_indent,
-                        first_line_offset: usize::from(guard.keyword.span().len()) + 1,
+                        width: printer
+                            .config
+                            .line_width
+                            .saturating_sub(shape.indent + const { " => {".len() }),
+                        indent: shape.indent,
+                        first_line_offset: 0,
                     };
-                    printer.print(&guard.condition, guard_shape);
-                    printer.print_str(" ");
-                    printer.print_raw_token(&self.fat_arrow);
-                    condition_multi_lined = true;
+                    guard.print(guard_shape, printer);
                 } else {
-                    printer.append_from_printer(single_line_guard_printer);
-                    printer.print_str(" ");
-                    printer.print_raw_token(&self.fat_arrow);
-                    printer.print_str(" ");
-                    condition_multi_lined = false;
+                    // guard goes on the same line after the pattern
+                    printer.print_spaces(1);
+                    printer.append_from_printer(guard_single_line);
                 }
             }
-        } else {
-            condition_multi_lined = pattern_info.multi_lined;
-            printer.print_str(" ");
-            printer.print_raw_token(&self.fat_arrow);
-            printer.print_str(" ");
         }
 
-        let body_info = if condition_multi_lined {
+        printer.print_str(" =>");
+
+        PrintInfo { multi_lined }
+    }
+}
+
+impl Printable for MatchArm {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let condition_info = self.print_condition(&shape, printer);
+        let condition_multi_lined = condition_info.multi_lined;
+
+        if condition_multi_lined {
+            // the body goes in a block expression on a new line
             printer.print_newline();
-            let body_shape = Shape {
-                width: printer.config.line_width.saturating_sub(shape.indent),
-                indent: shape.indent,
-                first_line_offset: 0,
-            };
+
             printer.print_spaces(shape.indent);
-            printer.print(&self.body, body_shape)
-        } else {
-            let remaining = printer.current_line_remaining_width();
+            if let Expression::Block(block) = &self.body {
+                // body is already a block expression
+                let body_shape = Shape {
+                    width: printer.config.line_width.saturating_sub(shape.indent),
+                    indent: shape.indent,
+                    first_line_offset: 0,
+                };
+                printer.print(block, body_shape);
+                printer.print_str(",");
+            } else {
+                // put the body in a block expression
+                printer.print_str("{");
+                printer.print_newline();
+                printer.print_standalone_with_trivia(
+                    &self.body,
+                    shape.indent + printer.config.indent_width,
+                );
+                printer.print_newline();
+                printer.print_spaces(shape.indent);
+                printer.print_str("},");
+            }
+            return PrintInfo::default_multi_lined();
+        }
+
+        // condition is single line, see if we can fit the body with it
+        // TODO: if the body is a block with only a tail expression, we might be able to un-nest it
+
+        printer.print_spaces(1);
+        let line_len_remaining = printer.current_line_remaining_width();
+        if let Expression::Block(block) = &self.body {
+            // If it is a block expression, we print it directly in front of the ` => `.
+            // Since the condition was single-line, the preceding line had no extra indent
+            // so we don't need to put the `{` on a new line.
             let body_shape = Shape {
-                width: remaining,
+                width: line_len_remaining,
                 indent: shape.indent,
                 first_line_offset: printer
                     .config
                     .line_width
-                    .saturating_sub(remaining + shape.indent),
+                    .saturating_sub(shape.indent + line_len_remaining),
             };
-            printer.print(&self.body, body_shape)
-        };
-
-        let multi_lined = condition_multi_lined || body_info.multi_lined;
-        if let Some(comma) = &self.comma {
-            printer.print_raw_token(comma);
-        } else {
+            let info = printer.print(block, body_shape);
             printer.print_str(",");
+            return info;
+        } else if let Expression::Match(match_expr) = &self.body
+            && let Some(match_scrutinee_len) = match_expr.scrutinee.single_line_width(printer.input)
+            && const { "match () {".len() } + match_scrutinee_len <= line_len_remaining
+        {
+            // Match expressions also may go directly on the same line if
+            // `match (...) {` fits. The arms can be multi-line.
+            let match_shape = Shape {
+                width: line_len_remaining,
+                indent: shape.indent,
+                first_line_offset: printer
+                    .config
+                    .line_width
+                    .saturating_sub(shape.indent + line_len_remaining),
+            };
+            let info = match_expr.print(match_shape, printer);
+            printer.print_str(",");
+            return info;
         }
-        PrintInfo { multi_lined }
+
+        // try and print the body single-line
+        let mut try_body = printer.sub_printer();
+        let try_body_info = self
+            .body
+            .print(Shape::unlimited_single_line(), &mut try_body);
+
+        if try_body_info.multi_lined || try_body.len() > line_len_remaining {
+            // create a block expression around it
+            printer.print_str("{");
+            printer.print_newline();
+            printer.print_standalone_with_trivia(
+                &self.body,
+                shape.indent + printer.config.indent_width,
+            );
+            printer.print_newline();
+            printer.print_spaces(shape.indent);
+            printer.print_str("},");
+            PrintInfo::default_multi_lined()
+        } else {
+            printer.append_from_printer(try_body);
+            printer.print_str(",");
+            PrintInfo::default_single_line()
+        }
     }
     fn leftmost_token(&self) -> TextRange {
         self.pattern.leftmost_token()
@@ -1248,6 +1416,16 @@ impl FromCST for CallExpr {
 impl KnownKind for CallExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::CALL_EXPR
+    }
+}
+
+impl CallExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let callee = self.callee.single_line_width(input)?;
+        let args = self.args.single_line_width(input)?;
+        Some(callee + args)
     }
 }
 
@@ -1358,6 +1536,19 @@ impl PrintMultiLine for CallArgs {
 }
 
 impl CallArgs {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let mut len = const { "()".len() };
+        for (i, (arg, _)) in self.args.iter().enumerate() {
+            len += arg.single_line_width(input)?;
+            if i + 1 < self.args.len() {
+                len += const { ", ".len() };
+            }
+        }
+        Some(len)
+    }
+
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the call args on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
@@ -1471,6 +1662,16 @@ impl KnownKind for IndexExpr {
     }
 }
 
+impl IndexExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let base = self.base.single_line_width(input)?;
+        let index = self.index.single_line_width(input)?;
+        Some(base + const { "[]".len() } + index)
+    }
+}
+
 impl Printable for IndexExpr {
     /// The main way to call this should be through [`PrintChain`]
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
@@ -1549,6 +1750,15 @@ impl KnownKind for FieldAccessExpr {
     }
 }
 
+impl FieldAccessExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let base = self.base.single_line_width(input)?;
+        Some(base + usize::from(self.dot.span().len()) + usize::from(self.field.span().len()))
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::ENV_ACCESS_EXPR`] node.
 #[derive(Debug)]
 pub struct EnvAccessExpr {
@@ -1583,6 +1793,18 @@ impl FromCST for EnvAccessExpr {
 impl KnownKind for EnvAccessExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::ENV_ACCESS_EXPR
+    }
+}
+
+impl EnvAccessExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, _input: &str) -> Option<usize> {
+        Some(
+            usize::from(self.keyword.span().len())
+                + usize::from(self.dot.span().len())
+                + usize::from(self.field.span().len()),
+        )
     }
 }
 
@@ -1811,6 +2033,19 @@ impl PrintMultiLine for ArrayInitializer {
 }
 
 impl ArrayInitializer {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let mut len = const { "[]".len() };
+        for (i, (elem, _)) in self.elements.iter().enumerate() {
+            len += elem.single_line_width(input)?;
+            if i + 1 < self.elements.len() {
+                len += const { ", ".len() };
+            }
+        }
+        Some(len)
+    }
+
     /// Tries to print the array initializer as a single line.
     ///
     /// If successful, returns the info.
@@ -1998,6 +2233,20 @@ impl PrintMultiLine for ObjectInitializer {
 }
 
 impl ObjectInitializer {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        // Name { field1: v1, field2: v2 }
+        let mut len = usize::from(self.name.span().len()) + const { " {  }".len() };
+        for (i, (field, _)) in self.fields.iter().enumerate() {
+            len += field.single_line_width(input)?;
+            if i + 1 < self.fields.len() {
+                len += const { ", ".len() };
+            }
+        }
+        Some(len)
+    }
+
     /// Tries to print the object initializer as a single line.
     ///
     /// If successful, returns the info.
@@ -2178,6 +2427,20 @@ impl PrintMultiLine for MapLiteral {
 }
 
 impl MapLiteral {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        // { k1: v1, k2: v2 }
+        let mut len = const { "{  }".len() };
+        for (i, (field, _)) in self.fields.iter().enumerate() {
+            len += field.single_line_width(input)?;
+            if i + 1 < self.fields.len() {
+                len += const { ", ".len() };
+            }
+        }
+        Some(len)
+    }
+
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the map literal on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
@@ -2280,6 +2543,16 @@ impl KnownKind for ObjectField {
     }
 }
 
+impl ObjectField {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        let name = self.name.single_line_width(input)?;
+        let value = self.value.single_line_width(input)?;
+        Some(name + const { ": ".len() } + value)
+    }
+}
+
 impl Printable for ObjectField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
@@ -2316,6 +2589,23 @@ impl FromCST for ObjectFieldKey {
                 found: elem.kind(),
                 at: elem.text_range(),
             }),
+        }
+    }
+}
+
+impl ObjectFieldKey {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &str) -> Option<usize> {
+        match self {
+            ObjectFieldKey::Word(word) => Some(usize::from(word.span().len())),
+            ObjectFieldKey::String(s) => {
+                if input[s.span()].contains('\n') {
+                    None
+                } else {
+                    Some(usize::from(s.span().len()))
+                }
+            }
         }
     }
 }

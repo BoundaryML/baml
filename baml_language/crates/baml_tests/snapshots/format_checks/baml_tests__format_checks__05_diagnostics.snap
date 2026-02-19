@@ -4,96 +4,6 @@ expression: output
 ---
 === DIAGNOSTICS ===
   [parse] Error: field 'name' is missing a type annotation
-    ╭─[ class_decls.baml:21:5 ]
-    │
- 21 │     name: string
-    │     ──┬─  
-    │       ╰─── field 'name' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected Unexpected token in class body, found ':'
-    ╭─[ class_decls.baml:21:9 ]
-    │
- 21 │     name: string
-    │         ┬  
-    │         ╰── Expected Unexpected token in class body, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: field 'string' is missing a type annotation
-    ╭─[ class_decls.baml:21:11 ]
-    │
- 21 │     name: string
-    │           ───┬──  
-    │              ╰──── field 'string' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: field 'age' is missing a type annotation
-    ╭─[ class_decls.baml:22:5 ]
-    │
- 22 │     age: int
-    │     ─┬─  
-    │      ╰─── field 'age' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected Unexpected token in class body, found ':'
-    ╭─[ class_decls.baml:22:8 ]
-    │
- 22 │     age: int
-    │        ┬  
-    │        ╰── Expected Unexpected token in class body, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: field 'int' is missing a type annotation
-    ╭─[ class_decls.baml:22:10 ]
-    │
- 22 │     age: int
-    │          ─┬─  
-    │           ╰─── field 'int' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected Unexpected token in class body, found ','
-    ╭─[ class_decls.baml:27:16 ]
-    │
- 27 │     name string,
-    │                ┬  
-    │                ╰── Expected Unexpected token in class body, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected Unexpected token in class body, found ','
-    ╭─[ class_decls.baml:28:12 ]
-    │
- 28 │     age int,
-    │            ┬  
-    │            ╰── Expected Unexpected token in class body, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected Unexpected token in class body, found ','
-    ╭─[ class_decls.baml:29:16 ]
-    │
- 29 │     active bool,
-    │                ┬  
-    │                ╰── Expected Unexpected token in class body, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: field 'name' is missing a type annotation
     ╭─[ class_decls.baml:96:5 ]
     │
  96 │     name // 8 field name trailing
@@ -539,16 +449,6 @@ expression: output
  621 │             int /* 24 type trailing */
      │             ─┬─  
      │              ╰─── field 'int' is missing a type annotation
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-  [parse] Error: Header comments (//#) are not allowed inside LLM functions
-     ╭─[ function_decls.baml:476:5 ]
-     │
- 476 │     //# collect source material
-     │     ─────────────┬─────────────  
-     │                  ╰─────────────── Header comments (//#) are not allowed inside LLM functions
      │ 
      │ Note: Error code: E0010
 ─────╯
@@ -2072,9 +1972,9 @@ expression: output
      │         ───────┬───────  
      │                ╰───────── enum `ExtraWhitespace` redefined here
      │
-     ├─[ function_decls.baml:493:13 ]
+     ├─[ function_decls.baml:509:13 ]
      │
- 493 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
+ 509 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
      │             ───────┬───────  
      │                    ╰───────── `ExtraWhitespace` first defined in function_decls.baml
      │ 
@@ -2082,9 +1982,9 @@ expression: output
 ─────╯
 
   [validation] Error: Duplicate function `ExtraWhitespace`
-     ╭─[ function_decls.baml:493:13 ]
+     ╭─[ function_decls.baml:509:13 ]
      │
- 493 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
+ 509 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
      │             ───────┬───────  
      │                    ╰───────── function `ExtraWhitespace` redefined here
      │
@@ -2130,9 +2030,9 @@ expression: output
 ───╯
 
   [validation] Error: Duplicate function `SixLongParams`
-     ╭─[ function_decls.baml:35:10 ]
+     ╭─[ function_decls.baml:42:10 ]
      │
-  35 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+  42 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
      │          ──────┬──────  
      │                ╰──────── function `SixLongParams` redefined here
      │
@@ -2152,9 +2052,9 @@ expression: output
      │                 ──────┬──────  
      │                       ╰──────── template_string `SixLongParams` redefined here
      │
-     ├─[ function_decls.baml:35:10 ]
+     ├─[ function_decls.baml:42:10 ]
      │
-  35 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+  42 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
      │          ──────┬──────  
      │                ╰──────── `SixLongParams` first defined in function_decls.baml
      │ 
@@ -2162,9 +2062,9 @@ expression: output
 ─────╯
 
   [validation] Error: Duplicate function `MultiParamTrivia`
-     ╭─[ function_decls.baml:135:10 ]
+     ╭─[ function_decls.baml:147:10 ]
      │
- 135 │ function MultiParamTrivia(
+ 147 │ function MultiParamTrivia(
      │          ────────┬───────  
      │                  ╰───────── function `MultiParamTrivia` redefined here
      │
@@ -2184,9 +2084,9 @@ expression: output
      │                 ────────┬───────  
      │                         ╰───────── template_string `MultiParamTrivia` redefined here
      │
-     ├─[ function_decls.baml:135:10 ]
+     ├─[ function_decls.baml:147:10 ]
      │
- 135 │ function MultiParamTrivia(
+ 147 │ function MultiParamTrivia(
      │          ────────┬───────  
      │                  ╰───────── `MultiParamTrivia` first defined in function_decls.baml
      │ 
@@ -2194,9 +2094,9 @@ expression: output
 ─────╯
 
   [validation] Error: Duplicate function `ConstrainedParams`
-     ╭─[ function_decls.baml:80:10 ]
+     ╭─[ function_decls.baml:90:10 ]
      │
-  80 │ function ConstrainedParams(name: string @description("the user's full legal name"), score: int @check("positive", {{ this > 0 }})) -> string {
+  90 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
      │          ────────┬────────  
      │                  ╰────────── function `ConstrainedParams` redefined here
      │
@@ -2216,9 +2116,9 @@ expression: output
      │                 ────────┬────────  
      │                         ╰────────── template_string `ConstrainedParams` redefined here
      │
-     ├─[ function_decls.baml:80:10 ]
+     ├─[ function_decls.baml:90:10 ]
      │
-  80 │ function ConstrainedParams(name: string @description("the user's full legal name"), score: int @check("positive", {{ this > 0 }})) -> string {
+  90 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
      │          ────────┬────────  
      │                  ╰────────── `ConstrainedParams` first defined in function_decls.baml
      │ 
@@ -2242,9 +2142,9 @@ expression: output
 ─────╯
 
   [validation] Error: Duplicate function `NoColonParams`
-    ╭─[ function_decls.baml:20:10 ]
+    ╭─[ function_decls.baml:23:10 ]
     │
- 20 │ function NoColonParams(x int, y int) -> int {
+ 23 │ function NoColonParams(x int, y int) -> int {
     │          ──────┬──────  
     │                ╰──────── function `NoColonParams` redefined here
     │
@@ -2264,9 +2164,9 @@ expression: output
     │                 ──────┬──────  
     │                       ╰──────── template_string `NoColonParams` redefined here
     │
-    ├─[ function_decls.baml:20:10 ]
+    ├─[ function_decls.baml:23:10 ]
     │
- 20 │ function NoColonParams(x int, y int) -> int {
+ 23 │ function NoColonParams(x int, y int) -> int {
     │          ──────┬──────  
     │                ╰──────── `NoColonParams` first defined in function_decls.baml
     │ 
@@ -2274,9 +2174,9 @@ expression: output
 ────╯
 
   [validation] Error: Duplicate function `ManyParams`
-    ╭─[ function_decls.baml:25:10 ]
+    ╭─[ function_decls.baml:28:10 ]
     │
- 25 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+ 28 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     │          ─────┬────  
     │               ╰────── function `ManyParams` redefined here
     │
@@ -2296,9 +2196,9 @@ expression: output
     │                 ─────┬────  
     │                      ╰────── template_string `ManyParams` redefined here
     │
-    ├─[ function_decls.baml:25:10 ]
+    ├─[ function_decls.baml:28:10 ]
     │
- 25 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+ 28 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     │          ─────┬────  
     │               ╰────── `ManyParams` first defined in function_decls.baml
     │ 
@@ -2306,9 +2206,9 @@ expression: output
 ────╯
 
   [validation] Error: Duplicate function `MultiParamTriviaBlock`
-     ╭─[ function_decls.baml:152:10 ]
+     ╭─[ function_decls.baml:164:10 ]
      │
- 152 │ function MultiParamTriviaBlock(
+ 164 │ function MultiParamTriviaBlock(
      │          ──────────┬──────────  
      │                    ╰──────────── function `MultiParamTriviaBlock` redefined here
      │
@@ -2328,9 +2228,9 @@ expression: output
      │                 ──────────┬──────────  
      │                           ╰──────────── template_string `MultiParamTriviaBlock` redefined here
      │
-     ├─[ function_decls.baml:152:10 ]
+     ├─[ function_decls.baml:164:10 ]
      │
- 152 │ function MultiParamTriviaBlock(
+ 164 │ function MultiParamTriviaBlock(
      │          ──────────┬──────────  
      │                    ╰──────────── `MultiParamTriviaBlock` first defined in function_decls.baml
      │ 
@@ -2423,16 +2323,6 @@ expression: output
      │           ╰──── Unknown type `name`
      │ 
      │ Note: Error code: E0002
-─────╯
-
-  [type] Error: Cannot apply operator 'And' to types `int` and `int`
-     ╭─[ binary_expr.baml:259:5 ]
-     │
- 259 │     a       &&       b;
-     │     ─────────┬────────  
-     │              ╰────────── Cannot apply operator 'And' to types `int` and `int`
-     │ 
-     │ Note: Error code: E0004
 ─────╯
 
   [type] Error: Type `string` has no field `len`
@@ -4687,9 +4577,9 @@ expression: output
 ─────╯
 
   [type] Error: Expected `(x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>`, found `int`
-    ╭─[ function_decls.baml:71:5 ]
+    ╭─[ function_decls.baml:78:5 ]
     │
- 71 │     1
+ 78 │     1
     │     ┬  
     │     ╰── Expected `(x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>`, found `int`
     │ 

@@ -1119,7 +1119,11 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         self.builder.set_current_block(body_block);
                     }
                     self.lower_expr(arm.body, dest.clone(), body);
-                    self.builder.goto(join_block);
+
+                    // If not already terminated by a return/break/continue, goto join_block
+                    if !self.builder.is_current_terminated() {
+                        self.builder.goto(join_block);
+                    }
 
                     // Only set current block to next_block if it's not the unreachable block
                     if !(is_last_arm && *is_exhaustive) {

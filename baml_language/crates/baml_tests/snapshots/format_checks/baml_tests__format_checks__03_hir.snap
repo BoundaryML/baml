@@ -51,14 +51,14 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
       a + b * c + d;
       a + b * c + d;
       a + b * c + d * a - b + c - d + a * b + c * d;
-      a + b * c + d + a - b * c - d * a * c + b * d - a * d + b * c;
+      a + b * c + d + a - b * c - d * a * c * d + b * c * d - a * d + b * c * d;
       a + b;
       a + b;
       a + b + c;
       a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b;
-      a > 0 && b > 0 && c > 0 && d > 0 && a != b && b != c && c != d && a < 1000 && b < 1000 && c < 1000 && d < 1000;
-      a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d;
-      a + b + c + d > 0 && a * b * c * d < 10000 && a - b - c - d != 0 && a + b * c + d >= 100;
+      a > 0 && b > 0 && c > 0 && d > 0 && a != b && b != c && c != d && a < 1000 * 8 + 1 * 2 && b < 1000 && c < 1000 && d < 1000 + 2 + 3;
+      a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d;
+      a + b + c + d > 0 && a * b * c * d < 10000 && a - b - c - d != 0 && a + b * c + d >= 100 || a * 1 < 2 && "aowiefjowiaj" == "jfeiowajpwoeifj";
       "// ===== Long string concatenation exceeding limit =====
       "a very long string prefix that is already quite long"" + " concatenated with " + "another very long string that together exceeds the line limit easily and comfortably";
       mut_a += a * b + c * d + a * b + c * d + a * b + c * d + a * b + c * d + a * b + c * d + a;
@@ -71,7 +71,7 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
       a + b;
       a * b + c;
       a == b;
-      a && b;
+      a == 2 && b != 3;
       a + b
 }
 
@@ -426,10 +426,8 @@ class LongFieldTypes {
 }
 
 class ColonFields {
-  name: <unknown>
-  string: <unknown>
-  age: <unknown>
-  int: <unknown>
+  name: string
+  age: int
 }
 
 class DynamicClass {
@@ -917,10 +915,6 @@ function NestedGenericReturn() -> map<string, map<string, map<string, int | stri
 
 function MultiParamTrivia(a: int, b: string) -> int {
       a
-}
-
-function LlmWithHeader(user_id: string) -> string {
-    baml.llm.call_llm_function("LlmWithHeader", { "user_id": user_id })
 }
 
 function F() -> int {
@@ -1645,7 +1639,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
           x: MatchSuccess | MatchFailure => "something",
       };
       match (x) {
-          0 | 1 | 2 | 3 => "small",
+          0 | 1 | 2 | 3 | 4 | 5 => "small",
           _ => "big",
       };
       match (x) {
@@ -1676,7 +1670,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
               } else {
                   "this is the false branch also very long"
               };
-              result;
+              result
           },
           _ => "short",
       };
