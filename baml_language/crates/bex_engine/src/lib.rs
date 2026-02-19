@@ -674,6 +674,12 @@ impl BexEngine {
         collectors: &[Arc<bex_events::Collector>],
         cancel: CancellationToken,
     ) -> Result<BexExternalValue, EngineError> {
+        // Fail fast if already cancelled — guarantees pre-cancelled tokens
+        // always produce Err(Cancelled) regardless of function contents.
+        if cancel.is_cancelled() {
+            return Err(EngineError::Cancelled);
+        }
+
         // Wait for any in-progress GC to complete.
         while self.gc_in_progress.load(Ordering::Acquire) {
             self.gc_complete.notified().await;
@@ -786,7 +792,15 @@ impl BexEngine {
             self.epoch_drained.notify_one();
         }
 
-        result
+        // If the call failed and the token is cancelled, upgrade to
+        // EngineError::Cancelled. This ensures cooperative BAML-level checks
+        // (which produce SysOpError via baml.sys.panic) are reported as
+        // Cancelled so callers can programmatically distinguish cancellation
+        // from genuine failures.
+        match result {
+            Err(_) if cancel.is_cancelled() => Err(EngineError::Cancelled),
+            other => other,
+        }
     }
 
     /// Look up a function by name and return its heap pointer.
@@ -998,6 +1012,10 @@ impl BexEngine {
                                 });
                                 abort_handles.push(handle.abort_handle());
                             }
+                            // WASM: spawn_local has no abort handle, so on
+                            // cancellation these tasks run to completion as
+                            // orphans. Acceptable because WASM is single-threaded
+                            // and most ops are short-lived (no streaming).
                             #[cfg(target_arch = "wasm32")]
                             wasm_bindgen_futures::spawn_local(async move {
                                 let result = fut.await;

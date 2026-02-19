@@ -188,7 +188,13 @@ impl BamlWasmRuntime {
         // Create cancellation token and register if call_id is provided.
         let cancel = CancellationToken::new();
         if let Some(id) = call_id {
-            self.active_calls.borrow_mut().insert(id, cancel.clone());
+            let mut calls = self.active_calls.borrow_mut();
+            if calls.contains_key(&id) {
+                return Err(JsError::new(&format!(
+                    "call_id {id} is already in use by an active call"
+                )));
+            }
+            calls.insert(id, cancel.clone());
         }
 
         // Call the function (Bex trait)

@@ -241,14 +241,11 @@ pub type SysOpFn = Arc<
 ///
 /// # Per-call fields
 ///
-/// Some fields (like `cancel`) are per-call, not per-engine. Fields are
-/// `Arc`-wrapped so that per-call clones (via [`with_cancel`](Self::with_cancel))
-/// are O(1) — just reference-count increments.
-///
-/// A cleaner alternative would be to split the context into a shared
-/// engine-level part and a per-call part (changing the `SysOpFn` type
-/// signature to accept both). That's a larger refactor for the same
-/// result, so we use the `Arc`-clone approach for now.
+/// The `cancel` field is per-call, not per-engine. All other fields are
+/// `Arc`-wrapped so that [`with_cancel`](Self::with_cancel) is O(1) — just
+/// reference-count increments, no data cloning. This is necessary because
+/// `SysOpFn` takes a single `&SysOpContext`; splitting into shared + per-call
+/// parts would require changing that signature and the proc macro codegen.
 #[derive(Clone)]
 pub struct SysOpContext {
     /// Pre-extracted LLM function metadata, keyed by function name.

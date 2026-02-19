@@ -75,8 +75,6 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                         quote!()
                     };
 
-                    // Separator between clean_params and ctx_param when both are non-empty
-                    // is already handled above (ctx_param has leading comma when has_regular_params).
                     let output_type = sys_op_output_type(d, &collected.builtin_types);
 
                     // Clean method: &self + params. Implementors override this.

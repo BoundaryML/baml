@@ -18,11 +18,10 @@ use sys_native::SysOpsExt;
 
 #[tokio::test]
 async fn cancel_before_call_returns_cancelled() {
-    // The function must hit at least one await point (sleep) for the
-    // biased select in the VM event loop to notice the cancellation.
+    // call_function checks the token before starting the VM, so even a
+    // purely synchronous function returns Cancelled immediately.
     let source = r#"
         function main() -> int {
-            baml.sys.sleep(0);
             42
         }
     "#;
@@ -226,16 +225,10 @@ async fn selective_cancellation_only_affects_target() {
 // ============================================================================
 
 #[tokio::test]
-async fn cancellation_requested_returns_true_after_cancel() {
-    // Test that baml.sys.cancellation_requested() reflects the token state.
-    // We cancel the token before the call and check that the BAML function
-    // can observe it. Since the engine exits at the first Await, we need
-    // a purely synchronous program that checks cancellation_requested before any await.
-    // However, cancellation_requested is a sys_op (dispatched as ScheduleFuture + Await),
-    // so the engine will check the cancel branch first in the biased select.
-    //
-    // With an already-cancelled token, the engine should exit immediately
-    // at the first Await point (before cancellation_requested even returns).
+async fn cancellation_requested_returns_false_when_not_cancelled() {
+    // cancellation_requested() is a sync sys_op (SysOpOutput::ok), so it takes
+    // the Ready path: ScheduleFuture → set_future_ready → Await sees Ready →
+    // extracts value without entering the biased select.
     let source = r#"
         function main() -> bool {
             baml.sys.cancellation_requested()
@@ -246,13 +239,40 @@ async fn cancellation_requested_returns_true_after_cancel() {
     let engine =
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
-    // With a non-cancelled token, cancellation_requested should return false.
     let result = engine
         .call_function("main", vec![], None, &[], CancellationToken::new())
         .await
         .expect("call should succeed");
 
     assert_eq!(result, BexExternalValue::Bool(false));
+}
+
+#[tokio::test]
+async fn cancellation_requested_with_precancelled_token_returns_cancelled() {
+    // With a pre-cancelled token, call_function fails fast before the VM
+    // even starts. This guarantees consistent Err(Cancelled) regardless of
+    // whether the function uses sync or async sys_ops.
+    let source = r#"
+        function main() -> bool {
+            baml.sys.cancellation_requested()
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine =
+        BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
+
+    let cancel = CancellationToken::new();
+    cancel.cancel(); // Pre-cancel
+
+    let result = engine
+        .call_function("main", vec![], None, &[], cancel)
+        .await;
+
+    assert!(
+        matches!(result, Err(EngineError::Cancelled)),
+        "Pre-cancelled token should return Cancelled, got: {result:?}"
+    );
 }
 
 // ============================================================================

@@ -171,6 +171,9 @@ function execute_client(
             let current_delay = r.initial_delay_ms + 0.0;
 
             for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
+                // Early exit: skip remaining retries if cancelled.
+                // Returns a fake failure; the VM-level biased select will
+                // fire Err(Cancelled) at the next async Await point.
                 if (baml.sys.cancellation_requested()) {
                     return baml.llm.ExecutionResult { ok: false, value: null };
                 }
@@ -215,6 +218,7 @@ function execute_client_once(
 ) -> baml.llm.ExecutionResult {
     match (llm_client.client_type) {
         baml.llm.ClientType.Primitive => {
+            // Early exit: skip HTTP work if cancelled (same pattern as retry/fallback).
             if (baml.sys.cancellation_requested()) {
                 return baml.llm.ExecutionResult { ok: false, value: null };
             }
@@ -245,6 +249,7 @@ function execute_client_once(
 
         baml.llm.ClientType.Fallback => {
             for (let sub in llm_client.sub_clients) {
+                // Early exit: skip remaining fallbacks if cancelled.
                 if (baml.sys.cancellation_requested()) {
                     return baml.llm.ExecutionResult { ok: false, value: null };
                 }
@@ -317,6 +322,10 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
         return result.value;
     }
 
+    // Distinguish cancellation from genuine "all steps failed". In practice
+    // the VM-level biased select fires Err(Cancelled) at the first async
+    // Await after the token is cancelled, so this branch only runs if
+    // cancellation happened to coincide with purely sync work.
     if (baml.sys.cancellation_requested()) {
         baml.sys.panic("Operation cancelled");
     }

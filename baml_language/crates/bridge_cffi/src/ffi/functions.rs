@@ -98,9 +98,10 @@ fn call_function_inner(
 
     // Create cancellation token and register it so cancel_function_call can fire it.
     let cancel = CancellationToken::new();
-    if let Ok(mut calls) = ACTIVE_CALLS.lock() {
-        calls.insert(id, cancel.clone());
-    }
+    ACTIVE_CALLS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(id, cancel.clone());
 
     // Spawn async task with panic catching
     get_tokio_runtime().spawn(async move {
@@ -114,9 +115,10 @@ fn call_function_inner(
         .await;
 
         // Unregister from active calls.
-        if let Ok(mut calls) = ACTIVE_CALLS.lock() {
-            calls.remove(&id);
-        }
+        ACTIVE_CALLS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&id);
 
         match result {
             Ok(Ok(value)) => {
@@ -179,8 +181,10 @@ pub extern "C" fn call_function_stream_from_c(
 /// If the call has already completed or the ID is unknown, this is a no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn cancel_function_call(id: u32) -> Buffer {
-    if let Ok(mut calls) = ACTIVE_CALLS.lock()
-        && let Some(token) = calls.remove(&id)
+    if let Some(token) = ACTIVE_CALLS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&id)
     {
         token.cancel();
     }
