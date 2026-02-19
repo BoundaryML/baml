@@ -3,11 +3,9 @@
 //! This module validates assumptions shared by analysis and emission so
 //! regressions fail loudly during development/testing.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use baml_compiler_mir::{
-    BasicBlock, BlockId, Local, MirFunction, Place, StatementKind, Terminator,
-};
+use baml_compiler_mir::{BlockId, Local, MirFunction, StatementKind, Terminator};
 
 use crate::analysis::{self, AnalysisResult, LocalClassification};
 
@@ -51,7 +49,8 @@ pub(crate) fn verify_mir_emit_invariants(mir: &MirFunction, analysis: &AnalysisR
         );
 
         let src_block = mir.block(src);
-        let is_threadable = is_threadable_redirect_source(src_block, &analysis.classifications);
+        let is_threadable =
+            analysis::threadable_goto_target(src_block, &analysis.classifications).is_some();
         assert!(
             is_threadable,
             "non-threadable redirect source {:?} in MIR function {}",
@@ -92,6 +91,12 @@ pub(crate) fn verify_mir_emit_invariants(mir: &MirFunction, analysis: &AnalysisR
     for (idx, decl) in mir.locals.iter().enumerate() {
         if decl.is_watched {
             let local = Local(idx);
+            assert!(
+                decl.name.is_some(),
+                "watched local {} must have a user-visible name in MIR function {}",
+                local,
+                mir.name
+            );
             let class = analysis
                 .classifications
                 .get(&local)
@@ -111,38 +116,39 @@ pub(crate) fn verify_mir_emit_invariants(mir: &MirFunction, analysis: &AnalysisR
             );
         }
     }
-}
 
-fn is_threadable_redirect_source(
-    block: &BasicBlock,
-    classifications: &HashMap<Local, LocalClassification>,
-) -> bool {
-    let Some(Terminator::Goto { .. }) = &block.terminator else {
-        return false;
-    };
+    // Watch-manipulation statements must only reference watched locals.
+    for block in &mir.blocks {
+        for stmt in &block.statements {
+            let Some(local) = (match &stmt.kind {
+                StatementKind::Unwatch(local)
+                | StatementKind::WatchNotify(local)
+                | StatementKind::WatchOptions { local, .. } => Some(*local),
+                _ => None,
+            }) else {
+                continue;
+            };
 
-    block.statements.iter().all(|stmt| {
-        matches!(
-            &stmt.kind,
-            StatementKind::Assign {
-                destination: Place::Local(local),
-                ..
-            } if matches!(
-                classifications.get(local),
-                Some(
-                    LocalClassification::Virtual
-                    | LocalClassification::Dead
-                    | LocalClassification::CopyOf
-                )
-            )
-        )
-    })
+            let decl = mir.local(local);
+            assert!(
+                decl.is_watched,
+                "watch statement references non-watched local {} in MIR function {}",
+                local, mir.name
+            );
+            assert!(
+                decl.name.is_some(),
+                "watch statement references unnamed watched local {} in MIR function {}",
+                local,
+                mir.name
+            );
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use baml_base::Name;
-    use baml_compiler_mir::{Constant, LocalDecl, Operand, Rvalue, Statement};
+    use baml_compiler_mir::{BasicBlock, Constant, LocalDecl, Operand, Place, Rvalue, Statement};
     use baml_type::Ty;
 
     use super::*;

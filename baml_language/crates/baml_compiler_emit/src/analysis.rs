@@ -367,29 +367,8 @@ fn build_redirect_targets_with_classifications(
     let mut goto_targets: HashMap<BlockId, BlockId> = HashMap::new();
 
     for block in &mir.blocks {
-        let Some(Terminator::Goto { target }) = &block.terminator else {
-            continue;
-        };
-
-        let effectively_empty = block.statements.iter().all(|stmt| {
-            matches!(
-                &stmt.kind,
-                StatementKind::Assign {
-                    destination: Place::Local(local),
-                    ..
-                } if matches!(
-                    classifications.get(local),
-                    Some(
-                        LocalClassification::Virtual
-                        | LocalClassification::Dead
-                        | LocalClassification::CopyOf
-                    )
-                )
-            )
-        });
-
-        if effectively_empty {
-            goto_targets.insert(block.id, *target);
+        if let Some(target) = threadable_goto_target(block, classifications) {
+            goto_targets.insert(block.id, target);
         }
     }
 
@@ -404,6 +383,36 @@ fn build_redirect_targets_with_classifications(
     }
 
     resolved
+}
+
+/// Return the goto target if this block is threadable as an effectively-empty
+/// redirect source under the given local classifications.
+pub(crate) fn threadable_goto_target(
+    block: &baml_compiler_mir::BasicBlock,
+    classifications: &HashMap<Local, LocalClassification>,
+) -> Option<BlockId> {
+    let Some(Terminator::Goto { target }) = &block.terminator else {
+        return None;
+    };
+
+    let effectively_empty = block.statements.iter().all(|stmt| {
+        matches!(
+            &stmt.kind,
+            StatementKind::Assign {
+                destination: Place::Local(local),
+                ..
+            } if matches!(
+                classifications.get(local),
+                Some(
+                    LocalClassification::Virtual
+                    | LocalClassification::Dead
+                    | LocalClassification::CopyOf
+                )
+            )
+        )
+    });
+
+    effectively_empty.then_some(*target)
 }
 
 // ============================================================================

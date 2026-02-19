@@ -198,6 +198,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    fn local_slot_or_panic(&self, local: Local, context: &str) -> usize {
+        *self.local_slots.get(&local).unwrap_or_else(|| {
+            panic!("local {local} has no allocated slot while emitting {context}")
+        })
+    }
+
     /// Compile a MIR function to bytecode.
     fn compile(mut self, mir: &MirFunction) -> Function {
         // 1. Allocate stack slots only for real locals
@@ -496,17 +502,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         if local_decl.is_watched && !self.watched_locals_initialized.contains(local)
                         {
                             self.watched_locals_initialized.insert(*local);
-                            if self.local_slots.contains_key(local) {
-                                if let Err(never) =
-                                    self.push_watch_channel(*local, local_decl.name.as_deref())
-                                {
-                                    match never {}
-                                }
-                                let null_const_idx = self.add_constant(ConstValue::Null);
-                                self.emit(Instruction::LoadConst(null_const_idx));
-                                if let Err(never) = self.watch_local(*local) {
-                                    match never {}
-                                }
+                            if let Err(never) =
+                                self.push_watch_channel(*local, local_decl.name.as_deref())
+                            {
+                                match never {}
+                            }
+                            let null_const_idx = self.add_constant(ConstValue::Null);
+                            self.emit(Instruction::LoadConst(null_const_idx));
+                            if let Err(never) = self.watch_local(*local) {
+                                match never {}
                             }
                         }
                     }
@@ -520,9 +524,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Unwatch(local) => {
                 // Emit unwatch for a watched local going out of scope
-                if let Some(&slot) = self.local_slots.get(local) {
-                    self.emit(Instruction::Unwatch(slot));
-                }
+                let slot = self.local_slot_or_panic(*local, "Unwatch");
+                self.emit(Instruction::Unwatch(slot));
             }
             StatementKind::NotifyBlock { name, level } => {
                 // Add block notification to the function's metadata
@@ -546,9 +549,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::WatchNotify(local) => {
                 // Emit manual notify for a watched variable
-                if let Some(&slot) = self.local_slots.get(local) {
-                    self.emit(Instruction::Notify(slot));
-                }
+                let slot = self.local_slot_or_panic(*local, "WatchNotify");
+                self.emit(Instruction::Notify(slot));
             }
             StatementKind::VizEnter(node_idx) => {
                 self.emit(Instruction::VizEnter(*node_idx));
@@ -1331,10 +1333,7 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
         channel_name: Option<&str>,
     ) -> Result<(), Self::Error> {
         // Watched locals must be `Real` and therefore must have slots.
-        assert!(
-            self.local_slots.contains_key(&local),
-            "watched local {local} has no allocated slot"
-        );
+        let _slot = self.local_slot_or_panic(local, "WatchOptions/watch initialization");
         let channel = channel_name
             .unwrap_or_else(|| panic!("watched local {local} must have a user-visible name"))
             .to_string();
@@ -1347,10 +1346,7 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
     }
 
     fn watch_local(&mut self, local: Local) -> Result<(), Self::Error> {
-        let slot = *self
-            .local_slots
-            .get(&local)
-            .unwrap_or_else(|| panic!("watched local {local} has no allocated slot"));
+        let slot = self.local_slot_or_panic(local, "Watch");
         self.emit(Instruction::Watch(slot));
         Ok(())
     }
