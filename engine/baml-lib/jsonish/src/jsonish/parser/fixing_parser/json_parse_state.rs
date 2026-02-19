@@ -18,6 +18,10 @@ struct StringQuoteTracking {
     unescaped_quote_count: usize,
 }
 
+/// Incremental JSON parser state machine that assembles JSON values from a
+/// stream of characters. Handles malformed JSON commonly produced by LLMs,
+/// including unquoted strings, single-quoted strings, trailing commas, and
+/// unterminated structures.
 #[derive(Debug)]
 pub struct JsonParseState {
     /// The stack of Json collection values being assembled.
@@ -35,6 +39,9 @@ pub struct JsonParseState {
     string_quote_tracking: StringQuoteTracking,
 }
 
+/// The position context of the current unquoted string relative to its
+/// enclosing collection. Used by `should_close_unescaped_string` to determine
+/// which delimiters terminate the string.
 #[derive(Clone, Debug)]
 enum Pos {
     InNothing,     // 0
@@ -45,6 +52,7 @@ enum Pos {
 }
 
 impl JsonParseState {
+    /// Creates a new empty parser state with no collections on the stack.
     pub fn new() -> Self {
         JsonParseState {
             collection_stack: vec![],
@@ -126,6 +134,8 @@ impl JsonParseState {
         }
     }
 
+    /// Appends a character to the current string-like collection on top of the stack.
+    /// Returns `Ok(0)` on success (no additional characters to skip).
     fn consume(&mut self, token: char) -> Result<usize> {
         // First check if we're in a QuotedString and need to update tracking
         // (done before getting mutable borrow to avoid borrow checker conflict)
@@ -166,6 +176,8 @@ impl JsonParseState {
         Ok(0)
     }
 
+    /// Returns `true` if the current unquoted string on the stack represents a
+    /// complete JSON literal (`true`, `false`, `null`, or a valid number).
     fn is_string_complete(&self) -> bool {
         let Some((JsonCollection::UnquotedString(v, _), _)) = self.collection_stack.last() else {
             return false;
@@ -184,6 +196,18 @@ impl JsonParseState {
         }
     }
 
+    /// Determines whether the current unquoted string should be closed based on
+    /// upcoming characters. Consumes characters from `next` looking for a
+    /// structural delimiter appropriate to the string's context (`:` for object
+    /// keys, `,`/`}` for object values, `,`/`]` for arrays, `{`/`[` for
+    /// top-level). Returns the number of characters consumed so the caller can
+    /// advance the outer iterator accordingly.
+    ///
+    /// When the iterator is exhausted without finding a delimiter (stream
+    /// incomplete), returns `Close(counter, Incomplete)` where `counter` is the
+    /// number of characters consumed. The `counter += 1` before each such return
+    /// accounts for the last character yielded by the iterator — without it, the
+    /// outer loop would re-process that character, causing duplication.
     fn should_close_unescaped_string(
         &mut self,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
@@ -376,6 +400,9 @@ impl JsonParseState {
         }
     }
 
+    /// Determines whether a quoted string (double-quoted, single-quoted, or
+    /// backtick) should be closed at the current position by peeking at
+    /// upcoming characters and checking for structural delimiters.
     fn should_close_string(
         &mut self,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
@@ -493,6 +520,9 @@ impl JsonParseState {
         }
     }
 
+    /// Processes a single character token in the context of the current parser
+    /// state. Returns the number of additional characters consumed from `next`
+    /// that the caller should skip in the outer iteration loop.
     pub fn process_token(
         &mut self,
         token: char,
@@ -733,7 +763,9 @@ impl JsonParseState {
         }
     }
 
-    // Returns the number of increments to skip after processing the token
+    /// Attempts to start parsing a new JSON value from the given token character.
+    /// Pushes the appropriate collection type onto the stack and returns the
+    /// number of additional characters consumed from `next`.
     fn find_any_starting_value(
         &mut self,
         token: char,
@@ -870,6 +902,8 @@ impl JsonParseState {
     }
 }
 
+/// Result of `should_close_unescaped_string`: either close the string with a
+/// character count and completion state, or continue accumulating characters.
 #[derive(Debug, PartialEq)]
 enum CloseStringResult {
     Close(usize, CompletionState),
