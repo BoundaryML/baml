@@ -149,6 +149,9 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Maps MIR Local -> stack slot index (only for Real locals).
     local_slots: HashMap<Local, usize>,
 
+    /// Number of extra local slots required for this function frame.
+    real_local_count: usize,
+
     /// Maps `BlockId` -> bytecode instruction index (for jump patching).
     block_addresses: HashMap<BlockId, usize>,
 
@@ -194,6 +197,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             objects: ctx.objects,
             analysis,
             local_slots: HashMap::new(),
+            real_local_count: 0,
             block_addresses: HashMap::new(),
             pending_jumps: Vec::new(),
             pending_jump_tables: Vec::new(),
@@ -299,6 +303,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         Function {
             name: mir.name.to_string(),
             arity: mir.arity,
+            real_local_count: self.real_local_count,
             bytecode: self.bytecode,
             kind: FunctionKind::Bytecode,
             locals_in_scope: Self::build_locals_in_scope(mir, &self.local_slots),
@@ -334,6 +339,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Virtual locals don't get slots - they're inlined at use sites.
     fn allocate_real_locals(&mut self, mir: &MirFunction) {
         self.local_slots.clear();
+        self.real_local_count = 0;
         let arity = mir.arity;
 
         // Count how many real locals we need to pre-allocate
@@ -366,10 +372,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
         }
 
-        // Pre-allocate only the real locals (not virtuals)
-        if slots_to_allocate > 0 {
-            self.emit(Instruction::InitLocals(slots_to_allocate));
-        }
+        // VM pre-allocates these slots when entering the frame.
+        self.real_local_count = slots_to_allocate;
     }
 
     /// Get current program counter (next instruction index).
@@ -760,8 +764,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
-                unwrap_infallible(pull_semantics::walk_invoke_operands(self, callee, args));
-                self.emit(Instruction::Call(args.len()));
+                let global_callee = pull_semantics::resolve_constant_function_name(
+                    callee,
+                    &self.analysis.classifications,
+                    &self.analysis.def_use,
+                )
+                .and_then(|name| self.globals.get(&name).copied())
+                .map(GlobalIndex::from_raw);
+
+                if let Some(global_callee) = global_callee {
+                    unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                    self.emit(Instruction::Call(global_callee));
+                } else {
+                    unwrap_infallible(pull_semantics::walk_call_indirect_operands(
+                        self, callee, args,
+                    ));
+                    self.emit(Instruction::CallIndirect);
+                }
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
             }
@@ -1271,9 +1290,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
             .get("baml.Array.length")
             .copied()
             .unwrap_or_else(|| panic!("undefined function: baml.Array.length"));
-        self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
         pull_semantics::walk_place_pull(self, place)?;
-        self.emit(Instruction::Call(1));
+        self.emit(Instruction::Call(GlobalIndex::from_raw(global_idx)));
         Ok(())
     }
 

@@ -353,6 +353,7 @@ pub fn compile_files(
         let builtin_fn = Function {
             name: builtin.path.to_string(),
             arity: builtin.arity(),
+            real_local_count: 0,
             bytecode: Bytecode::default(),
             kind,
             locals_in_scope: Vec::new(),
@@ -409,6 +410,7 @@ pub fn compile_files(
                         Function {
                             name: signature.name.to_string(),
                             arity: params.len(),
+                            real_local_count: 0,
                             bytecode: Bytecode::new(),
                             kind: FunctionKind::Bytecode,
                             locals_in_scope: vec![

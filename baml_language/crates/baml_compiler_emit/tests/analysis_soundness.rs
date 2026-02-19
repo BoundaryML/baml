@@ -21,7 +21,6 @@ fn virtual_cross_block_soundness_codegen() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::InitLocals(2),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
@@ -52,7 +51,6 @@ fn virtual_cross_block_param_mutation_soundness_codegen() -> anyhow::Result<()> 
         expected: vec![(
             "main",
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadVar("p".to_string()),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadVar("c".to_string()),
@@ -79,7 +77,6 @@ fn copy_of_mutable_param_soundness_codegen() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::StoreVar("y".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
@@ -107,7 +104,6 @@ fn virtual_cross_block_transitive_param_mutation_soundness_codegen() -> anyhow::
         expected: vec![(
             "main",
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadVar("p".to_string()),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadVar("c".to_string()),
@@ -149,9 +145,7 @@ fn virtual_multiple_defs_preserve_side_effects_codegen() -> anyhow::Result<()> {
             (
                 "main",
                 vec![
-                    Instruction::InitLocals(1),
-                    Instruction::LoadGlobal(Value::function("fail")),
-                    Instruction::Call(0),
+                    Instruction::Call("fail".to_string()),
                     Instruction::StoreVar("x".to_string()),
                     Instruction::LoadConst(Value::Int(2)),
                     Instruction::StoreVar("x".to_string()),

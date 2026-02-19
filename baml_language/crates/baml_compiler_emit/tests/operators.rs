@@ -26,9 +26,8 @@ fn basic_and() -> anyhow::Result<()> {
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(3),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::Jump(3),
-                Instruction::LoadGlobal(Value::function("ret_bool")),
-                Instruction::Call(0),
+                Instruction::Jump(2),
+                Instruction::Call("ret_bool".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -53,9 +52,8 @@ fn basic_or() -> anyhow::Result<()> {
             vec![
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadGlobal(Value::function("ret_bool")),
-                Instruction::Call(0),
+                Instruction::Jump(3),
+                Instruction::Call("ret_bool".to_string()),
                 Instruction::Jump(2),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::Return,
@@ -101,7 +99,6 @@ fn basic_assign_add() -> anyhow::Result<()> {
             // x is Real (used 3 times: init, compound assign read, return)
             // Compound assignment x += 2 expands to x = x + 2
             vec![
-                Instruction::InitLocals(1), // slot for x
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("x".to_string()), // let x = 1
                 Instruction::LoadVar("x".to_string()),  // read x

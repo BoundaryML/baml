@@ -79,11 +79,7 @@ fn return_function_call() -> anyhow::Result<()> {
             (
                 "main",
                 // ReturnPhi optimization: Call result goes directly to stack, no Store/Load
-                vec![
-                    Instruction::LoadGlobal(Value::function("one")),
-                    Instruction::Call(0),
-                    Instruction::Return,
-                ],
+                vec![Instruction::Call("one".to_string()), Instruction::Return],
             ),
         ],
     })
@@ -112,11 +108,7 @@ fn call_function_assign_to_variable() -> anyhow::Result<()> {
                 "main",
                 // CallResultImmediate optimization: Call result stays on stack,
                 // used immediately as return value (no Store/Load)
-                vec![
-                    Instruction::LoadGlobal(Value::function("two")),
-                    Instruction::Call(0),
-                    Instruction::Return,
-                ],
+                vec![Instruction::Call("two".to_string()), Instruction::Return],
             ),
         ],
     })
@@ -145,7 +137,6 @@ fn mutable_variables() -> anyhow::Result<()> {
                 "DeclareMutableInFunction",
                 // Multi-def locals are kept real (not virtualized)
                 vec![
-                    Instruction::InitLocals(1),
                     Instruction::LoadConst(Value::Int(3)),
                     Instruction::StoreVar("y".to_string()),
                     Instruction::LoadConst(Value::Int(5)),

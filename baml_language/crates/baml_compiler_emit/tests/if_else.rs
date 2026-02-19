@@ -313,9 +313,8 @@ fn if_else_with_function_call_in_branch() -> anyhow::Result<()> {
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(0)),
-                Instruction::Jump(3),
-                Instruction::LoadGlobal(Value::function("get_value")),
-                Instruction::Call(0),
+                Instruction::Jump(2),
+                Instruction::Call("get_value".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -425,7 +424,6 @@ fn if_else_in_arithmetic() -> anyhow::Result<()> {
             // RHS if-expression is materialized into a local because binary-op pull order
             // would otherwise consume the left operand first.
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
@@ -455,20 +453,15 @@ fn if_else_as_function_arg() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // If-expression result is materialized into a local before the call argument pull.
+            // If-expression result is kept on stack and consumed directly by call arg pull.
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Int(20)),
-                Instruction::StoreVar("_2".to_string()),
                 Instruction::Jump(3),
+                Instruction::LoadConst(Value::Int(20)),
+                Instruction::Jump(2),
                 Instruction::LoadConst(Value::Int(10)),
-                Instruction::StoreVar("_2".to_string()),
-                Instruction::LoadGlobal(Value::function("identity")),
-                Instruction::LoadVar("_2".to_string()),
-                Instruction::Call(1),
+                Instruction::Call("identity".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -488,20 +481,15 @@ fn if_else_assigned_then_passed_to_call() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // tmp is a real local and is loaded for the call.
+            // tmp is optimized away here: the if-expression result is consumed directly.
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                Instruction::LoadConst(Value::Int(20)),
-                Instruction::StoreVar("tmp".to_string()),
                 Instruction::Jump(3),
+                Instruction::LoadConst(Value::Int(20)),
+                Instruction::Jump(2),
                 Instruction::LoadConst(Value::Int(10)),
-                Instruction::StoreVar("tmp".to_string()),
-                Instruction::LoadGlobal(Value::function("identity")),
-                Instruction::LoadVar("tmp".to_string()),
-                Instruction::Call(1),
+                Instruction::Call("identity".to_string()),
                 Instruction::Return,
             ],
         )],
@@ -521,7 +509,6 @@ fn parenthesized_if_else_in_arithmetic() -> anyhow::Result<()> {
             "main",
             // Both if-expression results are materialized to preserve pull order in binary-op.
             vec![
-                Instruction::InitLocals(2),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
@@ -559,7 +546,6 @@ fn chained_if_else_in_arithmetic() -> anyhow::Result<()> {
             "main",
             // Both if-expression results are materialized to preserve pull order in binary-op.
             vec![
-                Instruction::InitLocals(2),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
@@ -631,7 +617,6 @@ fn if_without_else_statement() -> anyhow::Result<()> {
             // Stackification with fall-through elimination:
             // if-without-else is void - no temporary needed
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
@@ -663,7 +648,6 @@ fn if_without_else_with_local_var() -> anyhow::Result<()> {
             "main",
             // 'result' is Virtual (single-use, inlined as 0). 'temp' is Real (assigned but unused):
             vec![
-                Instruction::InitLocals(1), // Pre-allocate for 'temp'
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(10)),
@@ -718,7 +702,6 @@ fn consecutive_if_without_else() -> anyhow::Result<()> {
             // Stackification with fall-through elimination:
             // Both if-without-else are void - no temporaries needed
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
@@ -828,25 +811,22 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
             // Only unused user-named variables (x in else, y in then) need slots
             vec![
                 // Pre-allocate 2 slots for unused user-named variables
-                Instruction::InitLocals(2),
                 // Check condition b
                 Instruction::LoadVar("b".to_string()),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(8),
+                Instruction::Jump(7),
                 // Else branch: x = 3 (unused, stored), identity(4) (y inlined)
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::StoreVar("x".to_string()),
-                Instruction::LoadGlobal(Value::function("identity")),
                 Instruction::LoadConst(Value::Int(4)), // y inlined
-                Instruction::Call(1),
+                Instruction::Call("identity".to_string()),
                 Instruction::Pop(1), // discard unused call result
-                Instruction::Jump(7),
+                Instruction::Jump(6),
                 // Then branch: y = 2 (unused, stored), identity(1) (x inlined)
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("y".to_string()),
-                Instruction::LoadGlobal(Value::function("identity")),
                 Instruction::LoadConst(Value::Int(1)), // x inlined
-                Instruction::Call(1),
+                Instruction::Call("identity".to_string()),
                 Instruction::Pop(1), // discard unused call result
                 // Return a (inlined as 1)
                 Instruction::LoadConst(Value::Int(1)),
@@ -916,7 +896,6 @@ fn else_if_assignment() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate result
-                Instruction::InitLocals(1),
                 // Check condition a
                 Instruction::LoadVar("a".to_string()),
                 Instruction::PopJumpIfFalse(2),
@@ -969,7 +948,6 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate result
-                Instruction::InitLocals(1),
                 // Check condition a
                 Instruction::LoadVar("a".to_string()),
                 Instruction::PopJumpIfFalse(2),
@@ -1023,7 +1001,6 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate a
-                Instruction::InitLocals(1),
                 // a = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),

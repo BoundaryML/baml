@@ -34,8 +34,7 @@ fn create_and_access() -> anyhow::Result<()> {
                 // CallResultImmediate optimization: Call result stays on stack,
                 // used immediately for map access (no Store/Load)
                 vec![
-                    Instruction::LoadGlobal(Value::function("CreateMap")),
-                    Instruction::Call(0),
+                    Instruction::Call("CreateMap".to_string()),
                     Instruction::LoadConst(Value::string("hello")),
                     Instruction::LoadMapElement,
                     Instruction::Return,
@@ -73,8 +72,7 @@ fn access_no_key() -> anyhow::Result<()> {
                 // CallResultImmediate optimization: Call result stays on stack,
                 // used immediately for map access (no Store/Load)
                 vec![
-                    Instruction::LoadGlobal(Value::function("CreateMap")),
-                    Instruction::Call(0),
+                    Instruction::Call("CreateMap".to_string()),
                     Instruction::LoadConst(Value::string("world")),
                     Instruction::LoadMapElement,
                     Instruction::Return,
@@ -114,16 +112,13 @@ fn contains() -> anyhow::Result<()> {
                 "UseMapContains",
                 vec![
                     // Init local for map (return value is PhiLike, _3 is CallResultImmediate)
-                    Instruction::InitLocals(1),
                     // let map = CreateMapJSON();
-                    Instruction::LoadGlobal(Value::function("CreateMapJSON")),
-                    Instruction::Call(0),
+                    Instruction::Call("CreateMapJSON".to_string()),
                     Instruction::StoreVar("map".to_string()),
                     // map.has("hello") - method call, result stays on stack (CallResultImmediate)
-                    Instruction::LoadGlobal(Value::function("baml.Map.has")),
                     Instruction::LoadVar("map".to_string()),
                     Instruction::LoadConst(Value::string("hello")),
-                    Instruction::Call(2),
+                    Instruction::Call("baml.Map.has".to_string()),
                     // if condition - Call result used directly from stack
                     Instruction::PopJumpIfFalse(2),
                     Instruction::Jump(3),
@@ -159,7 +154,6 @@ fn modify() -> anyhow::Result<()> {
             "EditMapKey",
             vec![
                 // Init local for map (return value is ReturnPhi, no slot needed)
-                Instruction::InitLocals(1),
                 // let map = { "hi": 123 }; (values first, then keys)
                 Instruction::LoadConst(Value::Int(123)),
                 Instruction::LoadConst(Value::string("hi")),
@@ -207,7 +201,6 @@ fn len() -> anyhow::Result<()> {
             "Len",
             vec![
                 // Method call on map literal
-                Instruction::LoadGlobal(Value::function("baml.Map.length")),
                 // Map literal: values first, then keys
                 // { "hi": 123, "it_works": 456 }
                 Instruction::LoadConst(Value::Int(123)),
@@ -215,7 +208,7 @@ fn len() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::string("hi")),
                 Instruction::LoadConst(Value::string("it_works")),
                 Instruction::AllocMap(2),
-                Instruction::Call(1),
+                Instruction::Call("baml.Map.length".to_string()),
                 Instruction::Return,
             ],
         )],

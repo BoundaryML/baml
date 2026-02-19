@@ -87,7 +87,6 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
             // Stackification with dead store elimination:
             // a is user variable, dead compiler temps (_5 for if result) are eliminated
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
@@ -132,7 +131,6 @@ fn while_loop_with_break() -> anyhow::Result<()> {
             // Stackification with dead store elimination:
             // a is user variable, dead compiler temps (_5 for if result) are eliminated
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
@@ -177,7 +175,6 @@ fn break_factorial() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate result local
-                Instruction::InitLocals(1),
                 // Initialize result = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("result".to_string()),
@@ -238,7 +235,6 @@ fn continue_factorial() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate locals
-                Instruction::InitLocals(2),
                 // Initialize result = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("result".to_string()),
@@ -341,7 +337,6 @@ fn break_nested() -> anyhow::Result<()> {
             // Stackification with dead store elimination:
             // a is user variable, dead compiler temps are eliminated
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
@@ -392,7 +387,6 @@ fn break_nested_with_variable_conditions() -> anyhow::Result<()> {
             "Nested",
             vec![
                 // let a = 5
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("a".to_string()),
                 // outer while (x) - condition check
@@ -445,7 +439,6 @@ fn while_loop_with_conditional_break() -> anyhow::Result<()> {
             "CountDown",
             vec![
                 // let result = 0
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
                 // while (true) - condition

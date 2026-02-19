@@ -356,7 +356,9 @@ pub enum Instruction {
     Watch(usize),
     Unwatch(usize),
     Notify(usize),
-    Call(usize),
+    /// Direct call to a statically-known function by name.
+    Call(String),
+    CallIndirect,
 
     Return,
     Assert,
@@ -364,7 +366,10 @@ pub enum Instruction {
     VizEnter(usize),
     VizExit(usize),
     InitLocals(usize),
-    JumpTable { table_idx: usize, default: isize },
+    JumpTable {
+        table_idx: usize,
+        default: isize,
+    },
     Discriminant,
     TypeTag,
     Unreachable,

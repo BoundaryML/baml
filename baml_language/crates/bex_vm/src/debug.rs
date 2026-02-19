@@ -94,6 +94,19 @@ pub fn display_instruction(
                 format!("(global {})", index.raw())
             }
         }
+        Instruction::Call(callee) => {
+            if callee.raw() < globals.len() {
+                format!("({})", display_value(&globals[*callee]))
+            } else if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
+                if let Some(const_val) = ct_globals.get(callee.raw()) {
+                    format!("({})", display_const_value(const_val, Some(objs)))
+                } else {
+                    format!("(global {})", callee.raw())
+                }
+            } else {
+                format!("(global {})", callee.raw())
+            }
+        }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::Watch(index)
@@ -175,9 +188,8 @@ pub fn display_instruction(
         | Instruction::StoreMapElement
         | Instruction::DispatchFuture(_)
         | Instruction::Await
-        | Instruction::Call(_)
+        | Instruction::CallIndirect
         | Instruction::Assert
-        | Instruction::InitLocals(_)
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::Unreachable
@@ -289,7 +301,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Jump(_) | Instruction::PopJumpIfFalse(_) | Instruction::JumpTable { .. } => {
             Color::Yellow
         }
-        Instruction::Call(_) => Color::Magenta,
+        Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
         Instruction::Assert | Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) => {
             Color::Red
         }
@@ -302,7 +314,6 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::BrightRed
         }
         Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
-        Instruction::InitLocals(_) => Color::Green,
         Instruction::Discriminant | Instruction::TypeTag => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
     }

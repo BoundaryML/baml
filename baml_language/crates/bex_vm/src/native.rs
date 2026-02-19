@@ -577,6 +577,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
             Object::Function(Box::new(bex_vm_types::Function {
                 name: function.name,
                 arity: function.arity,
+                real_local_count: function.real_local_count,
                 bytecode: function.bytecode,
                 kind,
                 locals_in_scope: function.locals_in_scope,

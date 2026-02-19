@@ -20,12 +20,11 @@ fn builtin_method_call() -> anyhow::Result<()> {
             // Method call arr.length() desugars to baml.Array.length(arr).
             // ReturnPhi: call result stays on stack for return.
             vec![
-                Instruction::LoadGlobal(Value::function("baml.Array.length")),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::AllocArray(3),
-                Instruction::Call(1),
+                Instruction::Call("baml.Array.length".to_string()),
                 Instruction::Return,
             ],
         )],

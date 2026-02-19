@@ -1,6 +1,10 @@
 //! VM tests for function calls, parameters, and return statements.
 
-use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
+use baml_tests::bytecode::{
+    BytecodeProgram, ExecState, Program, Value, assert_vm_executes, assert_vm_executes_bytecode,
+};
+use bex_vm::VmExecState;
+use bex_vm_types::{ConstValue, Instruction, Value as VmValue};
 
 #[test]
 fn return_function_call() -> anyhow::Result<()> {
@@ -157,5 +161,43 @@ fn recursive() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: ExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn indirect_call_with_function_value() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function add(a: int, b: int) -> int {
+                a + b
+            }
+
+            function call_twice(f: (int, int) -> int, x: int, y: int) -> int {
+                f(x, y) + f(x, y)
+            }
+
+            function main() -> int {
+                let f = add;
+                call_twice(f, 20, 1)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(42)),
+    })
+}
+
+#[test]
+fn bytecode_respects_real_local_count() -> anyhow::Result<()> {
+    assert_vm_executes_bytecode(BytecodeProgram {
+        arity: 0,
+        real_local_count: 1,
+        instructions: vec![
+            Instruction::LoadConst(0),
+            Instruction::StoreVar(1),
+            Instruction::LoadVar(1),
+            Instruction::Return,
+        ],
+        constants: vec![ConstValue::Int(42)],
+        expected: VmExecState::Complete(VmValue::Int(42)),
     })
 }

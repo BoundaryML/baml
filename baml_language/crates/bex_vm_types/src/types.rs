@@ -231,6 +231,12 @@ pub struct Function {
     /// Number of arguments the function accepts.
     pub arity: usize,
 
+    /// Number of additional local slots (beyond callee + params) needed by the frame.
+    ///
+    /// The VM allocates these slots when creating a bytecode frame, instead of
+    /// relying on a dedicated bytecode instruction.
+    pub real_local_count: usize,
+
     /// Bytecode to execute.
     ///
     /// Only relevant if [`Self::kind`] is [`FunctionKind::Bytecode`].

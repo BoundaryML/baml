@@ -6,12 +6,14 @@
 //!
 //! Keeping a single traversal avoids semantic drift between emitter and analysis.
 
+use std::collections::{HashMap, HashSet};
+
 use baml_compiler_mir::{
     AggregateKind, BinOp, Constant, IndexKind, Local, Operand, Place, Rvalue, UnaryOp,
 };
 use baml_type::Ty;
 
-use crate::analysis::LocalClassification;
+use crate::analysis::{LocalClassification, LocalDefUse};
 
 /// What to do when pulling a local.
 pub(crate) enum LocalPullAction {
@@ -172,7 +174,9 @@ pub(crate) fn walk_assert_statement<S: StackEffectSink>(
     sink.assert_top()
 }
 
-/// Shared pull order for call-like terminators: `callee`, then each arg.
+/// Shared pull order for call-like terminators that consume `[callee, args...]`.
+///
+/// This remains the order used by `DispatchFuture`.
 pub(crate) fn walk_invoke_operands<S: PullSink>(
     sink: &mut S,
     callee: &Operand,
@@ -183,6 +187,90 @@ pub(crate) fn walk_invoke_operands<S: PullSink>(
         walk_operand_pull(sink, arg)?;
     }
     Ok(())
+}
+
+/// Shared pull order for direct calls: each arg only.
+pub(crate) fn walk_call_direct_args<S: PullSink>(
+    sink: &mut S,
+    args: &[Operand],
+) -> Result<(), S::Error> {
+    for arg in args {
+        walk_operand_pull(sink, arg)?;
+    }
+    Ok(())
+}
+
+/// Shared pull order for indirect calls: `args..., callee`.
+pub(crate) fn walk_call_indirect_operands<S: PullSink>(
+    sink: &mut S,
+    callee: &Operand,
+    args: &[Operand],
+) -> Result<(), S::Error> {
+    walk_call_direct_args(sink, args)?;
+    walk_operand_pull(sink, callee)
+}
+
+/// Resolve a call operand to a statically-known function name through
+/// `Virtual`/`CopyOf` forwarding chains.
+pub(crate) fn resolve_constant_function_name(
+    operand: &Operand,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> Option<String> {
+    resolve_constant_function_name_inner(operand, classifications, def_use, &mut HashSet::new())
+}
+
+fn resolve_constant_function_name_inner(
+    operand: &Operand,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+    visited_locals: &mut HashSet<Local>,
+) -> Option<String> {
+    match operand {
+        Operand::Constant(Constant::Function(qn)) => Some(qn.to_runtime_string()),
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+            if !visited_locals.insert(*local) {
+                return None;
+            }
+
+            match classifications.get(local).copied() {
+                Some(LocalClassification::Virtual) => {
+                    let def = def_use.get(local).and_then(|du| du.def.as_ref())?;
+                    let Rvalue::Use(inner) = &def.rvalue else {
+                        return None;
+                    };
+                    resolve_constant_function_name_inner(
+                        inner,
+                        classifications,
+                        def_use,
+                        visited_locals,
+                    )
+                }
+                Some(LocalClassification::CopyOf) => {
+                    let def = def_use.get(local).and_then(|du| du.def.as_ref())?;
+                    let Rvalue::Use(copy_operand) = &def.rvalue else {
+                        return None;
+                    };
+                    let source = match copy_operand {
+                        Operand::Copy(Place::Local(source))
+                        | Operand::Move(Place::Local(source)) => *source,
+                        _ => return None,
+                    };
+                    if source == *local {
+                        return None;
+                    }
+                    resolve_constant_function_name_inner(
+                        &Operand::copy_local(source),
+                        classifications,
+                        def_use,
+                        visited_locals,
+                    )
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
 }
 
 /// Shared pull for `Return` value place (`_0`).

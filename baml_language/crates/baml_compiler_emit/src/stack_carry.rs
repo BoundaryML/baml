@@ -435,18 +435,35 @@ fn simulate_terminator_stack(
             destination,
             ..
         } => {
-            let mut sink = StackCarryPullSink {
-                sim,
-                carried_local,
-                classifications,
-                def_use,
-            };
-            if pull_semantics::walk_invoke_operands(&mut sink, callee, args).is_err() {
-                return false;
-            }
-
-            if !sim.pop_n(args.len() + 1) {
-                return false;
+            let direct_call =
+                pull_semantics::resolve_constant_function_name(callee, classifications, def_use)
+                    .is_some();
+            if direct_call {
+                let mut sink = StackCarryPullSink {
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                };
+                if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
+                    return false;
+                }
+                if !sim.pop_n(args.len()) {
+                    return false;
+                }
+            } else {
+                let mut sink = StackCarryPullSink {
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                };
+                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args).is_err() {
+                    return false;
+                }
+                if !sim.pop_n(args.len() + 1) {
+                    return false;
+                }
             }
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
@@ -693,10 +710,9 @@ impl PullSink for StackCarryPullSink<'_> {
     }
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error> {
-        // Emitter lowers Len as: LoadGlobal(length), <place>, Call(1).
-        self.sim.push(); // LoadGlobal pushes callee.
+        // Emitter lowers Len as: <place>, Call(length, 1).
         pull_semantics::walk_place_pull(self, place)?;
-        if !self.sim.pop_n(2) {
+        if !self.sim.pop_n(1) {
             return Err(());
         }
         self.sim.push();
