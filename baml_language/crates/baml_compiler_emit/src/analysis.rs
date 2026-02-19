@@ -158,12 +158,39 @@ impl AnalysisResult {
         // Step 4: Collect def-use information
         let def_use = collect_def_use(mir);
 
-        // Step 5: Build jump threading redirect map
-        let redirect_targets = build_redirect_targets(mir);
+        // Step 5: Conservative jump threading (truly empty goto-only blocks).
+        let initial_redirect_targets = build_redirect_targets(mir);
 
-        // Step 6: Classify each local (including phi-like detection and copy propagation)
-        let (classifications, copy_sources) =
-            classify_locals(mir, &def_use, &dominators, &predecessors, &redirect_targets);
+        // Step 6: First classification pass.
+        let (mut classifications, mut copy_sources) = classify_locals(
+            mir,
+            &def_use,
+            &dominators,
+            &predecessors,
+            &initial_redirect_targets,
+        );
+
+        // Step 7: Enhanced jump threading using classification info.
+        // Some blocks have statements that produce no bytecode (Virtual, Dead,
+        // CopyOf assignments). These are effectively empty and can be threaded.
+        let redirect_targets = build_redirect_targets_with_classifications(mir, &classifications);
+
+        // Step 8: Re-run classification once if redirects changed.
+        // `ReturnPhi` checks walk through redirects, so this lets classification
+        // observe the final threaded CFG without requiring a general fixpoint loop.
+        //
+        // NOTE: This bounded refinement is sufficient for the current pipeline because
+        // redirect construction only depends on `Virtual | Dead | CopyOf`, which are
+        // not redirect-sensitive today. If future MIR optimizations introduce feedback
+        // where redirect-sensitive classifications can make blocks newly threadable
+        // (or iterative transforms like branch folding/DCE rewrite CFG edges between
+        // rounds), upgrade this to a true fixed-point convergence loop.
+        if redirect_targets != initial_redirect_targets {
+            let (reclassified, recopy_sources) =
+                classify_locals(mir, &def_use, &dominators, &predecessors, &redirect_targets);
+            classifications = reclassified;
+            copy_sources = recopy_sources;
+        }
 
         Self {
             classifications,
@@ -319,6 +346,59 @@ fn resolve_redirect_chain(start: BlockId, goto_targets: &HashMap<BlockId, BlockI
     }
 
     current
+}
+
+/// Build redirect targets using local classification info.
+///
+/// Like [`build_redirect_targets`] but also threads through blocks whose
+/// statements all target locals classified as [`LocalClassification::Virtual`],
+/// [`LocalClassification::Dead`], or [`LocalClassification::CopyOf`]. These
+/// assignments produce no bytecode during emission, making the block
+/// effectively empty.
+fn build_redirect_targets_with_classifications(
+    mir: &MirFunction,
+    classifications: &HashMap<Local, LocalClassification>,
+) -> HashMap<BlockId, BlockId> {
+    let mut goto_targets: HashMap<BlockId, BlockId> = HashMap::new();
+
+    for block in &mir.blocks {
+        let Some(Terminator::Goto { target }) = &block.terminator else {
+            continue;
+        };
+
+        let effectively_empty = block.statements.iter().all(|stmt| {
+            matches!(
+                &stmt.kind,
+                StatementKind::Assign {
+                    destination: Place::Local(local),
+                    ..
+                } if matches!(
+                    classifications.get(local),
+                    Some(
+                        LocalClassification::Virtual
+                        | LocalClassification::Dead
+                        | LocalClassification::CopyOf
+                    )
+                )
+            )
+        });
+
+        if effectively_empty {
+            goto_targets.insert(block.id, *target);
+        }
+    }
+
+    // Resolve chains (A -> B -> C becomes A -> C).
+    let mut resolved: HashMap<BlockId, BlockId> = HashMap::new();
+
+    for &block_id in goto_targets.keys() {
+        let final_target = resolve_redirect_chain(block_id, &goto_targets);
+        if final_target != block_id {
+            resolved.insert(block_id, final_target);
+        }
+    }
+
+    resolved
 }
 
 // ============================================================================

@@ -287,10 +287,7 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::LoadVar("_i1".to_string()),
                 Instruction::LoadVar("_len1".to_string()),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                // Inner loop exit: jump back to outer loop condition
-                Instruction::Jump(-26),
+                Instruction::PopJumpIfFalse(-24),
                 // Inner loop body: b = bs[_i1] - using param directly
                 Instruction::LoadVar("bs".to_string()),
                 Instruction::LoadVar("_i1".to_string()),
@@ -309,7 +306,7 @@ fn for_nested() -> anyhow::Result<()> {
                 Instruction::BinOp(BinOp::Add),
                 Instruction::StoreVar("result".to_string()),
                 // Jump back to inner loop condition
-                Instruction::Jump(-20),
+                Instruction::Jump(-18),
             ],
         )],
     })

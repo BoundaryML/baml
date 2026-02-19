@@ -113,9 +113,8 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Bool(true)), // literal true
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2), // if false, skip to second arm body
-                Instruction::Jump(4),           // if true, skip to "yes"
+                Instruction::Jump(3),           // if true, skip to "yes"
                 // Second arm: no comparison needed (exhaustive match optimization)
-                Instruction::Jump(1), // go directly to "no" body
                 Instruction::LoadConst(Value::string("no")),
                 Instruction::Jump(2), // skip to return
                 Instruction::LoadConst(Value::string("yes")),
@@ -243,9 +242,8 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2), // if false, skip to Failure arm body
-                Instruction::Jump(5),           // if true, skip to s.data
+                Instruction::Jump(4),           // if true, skip to s.data
                 // f: Failure arm - no instanceof check needed (exhaustive match optimization)
-                Instruction::Jump(1), // go directly to f.reason body
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadField(0),
                 Instruction::Jump(3), // skip to return
@@ -707,16 +705,14 @@ fn match_mixed_literal_typed_guard() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(13),
+                Instruction::Jump(12),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(4),
                 Instruction::LoadVar("flag".to_string()),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Exhaustive typed pattern - skips instanceof
-                Instruction::Jump(1),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::string("other int")),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::string("one with flag")),
@@ -756,14 +752,12 @@ fn match_guard_on_typed_pattern() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::string("")),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(11),
+                Instruction::Jump(10),
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Exhaustive - skips instanceof
-                Instruction::Jump(1),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::string("failure")),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::string("empty success")),
@@ -804,21 +798,19 @@ fn match_multiple_typed_patterns_with_guards() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(200)),
                 Instruction::CmpOp(CmpOp::Gt),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(20),
+                Instruction::Jump(19),
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(4),
                 Instruction::LoadVar("strict".to_string()),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(11),
+                Instruction::Jump(10),
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Exhaustive - skips instanceof
-                Instruction::Jump(1),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::string("failure")),
                 Instruction::Jump(6),
                 Instruction::LoadConst(Value::string("success")),
@@ -852,14 +844,12 @@ fn match_string_literal_with_typed_pattern() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::string("ok")),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(11),
+                Instruction::Jump(10),
                 Instruction::LoadVar("s".to_string()),
                 Instruction::LoadConst(Value::string("error")),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Exhaustive - skips instanceof
-                Instruction::Jump(1),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(500)),
@@ -1617,17 +1607,16 @@ fn match_enum_variant_switch() -> anyhow::Result<()> {
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(3),
                 Instruction::Pop(1),
-                Instruction::Jump(13),
+                Instruction::Jump(12),
                 // Second arm: check if variant index == 1 (Inactive)
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(3),
                 Instruction::Pop(1),
-                Instruction::Jump(5),
+                Instruction::Jump(4),
                 // Third arm: exhaustive match - skip comparison, value must be Pending
                 Instruction::Pop(1),
-                Instruction::Jump(1),
                 // Bodies in reverse order
                 Instruction::LoadConst(Value::string("pending")),
                 Instruction::Jump(4),
@@ -1777,15 +1766,14 @@ fn match_class_types_exhaustive() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::class("Cat")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(17),
+                Instruction::Jump(16),
                 // d: Dog instanceof check
                 Instruction::LoadVar("animal".to_string()),
                 Instruction::LoadConst(Value::class("Dog")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(7),
+                Instruction::Jump(6),
                 // b: Bird - no instanceof check (exhaustive optimization)
-                Instruction::Jump(1),
                 // Bird body
                 Instruction::LoadConst(Value::string("bird: ")),
                 Instruction::LoadVar("animal".to_string()),
@@ -1979,9 +1967,8 @@ fn match_bool_variable_exhaustive() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
+                Instruction::Jump(3),
                 // Second arm: no comparison needed (exhaustive)
-                Instruction::Jump(1),
                 Instruction::LoadConst(Value::string("no")),
                 Instruction::Jump(2),
                 Instruction::LoadConst(Value::string("yes")),
@@ -2016,9 +2003,8 @@ fn match_optional_with_null() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4), // to "none" body
+                Instruction::Jump(3), // to "none" body
                 // Second arm: n: int (exhaustive - skips instanceof check)
-                Instruction::Jump(1),
                 Instruction::LoadConst(Value::string("some")),
                 Instruction::Jump(2),
                 // Body for null
@@ -2051,15 +2037,14 @@ fn match_optional_with_null_and_literal() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(11), // to "none" body at offset 15
+                Instruction::Jump(10), // to "none" body
                 // Second arm: 0 check
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4), // to "zero" body
+                Instruction::Jump(3), // to "zero" body
                 // Third arm: n: int (exhaustive - skips instanceof)
-                Instruction::Jump(1),
                 Instruction::LoadConst(Value::string("other")),
                 Instruction::Jump(4),
                 // Body for 0

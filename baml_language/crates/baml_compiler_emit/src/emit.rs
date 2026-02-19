@@ -180,23 +180,45 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
 
-        // 2. Emit blocks in RPO order
+        // 2. Emit blocks in RPO order.
+        //
+        // We skip:
+        // - dead unreachable blocks (already handled before), and
+        // - non-entry redirect-source blocks (threaded through by analysis).
+        //
+        // Redirect-source blocks are effectively empty at bytecode level and keeping
+        // them would emit dead jumps. We still record their address at current PC so
+        // any accidental unresolved reference remains patchable.
         let rpo = self.analysis.rpo.clone();
+        let should_emit: Vec<bool> = rpo
+            .iter()
+            .map(|&block_id| {
+                let block = mir.block(block_id);
+                !crate::analysis::is_dead_unreachable_block(block)
+                    && (block_id == mir.entry
+                        || !self.analysis.redirect_targets.contains_key(&block_id))
+            })
+            .collect();
+
+        let mut next_emitted_after: Vec<Option<BlockId>> = vec![None; rpo.len()];
+        let mut next_emitted = None;
+        for i in (0..rpo.len()).rev() {
+            next_emitted_after[i] = next_emitted;
+            if should_emit[i] {
+                next_emitted = Some(rpo[i]);
+            }
+        }
+
         for (i, &block_id) in rpo.iter().enumerate() {
             self.block_addresses.insert(block_id, self.current_pc());
-            // Track the next block for fall-through optimization
-            self.next_block = rpo.get(i + 1).copied();
+            // Track the next *emitted* block for fall-through optimization.
+            self.next_block = next_emitted_after[i];
 
-            // Skip emitting dead unreachable blocks - they're targets for impossible
-            // control flow paths (e.g., exhaustive match fallthrough). We record
-            // their address (current PC) so jumps to them resolve, but don't emit
-            // any instructions. If somehow reached, execution falls through to
-            // whatever comes next.
-            let block = mir.block(block_id);
-            if crate::analysis::is_dead_unreachable_block(block) {
+            if !should_emit[i] {
                 continue;
             }
 
+            let block = mir.block(block_id);
             self.emit_block(block, mir);
         }
 
@@ -331,14 +353,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // Apply jump threading: resolve through redirect map
         let resolved_target = self.analysis.resolve_jump_target(target);
 
-        // Check if we can fall through:
-        // 1. Next block IS the resolved target, OR
-        // 2. Next block is an empty block that resolves to our target
-        //    (fall through to it, and it will take us there)
-        let can_fall_through = self.next_block.is_some_and(|next| {
-            let resolved_next = self.analysis.resolve_jump_target(next);
-            resolved_target == next || resolved_target == resolved_next
-        });
+        // Check if we can fall through to the next emitted block directly.
+        let can_fall_through = self.next_block.is_some_and(|next| resolved_target == next);
 
         if can_fall_through {
             // No jump needed - fall through will get us there
@@ -1067,6 +1083,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let table_idx = self.pending_jump_tables.len();
         let table = JumpTableData::new(min, max);
 
+        // Resolve all jump targets through redirect threading so we don't retain
+        // references to skipped redirect-source blocks.
+        let resolved_arms: Vec<(i64, BlockId)> = arms
+            .iter()
+            .map(|(value, target)| (*value, self.analysis.resolve_jump_target(*target)))
+            .collect();
+        let resolved_otherwise = self.analysis.resolve_jump_target(otherwise);
+
         // 3. Emit JumpTable instruction with placeholder default offset
         let jump_table_pc = self.emit(Instruction::JumpTable {
             table_idx,
@@ -1077,8 +1101,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.pending_jump_tables.push(PendingJumpTable {
             table_idx,
             jump_table_pc,
-            arms: arms.to_vec(),
-            otherwise,
+            arms: resolved_arms,
+            otherwise: resolved_otherwise,
             table,
         });
     }

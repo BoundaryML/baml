@@ -620,9 +620,7 @@ fn if_without_else_statement() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadVar("x".to_string()),
@@ -652,9 +650,7 @@ fn if_without_else_with_local_var() -> anyhow::Result<()> {
             vec![
                 Instruction::InitLocals(1), // Pre-allocate for 'temp'
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreVar("temp".to_string()),
                 Instruction::LoadConst(Value::Int(0)), // result inlined
@@ -711,15 +707,11 @@ fn consecutive_if_without_else() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadVar("x".to_string()),
@@ -1029,10 +1021,7 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                // If false: skip to return
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 // If true: a = 10
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreVar("a".to_string()),
@@ -1085,13 +1074,13 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(21),
+                Instruction::Jump(19),
                 // if (a != b) where a=1 and b=1 are both inlined
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(14),
+                Instruction::Jump(12),
                 // while (b != c) where b=3 and c=2 are both inlined
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::LoadConst(Value::Int(2)),
@@ -1103,10 +1092,7 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::Return,
                 // Loop body: if (true)
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                // Jump back to while condition
-                Instruction::Jump(-10),
+                Instruction::PopJumpIfFalse(-8),
                 // return 0 (from if true in loop)
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Return,
