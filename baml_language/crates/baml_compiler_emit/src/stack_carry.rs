@@ -2,9 +2,11 @@ use std::collections::{HashMap, HashSet};
 
 use baml_compiler_mir::{Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator};
 
-use super::{LocalClassification, LocalDefUse, StatementRef, UseLocation};
-use crate::pull_semantics::{
-    self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink, StackEffectSink,
+use crate::{
+    analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},
+    pull_semantics::{
+        self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink, StackEffectSink,
+    },
 };
 
 /// Stack-carry candidate kinds validated by stack simulation before activation.

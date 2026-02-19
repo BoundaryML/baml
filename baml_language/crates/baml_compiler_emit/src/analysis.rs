@@ -18,7 +18,7 @@ use baml_compiler_mir::{
     BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator,
 };
 
-mod stack_carry;
+use crate::stack_carry;
 
 // ============================================================================
 // Data Structures
