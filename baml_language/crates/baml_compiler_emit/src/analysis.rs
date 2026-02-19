@@ -91,6 +91,24 @@ pub(crate) enum LocalClassification {
     Dead,
 }
 
+/// Stack-carry candidate kinds validated by stack simulation before activation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StackCarryKind {
+    PhiLike,
+    ReturnPhi,
+    CallResultImmediate,
+}
+
+impl StackCarryKind {
+    fn to_classification(self) -> LocalClassification {
+        match self {
+            Self::PhiLike => LocalClassification::PhiLike,
+            Self::ReturnPhi => LocalClassification::ReturnPhi,
+            Self::CallResultImmediate => LocalClassification::CallResultImmediate,
+        }
+    }
+}
+
 /// Dominator tree.
 #[derive(Debug)]
 pub(crate) struct Dominators {
@@ -802,6 +820,7 @@ fn classify_locals(
 ) -> (HashMap<Local, LocalClassification>, HashMap<Local, Local>) {
     let mut classifications = HashMap::new();
     let mut copy_sources: HashMap<Local, Local> = HashMap::new();
+    let mut stack_carry_candidates: HashMap<Local, StackCarryKind> = HashMap::new();
 
     for (idx, _local_decl) in mir.locals.iter().enumerate() {
         let local = Local(idx);
@@ -830,7 +849,9 @@ fn classify_locals(
             // Dead local: either an unused compiler temp, or an unused wildcard binding.
             // Skip _0 which is implicitly used by return.
             LocalClassification::Dead
-        } else if let Some(source) = get_copy_source(du, mir, def_use) {
+        } else if idx != 0
+            && let Some(source) = get_copy_source(du, mir, def_use)
+        {
             // Copy propagation: this local is just `_X = copy _Y` where _Y is suitable.
             // We can eliminate _X and use _Y directly at all use sites.
             copy_sources.insert(local, source);
@@ -838,26 +859,25 @@ fn classify_locals(
         } else if can_be_virtual(du, dominators, mir, def_use, predecessors) {
             LocalClassification::Virtual
         } else if is_phi_like(local, du, mir, predecessors, def_use) {
-            // Phi-like: assigned in each predecessor, used once at join point.
-            // At def sites: emit rvalue but NOT StoreVar (leave on stack).
-            // At use site: don't emit LoadVar (value already on stack).
-            LocalClassification::PhiLike
+            // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, StackCarryKind::PhiLike);
+            LocalClassification::Real
         } else if is_return_phi(local, mir, def_use, redirect_targets) {
-            // Return-phi: _0 is assigned immediately before Return in each defining block.
-            // At def sites: emit rvalue but NOT StoreVar (leave on stack).
-            // At Return: don't emit LoadVar for _0 (value already on stack).
-            LocalClassification::ReturnPhi
-        } else if is_call_result_immediate(local, du, mir) {
-            // Call result used immediately in continuation block.
-            // At def site (after Call): don't emit StoreVar (leave on stack).
-            // At use site: don't emit LoadVar (value already on stack from Call).
-            LocalClassification::CallResultImmediate
+            // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, StackCarryKind::ReturnPhi);
+            LocalClassification::Real
+        } else if is_call_result_immediate(local, du, mir, redirect_targets) {
+            // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, StackCarryKind::CallResultImmediate);
+            LocalClassification::Real
         } else {
             LocalClassification::Real
         };
 
         classifications.insert(local, classification);
     }
+
+    refine_stack_carry_classifications(mir, def_use, &stack_carry_candidates, &mut classifications);
 
     (classifications, copy_sources)
 }
@@ -883,27 +903,6 @@ fn is_phi_like(
 
     let use_loc = &du.uses[0];
     let use_block = use_loc.block;
-    let use_block_data = mir.block(use_block);
-
-    // The value is carried on stack into the join block, so it must be consumed
-    // immediately in a stack-order-safe position.
-    let use_is_stack_safe = match use_loc.statement_ref {
-        StatementRef::Statement(0) => use_block_data
-            .statements
-            .first()
-            .is_some_and(|stmt| is_first_stack_pull_local_in_statement(local, &stmt.kind)),
-        StatementRef::Terminator => {
-            use_block_data.statements.is_empty()
-                && use_block_data
-                    .terminator
-                    .as_ref()
-                    .is_some_and(|term| is_first_stack_pull_local_in_terminator(local, term))
-        }
-        StatementRef::Statement(_) => false,
-    };
-    if !use_is_stack_safe {
-        return false;
-    }
 
     // Get predecessors of the use block
     let preds = match predecessors.get(&use_block) {
@@ -967,101 +966,722 @@ fn is_phi_like(
     true
 }
 
-/// Whether this local is the first stack-pulled value in a statement.
+/// Refine stack-carried classifications (`PhiLike`, `ReturnPhi`,
+/// `CallResultImmediate`) by simulating the emitter's stack behavior.
 ///
-/// This mirrors emitter evaluation order for the "first pull" position and is
-/// used to validate stack-carried optimizations (`PhiLike`, `CallResultImmediate`).
-fn is_first_stack_pull_local_in_statement(local: Local, kind: &StatementKind) -> bool {
+/// We first detect structural candidates, then greedily activate only the
+/// candidates whose single use is stack-safe in the current classification map.
+fn refine_stack_carry_classifications(
+    mir: &MirFunction,
+    def_use: &HashMap<Local, LocalDefUse>,
+    candidates: &HashMap<Local, StackCarryKind>,
+    classifications: &mut HashMap<Local, LocalClassification>,
+) {
+    let mut locals: Vec<Local> = candidates.keys().copied().collect();
+    locals.sort_by_key(|l| l.0);
+
+    for local in locals {
+        let kind = candidates[&local];
+        let is_safe = is_stack_carry_use_safe(local, kind, mir, classifications, def_use);
+        if is_safe {
+            classifications.insert(local, kind.to_classification());
+        }
+    }
+}
+
+fn is_stack_carried_local(classification: LocalClassification) -> bool {
+    matches!(
+        classification,
+        LocalClassification::PhiLike
+            | LocalClassification::ReturnPhi
+            | LocalClassification::CallResultImmediate
+    )
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StackCarrySim {
+    /// Number of stack values above the carried local's value. `None` after the carried
+    /// value has been consumed post-use.
+    depth: Option<usize>,
+    /// Whether we have reached the carried local's single use site.
+    used: bool,
+}
+
+impl StackCarrySim {
+    fn new() -> Self {
+        Self {
+            depth: Some(0),
+            used: false,
+        }
+    }
+
+    fn push(&mut self) {
+        if let Some(depth) = self.depth {
+            self.depth = Some(depth + 1);
+        }
+    }
+
+    fn pop_n(&mut self, n: usize) -> bool {
+        if n == 0 {
+            return true;
+        }
+
+        let Some(depth) = self.depth else {
+            return true;
+        };
+
+        if depth >= n {
+            self.depth = Some(depth - n);
+            true
+        } else if self.used {
+            // Carried value consumed after its use site - that's fine.
+            self.depth = None;
+            true
+        } else {
+            // Carried value consumed before reaching the use site.
+            false
+        }
+    }
+}
+
+fn is_stack_carry_use_safe(
+    local: Local,
+    kind: StackCarryKind,
+    mir: &MirFunction,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> bool {
+    // ReturnPhi already validates stack-safety via stack-neutral statement checks.
+    if kind == StackCarryKind::ReturnPhi {
+        return true;
+    }
+
+    let du = &def_use[&local];
+    if du.uses.len() != 1 {
+        return false;
+    }
+
+    let Some(use_loc) = resolve_effective_use_location(&du.uses[0], mir, classifications, def_use)
+    else {
+        return false;
+    };
+    let mut sim = StackCarrySim::new();
+    let mut current_block = match kind {
+        StackCarryKind::PhiLike => use_loc.block,
+        StackCarryKind::CallResultImmediate => {
+            let Some(def) = &du.def else {
+                return false;
+            };
+            let def_block = mir.block(def.block);
+            match &def_block.terminator {
+                Some(Terminator::Call {
+                    destination,
+                    target,
+                    ..
+                }) => {
+                    if !matches!(destination, Place::Local(l) if *l == local) {
+                        return false;
+                    }
+                    *target
+                }
+                Some(Terminator::Await {
+                    destination,
+                    target,
+                    ..
+                }) => {
+                    if !matches!(destination, Place::Local(l) if *l == local) {
+                        return false;
+                    }
+                    *target
+                }
+                Some(Terminator::DispatchFuture { future, resume, .. }) => {
+                    if !matches!(future, Place::Local(l) if *l == local) {
+                        return false;
+                    }
+                    *resume
+                }
+                _ => return false,
+            }
+        }
+        StackCarryKind::ReturnPhi => unreachable!("handled above"),
+    };
+
+    let mut visited = HashSet::new();
+    loop {
+        if !visited.insert(current_block) {
+            return false;
+        }
+
+        let block = mir.block(current_block);
+
+        if current_block == use_loc.block {
+            match use_loc.statement_ref {
+                StatementRef::Statement(stmt_idx) => {
+                    for stmt in &block.statements[..stmt_idx] {
+                        if !simulate_statement_stack(
+                            &stmt.kind,
+                            &mut sim,
+                            local,
+                            classifications,
+                            def_use,
+                        ) {
+                            return false;
+                        }
+                    }
+
+                    let Some(stmt) = block.statements.get(stmt_idx) else {
+                        return false;
+                    };
+                    if !simulate_statement_stack(
+                        &stmt.kind,
+                        &mut sim,
+                        local,
+                        classifications,
+                        def_use,
+                    ) {
+                        return false;
+                    }
+                }
+                StatementRef::Terminator => {
+                    for stmt in &block.statements {
+                        if !simulate_statement_stack(
+                            &stmt.kind,
+                            &mut sim,
+                            local,
+                            classifications,
+                            def_use,
+                        ) {
+                            return false;
+                        }
+                    }
+
+                    let Some(term) = block.terminator.as_ref() else {
+                        return false;
+                    };
+                    if !simulate_terminator_stack(term, &mut sim, local, classifications, def_use) {
+                        return false;
+                    }
+                }
+            }
+
+            return sim.used;
+        }
+
+        // Intermediate blocks on the carried path must be straight-line gotos.
+        for stmt in &block.statements {
+            if !simulate_statement_stack(&stmt.kind, &mut sim, local, classifications, def_use) {
+                return false;
+            }
+        }
+
+        let Some(term) = block.terminator.as_ref() else {
+            return false;
+        };
+        let Terminator::Goto { target } = term else {
+            return false;
+        };
+
+        current_block = *target;
+    }
+}
+
+fn resolve_effective_use_location(
+    initial_use: &UseLocation,
+    mir: &MirFunction,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> Option<UseLocation> {
+    let mut current = initial_use.clone();
+    let mut visited_forwarded_locals = HashSet::new();
+
+    loop {
+        let StatementRef::Statement(stmt_idx) = current.statement_ref else {
+            return Some(current);
+        };
+
+        let block = mir.block(current.block);
+        let stmt = block.statements.get(stmt_idx)?;
+        let StatementKind::Assign {
+            destination: Place::Local(dest_local),
+            ..
+        } = &stmt.kind
+        else {
+            return Some(current);
+        };
+
+        let dest_class = classifications
+            .get(dest_local)
+            .copied()
+            .unwrap_or(LocalClassification::Real);
+
+        match dest_class {
+            // These assignments are skipped and their value is forwarded to uses
+            // of the destination local.
+            LocalClassification::Virtual | LocalClassification::CopyOf => {
+                if !visited_forwarded_locals.insert(*dest_local) {
+                    return None;
+                }
+
+                let dest_du = def_use.get(dest_local)?;
+                if dest_du.uses.len() != 1 {
+                    return None;
+                }
+
+                current = dest_du.uses[0].clone();
+            }
+            LocalClassification::Dead => return None,
+            _ => return Some(current),
+        }
+    }
+}
+
+fn simulate_statement_stack(
+    kind: &StatementKind,
+    sim: &mut StackCarrySim,
+    carried_local: Local,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> bool {
     match kind {
         StatementKind::Assign { destination, value } => match destination {
-            // For local stores, rvalue evaluation starts immediately.
-            Place::Local(_) => is_first_stack_pull_local_in_rvalue(local, value),
-            // For field/index stores, emission pulls destination base first.
-            Place::Field { base, .. } | Place::Index { base, .. } => {
-                is_first_stack_pull_local_in_place(local, base)
+            Place::Local(dest_local) => {
+                let class = classifications
+                    .get(dest_local)
+                    .copied()
+                    .unwrap_or(LocalClassification::Real);
+
+                match class {
+                    LocalClassification::Virtual
+                    | LocalClassification::CopyOf
+                    | LocalClassification::Dead => {
+                        // Statement skipped entirely in emitter.
+                        true
+                    }
+                    LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
+                        // Emit value, skip store.
+                        simulate_rvalue_pull_stack(
+                            value,
+                            sim,
+                            carried_local,
+                            classifications,
+                            def_use,
+                        )
+                    }
+                    LocalClassification::Parameter
+                    | LocalClassification::Real
+                    | LocalClassification::CallResultImmediate => {
+                        if !simulate_rvalue_pull_stack(
+                            value,
+                            sim,
+                            carried_local,
+                            classifications,
+                            def_use,
+                        ) {
+                            return false;
+                        }
+
+                        // Assignment to CallResultImmediate local keeps value on stack.
+                        if !matches!(class, LocalClassification::CallResultImmediate) {
+                            sim.pop_n(1)
+                        } else {
+                            true
+                        }
+                    }
+                }
+            }
+            Place::Field { base, .. } => {
+                if !simulate_place_pull_stack(base, sim, carried_local, classifications, def_use) {
+                    return false;
+                }
+                if !simulate_rvalue_pull_stack(value, sim, carried_local, classifications, def_use)
+                {
+                    return false;
+                }
+                sim.pop_n(2)
+            }
+            Place::Index { base, index, .. } => {
+                if !simulate_place_pull_stack(base, sim, carried_local, classifications, def_use) {
+                    return false;
+                }
+                if !simulate_place_pull_stack(
+                    &Place::Local(*index),
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                ) {
+                    return false;
+                }
+                if !simulate_rvalue_pull_stack(value, sim, carried_local, classifications, def_use)
+                {
+                    return false;
+                }
+                sim.pop_n(3)
             }
         },
-        StatementKind::Drop(place) => is_first_stack_pull_local_in_place(local, place),
-        StatementKind::Assert(operand) => is_first_stack_pull_local_in_operand(local, operand),
-
-        // No pull-based reads from the eval stack here, or there are pushes before
-        // the first pull (`WatchOptions` emits channel const first), which is unsafe
-        // for stack-carried values.
+        StatementKind::Drop(place) => {
+            if !simulate_place_pull_stack(place, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            sim.pop_n(1)
+        }
         StatementKind::Unwatch(_)
         | StatementKind::NotifyBlock { .. }
-        | StatementKind::WatchOptions { .. }
         | StatementKind::WatchNotify(_)
         | StatementKind::VizEnter(_)
         | StatementKind::VizExit(_)
-        | StatementKind::Nop => false,
+        | StatementKind::Nop => true,
+        StatementKind::WatchOptions { filter, .. } => {
+            // Emit channel const, filter operand, then Watch pops both.
+            sim.push();
+            if !simulate_operand_pull_stack(filter, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            sim.pop_n(2)
+        }
+        StatementKind::Assert(operand) => {
+            if !simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            sim.pop_n(1)
+        }
     }
 }
 
-/// Whether this local is the first stack-pulled value in a terminator.
-fn is_first_stack_pull_local_in_terminator(local: Local, term: &Terminator) -> bool {
+fn simulate_terminator_stack(
+    term: &Terminator,
+    sim: &mut StackCarrySim,
+    carried_local: Local,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> bool {
     match term {
-        Terminator::Goto { .. } | Terminator::Unreachable => false,
+        Terminator::Goto { .. } | Terminator::Unreachable => true,
         Terminator::Branch { condition, .. } => {
-            is_first_stack_pull_local_in_operand(local, condition)
+            if !simulate_operand_pull_stack(condition, sim, carried_local, classifications, def_use)
+            {
+                return false;
+            }
+            sim.pop_n(1)
         }
         Terminator::Switch { discriminant, .. } => {
-            is_first_stack_pull_local_in_operand(local, discriminant)
+            // All switch strategies pull the discriminant first; that's the carried-use point.
+            simulate_operand_pull_stack(discriminant, sim, carried_local, classifications, def_use)
         }
-        Terminator::Return => local == Local(0),
-        Terminator::Call { callee, .. } | Terminator::DispatchFuture { callee, .. } => {
-            is_first_stack_pull_local_in_operand(local, callee)
+        Terminator::Return => {
+            if !simulate_place_pull_stack(
+                &Place::Local(Local(0)),
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ) {
+                return false;
+            }
+            sim.pop_n(1)
         }
-        Terminator::Await { future, .. } => is_first_stack_pull_local_in_place(local, future),
+        Terminator::Call {
+            callee,
+            args,
+            destination,
+            ..
+        } => {
+            if !simulate_operand_pull_stack(callee, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            for arg in args {
+                if !simulate_operand_pull_stack(arg, sim, carried_local, classifications, def_use) {
+                    return false;
+                }
+            }
+
+            if !sim.pop_n(args.len() + 1) {
+                return false;
+            }
+            sim.push();
+            simulate_store_place_stack(destination, sim, classifications)
+        }
+        Terminator::DispatchFuture {
+            callee,
+            args,
+            future,
+            ..
+        } => {
+            if !simulate_operand_pull_stack(callee, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            for arg in args {
+                if !simulate_operand_pull_stack(arg, sim, carried_local, classifications, def_use) {
+                    return false;
+                }
+            }
+
+            if !sim.pop_n(args.len() + 1) {
+                return false;
+            }
+            sim.push();
+            simulate_store_place_stack(future, sim, classifications)
+        }
+        Terminator::Await {
+            future,
+            destination,
+            ..
+        } => {
+            if !simulate_place_pull_stack(future, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            if !sim.pop_n(1) {
+                return false;
+            }
+            sim.push();
+            simulate_store_place_stack(destination, sim, classifications)
+        }
     }
 }
 
-/// Whether this local is the first stack-pulled value in an rvalue.
-fn is_first_stack_pull_local_in_rvalue(local: Local, rvalue: &Rvalue) -> bool {
-    match rvalue {
-        Rvalue::Use(operand) => is_first_stack_pull_local_in_operand(local, operand),
-        Rvalue::BinaryOp { left, .. } => is_first_stack_pull_local_in_operand(local, left),
-        Rvalue::UnaryOp { operand, .. } => is_first_stack_pull_local_in_operand(local, operand),
-        Rvalue::Array(elements) => elements
-            .first()
-            .is_some_and(|elem| is_first_stack_pull_local_in_operand(local, elem)),
-        Rvalue::Map(entries) => entries
-            .first()
-            // Emitter pushes all values first, so first value is first pull.
-            .is_some_and(|(_key, value)| is_first_stack_pull_local_in_operand(local, value)),
-        Rvalue::Aggregate { kind, fields } => match kind {
-            AggregateKind::Array => fields
-                .first()
-                .is_some_and(|field| is_first_stack_pull_local_in_operand(local, field)),
-            // Emitter pushes AllocInstance/Copy before field pulls, which can bury
-            // stack-carried values.
-            AggregateKind::Class(_) => false,
-            // Emitter does not pull operands for enum-variant construction.
-            AggregateKind::EnumVariant { .. } => false,
-        },
-        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-            is_first_stack_pull_local_in_place(local, place)
-        }
-        Rvalue::IsType { operand, .. } => is_first_stack_pull_local_in_operand(local, operand),
-    }
-}
-
-/// Whether this local is the first stack-pulled value in an operand.
-fn is_first_stack_pull_local_in_operand(local: Local, operand: &Operand) -> bool {
-    match operand {
-        Operand::Copy(place) | Operand::Move(place) => {
-            is_first_stack_pull_local_in_place(local, place)
-        }
-        Operand::Constant(_) => false,
-    }
-}
-
-/// Whether this local is the first stack-pulled value in a place expression.
-fn is_first_stack_pull_local_in_place(local: Local, place: &Place) -> bool {
+fn simulate_store_place_stack(
+    place: &Place,
+    sim: &mut StackCarrySim,
+    classifications: &HashMap<Local, LocalClassification>,
+) -> bool {
     match place {
-        Place::Local(l) => *l == local,
-        Place::Field { base, .. } | Place::Index { base, .. } => {
-            is_first_stack_pull_local_in_place(local, base)
+        Place::Local(local) => match classifications
+            .get(local)
+            .copied()
+            .unwrap_or(LocalClassification::Real)
+        {
+            LocalClassification::Parameter | LocalClassification::Real => sim.pop_n(1),
+            LocalClassification::PhiLike
+            | LocalClassification::ReturnPhi
+            | LocalClassification::CallResultImmediate => true,
+            LocalClassification::Virtual
+            | LocalClassification::CopyOf
+            | LocalClassification::Dead => sim.pop_n(1),
+        },
+        Place::Field { .. } | Place::Index { .. } => false,
+    }
+}
+
+fn simulate_operand_pull_stack(
+    operand: &Operand,
+    sim: &mut StackCarrySim,
+    carried_local: Local,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> bool {
+    match operand {
+        Operand::Constant(_) => {
+            sim.push();
+            true
         }
+        Operand::Copy(place) | Operand::Move(place) => {
+            simulate_place_pull_stack(place, sim, carried_local, classifications, def_use)
+        }
+    }
+}
+
+fn simulate_place_pull_stack(
+    place: &Place,
+    sim: &mut StackCarrySim,
+    carried_local: Local,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> bool {
+    match place {
+        Place::Local(local) => {
+            if *local == carried_local {
+                if sim.depth != Some(0) || sim.used {
+                    return false;
+                }
+                sim.used = true;
+                return true;
+            }
+
+            let class = classifications
+                .get(local)
+                .copied()
+                .unwrap_or(LocalClassification::Real);
+            match class {
+                LocalClassification::Virtual => {
+                    let Some(def) = def_use.get(local).and_then(|du| du.def.as_ref()) else {
+                        return false;
+                    };
+                    simulate_rvalue_pull_stack(
+                        &def.rvalue,
+                        sim,
+                        carried_local,
+                        classifications,
+                        def_use,
+                    )
+                }
+                // Another stack-carried local in this context makes single-local simulation
+                // ambiguous; reject to keep the optimization sound.
+                other if is_stack_carried_local(other) => false,
+                _ => {
+                    sim.push();
+                    true
+                }
+            }
+        }
+        Place::Field { base, .. } => {
+            if !simulate_place_pull_stack(base, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            if !sim.pop_n(1) {
+                return false;
+            }
+            sim.push();
+            true
+        }
+        Place::Index { base, index, .. } => {
+            if !simulate_place_pull_stack(base, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            if !simulate_place_pull_stack(
+                &Place::Local(*index),
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ) {
+                return false;
+            }
+            if !sim.pop_n(2) {
+                return false;
+            }
+            sim.push();
+            true
+        }
+    }
+}
+
+fn simulate_rvalue_pull_stack(
+    rvalue: &Rvalue,
+    sim: &mut StackCarrySim,
+    carried_local: Local,
+    classifications: &HashMap<Local, LocalClassification>,
+    def_use: &HashMap<Local, LocalDefUse>,
+) -> bool {
+    match rvalue {
+        Rvalue::Use(operand) => {
+            simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use)
+        }
+        Rvalue::BinaryOp { left, right, .. } => {
+            if !simulate_operand_pull_stack(left, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            if !simulate_operand_pull_stack(right, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            if !sim.pop_n(2) {
+                return false;
+            }
+            sim.push();
+            true
+        }
+        Rvalue::UnaryOp { operand, .. } => {
+            if !simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            if !sim.pop_n(1) {
+                return false;
+            }
+            sim.push();
+            true
+        }
+        Rvalue::Array(elements) => {
+            for elem in elements {
+                if !simulate_operand_pull_stack(elem, sim, carried_local, classifications, def_use)
+                {
+                    return false;
+                }
+            }
+            if !sim.pop_n(elements.len()) {
+                return false;
+            }
+            sim.push();
+            true
+        }
+        Rvalue::Map(entries) => {
+            for (_key, value) in entries {
+                if !simulate_operand_pull_stack(value, sim, carried_local, classifications, def_use)
+                {
+                    return false;
+                }
+            }
+            for (key, _value) in entries {
+                if !simulate_operand_pull_stack(key, sim, carried_local, classifications, def_use) {
+                    return false;
+                }
+            }
+            if !sim.pop_n(entries.len() * 2) {
+                return false;
+            }
+            sim.push();
+            true
+        }
+        Rvalue::Aggregate { kind, fields } => match kind {
+            AggregateKind::Array => {
+                for field in fields {
+                    if !simulate_operand_pull_stack(
+                        field,
+                        sim,
+                        carried_local,
+                        classifications,
+                        def_use,
+                    ) {
+                        return false;
+                    }
+                }
+                if !sim.pop_n(fields.len()) {
+                    return false;
+                }
+                sim.push();
+                true
+            }
+            AggregateKind::Class(_) => {
+                // AllocInstance
+                sim.push();
+                // For each field: Copy(0), emit field, StoreField
+                for field in fields {
+                    sim.push();
+                    if !simulate_operand_pull_stack(
+                        field,
+                        sim,
+                        carried_local,
+                        classifications,
+                        def_use,
+                    ) {
+                        return false;
+                    }
+                    if !sim.pop_n(2) {
+                        return false;
+                    }
+                }
+                true
+            }
+            AggregateKind::EnumVariant { .. } => {
+                // Load variant index constant then AllocVariant (pop1 push1)
+                sim.push();
+                if !sim.pop_n(1) {
+                    return false;
+                }
+                sim.push();
+                true
+            }
+        },
+        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) => {
+            if !simulate_place_pull_stack(place, sim, carried_local, classifications, def_use) {
+                return false;
+            }
+            if !sim.pop_n(1) {
+                return false;
+            }
+            sim.push();
+            true
+        }
+        // TODO: mirror Len/IsType emission edge cases once those paths are cleaned up.
+        Rvalue::Len(_) | Rvalue::IsType { .. } => false,
     }
 }
 
@@ -1516,20 +2136,24 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
 }
 
 /// Check if a local is a "call result immediate": defined by Call/Await/DispatchFuture,
-/// used exactly once at the start of the continuation block.
+/// used exactly once in the continuation block.
 ///
 /// Call result immediate applies when:
 /// 1. The local is defined by a Call/Await/DispatchFuture terminator
 /// 2. It has exactly one use
 /// 3. The use is in the continuation block (target of the Call)
-/// 4. The use is at statement index 0 (first thing in the continuation block)
 ///
 /// This allows us to:
 /// - After Call: don't emit `StoreVar` (leave result on stack)
 /// - At use site: don't emit `LoadVar` (value already on stack from Call)
 ///
 /// This eliminates the redundant `StoreVar("_X"); LoadVar("_X")` pattern for call results.
-fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -> bool {
+fn is_call_result_immediate(
+    local: Local,
+    du: &LocalDefUse,
+    mir: &MirFunction,
+    _redirect_targets: &HashMap<BlockId, BlockId>,
+) -> bool {
     // Must have exactly one use
     if du.uses.len() != 1 {
         return false;
@@ -1545,120 +2169,25 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -
         return false;
     }
 
-    let use_loc = &du.uses[0];
-
-    // The use must be at the very start of the continuation block:
-    // - statement index 0 (first statement), OR
-    // - Terminator if the block has no statements (use is directly in terminator)
-    let use_block = mir.block(use_loc.block);
-    let is_first_use = use_loc.statement_ref == StatementRef::Statement(0)
-        || (use_loc.statement_ref == StatementRef::Terminator && use_block.statements.is_empty());
-    if !is_first_use {
-        return false;
-    }
-
-    // The stack-carried value must be consumed in the first pull position.
-    let use_is_stack_safe = match use_loc.statement_ref {
-        StatementRef::Statement(0) => use_block
-            .statements
-            .first()
-            .is_some_and(|stmt| is_first_stack_pull_local_in_statement(local, &stmt.kind)),
-        StatementRef::Terminator => {
-            use_block.statements.is_empty()
-                && use_block
-                    .terminator
-                    .as_ref()
-                    .is_some_and(|term| is_first_stack_pull_local_in_terminator(local, term))
-        }
-        StatementRef::Statement(_) => false,
-    };
-    if !use_is_stack_safe {
-        return false;
-    }
-
     // Get the defining block and check that its terminator is Call/Await/DispatchFuture
-    // with the continuation block being the use block
+    // that defines this local.
     let def_block = mir.block(def.block);
-    let continuation_target = match &def_block.terminator {
+    match &def_block.terminator {
         Some(Terminator::Call {
             destination,
-            target,
+            target: _,
             ..
-        }) => {
-            // Verify this Call defines our local
-            if matches!(destination, Place::Local(l) if *l == local) {
-                Some(*target)
-            } else {
-                None
-            }
-        }
+        }) => matches!(destination, Place::Local(l) if *l == local),
         Some(Terminator::Await {
             destination,
-            target,
+            target: _,
             ..
-        }) => {
-            // Verify this Await defines our local
-            if matches!(destination, Place::Local(l) if *l == local) {
-                Some(*target)
-            } else {
-                None
-            }
-        }
-        Some(Terminator::DispatchFuture { future, resume, .. }) => {
-            // Verify this DispatchFuture defines our local
-            if matches!(future, Place::Local(l) if *l == local) {
-                Some(*resume)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    };
-
-    // Check that the continuation block is the use block
-    if continuation_target != Some(use_loc.block) {
-        return false;
+        }) => matches!(destination, Place::Local(l) if *l == local),
+        Some(Terminator::DispatchFuture {
+            future, resume: _, ..
+        }) => matches!(future, Place::Local(l) if *l == local),
+        _ => false,
     }
-
-    // Critical check 1: if the continuation block ends with a Call or DispatchFuture,
-    // we cannot use CallResultImmediate. The reason is stack ordering:
-    // - Call/DispatchFuture expects stack layout: [callee, arg0, arg1, ...]
-    // - If we leave the call result on the stack and then emit the callee, we get
-    //   [result, callee] instead of [callee, result]
-    //
-    // This happens even if the local is used indirectly (e.g., through a copy that
-    // gets Virtual classification), because the intermediate copy's emit_operand_pull
-    // will emit nothing for the CallResultImmediate source.
-    let use_block = mir.block(use_loc.block);
-    if matches!(
-        &use_block.terminator,
-        Some(Terminator::DispatchFuture { .. } | Terminator::Call { .. })
-    ) {
-        return false;
-    }
-
-    // Critical check 2: if ANY statement in the continuation block is a class constructor
-    // (Aggregate::Class), we cannot use CallResultImmediate. The emit code for class
-    // constructors pushes AllocInstance onto the stack BEFORE consuming field operands.
-    // If the call result feeds into a class field (directly or through a Virtual/copy
-    // chain), the AllocInstance will bury the call result on the stack and the field
-    // emit will find the wrong value.
-    for stmt in &use_block.statements {
-        if matches!(
-            &stmt.kind,
-            StatementKind::Assign {
-                value: Rvalue::Aggregate {
-                    kind: AggregateKind::Class(_),
-                    ..
-                },
-                ..
-            }
-        ) {
-            return false;
-        }
-    }
-
-    true
 }
 
 /// Check if a local is a simple copy of another local (for copy propagation).
