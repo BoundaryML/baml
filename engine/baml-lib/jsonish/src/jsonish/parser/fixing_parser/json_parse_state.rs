@@ -222,6 +222,7 @@ impl JsonParseState {
                         }
                     }
                 }
+                counter += 1; // Match InArray: account for the last consumed character
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             Pos::Unknown => CloseStringResult::Continue,
@@ -237,6 +238,7 @@ impl JsonParseState {
                         }
                     }
                 }
+                counter += 1; // Match InArray: account for the last consumed character
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             Pos::InObjectValue => {
@@ -352,6 +354,7 @@ impl JsonParseState {
                         }
                     }
                 }
+                counter += 1; // Match InArray: account for the last consumed character
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             Pos::InArray => {
