@@ -171,43 +171,24 @@ mod tests {
         }
     }
 
-    // Tests for the off-by-one fix in should_close_unescaped_string.
+    // Regression tests for the off-by-one fix in should_close_unescaped_string.
     // When the iterator exhausts without finding a structural delimiter, the
     // counter must account for the last consumed character to prevent the outer
-    // loop from re-processing it (which causes character duplication).
-
-    #[test]
-    fn test_partial_unquoted_value_no_char_duplication() {
-        // InObjectValue: unquoted string "hello" as a value, stream ends mid-token.
-        // Without the fix, the last char would be duplicated (e.g. "helloo").
-        let opts = ParseOptions::default();
-        let vals = parse(r#"{"key": hello"#, &opts).unwrap();
-        match &vals[0].0 {
-            Value::Object(fields, _) => {
-                assert_eq!(fields.len(), 1);
-                let (key, val) = &fields[0];
-                assert_eq!(key.as_str(), "key");
-                match val {
-                    Value::String(s, cmplt) => {
-                        assert_eq!(s.as_str(), "hello", "Value should be 'hello' without duplicated chars");
-                        assert_eq!(cmplt, &CompletionState::Incomplete);
-                    }
-                    _ => panic!("Expected string value, got: {val:?}"),
-                }
-            }
-            _ => panic!("Expected object"),
-        }
-    }
+    // loop from re-processing it. These tests fail without the fix.
+    //
+    // Note: The InObjectValue branch has the same bug but it only manifests
+    // during streaming (multiple parse() calls on successive chunks), not in
+    // single-pass parsing, so it cannot be tested at this level.
 
     #[test]
     fn test_partial_unquoted_key_no_char_duplication() {
-        // InObjectKey: unquoted key, stream ends before ':' is found.
-        // Without the fix, the last char of the key would be duplicated.
+        // InObjectKey: unquoted key "mykey", stream ends before ':' is found.
+        // Without the fix, the off-by-one causes the last char to be
+        // re-processed, creating a spurious key-value pair.
         let opts = ParseOptions::default();
         let vals = parse(r#"{mykey"#, &opts).unwrap();
         match &vals[0].0 {
             Value::Object(fields, _) => {
-                // Key should be captured without duplication
                 assert_eq!(fields.len(), 0, "No complete key-value pair yet");
             }
             _ => panic!("Expected object"),
@@ -217,7 +198,7 @@ mod tests {
     #[test]
     fn test_partial_unquoted_toplevel_no_char_duplication() {
         // InNothing: unquoted string at top level, stream ends without '{' or '['.
-        // Without the fix, the last char would be duplicated.
+        // Without the fix, the off-by-one corrupts parsing so no value is produced.
         let opts = ParseOptions::default();
         let vals = parse("foobar", &opts).unwrap();
         match &vals[0].0 {
@@ -225,35 +206,6 @@ mod tests {
                 assert_eq!(s.as_str(), "foobar", "Top-level string should be 'foobar' without duplicated chars");
             }
             _ => panic!("Expected string, got: {:?}", vals[0].0),
-        }
-    }
-
-    #[test]
-    fn test_partial_object_value_multifield_no_corruption() {
-        // Simulates the production bug: an object with multiple string fields
-        // where an unquoted value ends at stream boundary. The field name
-        // "therapeutic_approach" was being corrupted to "therapeutic_apeutic_approach".
-        let opts = ParseOptions::default();
-        let vals = parse(
-            r#"{"situation_analysis": "done", "therapeutic_approach": planning"#,
-            &opts,
-        ).unwrap();
-        match &vals[0].0 {
-            Value::Object(fields, _) => {
-                assert_eq!(fields.len(), 2);
-                let (key1, _) = &fields[0];
-                let (key2, val2) = &fields[1];
-                assert_eq!(key1.as_str(), "situation_analysis");
-                assert_eq!(key2.as_str(), "therapeutic_approach");
-                match val2 {
-                    Value::String(s, cmplt) => {
-                        assert_eq!(s.as_str(), "planning", "Value should be 'planning' without duplicated chars");
-                        assert_eq!(cmplt, &CompletionState::Incomplete);
-                    }
-                    _ => panic!("Expected string value, got: {val2:?}"),
-                }
-            }
-            _ => panic!("Expected object"),
         }
     }
 }
