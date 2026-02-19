@@ -1196,10 +1196,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn len(&mut self) -> Result<(), Self::Error> {
-        // TODO: Proper length builtin call. Keep existing behavior for now.
-        if let Some(&global_idx) = self.globals.get("baml.Array.length") {
-            self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
-        }
+        // MIR `Rvalue::Len` is array length.
+        let global_idx = self
+            .globals
+            .get("baml.Array.length")
+            .copied()
+            .unwrap_or_else(|| panic!("undefined function: baml.Array.length"));
+        self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
+        self.emit(Instruction::Call(1));
         Ok(())
     }
 
@@ -1213,10 +1217,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 self.emit(Instruction::LoadConst(class_const));
                 self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
             } else {
+                self.emit(Instruction::Pop(1));
                 let idx = self.add_constant(ConstValue::Bool(false));
                 self.emit(Instruction::LoadConst(idx));
             }
         } else {
+            self.emit(Instruction::Pop(1));
             let idx = self.add_constant(ConstValue::Bool(false));
             self.emit(Instruction::LoadConst(idx));
         }

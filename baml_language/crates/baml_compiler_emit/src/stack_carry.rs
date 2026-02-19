@@ -688,13 +688,22 @@ impl PullSink for StackCarryPullSink<'_> {
     }
 
     fn len(&mut self) -> Result<(), Self::Error> {
-        // Keep current conservative policy until Len emission is stabilized.
-        Err(())
+        // Emitter lowers Len as: LoadGlobal(length), Call(1).
+        // Net stack effect: consume the input value, push result.
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
     }
 
     fn is_type(&mut self, _ty: &baml_type::Ty) -> Result<(), Self::Error> {
-        // Keep current conservative policy until IsType emission is stabilized.
-        Err(())
+        // Emitter consumes operand and pushes boolean result.
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
     }
 }
 
