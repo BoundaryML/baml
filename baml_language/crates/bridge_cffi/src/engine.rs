@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use bex_factory::Bex;
+use bex_project::Bex;
 use once_cell::sync::OnceCell;
 use sys_native::SysOpsExt;
 use tokio::runtime::Runtime;
@@ -43,7 +43,18 @@ pub fn initialize_runtime(
     root_path: &str,
     src_files: HashMap<String, String>,
 ) -> Result<(), BridgeError> {
-    let rt = bex_factory::new(root_path, &src_files, bex_factory::SysOps::native())?;
+    let physical_fs = vfs::PhysicalFS::new("/");
+    let vfs_root = vfs::VfsPath::new(physical_fs);
+    let vfs_path = vfs_root
+        .join(root_path)
+        .map_err(|e| bex_project::RuntimeError::Other(e.to_string()))?;
+
+    let files = src_files
+        .into_iter()
+        .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
+        .collect();
+
+    let rt = bex_project::new(&vfs_path, bex_project::SysOps::native(), &files)?;
 
     let mut guard = RUNTIME_INSTANCE
         .write()

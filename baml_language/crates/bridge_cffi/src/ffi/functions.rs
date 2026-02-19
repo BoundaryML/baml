@@ -86,10 +86,13 @@ fn call_function_inner(
     // Spawn async task with panic catching
     get_tokio_runtime().spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
-        let result =
-            AssertUnwindSafe(async { runtime.call_function(&func_name, kwargs.into()).await })
-                .catch_unwind()
-                .await;
+        let result = AssertUnwindSafe(async {
+            runtime
+                .call_function(&func_name, kwargs.into(), sys_types::CallId::default())
+                .await
+        })
+        .catch_unwind()
+        .await;
 
         match result {
             Ok(Ok(value)) => {

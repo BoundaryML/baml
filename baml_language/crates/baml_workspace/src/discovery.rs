@@ -1,13 +1,11 @@
 //! File discovery utilities.
 
-use std::path::{Path, PathBuf};
-
 use walkdir::WalkDir;
 
 /// Discover all BAML files in a project directory.
 ///
 /// Returns paths sorted for deterministic ordering.
-pub fn discover_baml_files(root: &Path) -> Vec<PathBuf> {
+pub fn discover_baml_files(root: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut files = Vec::new();
 
     for entry in WalkDir::new(root)

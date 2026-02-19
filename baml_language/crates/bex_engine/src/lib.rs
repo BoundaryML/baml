@@ -69,7 +69,7 @@ use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
-use sys_types::{OpError, SysOpResult};
+use sys_types::{CallId, OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 
@@ -233,7 +233,7 @@ pub struct BexEngine {
     /// Resolved class names for instance allocation
     resolved_class_names: HashMap<String, HeapPtr>,
     /// System operations provider.
-    sys_ops: sys_types::SysOps,
+    sys_ops: std::sync::Arc<sys_types::SysOps>,
     /// Context passed to `sys_ops` that need engine-level information.
     sys_op_ctx: sys_types::SysOpContext,
 
@@ -266,7 +266,7 @@ impl BexEngine {
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
     pub fn new(
         bytecode_program: bex_vm_types::Program,
-        sys_ops: sys_types::SysOps,
+        sys_ops: std::sync::Arc<sys_types::SysOps>,
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode = bex_vm::convert_program(bytecode_program)?;
@@ -538,6 +538,7 @@ impl BexEngine {
         &self,
         function_name: &str,
         args: Vec<BexExternalValue>,
+        call_id: CallId,
     ) -> Result<BexExternalValue, EngineError> {
         // Wait for any in-progress GC to complete.
         // This ensures Handles in args have stable indices.
@@ -574,7 +575,7 @@ impl BexEngine {
 
         // Run the event loop with epoch tracking
         let result = self
-            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch)
+            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch, call_id)
             .await;
 
         // Unregister from epoch
@@ -699,6 +700,7 @@ impl BexEngine {
         return_type: Ty,
         vm: &mut BexVm,
         my_epoch: u64,
+        call_id: CallId,
     ) -> Result<BexExternalValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
 
@@ -725,7 +727,7 @@ impl BexEngine {
                         .map(|v| self.vm_arg_to_bex_value(v))
                         .collect();
 
-                    match self.execute_sys_op(pending.operation, &args) {
+                    match self.execute_sys_op(pending.operation, &args, call_id) {
                         SysOpResult::Ready(result) => {
                             // Sync operation - set future to Ready without touching stack.
                             // The VM will continue to the Await instruction which will
@@ -858,10 +860,10 @@ impl BexEngine {
     /// All `sys_ops` (including LLM ops) go through the `SysOps` function pointer table.
     /// No more special-case matching — adding a new `#[sys_op]` in the DSL automatically
     /// gets dispatched here via the generated `SysOps::get()`.
-    fn execute_sys_op(&self, op: SysOp, args: &[BexExternalValue]) -> SysOpResult {
+    fn execute_sys_op(&self, op: SysOp, args: &[BexExternalValue], call_id: CallId) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        fn_ptr(&self.heap, args, &self.sys_op_ctx)
+        fn_ptr(&self.heap, args, &self.sys_op_ctx, call_id)
     }
 }
 

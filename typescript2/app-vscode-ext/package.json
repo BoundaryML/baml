@@ -1,7 +1,7 @@
 {
   "name": "app-vscode-ext",
-  "displayName": "BAML Playground",
-  "description": "BAML Playground VSCode Extension",
+  "displayName": "BAML",
+  "description": "BAML language support — syntax highlighting, hover, completions, diagnostics, go-to-definition",
   "version": "0.1.0",
   "publisher": "Boundary",
   "private": true,
@@ -10,30 +10,99 @@
     "vscode": ">=1.63.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onLanguage:baml"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "baml",
+        "aliases": ["BAML", "baml"],
+        "extensions": [".baml"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "baml-jinja",
+        "aliases": ["Jinja baml"],
+        "extensions": [".baml.jinja"]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "baml",
+        "scopeName": "source.baml",
+        "path": "./syntaxes/baml.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.baml-jinja": "baml-jinja",
+          "string.quoted.block.baml.prompt": "baml-jinja"
+        }
+      },
+      {
+        "language": "baml-jinja",
+        "scopeName": "source.baml-jinja",
+        "path": "./syntaxes/jinja.tmLanguage.json"
+      }
+    ],
     "commands": [
       {
         "command": "baml.openPlayground",
         "title": "Open Playground",
         "category": "BAML"
+      },
+      {
+        "command": "baml.openLogs",
+        "title": "Open Logs",
+        "category": "BAML"
+      },
+      {
+        "command": "baml.restartLanguageServer",
+        "title": "Restart Language Server",
+        "category": "BAML"
+      },
+      {
+        "command": "baml.stopLanguageServer",
+        "title": "Stop Language Server",
+        "category": "BAML"
+      },
+      {
+        "command": "baml.startLanguageServer",
+        "title": "Start Language Server",
+        "category": "BAML"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "BAML",
+      "properties": {
+        "baml.cliPath": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Path to baml-cli binary. If not set, looks for 'baml-cli' on PATH.",
+          "scope": "machine-overridable"
+        },
+        "baml.trace.server": {
+          "scope": "window",
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Logging level between the VS Code extension and the language server."
+        }
+      }
+    }
   },
   "scripts": {
     "dev": "tsup --watch --sourcemap",
     "build": "pnpm run typecheck && tsup",
+    "build:cli": "cargo build -p baml_cli --manifest-path ../../baml_language/Cargo.toml",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run"
   },
   "dependencies": {
-    "app-vscode-webview": "workspace:*"
+    "vscode-languageclient": "^9.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

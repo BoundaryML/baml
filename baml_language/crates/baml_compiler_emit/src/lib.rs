@@ -59,6 +59,14 @@ pub use bex_vm_types::{
     type_tags,
 };
 
+// ============================================================================
+// Database Trait
+// ============================================================================
+
+/// Database trait for MIR queries. Extends `baml_compiler_vir::Db`.
+#[salsa::db]
+pub trait Db: baml_compiler_mir::Db {}
+
 /// Generate bytecode for all functions in a project.
 ///
 /// This is the main entry point for project-wide code generation.
@@ -66,7 +74,7 @@ pub use bex_vm_types::{
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
-pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Program, LoweringError> {
+pub fn generate_project_bytecode(db: &dyn Db) -> Result<Program, LoweringError> {
     let project = db.project();
     compile_files(db, project.files(db))
 }
@@ -76,10 +84,7 @@ pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Progr
 /// This is useful for testing or when you have a subset of files.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
-pub fn compile_files(
-    db: &dyn baml_compiler_mir::Db,
-    files: &[SourceFile],
-) -> Result<Program, LoweringError> {
+pub fn compile_files(db: &dyn Db, files: &[SourceFile]) -> Result<Program, LoweringError> {
     // Hidden LLM builtins (not exposed to users but used by compiler-generated code)
     // These are in the #[hide] mod llm block and not included in builtins()
     // Format: (path, arity)

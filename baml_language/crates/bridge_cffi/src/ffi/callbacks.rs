@@ -1,6 +1,6 @@
 //! Callback registration and invocation.
 
-use bex_factory::BexExternalValue;
+use bex_project::BexExternalValue;
 use bridge_ctypes::external_to_cffi_value;
 use once_cell::sync::OnceCell;
 use prost::Message;

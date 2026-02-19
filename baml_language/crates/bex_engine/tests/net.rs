@@ -31,8 +31,10 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
     );
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
-    let result = engine.call_function("main", vec![]).await?;
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into())?;
+    let result = engine
+        .call_function("main", vec![], sys_types::CallId::default())
+        .await?;
 
     // Wait for server to finish
     server.await?;
@@ -59,8 +61,10 @@ async fn net_connect_failure() -> anyhow::Result<()> {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
-    let result = engine.call_function("main", vec![]).await;
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into())?;
+    let result = engine
+        .call_function("main", vec![], sys_types::CallId::default())
+        .await;
 
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
@@ -100,8 +104,10 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
     );
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
-    let result = engine.call_function("main", vec![]).await?;
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into())?;
+    let result = engine
+        .call_function("main", vec![], sys_types::CallId::default())
+        .await?;
 
     server.await?;
 

@@ -1,63 +1,46 @@
+/* Import only theme + utilities from Tailwind v4.
+   We deliberately skip preflight.css so its global reset
+   (* { margin:0; padding:0; border:0 solid; }) doesn't break the VS Code workbench. */
+@layer theme, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* ── Tell Tailwind to scan the pkg-playground source files too ─────────── */
+@source "../../pkg-playground/src/**/*.tsx";
+
+/* ── Theme tokens ─────────────────────────────────────────────────────── */
+@theme {
+  /* VS Code workbench tokens — used by the playground panel (SplitPreview) */
+  --color-vsc-bg: var(--vscode-editor-background, #1f1f1f);
+  --color-vsc-surface: var(--vscode-sideBar-background, #181818);
+  --color-vsc-panel: var(--vscode-panel-background, var(--vscode-editor-background, #1f1f1f));
+  --color-vsc-border: var(--vscode-panel-border, var(--vscode-editorWidget-border, #2b2b2b));
+  --color-vsc-border-subtle: var(--vscode-widget-border, #2b2b2b);
+  --color-vsc-text: var(--vscode-editor-foreground, #cccccc);
+  --color-vsc-text-bright: var(--vscode-foreground, #cccccc);
+  --color-vsc-text-muted: var(--vscode-descriptionForeground, #858585);
+  --color-vsc-text-faint: var(--vscode-disabledForeground, #6b6b6b);
+  --color-vsc-accent: var(--vscode-button-background, #0078d4);
+  --color-vsc-accent-fg: var(--vscode-button-foreground, #ffffff);
+  --color-vsc-accent-hover: var(--vscode-button-hoverBackground, #026ec1);
+  --color-vsc-list-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+  --color-vsc-green: var(--vscode-testing-iconPassed, #3fb950);
+  --color-vsc-red: var(--vscode-errorForeground, #f85149);
+  --color-vsc-yellow: var(--vscode-editorWarning-foreground, #d29922);
+  --color-vsc-yellow-subtle: var(--vscode-inputValidation-warningBackground, rgba(210,153,34,0.15));
+  --color-vsc-input-bg: var(--vscode-input-background, #313131);
+  --color-vsc-input-fg: var(--vscode-input-foreground, #cccccc);
+  --color-vsc-input-border: var(--vscode-input-border, transparent);
+
+  /* Fonts */
+  --font-vsc: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif);
+  --font-vsc-mono: var(--vscode-editor-font-family, "SF Mono", "Fira Code", Consolas, monospace);
+}
+
+/* ── Minimal base styles ──────────────────────────────────────────────── */
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
-  background: #f5f5f5;
-  color: #121212;
-}
-
-.app {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  min-height: 100vh;
-  padding: 1rem 2rem 2rem;
-  box-sizing: border-box;
-}
-
-.app__header {
-  grid-column: 1 / -1;
-}
-
-.app__header h1 {
-  margin: 0;
-  font-size: 1.75rem;
-}
-
-.app__editor,
-.app__preview {
-  background: white;
-  border-radius: 0.75rem;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-}
-
-textarea {
-  flex: 1;
-  padding: 0.75rem;
-  font-family: 'Fira Code', 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.95rem;
-  border: 1px solid rgba(15, 23, 42, 0.15);
-  border-radius: 0.5rem;
-  resize: none;
-}
-
-pre {
-  flex: 1;
-  margin: 0;
-  padding: 0.75rem;
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 0.5rem;
-  font-family: 'Fira Code', 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.9rem;
-  overflow: auto;
-}
-
-@media (max-width: 960px) {
-  .app {
-    grid-template-columns: 1fr;
-  }
+  overflow: hidden;
+  background: var(--color-vsc-bg);
+  color: var(--color-vsc-text);
 }

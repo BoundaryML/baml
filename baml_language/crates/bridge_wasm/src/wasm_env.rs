@@ -5,7 +5,7 @@
 //! host page to show an interactive prompt and resolve when the user submits.
 
 use js_sys::{Function, Promise};
-use sys_types::{OpErrorKind, SysOpEnv, SysOpOutput};
+use sys_types::{CallId, OpErrorKind, SysOpEnv, SysOpOutput};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -32,7 +32,7 @@ impl WasmEnv {
 }
 
 impl SysOpEnv for WasmEnv {
-    fn env_get(&self, key: String) -> SysOpOutput<Option<String>> {
+    fn env_get(&self, _call_id: CallId, key: String) -> SysOpOutput<Option<String>> {
         let env_fn = self.env_fn().clone();
         let result = env_fn
             .call1(&wasm_bindgen::JsValue::NULL, &key.into())
@@ -80,7 +80,7 @@ impl SysOpEnv for WasmEnv {
         }
     }
 
-    fn env_get_or_panic(&self, key: String) -> SysOpOutput<String> {
+    fn env_get_or_panic(&self, _call_id: CallId, key: String) -> SysOpOutput<String> {
         let env_fn = self.env_fn().clone();
         let key_for_err = key.clone();
         SysOpOutput::Async(Box::pin(SendFuture(async move {

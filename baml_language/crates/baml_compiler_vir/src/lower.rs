@@ -63,6 +63,8 @@ pub enum LoweringError {
         function_name: String,
         error: Box<LoweringError>,
     },
+    /// The project has diagnostics errors and cannot be compiled.
+    HasDiagnosticsErrors,
 }
 
 impl LoweringError {
@@ -115,6 +117,12 @@ impl std::fmt::Display for LoweringError {
                 error,
             } => {
                 write!(f, "in function '{function_name}': {error}")
+            }
+            LoweringError::HasDiagnosticsErrors => {
+                write!(
+                    f,
+                    "the project has diagnostics errors and cannot be compiled"
+                )
             }
         }
     }

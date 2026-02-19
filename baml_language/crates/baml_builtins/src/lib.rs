@@ -795,6 +795,14 @@ mod tests {
 // Embedded BAML Builtin Files
 // ============================================================================
 
+pub const BUILTIN_PATH_PREFIX: &str = "<builtin>/";
+
+macro_rules! builtin_path {
+    ($path:expr) => {
+        concat!("<builtin>/", $path)
+    };
+}
+
 /// Embedded BAML source files for built-in functions.
 ///
 /// These files are compiled together with user code and provide
@@ -835,7 +843,7 @@ pub mod baml_sources {
     /// These should be added to the compilation context before user code.
     pub const ALL: &[BuiltinSource] = &[BuiltinSource {
         namespace: "baml.llm",
-        path: "<builtin>/baml/llm.baml",
+        path: builtin_path!("baml/llm.baml"),
         source: LLM,
     }];
 }

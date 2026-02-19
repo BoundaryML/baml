@@ -22,6 +22,9 @@
       ],
       "@b/pkg-proto/*": [
         "../pkg-proto/src/*"
+      ],
+      "@b/bridge_wasm": [
+        "../pkg-playground/wasm"
       ]
     },
     "types": [

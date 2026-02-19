@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
-use bex_factory::builtin_types;
+use bex_heap::builtin_types;
 use js_sys::{Function, Object, Promise, Reflect};
-use sys_types::{OpErrorKind, SysOpHttp, SysOpOutput};
+use sys_types::{CallId, OpErrorKind, SysOpHttp, SysOpOutput};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -41,18 +41,23 @@ impl WasmHttp {
 }
 
 impl SysOpHttp for WasmHttp {
-    fn baml_http_fetch(&self, url: String) -> SysOpOutput<builtin_types::owned::HttpResponse> {
+    fn baml_http_fetch(
+        &self,
+        call_id: CallId,
+        url: String,
+    ) -> SysOpOutput<builtin_types::owned::HttpResponse> {
         let req = builtin_types::owned::HttpRequest {
             method: "GET".to_string(),
             url,
             headers: indexmap::IndexMap::new(),
             body: String::new(),
         };
-        self.baml_http_send(req)
+        self.baml_http_send(call_id, req)
     }
 
     fn baml_http_send(
         &self,
+        call_id: CallId,
         request: builtin_types::owned::HttpRequest,
     ) -> SysOpOutput<builtin_types::owned::HttpResponse> {
         let fetch_fn = self.fetch_fn().clone();
@@ -62,8 +67,10 @@ impl SysOpHttp for WasmHttp {
                 .map_err(|e| OpErrorKind::Other(format!("Failed to serialize headers: {e}")))?;
 
             let promise = fetch_fn
-                .call4(
+                .call5(
                     &wasm_bindgen::JsValue::NULL,
+                    #[allow(clippy::cast_precision_loss)]
+                    &wasm_bindgen::JsValue::from_f64(call_id.0 as f64),
                     &request.method.into(),
                     &request.url.clone().into(),
                     &headers_json.into(),
@@ -135,6 +142,7 @@ impl SysOpHttp for WasmHttp {
 
     fn baml_http_response_text(
         &self,
+        _call_id: CallId,
         response: builtin_types::owned::HttpResponse,
     ) -> SysOpOutput<String> {
         let registry = Arc::clone(&self.registry);
@@ -163,6 +171,7 @@ impl SysOpHttp for WasmHttp {
 
     fn baml_http_response_ok(
         &self,
+        _call_id: CallId,
         response: builtin_types::owned::HttpResponse,
     ) -> SysOpOutput<bool> {
         SysOpOutput::ok((200..300).contains(&response.status_code))

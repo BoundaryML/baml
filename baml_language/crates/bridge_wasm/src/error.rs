@@ -7,7 +7,7 @@ use wasm_bindgen::JsCast;
 #[derive(Debug, Error)]
 pub enum BridgeError {
     #[error("{0}")]
-    Runtime(#[from] bex_factory::RuntimeError),
+    Runtime(#[from] bex_project::RuntimeError),
 
     #[error("Protobuf decode error: {0}")]
     ProtobufDecode(#[from] prost::DecodeError),

@@ -19,10 +19,13 @@ async fn test_handle_prevents_gc_collection() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into()).unwrap();
 
     // Get a handle to a string object
-    let result = engine.call_function("return_string", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_string", vec![], sys_types::CallId::default())
+        .await
+        .unwrap();
     assert!(
         matches!(result, BexExternalValue::String(_)),
         "Expected String, got {result:?}"
@@ -46,10 +49,13 @@ async fn test_array_preserved_through_gc() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into()).unwrap();
 
     // Get a handle to the array
-    let result = engine.call_function("return_array", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_array", vec![], sys_types::CallId::default())
+        .await
+        .unwrap();
     assert!(
         matches!(result, BexExternalValue::Array { .. }),
         "Expected Array, got {result:?}"
@@ -88,11 +94,11 @@ async fn test_gc_updates_forwarding_pointers() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into()).unwrap();
 
     // Create objects
     let result = engine
-        .call_function("create_objects", vec![])
+        .call_function("create_objects", vec![], sys_types::CallId::default())
         .await
         .unwrap();
 
@@ -125,19 +131,31 @@ async fn test_multiple_handles_survive_gc() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into()).unwrap();
 
     // Create multiple handles
     let h1 = engine
-        .call_function("make_string", vec!["hello".into()])
+        .call_function(
+            "make_string",
+            vec!["hello".into()],
+            sys_types::CallId::default(),
+        )
         .await
         .unwrap();
     let h2 = engine
-        .call_function("make_string", vec!["world".into()])
+        .call_function(
+            "make_string",
+            vec!["world".into()],
+            sys_types::CallId::default(),
+        )
         .await
         .unwrap();
     let h3 = engine
-        .call_function("make_string", vec!["test".into()])
+        .call_function(
+            "make_string",
+            vec!["test".into()],
+            sys_types::CallId::default(),
+        )
         .await
         .unwrap();
 
@@ -166,17 +184,26 @@ async fn test_primitive_returns_are_external_values() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into()).unwrap();
 
     // Int should be BexExternalValue::Int
-    let result = engine.call_function("return_int", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_int", vec![], sys_types::CallId::default())
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Int(42)));
 
     // Null should be BexExternalValue::Null
-    let result = engine.call_function("return_null", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_null", vec![], sys_types::CallId::default())
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Null));
 
     // Bool should be BexExternalValue::Bool
-    let result = engine.call_function("return_bool", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_bool", vec![], sys_types::CallId::default())
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Bool(true)));
 }
