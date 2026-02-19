@@ -2347,6 +2347,10 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::LParen) {
                 p.bump(); // (
                 p.parse_expr();
+                // Optional type annotation: match (expr : Type)
+                if p.eat(TokenKind::Colon) {
+                    p.parse_type();
+                }
                 p.expect(TokenKind::RParen);
             } else {
                 p.error_unexpected_token("'(' after 'match'".to_string());

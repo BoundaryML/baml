@@ -103,6 +103,8 @@ pub enum ErrorLocation {
         /// Offset from template start where the error ends
         end_offset: u32,
     },
+    /// Error at a pattern (e.g., a typed binding in a match arm).
+    Pattern(PatId),
     /// Fallback to a direct span (for errors from signatures or other non-body contexts).
     /// This should be minimized over time as we add more ID-based tracking.
     Span(Span),
@@ -165,6 +167,9 @@ impl ErrorLocation {
                 } else {
                     Span::default()
                 }
+            }
+            ErrorLocation::Pattern(id) => {
+                ctx.expr_fn_source_map.pattern_span(*id).unwrap_or_default()
             }
             ErrorLocation::Span(span) => *span,
         }

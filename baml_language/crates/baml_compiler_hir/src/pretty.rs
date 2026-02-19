@@ -198,9 +198,17 @@ impl<'a> CodePrinter<'a> {
             Expr::Missing => {
                 self.output.push_str("<missing>");
             }
-            Expr::Match { scrutinee, arms } => {
+            Expr::Match {
+                scrutinee,
+                arms,
+                scrutinee_type,
+            } => {
                 self.output.push_str("match (");
                 self.print_expr(*scrutinee);
+                if let Some(type_id) = scrutinee_type {
+                    let type_ref = &self.body.types[*type_id];
+                    write!(self.output, ": {}", type_ref_to_str(type_ref)).unwrap();
+                }
                 self.output.push_str(") {\n");
                 self.indent += 1;
                 for arm_id in arms {
@@ -514,5 +522,6 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap_union: bool) -> String {
         TypeRef::Error => "<error>".to_string(),
         TypeRef::Unknown => "<unknown>".to_string(),
         TypeRef::BuiltinUnknown => "unknown".to_string(),
+        TypeRef::Type => "big_t_type".to_string(),
     }
 }

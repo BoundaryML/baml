@@ -57,6 +57,7 @@ pub fn setup_test_db(source: &str) -> ProjectDatabase {
 ///
 /// Panics with a descriptive message if any error-level diagnostics are found.
 /// Warnings and info-level diagnostics are ignored.
+#[track_caller]
 pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
     use baml_compiler_diagnostics::Severity;
 

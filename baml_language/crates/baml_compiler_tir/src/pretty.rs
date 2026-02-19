@@ -338,7 +338,9 @@ impl<'a> TreeRenderer<'a> {
                     self.pop_continuation();
                 }
             }
-            Expr::Match { scrutinee, arms } => {
+            Expr::Match {
+                scrutinee, arms, ..
+            } => {
                 // Render scrutinee
                 let scrut_prefix = self.make_prefix(arms.is_empty());
                 writeln!(self.output, "{scrut_prefix}scrutinee:").ok();

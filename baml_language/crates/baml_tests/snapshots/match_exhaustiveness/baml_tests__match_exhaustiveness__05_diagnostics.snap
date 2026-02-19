@@ -1,17 +1,16 @@
 ---
-source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
 expression: output
 ---
 === DIAGNOSTICS ===
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:478:34 ]
+     ╭─[ match_exhaustiveness.baml:479:9 ]
      │
- 478 │ ╭─▶         Status.Active => "first",
- 479 │ ├─▶         Status.Active => "second",
-     │ │                                        
-     │ ╰──────────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 479 │         Status.Active => "second",
+     │         ──────┬──────  
+     │               ╰──────── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Non-exhaustive match on `bool`: missing cases true, false
@@ -27,25 +26,23 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm
-    ╭─[ match_exhaustiveness.baml:26:26 ]
+    ╭─[ match_exhaustiveness.baml:27:9 ]
     │
- 26 │ ╭─▶         _ => "catch all",
- 27 │ ├─▶         n: int => "unreachable 1",
-    │ │                                        
-    │ ╰──────────────────────────────────────── Unreachable match arm
-    │     
-    │     Note: Error code: E0063
+ 27 │         n: int => "unreachable 1",
+    │         ───┬──  
+    │            ╰──── Unreachable match arm
+    │ 
+    │ Note: Error code: E0063
 ────╯
 
   [type] Error: Unreachable match arm
-    ╭─[ match_exhaustiveness.baml:27:35 ]
+    ╭─[ match_exhaustiveness.baml:28:9 ]
     │
- 27 │ ╭─▶         n: int => "unreachable 1",
- 28 │ ├─▶         m: int => "unreachable 2"
-    │ │                                       
-    │ ╰─────────────────────────────────────── Unreachable match arm
-    │     
-    │     Note: Error code: E0063
+ 28 │         m: int => "unreachable 2"
+    │         ───┬──  
+    │            ╰──── Unreachable match arm
+    │ 
+    │ Note: Error code: E0063
 ────╯
 
   [type] Error: Non-exhaustive match on `bool`: missing cases true
@@ -61,36 +58,33 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:732:35 ]
+     ╭─[ match_exhaustiveness.baml:733:9 ]
      │
- 732 │ ╭─▶         x: Status => "any status",
- 733 │ ├─▶         Status.Active => "unreachable"
-     │ │                                            
-     │ ╰──────────────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 733 │         Status.Active => "unreachable"
+     │         ──────┬──────  
+     │               ╰──────── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:792:31 ]
+     ╭─[ match_exhaustiveness.baml:793:9 ]
      │
- 792 │ ╭─▶         x: bool => "any bool",
- 793 │ ├─▶         true => "unreachable"
-     │ │                                   
-     │ ╰─────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 793 │         true => "unreachable"
+     │         ──┬─  
+     │           ╰─── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:488:26 ]
+     ╭─[ match_exhaustiveness.baml:489:9 ]
      │
- 488 │ ╭─▶         1 => "first one",
- 489 │ ├─▶         1 => "second one",
-     │ │                                
-     │ ╰──────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 489 │         1 => "second one",
+     │         ┬  
+     │         ╰── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Non-exhaustive match on `Status?`: missing cases null
@@ -154,36 +148,33 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:865:35 ]
+     ╭─[ match_exhaustiveness.baml:866:9 ]
      │
- 865 │ ╭─▶         Status.Active => "active",
- 866 │ ├─▶         Status.Active => "duplicate 1",
-     │ │                                             
-     │ ╰───────────────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 866 │         Status.Active => "duplicate 1",
+     │         ──────┬──────  
+     │               ╰──────── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:867:39 ]
+     ╭─[ match_exhaustiveness.baml:868:9 ]
      │
- 867 │ ╭─▶         Status.Inactive => "inactive",
- 868 │ ├─▶         Status.Active => "duplicate 2",
-     │ │                                             
-     │ ╰───────────────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 868 │         Status.Active => "duplicate 2",
+     │         ──────┬──────  
+     │               ╰──────── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:854:35 ]
+     ╭─[ match_exhaustiveness.baml:855:13 ]
      │
- 854 │ ╭─▶             false => "zero false",
- 855 │ ├─▶             true => "unreachable nested"
-     │ │                                              
-     │ ╰────────────────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 855 │             true => "unreachable nested"
+     │             ──┬─  
+     │               ╰─── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Non-exhaustive match on `MaybeOk`: missing cases 200
@@ -223,14 +214,13 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:806:37 ]
+     ╭─[ match_exhaustiveness.baml:807:9 ]
      │
- 806 │ ╭─▶         s: Success | (Failure) => 0,
- 807 │ ├─▶         f: Failure => 1
-     │ │                             
-     │ ╰───────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 807 │         f: Failure => 1
+     │         ─────┬────  
+     │              ╰────── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Non-exhaustive match on `OkOrCreated`: missing cases 201
@@ -365,25 +355,23 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm
-    ╭─[ match_exhaustiveness.baml:18:26 ]
+    ╭─[ match_exhaustiveness.baml:19:9 ]
     │
- 18 │ ╭─▶         _ => "catch all",
- 19 │ ├─▶         n: int => "never reached"
-    │ │                                       
-    │ ╰─────────────────────────────────────── Unreachable match arm
-    │     
-    │     Note: Error code: E0063
+ 19 │         n: int => "never reached"
+    │         ───┬──  
+    │            ╰──── Unreachable match arm
+    │ 
+    │ Note: Error code: E0063
 ────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:497:30 ]
+     ╭─[ match_exhaustiveness.baml:498:9 ]
      │
- 497 │ ╭─▶         true => "first true",
- 498 │ ├─▶         true => "second true",
-     │ │                                    
-     │ ╰──────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 498 │         true => "second true",
+     │         ──┬─  
+     │           ╰─── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Unreachable match arm
@@ -446,12 +434,11 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:784:25 ]
+     ╭─[ match_exhaustiveness.baml:785:9 ]
      │
- 784 │ ╭─▶         n: int => "int",
- 785 │ ├─▶         42 => "unreachable"
-     │ │                                 
-     │ ╰───────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 785 │         42 => "unreachable"
+     │         ─┬  
+     │          ╰── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯

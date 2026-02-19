@@ -359,8 +359,10 @@ pub enum Expr {
     },
 
     /// Match expression: `match (scrutinee) { arm1, arm2, ... }`
+    /// Optional type annotation: `match (scrutinee: Type) { ... }`
     Match {
         scrutinee: ExprId,
+        scrutinee_type: Option<TypeId>,
         arms: Vec<MatchArmId>,
     },
 
@@ -555,7 +557,7 @@ pub struct MatchArm {
     pub body: ExprId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Literal {
     String(String),
     Int(i64),
@@ -1422,6 +1424,7 @@ impl LoweringContext {
 
         let match_span = self.span_from_node(node);
         let mut scrutinee = None;
+        let mut scrutinee_type = None;
         let mut arm_ids = Vec::new();
 
         // Use children_with_tokens to handle both node and token children
@@ -1433,6 +1436,16 @@ impl LoweringContext {
                             let (arm, spans) = self.lower_match_arm(&child);
                             let arm_id = self.alloc_match_arm(arm, spans);
                             arm_ids.push(arm_id);
+                        }
+                        SyntaxKind::TYPE_EXPR => {
+                            // Optional type annotation: match (expr : Type)
+                            if let Some(type_expr) =
+                                baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
+                            {
+                                let type_ref = crate::type_ref::TypeRef::from_ast(&type_expr);
+                                scrutinee_type =
+                                    Some(self.alloc_type(type_ref, child.text_range()));
+                            }
                         }
                         _ => {
                             // First non-MATCH_ARM child is the scrutinee (as a node)
@@ -1499,6 +1512,7 @@ impl LoweringContext {
 
         let expr_id = self.exprs.alloc(Expr::Match {
             scrutinee,
+            scrutinee_type,
             arms: arm_ids,
         });
 
@@ -1709,24 +1723,28 @@ impl LoweringContext {
                                     if let Some(el) = current_element.take() {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
-                                    elements.push(
-                                        self.patterns.alloc(Pattern::Literal(Literal::Bool(true))),
-                                    );
+                                    elements.push(self.alloc_pattern(
+                                        Pattern::Literal(Literal::Bool(true)),
+                                        token.text_range(),
+                                    ));
                                 }
                                 "false" => {
                                     if let Some(el) = current_element.take() {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
-                                    elements.push(
-                                        self.patterns.alloc(Pattern::Literal(Literal::Bool(false))),
-                                    );
+                                    elements.push(self.alloc_pattern(
+                                        Pattern::Literal(Literal::Bool(false)),
+                                        token.text_range(),
+                                    ));
                                 }
                                 "null" => {
                                     if let Some(el) = current_element.take() {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
-                                    elements
-                                        .push(self.patterns.alloc(Pattern::Literal(Literal::Null)));
+                                    elements.push(self.alloc_pattern(
+                                        Pattern::Literal(Literal::Null),
+                                        token.text_range(),
+                                    ));
                                 }
                                 _ => {
                                     // Finalize any previous element before starting new one
@@ -1778,18 +1796,21 @@ impl LoweringContext {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
+                            let range = token.text_range();
                             let mut value = token.text().parse::<i64>().unwrap_or(0);
                             if pending_negation {
                                 value = -value;
                                 pending_negation = false;
                             }
-                            elements
-                                .push(self.patterns.alloc(Pattern::Literal(Literal::Int(value))));
+                            elements.push(
+                                self.alloc_pattern(Pattern::Literal(Literal::Int(value)), range),
+                            );
                         }
                         SyntaxKind::FLOAT_LITERAL => {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
+                            let range = token.text_range();
                             let text = token.text().to_string();
                             let text = if pending_negation {
                                 pending_negation = false;
@@ -1797,13 +1818,15 @@ impl LoweringContext {
                             } else {
                                 text
                             };
-                            elements
-                                .push(self.patterns.alloc(Pattern::Literal(Literal::Float(text))));
+                            elements.push(
+                                self.alloc_pattern(Pattern::Literal(Literal::Float(text)), range),
+                            );
                         }
                         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
+                            let range = token.text_range();
                             let text = token.text().to_string();
                             let content = if text.starts_with("#\"") && text.ends_with("\"#") {
                                 text[2..text.len() - 2].to_string()
@@ -1813,8 +1836,10 @@ impl LoweringContext {
                                 text
                             };
                             elements.push(
-                                self.patterns
-                                    .alloc(Pattern::Literal(Literal::String(content))),
+                                self.alloc_pattern(
+                                    Pattern::Literal(Literal::String(content)),
+                                    range,
+                                ),
                             );
                         }
                         _ => {}
@@ -1827,6 +1852,7 @@ impl LoweringContext {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
+                            let range = child_node.text_range();
                             // Extract the string content from the node
                             // Trim whitespace trivia first, then remove quotes
                             let text = child_node.text().to_string();
@@ -1840,8 +1866,10 @@ impl LoweringContext {
                                 trimmed.to_string()
                             };
                             elements.push(
-                                self.patterns
-                                    .alloc(Pattern::Literal(Literal::String(content))),
+                                self.alloc_pattern(
+                                    Pattern::Literal(Literal::String(content)),
+                                    range,
+                                ),
                             );
                         }
                         SyntaxKind::TYPE_EXPR => {
@@ -1912,15 +1940,21 @@ impl LoweringContext {
     }
 
     /// Finalize a partially-built pattern element.
+    #[allow(clippy::cast_possible_truncation)]
     fn finalize_pattern_element(&mut self, element: PatternElement) -> PatId {
         match element {
-            PatternElement::Segments(segs, _start) => {
+            PatternElement::Segments(segs, start) => {
                 if segs.len() == 1 {
                     // Single segment → binding
-                    self.patterns
-                        .alloc(Pattern::Binding(segs.into_iter().next().unwrap()))
+                    let name = segs.into_iter().next().unwrap();
+                    let end = start + TextSize::new(name.as_str().len() as u32);
+                    self.alloc_pattern(Pattern::Binding(name), TextRange::new(start, end))
                 } else {
                     // Multi-segment → enum variant (all-but-last = enum name, last = variant)
+                    // Compute span: total length is all segments + dots between them
+                    let total_len: usize =
+                        segs.iter().map(|s| s.as_str().len()).sum::<usize>() + segs.len() - 1; // dots between segments
+                    let end = start + TextSize::new(total_len as u32);
                     let enum_name = Name::new(
                         segs[..segs.len() - 1]
                             .iter()
@@ -1929,8 +1963,10 @@ impl LoweringContext {
                             .join("."),
                     );
                     let variant = segs.into_iter().last().unwrap();
-                    self.patterns
-                        .alloc(Pattern::EnumVariant { enum_name, variant })
+                    self.alloc_pattern(
+                        Pattern::EnumVariant { enum_name, variant },
+                        TextRange::new(start, end),
+                    )
                 }
             }
             PatternElement::SegmentsAwaitingWord(segs, _start) => {
@@ -1939,9 +1975,10 @@ impl LoweringContext {
                 let last = segs.into_iter().last().unwrap_or_else(|| Name::new("_"));
                 self.patterns.alloc(Pattern::Binding(last))
             }
-            PatternElement::TypedBindingStart(name, _start) => {
+            PatternElement::TypedBindingStart(name, start) => {
                 // Incomplete typed binding (missing type) - treat as simple binding
-                self.patterns.alloc(Pattern::Binding(name))
+                let end = start + TextSize::new(name.as_str().len() as u32);
+                self.alloc_pattern(Pattern::Binding(name), TextRange::new(start, end))
             }
         }
     }

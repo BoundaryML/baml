@@ -1,0 +1,9 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== HIR ITEMS ===
+function test_big_t_type(function_name: string) -> string {
+      let t: big_t_type = baml.llm.get_return_type(function_name);
+      return "ok";
+}

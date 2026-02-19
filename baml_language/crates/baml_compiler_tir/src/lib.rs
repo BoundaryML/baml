@@ -2514,9 +2514,21 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         // Match expressions synthesize a type.
-        // TODO: we should support bidirectional type checking
-        Expr::Match { scrutinee, arms } => {
-            let scrutinee_ty = infer_expr(ctx, *scrutinee, body);
+        Expr::Match {
+            scrutinee,
+            scrutinee_type,
+            arms,
+        } => {
+            // Infer the scrutinee expression (needed for variable resolution / side effects)
+            let inferred_ty = infer_expr(ctx, *scrutinee, body);
+            // If there's an explicit type annotation, use it; otherwise use inferred type
+            let scrutinee_ty = if let Some(type_id) = scrutinee_type {
+                let type_ref = &body.types[*type_id];
+                let span = ctx.type_span(*type_id);
+                ctx.lower_type(type_ref, span)
+            } else {
+                inferred_ty
+            };
 
             if arms.is_empty() {
                 // Empty match is non-exhaustive (unless scrutinee is uninhabited).
@@ -2532,8 +2544,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 }
                 Ty::Unknown
             } else {
+                let arms_and_patterns: Vec<(MatchArmId, PatId)> = arms
+                    .iter()
+                    .map(|arm_id| (*arm_id, body.match_arms[*arm_id].pattern))
+                    .collect();
                 // Perform exhaustiveness checking and unreachable arm detection
-                check_match_exhaustiveness(ctx, &scrutinee_ty, arms, body, expr_id);
+                check_match_exhaustiveness(ctx, &scrutinee_ty, &arms_and_patterns, body, expr_id);
 
                 // Collect result types from all arms
                 let arm_types: Vec<Ty> = arms
@@ -2599,6 +2615,21 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 ///
 /// Returns the actual type of the expression (which should be a subtype of expected).
 fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
+    check_expr_with_info_location(ctx, expr_id, body, expected, None)
+}
+
+/// Check an expression with an optional location for the type constraint source.
+///
+/// When `info_location` is provided, type mismatches include a secondary location
+/// that points to where the expected type requirement came from (for example,
+/// a `let` type annotation).
+fn check_expr_with_info_location(
+    ctx: &mut TypeContext<'_>,
+    expr_id: ExprId,
+    body: &ExprBody,
+    expected: &Ty,
+    info_location: Option<&ErrorLocation>,
+) -> Ty {
     use baml_compiler_hir::Expr;
 
     let expr = &body.exprs[expr_id];
@@ -2692,7 +2723,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2765,7 +2796,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2804,7 +2835,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2826,7 +2857,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     expected: expected.clone(),
                     found: generalize_for_error(expected, &ty),
                     location,
-                    info_location: None,
+                    info_location: info_location.cloned(),
                 });
             }
             ty
@@ -2915,7 +2946,7 @@ fn extract_pattern_binding(
 fn check_match_exhaustiveness(
     ctx: &mut TypeContext<'_>,
     scrutinee_ty: &Ty,
-    arm_ids: &[MatchArmId],
+    arms_and_patterns: &[(MatchArmId, PatId)],
     body: &ExprBody,
     match_expr_id: ExprId,
 ) {
@@ -2933,13 +2964,17 @@ fn check_match_exhaustiveness(
         &ctx.type_alias_names,
     );
 
-    let result = checker.check(scrutinee_ty, arm_ids, body);
+    let arms = arms_and_patterns
+        .iter()
+        .map(|(arm, _)| *arm)
+        .collect::<Vec<_>>();
+    let result = checker.check(scrutinee_ty, &arms, body);
 
     // Report unreachable arms using position-independent MatchArmId
     for arm_idx in result.unreachable_arms {
-        let arm_id = arm_ids[arm_idx];
+        let pat_id = arms_and_patterns[arm_idx].1;
         ctx.push_error(TypeError::UnreachableArm {
-            location: ErrorLocation::MatchArm(arm_id),
+            location: ErrorLocation::Pattern(pat_id),
         });
     }
 
@@ -3457,9 +3492,16 @@ fn check_stmt_with_return(
                     let type_ref = &body.types[*type_id];
                     let span = ctx.type_span(*type_id);
                     let annot_ty = ctx.lower_type(type_ref, span);
+                    let annotation_location = ErrorLocation::Span(span);
                     // Use check_expr when we have an expected type
                     // check_expr already reports any type mismatch errors
-                    check_expr(ctx, *init, body, &annot_ty);
+                    check_expr_with_info_location(
+                        ctx,
+                        *init,
+                        body,
+                        &annot_ty,
+                        Some(&annotation_location),
+                    );
                     annot_ty
                 } else {
                     // No type annotation - infer and generalize for mutable variables
