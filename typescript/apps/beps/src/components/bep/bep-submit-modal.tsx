@@ -15,11 +15,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, FileText, FilePlus, Trash2, Send } from "lucide-react";
 import { useEditContext } from "./bep-edit-context";
+import { cn } from "@/lib/utils";
+import type { VersionMode } from "@/lib/types";
 
 interface BepSubmitModalProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (editNote: string) => void;
+  onSubmit: (editNote: string, versionMode: VersionMode) => void;
   onDiscard: () => void;
   hasConflict: boolean;
   conflictVersion?: number;
@@ -35,18 +37,21 @@ export function BepSubmitModal({
 }: BepSubmitModalProps) {
   const { changes, hasChanges } = useEditContext();
   const [editNote, setEditNote] = useState("");
+  const [versionMode, setVersionMode] = useState<VersionMode>("new");
 
   const changesList = Array.from(changes.values());
 
   const handleSubmit = () => {
-    onSubmit(editNote);
+    onSubmit(editNote, versionMode);
     setEditNote("");
+    setVersionMode("new");
   };
 
   const handleDiscard = () => {
     if (confirm("Are you sure you want to discard all changes? This cannot be undone.")) {
       onDiscard();
       setEditNote("");
+      setVersionMode("new");
     }
   };
 
@@ -59,19 +64,64 @@ export function BepSubmitModal({
             Ready to Submit?
           </DialogTitle>
           <DialogDescription className="text-left pt-2">
-            Submitting creates a new version of this proposal. As shepherd, you&apos;re
-            affirming this version reflects the community&apos;s input.
+            Choose whether this should be a full new version or a direct update
+            to the current one.
           </DialogDescription>
         </DialogHeader>
 
+        <div className="space-y-2">
+          <Label id="version-mode-label">How should these edits be applied?</Label>
+          <div className="grid gap-2 sm:grid-cols-2" role="group" aria-labelledby="version-mode-label">
+            <button
+              type="button"
+              onClick={() => setVersionMode("new")}
+              aria-pressed={versionMode === "new"}
+              className={cn(
+                "rounded-lg border p-3 text-left transition-colors",
+                versionMode === "new"
+                  ? "border-primary bg-primary/5"
+                  : "hover:bg-muted/50"
+              )}
+            >
+              <p className="font-medium text-sm">Create New Version</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Best for major feedback rounds. Starts a fresh comment cycle.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVersionMode("current")}
+              aria-pressed={versionMode === "current"}
+              className={cn(
+                "rounded-lg border p-3 text-left transition-colors",
+                versionMode === "current"
+                  ? "border-primary bg-primary/5"
+                  : "hover:bg-muted/50"
+              )}
+            >
+              <p className="font-medium text-sm">Apply To Current Version</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Best for small corrections. Keeps existing comments visible.
+              </p>
+            </button>
+          </div>
+        </div>
+
         {/* Shepherd message */}
         <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-2">
-          <p>
-            <strong>Comments</strong> from the current version will be preserved in history
-            but won&apos;t appear on the new version — they should be addressed in your changes.
-          </p>
+          {versionMode === "new" ? (
+            <p>
+              <strong>Comments</strong> from the current version will be preserved in history
+              but won&apos;t appear on the new version.
+            </p>
+          ) : (
+            <p>
+              <strong>Comments</strong> stay attached to the current version, so active threads
+              remain visible after your update.
+            </p>
+          )}
           <p className="text-muted-foreground">
-            <strong>Issues</strong> and <strong>Decisions</strong> carry forward across versions.
+            <strong>Issues</strong> and <strong>Decisions</strong> carry forward in either mode.
           </p>
         </div>
 
@@ -84,7 +134,9 @@ export function BepSubmitModal({
               </p>
               <p className="text-yellow-700 dark:text-yellow-300">
                 Someone else made changes (version {conflictVersion}) since you started editing.
-                Your changes will create a new version on top of theirs.
+                {versionMode === "new"
+                  ? " Your changes will create a new version on top of theirs."
+                  : " Your changes will be applied to the latest current version."}
               </p>
             </div>
           </div>
@@ -103,13 +155,12 @@ export function BepSubmitModal({
                   <span>{change.title}</span>
                   <Badge
                     variant="outline"
-                    className={`text-xs ${
-                      change.status === "new"
+                    className={`text-xs ${change.status === "new"
                         ? "text-green-600"
                         : change.status === "deleted"
                           ? "text-red-600"
                           : "text-blue-600"
-                    }`}
+                      }`}
                   >
                     {change.status}
                   </Badge>
@@ -121,12 +172,18 @@ export function BepSubmitModal({
 
         {/* Edit note */}
         <div className="space-y-2">
-          <Label htmlFor="edit-note">Version note (optional)</Label>
+          <Label htmlFor="edit-note">
+            {versionMode === "new" ? "Version note (optional)" : "Change note (optional)"}
+          </Label>
           <Input
             id="edit-note"
             value={editNote}
             onChange={(e) => setEditNote(e.target.value)}
-            placeholder="Briefly describe what changed..."
+            placeholder={
+              versionMode === "new"
+                ? "Briefly describe what changed in this version..."
+                : "Briefly describe this correction..."
+            }
           />
         </div>
 
@@ -143,7 +200,7 @@ export function BepSubmitModal({
             Keep Editing
           </Button>
           <Button onClick={handleSubmit} disabled={!hasChanges}>
-            Submit
+            {versionMode === "new" ? "Create Version" : "Apply Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>

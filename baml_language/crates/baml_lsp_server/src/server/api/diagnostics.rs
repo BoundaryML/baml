@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 
 use super::{
     ResultExt,
-    lsp_diagnostic::{LspConversionConfig, compute_line_starts, to_lsp_diagnostic},
+    lsp_diagnostic::{LspConversionConfig, compute_line_starts, to_lsp_diagnostics},
 };
 use crate::{
     Session,
@@ -145,7 +145,7 @@ fn project_diagnostics(
 
     // Convert and add diagnostics
     for diag in &check_result.diagnostics {
-        if let Some((url, lsp_diag)) = to_lsp_diagnostic(diag, &config) {
+        for (url, lsp_diag) in to_lsp_diagnostics(diag, &config) {
             result.entry(url).or_default().push(lsp_diag);
         }
     }

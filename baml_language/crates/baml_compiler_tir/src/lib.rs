@@ -38,6 +38,7 @@ mod cycles;
 mod exhaustiveness;
 pub mod jinja;
 mod lower;
+mod narrowing;
 mod normalize;
 pub mod pretty;
 mod resolve;
@@ -50,6 +51,9 @@ use builtins::Bindings;
 pub use cycles::{validate_class_cycles, validate_type_alias_cycles};
 use exhaustiveness::ExhaustivenessChecker;
 use lower::lower_type_ref;
+use narrowing::{
+    extract_condition_narrowing, extract_early_return_narrowing, infer_union_member_field,
+};
 pub use normalize::find_recursive_aliases;
 pub use pretty::render_function_tree;
 use resolve::ResolutionMap;
@@ -2445,9 +2449,13 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         Expr::Block { stmts, tail_expr } => {
             ctx.push_scope();
 
-            // Type check statements
+            // Type check statements, applying narrowing after early-return ifs
             for &stmt_id in stmts {
                 check_stmt(ctx, stmt_id, body);
+
+                for (var_name, narrowed_ty) in extract_early_return_narrowing(ctx, stmt_id, body) {
+                    ctx.define(var_name, narrowed_ty);
+                }
             }
 
             // Type of block is type of tail expression
@@ -2466,24 +2474,16 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             then_branch,
             else_branch,
         } => {
-            // Condition must be bool
-            let cond_ty = infer_expr(ctx, *condition, body);
-            if !ctx.is_subtype_of(&cond_ty, &Ty::Bool) {
-                ctx.push_error(TypeError::TypeMismatch {
-                    expected: Ty::Bool,
-                    found: cond_ty,
-                    location,
-                    info_location: None,
-                });
-            }
+            // Condition: accept any type (truthiness check), not just bool
+            infer_expr(ctx, *condition, body);
 
-            // Check for instanceof narrowing
-            let instanceof_narrowing = extract_instanceof_narrowing(ctx, *condition, body);
-
-            // Infer then-branch with narrowed type if applicable
-            let then_ty = if let Some((var_name, narrowed_ty)) = &instanceof_narrowing {
+            // Apply true-branch narrowing (instanceof + null checks + truthiness)
+            let true_narrowings = extract_condition_narrowing(ctx, *condition, body, true);
+            let then_ty = if !true_narrowings.is_empty() {
                 ctx.push_scope();
-                ctx.define(var_name.clone(), narrowed_ty.clone());
+                for (var_name, narrowed_ty) in true_narrowings {
+                    ctx.define(var_name, narrowed_ty);
+                }
                 let ty = infer_expr(ctx, *then_branch, body);
                 ctx.pop_scope();
                 ty
@@ -2491,8 +2491,20 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 infer_expr(ctx, *then_branch, body)
             };
 
+            // Apply false-branch narrowing to else
+            let false_narrowings = extract_condition_narrowing(ctx, *condition, body, false);
             let else_ty = if let Some(else_expr) = else_branch {
-                infer_expr(ctx, *else_expr, body)
+                if !false_narrowings.is_empty() {
+                    ctx.push_scope();
+                    for (var_name, narrowed_ty) in false_narrowings {
+                        ctx.define(var_name, narrowed_ty);
+                    }
+                    let ty = infer_expr(ctx, *else_expr, body);
+                    ctx.pop_scope();
+                    ty
+                } else {
+                    infer_expr(ctx, *else_expr, body)
+                }
             } else {
                 Ty::Void
             };
@@ -2514,9 +2526,21 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         // Match expressions synthesize a type.
-        // TODO: we should support bidirectional type checking
-        Expr::Match { scrutinee, arms } => {
-            let scrutinee_ty = infer_expr(ctx, *scrutinee, body);
+        Expr::Match {
+            scrutinee,
+            scrutinee_type,
+            arms,
+        } => {
+            // Infer the scrutinee expression (needed for variable resolution / side effects)
+            let inferred_ty = infer_expr(ctx, *scrutinee, body);
+            // If there's an explicit type annotation, use it; otherwise use inferred type
+            let scrutinee_ty = if let Some(type_id) = scrutinee_type {
+                let type_ref = &body.types[*type_id];
+                let span = ctx.type_span(*type_id);
+                ctx.lower_type(type_ref, span)
+            } else {
+                inferred_ty
+            };
 
             if arms.is_empty() {
                 // Empty match is non-exhaustive (unless scrutinee is uninhabited).
@@ -2532,8 +2556,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 }
                 Ty::Unknown
             } else {
+                let arms_and_patterns: Vec<(MatchArmId, PatId)> = arms
+                    .iter()
+                    .map(|arm_id| (*arm_id, body.match_arms[*arm_id].pattern))
+                    .collect();
                 // Perform exhaustiveness checking and unreachable arm detection
-                check_match_exhaustiveness(ctx, &scrutinee_ty, arms, body, expr_id);
+                check_match_exhaustiveness(ctx, &scrutinee_ty, &arms_and_patterns, body, expr_id);
 
                 // Collect result types from all arms
                 let arm_types: Vec<Ty> = arms
@@ -2599,6 +2627,21 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 ///
 /// Returns the actual type of the expression (which should be a subtype of expected).
 fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expected: &Ty) -> Ty {
+    check_expr_with_info_location(ctx, expr_id, body, expected, None)
+}
+
+/// Check an expression with an optional location for the type constraint source.
+///
+/// When `info_location` is provided, type mismatches include a secondary location
+/// that points to where the expected type requirement came from (for example,
+/// a `let` type annotation).
+fn check_expr_with_info_location(
+    ctx: &mut TypeContext<'_>,
+    expr_id: ExprId,
+    body: &ExprBody,
+    expected: &Ty,
+    info_location: Option<&ErrorLocation>,
+) -> Ty {
     use baml_compiler_hir::Expr;
 
     let expr = &body.exprs[expr_id];
@@ -2610,9 +2653,13 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
         Expr::Block { stmts, tail_expr } => {
             ctx.push_scope();
 
-            // Type check statements with expected return type for better checking
+            // Type check statements, applying narrowing after early-return ifs
             for &stmt_id in stmts {
                 check_stmt_with_return(ctx, stmt_id, body, Some(expected));
+
+                for (var_name, narrowed_ty) in extract_early_return_narrowing(ctx, stmt_id, body) {
+                    ctx.define(var_name, narrowed_ty);
+                }
             }
 
             // Check tail expression against expected type
@@ -2633,16 +2680,16 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
             then_branch,
             else_branch,
         } => {
-            // Check condition against Bool type (checking mode)
-            check_expr(ctx, *condition, body, &Ty::Bool);
+            // Condition: accept any type (truthiness check), not just bool
+            infer_expr(ctx, *condition, body);
 
-            // Check for instanceof narrowing (same as infer_expr)
-            let instanceof_narrowing = extract_instanceof_narrowing(ctx, *condition, body);
-
-            // Check then-branch with narrowed type if applicable
-            let then_ty = if let Some((var_name, narrowed_ty)) = &instanceof_narrowing {
+            // Apply true-branch narrowing (instanceof + null checks + truthiness)
+            let true_narrowings = extract_condition_narrowing(ctx, *condition, body, true);
+            let then_ty = if !true_narrowings.is_empty() {
                 ctx.push_scope();
-                ctx.define(var_name.clone(), narrowed_ty.clone());
+                for (var_name, narrowed_ty) in true_narrowings {
+                    ctx.define(var_name, narrowed_ty);
+                }
                 let ty = check_expr(ctx, *then_branch, body, expected);
                 ctx.pop_scope();
                 ty
@@ -2650,8 +2697,20 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                 check_expr(ctx, *then_branch, body, expected)
             };
 
+            // Apply false-branch narrowing to else
+            let false_narrowings = extract_condition_narrowing(ctx, *condition, body, false);
             let else_ty = if let Some(else_expr) = else_branch {
-                check_expr(ctx, *else_expr, body, expected)
+                if !false_narrowings.is_empty() {
+                    ctx.push_scope();
+                    for (var_name, narrowed_ty) in false_narrowings {
+                        ctx.define(var_name, narrowed_ty);
+                    }
+                    let ty = check_expr(ctx, *else_expr, body, expected);
+                    ctx.pop_scope();
+                    ty
+                } else {
+                    check_expr(ctx, *else_expr, body, expected)
+                }
             } else {
                 Ty::Void
             };
@@ -2692,7 +2751,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2765,7 +2824,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2804,7 +2863,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                         expected: expected.clone(),
                         found: generalize_for_error(expected, &ty),
                         location,
-                        info_location: None,
+                        info_location: info_location.cloned(),
                     });
                 }
                 ty
@@ -2826,7 +2885,7 @@ fn check_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody, expec
                     expected: expected.clone(),
                     found: generalize_for_error(expected, &ty),
                     location,
-                    info_location: None,
+                    info_location: info_location.cloned(),
                 });
             }
             ty
@@ -2915,7 +2974,7 @@ fn extract_pattern_binding(
 fn check_match_exhaustiveness(
     ctx: &mut TypeContext<'_>,
     scrutinee_ty: &Ty,
-    arm_ids: &[MatchArmId],
+    arms_and_patterns: &[(MatchArmId, PatId)],
     body: &ExprBody,
     match_expr_id: ExprId,
 ) {
@@ -2933,13 +2992,17 @@ fn check_match_exhaustiveness(
         &ctx.type_alias_names,
     );
 
-    let result = checker.check(scrutinee_ty, arm_ids, body);
+    let arms = arms_and_patterns
+        .iter()
+        .map(|(arm, _)| *arm)
+        .collect::<Vec<_>>();
+    let result = checker.check(scrutinee_ty, &arms, body);
 
     // Report unreachable arms using position-independent MatchArmId
     for arm_idx in result.unreachable_arms {
-        let arm_id = arm_ids[arm_idx];
+        let pat_id = arms_and_patterns[arm_idx].1;
         ctx.push_error(TypeError::UnreachableArm {
-            location: ErrorLocation::MatchArm(arm_id),
+            location: ErrorLocation::Pattern(pat_id),
         });
     }
 
@@ -3005,48 +3068,6 @@ fn generalize_for_error(expected: &Ty, found: &Ty) -> Ty {
     } else {
         generalize(found)
     }
-}
-
-/// Extract instanceof narrowing info from a condition expression.
-///
-/// If the condition is `x instanceof Foo`, returns `Some((x, Foo_type))`.
-/// Otherwise returns `None`.
-fn extract_instanceof_narrowing(
-    _ctx: &TypeContext<'_>,
-    condition: ExprId,
-    body: &ExprBody,
-) -> Option<(Name, Ty)> {
-    use baml_compiler_hir::Expr;
-
-    let expr = &body.exprs[condition];
-
-    // Check if this is an instanceof expression
-    if let Expr::Binary { op, lhs, rhs } = expr {
-        if *op == baml_compiler_hir::BinaryOp::Instanceof {
-            // LHS should be a simple path (variable name)
-            if let Expr::Path(segments) = &body.exprs[*lhs] {
-                if segments.len() == 1 {
-                    let var_name = segments[0].clone();
-
-                    // RHS should be a simple path (type name)
-                    if let Expr::Path(type_segments) = &body.exprs[*rhs] {
-                        if type_segments.len() == 1 {
-                            use baml_compiler_hir::QualifiedName;
-                            let type_name = type_segments[0].clone();
-                            // Return the variable name and the narrowed type
-                            // Use TypeAlias as a fallback - will be resolved during normalization
-                            return Some((
-                                var_name,
-                                Ty::TypeAlias(QualifiedName::local(type_name)),
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    None
 }
 
 /// Infer the result type of a binary operation.
@@ -3214,16 +3235,10 @@ fn infer_unary_op(
 
     match op {
         Not => {
-            if matches!(operand, Ty::Bool | Ty::Literal(LiteralValue::Bool(_))) {
-                Ty::Bool
-            } else {
-                ctx.push_error(TypeError::InvalidUnaryOp {
-                    op: "!".to_string(),
-                    operand: generalize(operand),
-                    location,
-                });
-                Ty::Error
-            }
+            // `!` is a truthiness check: accepts any type, returns bool.
+            // For bool operands this is logical negation; for other types
+            // it converts to bool (falsy: null, false; truthy: everything else).
+            Ty::Bool
         }
         Neg => match operand {
             Ty::Int | Ty::Literal(LiteralValue::Int(_)) => Ty::Int,
@@ -3323,6 +3338,25 @@ fn infer_field_access(
             // (e.g., "baml.http.Response") while keeping simple names for locals.
             let key = fqn.display_name();
             ctx.lookup_class_field(&key, field).cloned()
+        }
+        // Union field access: x.field where x: A | B is allowed if all members
+        // have the field. Result type is the union of field types across members.
+        Ty::Union(members) => {
+            let field_types: Vec<Ty> = members
+                .iter()
+                .filter_map(|member| infer_union_member_field(ctx, member, field))
+                .collect();
+            if field_types.len() == members.len() {
+                // All members have the field — return union of field types
+                // (deduplicated: if all the same, just return that type)
+                if field_types.iter().all(|t| t == &field_types[0]) {
+                    Some(field_types.into_iter().next().unwrap())
+                } else {
+                    Some(Ty::Union(field_types))
+                }
+            } else {
+                None
+            }
         }
         Ty::Unknown => return Ty::Unknown,
         _ => None,
@@ -3457,9 +3491,16 @@ fn check_stmt_with_return(
                     let type_ref = &body.types[*type_id];
                     let span = ctx.type_span(*type_id);
                     let annot_ty = ctx.lower_type(type_ref, span);
+                    let annotation_location = ErrorLocation::Span(span);
                     // Use check_expr when we have an expected type
                     // check_expr already reports any type mismatch errors
-                    check_expr(ctx, *init, body, &annot_ty);
+                    check_expr_with_info_location(
+                        ctx,
+                        *init,
+                        body,
+                        &annot_ty,
+                        Some(&annotation_location),
+                    );
                     annot_ty
                 } else {
                     // No type annotation - infer and generalize for mutable variables
@@ -3523,8 +3564,8 @@ fn check_stmt_with_return(
             after,
             origin: _, // origin is used for diagnostics, not type checking
         } => {
-            // Check condition against Bool (bidirectional)
-            check_expr(ctx, *condition, body, &Ty::Bool);
+            // Condition: accept any type (truthiness check)
+            infer_expr(ctx, *condition, body);
             infer_expr(ctx, *while_body, body);
             // Type-check the after statement (for desugared C-style for loops)
             if let Some(after_stmt) = after {

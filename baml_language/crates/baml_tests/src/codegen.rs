@@ -241,7 +241,6 @@ fn compile_source(source: &str) -> CompileResult {
 }
 
 /// Helper function to assert that source code compiles to expected bytecode instructions.
-#[track_caller]
 pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
     let (functions, globals) = compile_source(input.source);
 

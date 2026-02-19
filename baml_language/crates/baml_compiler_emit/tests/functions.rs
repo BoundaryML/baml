@@ -143,8 +143,16 @@ fn mutable_variables() -> anyhow::Result<()> {
         expected: vec![
             (
                 "DeclareMutableInFunction",
-                // Dead store elimination: y=3 immediately overwritten by y=5, just return 5
-                vec![Instruction::LoadConst(Value::Int(5)), Instruction::Return],
+                // Multi-def locals are kept real (not virtualized)
+                vec![
+                    Instruction::InitLocals(1),
+                    Instruction::LoadConst(Value::Int(3)),
+                    Instruction::StoreVar("y".to_string()),
+                    Instruction::LoadConst(Value::Int(5)),
+                    Instruction::StoreVar("y".to_string()),
+                    Instruction::LoadVar("y".to_string()),
+                    Instruction::Return,
+                ],
             ),
             (
                 "MutableInArg",

@@ -71,7 +71,7 @@ impl<C: ErrorContext> TypeError<C> {
                 )
                 .with_primary_span(loc_fn(location));
                 if let Some(info_location) = info_location {
-                    diag.with_related(loc_fn(info_location), "Type defined here")
+                    diag.with_secondary(loc_fn(info_location), "Type required here")
                 } else {
                     diag
                 }
@@ -1058,6 +1058,25 @@ mod tests {
         assert_eq!(diag.code(), "E0001");
         assert!(diag.message.contains("int"));
         assert!(diag.message.contains("string"));
+        assert_eq!(diag.phase, DiagnosticPhase::Type);
+    }
+
+    #[test]
+    fn test_type_error_with_info_location_to_diagnostic() {
+        let error: TypeError<SpanContext> = TypeError::TypeMismatch {
+            expected: "int".to_string(),
+            found: "string".to_string(),
+            location: Span {
+                file_id: baml_base::FileId::new(0),
+                range: TextRange::new(20.into(), 30.into()),
+            },
+            info_location: Some(test_span()),
+        };
+
+        let diag = error.to_diagnostic(Clone::clone, |s| *s);
+        assert_eq!(diag.code(), "E0001");
+        assert_eq!(diag.annotations.len(), 2); // primary + info span
+        assert!(diag.related_info.is_empty());
         assert_eq!(diag.phase, DiagnosticPhase::Type);
     }
 

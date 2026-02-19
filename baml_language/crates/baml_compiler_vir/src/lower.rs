@@ -542,7 +542,9 @@ impl<'a> LoweringContext<'a> {
                 self.weave_block(stmts, *tail_expr, hir_body)
             }
 
-            HirExpr::Match { scrutinee, arms } => {
+            HirExpr::Match {
+                scrutinee, arms, ..
+            } => {
                 let scrutinee_id = self.lower_expr(*scrutinee, hir_body)?;
                 let mut lowered_arms = Vec::with_capacity(arms.len());
                 for arm_id in arms {

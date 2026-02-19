@@ -59,7 +59,7 @@ use crate::{LiteralValue, Ty, lower::lower_type_ref};
 /// `200 | 201`          -> Union([Literal(200), Literal(201)])
 /// `x: int if x > 0`    -> Empty (guards don't guarantee coverage)
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum ValueSet {
     /// Matches ALL possible values.
     ///
@@ -238,7 +238,7 @@ impl<'a> ExhaustivenessChecker<'a> {
             }
 
             // Check if this arm's values are already fully covered
-            if !has_guard && Self::is_fully_covered(&value_set, &covered) {
+            if !has_guard && Self::is_fully_covered(&value_set, &covered, &required) {
                 unreachable_arms.push(arm_idx);
                 // Don't skip - we still add to coverage for accurate error messages
             }
@@ -510,8 +510,12 @@ impl<'a> ExhaustivenessChecker<'a> {
     // ========================================================================
 
     /// Check if a value set is fully covered by existing coverage.
-    fn is_fully_covered(value_set: &ValueSet, covered: &[ValueSet]) -> bool {
-        is_value_set_covered(value_set, covered)
+    /// `value_set`: a particular branch's `ValueSet`.
+    /// covered: `ValueSet`s covered by earlier branches.
+    /// required: `ValueSet`s that need coverage, derived from the
+    ///           top-level match scrutinee.
+    fn is_fully_covered(value_set: &ValueSet, covered: &[ValueSet], required: &[ValueSet]) -> bool {
+        is_value_set_covered(value_set, covered, required)
     }
 
     /// Add a value set to the coverage list.
@@ -519,11 +523,11 @@ impl<'a> ExhaustivenessChecker<'a> {
         add_to_coverage(covered, value_set, self.enum_variants);
     }
 
-    /// Find value sets that are not covered.
+    /// Find value sets that are both required and not covered.
     fn find_uncovered(required: &[ValueSet], covered: &[ValueSet]) -> Vec<ValueSet> {
         required
             .iter()
-            .filter(|req| !Self::is_fully_covered(req, covered))
+            .filter(|req| !Self::is_fully_covered(req, covered, required))
             .cloned()
             .collect()
     }
@@ -535,9 +539,19 @@ impl<'a> ExhaustivenessChecker<'a> {
 
 /// Check if a value set is fully covered by existing coverage.
 ///
-/// This is a free function that can be used by both `ExhaustivenessChecker`
-/// and test mocks without duplicating logic.
-fn is_value_set_covered(value_set: &ValueSet, covered: &[ValueSet]) -> bool {
+/// `value_set`: the requirements of a particular match arm.
+/// covered: the requirements satisfied by another context (usually preceding match arms).
+/// required: the requirements imposed by the match scrutinee.
+fn is_value_set_covered(value_set: &ValueSet, covered: &[ValueSet], required: &[ValueSet]) -> bool {
+    // If the existing coverage covers all the requirements of the scrutinee, then
+    // any value_set being checked is already covered.
+    let all_requirements_are_covered = !required.is_empty()
+        && required
+            .iter()
+            .all(|requirement| is_value_set_covered(requirement, covered, &[]));
+    if all_requirements_are_covered {
+        return true;
+    }
     match value_set {
         ValueSet::All => {
             // Catch-all is never "already covered" - it's the ultimate cover
@@ -574,6 +588,7 @@ fn is_value_set_covered(value_set: &ValueSet, covered: &[ValueSet]) -> bool {
                             variant_name: variant_name.clone(),
                         },
                         std::slice::from_ref(s),
+                        required,
                     )
                 }),
                 _ => false,
@@ -586,14 +601,19 @@ fn is_value_set_covered(value_set: &ValueSet, covered: &[ValueSet]) -> bool {
                 ValueSet::OfType(name) => literal_has_type(lit, name),
                 ValueSet::Literal(covered_lit) => covered_lit == lit,
                 ValueSet::Union(subs) => subs.iter().any(|s| {
-                    is_value_set_covered(&ValueSet::Literal(lit.clone()), std::slice::from_ref(s))
+                    is_value_set_covered(
+                        &ValueSet::Literal(lit.clone()),
+                        std::slice::from_ref(s),
+                        required,
+                    )
                 }),
                 _ => false,
             })
         }
         ValueSet::Union(subs) => {
             // Union is covered if ALL sub-sets are covered
-            subs.iter().all(|s| is_value_set_covered(s, covered))
+            subs.iter()
+                .all(|s| is_value_set_covered(s, covered, required))
         }
     }
 }
@@ -710,10 +730,12 @@ mod tests {
         assert!(is_value_set_covered(
             &ValueSet::OfType(make_name("Success")),
             &covered,
+            &[]
         ));
         assert!(!is_value_set_covered(
             &ValueSet::OfType(make_name("Failure")),
             &covered,
+            &[]
         ));
     }
 
@@ -734,13 +756,13 @@ mod tests {
         ];
 
         // Both should be covered
-        assert!(is_value_set_covered(&required[0], &covered));
-        assert!(is_value_set_covered(&required[1], &covered));
+        assert!(is_value_set_covered(&required[0], &covered, &[]));
+        assert!(is_value_set_covered(&required[1], &covered, &[]));
 
         // Find uncovered - should be empty
         let uncovered: Vec<_> = required
             .iter()
-            .filter(|req| !is_value_set_covered(req, &covered))
+            .filter(|req| !is_value_set_covered(req, &covered, &[]))
             .cloned()
             .collect();
 
@@ -807,11 +829,13 @@ mod tests {
         assert!(is_value_set_covered(
             &ValueSet::Literal(Literal::Int(42)),
             &covered,
+            &[]
         ));
         // But not a string literal
         assert!(!is_value_set_covered(
             &ValueSet::Literal(Literal::String("hello".to_string())),
             &covered,
+            &[]
         ));
     }
 
@@ -822,10 +846,12 @@ mod tests {
         assert!(is_value_set_covered(
             &ValueSet::OfType(make_name("Success")),
             &covered,
+            &[]
         ));
         assert!(is_value_set_covered(
             &ValueSet::Literal(Literal::Int(42)),
             &covered,
+            &[]
         ));
         assert!(is_value_set_covered(
             &ValueSet::EnumVariant {
@@ -833,6 +859,7 @@ mod tests {
                 variant_name: make_name("Active"),
             },
             &covered,
+            &[]
         ));
     }
 }

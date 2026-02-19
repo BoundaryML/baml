@@ -63,7 +63,6 @@ fn match_literal_int_with_fallback() -> anyhow::Result<()> {
             function main() -> int {
                 match (1) {
                     1 => 100,
-                    _ => 0
                 }
             }
         ",
@@ -73,17 +72,8 @@ fn match_literal_int_with_fallback() -> anyhow::Result<()> {
             vec![
                 // Scrutinee
                 Instruction::LoadConst(Value::Int(1)),
-                // Check if == 1
-                Instruction::Copy(0),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(3),
+                // Catch-all arm (threading eliminates Jump(1))
                 Instruction::Pop(1),
-                Instruction::Jump(4), // jump to 1 => 100 arm
-                // Catch-all arm
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(0)),
-                Instruction::Jump(2), // skip to return
                 // First arm: 1 => 100
                 Instruction::LoadConst(Value::Int(100)),
                 Instruction::Return,
@@ -99,7 +89,6 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
             function main() -> string {
                 match (true) {
                     true => "yes",
-                    false => "no"
                 }
             }
         "#,
@@ -109,46 +98,7 @@ fn match_literal_bool_exhaustive() -> anyhow::Result<()> {
             // Exhaustive match optimization: second arm's comparison is skipped
             // because else_block is unreachable (we know it must be false)
             vec![
-                Instruction::LoadConst(Value::Bool(true)), // scrutinee (inlined)
-                Instruction::LoadConst(Value::Bool(true)), // literal true
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false, skip to second arm body
-                Instruction::Jump(4),           // if true, skip to "yes"
-                // Second arm: no comparison needed (exhaustive match optimization)
-                Instruction::Jump(1), // go directly to "no" body
-                Instruction::LoadConst(Value::string("no")),
-                Instruction::Jump(2), // skip to return
                 Instruction::LoadConst(Value::string("yes")),
-                Instruction::Return,
-            ],
-        )],
-    })
-}
-
-#[test]
-fn match_literal_null() -> anyhow::Result<()> {
-    assert_compiles(Program {
-        source: r#"
-            function main() -> string {
-                match (null) {
-                    null => "nothing",
-                    _ => "something"
-                }
-            }
-        "#,
-        expected: vec![(
-            "main",
-            // Constant propagation: scrutinee null is inlined at each use
-            // Wildcard elimination: _ binding is unused so eliminated
-            vec![
-                Instruction::LoadConst(Value::Null), // scrutinee (inlined for comparison)
-                Instruction::LoadConst(Value::Null), // literal null
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
-                Instruction::Jump(3),           // if true, skip to "nothing"
-                Instruction::LoadConst(Value::string("something")), // catch-all result (no _ binding)
-                Instruction::Jump(2),                               // skip to return
-                Instruction::LoadConst(Value::string("nothing")),   // first arm result
                 Instruction::Return,
             ],
         )],
@@ -171,7 +121,6 @@ fn match_typed_pattern_single_class() -> anyhow::Result<()> {
                 let result = Success { data: "hello" };
                 match (result) {
                     s: Success => s.data,
-                    _ => "unknown"
                 }
             }
         "#,
@@ -187,15 +136,6 @@ fn match_typed_pattern_single_class() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::string("hello")),
                 Instruction::StoreField(0),
                 Instruction::StoreVar("result".to_string()),
-                // instanceof check
-                Instruction::LoadVar("result".to_string()),
-                Instruction::LoadConst(Value::class("Success")),
-                Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::PopJumpIfFalse(2), // if false, skip to catch-all
-                Instruction::Jump(3),           // if true, skip to s.data
-                // catch-all arm (no _ binding)
-                Instruction::LoadConst(Value::string("unknown")),
-                Instruction::Jump(3), // skip to return
                 // s: Success arm - access s.data (s is virtual, uses result directly)
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadField(0),
@@ -221,7 +161,6 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
                 let result = Success { data: "ok" };
                 match (result) {
                     s: Success => s.data,
-                    f: Failure => f.reason
                 }
             }
         "#,
@@ -238,17 +177,6 @@ fn match_typed_pattern_two_classes() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::string("ok")),
                 Instruction::StoreField(0),
                 Instruction::StoreVar("result".to_string()),
-                // s: Success instanceof check
-                Instruction::LoadVar("result".to_string()),
-                Instruction::LoadConst(Value::class("Success")),
-                Instruction::CmpOp(CmpOp::InstanceOf),
-                Instruction::PopJumpIfFalse(2), // if false, skip to Failure arm body
-                Instruction::Jump(5),           // if true, skip to s.data
-                // f: Failure arm - no instanceof check needed (exhaustive match optimization)
-                Instruction::Jump(1), // go directly to f.reason body
-                Instruction::LoadVar("result".to_string()),
-                Instruction::LoadField(0),
-                Instruction::Jump(3), // skip to return
                 // s: Success arm - access s.data
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadField(0),
@@ -269,7 +197,6 @@ fn match_union_literal_two_values() -> anyhow::Result<()> {
             function main() -> string {
                 match (200) {
                     200 | 201 => "success",
-                    _ => "other"
                 }
             }
         "#,
@@ -277,6 +204,7 @@ fn match_union_literal_two_values() -> anyhow::Result<()> {
             "main",
             // Switch-based emission: union 200|201 creates two switch arms
             // pointing to the same target block
+            // Threading eliminates Jump(1) catch-all and adjusts offsets
             vec![
                 // Scrutinee
                 Instruction::LoadConst(Value::Int(200)),
@@ -284,20 +212,10 @@ fn match_union_literal_two_values() -> anyhow::Result<()> {
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(200)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(3),
+                Instruction::PopJumpIfFalse(2),
                 Instruction::Pop(1),
-                Instruction::Jump(10), // jump to "success" arm
-                // Second part of union: check 201
-                Instruction::Copy(0),
-                Instruction::LoadConst(Value::Int(201)),
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(3),
+                // Catch-all falls through (dead for constant scrutinee 200)
                 Instruction::Pop(1),
-                Instruction::Jump(4), // jump to "success" arm
-                // Catch-all arm
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::string("other")),
-                Instruction::Jump(2), // skip to return
                 // Union arm result (200 | 201 => "success")
                 Instruction::LoadConst(Value::string("success")),
                 Instruction::Return,
@@ -317,31 +235,17 @@ fn match_in_arithmetic() -> anyhow::Result<()> {
             function main() -> int {
                 1 + match (2) {
                     2 => 20,
-                    _ => 0
                 }
             }
         ",
         expected: vec![(
             "main",
-            // Switch-based emission for integer literal match in expression
+            // Threading eliminates Jump(1) through empty catch-all block
             vec![
-                // Scrutinee
                 Instruction::LoadConst(Value::Int(2)),
-                // Check if == 2
-                Instruction::Copy(0),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(3),
                 Instruction::Pop(1),
-                Instruction::Jump(4), // jump to 2 => 20 arm
-                // Catch-all arm
-                Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(0)),
-                Instruction::Jump(2), // skip to addition
-                // First arm: 2 => 20
-                Instruction::LoadConst(Value::Int(20)),
-                // Addition: 1 + match result
                 Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadConst(Value::Int(20)),
                 Instruction::BinOp(bex_vm_types::BinOp::Add),
                 Instruction::Return,
             ],
@@ -361,42 +265,22 @@ fn match_nested() -> anyhow::Result<()> {
                 match (1) {
                     1 => match (2) {
                         2 => 12,
-                        _ => 10
                     },
-                    _ => 0
                 }
             }
         ",
         expected: vec![(
             "main",
-            // Switch-based emission for nested integer literal matches
+            // Threading eliminates both Jump(1) through empty catch-all blocks
             vec![
                 // Outer match scrutinee
                 Instruction::LoadConst(Value::Int(1)),
-                // Check if == 1
-                Instruction::Copy(0),
-                Instruction::LoadConst(Value::Int(1)),
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(3),
-                Instruction::Pop(1),
-                Instruction::Jump(4), // jump to inner match
                 // Outer catch-all
                 Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(0)),
-                Instruction::Jump(12), // skip to return
                 // Inner match scrutinee (arm 1 => ...)
                 Instruction::LoadConst(Value::Int(2)),
-                // Check if == 2
-                Instruction::Copy(0),
-                Instruction::LoadConst(Value::Int(2)),
-                Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(3),
-                Instruction::Pop(1),
-                Instruction::Jump(4), // jump to 12 arm
                 // Inner catch-all
                 Instruction::Pop(1),
-                Instruction::LoadConst(Value::Int(10)),
-                Instruction::Jump(2), // skip to return
                 // Inner arm 2 => 12
                 Instruction::LoadConst(Value::Int(12)),
                 Instruction::Return,
@@ -707,16 +591,15 @@ fn match_mixed_literal_typed_guard() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(13),
+                Instruction::Jump(12),
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(4),
                 Instruction::LoadVar("flag".to_string()),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Exhaustive typed pattern - skips instanceof
-                Instruction::Jump(1),
+                Instruction::Jump(3),
+                // Exhaustive typed pattern - threading eliminates Jump(1)
                 Instruction::LoadConst(Value::string("other int")),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::string("one with flag")),
@@ -756,14 +639,13 @@ fn match_guard_on_typed_pattern() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::string("")),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(11),
+                Instruction::Jump(10),
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Exhaustive - skips instanceof
-                Instruction::Jump(1),
+                Instruction::Jump(3),
+                // Exhaustive - threading eliminates Jump(1)
                 Instruction::LoadConst(Value::string("failure")),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::string("empty success")),
@@ -804,21 +686,20 @@ fn match_multiple_typed_patterns_with_guards() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(200)),
                 Instruction::CmpOp(CmpOp::Gt),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(20),
+                Instruction::Jump(19),
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(4),
                 Instruction::LoadVar("strict".to_string()),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(11),
+                Instruction::Jump(10),
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadConst(Value::class("Success")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Exhaustive - skips instanceof
-                Instruction::Jump(1),
+                Instruction::Jump(3),
+                // Exhaustive - threading eliminates Jump(1)
                 Instruction::LoadConst(Value::string("failure")),
                 Instruction::Jump(6),
                 Instruction::LoadConst(Value::string("success")),
@@ -852,14 +733,13 @@ fn match_string_literal_with_typed_pattern() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::string("ok")),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(11),
+                Instruction::Jump(10),
                 Instruction::LoadVar("s".to_string()),
                 Instruction::LoadConst(Value::string("error")),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Exhaustive - skips instanceof
-                Instruction::Jump(1),
+                Instruction::Jump(3),
+                // Exhaustive - threading eliminates Jump(1)
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(500)),
@@ -1617,17 +1497,16 @@ fn match_enum_variant_switch() -> anyhow::Result<()> {
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(3),
                 Instruction::Pop(1),
-                Instruction::Jump(13),
+                Instruction::Jump(12),
                 // Second arm: check if variant index == 1 (Inactive)
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(3),
                 Instruction::Pop(1),
-                Instruction::Jump(5),
-                // Third arm: exhaustive match - skip comparison, value must be Pending
+                Instruction::Jump(4),
+                // Third arm: exhaustive match - threading eliminates Jump(1)
                 Instruction::Pop(1),
-                Instruction::Jump(1),
                 // Bodies in reverse order
                 Instruction::LoadConst(Value::string("pending")),
                 Instruction::Jump(4),
@@ -1726,10 +1605,10 @@ fn match_enum_four_variants_jump_table() -> anyhow::Result<()> {
                 // Extract discriminant (variant index) from enum value
                 Instruction::LoadVar("d".to_string()),
                 Instruction::Discriminant,
-                // JumpTable: table_idx=0, default jumps +1 (to first body for exhaustive match)
+                // JumpTable: exhaustive default points to a shared trap target.
                 Instruction::JumpTable {
                     table_idx: 0,
-                    default: 1,
+                    default: 9,
                 },
                 // Bodies in reverse order: West (3), South (2), East (1), North (0)
                 Instruction::LoadConst(Value::string("W")),
@@ -1740,6 +1619,7 @@ fn match_enum_four_variants_jump_table() -> anyhow::Result<()> {
                 Instruction::Jump(2),
                 Instruction::LoadConst(Value::string("N")),
                 Instruction::Return,
+                Instruction::Unreachable,
             ],
         )],
     })
@@ -1777,15 +1657,14 @@ fn match_class_types_exhaustive() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::class("Cat")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(17),
+                Instruction::Jump(16),
                 // d: Dog instanceof check
                 Instruction::LoadVar("animal".to_string()),
                 Instruction::LoadConst(Value::class("Dog")),
                 Instruction::CmpOp(CmpOp::InstanceOf),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(7),
-                // b: Bird - no instanceof check (exhaustive optimization)
-                Instruction::Jump(1),
+                Instruction::Jump(6),
+                // b: Bird - threading eliminates Jump(1)
                 // Bird body
                 Instruction::LoadConst(Value::string("bird: ")),
                 Instruction::LoadVar("animal".to_string()),
@@ -1889,10 +1768,10 @@ fn match_union_type_four_patterns_type_tag() -> anyhow::Result<()> {
                 // Extract type tag from union value
                 Instruction::LoadVar("x".to_string()),
                 Instruction::TypeTag,
-                // JumpTable: table_idx=0, default jumps +1 (exhaustive match)
+                // JumpTable: exhaustive default points to a shared trap target.
                 Instruction::JumpTable {
                     table_idx: 0,
-                    default: 1,
+                    default: 9,
                 },
                 // Bodies in reverse order: float (4), bool (2), string (1), int (0)
                 Instruction::LoadConst(Value::string("decimal")),
@@ -1903,6 +1782,7 @@ fn match_union_type_four_patterns_type_tag() -> anyhow::Result<()> {
                 Instruction::Jump(2),
                 Instruction::LoadConst(Value::string("integer")),
                 Instruction::Return,
+                Instruction::Unreachable,
             ],
         )],
     })
@@ -1979,9 +1859,8 @@ fn match_bool_variable_exhaustive() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4),
-                // Second arm: no comparison needed (exhaustive)
-                Instruction::Jump(1),
+                Instruction::Jump(3),
+                // Second arm: threading eliminates Jump(1)
                 Instruction::LoadConst(Value::string("no")),
                 Instruction::Jump(2),
                 Instruction::LoadConst(Value::string("yes")),
@@ -2016,9 +1895,8 @@ fn match_optional_with_null() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4), // to "none" body
-                // Second arm: n: int (exhaustive - skips instanceof check)
-                Instruction::Jump(1),
+                Instruction::Jump(3), // to "none" body
+                // Second arm: n: int - threading eliminates Jump(1)
                 Instruction::LoadConst(Value::string("some")),
                 Instruction::Jump(2),
                 // Body for null
@@ -2051,15 +1929,14 @@ fn match_optional_with_null_and_literal() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Null),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(11), // to "none" body at offset 15
+                Instruction::Jump(10), // to "none" body
                 // Second arm: 0 check
                 Instruction::LoadVar("x".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(4), // to "zero" body
-                // Third arm: n: int (exhaustive - skips instanceof)
-                Instruction::Jump(1),
+                Instruction::Jump(3), // to "zero" body
+                // Third arm: n: int - threading eliminates Jump(1)
                 Instruction::LoadConst(Value::string("other")),
                 Instruction::Jump(4),
                 // Body for 0

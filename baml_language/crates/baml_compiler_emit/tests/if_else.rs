@@ -422,15 +422,20 @@ fn if_else_in_arithmetic() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Phi-like optimization: if-else result stays on stack, no Store/Load needed.
+            // RHS if-expression is materialized into a local because binary-op pull order
+            // would otherwise consume the left operand first.
             vec![
+                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(3),
+                Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(3)),
-                Instruction::Jump(2),
+                Instruction::StoreVar("_2".to_string()),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(2)),
+                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::Return,
             ],
@@ -450,16 +455,19 @@ fn if_else_as_function_arg() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Phi-like optimization: if-else result stays on stack for the call.
-            // ReturnPhi optimization: Call result goes directly to stack, no Store/Load for _0.
+            // If-expression result is materialized into a local before the call argument pull.
             vec![
+                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(3),
+                Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(20)),
-                Instruction::Jump(2),
+                Instruction::StoreVar("_2".to_string()),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(10)),
+                Instruction::StoreVar("_2".to_string()),
                 Instruction::LoadGlobal(Value::function("identity")),
+                Instruction::LoadVar("_2".to_string()),
                 Instruction::Call(1),
                 Instruction::Return,
             ],
@@ -480,16 +488,19 @@ fn if_else_assigned_then_passed_to_call() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // tmp is PhiLike (assigned in both branches, used once).
-            // ReturnPhi optimization: Call result goes directly to stack.
+            // tmp is a real local and is loaded for the call.
             vec![
+                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(3),
+                Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(20)),
-                Instruction::Jump(2),
+                Instruction::StoreVar("tmp".to_string()),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(10)),
+                Instruction::StoreVar("tmp".to_string()),
                 Instruction::LoadGlobal(Value::function("identity")),
+                Instruction::LoadVar("tmp".to_string()),
                 Instruction::Call(1),
                 Instruction::Return,
             ],
@@ -508,10 +519,9 @@ fn parenthesized_if_else_in_arithmetic() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Phi-like optimization: second if-else result stays on stack.
-            // First if-else (_1) needs Store/Load because second if-else is computed before use.
+            // Both if-expression results are materialized to preserve pull order in binary-op.
             vec![
-                Instruction::InitLocals(1),
+                Instruction::InitLocals(2),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
@@ -522,11 +532,14 @@ fn parenthesized_if_else_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::StoreVar("_1".to_string()),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(3),
+                Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(4)),
-                Instruction::Jump(2),
+                Instruction::StoreVar("_3".to_string()),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(3)),
+                Instruction::StoreVar("_3".to_string()),
                 Instruction::LoadVar("_1".to_string()),
+                Instruction::LoadVar("_3".to_string()),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::Return,
             ],
@@ -544,10 +557,9 @@ fn chained_if_else_in_arithmetic() -> anyhow::Result<()> {
         ",
         expected: vec![(
             "main",
-            // Phi-like optimization: second if-else result stays on stack.
-            // First if-else (_1) needs Store/Load because second if-else is computed before use.
+            // Both if-expression results are materialized to preserve pull order in binary-op.
             vec![
-                Instruction::InitLocals(1),
+                Instruction::InitLocals(2),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
@@ -558,11 +570,14 @@ fn chained_if_else_in_arithmetic() -> anyhow::Result<()> {
                 Instruction::StoreVar("_1".to_string()),
                 Instruction::LoadConst(Value::Bool(false)),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(3),
+                Instruction::Jump(4),
                 Instruction::LoadConst(Value::Int(4)),
-                Instruction::Jump(2),
+                Instruction::StoreVar("_3".to_string()),
+                Instruction::Jump(3),
                 Instruction::LoadConst(Value::Int(3)),
+                Instruction::StoreVar("_3".to_string()),
                 Instruction::LoadVar("_1".to_string()),
+                Instruction::LoadVar("_3".to_string()),
                 Instruction::BinOp(BinOp::Add),
                 Instruction::Return,
             ],
@@ -620,9 +635,7 @@ fn if_without_else_statement() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadVar("x".to_string()),
@@ -652,9 +665,7 @@ fn if_without_else_with_local_var() -> anyhow::Result<()> {
             vec![
                 Instruction::InitLocals(1), // Pre-allocate for 'temp'
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreVar("temp".to_string()),
                 Instruction::LoadConst(Value::Int(0)), // result inlined
@@ -711,15 +722,11 @@ fn consecutive_if_without_else() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadVar("x".to_string()),
@@ -1029,10 +1036,7 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                // If false: skip to return
-                Instruction::Jump(3),
+                Instruction::PopJumpIfFalse(3),
                 // If true: a = 10
                 Instruction::LoadConst(Value::Int(10)),
                 Instruction::StoreVar("a".to_string()),
@@ -1085,13 +1089,13 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(21),
+                Instruction::Jump(19),
                 // if (a != b) where a=1 and b=1 are both inlined
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::CmpOp(CmpOp::NotEq),
                 Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(14),
+                Instruction::Jump(12),
                 // while (b != c) where b=3 and c=2 are both inlined
                 Instruction::LoadConst(Value::Int(3)),
                 Instruction::LoadConst(Value::Int(2)),
@@ -1103,10 +1107,7 @@ fn return_with_stack() -> anyhow::Result<()> {
                 Instruction::Return,
                 // Loop body: if (true)
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                // Jump back to while condition
-                Instruction::Jump(-10),
+                Instruction::PopJumpIfFalse(-8),
                 // return 0 (from if true in loop)
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::Return,
