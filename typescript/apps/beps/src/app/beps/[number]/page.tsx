@@ -328,7 +328,10 @@ function BepDetailPageInner() {
   };
 
   // Handle confirm submit
-  const handleConfirmSubmit = async (editNote: string) => {
+  const handleConfirmSubmit = async (
+    editNote: string,
+    versionMode: "new" | "current"
+  ) => {
     if (!bep || !userId) return;
 
     setIsSubmitting(true);
@@ -412,6 +415,7 @@ function BepDetailPageInner() {
         pages: pageUpdates.length > 0 ? pageUpdates : undefined,
         userId,
         editNote: editNote || undefined,
+        versionMode,
       });
 
       setShowSubmitModal(false);

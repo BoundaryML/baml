@@ -6,33 +6,41 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (image | audio | pdf | video)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4AudioOrImageOrPDFOrVideo {
     #[baml(name = "image")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_image")]
     Image(Image),
 
     #[baml(name = "audio")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_audio")]
     Audio(Audio),
 
     #[baml(name = "pdf")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_pdf")]
     PDF(Pdf),
 
     #[baml(name = "video")]
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_video")]
     Video(Video),
 }
 
-impl AsRef<Union4AudioOrImageOrPDFOrVideo> for Union4AudioOrImageOrPDFOrVideo {
+impl ::std::convert::AsRef<Union4AudioOrImageOrPDFOrVideo> for Union4AudioOrImageOrPDFOrVideo {
     fn as_ref(&self) -> &Union4AudioOrImageOrPDFOrVideo {
         self
     }
 }
 
-impl Default for Union4AudioOrImageOrPDFOrVideo {
+impl ::std::default::Default for Union4AudioOrImageOrPDFOrVideo {
     fn default() -> Self {
-        Self::Image(Default::default())
+        Self::Image(::std::default::Default::default())
     }
 }

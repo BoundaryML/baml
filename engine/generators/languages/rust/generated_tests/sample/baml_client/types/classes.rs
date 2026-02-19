@@ -6,39 +6,39 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Example {
     #[baml(name = "type")]
+    #[serde(rename = "type")]
     pub r#type: String,
-
     pub a: Checked<i64>,
-
     pub b: String,
 }
 
-impl AsRef<Example> for Example {
+impl ::std::convert::AsRef<Example> for Example {
     fn as_ref(&self) -> &Example {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Example2 {
     #[baml(name = "type")]
+    #[serde(rename = "type")]
     pub r#type: String,
-
     pub item: Example,
-
     pub element: String,
-
     pub element2: String,
 }
 
-impl AsRef<Example2> for Example2 {
+impl ::std::convert::AsRef<Example2> for Example2 {
     fn as_ref(&self) -> &Example2 {
         self
     }

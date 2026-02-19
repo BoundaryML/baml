@@ -1,5 +1,53 @@
 [workspace]
-members = [ "crates/*", "rig_tests/crates/*" ]
+members = [
+  "crates/baml_base",
+  "crates/baml_builtins",
+  "crates/baml_builtins_macros",
+  "crates/baml_cli",
+  "crates/baml_codegen_python",
+  "crates/baml_codegen_tests",
+  "crates/baml_codegen_types",
+  "crates/baml_compiler_diagnostics",
+  "crates/baml_compiler_emit",
+  "crates/baml_compiler_hir",
+  "crates/baml_compiler_lexer",
+  "crates/baml_compiler_mir",
+  "crates/baml_compiler_parser",
+  "crates/baml_compiler_syntax",
+  "crates/baml_compiler_tir",
+  "crates/baml_compiler_vir",
+  "crates/baml_db",
+  "crates/baml_fmt",
+  "crates/baml_lsp_actions",
+  "crates/baml_lsp_actions_tests",
+  "crates/baml_lsp_server",
+  "crates/baml_lsp_types",
+  "crates/baml_playground_wasm",
+  "crates/baml_project",
+  "crates/baml_tests",
+  "crates/baml_type",
+  "crates/baml_workspace",
+  "crates/bex_engine",
+  "crates/bex_events",
+  "crates/bex_external_types",
+  "crates/bex_heap",
+  "crates/bex_project",
+  "crates/bex_resource_types",
+  "crates/bex_vm",
+  "crates/bex_vm_types",
+  "crates/bridge_cffi",
+  "crates/bridge_ctypes",
+  "crates/bridge_python",
+  "crates/bridge_wasm",
+  "crates/sys_llm",
+  "crates/sys_native",
+  "crates/sys_types",
+  "crates/tools_onionskin",
+  "crates/tools_rig",
+  "crates/tools_size_gate",
+  "crates/tools_stow",
+  "rig_tests/crates/*",
+]
 resolver = "2"
 
 [workspace.package]
@@ -39,6 +87,7 @@ sys_llm = { path = "crates/sys_llm" }
 sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native" }
 baml_db = { path = "crates/baml_db" }
+baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp_actions = { path = "crates/baml_lsp_actions" }
 baml_lsp_server = { path = "crates/baml_lsp_server" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
@@ -51,7 +100,9 @@ bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
 bridge_ctypes = { path = "crates/bridge_ctypes" }
 bridge_cffi = { path = "crates/bridge_cffi" }
+bridge_python = { path = "crates/bridge_python" }
 bridge_wasm = { path = "crates/bridge_wasm" }
+bex_events = { path = "crates/bex_events" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 
 # External dependency for sys_llm jinja module
@@ -83,6 +134,7 @@ crossbeam = { version = "0.8.4", features = [ "crossbeam-channel" ] }
 crossterm = "0.28"
 ctrlc = "3.4"
 divan = { package = "codspeed-divan-compat", version = "*" }
+flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
 indexmap = { version = "2.1.0", features = [ "serde" ] }
@@ -95,6 +147,7 @@ lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 notify = "7.0"
 once_cell = "1.19"
+ouroboros = "0.18.5"
 parking_lot = { version = "0.12", features = [ "deadlock_detection" ] }
 paste = "1.0"
 percent-encoding = "2.3"
@@ -142,6 +195,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
   "fmt",
 ] }
 url = "2.5.2"
+uuid = { version = "1", features = [ "v4" ] }
 walkdir = { version = "2.4" }
 tsify = { version = "0.5", features = [ "js" ] }
 wasm-bindgen = "0.2"
@@ -150,6 +204,9 @@ wasm-bindgen-test = "0.3"
 js-sys = "0.3"
 webbrowser = "1.0.5"
 strum = { version = "0.26", features = [ "derive" ] }
+pyo3 = { version = "0.23.3", default-features = false }
+pyo3-async-runtimes = { version = "0.23" }
+pyo3-build-config = "0.23"
 wee_alloc = "0.4"
 wiremock = "0.6"
 vfs = "0.12"
@@ -215,7 +272,10 @@ large_stack_arrays = "allow"
 
 [profile.release]
 lto = "fat"
-codegen-units = 16
+codegen-units = 1
+opt-level = "s"   # smallest; try "s" if perf matters
+strip = "symbols" # still keep your strip -x in packaging
+panic = "abort"
 
 # Some crates don't change as much but benefit more from
 # more expensive optimization passes, so we selectively

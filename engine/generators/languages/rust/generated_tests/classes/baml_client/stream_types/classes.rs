@@ -10,17 +10,17 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SimpleClass {
     pub digits: Option<i64>,
 
     pub words: baml::StreamState<Option<String>>,
 }
 
-impl AsRef<SimpleClass> for SimpleClass {
+impl ::std::convert::AsRef<SimpleClass> for SimpleClass {
     fn as_ref(&self) -> &SimpleClass {
         self
     }

@@ -228,6 +228,9 @@ pub(super) fn complete_symbols(db: &dyn Db, project: Project) -> Vec<CompletionI
                         .with_sort_text(format!("1{name}")),
                 );
             }
+            ItemId::RetryPolicy(_) => {
+                // Retry policies are not offered as symbol completions.
+            }
         }
     }
 
@@ -245,55 +248,79 @@ fn format_function_signature_short(sig: &baml_compiler_hir::FunctionSignature) -
 // ============================================================================
 
 /// Completions after a dot (field access).
+///
+/// Handles both user-defined items (`MyClass.`, `Status.`) and namespaced
+/// paths (`baml.`, `baml.llm.`) by querying the HIR scope tree.
 pub(super) fn complete_field_access(
     db: &dyn Db,
     project: Project,
     base_text: &str,
 ) -> Vec<CompletionItem> {
+    use baml_db::{
+        Name,
+        baml_compiler_hir::path_resolve::{ScopeChild, scope_children},
+    };
+
+    // Split the base text into path segments and query the scope tree.
+    let segments: Vec<Name> = base_text.split('.').map(Name::new).collect();
+
+    let children = scope_children(db, project, &segments);
+
+    if !children.is_empty() {
+        return children
+            .into_iter()
+            .map(|child| match child {
+                ScopeChild::Namespace(name) => {
+                    CompletionItem::new(name.as_str(), CompletionKind::Property)
+                        .with_detail("namespace")
+                        .with_sort_text(format!("0{name}"))
+                }
+                ScopeChild::BuiltinFunction { name, .. } => {
+                    CompletionItem::new(name.as_str(), CompletionKind::Function)
+                        .with_detail("builtin function")
+                        .with_sort_text(format!("1{name}"))
+                }
+                ScopeChild::Function { name, .. } => {
+                    CompletionItem::new(name.as_str(), CompletionKind::Function)
+                        .with_detail("function")
+                        .with_sort_text(format!("1{name}"))
+                }
+                ScopeChild::Enum { name, .. } => {
+                    CompletionItem::new(name.as_str(), CompletionKind::Enum)
+                        .with_detail("enum")
+                        .with_sort_text(format!("1{name}"))
+                }
+                ScopeChild::Variant(name) => {
+                    CompletionItem::new(name.as_str(), CompletionKind::EnumVariant)
+                        .with_detail("variant")
+                        .with_sort_text(format!("0{name}"))
+                }
+            })
+            .collect();
+    }
+
+    // Fall back to class field completion for user-defined classes.
     let mut items = vec![];
     let project_items = project_items(db, project);
 
-    // Look for a class with this name
     for item in project_items.items(db) {
-        match item {
-            ItemId::Class(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let class = &item_tree[loc.id(db)];
+        if let ItemId::Class(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let class = &item_tree[loc.id(db)];
 
-                if class.name.as_str() == base_text {
-                    // Found the class - return its fields
-                    for field in &class.fields {
-                        let name = field.name.as_str();
-                        let type_str = type_ref_to_str(&field.type_ref);
-                        items.push(
-                            CompletionItem::new(name, CompletionKind::Field)
-                                .with_detail(type_str)
-                                .with_sort_text(format!("0{name}")),
-                        );
-                    }
-                    return items;
+            if class.name.as_str() == base_text {
+                for field in &class.fields {
+                    let name = field.name.as_str();
+                    let type_str = type_ref_to_str(&field.type_ref);
+                    items.push(
+                        CompletionItem::new(name, CompletionKind::Field)
+                            .with_detail(type_str)
+                            .with_sort_text(format!("0{name}")),
+                    );
                 }
+                return items;
             }
-            ItemId::Enum(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let enum_def = &item_tree[loc.id(db)];
-
-                if enum_def.name.as_str() == base_text {
-                    // Found the enum - return its variants
-                    for variant in &enum_def.variants {
-                        let name = variant.name.as_str();
-                        items.push(
-                            CompletionItem::new(name, CompletionKind::EnumVariant)
-                                .with_detail("variant")
-                                .with_sort_text(format!("0{name}")),
-                        );
-                    }
-                    return items;
-                }
-            }
-            _ => {}
         }
     }
 

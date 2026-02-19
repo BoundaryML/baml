@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Admin {
     pub id: Option<i64>,
 
@@ -25,14 +25,14 @@ pub struct Admin {
     pub r#type: Option<String>,
 }
 
-impl AsRef<Admin> for Admin {
+impl ::std::convert::AsRef<Admin> for Admin {
     fn as_ref(&self) -> &Admin {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ApiError {
     pub status: Option<String>,
 
@@ -41,14 +41,14 @@ pub struct ApiError {
     pub code: Option<i64>,
 }
 
-impl AsRef<ApiError> for ApiError {
+impl ::std::convert::AsRef<ApiError> for ApiError {
     fn as_ref(&self) -> &ApiError {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ApiPending {
     pub status: Option<String>,
 
@@ -57,28 +57,28 @@ pub struct ApiPending {
     pub eta: Option<i64>,
 }
 
-impl AsRef<ApiPending> for ApiPending {
+impl ::std::convert::AsRef<ApiPending> for ApiPending {
     fn as_ref(&self) -> &ApiPending {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ApiSuccess {
     pub status: Option<String>,
 
     pub data: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<ApiSuccess> for ApiSuccess {
+impl ::std::convert::AsRef<ApiSuccess> for ApiSuccess {
     fn as_ref(&self) -> &ApiSuccess {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Bird {
     pub species: Option<String>,
 
@@ -87,14 +87,14 @@ pub struct Bird {
     pub wingspan: Option<f64>,
 }
 
-impl AsRef<Bird> for Bird {
+impl ::std::convert::AsRef<Bird> for Bird {
     fn as_ref(&self) -> &Bird {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Cat {
     pub species: Option<String>,
 
@@ -103,28 +103,28 @@ pub struct Cat {
     pub lives: Option<i64>,
 }
 
-impl AsRef<Cat> for Cat {
+impl ::std::convert::AsRef<Cat> for Cat {
     fn as_ref(&self) -> &Cat {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Circle {
     pub shape: Option<String>,
 
     pub radius: Option<f64>,
 }
 
-impl AsRef<Circle> for Circle {
+impl ::std::convert::AsRef<Circle> for Circle {
     fn as_ref(&self) -> &Circle {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ComplexUnions {
     pub userOrProduct: Option<Union2ProductOrUser>,
 
@@ -137,14 +137,14 @@ pub struct ComplexUnions {
     pub multiTypeResult: Option<Union3ErrorOrSuccessOrWarning>,
 }
 
-impl AsRef<ComplexUnions> for ComplexUnions {
+impl ::std::convert::AsRef<ComplexUnions> for ComplexUnions {
     fn as_ref(&self) -> &ComplexUnions {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DataResponse {
     pub data: Option<String>,
 
@@ -153,14 +153,14 @@ pub struct DataResponse {
     pub status: Option<String>,
 }
 
-impl AsRef<DataResponse> for DataResponse {
+impl ::std::convert::AsRef<DataResponse> for DataResponse {
     fn as_ref(&self) -> &DataResponse {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DiscriminatedUnions {
     pub shape: Option<Union3CircleOrRectangleOrTriangle>,
 
@@ -169,14 +169,14 @@ pub struct DiscriminatedUnions {
     pub response: Option<Union3ApiErrorOrApiPendingOrApiSuccess>,
 }
 
-impl AsRef<DiscriminatedUnions> for DiscriminatedUnions {
+impl ::std::convert::AsRef<DiscriminatedUnions> for DiscriminatedUnions {
     fn as_ref(&self) -> &DiscriminatedUnions {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Dog {
     pub species: Option<String>,
 
@@ -185,14 +185,14 @@ pub struct Dog {
     pub goodBoy: Option<bool>,
 }
 
-impl AsRef<Dog> for Dog {
+impl ::std::convert::AsRef<Dog> for Dog {
     fn as_ref(&self) -> &Dog {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Error {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -204,14 +204,14 @@ pub struct Error {
     pub details: Option<String>,
 }
 
-impl AsRef<Error> for Error {
+impl ::std::convert::AsRef<Error> for Error {
     fn as_ref(&self) -> &Error {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ErrorResponse {
     pub error: Option<String>,
 
@@ -220,14 +220,14 @@ pub struct ErrorResponse {
     pub status: Option<String>,
 }
 
-impl AsRef<ErrorResponse> for ErrorResponse {
+impl ::std::convert::AsRef<ErrorResponse> for ErrorResponse {
     fn as_ref(&self) -> &ErrorResponse {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrimitiveUnions {
     pub stringOrInt: Option<types::Union2IntOrString>,
 
@@ -240,14 +240,14 @@ pub struct PrimitiveUnions {
     pub anyPrimitive: Option<types::Union4BoolOrFloatOrIntOrString>,
 }
 
-impl AsRef<PrimitiveUnions> for PrimitiveUnions {
+impl ::std::convert::AsRef<PrimitiveUnions> for PrimitiveUnions {
     fn as_ref(&self) -> &PrimitiveUnions {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Product {
     pub id: Option<i64>,
 
@@ -259,14 +259,14 @@ pub struct Product {
     pub r#type: Option<String>,
 }
 
-impl AsRef<Product> for Product {
+impl ::std::convert::AsRef<Product> for Product {
     fn as_ref(&self) -> &Product {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Rectangle {
     pub shape: Option<String>,
 
@@ -275,42 +275,42 @@ pub struct Rectangle {
     pub height: Option<f64>,
 }
 
-impl AsRef<Rectangle> for Rectangle {
+impl ::std::convert::AsRef<Rectangle> for Rectangle {
     fn as_ref(&self) -> &Rectangle {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct RecursiveUnion {
     pub value: Option<Union3IntOrRecursiveUnionOrString>,
 
     pub children: Vec<Union2RecursiveUnionOrString>,
 }
 
-impl AsRef<RecursiveUnion> for RecursiveUnion {
+impl ::std::convert::AsRef<RecursiveUnion> for RecursiveUnion {
     fn as_ref(&self) -> &RecursiveUnion {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Result {
     pub value: Option<types::Union3FloatOrIntOrString>,
 
     pub metadata: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<Result> for Result {
+impl ::std::convert::AsRef<Result> for Result {
     fn as_ref(&self) -> &Result {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Success {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -320,14 +320,14 @@ pub struct Success {
     pub data: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<Success> for Success {
+impl ::std::convert::AsRef<Success> for Success {
     fn as_ref(&self) -> &Success {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Triangle {
     pub shape: Option<String>,
 
@@ -336,14 +336,14 @@ pub struct Triangle {
     pub height: Option<f64>,
 }
 
-impl AsRef<Triangle> for Triangle {
+impl ::std::convert::AsRef<Triangle> for Triangle {
     fn as_ref(&self) -> &Triangle {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UnionArrays {
     pub mixedArray: Vec<types::Union2IntOrString>,
 
@@ -354,14 +354,14 @@ pub struct UnionArrays {
     pub nestedUnionArray: Vec<types::Union2ListIntOrString>,
 }
 
-impl AsRef<UnionArrays> for UnionArrays {
+impl ::std::convert::AsRef<UnionArrays> for UnionArrays {
     fn as_ref(&self) -> &UnionArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct User {
     pub id: Option<i64>,
 
@@ -371,14 +371,14 @@ pub struct User {
     pub r#type: Option<String>,
 }
 
-impl AsRef<User> for User {
+impl ::std::convert::AsRef<User> for User {
     fn as_ref(&self) -> &User {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Warning {
     #[baml(name = "type")]
     pub r#type: Option<String>,
@@ -388,7 +388,7 @@ pub struct Warning {
     pub level: Option<i64>,
 }
 
-impl AsRef<Warning> for Warning {
+impl ::std::convert::AsRef<Warning> for Warning {
     fn as_ref(&self) -> &Warning {
         self
     }

@@ -23,6 +23,7 @@ fn parse_phase(name: &str) -> Option<CompilerPhase> {
         "codegen" => Some(CompilerPhase::Codegen),
         "vmrunner" | "vm_runner" | "vm-runner" => Some(CompilerPhase::VmRunner),
         "metrics" => Some(CompilerPhase::Metrics),
+        "formatter" => Some(CompilerPhase::Formatter),
         _ => None,
     }
 }
@@ -49,7 +50,7 @@ struct Args {
     no_hot_reload: bool,
 
     /// Initial compiler phase to display (used to restore view after restart)
-    /// Values: lexer, parser, ast, hir, thir, typedir, mir, diagnostics, codegen, vmrunner, metrics
+    /// Values: lexer, parser, ast, hir, thir, typedir, mir, diagnostics, codegen, vmrunner, metrics, formatter
     #[arg(long = "phase", hide = true)]
     phase: Option<String>,
 }
@@ -242,6 +243,7 @@ fn run_increment_test(before: &Path, after: &Path) -> Result<()> {
         CompilerPhase::Mir,
         CompilerPhase::Diagnostics,
         CompilerPhase::Codegen,
+        CompilerPhase::Formatter,
     ] {
         println!("\n### {} ###", phase.name());
         let annotated = compiler.get_annotated_output(phase);

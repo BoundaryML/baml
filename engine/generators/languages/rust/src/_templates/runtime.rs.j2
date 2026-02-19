@@ -220,3 +220,77 @@ pub fn new_video_from_base64(base64: &str, mime_type: Option<&str>) -> baml::Vid
 pub fn new_collector(name: &str) -> baml::Collector {
     get_runtime().new_collector(name)
 }
+
+// =============================================================================
+// Serde Deserialize helpers
+// =============================================================================
+
+/// Referenced by `#[serde(deserialize_with = "__internal_media_serde::...")]` in created types,
+/// Since the actual media types don't have access to the runtime.
+pub(super) mod __internal_media_serde {
+    use super::{
+        new_audio_from_base64, new_audio_from_url, new_image_from_base64, new_image_from_url,
+        new_pdf_from_base64, new_pdf_from_url, new_video_from_base64, new_video_from_url,
+    };
+    use baml::__internal::{
+        BamlMediaRepr, BamlMediaReprContent,
+        serde::{self, Deserialize, Deserializer},
+    };
+
+    pub fn deserialize_image<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<baml::Image, D::Error> {
+        let repr = BamlMediaRepr::deserialize(deserializer)?;
+        let image = match repr.content {
+            BamlMediaReprContent::Url { url } => {
+                new_image_from_url(url.as_str(), repr.mime_type.as_deref())
+            }
+            BamlMediaReprContent::Base64 { base64 } => {
+                new_image_from_base64(base64.as_str(), repr.mime_type.as_deref())
+            }
+        };
+        Ok(image)
+    }
+    pub fn deserialize_audio<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<baml::Audio, D::Error> {
+        let repr = BamlMediaRepr::deserialize(deserializer)?;
+        let audio = match repr.content {
+            BamlMediaReprContent::Url { url } => {
+                new_audio_from_url(url.as_str(), repr.mime_type.as_deref())
+            }
+            BamlMediaReprContent::Base64 { base64 } => {
+                new_audio_from_base64(base64.as_str(), repr.mime_type.as_deref())
+            }
+        };
+        Ok(audio)
+    }
+    pub fn deserialize_pdf<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<baml::Pdf, D::Error> {
+        let repr = BamlMediaRepr::deserialize(deserializer)?;
+        let pdf = match repr.content {
+            BamlMediaReprContent::Url { url } => {
+                new_pdf_from_url(url.as_str(), repr.mime_type.as_deref())
+            }
+            BamlMediaReprContent::Base64 { base64 } => {
+                new_pdf_from_base64(base64.as_str(), repr.mime_type.as_deref())
+            }
+        };
+        Ok(pdf)
+    }
+    pub fn deserialize_video<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<baml::Video, D::Error> {
+        let repr = BamlMediaRepr::deserialize(deserializer)?;
+        let video = match repr.content {
+            BamlMediaReprContent::Url { url } => {
+                new_video_from_url(url.as_str(), repr.mime_type.as_deref())
+            }
+            BamlMediaReprContent::Base64 { base64 } => {
+                new_video_from_base64(base64.as_str(), repr.mime_type.as_deref())
+            }
+        };
+        Ok(video)
+    }
+}

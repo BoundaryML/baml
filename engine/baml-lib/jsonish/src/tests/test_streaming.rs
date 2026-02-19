@@ -642,3 +642,118 @@ test_partial_deserializer_streaming!(
     TypeIR::class("Response"),
     {"content": "test value with {"}
 );
+
+// Regression test for Discord bug report: (T @stream.done)[] with union types
+// When using `(OutputItem @stream.done)[]` where OutputItem is a union of classes,
+// incomplete list items should be filtered out during streaming. Items should
+// only appear once they're fully complete.
+const UNION_STREAM_DONE_LIST: &str = r#"
+class ToolCall {
+  name string
+  parameters string
+}
+
+class ExampleMessage {
+  role string
+  content string
+}
+
+type OutputItem = ToolCall | ExampleMessage
+"#;
+
+// Test: An incomplete object in the list should be filtered out because the
+// union element type has @stream.done.
+test_partial_deserializer_streaming!(
+    test_union_stream_done_list_incomplete_item,
+    UNION_STREAM_DONE_LIST,
+    // First object complete, second object incomplete (no closing brace, missing field)
+    r#"[{"name": "get_weather", "parameters": "{}"}, {"name": "add_reminder"#,
+    {
+        let inner = {
+            let mut u = TypeIR::union(vec![
+                TypeIR::class("ToolCall"),
+                TypeIR::class("ExampleMessage"),
+            ]);
+            u.meta_mut().streaming_behavior.done = true;
+            u
+        };
+        TypeIR::List(Box::new(inner), Default::default())
+    },
+    // Only the first (complete) item should appear.
+    // The second item is incomplete and should be filtered out by @stream.done.
+    [{"name": "get_weather", "parameters": "{}"}]
+);
+
+// Test: A single incomplete object should result in an empty list.
+test_partial_deserializer_streaming!(
+    test_union_stream_done_list_all_incomplete,
+    UNION_STREAM_DONE_LIST,
+    // Single object, incomplete
+    r#"[{"name": "get_weather"#,
+    {
+        let inner = {
+            let mut u = TypeIR::union(vec![
+                TypeIR::class("ToolCall"),
+                TypeIR::class("ExampleMessage"),
+            ]);
+            u.meta_mut().streaming_behavior.done = true;
+            u
+        };
+        TypeIR::List(Box::new(inner), Default::default())
+    },
+    // No items should appear because the only item is incomplete.
+    []
+);
+
+// Test: All complete objects should appear normally.
+test_partial_deserializer_streaming!(
+    test_union_stream_done_list_all_complete,
+    UNION_STREAM_DONE_LIST,
+    r#"[{"name": "get_weather", "parameters": "{}"}, {"role": "assistant", "content": "hello world"}]"#,
+    {
+        let inner = {
+            let mut u = TypeIR::union(vec![
+                TypeIR::class("ToolCall"),
+                TypeIR::class("ExampleMessage"),
+            ]);
+            u.meta_mut().streaming_behavior.done = true;
+            u
+        };
+        TypeIR::List(Box::new(inner), Default::default())
+    },
+    [
+        {"name": "get_weather", "parameters": "{}"},
+        {"role": "assistant", "content": "hello world"}
+    ]
+);
+
+// Test: Classes with @@stream.done inside a list (the workaround that does work).
+const UNION_BLOCK_STREAM_DONE_LIST: &str = r#"
+class ToolCall {
+  name string
+  parameters string
+  @@stream.done
+}
+
+class ExampleMessage {
+  role string
+  content string
+  @@stream.done
+}
+
+type OutputItem = ToolCall | ExampleMessage
+"#;
+
+test_partial_deserializer_streaming!(
+    test_union_block_stream_done_list_incomplete,
+    UNION_BLOCK_STREAM_DONE_LIST,
+    r#"[{"name": "get_weather", "parameters": "{}"}, {"name": "add_reminder"#,
+    {
+        let inner = TypeIR::union(vec![
+            TypeIR::class("ToolCall"),
+            TypeIR::class("ExampleMessage"),
+        ]);
+        TypeIR::List(Box::new(inner), Default::default())
+    },
+    [{"name": "get_weather", "parameters": "{}"}]
+);

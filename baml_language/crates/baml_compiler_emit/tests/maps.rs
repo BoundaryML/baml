@@ -114,7 +114,7 @@ fn contains() -> anyhow::Result<()> {
                 "UseMapContains",
                 vec![
                     // Init local for map (return value is PhiLike, _3 is CallResultImmediate)
-                    Instruction::LoadConst(Value::Null),
+                    Instruction::InitLocals(1),
                     // let map = CreateMapJSON();
                     Instruction::LoadGlobal(Value::function("CreateMapJSON")),
                     Instruction::Call(0),
@@ -159,7 +159,7 @@ fn modify() -> anyhow::Result<()> {
             "EditMapKey",
             vec![
                 // Init local for map (return value is ReturnPhi, no slot needed)
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 // let map = { "hi": 123 }; (values first, then keys)
                 Instruction::LoadConst(Value::Int(123)),
                 Instruction::LoadConst(Value::string("hi")),

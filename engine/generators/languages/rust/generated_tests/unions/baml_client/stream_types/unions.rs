@@ -7,11 +7,15 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{
+    BamlDecode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (int @stream.done | Streaming.Recursive1[] | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2IntOrListRecursive1 {
     #[baml(name = "int")]
     Int(i64),
@@ -20,21 +24,22 @@ pub enum Union2IntOrListRecursive1 {
     ListRecursive1(Vec<Recursive1>),
 }
 
-impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
+impl ::std::convert::AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
     fn as_ref(&self) -> &Union2IntOrListRecursive1 {
         self
     }
 }
 
-impl Default for Union2IntOrListRecursive1 {
+impl ::std::default::Default for Union2IntOrListRecursive1 {
     fn default() -> Self {
-        Self::Int(Default::default())
+        Self::Int(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Streaming.Recursive1 | int @stream.done | string | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3IntOrRecursive1OrString {
     #[baml(name = "Recursive1")]
     Recursive1(Recursive1),
@@ -46,14 +51,14 @@ pub enum Union3IntOrRecursive1OrString {
     String(String),
 }
 
-impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
+impl ::std::convert::AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
     fn as_ref(&self) -> &Union3IntOrRecursive1OrString {
         self
     }
 }
 
-impl Default for Union3IntOrRecursive1OrString {
+impl ::std::default::Default for Union3IntOrRecursive1OrString {
     fn default() -> Self {
-        Self::Recursive1(Default::default())
+        Self::Recursive1(::std::default::Default::default())
     }
 }

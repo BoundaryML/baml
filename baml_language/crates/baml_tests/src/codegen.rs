@@ -132,11 +132,13 @@ fn convert_instruction(
         bex_vm_types::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
         bex_vm_types::Instruction::Notify(idx) => Instruction::Notify(*idx),
         bex_vm_types::Instruction::Call(n) => Instruction::Call(*n),
+
         bex_vm_types::Instruction::Return => Instruction::Return,
         bex_vm_types::Instruction::Assert => Instruction::Assert,
         bex_vm_types::Instruction::NotifyBlock(idx) => Instruction::NotifyBlock(*idx),
         bex_vm_types::Instruction::VizEnter(idx) => Instruction::VizEnter(*idx),
         bex_vm_types::Instruction::VizExit(idx) => Instruction::VizExit(*idx),
+        bex_vm_types::Instruction::InitLocals(n) => Instruction::InitLocals(*n),
         bex_vm_types::Instruction::JumpTable { table_idx, default } => Instruction::JumpTable {
             table_idx: *table_idx,
             default: *default,
@@ -239,7 +241,6 @@ fn compile_source(source: &str) -> CompileResult {
 }
 
 /// Helper function to assert that source code compiles to expected bytecode instructions.
-#[track_caller]
 pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
     let (functions, globals) = compile_source(input.source);
 

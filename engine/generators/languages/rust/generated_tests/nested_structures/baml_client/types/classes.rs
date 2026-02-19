@@ -6,541 +6,455 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Address {
     pub street: String,
-
     pub city: String,
-
     pub state: String,
-
     pub country: String,
-
     pub postalCode: String,
-
     pub coordinates: Option<Coordinates>,
 }
 
-impl AsRef<Address> for Address {
+impl ::std::convert::AsRef<Address> for Address {
     fn as_ref(&self) -> &Address {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Approval {
     pub approver: String,
-
     pub date: String,
-
     pub amount: f64,
-
     pub notes: Option<String>,
 }
 
-impl AsRef<Approval> for Approval {
+impl ::std::convert::AsRef<Approval> for Approval {
     fn as_ref(&self) -> &Approval {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Budget {
     pub total: f64,
-
     pub spent: f64,
-
     pub categories: std::collections::HashMap<String, f64>,
-
     pub approvals: Vec<Approval>,
 }
 
-impl AsRef<Budget> for Budget {
+impl ::std::convert::AsRef<Budget> for Budget {
     fn as_ref(&self) -> &Budget {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Company {
     pub id: i64,
-
     pub name: String,
-
     pub address: Address,
-
     pub departments: Vec<Department>,
-
     pub metadata: Box<CompanyMetadata>,
 }
 
-impl AsRef<Company> for Company {
+impl ::std::convert::AsRef<Company> for Company {
     fn as_ref(&self) -> &Company {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct CompanyMetadata {
     pub founded: String,
-
     pub industry: String,
-
     pub size: Union4KenterpriseOrKlargeOrKmediumOrKsmall,
-
     pub certifications: Vec<String>,
-
     pub partnerships: Option<Vec<Box<Company>>>,
 }
 
-impl AsRef<CompanyMetadata> for CompanyMetadata {
+impl ::std::convert::AsRef<CompanyMetadata> for CompanyMetadata {
     fn as_ref(&self) -> &CompanyMetadata {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ComplexNested {
     pub company: Company,
-
     pub employees: Vec<Employee>,
-
     pub projects: Vec<Project>,
 }
 
-impl AsRef<ComplexNested> for ComplexNested {
+impl ::std::convert::AsRef<ComplexNested> for ComplexNested {
     fn as_ref(&self) -> &ComplexNested {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Contact {
     pub name: String,
-
     pub relationship: String,
-
     pub phone: String,
-
     pub email: Option<String>,
 }
 
-impl AsRef<Contact> for Contact {
+impl ::std::convert::AsRef<Contact> for Contact {
     fn as_ref(&self) -> &Contact {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Coordinates {
     pub latitude: f64,
-
     pub longitude: f64,
 }
 
-impl AsRef<Coordinates> for Coordinates {
+impl ::std::convert::AsRef<Coordinates> for Coordinates {
     fn as_ref(&self) -> &Coordinates {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DeeplyNested {
     pub level1: Level1,
 }
 
-impl AsRef<DeeplyNested> for DeeplyNested {
+impl ::std::convert::AsRef<DeeplyNested> for DeeplyNested {
     fn as_ref(&self) -> &DeeplyNested {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Department {
     pub id: i64,
-
     pub name: String,
-
     pub manager: Option<Employee>,
-
     pub members: Vec<Employee>,
-
     pub budget: f64,
-
     pub projects: Vec<Project>,
 }
 
-impl AsRef<Department> for Department {
+impl ::std::convert::AsRef<Department> for Department {
     fn as_ref(&self) -> &Department {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DisplaySettings {
     pub fontSize: i64,
-
     pub colorScheme: String,
-
     pub layout: Union2KgridOrKlist,
 }
 
-impl AsRef<DisplaySettings> for DisplaySettings {
+impl ::std::convert::AsRef<DisplaySettings> for DisplaySettings {
     fn as_ref(&self) -> &DisplaySettings {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Employee {
     pub id: i64,
-
     pub name: String,
-
     pub email: String,
-
     pub role: String,
-
     pub department: String,
-
     pub skills: Vec<String>,
-
     pub address: Option<Address>,
-
     pub emergencyContact: Option<Contact>,
 }
 
-impl AsRef<Employee> for Employee {
+impl ::std::convert::AsRef<Employee> for Employee {
     fn as_ref(&self) -> &Employee {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Level1 {
     pub data: String,
-
     pub level2: Level2,
 }
 
-impl AsRef<Level1> for Level1 {
+impl ::std::convert::AsRef<Level1> for Level1 {
     fn as_ref(&self) -> &Level1 {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Level2 {
     pub data: String,
-
     pub level3: Level3,
 }
 
-impl AsRef<Level2> for Level2 {
+impl ::std::convert::AsRef<Level2> for Level2 {
     fn as_ref(&self) -> &Level2 {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Level3 {
     pub data: String,
-
     pub level4: Level4,
 }
 
-impl AsRef<Level3> for Level3 {
+impl ::std::convert::AsRef<Level3> for Level3 {
     fn as_ref(&self) -> &Level3 {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Level4 {
     pub data: String,
-
     pub level5: Level5,
 }
 
-impl AsRef<Level4> for Level4 {
+impl ::std::convert::AsRef<Level4> for Level4 {
     fn as_ref(&self) -> &Level4 {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Level5 {
     pub data: String,
-
     pub items: Vec<String>,
-
     pub mapping: std::collections::HashMap<String, i64>,
 }
 
-impl AsRef<Level5> for Level5 {
+impl ::std::convert::AsRef<Level5> for Level5 {
     fn as_ref(&self) -> &Level5 {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Metadata {
     pub createdAt: String,
-
     pub updatedAt: String,
-
     pub version: i64,
-
     pub tags: Vec<String>,
-
     pub attributes: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<Metadata> for Metadata {
+impl ::std::convert::AsRef<Metadata> for Metadata {
     fn as_ref(&self) -> &Metadata {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Milestone {
     pub id: i64,
-
     pub name: String,
-
     pub dueDate: String,
-
     pub completed: bool,
-
     pub tasks: Vec<Task>,
 }
 
-impl AsRef<Milestone> for Milestone {
+impl ::std::convert::AsRef<Milestone> for Milestone {
     fn as_ref(&self) -> &Milestone {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NotificationSettings {
     pub email: bool,
-
     pub push: bool,
-
     pub sms: bool,
-
     pub frequency: Union3KdailyOrKimmediateOrKweekly,
 }
 
-impl AsRef<NotificationSettings> for NotificationSettings {
+impl ::std::convert::AsRef<NotificationSettings> for NotificationSettings {
     fn as_ref(&self) -> &NotificationSettings {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Preferences {
     pub theme: Union2KdarkOrKlight,
-
     pub language: String,
-
     pub notifications: NotificationSettings,
 }
 
-impl AsRef<Preferences> for Preferences {
+impl ::std::convert::AsRef<Preferences> for Preferences {
     fn as_ref(&self) -> &Preferences {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrivacySettings {
     pub profileVisibility: Union3KfriendsOrKprivateOrKpublic,
-
     pub showEmail: bool,
-
     pub showPhone: bool,
 }
 
-impl AsRef<PrivacySettings> for PrivacySettings {
+impl ::std::convert::AsRef<PrivacySettings> for PrivacySettings {
     fn as_ref(&self) -> &PrivacySettings {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Profile {
     pub bio: String,
-
     pub avatar: String,
-
     pub social: SocialLinks,
-
     pub preferences: Preferences,
 }
 
-impl AsRef<Profile> for Profile {
+impl ::std::convert::AsRef<Profile> for Profile {
     fn as_ref(&self) -> &Profile {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Project {
     pub id: i64,
-
     pub name: String,
-
     pub description: String,
-
     pub status: Union4KactiveOrKcancelledOrKcompletedOrKplanning,
-
     pub team: Vec<Employee>,
-
     pub milestones: Vec<Milestone>,
-
     pub budget: Budget,
 }
 
-impl AsRef<Project> for Project {
+impl ::std::convert::AsRef<Project> for Project {
     fn as_ref(&self) -> &Project {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct RecursiveStructure {
     pub id: i64,
-
     pub name: String,
-
     pub children: Vec<Box<RecursiveStructure>>,
-
     pub parent: Option<Box<RecursiveStructure>>,
-
     pub metadata: std::collections::HashMap<String, Union3BoolOrIntOrString>,
 }
 
-impl AsRef<RecursiveStructure> for RecursiveStructure {
+impl ::std::convert::AsRef<RecursiveStructure> for RecursiveStructure {
     fn as_ref(&self) -> &RecursiveStructure {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SimpleNested {
     pub user: User,
-
     pub address: Address,
-
     pub metadata: Metadata,
 }
 
-impl AsRef<SimpleNested> for SimpleNested {
+impl ::std::convert::AsRef<SimpleNested> for SimpleNested {
     fn as_ref(&self) -> &SimpleNested {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SocialLinks {
     pub twitter: Option<String>,
-
     pub github: Option<String>,
-
     pub linkedin: Option<String>,
-
     pub website: Option<String>,
 }
 
-impl AsRef<SocialLinks> for SocialLinks {
+impl ::std::convert::AsRef<SocialLinks> for SocialLinks {
     fn as_ref(&self) -> &SocialLinks {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Task {
     pub id: i64,
-
     pub title: String,
-
     pub description: String,
-
     pub assignee: String,
-
     pub priority: Union3KhighOrKlowOrKmedium,
-
     pub status: Union3KdoneOrKin_progressOrKtodo,
-
     pub subtasks: Option<Vec<Box<Task>>>,
 }
 
-impl AsRef<Task> for Task {
+impl ::std::convert::AsRef<Task> for Task {
     fn as_ref(&self) -> &Task {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct User {
     pub id: i64,
-
     pub name: String,
-
     pub profile: Profile,
-
     pub settings: UserSettings,
 }
 
-impl AsRef<User> for User {
+impl ::std::convert::AsRef<User> for User {
     fn as_ref(&self) -> &User {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UserSettings {
     pub privacy: PrivacySettings,
-
     pub display: DisplaySettings,
-
     pub advanced: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<UserSettings> for UserSettings {
+impl ::std::convert::AsRef<UserSettings> for UserSettings {
     fn as_ref(&self) -> &UserSettings {
         self
     }

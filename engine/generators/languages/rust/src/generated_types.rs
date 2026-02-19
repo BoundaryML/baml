@@ -1,6 +1,7 @@
 use crate::{
     package::CurrentRenderPackage,
     r#type::{SerializeType, TypeRust},
+    MediaTypeRust,
 };
 
 #[derive(Debug)]
@@ -117,16 +118,22 @@ pub struct FieldRustRendered {
     pub raw_name: String,
     pub docstring: Option<String>,
     pub type_str: String,
+    pub media_type: Option<MediaTypeRust>,
 }
 
 impl FieldRustRendered {
     pub fn from_field(field: &FieldRust, pkg: &CurrentRenderPackage) -> Self {
+        let media_type = match field.r#type {
+            TypeRust::Media(media_type) => Some(media_type),
+            _ => None,
+        };
         Self {
             name: field.name.clone(),
             cffi_name: field.cffi_name.clone(),
             raw_name: field.raw_name.clone(),
             docstring: field.docstring.clone(),
             type_str: field.r#type.serialize_type(pkg),
+            media_type,
         }
     }
 }
@@ -171,15 +178,21 @@ pub struct VariantRustRendered {
     pub cffi_name: String,
     pub literal_repr: Option<String>,
     pub type_str: String,
+    pub media_type: Option<MediaTypeRust>,
 }
 
 impl VariantRustRendered {
     pub fn from_variant(variant: &VariantRust, pkg: &CurrentRenderPackage) -> Self {
+        let media_type = match variant.type_ {
+            TypeRust::Media(media_type) => Some(media_type),
+            _ => None,
+        };
         Self {
             name: variant.name.clone(),
             cffi_name: variant.cffi_name.clone(),
             literal_repr: variant.literal_repr.clone(),
             type_str: variant.type_.serialize_type(pkg),
+            media_type,
         }
     }
 }

@@ -10,29 +10,29 @@
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 {% endif %}
 pub struct {{ cls.name }}ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl {{ cls.name }}ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type()
             .expect("{{ cls.name }} is statically defined in .baml and should always have a type")
     }
 
 {% if cls.dynamic %}
     /// Add a new property to this dynamic class.
-    pub fn add_property(&self, name: &str, field_type: &baml::TypeDef) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+    pub fn add_property(&self, name: &str, field_type: &::baml::TypeDef) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -43,7 +43,7 @@ impl {{ cls.name }}ClassBuilder {
 {% for field in cls.fields %}
 
     /// Access the `{{ field.name }}` field builder.
-    pub fn property_{{ field.raw_name }}(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_{{ field.raw_name }}(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("{{ field.raw_name }}")
             .expect("{{ cls.name }}.{{ field.raw_name }} is statically defined in .baml and should always be present")
     }

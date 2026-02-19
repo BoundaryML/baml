@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     MixedPrimitives(MixedPrimitives),
 
@@ -32,20 +34,30 @@ pub enum Types {
     PrimitiveTypes(PrimitiveTypes),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::MixedPrimitives(_) => "MixedPrimitives",
+            Self::MixedPrimitives(_) => "MixedPrimitives",
 
-            Types::PrimitiveArrays(_) => "PrimitiveArrays",
+            Self::PrimitiveArrays(_) => "PrimitiveArrays",
 
-            Types::PrimitiveMaps(_) => "PrimitiveMaps",
+            Self::PrimitiveMaps(_) => "PrimitiveMaps",
 
-            Types::PrimitiveTypes(_) => "PrimitiveTypes",
+            Self::PrimitiveTypes(_) => "PrimitiveTypes",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

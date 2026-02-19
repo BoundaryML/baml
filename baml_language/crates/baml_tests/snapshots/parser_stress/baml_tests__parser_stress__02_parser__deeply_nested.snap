@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1fb40547d0a1a115/out/generated_tests.rs
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -155,7 +155,8 @@ SOURCE_FILE
                   L_BRACKET "["
                   R_BRACKET "]"
                   QUESTION "?"
-                GREATER_GREATER ">>"
+                GREATER ">"
+            GREATER ">"
         GREATER ">"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR

@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     ArrayWithConstraints(ArrayWithConstraints),
 
@@ -46,34 +48,44 @@ pub enum Types {
     Union4BoolOrFloatOrIntOrString(Union4BoolOrFloatOrIntOrString),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::ArrayWithConstraints(_) => "ArrayWithConstraints",
+            Self::ArrayWithConstraints(_) => "ArrayWithConstraints",
 
-            Types::MixedArrays(_) => "MixedArrays",
+            Self::MixedArrays(_) => "MixedArrays",
 
-            Types::NestedArrays(_) => "NestedArrays",
+            Self::NestedArrays(_) => "NestedArrays",
 
-            Types::ObjectArrays(_) => "ObjectArrays",
+            Self::ObjectArrays(_) => "ObjectArrays",
 
-            Types::Product(_) => "Product",
+            Self::Product(_) => "Product",
 
-            Types::SimpleArrays(_) => "SimpleArrays",
+            Self::SimpleArrays(_) => "SimpleArrays",
 
-            Types::Tag(_) => "Tag",
+            Self::Tag(_) => "Tag",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
+            Self::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
 
-            Types::Union3ProductOrTagOrUser(_) => "Union3ProductOrTagOrUser",
+            Self::Union3ProductOrTagOrUser(_) => "Union3ProductOrTagOrUser",
 
-            Types::Union4BoolOrFloatOrIntOrString(_) => "Union4BoolOrFloatOrIntOrString",
+            Self::Union4BoolOrFloatOrIntOrString(_) => "Union4BoolOrFloatOrIntOrString",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

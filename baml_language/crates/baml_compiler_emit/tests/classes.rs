@@ -93,7 +93,7 @@ fn class_constructor_with_spread_operator() -> anyhow::Result<()> {
             // All fields come from the spread (last assignment wins).
             // Spread is stored to temp local, then accessed for each field.
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
                 Instruction::StoreVar("_2".to_string()),
@@ -141,7 +141,7 @@ fn nested_class_construction() -> anyhow::Result<()> {
             // Stackification with fall-through elimination:
             // o is assigned but never read (dead store)
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
                 Instruction::AllocInstance(Value::class("Inner")),
@@ -183,7 +183,7 @@ fn nested_class_with_multiple_fields() -> anyhow::Result<()> {
             // Stackification with fall-through elimination:
             // o is assigned but never read (dead store)
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::AllocInstance(Value::class("Outer")),
                 Instruction::Copy(0),
                 Instruction::AllocInstance(Value::class("Inner")),
@@ -298,7 +298,7 @@ fn class_constructor_with_spread_before_named_fields() -> anyhow::Result<()> {
             // Spread is at position 0, named fields x,y at positions 1,2.
             // x and y from named (override spread), z and w from spread.
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
                 Instruction::StoreVar("_2".to_string()),
@@ -348,7 +348,7 @@ fn class_constructor_with_spread_after_named_fields() -> anyhow::Result<()> {
             // Spread at position 2 overrides named fields at positions 0,1.
             // All fields from spread.
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
                 Instruction::StoreVar("_2".to_string()),
@@ -410,7 +410,7 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
                 // ...x_one() at pos 0, ...xy_one() at pos 1
                 // xy_one wins for all fields; x_one called but result popped (unused)
                 vec![
-                    Instruction::LoadConst(Value::Null),
+                    Instruction::InitLocals(1),
                     Instruction::LoadGlobal(Value::function("x_one")),
                     Instruction::Call(0),
                     Instruction::Pop(1),
@@ -442,7 +442,7 @@ fn class_constructor_with_multiple_spread_operators() -> anyhow::Result<()> {
                 // ...xy_one() at pos 0, ...x_one() at pos 1
                 // x_one wins for all fields; xy_one called but result popped (unused)
                 vec![
-                    Instruction::LoadConst(Value::Null),
+                    Instruction::InitLocals(1),
                     Instruction::LoadGlobal(Value::function("xy_one")),
                     Instruction::Call(0),
                     Instruction::Pop(1),
@@ -500,8 +500,7 @@ fn class_constructor_with_spread_operator_does_not_break_locals() -> anyhow::Res
             // 'p' is assigned but never used (dead store, but still generated).
             // 'x' is a constant, inlined.
             vec![
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(2),
                 Instruction::LoadGlobal(Value::function("default_point")),
                 Instruction::Call(0),
                 Instruction::StoreVar("_2".to_string()),

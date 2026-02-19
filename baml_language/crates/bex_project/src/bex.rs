@@ -59,7 +59,8 @@ async fn call_engine(
         });
     }
 
-    let result = BexEngine::call_function(engine, function_name, ordered_args, call_id).await?;
+    let result =
+        BexEngine::call_function(engine, function_name, ordered_args, call_id, None, &[]).await?;
 
     let owned_result = engine
         .heap()

@@ -168,6 +168,23 @@ pub enum HirDiagnostic {
     /// `allowed_roles` values must be strings.
     AllowedRoleNotString { client_name: String, span: Span },
 
+    /// Composite client (fallback/round-robin) has no sub-clients in strategy.
+    EmptyStrategy {
+        client_name: String,
+        provider: String,
+        span: Span,
+    },
+
+    /// Client references a retry policy that doesn't exist.
+    UnknownRetryPolicy {
+        client_name: String,
+        policy_name: String,
+        span: Span,
+    },
+
+    /// Strategy array element is not a valid client name.
+    InvalidStrategyElement { client_name: String, span: Span },
+
     // ============ Syntax Diagnostics ============
     /// Statement missing required semicolon.
     /// In Rust-style blocks, all statements except the final expression need semicolons.

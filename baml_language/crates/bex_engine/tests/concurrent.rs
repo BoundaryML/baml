@@ -31,7 +31,7 @@ async fn test_concurrent_calls_no_race() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, sys_types::SysOps::native().into())
+        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
             .expect("Failed to create engine"),
     );
 
@@ -41,7 +41,13 @@ async fn test_concurrent_calls_no_race() {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
             engine
-                .call_function("test_function", vec![], sys_types::CallId::default())
+                .call_function(
+                    "test_function",
+                    vec![],
+                    sys_types::CallId::default(),
+                    None,
+                    &[],
+                )
                 .await
         }));
     }
@@ -70,7 +76,7 @@ async fn test_concurrent_allocations_no_overlap() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, sys_types::SysOps::native().into())
+        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
             .expect("Failed to create engine"),
     );
 
@@ -84,7 +90,13 @@ async fn test_concurrent_allocations_no_overlap() {
         handles.push(tokio::spawn(async move {
             // Function that allocates many objects
             let result = engine
-                .call_function("allocate_many", vec![], sys_types::CallId::default())
+                .call_function(
+                    "allocate_many",
+                    vec![],
+                    sys_types::CallId::default(),
+                    None,
+                    &[],
+                )
                 .await?;
             count.fetch_add(1, Ordering::SeqCst);
             Ok::<_, bex_engine::EngineError>(result)
@@ -124,7 +136,7 @@ async fn test_heap_stats_during_concurrent_execution() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, sys_types::SysOps::native().into())
+        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
             .expect("Failed to create engine"),
     );
 
@@ -136,7 +148,13 @@ async fn test_heap_stats_during_concurrent_execution() {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
             engine
-                .call_function("test_function", vec![], sys_types::CallId::default())
+                .call_function(
+                    "test_function",
+                    vec![],
+                    sys_types::CallId::default(),
+                    None,
+                    &[],
+                )
                 .await
         }));
     }
@@ -177,7 +195,7 @@ async fn test_concurrent_string_allocations() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, sys_types::SysOps::native().into())
+        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
             .expect("Failed to create engine"),
     );
 
@@ -192,7 +210,7 @@ async fn test_concurrent_string_allocations() {
         let func = (*func_name).to_string();
         handles.push(tokio::spawn(async move {
             let result = engine
-                .call_function(&func, vec![], sys_types::CallId::default())
+                .call_function(&func, vec![], sys_types::CallId::default(), None, &[])
                 .await?;
             Ok::<_, bex_engine::EngineError>((func, result))
         }));
@@ -229,7 +247,7 @@ async fn test_concurrent_array_allocations() {
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
-        BexEngine::new(snapshot, sys_types::SysOps::native().into())
+        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
             .expect("Failed to create engine"),
     );
 
@@ -243,7 +261,7 @@ async fn test_concurrent_array_allocations() {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
             let result = engine
-                .call_function(func_name, vec![], sys_types::CallId::default())
+                .call_function(func_name, vec![], sys_types::CallId::default(), None, &[])
                 .await?;
             Ok::<_, bex_engine::EngineError>((size, result))
         }));
@@ -286,7 +304,7 @@ async fn test_call_function_with_external_args() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into())
+    let engine = BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
         .expect("Failed to create engine");
 
     // Test passing strings via BexExternalValue
@@ -295,6 +313,8 @@ async fn test_call_function_with_external_args() {
             "concat_strings",
             vec!["Hello".into(), "World".into()],
             sys_types::CallId::default(),
+            None,
+            &[],
         )
         .await
         .expect("call_function failed");
@@ -312,7 +332,13 @@ async fn test_call_function_with_external_args() {
         ],
     };
     let result = engine
-        .call_function("sum_array", vec![arr], sys_types::CallId::default())
+        .call_function(
+            "sum_array",
+            vec![arr],
+            sys_types::CallId::default(),
+            None,
+            &[],
+        )
         .await
         .expect("call_function failed");
 
@@ -324,6 +350,8 @@ async fn test_call_function_with_external_args() {
             "add_numbers",
             vec![BexExternalValue::from(15i64), BexExternalValue::from(27i64)],
             sys_types::CallId::default(),
+            None,
+            &[],
         )
         .await
         .expect("call_function failed");

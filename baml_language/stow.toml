@@ -44,7 +44,7 @@ ignore_crates = ["rig_*"]
 # Graph visualization settings
 # Run: cargo stow --graph /tmp/deps.svg
 [graph]
-external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan"]
+external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan", "reqwest"]
 
 # Implied dependencies: if a crate depends on both the key and a value,
 # the edge to the value is hidden (it's visually implied by the key).
@@ -59,7 +59,7 @@ bex_vm_types = ["bex_resource_types"]
 # Global dependency rules (apply to ALL crate namespaces)
 [[dependency_rules]]
 pattern = "anyhow"
-allowed_crates = ["*_cli", "tools_*", "baml_lsp_*"]
+allowed_crates = ["*_cli", "tools_*", "cargo-*", "baml_lsp_*"]
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
@@ -93,7 +93,7 @@ reason = "Only compiler_emit and baml_project crates should depend on bex_vm_typ
 [[namespaces]]
 name = "tools"
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
-name_exceptions = { "tools_stow" = "cargo-stow" }
+name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 
 # bex namespace configuration
 [[namespaces]]
@@ -110,12 +110,12 @@ link_crates = ["baml_db", "baml_project"]
 name = "bridge"
 link_crates = ["bex_project", "sys_native", "sys_types"]
 
-# Bridge crates may depend on bex_project and related bex crates (bex_external_types, bex_heap, bex_resource_types).
+# Bridge crates may depend on bex_engine, bex_project, bex_events, bex_external_types; bridge_wasm also needs bex_heap, bex_resource_types.
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
-pattern.exclude = ["bex_factory"]
-allowed_crates = ["bridge_cffi", "bridge_ctypes", "bridge_wasm"]
-reason = "Bridge crates may depend on bex_project and related bex crates from the bex namespace."
+pattern.exclude = ["bex_engine", "bex_project", "bex_events", "bex_external_types", "bex_heap", "bex_resource_types"]
+allowed_crates = []
+reason = "Bridge crates may only depend on the excluded bex_* crates from the bex namespace."
 
 # sys namespace configuration
 [[namespaces]]

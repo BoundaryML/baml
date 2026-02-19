@@ -1,0 +1,41 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+function Fn() -> string {
+    client "openai/gpt-4o"
+    prompt #"Hi"#
+}
+
+class TopLevelClass {
+    a string
+}
+
+enum TopLevelEnum {
+    A,
+    B,
+}
+
+test MyTest {
+    functions [Fn],
+    type_builder {
+        class InnerClass {
+            b int
+        }
+        dynamic class DynamicInner {
+            c string
+        }
+        enum InnerEnum {
+            X,
+            Y,
+        }
+        dynamic enum DynamicEnum {
+            P,
+            Q,
+        }
+        type MyAlias = string | int
+    },
+    args {
+        from_text "test",
+    },
+}

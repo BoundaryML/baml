@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     ComplexMaps(ComplexMaps),
 
@@ -44,32 +46,42 @@ pub enum Types {
     Union3BoolOrIntOrString(Union3BoolOrIntOrString),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::ComplexMaps(_) => "ComplexMaps",
+            Self::ComplexMaps(_) => "ComplexMaps",
 
-            Types::Config(_) => "Config",
+            Self::Config(_) => "Config",
 
-            Types::EdgeCaseMaps(_) => "EdgeCaseMaps",
+            Self::EdgeCaseMaps(_) => "EdgeCaseMaps",
 
-            Types::MixedKeyMaps(_) => "MixedKeyMaps",
+            Self::MixedKeyMaps(_) => "MixedKeyMaps",
 
-            Types::NestedMaps(_) => "NestedMaps",
+            Self::NestedMaps(_) => "NestedMaps",
 
-            Types::Product(_) => "Product",
+            Self::Product(_) => "Product",
 
-            Types::SimpleMaps(_) => "SimpleMaps",
+            Self::SimpleMaps(_) => "SimpleMaps",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::Status(_) => "Status",
+            Self::Status(_) => "Status",
 
-            Types::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
+            Self::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

@@ -52,6 +52,12 @@ pub enum TypePattern {
     /// Maps to `Ty::BuiltinUnknown` in TIR.
     /// In builtin definitions, use the `Unknown` type annotation.
     BuiltinUnknown,
+    /// Builtin enum type - matches exactly by path.
+    /// E.g., `Enum("baml.llm.ClientType")` matches only `Ty::Enum("baml.llm.ClientType")`.
+    Enum(&'static str),
+    /// Meta-type — the type of type values.
+    /// A value of type `Type` wraps a `baml_type::Ty` at runtime.
+    Type,
 }
 
 /// How a builtin type is represented at runtime on the VM heap.
@@ -92,6 +98,15 @@ pub struct BuiltinTypeDefinition {
     pub fields: Vec<BuiltinField>,
     /// How this type is represented on the VM heap.
     pub runtime_kind: RuntimeKind,
+}
+
+/// A builtin enum definition (enum with variants).
+#[derive(Debug, Clone)]
+pub struct BuiltinEnumDefinition {
+    /// Full path (e.g., "baml.llm.ClientType").
+    pub path: &'static str,
+    /// Variant names (e.g., `Primitive`, `Fallback`, `RoundRobin`).
+    pub variants: Vec<&'static str>,
 }
 
 impl TypePattern {
@@ -204,6 +219,13 @@ macro_rules! with_builtins {
                 }
 
                 // =====================================================================
+                // Math functions
+                // =====================================================================
+                mod math {
+                    fn trunc(value: f64) -> i64;
+                }
+
+                // =====================================================================
                 // Media methods
                 // =====================================================================
                 struct Media {
@@ -237,6 +259,14 @@ macro_rules! with_builtins {
                     /// Execute a shell command and return stdout.
                     #[sys_op]
                     fn shell(command: String) -> String;
+
+                    /// Sleep for the given number of milliseconds.
+                    #[sys_op]
+                    fn sleep(delay_ms: i64);
+
+                    /// Abort execution with an error message.
+                    #[sys_op]
+                    fn panic(message: String);
                 }
 
                 // =====================================================================
@@ -305,6 +335,33 @@ macro_rules! with_builtins {
                     #[opaque]
                     struct PromptAst {}
 
+                    /// The type of an LLM client (primitive, fallback, or round-robin).
+                    #[builtin]
+                    enum ClientType {
+                        Primitive,
+                        Fallback,
+                        RoundRobin,
+                    }
+
+                    /// A retry policy for LLM calls.
+                    #[builtin]
+                    struct RetryPolicy {
+                        max_retries: i64,
+                        initial_delay_ms: i64,
+                        multiplier: f64,
+                        max_delay_ms: i64,
+                    }
+
+                    /// An LLM client (primitive, fallback, or round-robin).
+                    /// Built by get_client from compiler metadata.
+                    /// Complex fields: accessor/owned codegen is skipped (written manually).
+                    #[builtin]
+                    struct Client {
+                        name: String,
+                        client_type: ClientType,
+                        sub_clients: Array<Client>,
+                        retry: Option<RetryPolicy>,
+                    }
 
                     /// A primitive LLM client (single provider, fully resolved).
                     /// Options have been evaluated (env vars resolved, expressions computed).
@@ -335,8 +392,7 @@ macro_rules! with_builtins {
                         /// Parse an HTTP response into a BAML value.
                         /// Interprets the provider-specific response format and parses the output.
                         #[sys_op]
-                        #[uses(engine_ctx)]
-                        fn parse(self: PrimitiveClient, http_response_body: String, function_name: String) -> Any;
+                        fn parse(self: PrimitiveClient, http_response_body: String, type_def: Type) -> Any;
                     }
 
                     /// Get the Jinja template for an LLM function.
@@ -355,11 +411,35 @@ macro_rules! with_builtins {
                         options: Map<String, Unknown>
                     ) -> PrimitiveClient;
 
-                    /// Get the client resolve function for an LLM function.
-                    /// Returns a function that, when called, returns a PrimitiveClient.
+                    /// Get a Client tree for an LLM function.
+                    /// Returns a Client with type, sub-clients, and retry policy.
                     #[sys_op]
                     #[uses(engine_ctx)]
-                    fn get_client_function(function_name: String) -> fn() -> PrimitiveClient;
+                    fn get_client(function_name: String) -> Client;
+
+                    /// Get the resolve function for a client by name.
+                    /// Returns a function that resolves to a PrimitiveClient when called.
+                    #[sys_op]
+                    #[uses(engine_ctx)]
+                    fn resolve_client(client_name: String) -> fn() -> PrimitiveClient;
+
+                    /// Get the next round-robin index for a client.
+                    /// Returns the current counter value and increments it atomically.
+                    #[sys_op]
+                    #[uses(engine_ctx)]
+                    fn round_robin_next(client_name: String) -> i64;
+
+                    /// Peek the current round-robin index for a client.
+                    /// Returns the current counter value without incrementing it.
+                    #[sys_op]
+                    #[uses(engine_ctx)]
+                    fn round_robin_peek(client_name: String) -> i64;
+
+                    /// Get the return type for an LLM function.
+                    /// Returns a Type value that can be passed to `parse()`.
+                    #[sys_op]
+                    #[uses(engine_ctx)]
+                    fn get_return_type(function_name: String) -> Type;
                 }
             }
 
@@ -390,9 +470,19 @@ pub fn builtin_types() -> &'static [BuiltinTypeDefinition] {
     &BUILTIN_TYPES
 }
 
+/// Get all built-in enum definitions.
+pub fn builtin_enums() -> &'static [BuiltinEnumDefinition] {
+    &BUILTIN_ENUMS
+}
+
 /// Find a builtin type by path.
 pub fn find_builtin_type(path: &str) -> Option<&'static BuiltinTypeDefinition> {
     builtin_types().iter().find(|td| td.path == path)
+}
+
+/// Find a builtin enum by path.
+pub fn find_builtin_enum(path: &str) -> Option<&'static BuiltinEnumDefinition> {
+    builtin_enums().iter().find(|ed| ed.path == path)
 }
 
 /// Find a field in a builtin type.
@@ -424,73 +514,6 @@ pub fn find_function(path: &str) -> Option<&'static BuiltinSignature> {
 pub fn find_builtin_by_path(path: &str) -> Option<&'static BuiltinSignature> {
     let normalized = normalize_baml_prefix(path);
     builtins().iter().find(|def| def.path == normalized)
-}
-
-// ============================================================================
-// Prelude - commonly used types available without qualification
-// ============================================================================
-
-/// A prelude entry mapping a short name to its fully qualified path.
-#[derive(Debug, Clone, Copy)]
-pub struct PreludeEntry {
-    /// The short name (e.g., "Request")
-    pub short_name: &'static str,
-    /// The fully qualified path (e.g., "baml.http.Request")
-    pub qualified_path: &'static str,
-}
-
-/// The prelude - types that are automatically available without qualification.
-///
-/// These are commonly-used builtin types that can be referenced by their
-/// short names in BAML code. For example, `Request` resolves to `baml.http.Request`.
-///
-/// User-defined types with the same name will shadow prelude entries.
-static PRELUDE: &[PreludeEntry] = &[
-    // HTTP types
-    PreludeEntry {
-        short_name: "Request",
-        qualified_path: "baml.http.Request",
-    },
-    PreludeEntry {
-        short_name: "Response",
-        qualified_path: "baml.http.Response",
-    },
-    // LLM types
-    PreludeEntry {
-        short_name: "PromptAst",
-        qualified_path: "baml.llm.PromptAst",
-    },
-    PreludeEntry {
-        short_name: "PrimitiveClient",
-        qualified_path: "baml.llm.PrimitiveClient",
-    },
-    // File system types
-    PreludeEntry {
-        short_name: "File",
-        qualified_path: "baml.fs.File",
-    },
-    // Network types
-    PreludeEntry {
-        short_name: "Socket",
-        qualified_path: "baml.net.Socket",
-    },
-];
-
-/// Get the prelude entries.
-///
-/// Returns all type names that are automatically available without qualification.
-pub fn prelude() -> &'static [PreludeEntry] {
-    PRELUDE
-}
-
-/// Look up a short name in the prelude.
-///
-/// Returns the fully qualified path if the name is in the prelude.
-pub fn lookup_prelude(short_name: &str) -> Option<&'static str> {
-    PRELUDE
-        .iter()
-        .find(|entry| entry.short_name == short_name)
-        .map(|entry| entry.qualified_path)
 }
 
 /// Normalize the `baml` prefix, allowing any number of a's.
@@ -629,14 +652,23 @@ mod tests {
         assert!(render_prompt.is_some());
         assert!(render_prompt.unwrap().is_sys_op);
 
-        let get_client_fn = find_builtin_by_path("baml.llm.get_client_function");
-        assert!(
-            get_client_fn.is_some(),
-            "get_client_function should be found"
+        let get_client_fn = find_builtin_by_path("baml.llm.get_client");
+        assert!(get_client_fn.is_some(), "get_client should be found");
+        let get_client_fn = get_client_fn.unwrap();
+        assert!(get_client_fn.is_sys_op, "get_client should be sys_op");
+        assert_eq!(
+            get_client_fn.arity(),
+            1,
+            "get_client should have arity 1 (function_name param)"
+        );
+        assert_eq!(
+            get_client_fn.params.len(),
+            1,
+            "get_client should have 1 param"
         );
         assert!(
-            get_client_fn.unwrap().is_sys_op,
-            "get_client_function should be sys_op"
+            get_client_fn.receiver.is_none(),
+            "get_client should not have a receiver"
         );
 
         let get_jinja = find_builtin_by_path("baml.llm.get_jinja_template");
@@ -749,109 +781,87 @@ mod tests {
         let headers_field = headers_field.unwrap();
         assert!(matches!(headers_field.ty, TypePattern::Map { .. }));
     }
-
-    #[test]
-    fn test_prelude() {
-        // Test that prelude entries exist
-        assert!(!prelude().is_empty(), "Prelude should not be empty");
-
-        // Test lookup_prelude
-        assert_eq!(
-            lookup_prelude("Request"),
-            Some("baml.http.Request"),
-            "Request should resolve to baml.http.Request"
-        );
-        assert_eq!(
-            lookup_prelude("Response"),
-            Some("baml.http.Response"),
-            "Response should resolve to baml.http.Response"
-        );
-        assert_eq!(
-            lookup_prelude("PromptAst"),
-            Some("baml.llm.PromptAst"),
-            "PromptAst should resolve to baml.llm.PromptAst"
-        );
-        assert_eq!(
-            lookup_prelude("PrimitiveClient"),
-            Some("baml.llm.PrimitiveClient"),
-            "PrimitiveClient should resolve to baml.llm.PrimitiveClient"
-        );
-
-        // Test that unknown names return None
-        assert_eq!(
-            lookup_prelude("UnknownType"),
-            None,
-            "Unknown types should return None"
-        );
-        assert_eq!(
-            lookup_prelude("string"),
-            None,
-            "Primitives should not be in prelude"
-        );
-    }
 }
 
 // ============================================================================
 // Embedded BAML Builtin Files
 // ============================================================================
 
+/// Builtin BAML source files for built-in functions.
 pub const BUILTIN_PATH_PREFIX: &str = "<builtin>/";
-
-macro_rules! builtin_path {
-    ($path:expr) => {
-        concat!("<builtin>/", $path)
-    };
-}
-
-/// Embedded BAML source files for built-in functions.
 ///
 /// These files are compiled together with user code and provide
 /// implementations for builtin namespaces like `baml.llm`.
+///
+/// On native targets, source is read from disk at runtime to avoid bloating
+/// the binary. On WASM, source is embedded via `include_str!` since filesystem
+/// access is not available.
 ///
 /// # Structure
 ///
 /// Files are organized by namespace:
 /// - `baml/llm.baml` -> `baml.llm` namespace
-///
-/// # Usage
-///
-/// ```ignore
-/// for (namespace, source) in baml_builtins::baml_sources() {
-///     // Add source to compilation context
-///     compiler.add_builtin(namespace, source);
-/// }
-/// ```
 pub mod baml_sources {
-    /// The BAML source for the `baml.llm` namespace.
+    /// Compile-time path to the `baml_builtins` crate directory.
+    /// Used to locate .baml source files on disk (native only).
     ///
-    /// Contains the `render_prompt` orchestrator function.
-    pub const LLM: &str = include_str!("../baml/llm.baml");
+    /// TODO: This needs to be parametrizable. The stdlib will eventually live on the
+    /// user's machine (not baked into the binary), so the consumer (e.g. db.rs) should
+    /// be able to pass in a custom stdlib path instead of relying on `CARGO_MANIFEST_DIR`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub const BUILTINS_CRATE_DIR: &str = env!("CARGO_MANIFEST_DIR");
+
+    /// Embedded source for WASM targets (no filesystem access).
+    #[cfg(target_arch = "wasm32")]
+    const LLM_EMBEDDED: &str = include_str!("../baml/llm.baml");
 
     /// A builtin BAML source file with its namespace.
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone)]
     pub struct BuiltinSource {
         /// The namespace this file provides (e.g., "baml.llm").
         pub namespace: &'static str,
         /// The virtual file path for diagnostics (e.g., `<builtin>/baml/llm.baml`).
         pub path: &'static str,
-        /// The BAML source code.
-        pub source: &'static str,
+        /// The relative path from `BUILTINS_CRATE_DIR` to the .baml file.
+        pub relative_path: &'static str,
     }
 
     /// All builtin BAML sources.
-    ///
-    /// These should be added to the compilation context before user code.
     pub const ALL: &[BuiltinSource] = &[BuiltinSource {
         namespace: "baml.llm",
-        path: builtin_path!("baml/llm.baml"),
-        source: LLM,
+        path: "<builtin>/baml/llm.baml",
+        relative_path: "baml/llm.baml",
     }];
+
+    impl BuiltinSource {
+        /// Load the BAML source code for this builtin.
+        ///
+        /// On native: reads from disk using `BUILTINS_CRATE_DIR`.
+        /// On WASM: returns the embedded source.
+        pub fn source(&self) -> String {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let fs_path = std::path::Path::new(BUILTINS_CRATE_DIR).join(self.relative_path);
+                std::fs::read_to_string(&fs_path).unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to read builtin BAML source at {}: {}",
+                        fs_path.display(),
+                        e
+                    )
+                })
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                match self.relative_path {
+                    "baml/llm.baml" => LLM_EMBEDDED.to_string(),
+                    _ => panic!("Unknown builtin source: {}", self.relative_path),
+                }
+            }
+        }
+    }
 }
 
 /// Get all builtin BAML sources.
-///
-/// Returns an iterator over all embedded BAML files that should be
-/// compiled as part of the builtin library.
 pub fn baml_sources() -> impl Iterator<Item = &'static baml_sources::BuiltinSource> {
     baml_sources::ALL.iter()
 }

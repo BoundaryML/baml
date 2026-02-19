@@ -1,6 +1,6 @@
 use crate::package::{CurrentRenderPackage, Package};
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum MediaTypeRust {
     Image,
     Audio,

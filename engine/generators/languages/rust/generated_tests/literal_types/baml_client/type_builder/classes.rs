@@ -11,22 +11,22 @@
 /// Access fields via methods: `builder.field_name()`
 
 pub struct BooleanLiteralsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl BooleanLiteralsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("BooleanLiterals is statically defined in .baml and should always have a type")
@@ -37,19 +37,19 @@ impl BooleanLiteralsClassBuilder {
     // =========================================================================
 
     /// Access the `alwaysTrue` field builder.
-    pub fn property_alwaysTrue(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_alwaysTrue(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("alwaysTrue")
             .expect("BooleanLiterals.alwaysTrue is statically defined in .baml and should always be present")
     }
 
     /// Access the `alwaysFalse` field builder.
-    pub fn property_alwaysFalse(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_alwaysFalse(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("alwaysFalse")
             .expect("BooleanLiterals.alwaysFalse is statically defined in .baml and should always be present")
     }
 
     /// Access the `eitherBool` field builder.
-    pub fn property_eitherBool(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_eitherBool(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("eitherBool")
             .expect("BooleanLiterals.eitherBool is statically defined in .baml and should always be present")
     }
@@ -61,22 +61,22 @@ impl BooleanLiteralsClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ComplexLiteralsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ComplexLiteralsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("ComplexLiterals is statically defined in .baml and should always have a type")
@@ -87,34 +87,34 @@ impl ComplexLiteralsClassBuilder {
     // =========================================================================
 
     /// Access the `state` field builder.
-    pub fn property_state(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_state(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("state").expect(
             "ComplexLiterals.state is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `retryCount` field builder.
-    pub fn property_retryCount(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_retryCount(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("retryCount")
             .expect("ComplexLiterals.retryCount is statically defined in .baml and should always be present")
     }
 
     /// Access the `response` field builder.
-    pub fn property_response(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_response(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("response").expect(
             "ComplexLiterals.response is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `flags` field builder.
-    pub fn property_flags(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_flags(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("flags").expect(
             "ComplexLiterals.flags is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `codes` field builder.
-    pub fn property_codes(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_codes(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("codes").expect(
             "ComplexLiterals.codes is statically defined in .baml and should always be present",
         )
@@ -127,22 +127,22 @@ impl ComplexLiteralsClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct IntegerLiteralsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl IntegerLiteralsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("IntegerLiterals is statically defined in .baml and should always have a type")
@@ -153,20 +153,20 @@ impl IntegerLiteralsClassBuilder {
     // =========================================================================
 
     /// Access the `priority` field builder.
-    pub fn property_priority(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_priority(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("priority").expect(
             "IntegerLiterals.priority is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `httpStatus` field builder.
-    pub fn property_httpStatus(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_httpStatus(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("httpStatus")
             .expect("IntegerLiterals.httpStatus is statically defined in .baml and should always be present")
     }
 
     /// Access the `maxRetries` field builder.
-    pub fn property_maxRetries(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_maxRetries(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("maxRetries")
             .expect("IntegerLiterals.maxRetries is statically defined in .baml and should always be present")
     }
@@ -178,22 +178,22 @@ impl IntegerLiteralsClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MixedLiteralsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MixedLiteralsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("MixedLiterals is statically defined in .baml and should always have a type")
@@ -204,35 +204,35 @@ impl MixedLiteralsClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
             .expect("MixedLiterals.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `r#type` field builder.
-    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_type(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("type").expect(
             "MixedLiterals.type is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `level` field builder.
-    pub fn property_level(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_level(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("level").expect(
             "MixedLiterals.level is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `isActive` field builder.
-    pub fn property_isActive(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_isActive(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("isActive").expect(
             "MixedLiterals.isActive is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `apiVersion` field builder.
-    pub fn property_apiVersion(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_apiVersion(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("apiVersion").expect(
             "MixedLiterals.apiVersion is statically defined in .baml and should always be present",
         )
@@ -245,22 +245,22 @@ impl MixedLiteralsClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct StringLiteralsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl StringLiteralsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("StringLiterals is statically defined in .baml and should always have a type")
@@ -271,20 +271,20 @@ impl StringLiteralsClassBuilder {
     // =========================================================================
 
     /// Access the `status` field builder.
-    pub fn property_status(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_status(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("status").expect(
             "StringLiterals.status is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `environment` field builder.
-    pub fn property_environment(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_environment(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("environment")
             .expect("StringLiterals.environment is statically defined in .baml and should always be present")
     }
 
     /// Access the `method` field builder.
-    pub fn property_method(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_method(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("method").expect(
             "StringLiterals.method is statically defined in .baml and should always be present",
         )

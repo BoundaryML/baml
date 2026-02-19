@@ -1,0 +1,6 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: output
+---
+=== FORMATTER ERROR ===
+[UnexpectedToken { expected: "client name", found: "'<'", span: Span { file_id: FileId(0), range: 358..359 } }, UnexpectedToken { expected: "Only 'client' and 'prompt' allowed in LLM function, found '<'", found: "'<'", span: Span { file_id: FileId(0), range: 358..359 } }, UnexpectedToken { expected: "Only 'client' and 'prompt' allowed in LLM function, found 'llm'", found: "identifier", span: Span { file_id: FileId(0), range: 359..362 } }, UnexpectedToken { expected: "Only 'client' and 'prompt' allowed in LLM function, found '>'", found: "'>'", span: Span { file_id: FileId(0), range: 362..363 } }, UnexpectedToken { expected: "Only 'client' and 'prompt' allowed in LLM function, found 'MyClient'", found: "identifier", span: Span { file_id: FileId(0), range: 364..372 } }]

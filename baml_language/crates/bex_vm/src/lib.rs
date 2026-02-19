@@ -21,4 +21,5 @@ pub mod watch;
 
 pub use errors::{InternalError, RuntimeError, StackTrace};
 pub use indexable::EvalStack;
-pub use vm::{BexVm, BytecodeProgram, VmExecState, convert_program};
+pub use native::NativeFunction;
+pub use vm::{BexVm, BytecodeProgram, SpanNotification, VmExecState, convert_program};

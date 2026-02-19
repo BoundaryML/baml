@@ -93,6 +93,7 @@ pub(super) fn parse_openai_response(body: &str) -> Result<LlmProviderResponse, P
         content,
         model: response.model,
         finish_reason,
+        finish_reason_raw: choice.finish_reason.clone(),
         usage,
         metadata,
     })

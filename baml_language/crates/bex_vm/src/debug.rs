@@ -177,6 +177,7 @@ pub fn display_instruction(
         | Instruction::Await
         | Instruction::Call(_)
         | Instruction::Assert
+        | Instruction::InitLocals(_)
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::Unreachable
@@ -301,6 +302,7 @@ fn instruction_color(instruction: &Instruction) -> Color {
             Color::BrightRed
         }
         Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
+        Instruction::InitLocals(_) => Color::Green,
         Instruction::Discriminant | Instruction::TypeTag => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
     }

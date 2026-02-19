@@ -1,0 +1,26 @@
+[package]
+name = "cargo-size-gate"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+publish = false
+description = "Binary size gating for Rust workspace artifacts"
+
+[[bin]]
+name = "cargo-size-gate"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = [ "derive" ] }
+flate2 = { workspace = true }
+serde = { workspace = true, features = [ "derive" ] }
+serde_json = { workspace = true }
+toml = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false

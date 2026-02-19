@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     AllNullable(AllNullable),
 
@@ -60,48 +62,58 @@ pub enum Types {
     Union3BoolOrIntOrString(Union3BoolOrIntOrString),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::AllNullable(_) => "AllNullable",
+            Self::AllNullable(_) => "AllNullable",
 
-            Types::BooleanEdgeCases(_) => "BooleanEdgeCases",
+            Self::BooleanEdgeCases(_) => "BooleanEdgeCases",
 
-            Types::CircularReference(_) => "CircularReference",
+            Self::CircularReference(_) => "CircularReference",
 
-            Types::DeepRecursion(_) => "DeepRecursion",
+            Self::DeepRecursion(_) => "DeepRecursion",
 
-            Types::EmptyCollections(_) => "EmptyCollections",
+            Self::EmptyCollections(_) => "EmptyCollections",
 
-            Types::InnerNullable(_) => "InnerNullable",
+            Self::InnerNullable(_) => "InnerNullable",
 
-            Types::LargeStructure(_) => "LargeStructure",
+            Self::LargeStructure(_) => "LargeStructure",
 
-            Types::MixedEdgeCases(_) => "MixedEdgeCases",
+            Self::MixedEdgeCases(_) => "MixedEdgeCases",
 
-            Types::NestedNullable(_) => "NestedNullable",
+            Self::NestedNullable(_) => "NestedNullable",
 
-            Types::NullEdgeCases(_) => "NullEdgeCases",
+            Self::NullEdgeCases(_) => "NullEdgeCases",
 
-            Types::NumberEdgeCases(_) => "NumberEdgeCases",
+            Self::NumberEdgeCases(_) => "NumberEdgeCases",
 
-            Types::OptionalEverything(_) => "OptionalEverything",
+            Self::OptionalEverything(_) => "OptionalEverything",
 
-            Types::OuterNullable(_) => "OuterNullable",
+            Self::OuterNullable(_) => "OuterNullable",
 
-            Types::SomeNullable(_) => "SomeNullable",
+            Self::SomeNullable(_) => "SomeNullable",
 
-            Types::SpecialCharacters(_) => "SpecialCharacters",
+            Self::SpecialCharacters(_) => "SpecialCharacters",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::VeryLongStrings(_) => "VeryLongStrings",
+            Self::VeryLongStrings(_) => "VeryLongStrings",
 
-            Types::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
+            Self::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

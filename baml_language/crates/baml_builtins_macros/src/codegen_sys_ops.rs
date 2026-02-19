@@ -262,6 +262,7 @@ fn sys_op_rust_type(
         "()" => Ok(quote!(())),
         "Media" => Ok(quote!(bex_vm_types::MediaValue)),
         "PromptAst" => Ok(quote!(bex_vm_types::PromptAst)),
+        "Type" => Ok(quote!(baml_type::Ty)),
         t if t.starts_with("Option<") && t.ends_with('>') => {
             let inner = &t[7..t.len() - 1];
             let inner_type = sys_op_rust_type(inner.trim(), builtin_types)?;
@@ -286,6 +287,9 @@ fn sys_op_extract_one(
 ) -> TokenStream2 {
     match type_name {
         "String" => quote!(#arg_ident.as_string(&__p).cloned()?),
+        "i64" => quote!(#arg_ident.as_int()?),
+        "f64" => quote!(#arg_ident.as_float()?),
+        "bool" => quote!(#arg_ident.as_bool()?),
         _ if builtin_types.contains_key(type_name) && type_name != "PromptAst" => {
             let full_path = builtin_types
                 .get(type_name)
@@ -298,6 +302,7 @@ fn sys_op_extract_one(
             )
         }
         "PromptAst" => quote!(#arg_ident.as_prompt_ast_owned(&__p)?),
+        "Type" => quote!(#arg_ident.as_baml_type_owned(&__p)?),
         _ => quote!(#arg_ident.as_owned_but_very_slow(&__p)?),
     }
 }

@@ -5,10 +5,13 @@
 
 //! Generated enum types.
 
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum TestEnum {
     Angry,
 
@@ -25,14 +28,14 @@ pub enum TestEnum {
     Bored,
 }
 
-impl Default for TestEnum {
+impl ::std::default::Default for TestEnum {
     fn default() -> Self {
         Self::Angry
     }
 }
 
-impl std::fmt::Display for TestEnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for TestEnum {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Angry => write!(f, "Angry"),
 
@@ -51,31 +54,31 @@ impl std::fmt::Display for TestEnum {
     }
 }
 
-impl std::str::FromStr for TestEnum {
+impl ::std::str::FromStr for TestEnum {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Angry" => Ok(Self::Angry),
+            "Angry" => ::std::result::Result::Ok(Self::Angry),
 
-            "Happy" => Ok(Self::Happy),
+            "Happy" => ::std::result::Result::Ok(Self::Happy),
 
-            "Sad" => Ok(Self::Sad),
+            "Sad" => ::std::result::Result::Ok(Self::Sad),
 
-            "Confused" => Ok(Self::Confused),
+            "Confused" => ::std::result::Result::Ok(Self::Confused),
 
-            "Excited" => Ok(Self::Excited),
+            "Excited" => ::std::result::Result::Ok(Self::Excited),
 
-            "Exclamation" => Ok(Self::Exclamation),
+            "Exclamation" => ::std::result::Result::Ok(Self::Exclamation),
 
-            "Bored" => Ok(Self::Bored),
+            "Bored" => ::std::result::Result::Ok(Self::Bored),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<TestEnum> for TestEnum {
+impl ::std::convert::AsRef<TestEnum> for TestEnum {
     fn as_ref(&self) -> &TestEnum {
         self
     }

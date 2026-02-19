@@ -1,0 +1,19 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+function stringValues() -> map<string, string> {
+    { "hello": "world", "test": "test" }
+}
+
+function intValues() -> map<string, int> {
+    { "hello": 1, "test": 2 }
+}
+
+function floatValues() -> map<string, float> {
+    { "hello": 1.0, "test": 2.0 }
+}
+
+function boolValues() -> map<string, bool> {
+    { "hello": true, "test": false }
+}

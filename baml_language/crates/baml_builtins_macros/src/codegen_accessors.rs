@@ -4,13 +4,23 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
-use crate::collect::{AccessorFieldDef, AccessorTypeDef, CollectedBuiltins, FieldTypeKind};
+use crate::{
+    collect::{
+        AccessorEnumDef, AccessorFieldDef, AccessorTypeDef, CollectedBuiltins, FieldTypeKind,
+    },
+    util::path_to_rust_ident,
+};
 
 pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
     let owned_structs: Vec<_> = collected
         .accessor_types
         .iter()
         .map(gen_owned_struct)
+        .collect();
+    let owned_enums: Vec<_> = collected
+        .accessor_enums
+        .iter()
+        .map(gen_owned_enum)
         .collect();
     let accessor_structs: Vec<_> = collected
         .accessor_types
@@ -26,6 +36,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                 use bex_external_types::{AsBexExternalValue, BexExternalValue};
 
                 #(#owned_structs)*
+                #(#owned_enums)*
             }
 
             #(#accessor_structs)*
@@ -49,6 +60,18 @@ fn gen_owned_field_type(kind: &FieldTypeKind) -> TokenStream2 {
             quote!(indexmap::IndexMap<String, bex_external_types::BexExternalValue>)
         }
         FieldTypeKind::ArrayString => quote!(Vec<String>),
+        FieldTypeKind::BuiltinEnum(path) => {
+            let ident = path_to_rust_ident(path);
+            quote!(#ident)
+        }
+        FieldTypeKind::ArrayBuiltinStruct(path) => {
+            let ident = path_to_rust_ident(path);
+            quote!(Vec<#ident>)
+        }
+        FieldTypeKind::OptionalBuiltinStruct(path) => {
+            let ident = path_to_rust_ident(path);
+            quote!(Option<#ident>)
+        }
     }
 }
 
@@ -56,7 +79,7 @@ fn gen_owned_field_type(kind: &FieldTypeKind) -> TokenStream2 {
 fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>, TokenStream2) {
     let name = &field.name;
     let name_str = &field.name_str;
-    match field.kind {
+    match &field.kind {
         FieldTypeKind::String => (
             None,
             quote!(#name_str.to_string() => BexExternalValue::String(self.#name)),
@@ -115,6 +138,33 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
             let entry = quote!(#name_str.to_string() => #name);
             (Some(binding), entry)
         }
+        FieldTypeKind::BuiltinEnum(_) => {
+            let binding = quote! {
+                let #name = self.#name.into_bex_external_value();
+            };
+            let entry = quote!(#name_str.to_string() => #name);
+            (Some(binding), entry)
+        }
+        FieldTypeKind::ArrayBuiltinStruct(_) => {
+            let binding = quote! {
+                let #name = BexExternalValue::Array {
+                    element_type: bex_external_types::Ty::BuiltinUnknown,
+                    items: self.#name
+                        .into_iter()
+                        .map(AsBexExternalValue::into_bex_external_value)
+                        .collect(),
+                };
+            };
+            let entry = quote!(#name_str.to_string() => #name);
+            (Some(binding), entry)
+        }
+        FieldTypeKind::OptionalBuiltinStruct(_) => {
+            let binding = quote! {
+                let #name = self.#name.into_bex_external_value();
+            };
+            let entry = quote!(#name_str.to_string() => #name);
+            (Some(binding), entry)
+        }
     }
 }
 
@@ -142,7 +192,7 @@ fn gen_owned_struct(td: &AccessorTypeDef) -> TokenStream2 {
     let class_name = &td.path;
 
     quote! {
-        #[derive(Debug)]
+        #[derive(Debug, Clone)]
         pub struct #name {
             #(#fields,)*
         }
@@ -155,6 +205,42 @@ fn gen_owned_struct(td: &AccessorTypeDef) -> TokenStream2 {
                     fields: indexmap::indexmap! {
                         #(#entries,)*
                     },
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Owned enum generation
+// ============================================================================
+
+fn gen_owned_enum(ed: &AccessorEnumDef) -> TokenStream2 {
+    let name = &ed.rust_name;
+    let variants = &ed.variants;
+    let enum_path = &ed.path;
+
+    let variant_arms: Vec<_> = variants
+        .iter()
+        .map(|v| {
+            let variant_str = v.to_string();
+            quote!(#name::#v => BexExternalValue::Variant {
+                enum_name: #enum_path.to_string(),
+                variant_name: #variant_str.to_string(),
+            })
+        })
+        .collect();
+
+    quote! {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum #name {
+            #(#variants,)*
+        }
+
+        impl AsBexExternalValue for #name {
+            fn into_bex_external_value(self) -> BexExternalValue {
+                match self {
+                    #(#variant_arms,)*
                 }
             }
         }
@@ -175,13 +261,22 @@ fn gen_accessor_return_type(kind: &FieldTypeKind) -> TokenStream2 {
         FieldTypeKind::MapStringString => quote!(indexmap::IndexMap<String, &'a String>),
         FieldTypeKind::MapStringUnknown => quote!(indexmap::IndexMap<String, BexValue<'a>>),
         FieldTypeKind::ArrayString => quote!(Vec<&'a String>),
+        // Complex types: accessor reading from heap is not supported
+        FieldTypeKind::BuiltinEnum(_)
+        | FieldTypeKind::ArrayBuiltinStruct(_)
+        | FieldTypeKind::OptionalBuiltinStruct(_) => quote!(()),
     }
 }
 
 fn accessor_needs_heap(kind: &FieldTypeKind) -> bool {
     !matches!(
         kind,
-        FieldTypeKind::Int | FieldTypeKind::Float | FieldTypeKind::Bool
+        FieldTypeKind::Int
+            | FieldTypeKind::Float
+            | FieldTypeKind::Bool
+            | FieldTypeKind::BuiltinEnum(_)
+            | FieldTypeKind::ArrayBuiltinStruct(_)
+            | FieldTypeKind::OptionalBuiltinStruct(_)
     )
 }
 
@@ -238,6 +333,14 @@ fn gen_accessor_body(field: &AccessorFieldDef) -> TokenStream2 {
                 })
             })
         },
+        // Complex types: accessor reading from heap not yet implemented
+        FieldTypeKind::BuiltinEnum(_)
+        | FieldTypeKind::ArrayBuiltinStruct(_)
+        | FieldTypeKind::OptionalBuiltinStruct(_) => quote! {
+            Err(AccessError::CannotConvertToOwned {
+                reason: format!("complex field accessor for '{}' not supported", #name_str),
+            })
+        },
     }
 }
 
@@ -263,6 +366,14 @@ fn gen_into_owned_field(field: &AccessorFieldDef) -> TokenStream2 {
         }
         FieldTypeKind::ArrayString => {
             quote!(#name: self.#name(heap)?.into_iter().cloned().collect())
+        }
+        // Complex types: into_owned from heap reads not yet implemented
+        FieldTypeKind::BuiltinEnum(_)
+        | FieldTypeKind::ArrayBuiltinStruct(_)
+        | FieldTypeKind::OptionalBuiltinStruct(_) => {
+            quote!(#name: return Err(AccessError::CannotConvertToOwned {
+                reason: format!("complex field into_owned for '{}' not supported", stringify!(#name)),
+            }))
         }
     }
 }

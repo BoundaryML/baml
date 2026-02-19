@@ -10,10 +10,7 @@ client<llm> MyClient {
      block_string #"hello there my frien
                 d"#
     inline_raw_string #"inline "raw" string,,"#
-    keyStringNoSpacesWorksWithoutQuotes NoQuotes!!123
-    unquoted_string_whitespace hello world
     "string key" "value with spaces"
-    filePathString ../this-is-also-a-string
     booleanValue true
     stringKey "true"
     array1 [

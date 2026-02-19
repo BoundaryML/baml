@@ -5,11 +5,14 @@
 
 //! Generated enum types.
 
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Category {
     Technology,
 
@@ -19,17 +22,18 @@ pub enum Category {
 
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
-    _Dynamic(String),
+    #[serde(untagged)]
+    _Dynamic(::std::string::String),
 }
 
-impl Default for Category {
+impl ::std::default::Default for Category {
     fn default() -> Self {
         Self::Technology
     }
 }
 
-impl std::fmt::Display for Category {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Category {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Technology => write!(f, "Technology"),
 
@@ -42,31 +46,31 @@ impl std::fmt::Display for Category {
     }
 }
 
-impl std::str::FromStr for Category {
+impl ::std::str::FromStr for Category {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Technology" => Ok(Self::Technology),
+            "Technology" => ::std::result::Result::Ok(Self::Technology),
 
-            "Science" => Ok(Self::Science),
+            "Science" => ::std::result::Result::Ok(Self::Science),
 
-            "Arts" => Ok(Self::Arts),
+            "Arts" => ::std::result::Result::Ok(Self::Arts),
 
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<Category> for Category {
+impl ::std::convert::AsRef<Category> for Category {
     fn as_ref(&self) -> &Category {
         self
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Priority {
     High,
 
@@ -76,17 +80,18 @@ pub enum Priority {
 
     /// Dynamic variant for runtime-added enum values.
     #[baml(dynamic_variant)]
-    _Dynamic(String),
+    #[serde(untagged)]
+    _Dynamic(::std::string::String),
 }
 
-impl Default for Priority {
+impl ::std::default::Default for Priority {
     fn default() -> Self {
         Self::High
     }
 }
 
-impl std::fmt::Display for Priority {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Priority {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::High => write!(f, "High"),
 
@@ -99,30 +104,30 @@ impl std::fmt::Display for Priority {
     }
 }
 
-impl std::str::FromStr for Priority {
+impl ::std::str::FromStr for Priority {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "High" => Ok(Self::High),
+            "High" => ::std::result::Result::Ok(Self::High),
 
-            "Medium" => Ok(Self::Medium),
+            "Medium" => ::std::result::Result::Ok(Self::Medium),
 
-            "Low" => Ok(Self::Low),
+            "Low" => ::std::result::Result::Ok(Self::Low),
 
-            other => Ok(Self::_Dynamic(other.to_string())),
+            other => ::std::result::Result::Ok(Self::_Dynamic(other.to_string())),
         }
     }
 }
 
-impl AsRef<Priority> for Priority {
+impl ::std::convert::AsRef<Priority> for Priority {
     fn as_ref(&self) -> &Priority {
         self
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Status {
     Active,
 
@@ -131,14 +136,14 @@ pub enum Status {
     Pending,
 }
 
-impl Default for Status {
+impl ::std::default::Default for Status {
     fn default() -> Self {
         Self::Active
     }
 }
 
-impl std::fmt::Display for Status {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Status {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::Active => write!(f, "Active"),
 
@@ -149,23 +154,23 @@ impl std::fmt::Display for Status {
     }
 }
 
-impl std::str::FromStr for Status {
+impl ::std::str::FromStr for Status {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "Active" => Ok(Self::Active),
+            "Active" => ::std::result::Result::Ok(Self::Active),
 
-            "Inactive" => Ok(Self::Inactive),
+            "Inactive" => ::std::result::Result::Ok(Self::Inactive),
 
-            "Pending" => Ok(Self::Pending),
+            "Pending" => ::std::result::Result::Ok(Self::Pending),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<Status> for Status {
+impl ::std::convert::AsRef<Status> for Status {
     fn as_ref(&self) -> &Status {
         self
     }

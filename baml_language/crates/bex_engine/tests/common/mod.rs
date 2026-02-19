@@ -74,7 +74,13 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
         .expect("Failed to create engine");
 
     let result = engine
-        .call_function(input.entry, input.inputs, sys_types::CallId::default())
+        .call_function(
+            input.entry,
+            input.inputs,
+            sys_types::CallId::default(),
+            None,
+            &[],
+        )
         .await;
 
     match (result, input.expected) {

@@ -3,7 +3,7 @@
 {% else %}
 //! Generated class types.
 
-use baml::{BamlEncode, BamlDecode};
+use baml::{BamlEncode, BamlDecode, __internal::serde::{Serialize, Deserialize}};
 use super::*;
 {% for class in classes %}
 
@@ -11,44 +11,64 @@ use super::*;
 {{ crate::utils::prefix_lines(docstring, "/// ") }}
 {%- endif %}
 {% if class.dynamic %}
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, Serialize, Deserialize)]
 #[baml(dynamic)]
-{% else %}
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-{% endif %}
+{%- else %}
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+{%- endif %}
+#[serde(crate = "::baml::__internal::serde")]
 pub struct {{ class.name }} {
-{% for field in class.fields %}
-{% if let Some(docstring) = field.docstring %}
+{%- for field in class.fields %}
+{%- if let Some(docstring) = field.docstring %}
     {{ crate::utils::prefix_lines(docstring, "/// ") }}
-{% endif %}
-{% if let Some(cffi_name) = field.cffi_name %}
+{%- endif %}
+{%- if let Some(cffi_name) = field.cffi_name %}
     #[baml(name = "{{ cffi_name }}")]
-{% endif %}
+    #[serde(rename = "{{ cffi_name }}")]
+{%- endif %}
+{%- if let Some(media_type) = field.media_type %}
+{%- match media_type %}
+{%- when MediaTypeRust::Image %}
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_image")]
+{%- when MediaTypeRust::Audio %}
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_audio")]
+{%- when MediaTypeRust::Pdf %}
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_pdf")]
+{%- when MediaTypeRust::Video %}
+    #[serde(deserialize_with = "super::super::runtime::__internal_media_serde::deserialize_video")]
+{%- endmatch %}
+{%- endif %}
     pub {{ field.name }}: {{ field.type_str }},
-{% endfor %}
-{% if class.dynamic %}
+{%- endfor %}
+{%- if class.dynamic %}
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
-    pub __dynamic: std::collections::HashMap<String, baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>>,
-{% endif %}
+    #[serde(flatten)]
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>,
+    >,
+{%- endif %}
 }
 
 {% if class.dynamic %}
 impl {{ class.name }} {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<super::Types, super::super::stream_types::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> ::std::result::Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
-            .ok_or_else(|| baml::BamlError::internal(format!("dynamic field '{}' not found", field)))
+            .ok_or_else(|| ::baml::BamlError::internal(format!("dynamic field '{}' not found", field)))
             .and_then(|v| v.get())
     }
 
     /// Get a dynamic field as a BamlValue reference (zero-copy).
-    pub fn get_ref(&self, field: &str) -> Option<&baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>> {
+    pub fn get_ref(&self, field: &str) -> ::std::option::Option<
+        &::baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>
+    > {
         self.__dynamic.get(field)
     }
 
@@ -58,24 +78,24 @@ impl {{ class.name }} {
     }
 
     /// Iterate over all dynamic fields.
-    pub fn dynamic_fields(&self) -> impl Iterator<Item = (&str, &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>)> {
+    pub fn dynamic_fields(&self) -> impl ::std::iter::Iterator<Item = (&str, &baml::BamlValue<super::Types, super::super::stream_types::StreamTypes>)> {
         self.__dynamic.iter().map(|(k, v)| (k.as_str(), v))
     }
 }
 
-impl Default for {{ class.name }} {
+impl ::std::default::Default for {{ class.name }} {
     fn default() -> Self {
         Self {
 {% for field in class.fields %}
-            {{ field.name }}: Default::default(),
-{% endfor %}
-            __dynamic: std::collections::HashMap::new(),
+            {{ field.name }}: ::std::default::Default::default(),
+{%- endfor %}
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 {% endif %}
 
-impl AsRef<{{ class.name }}> for {{ class.name }} {
+impl ::std::convert::AsRef<{{ class.name }}> for {{ class.name }} {
     fn as_ref(&self) -> &{{ class.name }} {
         self
     }

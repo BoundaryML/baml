@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -100,19 +100,6 @@ SOURCE_FILE
               R_BRACE "}"
           R_BRACE "}"
       R_BRACE "}"
-  SLASH "/"
-  SLASH "/"
-  MINUS_MINUS "--"
-  MINUS_MINUS "--"
-  SLASH "/"
-  SLASH "/"
-  MINUS "-"
-  WORD "diagnostics"
-  SLASH "/"
-  SLASH "/"
-  LESS "<"
-  WORD "no-diagnostics-expected"
-  GREATER ">"
 
 === ERRORS ===
 None

@@ -45,9 +45,8 @@ pub(crate) enum Commands {
 
     // #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)", hide = true)]
     // Login(crate::auth::LoginArgs),
-
-    // #[command(about = "Format BAML source files", name = "fmt", hide = true)]
-    // Format(crate::format::FormatArgs),
+    #[command(about = "Format BAML source files", name = "fmt", hide = true)]
+    Format(crate::format::FormatArgs),
 
     // #[command(about = "Run BAML tests")]
     // Test(baml_runtime::cli::testing::TestArgs),
@@ -119,6 +118,7 @@ impl RuntimeCli {
                     Ok(crate::ExitCode::Other)
                 }
             },
+            Commands::Format(args) => args.run(),
         }
     }
 }

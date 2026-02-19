@@ -6,154 +6,131 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ComplexMaps {
     pub userMap: std::collections::HashMap<String, User>,
-
     pub productMap: std::collections::HashMap<String, Product>,
-
     pub nestedMap: std::collections::HashMap<String, std::collections::HashMap<String, String>>,
-
     pub arrayMap: std::collections::HashMap<String, Vec<i64>>,
-
     pub mapArray: Vec<std::collections::HashMap<String, String>>,
 }
 
-impl AsRef<ComplexMaps> for ComplexMaps {
+impl ::std::convert::AsRef<ComplexMaps> for ComplexMaps {
     fn as_ref(&self) -> &ComplexMaps {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Config {
     pub url: String,
-
     pub port: i64,
-
     pub debug: bool,
 }
 
-impl AsRef<Config> for Config {
+impl ::std::convert::AsRef<Config> for Config {
     fn as_ref(&self) -> &Config {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct EdgeCaseMaps {
     pub emptyMap: std::collections::HashMap<String, String>,
-
     pub nullableValues: std::collections::HashMap<String, Option<String>>,
-
     pub optionalValues: std::collections::HashMap<String, Option<String>>,
-
     pub unionValues: std::collections::HashMap<String, Union3BoolOrIntOrString>,
 }
 
-impl AsRef<EdgeCaseMaps> for EdgeCaseMaps {
+impl ::std::convert::AsRef<EdgeCaseMaps> for EdgeCaseMaps {
     fn as_ref(&self) -> &EdgeCaseMaps {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedKeyMaps {
     pub stringIntMap: std::collections::HashMap<String, i64>,
-
     pub intStringMap: std::collections::HashMap<String, String>,
-
     pub enumMap: std::collections::HashMap<String, String>,
-
     pub literalMap: std::collections::HashMap<String, Config>,
 }
 
-impl AsRef<MixedKeyMaps> for MixedKeyMaps {
+impl ::std::convert::AsRef<MixedKeyMaps> for MixedKeyMaps {
     fn as_ref(&self) -> &MixedKeyMaps {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NestedMaps {
     pub simple: std::collections::HashMap<String, String>,
-
     pub oneLevelNested: std::collections::HashMap<String, std::collections::HashMap<String, i64>>,
-
     pub twoLevelNested: std::collections::HashMap<
         String,
         std::collections::HashMap<String, std::collections::HashMap<String, bool>>,
     >,
-
     pub mapOfArrays: std::collections::HashMap<String, Vec<String>>,
-
     pub mapOfMaps: std::collections::HashMap<String, std::collections::HashMap<String, f64>>,
 }
 
-impl AsRef<NestedMaps> for NestedMaps {
+impl ::std::convert::AsRef<NestedMaps> for NestedMaps {
     fn as_ref(&self) -> &NestedMaps {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Product {
     pub id: i64,
-
     pub name: String,
-
     pub price: f64,
-
     pub tags: Vec<String>,
 }
 
-impl AsRef<Product> for Product {
+impl ::std::convert::AsRef<Product> for Product {
     fn as_ref(&self) -> &Product {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SimpleMaps {
     pub stringToString: std::collections::HashMap<String, String>,
-
     pub stringToInt: std::collections::HashMap<String, i64>,
-
     pub stringToFloat: std::collections::HashMap<String, f64>,
-
     pub stringToBool: std::collections::HashMap<String, bool>,
-
     pub intToString: std::collections::HashMap<String, String>,
 }
 
-impl AsRef<SimpleMaps> for SimpleMaps {
+impl ::std::convert::AsRef<SimpleMaps> for SimpleMaps {
     fn as_ref(&self) -> &SimpleMaps {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct User {
     pub id: i64,
-
     pub name: String,
-
     pub email: String,
-
     pub active: bool,
 }
 
-impl AsRef<User> for User {
+impl ::std::convert::AsRef<User> for User {
     fn as_ref(&self) -> &User {
         self
     }

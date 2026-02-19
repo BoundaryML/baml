@@ -7,11 +7,15 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{
+    BamlDecode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (Streaming.Condition | Streaming.SimpleCondition)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ConditionOrSimpleCondition {
     #[baml(name = "Condition")]
     Condition(Box<Condition>),
@@ -20,21 +24,22 @@ pub enum Union2ConditionOrSimpleCondition {
     SimpleCondition(SimpleCondition),
 }
 
-impl AsRef<Union2ConditionOrSimpleCondition> for Union2ConditionOrSimpleCondition {
+impl ::std::convert::AsRef<Union2ConditionOrSimpleCondition> for Union2ConditionOrSimpleCondition {
     fn as_ref(&self) -> &Union2ConditionOrSimpleCondition {
         self
     }
 }
 
-impl Default for Union2ConditionOrSimpleCondition {
+impl ::std::default::Default for Union2ConditionOrSimpleCondition {
     fn default() -> Self {
-        Self::Condition(Default::default())
+        Self::Condition(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Streaming.Success | Streaming.Error | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ErrorOrSuccess {
     #[baml(name = "Success")]
     Success(Success),
@@ -43,21 +48,22 @@ pub enum Union2ErrorOrSuccess {
     Error(Error),
 }
 
-impl AsRef<Union2ErrorOrSuccess> for Union2ErrorOrSuccess {
+impl ::std::convert::AsRef<Union2ErrorOrSuccess> for Union2ErrorOrSuccess {
     fn as_ref(&self) -> &Union2ErrorOrSuccess {
         self
     }
 }
 
-impl Default for Union2ErrorOrSuccess {
+impl ::std::default::Default for Union2ErrorOrSuccess {
     fn default() -> Self {
-        Self::Success(Default::default())
+        Self::Success(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int @stream.done | Streaming.DataObject | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3DataObjectOrIntOrString {
     #[baml(name = "string")]
     String(String),
@@ -69,21 +75,22 @@ pub enum Union3DataObjectOrIntOrString {
     DataObject(DataObject),
 }
 
-impl AsRef<Union3DataObjectOrIntOrString> for Union3DataObjectOrIntOrString {
+impl ::std::convert::AsRef<Union3DataObjectOrIntOrString> for Union3DataObjectOrIntOrString {
     fn as_ref(&self) -> &Union3DataObjectOrIntOrString {
         self
     }
 }
 
-impl Default for Union3DataObjectOrIntOrString {
+impl ::std::default::Default for Union3DataObjectOrIntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int @stream.done | Streaming.Node[] | map<string, Streaming.Node> | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
     #[baml(name = "string")]
     String(String),
@@ -98,7 +105,7 @@ pub enum Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
     MapStringKeyNodeValue(std::collections::HashMap<String, Node>),
 }
 
-impl AsRef<Union4IntOrListNodeOrMapStringKeyNodeValueOrString>
+impl ::std::convert::AsRef<Union4IntOrListNodeOrMapStringKeyNodeValueOrString>
     for Union4IntOrListNodeOrMapStringKeyNodeValueOrString
 {
     fn as_ref(&self) -> &Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
@@ -106,8 +113,8 @@ impl AsRef<Union4IntOrListNodeOrMapStringKeyNodeValueOrString>
     }
 }
 
-impl Default for Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
+impl ::std::default::Default for Union4IntOrListNodeOrMapStringKeyNodeValueOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }

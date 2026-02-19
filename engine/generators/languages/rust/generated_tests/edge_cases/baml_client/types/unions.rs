@@ -6,11 +6,15 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (string | int | bool | null)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3BoolOrIntOrString {
     #[baml(name = "string")]
     String(String),
@@ -22,14 +26,14 @@ pub enum Union3BoolOrIntOrString {
     Bool(bool),
 }
 
-impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
+impl ::std::convert::AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
     fn as_ref(&self) -> &Union3BoolOrIntOrString {
         self
     }
 }
 
-impl Default for Union3BoolOrIntOrString {
+impl ::std::default::Default for Union3BoolOrIntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }

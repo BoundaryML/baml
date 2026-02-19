@@ -11,22 +11,22 @@
 /// Access fields via methods: `builder.field_name()`
 
 pub struct PersonClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl PersonClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Person is statically defined in .baml and should always have a type")
@@ -37,14 +37,14 @@ impl PersonClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("Person.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `age` field builder.
-    pub fn property_age(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_age(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("age")
             .expect("Person.age is statically defined in .baml and should always be present")

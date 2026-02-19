@@ -22,6 +22,8 @@ pub use crate::loc::EnumLoc as EnumId;
 pub use crate::loc::FunctionLoc as FunctionId;
 /// Identifier for a generator configuration.
 pub use crate::loc::GeneratorLoc as GeneratorId;
+/// Identifier for a retry policy.
+pub use crate::loc::RetryPolicyLoc as RetryPolicyId;
 /// Identifier for a template string definition.
 pub use crate::loc::TemplateStringLoc as TemplateStringId;
 /// Identifier for a test definition.
@@ -80,6 +82,12 @@ impl std::fmt::Debug for TemplateStringId<'_> {
     }
 }
 
+impl std::fmt::Debug for RetryPolicyId<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RetryPolicyId(..)")
+    }
+}
+
 /// Union type for any top-level item.
 ///
 /// Note: Salsa interned types have a `'db` lifetime, so `ItemId` must also have one.
@@ -93,6 +101,7 @@ pub enum ItemId<'db> {
     Generator(GeneratorId<'db>),
     Test(TestId<'db>),
     TemplateString(TemplateStringId<'db>),
+    RetryPolicy(RetryPolicyId<'db>),
 }
 
 // Manual Debug impl since Salsa interned types don't auto-derive Debug
@@ -107,6 +116,7 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::Generator(_) => write!(f, "Generator(_)"),
             ItemId::Test(_) => write!(f, "Test(_)"),
             ItemId::TemplateString(_) => write!(f, "TemplateString(_)"),
+            ItemId::RetryPolicy(_) => write!(f, "RetryPolicy(_)"),
         }
     }
 }
@@ -176,4 +186,5 @@ pub enum ItemKind {
     Generator,
     Test,
     TemplateString,
+    RetryPolicy,
 }

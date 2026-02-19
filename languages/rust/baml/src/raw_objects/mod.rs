@@ -119,7 +119,7 @@ use std::{ffi::c_void, sync::Arc};
 pub use collector::{Collector, FunctionLog, LogType, StreamTiming, Timing, Usage};
 pub use http::{HTTPBody, HTTPRequest, HTTPResponse, SSEResponse};
 pub use llm_call::{LLMCall, LLMCallKind, LLMStreamCall};
-pub use media::{Audio, Image, Pdf, Video};
+pub use media::{Audio, Image, Pdf, Video, BamlMediaRepr, BamlMediaReprContent};
 use prost::Message;
 pub use type_builder::{
     ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,

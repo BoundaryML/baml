@@ -6,11 +6,15 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (string | int | bool)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3BoolOrIntOrString {
     #[baml(name = "string")]
     String(String),
@@ -22,21 +26,22 @@ pub enum Union3BoolOrIntOrString {
     Bool(bool),
 }
 
-impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
+impl ::std::convert::AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
     fn as_ref(&self) -> &Union3BoolOrIntOrString {
         self
     }
 }
 
-impl Default for Union3BoolOrIntOrString {
+impl ::std::default::Default for Union3BoolOrIntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (User | Product | Tag)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3ProductOrTagOrUser {
     #[baml(name = "User")]
     User(User),
@@ -48,21 +53,22 @@ pub enum Union3ProductOrTagOrUser {
     Tag(Tag),
 }
 
-impl AsRef<Union3ProductOrTagOrUser> for Union3ProductOrTagOrUser {
+impl ::std::convert::AsRef<Union3ProductOrTagOrUser> for Union3ProductOrTagOrUser {
     fn as_ref(&self) -> &Union3ProductOrTagOrUser {
         self
     }
 }
 
-impl Default for Union3ProductOrTagOrUser {
+impl ::std::default::Default for Union3ProductOrTagOrUser {
     fn default() -> Self {
-        Self::User(Default::default())
+        Self::User(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int | float | bool)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4BoolOrFloatOrIntOrString {
     #[baml(name = "string")]
     String(String),
@@ -77,14 +83,14 @@ pub enum Union4BoolOrFloatOrIntOrString {
     Bool(bool),
 }
 
-impl AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
+impl ::std::convert::AsRef<Union4BoolOrFloatOrIntOrString> for Union4BoolOrFloatOrIntOrString {
     fn as_ref(&self) -> &Union4BoolOrFloatOrIntOrString {
         self
     }
 }
 
-impl Default for Union4BoolOrFloatOrIntOrString {
+impl ::std::default::Default for Union4BoolOrFloatOrIntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }

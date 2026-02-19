@@ -11,22 +11,22 @@
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ArrayWithConstraintsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ArrayWithConstraintsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "ArrayWithConstraints is statically defined in .baml and should always have a type",
         )
@@ -37,19 +37,19 @@ impl ArrayWithConstraintsClassBuilder {
     // =========================================================================
 
     /// Access the `nonEmptyStrings` field builder.
-    pub fn property_nonEmptyStrings(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_nonEmptyStrings(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("nonEmptyStrings")
             .expect("ArrayWithConstraints.nonEmptyStrings is statically defined in .baml and should always be present")
     }
 
     /// Access the `limitedInts` field builder.
-    pub fn property_limitedInts(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_limitedInts(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("limitedInts")
             .expect("ArrayWithConstraints.limitedInts is statically defined in .baml and should always be present")
     }
 
     /// Access the `positiveFloats` field builder.
-    pub fn property_positiveFloats(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_positiveFloats(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("positiveFloats")
             .expect("ArrayWithConstraints.positiveFloats is statically defined in .baml and should always be present")
     }
@@ -61,22 +61,22 @@ impl ArrayWithConstraintsClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MixedArraysClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MixedArraysClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("MixedArrays is statically defined in .baml and should always have a type")
@@ -87,34 +87,34 @@ impl MixedArraysClassBuilder {
     // =========================================================================
 
     /// Access the `primitiveArray` field builder.
-    pub fn property_primitiveArray(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_primitiveArray(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("primitiveArray")
             .expect("MixedArrays.primitiveArray is statically defined in .baml and should always be present")
     }
 
     /// Access the `nullableArray` field builder.
-    pub fn property_nullableArray(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_nullableArray(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("nullableArray").expect(
             "MixedArrays.nullableArray is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `optionalItems` field builder.
-    pub fn property_optionalItems(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_optionalItems(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("optionalItems").expect(
             "MixedArrays.optionalItems is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `arrayOfArrays` field builder.
-    pub fn property_arrayOfArrays(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_arrayOfArrays(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("arrayOfArrays").expect(
             "MixedArrays.arrayOfArrays is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `complexMixed` field builder.
-    pub fn property_complexMixed(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_complexMixed(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("complexMixed").expect(
             "MixedArrays.complexMixed is statically defined in .baml and should always be present",
         )
@@ -127,22 +127,22 @@ impl MixedArraysClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct NestedArraysClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl NestedArraysClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("NestedArrays is statically defined in .baml and should always have a type")
@@ -153,21 +153,21 @@ impl NestedArraysClassBuilder {
     // =========================================================================
 
     /// Access the `matrix` field builder.
-    pub fn property_matrix(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_matrix(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("matrix").expect(
             "NestedArrays.matrix is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `stringMatrix` field builder.
-    pub fn property_stringMatrix(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_stringMatrix(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("stringMatrix").expect(
             "NestedArrays.stringMatrix is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `threeDimensional` field builder.
-    pub fn property_threeDimensional(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_threeDimensional(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("threeDimensional")
             .expect("NestedArrays.threeDimensional is statically defined in .baml and should always be present")
     }
@@ -179,22 +179,22 @@ impl NestedArraysClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ObjectArraysClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ObjectArraysClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("ObjectArrays is statically defined in .baml and should always have a type")
@@ -205,21 +205,21 @@ impl ObjectArraysClassBuilder {
     // =========================================================================
 
     /// Access the `users` field builder.
-    pub fn property_users(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_users(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("users").expect(
             "ObjectArrays.users is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `products` field builder.
-    pub fn property_products(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_products(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("products").expect(
             "ObjectArrays.products is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `tags` field builder.
-    pub fn property_tags(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_tags(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("tags")
             .expect("ObjectArrays.tags is statically defined in .baml and should always be present")
@@ -232,22 +232,22 @@ impl ObjectArraysClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ProductClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ProductClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Product is statically defined in .baml and should always have a type")
@@ -258,35 +258,35 @@ impl ProductClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
             .expect("Product.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("Product.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `price` field builder.
-    pub fn property_price(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_price(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("price")
             .expect("Product.price is statically defined in .baml and should always be present")
     }
 
     /// Access the `tags` field builder.
-    pub fn property_tags(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_tags(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("tags")
             .expect("Product.tags is statically defined in .baml and should always be present")
     }
 
     /// Access the `inStock` field builder.
-    pub fn property_inStock(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_inStock(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("inStock")
             .expect("Product.inStock is statically defined in .baml and should always be present")
@@ -299,22 +299,22 @@ impl ProductClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct SimpleArraysClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SimpleArraysClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("SimpleArrays is statically defined in .baml and should always have a type")
@@ -325,28 +325,28 @@ impl SimpleArraysClassBuilder {
     // =========================================================================
 
     /// Access the `strings` field builder.
-    pub fn property_strings(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_strings(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("strings").expect(
             "SimpleArrays.strings is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `integers` field builder.
-    pub fn property_integers(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_integers(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("integers").expect(
             "SimpleArrays.integers is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `floats` field builder.
-    pub fn property_floats(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_floats(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("floats").expect(
             "SimpleArrays.floats is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `booleans` field builder.
-    pub fn property_booleans(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_booleans(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("booleans").expect(
             "SimpleArrays.booleans is statically defined in .baml and should always be present",
         )
@@ -359,22 +359,22 @@ impl SimpleArraysClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TagClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TagClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Tag is statically defined in .baml and should always have a type")
@@ -385,21 +385,21 @@ impl TagClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
             .expect("Tag.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("Tag.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `color` field builder.
-    pub fn property_color(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_color(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("color")
             .expect("Tag.color is statically defined in .baml and should always be present")
@@ -412,22 +412,22 @@ impl TagClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct UserClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl UserClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("User is statically defined in .baml and should always have a type")
@@ -438,28 +438,28 @@ impl UserClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
             .expect("User.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("User.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `email` field builder.
-    pub fn property_email(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_email(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("email")
             .expect("User.email is statically defined in .baml and should always be present")
     }
 
     /// Access the `isActive` field builder.
-    pub fn property_isActive(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_isActive(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("isActive")
             .expect("User.isActive is statically defined in .baml and should always be present")

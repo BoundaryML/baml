@@ -11,22 +11,22 @@
 /// Access values via methods: `builder.ValueName()`
 
 pub struct StatusEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl StatusEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Status is statically defined in .baml and should always have a type")
@@ -37,21 +37,21 @@ impl StatusEnumBuilder {
     // =========================================================================
 
     /// Access the `ACTIVE` value builder.
-    pub fn value_ACTIVE(&self) -> baml::EnumValueBuilder {
+    pub fn value_ACTIVE(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("ACTIVE")
             .expect("Status.ACTIVE is statically defined in .baml and should always be present")
     }
 
     /// Access the `INACTIVE` value builder.
-    pub fn value_INACTIVE(&self) -> baml::EnumValueBuilder {
+    pub fn value_INACTIVE(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("INACTIVE")
             .expect("Status.INACTIVE is statically defined in .baml and should always be present")
     }
 
     /// Access the `PENDING` value builder.
-    pub fn value_PENDING(&self) -> baml::EnumValueBuilder {
+    pub fn value_PENDING(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("PENDING")
             .expect("Status.PENDING is statically defined in .baml and should always be present")

@@ -31,6 +31,8 @@ pub struct TestMarker;
 pub struct GeneratorMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TemplateStringMarker;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct RetryPolicyMarker;
 
 /// Location of a function in the source code.
 ///
@@ -91,4 +93,11 @@ pub struct GeneratorLoc {
 pub struct TemplateStringLoc {
     pub file: SourceFile,
     pub id: LocalItemId<TemplateStringMarker>,
+}
+
+/// Location of a retry policy definition.
+#[salsa::interned]
+pub struct RetryPolicyLoc {
+    pub file: SourceFile,
+    pub id: LocalItemId<RetryPolicyMarker>,
 }

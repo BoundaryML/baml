@@ -1,10 +1,10 @@
 ---
-source: target/debug/build/baml_tests-eb448e436f8a003a/out/generated_tests.rs
+source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
 function GetTodo() -> Todo {
-      <missing>({ method: baml.HttpMethod.Get, url: "dummyjson.com/todos/1" })
+      <missing>(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/todos/1" })
 }
 
 class Todo {

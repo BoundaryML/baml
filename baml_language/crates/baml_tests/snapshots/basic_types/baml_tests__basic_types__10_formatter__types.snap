@@ -1,0 +1,57 @@
+---
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
+expression: first
+---
+class User {
+    id int
+    name string
+    email string
+}
+
+enum Status {
+    Active,
+    Inactive,
+}
+
+// String literal type tests
+type Role = "user" | "assistant" | "system"
+
+// Optional string literal - regression test for from_type_text
+type OptionalRole = "admin"?
+
+// Array of string literal
+type RoleList = "reader"[]
+
+// Optional array of string literal
+type OptionalRoleList = "writer"[]?
+
+// Optional int literal
+type OptionalCode = 200?
+
+// Optional bool literal
+type OptionalFlag = true?
+
+// Array of union - tests parenthesized union in array
+type MixedList = (int | string)[]
+
+// Map with union value type
+type MixedMap = map<string, int | string>
+
+// Union of arrays (different from array of union)
+type UnionOfArrays = int[] | string[]
+
+// A really long type that should wrap to multiple lines
+type ReallyLongMapType = map<
+    string,
+    "fieopwaiwjepfoiwajpoweijf"
+        | int
+        | string
+        | bool
+        | float
+        | int[]
+        | string[]
+        | map<string, int | string>
+        | map<string, map<string, int | string>>
+        | map<string, map<string, map<string, int | string>>>
+        | map<string, map<string, map<string, map<string, int | string>>>>
+>

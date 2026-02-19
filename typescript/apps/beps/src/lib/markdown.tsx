@@ -29,7 +29,7 @@ export const markdownComponents: Components = {
     const isInline = !className;
     if (isInline) {
       return (
-        <code className="rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-[0.875em] text-gray-800 border border-gray-200">
+        <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.875em] text-foreground border border-border">
           {children}
         </code>
       );
@@ -58,7 +58,7 @@ export const markdownComponents: Components = {
 
     // Fallback for non-code pre content
     return (
-      <pre className="my-5 overflow-x-auto rounded-xl bg-slate-900 dark:bg-slate-950 p-5 font-mono text-sm text-slate-200 border border-slate-800 shadow-lg">
+      <pre className="my-5 overflow-x-auto rounded-xl bg-muted p-5 font-mono text-sm text-foreground border border-border shadow-sm">
         {children}
       </pre>
     );
@@ -66,7 +66,7 @@ export const markdownComponents: Components = {
   a: ({ href, children }) => (
     <a
       href={href}
-      className="text-sky-500 dark:text-sky-400 underline underline-offset-4 hover:text-sky-600 dark:hover:text-sky-300 transition-colors"
+      className="text-primary underline underline-offset-4 hover:text-primary/80 transition-colors"
       target={href?.startsWith("http") ? "_blank" : undefined}
       rel={href?.startsWith("http") ? "noopener noreferrer" : undefined}
     >
@@ -80,9 +80,9 @@ export const markdownComponents: Components = {
       </table>
     </div>
   ),
-  thead: ({ children }) => <thead className="bg-slate-100 dark:bg-slate-800/50">{children}</thead>,
+  thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
   th: ({ children }) => (
-    <th className="border-b border-border px-4 py-3 text-left font-semibold text-sm uppercase tracking-wider text-slate-600 dark:text-slate-300">
+    <th className="border-b border-border px-4 py-3 text-left font-semibold text-sm uppercase tracking-wider text-muted-foreground">
       {children}
     </th>
   ),
@@ -96,7 +96,5 @@ export const markdownComponents: Components = {
   strong: ({ children }) => (
     <strong className="font-semibold text-foreground">{children}</strong>
   ),
-  em: ({ children }) => (
-    <em className="italic text-slate-600 dark:text-slate-300">{children}</em>
-  ),
+  em: ({ children }) => <em className="italic text-muted-foreground">{children}</em>,
 };

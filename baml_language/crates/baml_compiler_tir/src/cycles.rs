@@ -415,7 +415,7 @@ fn extract_class_deps(ty: &Ty, type_aliases: &HashMap<Name, Ty>) -> HashSet<Name
                 // Only add if not optional and not in list/map.
                 // Optional and structural contexts break the hard dependency.
                 if !optional && !in_list_or_map {
-                    deps.insert(fqn.name.clone());
+                    deps.insert(fqn.display_name());
                 }
             }
             Ty::TypeAlias(fqn) => {

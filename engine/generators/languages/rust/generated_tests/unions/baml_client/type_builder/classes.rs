@@ -11,22 +11,22 @@
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ExistingSystemComponentClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ExistingSystemComponentClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "ExistingSystemComponent is statically defined in .baml and should always have a type",
         )
@@ -37,31 +37,31 @@ impl ExistingSystemComponentClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("id")
             .expect("ExistingSystemComponent.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("name")
             .expect("ExistingSystemComponent.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `r#type` field builder.
-    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_type(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("type")
             .expect("ExistingSystemComponent.type is statically defined in .baml and should always be present")
     }
 
     /// Access the `category` field builder.
-    pub fn property_category(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_category(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("category")
             .expect("ExistingSystemComponent.category is statically defined in .baml and should always be present")
     }
 
     /// Access the `explanation` field builder.
-    pub fn property_explanation(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_explanation(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("explanation")
             .expect("ExistingSystemComponent.explanation is statically defined in .baml and should always be present")
     }
@@ -73,22 +73,22 @@ impl ExistingSystemComponentClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct UseMyUnionClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl UseMyUnionClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("UseMyUnion is statically defined in .baml and should always have a type")
@@ -99,7 +99,7 @@ impl UseMyUnionClassBuilder {
     // =========================================================================
 
     /// Access the `u` field builder.
-    pub fn property_u(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_u(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("u")
             .expect("UseMyUnion.u is statically defined in .baml and should always be present")

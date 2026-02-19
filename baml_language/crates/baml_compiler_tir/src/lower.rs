@@ -7,7 +7,7 @@
 //! - Handling primitive type names
 //! - Validating that named types exist (when `type_alias_names` is provided)
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
 use baml_compiler_diagnostics::TypeError;
@@ -29,8 +29,8 @@ use crate::{LiteralValue, TirTypeError, Ty};
 pub(crate) fn lower_type_ref(
     type_ref: &TypeRef,
     type_alias_names: &HashSet<Name>,
-    class_names: &HashSet<Name>,
-    enum_names: &HashSet<Name>,
+    class_names: &HashMap<Name, baml_compiler_hir::QualifiedName>,
+    enum_names: &HashMap<Name, baml_compiler_hir::QualifiedName>,
     location: impl Into<ErrorLocation>,
 ) -> (Ty, Vec<TirTypeError>) {
     let mut ctx = TypeLoweringContextResolved::new(
@@ -46,8 +46,8 @@ pub(crate) fn lower_type_ref(
 /// Context for type lowering with validation and resolution.
 struct TypeLoweringContextResolved<'a> {
     type_alias_names: &'a HashSet<Name>,
-    class_names: &'a HashSet<Name>,
-    enum_names: &'a HashSet<Name>,
+    class_names: &'a HashMap<Name, baml_compiler_hir::QualifiedName>,
+    enum_names: &'a HashMap<Name, baml_compiler_hir::QualifiedName>,
     /// Base error location (e.g., `TypeAliasType` with `alias_name`)
     base_location: ErrorLocation,
     /// Current path within nested type constructors (for `TypeAliasType`)
@@ -58,8 +58,8 @@ struct TypeLoweringContextResolved<'a> {
 impl<'a> TypeLoweringContextResolved<'a> {
     fn new(
         type_alias_names: &'a HashSet<Name>,
-        class_names: &'a HashSet<Name>,
-        enum_names: &'a HashSet<Name>,
+        class_names: &'a HashMap<Name, baml_compiler_hir::QualifiedName>,
+        enum_names: &'a HashMap<Name, baml_compiler_hir::QualifiedName>,
         location: ErrorLocation,
     ) -> Self {
         Self {
@@ -96,26 +96,12 @@ impl<'a> TypeLoweringContextResolved<'a> {
     }
 
     fn resolve_name(&self, name: &Name) -> Option<Ty> {
-        use baml_compiler_hir::QualifiedName;
-
-        // First check user-defined types (they shadow prelude)
-        if self.class_names.contains(name) {
-            // Builtin types (e.g., "baml.http.Request") need Builtin namespace
-            // so they match structurally with types returned by builtin method calls.
-            if baml_builtins::find_builtin_type(name.as_str()).is_some() {
-                return Some(Ty::Class(QualifiedName::from_builtin_path(name.as_str())));
-            }
-            return Some(Ty::Class(QualifiedName::local(name.clone())));
+        if let Some(qn) = self.class_names.get(name) {
+            return Some(Ty::Class(qn.clone()));
         }
-        if self.enum_names.contains(name) {
-            return Some(Ty::Enum(QualifiedName::local(name.clone())));
+        if let Some(qn) = self.enum_names.get(name) {
+            return Some(Ty::Enum(qn.clone()));
         }
-
-        // Check prelude for builtin types
-        if let Some(qualified_path) = baml_builtins::lookup_prelude(name.as_str()) {
-            return Some(Ty::Class(QualifiedName::from_builtin_path(qualified_path)));
-        }
-
         None
     }
 }
@@ -219,6 +205,9 @@ fn lower_type_ref_resolved_with_ctx(
 
         // BuiltinUnknown - the `unknown` type keyword for builtin functions
         TypeRef::BuiltinUnknown => Ty::BuiltinUnknown,
+
+        // Type - the `big_t_type` keyword for the meta-type
+        TypeRef::Type => Ty::Type,
     }
 }
 

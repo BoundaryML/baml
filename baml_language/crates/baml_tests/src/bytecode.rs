@@ -57,6 +57,7 @@ pub fn setup_test_db(source: &str) -> ProjectDatabase {
 ///
 /// Panics with a descriptive message if any error-level diagnostics are found.
 /// Warnings and info-level diagnostics are ignored.
+#[track_caller]
 pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
     use baml_compiler_diagnostics::Severity;
 
@@ -180,6 +181,11 @@ pub fn collect_vm_exec_states(
 
     loop {
         let result = vm.exec()?;
+        // Skip SpanNotify states — these are span lifecycle events from
+        // traced function calls that aren't relevant for watch/emit tests.
+        if matches!(result, VmExecState::SpanNotify(_)) {
+            continue;
+        }
         let is_complete = matches!(result, VmExecState::Complete(_));
         let test_state = ExecState::from_vm_exec_state(result, &vm)?;
         states.push(test_state);
@@ -238,7 +244,16 @@ fn setup_and_exec_program(
     let mut vm = BexVm::from_program(program)?;
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &[]);
-    let result = vm.exec();
+
+    // Loop past SpanNotify states. Traced function calls yield SpanNotify
+    // before reaching the actual result.
+    let result = loop {
+        let result = vm.exec();
+        match &result {
+            Ok(VmExecState::SpanNotify(_)) => continue,
+            _ => break result,
+        }
+    };
     Ok((vm, result))
 }
 
@@ -289,6 +304,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         param_names: Vec::new(),
         param_types: Vec::new(),
         body_meta: None,
+        trace: false,
     };
 
     let mut program = VmProgram::new();

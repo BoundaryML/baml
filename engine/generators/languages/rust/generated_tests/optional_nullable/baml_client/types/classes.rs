@@ -6,197 +6,163 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ComplexOptional {
     pub data: Option<OptionalData>,
-
     pub items: Vec<OptionalItem>,
-
     pub mapping: std::collections::HashMap<String, Option<OptionalValue>>,
 }
 
-impl AsRef<ComplexOptional> for ComplexOptional {
+impl ::std::convert::AsRef<ComplexOptional> for ComplexOptional {
     fn as_ref(&self) -> &ComplexOptional {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedOptionalNullable {
     pub id: i64,
-
     pub description: Option<String>,
-
     pub metadata: Option<String>,
-
     pub notes: Option<String>,
-
     pub tags: Vec<String>,
-
     pub categories: Option<Vec<String>>,
-
     pub keywords: Option<Vec<String>>,
-
     pub primaryUser: User,
-
     pub secondaryUser: Option<User>,
-
     pub tertiaryUser: Option<User>,
 }
 
-impl AsRef<MixedOptionalNullable> for MixedOptionalNullable {
+impl ::std::convert::AsRef<MixedOptionalNullable> for MixedOptionalNullable {
     fn as_ref(&self) -> &MixedOptionalNullable {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NullableTypes {
     pub nullableString: Option<String>,
-
     pub nullableInt: Option<i64>,
-
     pub nullableFloat: Option<f64>,
-
     pub nullableBool: Option<bool>,
-
     pub nullableArray: Option<Vec<String>>,
-
     pub nullableObject: Option<User>,
 }
 
-impl AsRef<NullableTypes> for NullableTypes {
+impl ::std::convert::AsRef<NullableTypes> for NullableTypes {
     fn as_ref(&self) -> &NullableTypes {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalData {
     pub value: String,
-
     pub count: Option<i64>,
-
     pub enabled: Option<bool>,
 }
 
-impl AsRef<OptionalData> for OptionalData {
+impl ::std::convert::AsRef<OptionalData> for OptionalData {
     fn as_ref(&self) -> &OptionalData {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalFields {
     pub requiredString: String,
-
     pub optionalString: Option<String>,
-
     pub requiredInt: i64,
-
     pub optionalInt: Option<i64>,
-
     pub requiredBool: bool,
-
     pub optionalBool: Option<bool>,
-
     pub optionalArray: Option<Vec<String>>,
-
     pub optionalMap: Option<std::collections::HashMap<String, String>>,
 }
 
-impl AsRef<OptionalFields> for OptionalFields {
+impl ::std::convert::AsRef<OptionalFields> for OptionalFields {
     fn as_ref(&self) -> &OptionalFields {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalItem {
     pub id: i64,
-
     pub name: String,
-
     pub description: Option<String>,
-
     pub metadata: Option<std::collections::HashMap<String, String>>,
 }
 
-impl AsRef<OptionalItem> for OptionalItem {
+impl ::std::convert::AsRef<OptionalItem> for OptionalItem {
     fn as_ref(&self) -> &OptionalItem {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalValue {
     pub data: Option<Union2IntOrString>,
-
     pub optional: Option<String>,
 }
 
-impl AsRef<OptionalValue> for OptionalValue {
+impl ::std::convert::AsRef<OptionalValue> for OptionalValue {
     fn as_ref(&self) -> &OptionalValue {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Product {
     pub id: i64,
-
     pub name: String,
-
     pub price: Option<f64>,
 }
 
-impl AsRef<Product> for Product {
+impl ::std::convert::AsRef<Product> for Product {
     fn as_ref(&self) -> &Product {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UnionWithNull {
     pub simpleUnion: Union2IntOrString,
-
     pub nullableUnion: Option<Union2IntOrString>,
-
     pub optionalUnion: Option<Union2IntOrString>,
-
     pub complexUnion: Option<Union2ProductOrUser>,
 }
 
-impl AsRef<UnionWithNull> for UnionWithNull {
+impl ::std::convert::AsRef<UnionWithNull> for UnionWithNull {
     fn as_ref(&self) -> &UnionWithNull {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct User {
     pub id: i64,
-
     pub name: String,
-
     pub email: Option<String>,
-
     pub phone: Option<String>,
 }
 
-impl AsRef<User> for User {
+impl ::std::convert::AsRef<User> for User {
     fn as_ref(&self) -> &User {
         self
     }

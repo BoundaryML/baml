@@ -1,0 +1,23 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+type foo = bar
+type bar = int
+
+// Should pass.
+function Foo() -> foo {
+    1
+}
+
+// Should fail.
+function Bar() -> foo {
+    true
+}
+
+type Json = int | float | string | Json[] | map<string, Json>
+
+// Should pass.
+function Baz() -> Json {
+    "hello"
+}

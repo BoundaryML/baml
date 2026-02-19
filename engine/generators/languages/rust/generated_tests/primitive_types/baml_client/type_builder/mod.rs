@@ -11,8 +11,6 @@ mod enums;
 pub use classes::*;
 pub use enums::*;
 
-use std::sync::Arc;
-
 /// TypeBuilder for dynamic type construction.
 ///
 /// This wrapper provides access to the BAML TypeBuilder for creating
@@ -23,7 +21,7 @@ use std::sync::Arc;
 /// - `tb.EnumName()` returns the enum builder
 #[derive(Clone)]
 pub struct TypeBuilder {
-    inner: Arc<baml::TypeBuilder>,
+    inner: ::std::sync::Arc<::baml::TypeBuilder>,
 }
 
 impl TypeBuilder {
@@ -37,12 +35,12 @@ impl TypeBuilder {
     /// ```
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(super::runtime::get_runtime().new_type_builder()),
+            inner: ::std::sync::Arc::new(super::runtime::get_runtime().new_type_builder()),
         }
     }
 
     /// Get reference to inner TypeBuilder for FFI calls.
-    pub(crate) fn inner(&self) -> &baml::TypeBuilder {
+    pub(crate) fn inner(&self) -> &::baml::TypeBuilder {
         &self.inner
     }
 
@@ -95,27 +93,27 @@ impl TypeBuilder {
     // =========================================================================
 
     /// Get the string type.
-    pub fn string(&self) -> baml::TypeDef {
+    pub fn string(&self) -> ::baml::TypeDef {
         self.inner.string()
     }
 
     /// Get the int type.
-    pub fn int(&self) -> baml::TypeDef {
+    pub fn int(&self) -> ::baml::TypeDef {
         self.inner.int()
     }
 
     /// Get the float type.
-    pub fn float(&self) -> baml::TypeDef {
+    pub fn float(&self) -> ::baml::TypeDef {
         self.inner.float()
     }
 
     /// Get the bool type.
-    pub fn bool(&self) -> baml::TypeDef {
+    pub fn bool(&self) -> ::baml::TypeDef {
         self.inner.bool()
     }
 
     /// Get the null type.
-    pub fn null(&self) -> baml::TypeDef {
+    pub fn null(&self) -> ::baml::TypeDef {
         self.inner.null()
     }
 
@@ -124,17 +122,17 @@ impl TypeBuilder {
     // =========================================================================
 
     /// Create a literal string type.
-    pub fn literal_string(&self, value: &str) -> baml::TypeDef {
+    pub fn literal_string(&self, value: &str) -> ::baml::TypeDef {
         self.inner.literal_string(value)
     }
 
     /// Create a literal int type.
-    pub fn literal_int(&self, value: i64) -> baml::TypeDef {
+    pub fn literal_int(&self, value: i64) -> ::baml::TypeDef {
         self.inner.literal_int(value)
     }
 
     /// Create a literal bool type.
-    pub fn literal_bool(&self, value: bool) -> baml::TypeDef {
+    pub fn literal_bool(&self, value: bool) -> ::baml::TypeDef {
         self.inner.literal_bool(value)
     }
 
@@ -143,22 +141,22 @@ impl TypeBuilder {
     // =========================================================================
 
     /// Create a list type.
-    pub fn list(&self, inner: &baml::TypeDef) -> baml::TypeDef {
+    pub fn list(&self, inner: &::baml::TypeDef) -> ::baml::TypeDef {
         self.inner.list(inner)
     }
 
     /// Create an optional type.
-    pub fn optional(&self, inner: &baml::TypeDef) -> baml::TypeDef {
+    pub fn optional(&self, inner: &::baml::TypeDef) -> ::baml::TypeDef {
         self.inner.optional(inner)
     }
 
     /// Create a map type.
-    pub fn map(&self, key: &baml::TypeDef, value: &baml::TypeDef) -> baml::TypeDef {
+    pub fn map(&self, key: &::baml::TypeDef, value: &::baml::TypeDef) -> ::baml::TypeDef {
         self.inner.map(key, value)
     }
 
     /// Create a union type.
-    pub fn union(&self, types: &[&baml::TypeDef]) -> baml::TypeDef {
+    pub fn union(&self, types: &[&::baml::TypeDef]) -> ::baml::TypeDef {
         self.inner.union(types)
     }
 
@@ -167,12 +165,12 @@ impl TypeBuilder {
     // =========================================================================
 
     /// Add BAML schema definitions.
-    pub fn add_baml(&self, baml_source: &str) -> Result<(), baml::BamlError> {
+    pub fn add_baml(&self, baml_source: &str) -> ::std::result::Result<(), ::baml::BamlError> {
         self.inner.add_baml(baml_source)
     }
 
     /// Print the TypeBuilder state for debugging.
-    pub fn print(&self) -> String {
+    pub fn print(&self) -> ::std::string::String {
         self.inner.print()
     }
 
@@ -181,17 +179,20 @@ impl TypeBuilder {
     // =========================================================================
 
     /// Add a new dynamic enum.
-    pub fn add_enum(&self, name: &str) -> Result<baml::EnumBuilder, baml::BamlError> {
+    pub fn add_enum(
+        &self,
+        name: &str,
+    ) -> ::std::result::Result<::baml::EnumBuilder, ::baml::BamlError> {
         self.inner.add_enum(name)
     }
 
     /// Get an enum by name (returns None if not found).
-    pub fn get_enum(&self, name: &str) -> Option<baml::EnumBuilder> {
+    pub fn get_enum(&self, name: &str) -> ::std::option::Option<::baml::EnumBuilder> {
         self.inner.get_enum(name)
     }
 
     /// List all enums.
-    pub fn list_enums(&self) -> Vec<baml::EnumBuilder> {
+    pub fn list_enums(&self) -> ::std::vec::Vec<::baml::EnumBuilder> {
         self.inner.list_enums()
     }
 
@@ -200,29 +201,32 @@ impl TypeBuilder {
     // =========================================================================
 
     /// Add a new dynamic class.
-    pub fn add_class(&self, name: &str) -> Result<baml::ClassBuilder, baml::BamlError> {
+    pub fn add_class(
+        &self,
+        name: &str,
+    ) -> ::std::result::Result<::baml::ClassBuilder, ::baml::BamlError> {
         self.inner.add_class(name)
     }
 
     /// Get a class by name (returns None if not found).
-    pub fn get_class(&self, name: &str) -> Option<baml::ClassBuilder> {
+    pub fn get_class(&self, name: &str) -> ::std::option::Option<::baml::ClassBuilder> {
         self.inner.get_class(name)
     }
 
     /// List all classes.
-    pub fn list_classes(&self) -> Vec<baml::ClassBuilder> {
+    pub fn list_classes(&self) -> ::std::vec::Vec<::baml::ClassBuilder> {
         self.inner.list_classes()
     }
 }
 
-impl Default for TypeBuilder {
+impl ::std::default::Default for TypeBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl std::fmt::Debug for TypeBuilder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Debug for TypeBuilder {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         f.debug_struct("TypeBuilder")
             .field("state", &self.print())
             .finish()

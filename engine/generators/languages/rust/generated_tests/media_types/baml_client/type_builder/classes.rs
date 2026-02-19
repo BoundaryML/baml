@@ -11,22 +11,22 @@
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MediaAnalysisResultClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MediaAnalysisResultClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "MediaAnalysisResult is statically defined in .baml and should always have a type",
         )
@@ -37,13 +37,13 @@ impl MediaAnalysisResultClassBuilder {
     // =========================================================================
 
     /// Access the `topics` field builder.
-    pub fn property_topics(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_topics(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("topics")
             .expect("MediaAnalysisResult.topics is statically defined in .baml and should always be present")
     }
 
     /// Access the `analysisText` field builder.
-    pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_analysisText(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("analysisText")
             .expect("MediaAnalysisResult.analysisText is statically defined in .baml and should always be present")
     }
@@ -55,22 +55,22 @@ impl MediaAnalysisResultClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MediaArrayAnalysisResultClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MediaArrayAnalysisResultClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "MediaArrayAnalysisResult is statically defined in .baml and should always have a type",
         )
@@ -81,13 +81,13 @@ impl MediaArrayAnalysisResultClassBuilder {
     // =========================================================================
 
     /// Access the `analysisText` field builder.
-    pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_analysisText(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("analysisText")
             .expect("MediaArrayAnalysisResult.analysisText is statically defined in .baml and should always be present")
     }
 
     /// Access the `mediaCount` field builder.
-    pub fn property_mediaCount(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_mediaCount(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("mediaCount")
             .expect("MediaArrayAnalysisResult.mediaCount is statically defined in .baml and should always be present")
     }
@@ -99,22 +99,22 @@ impl MediaArrayAnalysisResultClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MediaMapAnalysisResultClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MediaMapAnalysisResultClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "MediaMapAnalysisResult is statically defined in .baml and should always have a type",
         )
@@ -125,19 +125,19 @@ impl MediaMapAnalysisResultClassBuilder {
     // =========================================================================
 
     /// Access the `analysisText` field builder.
-    pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_analysisText(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("analysisText")
             .expect("MediaMapAnalysisResult.analysisText is statically defined in .baml and should always be present")
     }
 
     /// Access the `keyCount` field builder.
-    pub fn property_keyCount(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_keyCount(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("keyCount")
             .expect("MediaMapAnalysisResult.keyCount is statically defined in .baml and should always be present")
     }
 
     /// Access the `keys` field builder.
-    pub fn property_keys(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_keys(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("keys")
             .expect("MediaMapAnalysisResult.keys is statically defined in .baml and should always be present")
     }
@@ -149,22 +149,22 @@ impl MediaMapAnalysisResultClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MixedMediaAnalysisResultClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MixedMediaAnalysisResultClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "MixedMediaAnalysisResult is statically defined in .baml and should always have a type",
         )
@@ -175,49 +175,49 @@ impl MixedMediaAnalysisResultClassBuilder {
     // =========================================================================
 
     /// Access the `title` field builder.
-    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_title(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("title")
             .expect("MixedMediaAnalysisResult.title is statically defined in .baml and should always be present")
     }
 
     /// Access the `description` field builder.
-    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("description")
             .expect("MixedMediaAnalysisResult.description is statically defined in .baml and should always be present")
     }
 
     /// Access the `hasImage` field builder.
-    pub fn property_hasImage(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_hasImage(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("hasImage")
             .expect("MixedMediaAnalysisResult.hasImage is statically defined in .baml and should always be present")
     }
 
     /// Access the `hasVideo` field builder.
-    pub fn property_hasVideo(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_hasVideo(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("hasVideo")
             .expect("MixedMediaAnalysisResult.hasVideo is statically defined in .baml and should always be present")
     }
 
     /// Access the `hasAudio` field builder.
-    pub fn property_hasAudio(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_hasAudio(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("hasAudio")
             .expect("MixedMediaAnalysisResult.hasAudio is statically defined in .baml and should always be present")
     }
 
     /// Access the `hasPdf` field builder.
-    pub fn property_hasPdf(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_hasPdf(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("hasPdf")
             .expect("MixedMediaAnalysisResult.hasPdf is statically defined in .baml and should always be present")
     }
 
     /// Access the `additionalImageCount` field builder.
-    pub fn property_additionalImageCount(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_additionalImageCount(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("additionalImageCount")
             .expect("MixedMediaAnalysisResult.additionalImageCount is statically defined in .baml and should always be present")
     }
 
     /// Access the `metadataKeys` field builder.
-    pub fn property_metadataKeys(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_metadataKeys(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("metadataKeys")
             .expect("MixedMediaAnalysisResult.metadataKeys is statically defined in .baml and should always be present")
     }
@@ -229,22 +229,22 @@ impl MixedMediaAnalysisResultClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct OptionalMediaAnalysisResultClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl OptionalMediaAnalysisResultClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type()
             .expect("OptionalMediaAnalysisResult is statically defined in .baml and should always have a type")
     }
@@ -254,19 +254,19 @@ impl OptionalMediaAnalysisResultClassBuilder {
     // =========================================================================
 
     /// Access the `analysisText` field builder.
-    pub fn property_analysisText(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_analysisText(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("analysisText")
             .expect("OptionalMediaAnalysisResult.analysisText is statically defined in .baml and should always be present")
     }
 
     /// Access the `providedMediaTypes` field builder.
-    pub fn property_providedMediaTypes(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_providedMediaTypes(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("providedMediaTypes")
             .expect("OptionalMediaAnalysisResult.providedMediaTypes is statically defined in .baml and should always be present")
     }
 
     /// Access the `missingMediaTypes` field builder.
-    pub fn property_missingMediaTypes(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_missingMediaTypes(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("missingMediaTypes")
             .expect("OptionalMediaAnalysisResult.missingMediaTypes is statically defined in .baml and should always be present")
     }

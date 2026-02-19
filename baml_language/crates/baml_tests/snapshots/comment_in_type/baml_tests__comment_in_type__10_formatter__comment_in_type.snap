@@ -1,0 +1,24 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+// Test case for comments in type positions
+
+client<llm> TestClient {
+    provider baml-openai-chat,
+}
+
+// This function has comments around the return type
+function FunctionWithComments(
+    a: string,
+    b: int, // comment after param type
+) -> string {
+    client TestClient
+    prompt #"test"#
+}
+
+// Another test - comment immediately after arrow
+function CommentAfterArrow() -> string {
+    client TestClient
+    prompt #"test"#
+}

@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ArrayWithConstraints {
     pub nonEmptyStrings: Vec<String>,
 
@@ -22,14 +22,14 @@ pub struct ArrayWithConstraints {
     pub positiveFloats: Vec<f64>,
 }
 
-impl AsRef<ArrayWithConstraints> for ArrayWithConstraints {
+impl ::std::convert::AsRef<ArrayWithConstraints> for ArrayWithConstraints {
     fn as_ref(&self) -> &ArrayWithConstraints {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedArrays {
     pub primitiveArray: Vec<types::Union4BoolOrFloatOrIntOrString>,
 
@@ -42,14 +42,14 @@ pub struct MixedArrays {
     pub complexMixed: Vec<Union3ProductOrTagOrUser>,
 }
 
-impl AsRef<MixedArrays> for MixedArrays {
+impl ::std::convert::AsRef<MixedArrays> for MixedArrays {
     fn as_ref(&self) -> &MixedArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NestedArrays {
     pub matrix: Vec<Vec<i64>>,
 
@@ -58,14 +58,14 @@ pub struct NestedArrays {
     pub threeDimensional: Vec<Vec<Vec<f64>>>,
 }
 
-impl AsRef<NestedArrays> for NestedArrays {
+impl ::std::convert::AsRef<NestedArrays> for NestedArrays {
     fn as_ref(&self) -> &NestedArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ObjectArrays {
     pub users: Vec<User>,
 
@@ -74,14 +74,14 @@ pub struct ObjectArrays {
     pub tags: Vec<Tag>,
 }
 
-impl AsRef<ObjectArrays> for ObjectArrays {
+impl ::std::convert::AsRef<ObjectArrays> for ObjectArrays {
     fn as_ref(&self) -> &ObjectArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Product {
     pub id: Option<i64>,
 
@@ -94,14 +94,14 @@ pub struct Product {
     pub inStock: Option<bool>,
 }
 
-impl AsRef<Product> for Product {
+impl ::std::convert::AsRef<Product> for Product {
     fn as_ref(&self) -> &Product {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SimpleArrays {
     pub strings: Vec<String>,
 
@@ -112,14 +112,14 @@ pub struct SimpleArrays {
     pub booleans: Vec<bool>,
 }
 
-impl AsRef<SimpleArrays> for SimpleArrays {
+impl ::std::convert::AsRef<SimpleArrays> for SimpleArrays {
     fn as_ref(&self) -> &SimpleArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Tag {
     pub id: Option<i64>,
 
@@ -128,14 +128,14 @@ pub struct Tag {
     pub color: Option<String>,
 }
 
-impl AsRef<Tag> for Tag {
+impl ::std::convert::AsRef<Tag> for Tag {
     fn as_ref(&self) -> &Tag {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct User {
     pub id: Option<i64>,
 
@@ -146,7 +146,7 @@ pub struct User {
     pub isActive: Option<bool>,
 }
 
-impl AsRef<User> for User {
+impl ::std::convert::AsRef<User> for User {
     fn as_ref(&self) -> &User {
         self
     }

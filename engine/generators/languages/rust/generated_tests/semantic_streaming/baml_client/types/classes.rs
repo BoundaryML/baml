@@ -6,71 +6,64 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithBlockDone {
     pub i_16_digits: i64,
-
     pub s_20_words: String,
 }
 
-impl AsRef<ClassWithBlockDone> for ClassWithBlockDone {
+impl ::std::convert::AsRef<ClassWithBlockDone> for ClassWithBlockDone {
     fn as_ref(&self) -> &ClassWithBlockDone {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ClassWithoutDone {
     pub i_16_digits: i64,
-
     pub s_20_words: String,
 }
 
-impl AsRef<ClassWithoutDone> for ClassWithoutDone {
+impl ::std::convert::AsRef<ClassWithoutDone> for ClassWithoutDone {
     fn as_ref(&self) -> &ClassWithoutDone {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SemanticContainer {
     pub sixteen_digit_number: i64,
-
     pub string_with_twenty_words: String,
-
     pub class_1: ClassWithoutDone,
-
     pub class_2: ClassWithBlockDone,
-
     pub class_done_needed: ClassWithBlockDone,
-
     pub class_needed: ClassWithoutDone,
-
     pub three_small_things: Vec<SmallThing>,
-
     pub final_string: String,
 }
 
-impl AsRef<SemanticContainer> for SemanticContainer {
+impl ::std::convert::AsRef<SemanticContainer> for SemanticContainer {
     fn as_ref(&self) -> &SemanticContainer {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SmallThing {
     pub i_16_digits: i64,
-
     pub i_8_digits: i64,
 }
 
-impl AsRef<SmallThing> for SmallThing {
+impl ::std::convert::AsRef<SmallThing> for SmallThing {
     fn as_ref(&self) -> &SmallThing {
         self
     }

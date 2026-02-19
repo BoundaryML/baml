@@ -11,22 +11,22 @@
 /// Access fields via methods: `builder.field_name()`
 
 pub struct AddressClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl AddressClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Address is statically defined in .baml and should always have a type")
@@ -37,21 +37,21 @@ impl AddressClassBuilder {
     // =========================================================================
 
     /// Access the `street` field builder.
-    pub fn property_street(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_street(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("street")
             .expect("Address.street is statically defined in .baml and should always be present")
     }
 
     /// Access the `city` field builder.
-    pub fn property_city(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_city(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("city")
             .expect("Address.city is statically defined in .baml and should always be present")
     }
 
     /// Access the `country` field builder.
-    pub fn property_country(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_country(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("country")
             .expect("Address.country is statically defined in .baml and should always be present")
@@ -67,22 +67,22 @@ impl AddressClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct ArticleClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ArticleClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Article is statically defined in .baml and should always have a type")
@@ -92,8 +92,8 @@ impl ArticleClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -102,28 +102,28 @@ impl ArticleClassBuilder {
     // =========================================================================
 
     /// Access the `title` field builder.
-    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_title(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("title")
             .expect("Article.title is statically defined in .baml and should always be present")
     }
 
     /// Access the `category` field builder.
-    pub fn property_category(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_category(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("category")
             .expect("Article.category is statically defined in .baml and should always be present")
     }
 
     /// Access the `author` field builder.
-    pub fn property_author(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_author(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("author")
             .expect("Article.author is statically defined in .baml and should always be present")
     }
 
     /// Access the `status` field builder.
-    pub fn property_status(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_status(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("status")
             .expect("Article.status is statically defined in .baml and should always be present")
@@ -139,22 +139,22 @@ impl ArticleClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct PersonClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl PersonClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Person is statically defined in .baml and should always have a type")
@@ -164,8 +164,8 @@ impl PersonClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -174,14 +174,14 @@ impl PersonClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("Person.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `age` field builder.
-    pub fn property_age(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_age(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("age")
             .expect("Person.age is statically defined in .baml and should always be present")
@@ -197,22 +197,22 @@ impl PersonClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct PureDynamicClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl PureDynamicClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("PureDynamic is statically defined in .baml and should always have a type")
@@ -222,8 +222,8 @@ impl PureDynamicClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
