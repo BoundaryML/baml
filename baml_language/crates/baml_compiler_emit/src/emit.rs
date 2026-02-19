@@ -4,11 +4,14 @@
 //! results to emit optimized bytecode. Virtual locals are inlined at their
 //! use sites instead of being stored to stack slots.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::Infallible,
+};
 
 use baml_compiler_mir::{
-    AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
-    Place, Rvalue, StatementKind, Terminator, UnaryOp,
+    BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand, Place, Rvalue,
+    StatementKind, Terminator, UnaryOp,
 };
 use baml_type::Ty;
 use bex_vm_types::{
@@ -83,6 +86,7 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
 use crate::{
     MirCodegenContext,
     analysis::{AnalysisResult, LocalClassification},
+    pull_semantics::{self, LocalPullAction, PullSink},
 };
 
 // ============================================================================
@@ -528,209 +532,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     ///
     /// For Virtual locals, this recursively emits the definition's rvalue inline.
     /// For Real locals, this emits a `LoadVar` instruction.
-    fn emit_operand_pull(&mut self, operand: &Operand, mir: &MirFunction) {
-        match operand {
-            Operand::Copy(place) | Operand::Move(place) => {
-                self.emit_place_value_pull(place, mir);
-            }
-            Operand::Constant(constant) => {
-                self.emit_constant(constant);
-            }
+    fn emit_operand_pull(&mut self, operand: &Operand, _mir: &MirFunction) {
+        if let Err(never) = pull_semantics::walk_operand_pull(self, operand) {
+            match never {}
         }
     }
 
     /// Emit a place's value using the pull model.
-    fn emit_place_value_pull(&mut self, place: &Place, mir: &MirFunction) {
-        match place {
-            Place::Local(local) => {
-                let classification = self.analysis.classifications[local];
-
-                match classification {
-                    LocalClassification::Virtual => {
-                        // PULL: emit the definition's rvalue inline
-                        // Clone the rvalue to avoid borrow checker issues
-                        let rvalue = self.analysis.def_use[local]
-                            .def
-                            .as_ref()
-                            .map(|def| def.rvalue.clone())
-                            .unwrap_or_else(|| panic!("virtual local {local} without definition"));
-                        self.emit_rvalue_pull(&rvalue, mir);
-                    }
-                    LocalClassification::PhiLike
-                    | LocalClassification::ReturnPhi
-                    | LocalClassification::CallResultImmediate => {
-                        // PhiLike: value is already on the stack from the predecessor block.
-                        // ReturnPhi: value is already on the stack from the assignment.
-                        // CallResultImmediate: value is already on the stack from the Call.
-                        // Don't emit any instruction - the value is there waiting for us.
-                    }
-                    LocalClassification::CopyOf => {
-                        // Copy propagation: load from the source local instead.
-                        let source = self.analysis.resolve_copy_source(*local);
-                        let slot = self.local_slots[&source];
-                        self.emit(Instruction::LoadVar(slot));
-                    }
-                    _ => {
-                        // Real/Parameter local: emit LoadVar
-                        let slot = self.local_slots[local];
-                        self.emit(Instruction::LoadVar(slot));
-                    }
-                }
-            }
-            Place::Field { base, field } => {
-                // Load base then field
-                self.emit_place_value_pull(base, mir);
-                self.emit(Instruction::LoadField(*field));
-            }
-            Place::Index { base, index, kind } => {
-                // Load base, load index, then LoadArrayElement or LoadMapElement
-                self.emit_place_value_pull(base, mir);
-                // Index may be virtual or real
-                self.emit_place_value_pull(&Place::Local(*index), mir);
-                match kind {
-                    IndexKind::Array => self.emit(Instruction::LoadArrayElement),
-                    IndexKind::Map => self.emit(Instruction::LoadMapElement),
-                };
-            }
+    fn emit_place_value_pull(&mut self, place: &Place, _mir: &MirFunction) {
+        if let Err(never) = pull_semantics::walk_place_pull(self, place) {
+            match never {}
         }
     }
 
     /// Emit an rvalue using the pull model.
-    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue, mir: &MirFunction) {
-        match rvalue {
-            Rvalue::Use(operand) => {
-                self.emit_operand_pull(operand, mir);
-            }
-
-            Rvalue::BinaryOp { op, left, right } => {
-                self.emit_operand_pull(left, mir);
-                self.emit_operand_pull(right, mir);
-                self.emit(Self::binop_instruction(*op));
-            }
-
-            Rvalue::UnaryOp { op, operand } => {
-                self.emit_operand_pull(operand, mir);
-                self.emit(Self::unaryop_instruction(*op));
-            }
-
-            Rvalue::Array(elements) => {
-                for elem in elements {
-                    self.emit_operand_pull(elem, mir);
-                }
-                self.emit(Instruction::AllocArray(elements.len()));
-            }
-
-            Rvalue::Map(entries) => {
-                // For maps, VM expects stack layout: [value1, value2, ..., valueN, key1, key2, ..., keyN]
-                // Push all values first
-                for (_key, value) in entries {
-                    self.emit_operand_pull(value, mir);
-                }
-                // Then push all keys
-                for (key, _value) in entries {
-                    self.emit_operand_pull(key, mir);
-                }
-                self.emit(Instruction::AllocMap(entries.len()));
-            }
-
-            Rvalue::Aggregate { kind, fields } => {
-                match kind {
-                    AggregateKind::Array => {
-                        for field in fields {
-                            self.emit_operand_pull(field, mir);
-                        }
-                        self.emit(Instruction::AllocArray(fields.len()));
-                    }
-                    AggregateKind::Class(class_name) => {
-                        // Look up pre-allocated Class object index
-                        let class_obj_idx = self
-                            .class_object_indices
-                            .get(class_name)
-                            .copied()
-                            .unwrap_or_else(|| panic!("undefined class: {class_name}"));
-
-                        // Emit AllocInstance
-                        self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
-                            class_obj_idx,
-                        )));
-
-                        // For each field: Copy instance, emit field value, StoreField
-                        for (field_idx, field_operand) in fields.iter().enumerate() {
-                            self.emit(Instruction::Copy(0));
-                            self.emit_operand_pull(field_operand, mir);
-                            self.emit(Instruction::StoreField(field_idx));
-                        }
-                    }
-                    AggregateKind::EnumVariant { enum_name, variant } => {
-                        // Look up the enum object index
-                        let enum_obj_idx = self
-                            .enum_object_indices
-                            .get(enum_name)
-                            .copied()
-                            .unwrap_or_else(|| panic!("undefined enum: {enum_name}"));
-
-                        // Look up the variant index
-                        let variant_idx = self
-                            .enum_variants
-                            .get(enum_name)
-                            .and_then(|variants| variants.get(variant))
-                            .copied()
-                            .unwrap_or_else(|| panic!("undefined variant: {enum_name}.{variant}"));
-
-                        // Load variant index onto stack, then allocate variant
-                        #[allow(clippy::cast_possible_wrap)]
-                        let idx = self.add_constant(ConstValue::Int(variant_idx as i64));
-                        self.emit(Instruction::LoadConst(idx));
-                        self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
-                            enum_obj_idx,
-                        )));
-                    }
-                }
-            }
-
-            Rvalue::Discriminant(place) => {
-                self.emit_place_value_pull(place, mir);
-                self.emit(Instruction::Discriminant);
-            }
-
-            Rvalue::TypeTag(place) => {
-                self.emit_place_value_pull(place, mir);
-                self.emit(Instruction::TypeTag);
-            }
-
-            Rvalue::Len(place) => {
-                self.emit_place_value_pull(place, mir);
-                // TODO: Proper length builtin call
-                if let Some(&global_idx) = self.globals.get("baml.Array.length") {
-                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
-                    // Stack ordering issue - same as original codegen
-                }
-            }
-
-            Rvalue::IsType { operand, ty } => {
-                self.emit_operand_pull(operand, mir);
-                // Emit instanceof check using CmpOp::InstanceOf
-                // The type should be a class name - look up the class object
-                if let Ty::Class(tn) | Ty::TypeAlias(tn) = ty {
-                    let class_name_str = tn.display_name.as_str();
-                    if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
-                        // Load the Class object for the type check
-                        let class_const = self
-                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
-                        self.emit(Instruction::LoadConst(class_const));
-                        // Emit instanceof comparison
-                        self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
-                    } else {
-                        // Unknown class - treat as always false
-                        let idx = self.add_constant(ConstValue::Bool(false));
-                        self.emit(Instruction::LoadConst(idx));
-                    }
-                } else {
-                    // Non-class type - not supported yet, return false
-                    let idx = self.add_constant(ConstValue::Bool(false));
-                    self.emit(Instruction::LoadConst(idx));
-                }
-            }
+    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue, _mir: &MirFunction) {
+        if let Err(never) = pull_semantics::walk_rvalue_pull(self, rvalue) {
+            match never {}
         }
     }
 
@@ -1275,6 +1093,170 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
 
         vec![names]
+    }
+}
+
+impl PullSink for StackifyCodegen<'_, '_> {
+    type Error = Infallible;
+
+    fn pull_constant(&mut self, constant: &Constant) -> Result<(), Self::Error> {
+        self.emit_constant(constant);
+        Ok(())
+    }
+
+    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction, Self::Error> {
+        let classification = self.analysis.classifications[&local];
+
+        let action = match classification {
+            LocalClassification::Virtual => {
+                // Inline the definition rvalue at use site.
+                let rvalue = self.analysis.def_use[&local]
+                    .def
+                    .as_ref()
+                    .map(|def| def.rvalue.clone())
+                    .unwrap_or_else(|| panic!("virtual local {local} without definition"));
+                LocalPullAction::Inline(rvalue)
+            }
+            LocalClassification::PhiLike
+            | LocalClassification::ReturnPhi
+            | LocalClassification::CallResultImmediate => LocalPullAction::Done,
+            LocalClassification::CopyOf => {
+                // Copy propagation: load from source slot directly.
+                let source = self.analysis.resolve_copy_source(local);
+                let slot = self.local_slots[&source];
+                self.emit(Instruction::LoadVar(slot));
+                LocalPullAction::Done
+            }
+            LocalClassification::Parameter
+            | LocalClassification::Real
+            | LocalClassification::Dead => {
+                let slot = self.local_slots[&local];
+                self.emit(Instruction::LoadVar(slot));
+                LocalPullAction::Done
+            }
+        };
+
+        Ok(action)
+    }
+
+    fn load_field(&mut self, field: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::LoadField(field));
+        Ok(())
+    }
+
+    fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error> {
+        match kind {
+            IndexKind::Array => {
+                self.emit(Instruction::LoadArrayElement);
+            }
+            IndexKind::Map => {
+                self.emit(Instruction::LoadMapElement);
+            }
+        }
+        Ok(())
+    }
+
+    fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error> {
+        self.emit(Self::binop_instruction(op));
+        Ok(())
+    }
+
+    fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error> {
+        self.emit(Self::unaryop_instruction(op));
+        Ok(())
+    }
+
+    fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::AllocArray(len));
+        Ok(())
+    }
+
+    fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::AllocMap(len));
+        Ok(())
+    }
+
+    fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error> {
+        let class_obj_idx = self
+            .class_object_indices
+            .get(class_name)
+            .copied()
+            .unwrap_or_else(|| panic!("undefined class: {class_name}"));
+        self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
+            class_obj_idx,
+        )));
+        Ok(())
+    }
+
+    fn copy_top(&mut self, offset: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::Copy(offset));
+        Ok(())
+    }
+
+    fn store_field(&mut self, field_idx: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::StoreField(field_idx));
+        Ok(())
+    }
+
+    fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error> {
+        let enum_obj_idx = self
+            .enum_object_indices
+            .get(enum_name)
+            .copied()
+            .unwrap_or_else(|| panic!("undefined enum: {enum_name}"));
+
+        let variant_idx = self
+            .enum_variants
+            .get(enum_name)
+            .and_then(|variants| variants.get(variant))
+            .copied()
+            .unwrap_or_else(|| panic!("undefined variant: {enum_name}.{variant}"));
+
+        #[allow(clippy::cast_possible_wrap)]
+        let idx = self.add_constant(ConstValue::Int(variant_idx as i64));
+        self.emit(Instruction::LoadConst(idx));
+        self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
+            enum_obj_idx,
+        )));
+        Ok(())
+    }
+
+    fn discriminant(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::Discriminant);
+        Ok(())
+    }
+
+    fn type_tag(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::TypeTag);
+        Ok(())
+    }
+
+    fn len(&mut self) -> Result<(), Self::Error> {
+        // TODO: Proper length builtin call. Keep existing behavior for now.
+        if let Some(&global_idx) = self.globals.get("baml.Array.length") {
+            self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
+        }
+        Ok(())
+    }
+
+    fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
+        // Emit instanceof check using CmpOp::InstanceOf for class aliases.
+        if let Ty::Class(tn) | Ty::TypeAlias(tn) = ty {
+            let class_name_str = tn.display_name.as_str();
+            if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                let class_const =
+                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
+                self.emit(Instruction::LoadConst(class_const));
+                self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
+            } else {
+                let idx = self.add_constant(ConstValue::Bool(false));
+                self.emit(Instruction::LoadConst(idx));
+            }
+        } else {
+            let idx = self.add_constant(ConstValue::Bool(false));
+            self.emit(Instruction::LoadConst(idx));
+        }
+        Ok(())
     }
 }
 

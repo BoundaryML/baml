@@ -1,10 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use baml_compiler_mir::{
-    AggregateKind, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator,
-};
+use baml_compiler_mir::{Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator};
 
 use super::{LocalClassification, LocalDefUse, StatementRef, UseLocation};
+use crate::pull_semantics::{self, LocalPullAction, PullSink};
 
 /// Stack-carry candidate kinds validated by stack simulation before activation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -527,15 +526,13 @@ fn simulate_operand_pull_stack(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
-    match operand {
-        Operand::Constant(_) => {
-            sim.push();
-            true
-        }
-        Operand::Copy(place) | Operand::Move(place) => {
-            simulate_place_pull_stack(place, sim, carried_local, classifications, def_use)
-        }
-    }
+    let mut sink = StackCarryPullSink {
+        sim,
+        carried_local,
+        classifications,
+        def_use,
+    };
+    pull_semantics::walk_operand_pull(&mut sink, operand).is_ok()
 }
 
 fn simulate_place_pull_stack(
@@ -545,72 +542,13 @@ fn simulate_place_pull_stack(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
-    match place {
-        Place::Local(local) => {
-            if *local == carried_local {
-                if sim.depth != Some(0) || sim.used {
-                    return false;
-                }
-                sim.used = true;
-                return true;
-            }
-
-            let class = classifications
-                .get(local)
-                .copied()
-                .unwrap_or(LocalClassification::Real);
-            match class {
-                LocalClassification::Virtual => {
-                    let Some(def) = def_use.get(local).and_then(|du| du.def.as_ref()) else {
-                        return false;
-                    };
-                    simulate_rvalue_pull_stack(
-                        &def.rvalue,
-                        sim,
-                        carried_local,
-                        classifications,
-                        def_use,
-                    )
-                }
-                // Another stack-carried local in this context makes single-local simulation
-                // ambiguous; reject to keep the optimization sound.
-                other if is_stack_carried_local(other) => false,
-                _ => {
-                    sim.push();
-                    true
-                }
-            }
-        }
-        Place::Field { base, .. } => {
-            if !simulate_place_pull_stack(base, sim, carried_local, classifications, def_use) {
-                return false;
-            }
-            if !sim.pop_n(1) {
-                return false;
-            }
-            sim.push();
-            true
-        }
-        Place::Index { base, index, .. } => {
-            if !simulate_place_pull_stack(base, sim, carried_local, classifications, def_use) {
-                return false;
-            }
-            if !simulate_place_pull_stack(
-                &Place::Local(*index),
-                sim,
-                carried_local,
-                classifications,
-                def_use,
-            ) {
-                return false;
-            }
-            if !sim.pop_n(2) {
-                return false;
-            }
-            sim.push();
-            true
-        }
-    }
+    let mut sink = StackCarryPullSink {
+        sim,
+        carried_local,
+        classifications,
+        def_use,
+    };
+    pull_semantics::walk_place_pull(&mut sink, place).is_ok()
 }
 
 fn simulate_rvalue_pull_stack(
@@ -620,125 +558,166 @@ fn simulate_rvalue_pull_stack(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
-    match rvalue {
-        Rvalue::Use(operand) => {
-            simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use)
+    let mut sink = StackCarryPullSink {
+        sim,
+        carried_local,
+        classifications,
+        def_use,
+    };
+    pull_semantics::walk_rvalue_pull(&mut sink, rvalue).is_ok()
+}
+
+struct StackCarryPullSink<'a> {
+    sim: &'a mut StackCarrySim,
+    carried_local: Local,
+    classifications: &'a HashMap<Local, LocalClassification>,
+    def_use: &'a HashMap<Local, LocalDefUse>,
+}
+
+impl PullSink for StackCarryPullSink<'_> {
+    type Error = ();
+
+    fn pull_constant(
+        &mut self,
+        _constant: &baml_compiler_mir::Constant,
+    ) -> Result<(), Self::Error> {
+        self.sim.push();
+        Ok(())
+    }
+
+    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction, Self::Error> {
+        if local == self.carried_local {
+            if self.sim.depth != Some(0) || self.sim.used {
+                return Err(());
+            }
+            self.sim.used = true;
+            return Ok(LocalPullAction::Done);
         }
-        Rvalue::BinaryOp { left, right, .. } => {
-            if !simulate_operand_pull_stack(left, sim, carried_local, classifications, def_use) {
-                return false;
+
+        let class = self
+            .classifications
+            .get(&local)
+            .copied()
+            .unwrap_or(LocalClassification::Real);
+
+        match class {
+            LocalClassification::Virtual => {
+                let def = self
+                    .def_use
+                    .get(&local)
+                    .and_then(|du| du.def.as_ref())
+                    .ok_or(())?;
+                Ok(LocalPullAction::Inline(def.rvalue.clone()))
             }
-            if !simulate_operand_pull_stack(right, sim, carried_local, classifications, def_use) {
-                return false;
+            // Another stack-carried local in this context makes single-local
+            // simulation ambiguous; reject to keep the optimization sound.
+            other if is_stack_carried_local(other) => Err(()),
+            _ => {
+                self.sim.push();
+                Ok(LocalPullAction::Done)
             }
-            if !sim.pop_n(2) {
-                return false;
-            }
-            sim.push();
-            true
         }
-        Rvalue::UnaryOp { operand, .. } => {
-            if !simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use) {
-                return false;
-            }
-            if !sim.pop_n(1) {
-                return false;
-            }
-            sim.push();
-            true
+    }
+
+    fn load_field(&mut self, _field: usize) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(1) {
+            return Err(());
         }
-        Rvalue::Array(elements) => {
-            for elem in elements {
-                if !simulate_operand_pull_stack(elem, sim, carried_local, classifications, def_use)
-                {
-                    return false;
-                }
-            }
-            if !sim.pop_n(elements.len()) {
-                return false;
-            }
-            sim.push();
-            true
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_index(&mut self, _kind: baml_compiler_mir::IndexKind) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(2) {
+            return Err(());
         }
-        Rvalue::Map(entries) => {
-            for (_key, value) in entries {
-                if !simulate_operand_pull_stack(value, sim, carried_local, classifications, def_use)
-                {
-                    return false;
-                }
-            }
-            for (key, _value) in entries {
-                if !simulate_operand_pull_stack(key, sim, carried_local, classifications, def_use) {
-                    return false;
-                }
-            }
-            if !sim.pop_n(entries.len() * 2) {
-                return false;
-            }
-            sim.push();
-            true
+        self.sim.push();
+        Ok(())
+    }
+
+    fn binary_op(&mut self, _op: baml_compiler_mir::BinOp) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(2) {
+            return Err(());
         }
-        Rvalue::Aggregate { kind, fields } => match kind {
-            AggregateKind::Array => {
-                for field in fields {
-                    if !simulate_operand_pull_stack(
-                        field,
-                        sim,
-                        carried_local,
-                        classifications,
-                        def_use,
-                    ) {
-                        return false;
-                    }
-                }
-                if !sim.pop_n(fields.len()) {
-                    return false;
-                }
-                sim.push();
-                true
-            }
-            AggregateKind::Class(_) => {
-                // AllocInstance
-                sim.push();
-                // For each field: Copy(0), emit field, StoreField
-                for field in fields {
-                    sim.push();
-                    if !simulate_operand_pull_stack(
-                        field,
-                        sim,
-                        carried_local,
-                        classifications,
-                        def_use,
-                    ) {
-                        return false;
-                    }
-                    if !sim.pop_n(2) {
-                        return false;
-                    }
-                }
-                true
-            }
-            AggregateKind::EnumVariant { .. } => {
-                // Load variant index constant then AllocVariant (pop1 push1)
-                sim.push();
-                if !sim.pop_n(1) {
-                    return false;
-                }
-                sim.push();
-                true
-            }
-        },
-        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) => {
-            if !simulate_place_pull_stack(place, sim, carried_local, classifications, def_use) {
-                return false;
-            }
-            if !sim.pop_n(1) {
-                return false;
-            }
-            sim.push();
-            true
+        self.sim.push();
+        Ok(())
+    }
+
+    fn unary_op(&mut self, _op: baml_compiler_mir::UnaryOp) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(1) {
+            return Err(());
         }
-        // TODO: mirror Len/IsType emission edge cases once those paths are cleaned up.
-        Rvalue::Len(_) | Rvalue::IsType { .. } => false,
+        self.sim.push();
+        Ok(())
+    }
+
+    fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(len) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(len * 2) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn alloc_class_instance(&mut self, _class_name: &str) -> Result<(), Self::Error> {
+        // AllocInstance pushes the object reference.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn copy_top(&mut self, _offset: usize) -> Result<(), Self::Error> {
+        // Copy duplicates a stack value without consuming the source.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn store_field(&mut self, _field_idx: usize) -> Result<(), Self::Error> {
+        // StoreField consumes object + value; class construction leaves original
+        // instance below those two entries.
+        if !self.sim.pop_n(2) {
+            return Err(());
+        }
+        Ok(())
+    }
+
+    fn alloc_enum_variant(&mut self, _enum_name: &str, _variant: &str) -> Result<(), Self::Error> {
+        // Emitter loads variant index constant, then AllocVariant (pop1 push1).
+        // Net stack effect from this aggregate shape is +1.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn discriminant(&mut self) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn type_tag(&mut self) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn len(&mut self) -> Result<(), Self::Error> {
+        // Keep current conservative policy until Len emission is stabilized.
+        Err(())
+    }
+
+    fn is_type(&mut self, _ty: &baml_type::Ty) -> Result<(), Self::Error> {
+        // Keep current conservative policy until IsType emission is stabilized.
+        Err(())
     }
 }
