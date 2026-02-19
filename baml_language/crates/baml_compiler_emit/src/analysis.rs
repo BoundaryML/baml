@@ -1441,19 +1441,15 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -
     // that defines this local.
     let def_block = mir.block(def.block);
     match &def_block.terminator {
-        Some(Terminator::Call {
-            destination,
-            target: _,
-            ..
-        }) => matches!(destination, Place::Local(l) if *l == local),
-        Some(Terminator::Await {
-            destination,
-            target: _,
-            ..
-        }) => matches!(destination, Place::Local(l) if *l == local),
-        Some(Terminator::DispatchFuture {
-            future, resume: _, ..
-        }) => matches!(future, Place::Local(l) if *l == local),
+        Some(Terminator::Call { destination, .. }) => {
+            matches!(destination, Place::Local(l) if *l == local)
+        }
+        Some(Terminator::Await { destination, .. }) => {
+            matches!(destination, Place::Local(l) if *l == local)
+        }
+        Some(Terminator::DispatchFuture { future, .. }) => {
+            matches!(future, Place::Local(l) if *l == local)
+        }
         _ => false,
     }
 }

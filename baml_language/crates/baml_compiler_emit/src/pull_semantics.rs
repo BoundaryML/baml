@@ -245,7 +245,8 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             sink.alloc_array(elements.len())
         }
         Rvalue::Map(entries) => {
-            // VM expects values first, then keys.
+            // VM `AllocMap` expects stack layout:
+            // [..., v1, v2, ..., k1, k2, ...] for {(k1, v1), (k2, v2), ...}.
             for (_key, value) in entries {
                 walk_operand_pull(sink, value)?;
             }

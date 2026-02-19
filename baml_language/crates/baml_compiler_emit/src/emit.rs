@@ -1330,24 +1330,28 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
         local: Local,
         channel_name: Option<&str>,
     ) -> Result<(), Self::Error> {
-        // Watch ops only apply to locals with allocated slots.
-        if self.local_slots.contains_key(&local) {
-            let channel = channel_name
-                .unwrap_or_else(|| panic!("watched local {local} must have a user-visible name"))
-                .to_string();
-            let channel_obj_idx = self.objects.len();
-            self.objects.push(Object::String(channel));
-            let channel_const_idx =
-                self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
-            self.emit(Instruction::LoadConst(channel_const_idx));
-        }
+        // Watched locals must be `Real` and therefore must have slots.
+        assert!(
+            self.local_slots.contains_key(&local),
+            "watched local {local} has no allocated slot"
+        );
+        let channel = channel_name
+            .unwrap_or_else(|| panic!("watched local {local} must have a user-visible name"))
+            .to_string();
+        let channel_obj_idx = self.objects.len();
+        self.objects.push(Object::String(channel));
+        let channel_const_idx =
+            self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
+        self.emit(Instruction::LoadConst(channel_const_idx));
         Ok(())
     }
 
     fn watch_local(&mut self, local: Local) -> Result<(), Self::Error> {
-        if let Some(&slot) = self.local_slots.get(&local) {
-            self.emit(Instruction::Watch(slot));
-        }
+        let slot = *self
+            .local_slots
+            .get(&local)
+            .unwrap_or_else(|| panic!("watched local {local} has no allocated slot"));
+        self.emit(Instruction::Watch(slot));
         Ok(())
     }
 

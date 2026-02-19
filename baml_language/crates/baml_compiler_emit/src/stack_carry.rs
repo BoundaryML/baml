@@ -39,6 +39,8 @@ pub(super) fn refine_stack_carry_classifications(
     classifications: &mut HashMap<Local, LocalClassification>,
 ) {
     let mut locals: Vec<Local> = candidates.keys().copied().collect();
+    // Deterministic greedy order: this is not a fixpoint search.
+    // Some valid candidates may be skipped if they depend on earlier activations.
     locals.sort_by_key(|l| l.0);
 
     for local in locals {
@@ -88,6 +90,8 @@ impl StackCarrySim {
         }
 
         let Some(depth) = self.depth else {
+            // Once the carried value has already been consumed post-use, we stop
+            // tracking exact stack depth and treat subsequent pops as irrelevant.
             return true;
         };
 
@@ -112,7 +116,8 @@ fn is_stack_carry_use_safe(
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
-    // ReturnPhi already validates stack-safety via stack-neutral statement checks.
+    // `analysis::is_return_phi` already proves stack safety for this shape by
+    // requiring only stack-neutral statements between def and `Return`.
     if kind == StackCarryKind::ReturnPhi {
         return true;
     }
