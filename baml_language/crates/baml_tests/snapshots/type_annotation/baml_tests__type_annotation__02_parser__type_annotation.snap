@@ -1,11 +1,12 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "test_big_t_type"
+    WORD "test_type_annotation"
     PARAMETER_LIST
       L_PAREN "("
       PARAMETER
@@ -24,8 +25,8 @@ SOURCE_FILE
           KW_LET "let"
           WORD "t"
           COLON ":"
-          TYPE_EXPR "big_t_type"
-            WORD "big_t_type"
+          TYPE_EXPR "type"
+            WORD "type"
           EQUALS "="
           CALL_EXPR
             PATH_EXPR "baml.llm.get_return_type"

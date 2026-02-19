@@ -1,8 +1,9 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 Function "function"
-Word "test_big_t_type"
+Word "test_type_annotation"
 LParen "("
 Word "function_name"
 Colon ":"
@@ -14,7 +15,7 @@ LBrace "{"
 Let "let"
 Word "t"
 Colon ":"
-Word "big_t_type"
+Word "type"
 Equals "="
 Word "baml"
 Dot "."

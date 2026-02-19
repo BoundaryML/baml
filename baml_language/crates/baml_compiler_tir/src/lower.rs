@@ -206,7 +206,7 @@ fn lower_type_ref_resolved_with_ctx(
         // BuiltinUnknown - the `unknown` type keyword for builtin functions
         TypeRef::BuiltinUnknown => Ty::BuiltinUnknown,
 
-        // Type - the `big_t_type` keyword for the meta-type
+        // Type - the `type` keyword for the meta-type
         TypeRef::Type => Ty::Type,
     }
 }

@@ -522,6 +522,6 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap_union: bool) -> String {
         TypeRef::Error => "<error>".to_string(),
         TypeRef::Unknown => "<unknown>".to_string(),
         TypeRef::BuiltinUnknown => "unknown".to_string(),
-        TypeRef::Type => "big_t_type".to_string(),
+        TypeRef::Type => "type".to_string(),
     }
 }

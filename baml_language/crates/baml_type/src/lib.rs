@@ -104,10 +104,10 @@ pub enum Ty {
     /// Well-known opaque types:
     /// - `baml.llm.Resource` — file/socket/HTTP response handles
     /// - `baml.llm.PromptAst` — structured prompt trees for LLM calls
-    /// - `big_t_type` — meta-type wrapping a `Ty` for reflection
+    /// - `type` — meta-type wrapping a `Ty` for reflection
     ///
     /// Use the convenience constructors `Ty::resource()`, `Ty::prompt_ast()`,
-    /// `Ty::big_t_type()` instead of constructing directly.
+    /// `Ty::type_type()` instead of constructing directly.
     Opaque(TypeName),
 
     // --- Compiler-specific: present in VIR/MIR, absent at runtime ---
@@ -182,8 +182,8 @@ impl Ty {
     }
 
     /// Meta-type — a runtime value that wraps a `Ty`.
-    pub fn big_t_type() -> Self {
-        Self::opaque_builtin("baml.reflect.Type", "big_t_type")
+    pub fn type_type() -> Self {
+        Self::opaque_builtin("baml.reflect.Type", "type")
     }
 
     /// Check if this is an opaque type with the given qualified name
@@ -466,14 +466,14 @@ mod tests {
     fn test_validate_runtime_accepts_opaque_types() {
         assert!(Ty::resource().validate_runtime().is_ok());
         assert!(Ty::prompt_ast().validate_runtime().is_ok());
-        assert!(Ty::big_t_type().validate_runtime().is_ok());
+        assert!(Ty::type_type().validate_runtime().is_ok());
     }
 
     #[test]
     fn test_display_opaque_types() {
         assert_eq!(Ty::resource().to_string(), "baml.llm.Resource");
         assert_eq!(Ty::prompt_ast().to_string(), "baml.llm.PromptAst");
-        assert_eq!(Ty::big_t_type().to_string(), "big_t_type");
+        assert_eq!(Ty::type_type().to_string(), "type");
     }
 
     #[test]

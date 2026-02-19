@@ -146,7 +146,7 @@ pub fn convert_tir_ty(
         baml_compiler_tir::Ty::Resource => Ok(Ty::resource()),
         // BuiltinUnknown is preserved for VIR type checking at call sites.
         baml_compiler_tir::Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
-        baml_compiler_tir::Ty::Type => Ok(Ty::big_t_type()),
+        baml_compiler_tir::Ty::Type => Ok(Ty::type_type()),
 
         baml_compiler_tir::Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(
             convert_tir_ty(inner, aliases, recursive_aliases)?,

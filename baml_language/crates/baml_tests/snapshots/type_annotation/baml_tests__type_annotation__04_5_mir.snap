@@ -1,0 +1,211 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR ===
+fn test_type_annotation(function_name: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // function_name // param
+    let _2: type // t
+    let _3: (string) -> type
+    let _4: string
+    let _5: null
+    let _6: void
+
+    bb0: {
+        _3 = const fn baml.llm.get_return_type;
+        _4 = copy _1;
+        _5 = dispatch_future copy _3(copy _4) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _2 = await _5 -> [bb3];
+    }
+
+    bb3: {
+        _0 = const "ok";
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn test_optional(function_name: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // function_name // param
+    let _2: type? // t
+    let _3: void
+
+    bb0: {
+        _2 = const null;
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn test_let_binding(function_name: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // function_name // param
+    let _2: type // t
+    let _3: (string) -> type
+    let _4: string
+    let _5: null
+    let _6: void
+
+    bb0: {
+        _3 = const fn baml.llm.get_return_type;
+        _4 = copy _1;
+        _5 = dispatch_future copy _3(copy _4) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _2 = await _5 -> [bb3];
+    }
+
+    bb3: {
+        _0 = const "ok";
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn test_param(t: type) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: type // t // param
+    let _2: void
+
+    bb0: {
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn test_list(function_name: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // function_name // param
+    let _2: type[] // ts
+    let _3: void
+
+    bb0: {
+        _2 = [];
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn test_union(function_name: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // function_name // param
+    let _2: type | string // t
+    let _3: void
+
+    bb0: {
+        _2 = const "hello";
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn test_return_type(function_name: string) -> type {
+    // Locals:
+    let _0: type // return
+    let _1: string // function_name // param
+    let _2: void
+    let _3: (string) -> type
+    let _4: string
+    let _5: null
+
+    bb0: {
+        _3 = const fn baml.llm.get_return_type;
+        _4 = copy _1;
+        _5 = dispatch_future copy _3(copy _4) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _5 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+fn test_map(function_name: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // function_name // param
+    let _2: map<string, type> // m
+    let _3: void
+
+    bb0: {
+        _2 = {  };
+        _0 = const "ok";
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+}

@@ -1,0 +1,6 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== FORMATTER ERROR ===
+[UnexpectedToken { expected: "'='", found: "identifier", span: Span { file_id: FileId(0), range: 183..186 } }, UnexpectedToken { expected: "type", found: "EOF", span: Span { file_id: FileId(0), range: 251..252 } }]

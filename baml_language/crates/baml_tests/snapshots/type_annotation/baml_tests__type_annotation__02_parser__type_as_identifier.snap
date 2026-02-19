@@ -1,0 +1,40 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "RiskFactor"
+    L_BRACE "{"
+    FIELD
+      WORD "type"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "severity"
+      TYPE_EXPR "float"
+        WORD "float"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MetaField"
+    L_BRACE "{"
+    FIELD
+      WORD "type"
+      TYPE_EXPR "type"
+        WORD "type"
+    R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Kind"
+    L_BRACE "{"
+    ENUM_VARIANT "type"
+      WORD "type"
+    ENUM_VARIANT "other"
+      WORD "other"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

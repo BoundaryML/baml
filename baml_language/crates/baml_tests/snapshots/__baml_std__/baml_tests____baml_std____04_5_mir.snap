@@ -1020,8 +1020,8 @@ fn execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionC
     let _42: baml.http.Response
     let _43: (baml.http.Response) -> string
     let _44: null
-    let _45: big_t_type // return_type
-    let _46: (string) -> big_t_type
+    let _45: type // return_type
+    let _46: (string) -> type
     let _47: string
     let _48: baml.llm.ExecutionContext
     let _49: null
@@ -1030,8 +1030,8 @@ fn execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionC
     let _52: null
     let _53: baml.llm.PrimitiveClient
     let _54: string
-    let _55: big_t_type
-    let _56: (baml.llm.PrimitiveClient, string, big_t_type) -> null
+    let _55: type
+    let _56: (baml.llm.PrimitiveClient, string, type) -> null
     let _57: null
     let _58: void
     let _59: bool

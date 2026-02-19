@@ -1,0 +1,37 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "type"
+    TYPE_EXPR "Foo"
+      WORD "Foo"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "Bar"
+    EQUALS "="
+    TYPE_EXPR
+
+=== ERRORS ===
+Error: Expected '=', found identifier
+   ╭─[ type_malformed.baml:7:6 ]
+   │
+ 7 │ type Foo
+   │      ─┬─  
+   │       ╰─── Expected '=', found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected type, found EOF
+    ╭─[ type_malformed.baml:10:11 ]
+    │
+ 10 │ type Bar =
+    │           ┬  
+    │           ╰── Expected type, found EOF
+    │ 
+    │ Note: Error code: E0010
+────╯

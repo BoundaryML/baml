@@ -1,0 +1,18 @@
+// Test `type` used as an identifier in non-annotation positions
+
+// Class with a field named `type` (common in real-world BAML)
+class RiskFactor {
+    type string
+    severity float
+}
+
+// Class with field named `type` whose type is the meta-type `type`
+class MetaField {
+    type type
+}
+
+// Enum with a variant named `type`
+enum Kind {
+    type
+    other
+}

@@ -562,8 +562,8 @@ mod tests {
 
     #[test]
     fn test_render_opaque_unsupported() {
-        let content = OutputFormatContent::new(Ty::big_t_type());
+        let content = OutputFormatContent::new(Ty::type_type());
         let err = content.render(&RenderOptions::default()).unwrap_err();
-        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "big_t_type"));
+        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "type"));
     }
 }
