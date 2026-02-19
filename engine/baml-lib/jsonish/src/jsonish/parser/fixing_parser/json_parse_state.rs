@@ -909,3 +909,46 @@ enum CloseStringResult {
     Close(usize, CompletionState),
     Continue,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_types::CompletionState;
+
+    /// Test the InObjectValue branch of should_close_unescaped_string directly.
+    ///
+    /// The off-by-one bug on this branch only manifests during streaming (multiple
+    /// parse() calls on successive chunks), not in single-pass parsing. Testing
+    /// through the public parse() API cannot catch it because the re-processed
+    /// character gets absorbed harmlessly. So we test the private function directly
+    /// by setting up the collection stack to simulate being inside an object value.
+    #[test]
+    fn test_should_close_unescaped_string_in_object_value_exhausted() {
+        let mut state = JsonParseState::new();
+        // Set up stack: Object with one key but no value yet (InObjectValue),
+        // then an UnquotedString being accumulated on top.
+        state.collection_stack.push((
+            JsonCollection::Object(
+                vec!["key".to_string()],
+                vec![],
+                CompletionState::Incomplete,
+            ),
+            Default::default(),
+        ));
+        state.collection_stack.push((
+            JsonCollection::UnquotedString("hello".to_string(), CompletionState::Incomplete),
+            Default::default(),
+        ));
+
+        // Remaining chars: "world" — no ',' or '}' to trigger Complete
+        let remaining: Vec<(usize, char)> =
+            vec![(0, 'w'), (1, 'o'), (2, 'r'), (3, 'l'), (4, 'd')];
+        let result = state.should_close_unescaped_string(remaining.into_iter().peekable());
+
+        // counter should be 5 (last idx=4, +1), not 4
+        assert_eq!(
+            result,
+            CloseStringResult::Close(5, CompletionState::Incomplete)
+        );
+    }
+}
