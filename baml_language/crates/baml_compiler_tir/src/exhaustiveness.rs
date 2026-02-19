@@ -145,6 +145,17 @@ impl std::fmt::Display for ValueSet {
     }
 }
 
+impl From<&LiteralValue> for ValueSet {
+    fn from(value: &LiteralValue) -> Self {
+        match value {
+            LiteralValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
+            LiteralValue::Float(v) => ValueSet::Literal(Literal::Float(v.clone())),
+            LiteralValue::String(v) => ValueSet::Literal(Literal::String(v.clone())),
+            LiteralValue::Bool(v) => ValueSet::Literal(Literal::Bool(*v)),
+        }
+    }
+}
+
 // ============================================================================
 // ExhaustivenessChecker: The Algorithm
 // ============================================================================
@@ -248,7 +259,6 @@ impl<'a> ExhaustivenessChecker<'a> {
                 match &value_set {
                     ValueSet::All => {
                         has_catch_all = true;
-                        covered.clone_from(&required); // Everything is now covered
                     }
                     ValueSet::Empty => {
                         // Guarded patterns don't contribute
@@ -279,70 +289,54 @@ impl<'a> ExhaustivenessChecker<'a> {
     // ========================================================================
 
     /// Expand a type into the value sets that need to be covered.
-    ///
-    /// For finite types (enums, bool), this produces individual value sets.
-    /// For infinite types, this produces a single `OfType` value set.
     fn expand_type_to_values(&self, ty: &Ty) -> Vec<ValueSet> {
+        self.expand_ty(ty, &mut HashSet::new())
+    }
+
+    /// Recursive core of type expansion with a cycle guard.
+    ///
+    /// `visiting` tracks which aliases are on the current expansion stack.
+    /// A back-reference means the alias is recursive: we stop there and treat
+    /// the alias as an opaque infinite type (`OfType`), which is the correct
+    /// semantic base case — recursive aliases are structurally unbounded and
+    /// cannot be enumerated. Invalid (non-structural) cycles are already
+    /// reported as errors by `validate_type_alias_cycles` before this runs.
+    ///
+    /// # TODO(type-alias-architecture)
+    /// Alias resolution should be a dedicated compiler phase (Salsa query)
+    /// that runs once after name resolution, making pre-resolved aliases
+    /// available to all consumers (codegen, prompt rendering, exhaustiveness)
+    /// without per-call re-traversal.
+    fn expand_ty(&self, ty: &Ty, visiting: &mut HashSet<Name>) -> Vec<ValueSet> {
         match ty {
-            // Union types: expand each member
             Ty::Union(members) => members
                 .iter()
-                .flat_map(|m| self.expand_type_to_values(m))
+                .flat_map(|m| self.expand_ty(m, visiting))
                 .collect(),
 
-            // Optional is T | null
             Ty::Optional(inner) => {
-                let mut values = self.expand_type_to_values(inner);
-                // Only add null if not already present (handles T?? = T? flattening)
-                let null_value = ValueSet::Literal(Literal::Null);
-                if !values.contains(&null_value) {
-                    values.push(null_value);
+                let mut values = self.expand_ty(inner, visiting);
+                // Deduplicate null (handles T?? = T? flattening)
+                let null = ValueSet::Literal(Literal::Null);
+                if !values.contains(&null) {
+                    values.push(null);
                 }
                 values
             }
 
-            // Type alias: expand to underlying type
             Ty::TypeAlias(fqn) => {
-                // Check if we can resolve the type alias
-                //
-                // TODO(type-alias-architecture): Type alias resolution should be its own
-                // dedicated phase that runs once after name resolution. Resolved aliases
-                // are used in multiple places:
-                //   - Bytecode generation
-                //   - Target language codegen (TS, Python, Go, Ruby)
-                //   - Prompt rendering
-                //   - Exhaustiveness checking (here)
-                //
-                // Currently we build the type_aliases map per-compilation, but as more
-                // consumers are added, this should become a cached Salsa query to avoid
-                // redundant resolution.
-                //
-                // TODO(recursive-type-aliases): Recursive type aliases like `type A = A | B`
-                // or structural recursion like `type LinkedList = { val: int, next: LinkedList? }`
-                // are NOT handled here. Currently this would cause infinite recursion.
-                //
-                // The legacy compiler solved this problem:
-                //   - PR #1163: Implement Type Aliases (basic support)
-                //   - PR #1207: Allow structural recursion in type aliases
-                //   - PR #1416: Recurse into recursive type alias unions
-                //
-                // The solution involves:
-                //   1. Building a dependency graph of alias references
-                //   2. Using Tarjan's SCC algorithm for cycle detection
-                //   3. Distinguishing structural vs non-structural recursion
-                //   4. Reporting diagnostics for invalid cycles, inserting Ty::Error
-                //
-                // Reference implementation: engine/baml-lib/parser-database/src/tarjan.rs
-                // and engine/baml-lib/parser-database/src/types/mod.rs (resolve_type_aliases)
-                //
-                // Porting this to the new compiler requires its own task for feature parity.
-                let name = &fqn.name;
-                if let Some(alias_ty) = self.type_aliases.get(name) {
-                    return self.expand_type_to_values(alias_ty);
+                if visiting.contains(&fqn.name) {
+                    // Cycle detected: treat as opaque to prevent infinite recursion.
+                    return vec![ValueSet::OfType(fqn.name.clone())];
                 }
-
-                // Unknown type alias (infinite)
-                vec![ValueSet::OfType(name.clone())]
+                visiting.insert(fqn.name.clone());
+                let result = if let Some(alias_ty) = self.type_aliases.get(&fqn.name) {
+                    self.expand_ty(alias_ty, visiting)
+                } else {
+                    vec![ValueSet::OfType(fqn.name.clone())]
+                };
+                visiting.remove(&fqn.name);
+                result
             }
 
             // Bool is finite: {true, false}
@@ -351,20 +345,11 @@ impl<'a> ExhaustivenessChecker<'a> {
                 ValueSet::Literal(Literal::Bool(false)),
             ],
 
-            // Singleton types (types containing exactly one value)
+            // Singleton types
             Ty::Null => vec![ValueSet::Literal(Literal::Null)],
-            Ty::Literal(value) => match value {
-                LiteralValue::Int(v) => vec![ValueSet::Literal(Literal::Int(*v))],
-                LiteralValue::Float(v) => {
-                    vec![ValueSet::Literal(Literal::Float(v.clone()))]
-                }
-                LiteralValue::String(v) => {
-                    vec![ValueSet::Literal(Literal::String(v.clone()))]
-                }
-                LiteralValue::Bool(v) => vec![ValueSet::Literal(Literal::Bool(*v))],
-            },
+            Ty::Literal(value) => vec![ValueSet::from(value)],
 
-            // Infinite types: int, float, string, resource, classes, etc.
+            // Infinite primitive types
             Ty::Int => vec![ValueSet::OfType(Name::new("int"))],
             Ty::Float => vec![ValueSet::OfType(Name::new("float"))],
             Ty::String => vec![ValueSet::OfType(Name::new("string"))],
@@ -372,37 +357,31 @@ impl<'a> ExhaustivenessChecker<'a> {
             Ty::Type => vec![ValueSet::OfType(Name::new("type"))],
             Ty::Media(kind) => vec![ValueSet::OfType(Name::new(kind.to_string()))],
 
-            // User-defined class and enum types (resolved by FQN).
-            Ty::Class(fqn) => {
-                // Class types are treated like named types for exhaustiveness
-                vec![ValueSet::OfType(fqn.display_name())]
-            }
+            // Classes are opaque infinite types for exhaustiveness purposes.
+            Ty::Class(fqn) => vec![ValueSet::OfType(fqn.display_name())],
+
+            // Enums are finite: expand to their variants.
+            // Uses display_name (FQN for builtins, short name for locals).
             Ty::Enum(fqn) => {
-                // Enum types: look up variants for exhaustiveness checking
-                // Use display_name (FQN for builtins, short name for locals)
                 let display = fqn.display_name();
-                if let Some(variants) = self.enum_variants.get(&display) {
-                    variants
+                match self.enum_variants.get(&display) {
+                    Some(variants) => variants
                         .iter()
                         .map(|variant_name| ValueSet::EnumVariant {
                             enum_name: display.clone(),
                             variant_name: variant_name.clone(),
                         })
-                        .collect()
-                } else {
-                    vec![ValueSet::OfType(display)]
+                        .collect(),
+                    None => vec![ValueSet::OfType(display)],
                 }
             }
 
-            // List types: include element type for proper distinction between e.g. int[] vs string[]
+            // Composite types: opaque (element type embedded for disambiguation)
             Ty::List(inner) => vec![ValueSet::OfType(Name::new(format!("{inner}[]")))],
-
-            // Map types are not yet fully implemented in HIR (see tests/maps.rs).
-            // When they are, this should include key/value types: map<{key}, {value}>
             Ty::Map { .. } => vec![ValueSet::OfType(Name::new("<map>"))],
 
-            // Special types
-            Ty::Unknown | Ty::Error | Ty::Void | Ty::BuiltinUnknown => Vec::new(),
+            // Special / error types produce no required value sets
+            Ty::Unknown | Ty::Error | Ty::Void | Ty::BuiltinUnknown => vec![],
             Ty::Function { .. } => vec![ValueSet::OfType(Name::new("<function>"))],
             Ty::WatchAccessor(_) => vec![ValueSet::OfType(Name::new("<$watch>"))],
         }
@@ -437,7 +416,7 @@ impl<'a> ExhaustivenessChecker<'a> {
                     self.enum_names,
                     Span::default(),
                 );
-                Self::ty_to_value_set(&lowered_ty)
+                self.ty_to_value_set(&lowered_ty)
             }
 
             // Literal: matches exactly that value
@@ -459,50 +438,19 @@ impl<'a> ExhaustivenessChecker<'a> {
                     })
                     .collect();
 
-                if sub_sets.len() == 1 {
-                    sub_sets.into_iter().next().unwrap()
-                } else {
-                    ValueSet::Union(sub_sets)
-                }
+                values_into_value_set(sub_sets)
             }
         }
     }
 
-    /// Convert a type to a value set (for typed bindings).
-    fn ty_to_value_set(ty: &Ty) -> ValueSet {
-        match ty {
-            Ty::Union(members) => {
-                let sub_sets: Vec<ValueSet> = members.iter().map(Self::ty_to_value_set).collect();
-                if sub_sets.len() == 1 {
-                    sub_sets.into_iter().next().unwrap()
-                } else {
-                    ValueSet::Union(sub_sets)
-                }
-            }
-            Ty::Optional(inner) => {
-                let inner_set = Self::ty_to_value_set(inner);
-                ValueSet::Union(vec![inner_set, ValueSet::Literal(Literal::Null)])
-            }
-            Ty::TypeAlias(fqn) => {
-                // For type aliases, keep the alias name (don't expand)
-                // The coverage check will handle expansion
-                ValueSet::OfType(fqn.name.clone())
-            }
-            Ty::Class(fqn) => ValueSet::OfType(fqn.display_name()),
-            Ty::Enum(fqn) => ValueSet::OfType(fqn.display_name()),
-            Ty::Literal(value) => match value {
-                LiteralValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
-                LiteralValue::Float(v) => ValueSet::Literal(Literal::Float(v.clone())),
-                LiteralValue::String(v) => ValueSet::Literal(Literal::String(v.clone())),
-                LiteralValue::Bool(v) => ValueSet::Literal(Literal::Bool(*v)),
-            },
-            Ty::Bool => ValueSet::OfType(Name::new("bool")),
-            Ty::Int => ValueSet::OfType(Name::new("int")),
-            Ty::Float => ValueSet::OfType(Name::new("float")),
-            Ty::String => ValueSet::OfType(Name::new("string")),
-            Ty::Null => ValueSet::Literal(Literal::Null),
-            _ => ValueSet::OfType(Name::new(ty.to_string())),
-        }
+    /// Convert a type to a single `ValueSet` covering all its values.
+    ///
+    /// Delegates to `expand_ty` so alias resolution, enum expansion, and the
+    /// cycle guard are shared with the scrutinee path. A single-element result
+    /// is returned as-is; multiple elements become a `Union`; zero (error/void)
+    /// becomes `Empty`.
+    fn ty_to_value_set(&self, ty: &Ty) -> ValueSet {
+        values_into_value_set(self.expand_ty(ty, &mut HashSet::new()))
     }
 
     // ========================================================================
@@ -536,6 +484,24 @@ impl<'a> ExhaustivenessChecker<'a> {
 // ============================================================================
 // Shared Coverage Functions
 // ============================================================================
+
+/// Collapse a `Vec<ValueSet>` into a single `ValueSet`.
+///
+/// - Empty  → `Empty` (error/void/unreachable types produce no values)
+/// - Single → the element itself (no unnecessary wrapping)
+/// - Many   → `Union` (flat, since `expand_ty` never nests unions)
+fn values_into_value_set(values: Vec<ValueSet>) -> ValueSet {
+    let mut iter = values.into_iter();
+    match (iter.next(), iter.next()) {
+        (None, _) => ValueSet::Empty,
+        (Some(only), None) => only,
+        (Some(first), Some(second)) => {
+            let mut union = vec![first, second];
+            union.extend(iter);
+            ValueSet::Union(union)
+        }
+    }
+}
 
 /// Check if a value set is fully covered by existing coverage.
 ///
@@ -861,5 +827,185 @@ mod tests {
             &covered,
             &[]
         ));
+    }
+
+    // ========================================================================
+    // Type Alias Expansion Tests
+    // ========================================================================
+
+    /// Owns all maps so that `ExhaustivenessChecker`'s borrows are valid.
+    struct TestCtx {
+        enum_variants: HashMap<Name, Vec<Name>>,
+        type_aliases: HashMap<Name, Ty>,
+        class_names: HashMap<Name, baml_compiler_hir::QualifiedName>,
+        enum_names: HashMap<Name, baml_compiler_hir::QualifiedName>,
+        type_alias_names: HashSet<Name>,
+    }
+
+    impl TestCtx {
+        fn new(
+            enum_variants: HashMap<Name, Vec<Name>>,
+            type_aliases: HashMap<Name, Ty>,
+        ) -> Self {
+            Self {
+                enum_variants,
+                type_aliases,
+                class_names: HashMap::new(),
+                enum_names: HashMap::new(),
+                type_alias_names: HashSet::new(),
+            }
+        }
+
+        fn checker(&self) -> ExhaustivenessChecker<'_> {
+            ExhaustivenessChecker::new(
+                &self.enum_variants,
+                &self.type_aliases,
+                &self.class_names,
+                &self.enum_names,
+                &self.type_alias_names,
+            )
+        }
+    }
+
+    fn ty_alias(name: &str) -> Ty {
+        Ty::TypeAlias(baml_compiler_hir::QualifiedName::local(make_name(name)))
+    }
+
+    fn ty_enum(name: &str) -> Ty {
+        Ty::Enum(baml_compiler_hir::QualifiedName::local(make_name(name)))
+    }
+
+    #[test]
+    fn test_alias_to_primitive_expands() {
+        let mut aliases = HashMap::new();
+        aliases.insert(make_name("MyInt"), Ty::Int);
+        let ctx = TestCtx::new(HashMap::new(), aliases);
+
+        let values = ctx.checker().expand_type_to_values(&ty_alias("MyInt"));
+        assert_eq!(values, vec![ValueSet::OfType(make_name("int"))]);
+    }
+
+    #[test]
+    fn test_alias_to_bool_expands_finite() {
+        let mut aliases = HashMap::new();
+        aliases.insert(make_name("Flag"), Ty::Bool);
+        let ctx = TestCtx::new(HashMap::new(), aliases);
+
+        let values = ctx.checker().expand_type_to_values(&ty_alias("Flag"));
+        assert_eq!(
+            values,
+            vec![
+                ValueSet::Literal(Literal::Bool(true)),
+                ValueSet::Literal(Literal::Bool(false)),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_alias_to_enum_expands_variants() {
+        let enum_variants = enum_variants_with("Status", &["Active", "Inactive"]);
+        let mut aliases = HashMap::new();
+        aliases.insert(make_name("MyStatus"), ty_enum("Status"));
+        let ctx = TestCtx::new(enum_variants, aliases);
+
+        let values = ctx.checker().expand_type_to_values(&ty_alias("MyStatus"));
+        assert_eq!(
+            values,
+            vec![
+                ValueSet::EnumVariant {
+                    enum_name: make_name("Status"),
+                    variant_name: make_name("Active"),
+                },
+                ValueSet::EnumVariant {
+                    enum_name: make_name("Status"),
+                    variant_name: make_name("Inactive"),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_transitive_alias_expands() {
+        // type A = B; type B = int
+        let mut aliases = HashMap::new();
+        aliases.insert(make_name("A"), ty_alias("B"));
+        aliases.insert(make_name("B"), Ty::Int);
+        let ctx = TestCtx::new(HashMap::new(), aliases);
+
+        let values = ctx.checker().expand_type_to_values(&ty_alias("A"));
+        assert_eq!(values, vec![ValueSet::OfType(make_name("int"))]);
+    }
+
+    #[test]
+    fn test_alias_union_expands_members() {
+        // type Result = int | string
+        let mut aliases = HashMap::new();
+        aliases.insert(make_name("Result"), Ty::Union(vec![Ty::Int, Ty::String]));
+        let ctx = TestCtx::new(HashMap::new(), aliases);
+
+        let values = ctx.checker().expand_type_to_values(&ty_alias("Result"));
+        assert_eq!(
+            values,
+            vec![
+                ValueSet::OfType(make_name("int")),
+                ValueSet::OfType(make_name("string")),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_cyclic_alias_does_not_overflow() {
+        // type A = A | int — invalid cycle, handled gracefully
+        let mut aliases = HashMap::new();
+        aliases.insert(make_name("A"), Ty::Union(vec![ty_alias("A"), Ty::Int]));
+        let ctx = TestCtx::new(HashMap::new(), aliases);
+
+        // Must not stack-overflow; result is non-empty (A as opaque + int)
+        let values = ctx.checker().expand_type_to_values(&ty_alias("A"));
+        assert!(!values.is_empty());
+    }
+
+    #[test]
+    fn test_mutually_recursive_aliases_do_not_overflow() {
+        // type A = B; type B = A — invalid cycle
+        let mut aliases = HashMap::new();
+        aliases.insert(make_name("A"), ty_alias("B"));
+        aliases.insert(make_name("B"), ty_alias("A"));
+        let ctx = TestCtx::new(HashMap::new(), aliases);
+
+        let values = ctx.checker().expand_type_to_values(&ty_alias("A"));
+        assert!(!values.is_empty());
+    }
+
+    /// Regression: `x: MyStatus` must cover a scrutinee of type `MyStatus`
+    /// when `MyStatus` is an alias for an enum. Previously, `ty_to_value_set`
+    /// returned an opaque `OfType("MyStatus")` which never matched the
+    /// expanded enum variants, producing a false non-exhaustive error.
+    #[test]
+    fn test_alias_pattern_covers_aliased_enum_scrutinee() {
+        let enum_variants = enum_variants_with("Status", &["Active", "Inactive"]);
+        let mut aliases = HashMap::new();
+        aliases.insert(make_name("MyStatus"), ty_enum("Status"));
+        let ctx = TestCtx::new(enum_variants.clone(), aliases);
+        let checker = ctx.checker();
+
+        // Scrutinee: MyStatus alias → expands to [Active, Inactive]
+        let required = checker.expand_type_to_values(&ty_alias("MyStatus"));
+        assert_eq!(required.len(), 2, "alias scrutinee should expand to 2 variants");
+
+        // Pattern `x: MyStatus` → must also expand through the alias
+        let pattern_coverage = checker.ty_to_value_set(&ty_alias("MyStatus"));
+        let mut covered = Vec::new();
+        add_to_coverage(&mut covered, &pattern_coverage, &enum_variants);
+
+        let uncovered: Vec<_> = required
+            .iter()
+            .filter(|req| !is_value_set_covered(req, &covered, &required))
+            .collect();
+
+        assert!(
+            uncovered.is_empty(),
+            "x: MyStatus should fully cover MyStatus scrutinee; uncovered: {uncovered:?}"
+        );
     }
 }
