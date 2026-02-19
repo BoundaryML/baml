@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ConvexHttpClient } from "convex/browser";
+import type { FunctionReturnType } from "convex/server";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { api } from "../../../../../convex/_generated/api";
 import {
@@ -31,6 +32,10 @@ type MatchResult = {
 };
 
 const TRUE_VALUES = new Set(["1", "true", "yes", "y", "on"]);
+const BEP_LIST_LIMIT = 500;
+const BEP_LIST_PROBE_LIMIT = BEP_LIST_LIMIT + 1;
+
+type RawBepListItem = FunctionReturnType<typeof api.beps.list>[number];
 
 function isTruthy(value: string | null): boolean {
   if (!value) return false;
@@ -219,15 +224,21 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   let beps: ListBepResult[];
   try {
-    const bepsRaw = await convex.query(api.beps.list, { limit: 500 });
+    const bepsRaw = await convex.query(api.beps.list, {
+      limit: BEP_LIST_PROBE_LIMIT,
+    });
+    if (bepsRaw.length > BEP_LIST_LIMIT) {
+      return jsonResponse(
+        {
+          error: `BEP list exceeds the supported search size (${BEP_LIST_LIMIT}).`,
+          detail: "Add pagination support before returning more BEPs.",
+        },
+        503
+      );
+    }
+
     beps = bepsRaw.map(
-      (bep: {
-        _id: unknown;
-        number: number;
-        title: string;
-        status: string;
-        updatedAt: number;
-      }) => ({
+      (bep: RawBepListItem) => ({
         _id: String(bep._id),
         number: bep.number,
         title: bep.title,
