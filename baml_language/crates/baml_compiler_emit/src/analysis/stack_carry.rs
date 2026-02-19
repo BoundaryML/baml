@@ -4,7 +4,7 @@ use baml_compiler_mir::{Local, MirFunction, Operand, Place, Rvalue, StatementKin
 
 use super::{LocalClassification, LocalDefUse, StatementRef, UseLocation};
 use crate::pull_semantics::{
-    self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink,
+    self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink, StackEffectSink,
 };
 
 /// Stack-carry candidate kinds validated by stack simulation before activation.
@@ -344,41 +344,24 @@ fn simulate_statement_stack(
                     }
                 }
             }
-            Place::Field { base, .. } => {
-                if !simulate_place_pull_stack(base, sim, carried_local, classifications, def_use) {
-                    return false;
-                }
-                if !simulate_rvalue_pull_stack(value, sim, carried_local, classifications, def_use)
-                {
-                    return false;
-                }
-                sim.pop_n(2)
-            }
-            Place::Index { base, index, .. } => {
-                if !simulate_place_pull_stack(base, sim, carried_local, classifications, def_use) {
-                    return false;
-                }
-                if !simulate_place_pull_stack(
-                    &Place::Local(*index),
+            Place::Field { .. } | Place::Index { .. } => {
+                let mut sink = StackCarryPullSink {
                     sim,
                     carried_local,
                     classifications,
                     def_use,
-                ) {
-                    return false;
-                }
-                if !simulate_rvalue_pull_stack(value, sim, carried_local, classifications, def_use)
-                {
-                    return false;
-                }
-                sim.pop_n(3)
+                };
+                pull_semantics::walk_projection_store(&mut sink, destination, value).is_ok()
             }
         },
         StatementKind::Drop(place) => {
-            if !simulate_place_pull_stack(place, sim, carried_local, classifications, def_use) {
-                return false;
-            }
-            sim.pop_n(1)
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            pull_semantics::walk_drop_statement(&mut sink, place).is_ok()
         }
         StatementKind::Unwatch(_)
         | StatementKind::NotifyBlock { .. }
@@ -386,19 +369,23 @@ fn simulate_statement_stack(
         | StatementKind::VizEnter(_)
         | StatementKind::VizExit(_)
         | StatementKind::Nop => true,
-        StatementKind::WatchOptions { filter, .. } => {
-            // Emit channel const, filter operand, then Watch pops both.
-            sim.push();
-            if !simulate_operand_pull_stack(filter, sim, carried_local, classifications, def_use) {
-                return false;
-            }
-            sim.pop_n(2)
+        StatementKind::WatchOptions { local, filter } => {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            pull_semantics::walk_watch_options_statement(&mut sink, *local, None, filter).is_ok()
         }
         StatementKind::Assert(operand) => {
-            if !simulate_operand_pull_stack(operand, sim, carried_local, classifications, def_use) {
-                return false;
-            }
-            sim.pop_n(1)
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            pull_semantics::walk_assert_statement(&mut sink, operand).is_ok()
         }
     }
 }
@@ -424,13 +411,13 @@ fn simulate_terminator_stack(
             simulate_operand_pull_stack(discriminant, sim, carried_local, classifications, def_use)
         }
         Terminator::Return => {
-            if !simulate_place_pull_stack(
-                &Place::Local(Local(0)),
+            let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
-            ) {
+            };
+            if pull_semantics::walk_return_value(&mut sink).is_err() {
                 return false;
             }
             sim.pop_n(1)
@@ -441,13 +428,14 @@ fn simulate_terminator_stack(
             destination,
             ..
         } => {
-            if !simulate_operand_pull_stack(callee, sim, carried_local, classifications, def_use) {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_invoke_operands(&mut sink, callee, args).is_err() {
                 return false;
-            }
-            for arg in args {
-                if !simulate_operand_pull_stack(arg, sim, carried_local, classifications, def_use) {
-                    return false;
-                }
             }
 
             if !sim.pop_n(args.len() + 1) {
@@ -462,13 +450,14 @@ fn simulate_terminator_stack(
             future,
             ..
         } => {
-            if !simulate_operand_pull_stack(callee, sim, carried_local, classifications, def_use) {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_invoke_operands(&mut sink, callee, args).is_err() {
                 return false;
-            }
-            for arg in args {
-                if !simulate_operand_pull_stack(arg, sim, carried_local, classifications, def_use) {
-                    return false;
-                }
             }
 
             if !sim.pop_n(args.len() + 1) {
@@ -482,7 +471,13 @@ fn simulate_terminator_stack(
             destination,
             ..
         } => {
-            if !simulate_place_pull_stack(future, sim, carried_local, classifications, def_use) {
+            let mut sink = StackCarryPullSink {
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            };
+            if pull_semantics::walk_await_future(&mut sink, future).is_err() {
                 return false;
             }
             if !sim.pop_n(1) {
@@ -528,22 +523,6 @@ fn simulate_operand_pull_stack(
         def_use,
     };
     pull_semantics::walk_operand_pull(&mut sink, operand).is_ok()
-}
-
-fn simulate_place_pull_stack(
-    place: &Place,
-    sim: &mut StackCarrySim,
-    carried_local: Local,
-    classifications: &HashMap<Local, LocalClassification>,
-    def_use: &HashMap<Local, LocalDefUse>,
-) -> bool {
-    let mut sink = StackCarryPullSink {
-        sim,
-        carried_local,
-        classifications,
-        def_use,
-    };
-    pull_semantics::walk_place_pull(&mut sink, place).is_ok()
 }
 
 fn simulate_rvalue_pull_stack(
@@ -714,5 +693,54 @@ impl PullSink for StackCarryPullSink<'_> {
     fn is_type(&mut self, _ty: &baml_type::Ty) -> Result<(), Self::Error> {
         // Keep current conservative policy until IsType emission is stabilized.
         Err(())
+    }
+}
+
+impl StackEffectSink for StackCarryPullSink<'_> {
+    fn store_field_value(&mut self, _field: usize) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(2) {
+            return Err(());
+        }
+        Ok(())
+    }
+
+    fn store_index_value(
+        &mut self,
+        _kind: baml_compiler_mir::IndexKind,
+    ) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(3) {
+            return Err(());
+        }
+        Ok(())
+    }
+
+    fn pop_values(&mut self, n: usize) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(n) {
+            return Err(());
+        }
+        Ok(())
+    }
+
+    fn push_watch_channel(
+        &mut self,
+        _local: Local,
+        _channel_name: Option<&str>,
+    ) -> Result<(), Self::Error> {
+        self.sim.push();
+        Ok(())
+    }
+
+    fn watch_local(&mut self, _local: Local) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(2) {
+            return Err(());
+        }
+        Ok(())
+    }
+
+    fn assert_top(&mut self) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        Ok(())
     }
 }

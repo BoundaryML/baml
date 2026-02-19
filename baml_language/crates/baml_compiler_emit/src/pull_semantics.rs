@@ -50,6 +50,21 @@ pub(crate) trait PullSink {
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
 }
 
+/// Stack-effect callbacks for statement/terminator helpers.
+pub(crate) trait StackEffectSink: PullSink {
+    fn store_field_value(&mut self, field: usize) -> Result<(), Self::Error>;
+    fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
+    fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
+
+    fn push_watch_channel(
+        &mut self,
+        local: Local,
+        channel_name: Option<&str>,
+    ) -> Result<(), Self::Error>;
+    fn watch_local(&mut self, local: Local) -> Result<(), Self::Error>;
+    fn assert_top(&mut self) -> Result<(), Self::Error>;
+}
+
 /// How a local assignment statement should be emitted/evaluated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum LocalAssignBehavior {
@@ -98,6 +113,86 @@ pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBeha
             LocalStoreBehavior::PopValue
         }
     }
+}
+
+/// Shared evaluation order for projection stores (`base/index -> value -> store`).
+///
+/// Returns `Ok(true)` when `destination` is a projection and was handled here.
+/// Returns `Ok(false)` for `Place::Local(_)`.
+pub(crate) fn walk_projection_store<S: StackEffectSink>(
+    sink: &mut S,
+    destination: &Place,
+    value: &Rvalue,
+) -> Result<bool, S::Error> {
+    match destination {
+        Place::Field { base, field } => {
+            walk_place_pull(sink, base)?;
+            walk_rvalue_pull(sink, value)?;
+            sink.store_field_value(*field)?;
+            Ok(true)
+        }
+        Place::Index { base, index, kind } => {
+            walk_place_pull(sink, base)?;
+            walk_place_pull(sink, &Place::Local(*index))?;
+            walk_rvalue_pull(sink, value)?;
+            sink.store_index_value(*kind)?;
+            Ok(true)
+        }
+        Place::Local(_) => Ok(false),
+    }
+}
+
+/// Shared evaluation for `Drop(place)`.
+pub(crate) fn walk_drop_statement<S: StackEffectSink>(
+    sink: &mut S,
+    place: &Place,
+) -> Result<(), S::Error> {
+    walk_place_pull(sink, place)?;
+    sink.pop_values(1)
+}
+
+/// Shared evaluation for `WatchOptions`.
+pub(crate) fn walk_watch_options_statement<S: StackEffectSink>(
+    sink: &mut S,
+    local: Local,
+    channel_name: Option<&str>,
+    filter: &Operand,
+) -> Result<(), S::Error> {
+    sink.push_watch_channel(local, channel_name)?;
+    walk_operand_pull(sink, filter)?;
+    sink.watch_local(local)
+}
+
+/// Shared evaluation for `Assert(operand)`.
+pub(crate) fn walk_assert_statement<S: StackEffectSink>(
+    sink: &mut S,
+    operand: &Operand,
+) -> Result<(), S::Error> {
+    walk_operand_pull(sink, operand)?;
+    sink.assert_top()
+}
+
+/// Shared pull order for call-like terminators: `callee`, then each arg.
+pub(crate) fn walk_invoke_operands<S: PullSink>(
+    sink: &mut S,
+    callee: &Operand,
+    args: &[Operand],
+) -> Result<(), S::Error> {
+    walk_operand_pull(sink, callee)?;
+    for arg in args {
+        walk_operand_pull(sink, arg)?;
+    }
+    Ok(())
+}
+
+/// Shared pull for `Return` value place (`_0`).
+pub(crate) fn walk_return_value<S: PullSink>(sink: &mut S) -> Result<(), S::Error> {
+    walk_place_pull(sink, &Place::Local(Local(0)))
+}
+
+/// Shared pull for `Await` future place.
+pub(crate) fn walk_await_future<S: PullSink>(sink: &mut S, future: &Place) -> Result<(), S::Error> {
+    walk_place_pull(sink, future)
 }
 
 /// Walk an operand in pull order.

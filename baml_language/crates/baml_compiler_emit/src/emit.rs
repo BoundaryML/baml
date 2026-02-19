@@ -86,7 +86,9 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
 use crate::{
     MirCodegenContext,
     analysis::{AnalysisResult, LocalClassification},
-    pull_semantics::{self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink},
+    pull_semantics::{
+        self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink, StackEffectSink,
+    },
 };
 
 // ============================================================================
@@ -410,23 +412,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 // For field/index stores, push the base object first, then emit the value
                 // This sets up the stack correctly for StoreField/StoreArrayElement
+                match pull_semantics::walk_projection_store(self, destination, value) {
+                    Ok(true) => return,
+                    Ok(false) => {}
+                    Err(never) => match never {},
+                }
+
                 match destination {
-                    Place::Field { base, field } => {
-                        // For field store: push object, then value, then StoreField
-                        self.emit_place_value_pull(base, mir); // push object
-                        self.emit_rvalue_pull(value, mir); // push value
-                        self.emit(Instruction::StoreField(*field));
-                    }
-                    Place::Index { base, index, kind } => {
-                        // For index store: push array/map, then index/key, then value, then Store*Element
-                        self.emit_place_value_pull(base, mir); // push array/map
-                        self.emit_place_value_pull(&Place::Local(*index), mir); // push index/key
-                        self.emit_rvalue_pull(value, mir); // push value
-                        match kind {
-                            IndexKind::Array => self.emit(Instruction::StoreArrayElement),
-                            IndexKind::Map => self.emit(Instruction::StoreMapElement),
-                        };
-                    }
                     Place::Local(local) => {
                         // Local assignment: emit rvalue then store
                         self.emit_rvalue_pull(value, mir);
@@ -436,27 +428,27 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         if local_decl.is_watched && !self.watched_locals_initialized.contains(local)
                         {
                             self.watched_locals_initialized.insert(*local);
-                            if let Some(&slot) = self.local_slots.get(local) {
-                                // Push channel name (variable name) and filter (null for default)
-                                let channel =
-                                    local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
-                                let channel_obj_idx = self.objects.len();
-                                self.objects.push(Object::String(channel.to_string()));
-                                let channel_const_idx = self.add_constant(ConstValue::Object(
-                                    ObjectIndex::from_raw(channel_obj_idx),
-                                ));
-                                self.emit(Instruction::LoadConst(channel_const_idx));
+                            if self.local_slots.contains_key(local) {
+                                if let Err(never) =
+                                    self.push_watch_channel(*local, local_decl.name.as_deref())
+                                {
+                                    match never {}
+                                }
                                 let null_const_idx = self.add_constant(ConstValue::Null);
                                 self.emit(Instruction::LoadConst(null_const_idx));
-                                self.emit(Instruction::Watch(slot));
+                                if let Err(never) = self.watch_local(*local) {
+                                    match never {}
+                                }
                             }
                         }
                     }
+                    Place::Field { .. } | Place::Index { .. } => unreachable!(),
                 }
             }
             StatementKind::Drop(place) => {
-                self.emit_place_value_pull(place, mir);
-                self.emit(Instruction::Pop(1));
+                if let Err(never) = pull_semantics::walk_drop_statement(self, place) {
+                    match never {}
+                }
             }
             StatementKind::Unwatch(local) => {
                 // Emit unwatch for a watched local going out of scope
@@ -477,21 +469,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::NotifyBlock(block_index));
             }
             StatementKind::WatchOptions { local, filter } => {
-                // Emit Watch instruction with new filter
-                // This updates the watch settings for an already-watched variable
-                if let Some(&slot) = self.local_slots.get(local) {
-                    let local_decl = mir.local(*local);
-                    // Push channel name
-                    let channel = local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
-                    let channel_obj_idx = self.objects.len();
-                    self.objects.push(Object::String(channel.to_string()));
-                    let channel_const_idx = self
-                        .add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
-                    self.emit(Instruction::LoadConst(channel_const_idx));
-                    // Push filter value
-                    self.emit_operand_pull(filter, mir);
-                    // Re-emit Watch with new filter
-                    self.emit(Instruction::Watch(slot));
+                let channel_name = mir.local(*local).name.as_deref();
+                if let Err(never) =
+                    pull_semantics::walk_watch_options_statement(self, *local, channel_name, filter)
+                {
+                    match never {}
                 }
             }
             StatementKind::WatchNotify(local) => {
@@ -508,8 +490,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Nop => {}
             StatementKind::Assert(operand) => {
-                self.emit_operand_pull(operand, mir);
-                self.emit(Instruction::Assert);
+                if let Err(never) = pull_semantics::walk_assert_statement(self, operand) {
+                    match never {}
+                }
             }
         }
     }
@@ -524,13 +507,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// For Real locals, this emits a `LoadVar` instruction.
     fn emit_operand_pull(&mut self, operand: &Operand, _mir: &MirFunction) {
         if let Err(never) = pull_semantics::walk_operand_pull(self, operand) {
-            match never {}
-        }
-    }
-
-    /// Emit a place's value using the pull model.
-    fn emit_place_value_pull(&mut self, place: &Place, _mir: &MirFunction) {
-        if let Err(never) = pull_semantics::walk_place_pull(self, place) {
             match never {}
         }
     }
@@ -709,7 +685,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
             Terminator::Return => {
                 // Use pull model for return value - if _0 is Virtual, inline it
-                self.emit_place_value_pull(&Place::Local(Local(0)), mir);
+                if let Err(never) = pull_semantics::walk_return_value(self) {
+                    match never {}
+                }
                 self.emit(Instruction::Return);
             }
 
@@ -720,9 +698,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
-                self.emit_operand_pull(callee, mir);
-                for arg in args {
-                    self.emit_operand_pull(arg, mir);
+                if let Err(never) = pull_semantics::walk_invoke_operands(self, callee, args) {
+                    match never {}
                 }
                 self.emit(Instruction::Call(args.len()));
                 self.emit_store_place(destination, mir);
@@ -743,9 +720,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 future,
                 resume,
             } => {
-                self.emit_operand_pull(callee, mir);
-                for arg in args {
-                    self.emit_operand_pull(arg, mir);
+                if let Err(never) = pull_semantics::walk_invoke_operands(self, callee, args) {
+                    match never {}
                 }
                 self.emit(Instruction::DispatchFuture(args.len()));
                 self.emit_store_place(future, mir);
@@ -758,7 +734,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
-                self.emit_place_value_pull(future, mir);
+                if let Err(never) = pull_semantics::walk_await_future(self, future) {
+                    match never {}
+                }
                 self.emit(Instruction::Await);
                 self.emit_store_place(destination, mir);
                 self.emit_jump_unless_fallthrough(*target);
@@ -1242,6 +1220,57 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let idx = self.add_constant(ConstValue::Bool(false));
             self.emit(Instruction::LoadConst(idx));
         }
+        Ok(())
+    }
+}
+
+impl StackEffectSink for StackifyCodegen<'_, '_> {
+    fn store_field_value(&mut self, field: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::StoreField(field));
+        Ok(())
+    }
+
+    fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error> {
+        match kind {
+            IndexKind::Array => self.emit(Instruction::StoreArrayElement),
+            IndexKind::Map => self.emit(Instruction::StoreMapElement),
+        };
+        Ok(())
+    }
+
+    fn pop_values(&mut self, n: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::Pop(n));
+        Ok(())
+    }
+
+    fn push_watch_channel(
+        &mut self,
+        local: Local,
+        channel_name: Option<&str>,
+    ) -> Result<(), Self::Error> {
+        // Watch ops only apply to locals with allocated slots.
+        if self.local_slots.contains_key(&local) {
+            let channel = channel_name
+                .unwrap_or_else(|| panic!("watched local {local} must have a user-visible name"))
+                .to_string();
+            let channel_obj_idx = self.objects.len();
+            self.objects.push(Object::String(channel));
+            let channel_const_idx =
+                self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
+            self.emit(Instruction::LoadConst(channel_const_idx));
+        }
+        Ok(())
+    }
+
+    fn watch_local(&mut self, local: Local) -> Result<(), Self::Error> {
+        if let Some(&slot) = self.local_slots.get(&local) {
+            self.emit(Instruction::Watch(slot));
+        }
+        Ok(())
+    }
+
+    fn assert_top(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::Assert);
         Ok(())
     }
 }
