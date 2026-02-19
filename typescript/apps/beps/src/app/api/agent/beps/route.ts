@@ -122,7 +122,10 @@ function findBestMatch(query: string, beps: ListBepResult[]): {
 } {
   const normalizedQuery = normalize(query);
 
-  const byNumber = normalizedQuery.match(/(?:^|\s)bep\s*0*(\d+)(?:\s|$)|(?:^|\s)0*(\d+)(?:\s|$)/i);
+  // Match "bep 5" / "BEP-005" anywhere, or a bare integer when that is the entire query.
+  const byNumber = normalizedQuery.match(
+    /(?:^|\s)bep\s*0*(\d+)(?:\s|$)|^0*(\d+)$/
+  );
   const numberCandidate = byNumber?.[1] ?? byNumber?.[2];
   if (numberCandidate) {
     const parsedNumber = Number.parseInt(numberCandidate, 10);
@@ -147,9 +150,29 @@ function findBestMatch(query: string, beps: ListBepResult[]): {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isExportData(value: unknown): value is ExportData {
+  if (!isRecord(value)) return false;
+
+  return (
+    isRecord(value.bep) &&
+    Array.isArray(value.pages) &&
+    Array.isArray(value.comments) &&
+    Array.isArray(value.decisions) &&
+    Array.isArray(value.issues) &&
+    Array.isArray(value.versions) &&
+    Array.isArray(value.summaries) &&
+    typeof value.currentVersion === "number" &&
+    typeof value.exportedAt === "number"
+  );
+}
+
+// Callers should pass only markdown files.
 function flattenMarkdownForAgents(files: ExportFile[]): string {
   return files
-    .filter((file) => file.path.endsWith(".md"))
     .map(
       (file) =>
         `<!-- FILE: ${file.path} -->\n${file.content.trimEnd()}`
@@ -193,14 +216,33 @@ export async function GET(request: NextRequest): Promise<Response> {
   const omitOtherVersions = isTruthy(searchParams.get("omitOtherVersions"));
   const format = (searchParams.get("format") ?? "json").toLowerCase();
 
-  const bepsRaw = await convex.query(api.beps.list, { limit: 500 });
-  const beps: ListBepResult[] = bepsRaw.map((bep) => ({
-    _id: String(bep._id),
-    number: bep.number,
-    title: bep.title,
-    status: bep.status,
-    updatedAt: bep.updatedAt,
-  }));
+  let beps: ListBepResult[];
+  try {
+    const bepsRaw = await convex.query(api.beps.list, { limit: 500 });
+    beps = bepsRaw.map(
+      (bep: {
+        _id: unknown;
+        number: number;
+        title: string;
+        status: string;
+        updatedAt: number;
+      }) => ({
+        _id: String(bep._id),
+        number: bep.number,
+        title: bep.title,
+        status: bep.status,
+        updatedAt: bep.updatedAt,
+      })
+    );
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to fetch BEP list.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      502
+    );
+  }
 
   if (!query) {
     const sorted = [...beps].sort((a, b) => a.number - b.number);
@@ -239,15 +281,31 @@ export async function GET(request: NextRequest): Promise<Response> {
     );
   }
 
-  const exportDataRaw = await convex.query(api.export.getFullBepForExport, {
-    bepId: bestMatch.bep._id as Id<"beps">,
-  });
+  let exportDataRaw: unknown;
+  try {
+    exportDataRaw = await convex.query(api.export.getFullBepForExport, {
+      bepId: bestMatch.bep._id as Id<"beps">,
+    });
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Failed to fetch BEP export data.",
+        detail: err instanceof Error ? err.message : String(err),
+      },
+      502
+    );
+  }
 
   if (!exportDataRaw) {
     return jsonResponse({ error: "Matched BEP was not found." }, 404);
   }
 
-  const exportData = exportDataRaw as unknown as ExportData;
+  if (!isExportData(exportDataRaw)) {
+    return jsonResponse({ error: "Invalid BEP export payload shape." }, 502);
+  }
+
+  // TODO: Align getFullBepForExport's generated return type with ExportData.
+  const exportData = exportDataRaw;
   const allFiles = generateAllExportFiles(exportData).filter((file) =>
     file.path.endsWith(".md")
   );
