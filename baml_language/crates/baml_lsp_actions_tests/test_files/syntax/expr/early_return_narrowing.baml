@@ -18,11 +18,13 @@ function test_not_null_early_return(x: string?) -> string? {
 
 // Test 3: instanceof with early return
 class NarrowFoo {
+    type "narrow_foo"
     field string
 }
 
 class NarrowBar {
-    other int
+    type "narrow_bar"
+    other string
 }
 
 function test_instanceof_early_return(x: NarrowFoo | NarrowBar) -> string {
@@ -77,6 +79,14 @@ function test_simple_truthiness(x: int?) -> string {
     return "x is not null";
   }
   "x was null"
+}
+
+function test_diverging_if_with_plain_else(x: int?) -> int {
+  if (x == null) {
+    return 0;
+  } else {
+  };
+  x + 1
 }
 
 //----
