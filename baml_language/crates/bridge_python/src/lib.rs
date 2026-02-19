@@ -3,6 +3,7 @@
 //! This crate provides the same Python API as `language_client_python`
 //! but powered by `bex_engine` (via `bridge_cffi`) instead of `baml-runtime`.
 
+mod abort_controller;
 mod errors;
 mod runtime;
 mod types;
@@ -29,6 +30,7 @@ fn flush_events() {
 
 #[pymodule]
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<abort_controller::AbortController>()?;
     m.add_class::<runtime::BamlRuntime>()?;
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::HostSpanManager>()?;

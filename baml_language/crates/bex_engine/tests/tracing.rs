@@ -9,7 +9,9 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue, HostSpanContext, RuntimeEvent, SpanId};
+use bex_engine::{
+    BexEngine, BexExternalValue, CancellationToken, HostSpanContext, RuntimeEvent, SpanId,
+};
 use bex_events::{EventKind, FunctionEvent};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -74,7 +76,13 @@ async fn trace_single_function() {
 
     let (host_ctx, guard) = setup_tracking();
     let value = engine
-        .call_function("main", vec![], Some(host_ctx), &[])
+        .call_function(
+            "main",
+            vec![],
+            Some(host_ctx),
+            &[],
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
     let events = collect_events(&guard);
@@ -113,7 +121,13 @@ async fn trace_nested_expression_calls_no_child_spans() {
 
     let (host_ctx, guard) = setup_tracking();
     let value = engine
-        .call_function("main", vec![], Some(host_ctx), &[])
+        .call_function(
+            "main",
+            vec![],
+            Some(host_ctx),
+            &[],
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
     let events = collect_events(&guard);
@@ -152,7 +166,13 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
 
     let (host_ctx, guard) = setup_tracking();
     let value = engine
-        .call_function("main", vec![], Some(host_ctx), &[])
+        .call_function(
+            "main",
+            vec![],
+            Some(host_ctx),
+            &[],
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
     let events = collect_events(&guard);
@@ -185,7 +205,13 @@ async fn trace_sibling_expression_calls_no_child_spans() {
 
     let (host_ctx, guard) = setup_tracking();
     let value = engine
-        .call_function("main", vec![], Some(host_ctx), &[])
+        .call_function(
+            "main",
+            vec![],
+            Some(host_ctx),
+            &[],
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
     let events = collect_events(&guard);
@@ -215,6 +241,7 @@ async fn trace_captures_root_args() {
             vec![BexExternalValue::Int(3), BexExternalValue::Int(4)],
             Some(host_ctx),
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -254,6 +281,7 @@ async fn trace_captures_root_result() {
             vec![BexExternalValue::Int(5)],
             Some(host_ctx),
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();

@@ -6,7 +6,7 @@
 //! 3. `render_prompt` correctly renders templates with arguments
 
 use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
-use bex_engine::Ty;
+use bex_engine::{CancellationToken, Ty};
 use bex_external_types::BexExternalAdt;
 use bex_heap::{BexExternalValue, builtin_types::owned::LlmPrimitiveClient};
 
@@ -235,7 +235,9 @@ function test_render() -> int {
     let engine =
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
-    let result = engine.call_function("test_render", vec![], None, &[]).await;
+    let result = engine
+        .call_function("test_render", vec![], None, &[], CancellationToken::new())
+        .await;
 
     match result {
         Ok(value) => {
@@ -283,7 +285,9 @@ function get_prompt() -> baml.llm.PromptAst {
     let engine =
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
-    let result = engine.call_function("get_prompt", vec![], None, &[]).await;
+    let result = engine
+        .call_function("get_prompt", vec![], None, &[], CancellationToken::new())
+        .await;
 
     match result {
         Ok(value) => {
@@ -348,7 +352,13 @@ function test_build_request() -> int {
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
-        .call_function("test_build_request", vec![], None, &[])
+        .call_function(
+            "test_build_request",
+            vec![],
+            None,
+            &[],
+            CancellationToken::new(),
+        )
         .await;
     assert!(result.is_ok(), "build_request should succeed: {result:?}");
 }
@@ -386,7 +396,7 @@ function test_call_llm() -> unknown {
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
     let result = engine
-        .call_function("test_call_llm", vec![], None, &[])
+        .call_function("test_call_llm", vec![], None, &[], CancellationToken::new())
         .await;
 
     // Without a valid API key, the orchestration loop will either:
@@ -426,7 +436,7 @@ function test_call_llm() -> string {
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
-        .call_function("test_call_llm", vec![], None, &[])
+        .call_function("test_call_llm", vec![], None, &[], CancellationToken::new())
         .await;
 
     // Without a valid API key, the orchestration loop will either:
@@ -467,7 +477,7 @@ function test_call_llm() -> unknown {
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
-        .call_function("test_call_llm", vec![], None, &[])
+        .call_function("test_call_llm", vec![], None, &[], CancellationToken::new())
         .await;
 
     // Without a valid API key, the orchestration loop will either:
@@ -522,7 +532,7 @@ function get_prompt() -> baml.llm.PromptAst {
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
-        .call_function("get_prompt", vec![], None, &[])
+        .call_function("get_prompt", vec![], None, &[], CancellationToken::new())
         .await
         .expect("failed to render prompt that calls template_string Greet(name)");
     assert_eq!(result, prompt_ast_string("Hello, Alice!"));
@@ -561,7 +571,7 @@ function get_prompt() -> baml.llm.PromptAst {
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
-        .call_function("get_prompt", vec![], None, &[])
+        .call_function("get_prompt", vec![], None, &[], CancellationToken::new())
         .await
         .expect("failed to render prompt with nested template_strings Outer() -> Inner()");
     assert_eq!(result, prompt_ast_string("before INNER after"));
@@ -606,7 +616,7 @@ function get_prompt() -> baml.llm.PromptAst {
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
-        .call_function("get_prompt", vec![], None, &[])
+        .call_function("get_prompt", vec![], None, &[], CancellationToken::new())
         .await
         .expect("failed to render prompt with 2-arg template_string Describe(label, person)");
     assert_eq!(result, prompt_ast_string("User: Bob (age 42)"));
@@ -645,7 +655,7 @@ function get_prompt() -> baml.llm.PromptAst {
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
     let result = engine
-        .call_function("get_prompt", vec![], None, &[])
+        .call_function("get_prompt", vec![], None, &[], CancellationToken::new())
         .await
         .expect("failed to render prompt that calls parameterless template_string Header()");
     assert_eq!(result, prompt_ast_string("=== HEADER ===\nContent here"));

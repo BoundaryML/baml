@@ -267,6 +267,11 @@ macro_rules! with_builtins {
                     /// Abort execution with an error message.
                     #[sys_op]
                     fn panic(message: String);
+
+                    /// Check if the current function call has been cancelled.
+                    #[sys_op]
+                    #[uses(engine_ctx)]
+                    fn is_cancelled() -> bool;
                 }
 
                 // =====================================================================

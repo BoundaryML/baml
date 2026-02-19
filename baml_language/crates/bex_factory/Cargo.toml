@@ -33,3 +33,4 @@ bex_resource_types = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
+tokio-util = { workspace = true }

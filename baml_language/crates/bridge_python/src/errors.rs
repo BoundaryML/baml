@@ -9,6 +9,7 @@ use pyo3::{
 create_exception!(baml_py, BamlError, pyo3::exceptions::PyException);
 create_exception!(baml_py, BamlInvalidArgumentError, BamlError);
 create_exception!(baml_py, BamlClientError, BamlError);
+create_exception!(baml_py, BamlCancelledError, BamlError);
 
 /// Register error types on the module.
 pub fn register_errors(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -18,6 +19,10 @@ pub fn register_errors(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.py().get_type::<BamlInvalidArgumentError>(),
     )?;
     m.add("BamlClientError", m.py().get_type::<BamlClientError>())?;
+    m.add(
+        "BamlCancelledError",
+        m.py().get_type::<BamlCancelledError>(),
+    )?;
     Ok(())
 }
 
@@ -29,6 +34,7 @@ pub fn engine_error_to_py(err: bex_factory::EngineError) -> PyErr {
         EngineError::FunctionNotFound { .. } => {
             PyErr::new::<BamlInvalidArgumentError, _>(err.to_string())
         }
+        EngineError::Cancelled => PyErr::new::<BamlCancelledError, _>(err.to_string()),
         _ => PyErr::new::<BamlClientError, _>(err.to_string()),
     }
 }

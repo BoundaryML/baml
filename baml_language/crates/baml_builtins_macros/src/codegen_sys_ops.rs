@@ -54,17 +54,29 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                     let extraction = sys_op_extraction(d, &collected.builtin_types);
 
                     let uses_ctx = d.uses_engine_ctx;
+                    let has_regular_params = d.receiver.is_some() || !d.params.is_empty();
+
                     let ctx_param = if uses_ctx {
-                        quote!(, ctx: &SysOpContext)
+                        if has_regular_params {
+                            quote!(, ctx: &SysOpContext)
+                        } else {
+                            quote!(ctx: &SysOpContext)
+                        }
                     } else {
                         quote!()
                     };
                     let ctx_arg = if uses_ctx {
-                        quote!(, ctx)
+                        if has_regular_params {
+                            quote!(, ctx)
+                        } else {
+                            quote!(ctx)
+                        }
                     } else {
                         quote!()
                     };
 
+                    // Separator between clean_params and ctx_param when both are non-empty
+                    // is already handled above (ctx_param has leading comma when has_regular_params).
                     let output_type = sys_op_output_type(d, &collected.builtin_types);
 
                     // Clean method: &self + params. Implementors override this.

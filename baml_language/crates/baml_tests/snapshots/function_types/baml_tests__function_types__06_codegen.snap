@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 13
-Objects: 77
-Globals: 63
+Objects: 79
+Globals: 64
 
 Function GetTransform (arity: 0, kind: Bytecode):
      0   LOAD_CONST 0   (1)
@@ -53,7 +53,7 @@ Function baml.llm.PlannerState.rr_local_offset (arity: 2, kind: Bytecode):
 
 Function baml.llm.PlannerState.rr_pick_index (arity: 3, kind: Bytecode):
      0    INIT_LOCALS 1       
-     1    LOAD_GLOBAL 60      (<fn baml.llm.PlannerState.rr_local_offset>)
+     1    LOAD_GLOBAL 61      (<fn baml.llm.PlannerState.rr_local_offset>)
      2    LOAD_VAR 1          (self)
      3    LOAD_VAR 2          (client_name)
      4    CALL 2              
@@ -64,7 +64,7 @@ Function baml.llm.PlannerState.rr_pick_index (arity: 3, kind: Bytecode):
      9    LOAD_VAR 2          (client_name)
      10   CALL 2              
      11   POP 1               
-     12   LOAD_GLOBAL 46      (<fn baml.llm.round_robin_peek>)
+     12   LOAD_GLOBAL 47      (<fn baml.llm.round_robin_peek>)
      13   LOAD_VAR 2          (client_name)
      14   DISPATCH_FUTURE 1   
      15   AWAIT               
@@ -75,7 +75,7 @@ Function baml.llm.PlannerState.rr_pick_index (arity: 3, kind: Bytecode):
      20   RETURN              
 
 Function baml.llm.build_attempt (arity: 1, kind: Bytecode):
-     0   LOAD_GLOBAL 50      (<fn baml.llm.build_attempt_with_state>)
+     0   LOAD_GLOBAL 51      (<fn baml.llm.build_attempt_with_state>)
      1   LOAD_VAR 1          (llm_client)
      2   ALLOC_INSTANCE 10   (<class baml.llm.PlannerState>)
      3   COPY 0              
@@ -118,7 +118,7 @@ Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
      30    LOAD_FIELD 2           
      31    CALL 1                 
      32    STORE_VAR 16           (_71)
-     33    LOAD_GLOBAL 61         (<fn baml.llm.PlannerState.rr_pick_index>)
+     33    LOAD_GLOBAL 62         (<fn baml.llm.PlannerState.rr_pick_index>)
      34    LOAD_VAR 2             (planner_state)
      35    LOAD_VAR 1             (llm_client)
      36    LOAD_FIELD 0           
@@ -131,7 +131,7 @@ Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
      43    LOAD_VAR 15            (idx)
      44    CALL 2                 
      45    STORE_VAR 17           (_77)
-     46    LOAD_GLOBAL 51         (<fn baml.llm.build_plan_with_state>)
+     46    LOAD_GLOBAL 52         (<fn baml.llm.build_plan_with_state>)
      47    LOAD_VAR 17            (_77)
      48    LOAD_VAR 2             (planner_state)
      49    CALL 2                 
@@ -164,7 +164,7 @@ Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
      76    LOAD_CONST 1           (1)
      77    BIN_OP +               
      78    STORE_VAR 8            (_i)
-     79    LOAD_GLOBAL 51         (<fn baml.llm.build_plan_with_state>)
+     79    LOAD_GLOBAL 52         (<fn baml.llm.build_plan_with_state>)
      80    LOAD_VAR 9             (sub)
      81    LOAD_VAR 2             (planner_state)
      82    CALL 2                 
@@ -195,7 +195,7 @@ Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
      107   CALL 2                 
      108   POP 1                  
      109   JUMP -19               (to 90)
-     110   LOAD_GLOBAL 44         (<fn baml.llm.resolve_client>)
+     110   LOAD_GLOBAL 45         (<fn baml.llm.resolve_client>)
      111   LOAD_VAR 1             (llm_client)
      112   LOAD_FIELD 0           
      113   DISPATCH_FUTURE 1      
@@ -215,7 +215,7 @@ Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
      127   RETURN                 
 
 Function baml.llm.build_plan (arity: 1, kind: Bytecode):
-     0   LOAD_GLOBAL 51      (<fn baml.llm.build_plan_with_state>)
+     0   LOAD_GLOBAL 52      (<fn baml.llm.build_plan_with_state>)
      1   LOAD_VAR 1          (llm_client)
      2   ALLOC_INSTANCE 10   (<class baml.llm.PlannerState>)
      3   COPY 0              
@@ -287,7 +287,7 @@ Function baml.llm.build_plan_with_state (arity: 2, kind: Bytecode):
      59    LOAD_CONST 1           (0)
      60    BIN_OP +               
      61    STORE_VAR 6            (current_delay)
-     62    LOAD_GLOBAL 50         (<fn baml.llm.build_attempt_with_state>)
+     62    LOAD_GLOBAL 51         (<fn baml.llm.build_attempt_with_state>)
      63    LOAD_VAR 1             (llm_client)
      64    LOAD_VAR 2             (planner_state)
      65    CALL 2                 
@@ -331,7 +331,7 @@ Function baml.llm.build_plan_with_state (arity: 2, kind: Bytecode):
      103   CALL 2                 
      104   POP 1                  
      105   JUMP -30               (to 75)
-     106   LOAD_GLOBAL 50         (<fn baml.llm.build_attempt_with_state>)
+     106   LOAD_GLOBAL 51         (<fn baml.llm.build_attempt_with_state>)
      107   LOAD_VAR 1             (llm_client)
      108   LOAD_VAR 2             (planner_state)
      109   CALL 2                 
@@ -339,16 +339,16 @@ Function baml.llm.build_plan_with_state (arity: 2, kind: Bytecode):
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):
      0    INIT_LOCALS 2       
-     1    LOAD_GLOBAL 53      (<fn baml.llm.resolve_primitive>)
+     1    LOAD_GLOBAL 54      (<fn baml.llm.resolve_primitive>)
      2    LOAD_VAR 1          (function_name)
      3    CALL 1              
      4    STORE_VAR 3         (primitive_client)
-     5    LOAD_GLOBAL 52      (<fn baml.llm.render_prompt>)
+     5    LOAD_GLOBAL 53      (<fn baml.llm.render_prompt>)
      6    LOAD_VAR 1          (function_name)
      7    LOAD_VAR 2          (args)
      8    CALL 2              
      9    STORE_VAR 4         (specialized_prompt)
-     10   LOAD_GLOBAL 39      (<fn baml.llm.PrimitiveClient.build_request>)
+     10   LOAD_GLOBAL 40      (<fn baml.llm.PrimitiveClient.build_request>)
      11   LOAD_VAR 3          (primitive_client)
      12   LOAD_VAR 4          (specialized_prompt)
      13   DISPATCH_FUTURE 2   
@@ -357,17 +357,17 @@ Function baml.llm.build_request (arity: 2, kind: Bytecode):
 
 Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
      0    INIT_LOCALS 3          
-     1    LOAD_GLOBAL 41         (<fn baml.llm.get_jinja_template>)
+     1    LOAD_GLOBAL 42         (<fn baml.llm.get_jinja_template>)
      2    LOAD_VAR 1             (function_name)
      3    DISPATCH_FUTURE 1      
      4    AWAIT                  
      5    STORE_VAR 3            (jinja_string)
-     6    LOAD_GLOBAL 43         (<fn baml.llm.get_client>)
+     6    LOAD_GLOBAL 44         (<fn baml.llm.get_client>)
      7    LOAD_VAR 1             (function_name)
      8    DISPATCH_FUTURE 1      
      9    AWAIT                  
      10   STORE_VAR 4            (llm_client)
-     11   LOAD_GLOBAL 55         (<fn baml.llm.execute_client>)
+     11   LOAD_GLOBAL 56         (<fn baml.llm.execute_client>)
      12   LOAD_VAR 4             (llm_client)
      13   ALLOC_INSTANCE 9       (<class baml.llm.ExecutionContext>)
      14   COPY 0                 
@@ -385,117 +385,134 @@ Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
      26   LOAD_VAR 5             (result)
      27   LOAD_FIELD 0           
      28   POP_JUMP_IF_FALSE +2   (to 30)
-     29   JUMP +8                (to 37)
-     30   LOAD_GLOBAL 29         (<fn baml.sys.panic>)
-     31   LOAD_CONST 1           ("All orchestration steps failed")
-     32   DISPATCH_FUTURE 1      
-     33   AWAIT                  
-     34   POP 1                  
-     35   LOAD_CONST 2           (null)
-     36   RETURN                 
-     37   LOAD_VAR 5             (result)
-     38   LOAD_FIELD 1           
-     39   RETURN                 
+     29   JUMP +19               (to 48)
+     30   LOAD_GLOBAL 30         (<fn baml.sys.is_cancelled>)
+     31   DISPATCH_FUTURE 0      
+     32   AWAIT                  
+     33   POP_JUMP_IF_FALSE +2   (to 35)
+     34   JUMP +2                (to 36)
+     35   JUMP +6                (to 41)
+     36   LOAD_GLOBAL 29         (<fn baml.sys.panic>)
+     37   LOAD_CONST 1           ("Operation cancelled")
+     38   DISPATCH_FUTURE 1      
+     39   AWAIT                  
+     40   POP 1                  
+     41   LOAD_GLOBAL 29         (<fn baml.sys.panic>)
+     42   LOAD_CONST 2           ("All orchestration steps failed")
+     43   DISPATCH_FUTURE 1      
+     44   AWAIT                  
+     45   POP 1                  
+     46   LOAD_CONST 3           (null)
+     47   RETURN                 
+     48   LOAD_VAR 5             (result)
+     49   LOAD_FIELD 1           
+     50   RETURN                 
 
 Function baml.llm.execute_client (arity: 3, kind: Bytecode):
-     0    INIT_LOCALS 7          
-     1    LOAD_VAR 1             (llm_client)
-     2    LOAD_FIELD 3           
-     3    STORE_VAR 4            (_4)
-     4    LOAD_VAR 4             (_4)
-     5    LOAD_CONST 0           (null)
-     6    CMP_OP ==              
-     7    POP_JUMP_IF_FALSE +2   (to 9)
-     8    JUMP +84               (to 92)
-     9    JUMP +1                (to 10)
-     10   LOAD_VAR 4             (_4)
-     11   STORE_VAR 5            (r)
-     12   LOAD_VAR 5             (r)
-     13   LOAD_FIELD 1           
-     14   LOAD_CONST 1           (0)
-     15   BIN_OP +               
-     16   STORE_VAR 6            (current_delay)
-     17   LOAD_CONST 2           (0)
-     18   STORE_VAR 7            (attempt)
-     19   LOAD_VAR 7             (attempt)
-     20   LOAD_VAR 5             (r)
-     21   LOAD_FIELD 0           
-     22   CMP_OP <=              
-     23   POP_JUMP_IF_FALSE +2   (to 25)
-     24   JUMP +9                (to 33)
-     25   ALLOC_INSTANCE 8       (<class baml.llm.ExecutionResult>)
-     26   COPY 0                 
-     27   LOAD_CONST 3           (false)
-     28   STORE_FIELD 0          
-     29   COPY 0                 
-     30   LOAD_CONST 0           (null)
-     31   STORE_FIELD 1          
-     32   JUMP +65               (to 97)
-     33   LOAD_VAR 3             (inherited_delay_ms)
-     34   STORE_VAR 8            (attempt_delay)
-     35   LOAD_VAR 7             (attempt)
-     36   LOAD_CONST 2           (0)
-     37   CMP_OP >               
-     38   POP_JUMP_IF_FALSE +2   (to 40)
-     39   JUMP +2                (to 41)
-     40   JUMP +26               (to 66)
-     41   LOAD_GLOBAL 19         (<fn baml.math.trunc>)
-     42   LOAD_VAR 6             (current_delay)
-     43   CALL 1                 
-     44   STORE_VAR 8            (attempt_delay)
-     45   LOAD_VAR 6             (current_delay)
-     46   LOAD_VAR 5             (r)
-     47   LOAD_FIELD 2           
-     48   BIN_OP *               
-     49   STORE_VAR 9            (next)
-     50   LOAD_VAR 9             (next)
-     51   LOAD_VAR 5             (r)
-     52   LOAD_FIELD 3           
-     53   LOAD_CONST 1           (0)
-     54   BIN_OP +               
-     55   CMP_OP >               
-     56   POP_JUMP_IF_FALSE +2   (to 58)
-     57   JUMP +4                (to 61)
-     58   LOAD_VAR 9             (next)
-     59   STORE_VAR 6            (current_delay)
-     60   JUMP +6                (to 66)
-     61   LOAD_VAR 5             (r)
-     62   LOAD_FIELD 3           
-     63   LOAD_CONST 1           (0)
-     64   BIN_OP +               
-     65   STORE_VAR 6            (current_delay)
-     66   LOAD_VAR 7             (attempt)
-     67   LOAD_VAR 5             (r)
-     68   LOAD_FIELD 0           
-     69   CMP_OP ==              
-     70   POP_JUMP_IF_FALSE +2   (to 72)
-     71   JUMP +2                (to 73)
-     72   JUMP +3                (to 75)
-     73   LOAD_VAR 3             (inherited_delay_ms)
-     74   STORE_VAR 8            (attempt_delay)
-     75   LOAD_GLOBAL 56         (<fn baml.llm.execute_client_once>)
-     76   LOAD_VAR 1             (llm_client)
-     77   LOAD_VAR 2             (context)
-     78   LOAD_VAR 8             (attempt_delay)
-     79   CALL 3                 
-     80   STORE_VAR 10           (result)
-     81   LOAD_VAR 10            (result)
-     82   LOAD_FIELD 0           
-     83   POP_JUMP_IF_FALSE +2   (to 85)
-     84   JUMP +6                (to 90)
-     85   LOAD_VAR 7             (attempt)
-     86   LOAD_CONST 4           (1)
-     87   BIN_OP +               
-     88   STORE_VAR 7            (attempt)
-     89   JUMP -70               (to 19)
-     90   LOAD_VAR 10            (result)
-     91   RETURN                 
-     92   LOAD_GLOBAL 56         (<fn baml.llm.execute_client_once>)
-     93   LOAD_VAR 1             (llm_client)
-     94   LOAD_VAR 2             (context)
-     95   LOAD_VAR 3             (inherited_delay_ms)
-     96   CALL 3                 
-     97   RETURN                 
+     0     INIT_LOCALS 7          
+     1     LOAD_VAR 1             (llm_client)
+     2     LOAD_FIELD 3           
+     3     STORE_VAR 4            (_4)
+     4     LOAD_VAR 4             (_4)
+     5     LOAD_CONST 0           (null)
+     6     CMP_OP ==              
+     7     POP_JUMP_IF_FALSE +2   (to 9)
+     8     JUMP +90               (to 98)
+     9     JUMP +1                (to 10)
+     10    LOAD_VAR 4             (_4)
+     11    STORE_VAR 5            (r)
+     12    LOAD_VAR 5             (r)
+     13    LOAD_FIELD 1           
+     14    LOAD_CONST 1           (0)
+     15    BIN_OP +               
+     16    STORE_VAR 6            (current_delay)
+     17    LOAD_CONST 2           (0)
+     18    STORE_VAR 7            (attempt)
+     19    LOAD_VAR 7             (attempt)
+     20    LOAD_VAR 5             (r)
+     21    LOAD_FIELD 0           
+     22    CMP_OP <=              
+     23    POP_JUMP_IF_FALSE +2   (to 25)
+     24    JUMP +9                (to 33)
+     25    ALLOC_INSTANCE 8       (<class baml.llm.ExecutionResult>)
+     26    COPY 0                 
+     27    LOAD_CONST 3           (false)
+     28    STORE_FIELD 0          
+     29    COPY 0                 
+     30    LOAD_CONST 0           (null)
+     31    STORE_FIELD 1          
+     32    JUMP +71               (to 103)
+     33    LOAD_GLOBAL 30         (<fn baml.sys.is_cancelled>)
+     34    DISPATCH_FUTURE 0      
+     35    AWAIT                  
+     36    POP_JUMP_IF_FALSE +2   (to 38)
+     37    JUMP +60               (to 97)
+     38    LOAD_VAR 3             (inherited_delay_ms)
+     39    STORE_VAR 8            (attempt_delay)
+     40    LOAD_VAR 7             (attempt)
+     41    LOAD_CONST 2           (0)
+     42    CMP_OP >               
+     43    POP_JUMP_IF_FALSE +2   (to 45)
+     44    JUMP +2                (to 46)
+     45    JUMP +26               (to 71)
+     46    LOAD_GLOBAL 19         (<fn baml.math.trunc>)
+     47    LOAD_VAR 6             (current_delay)
+     48    CALL 1                 
+     49    STORE_VAR 8            (attempt_delay)
+     50    LOAD_VAR 6             (current_delay)
+     51    LOAD_VAR 5             (r)
+     52    LOAD_FIELD 2           
+     53    BIN_OP *               
+     54    STORE_VAR 9            (next)
+     55    LOAD_VAR 9             (next)
+     56    LOAD_VAR 5             (r)
+     57    LOAD_FIELD 3           
+     58    LOAD_CONST 1           (0)
+     59    BIN_OP +               
+     60    CMP_OP >               
+     61    POP_JUMP_IF_FALSE +2   (to 63)
+     62    JUMP +4                (to 66)
+     63    LOAD_VAR 9             (next)
+     64    STORE_VAR 6            (current_delay)
+     65    JUMP +6                (to 71)
+     66    LOAD_VAR 5             (r)
+     67    LOAD_FIELD 3           
+     68    LOAD_CONST 1           (0)
+     69    BIN_OP +               
+     70    STORE_VAR 6            (current_delay)
+     71    LOAD_VAR 7             (attempt)
+     72    LOAD_VAR 5             (r)
+     73    LOAD_FIELD 0           
+     74    CMP_OP ==              
+     75    POP_JUMP_IF_FALSE +2   (to 77)
+     76    JUMP +2                (to 78)
+     77    JUMP +3                (to 80)
+     78    LOAD_VAR 3             (inherited_delay_ms)
+     79    STORE_VAR 8            (attempt_delay)
+     80    LOAD_GLOBAL 57         (<fn baml.llm.execute_client_once>)
+     81    LOAD_VAR 1             (llm_client)
+     82    LOAD_VAR 2             (context)
+     83    LOAD_VAR 8             (attempt_delay)
+     84    CALL 3                 
+     85    STORE_VAR 10           (result)
+     86    LOAD_VAR 10            (result)
+     87    LOAD_FIELD 0           
+     88    POP_JUMP_IF_FALSE +2   (to 90)
+     89    JUMP +6                (to 95)
+     90    LOAD_VAR 7             (attempt)
+     91    LOAD_CONST 4           (1)
+     92    BIN_OP +               
+     93    STORE_VAR 7            (attempt)
+     94    JUMP -75               (to 19)
+     95    LOAD_VAR 10            (result)
+     96    RETURN                 
+     97    RETURN                 
+     98    LOAD_GLOBAL 57         (<fn baml.llm.execute_client_once>)
+     99    LOAD_VAR 1             (llm_client)
+     100   LOAD_VAR 2             (context)
+     101   LOAD_VAR 3             (inherited_delay_ms)
+     102   CALL 3                 
+     103   RETURN                 
 
 Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      0     INIT_LOCALS 16         
@@ -507,7 +524,7 @@ Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      6     CMP_OP ==              
      7     POP_JUMP_IF_FALSE +3   (to 10)
      8     POP 1                  
-     9     JUMP +77               (to 86)
+     9     JUMP +83               (to 92)
      10    COPY 0                 
      11    LOAD_CONST 1           (1)
      12    CMP_OP ==              
@@ -516,31 +533,31 @@ Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      15    JUMP +28               (to 43)
      16    POP 1                  
      17    JUMP +1                (to 18)
-     18    LOAD_GLOBAL 45         (<fn baml.llm.round_robin_next>)
+     18    LOAD_GLOBAL 46         (<fn baml.llm.round_robin_next>)
      19    LOAD_VAR 1             (llm_client)
      20    LOAD_FIELD 0           
      21    DISPATCH_FUTURE 1      
      22    AWAIT                  
-     23    STORE_VAR 17           (_92)
+     23    STORE_VAR 17           (_102)
      24    LOAD_GLOBAL 0          (<fn baml.Array.length>)
      25    LOAD_VAR 1             (llm_client)
      26    LOAD_FIELD 2           
      27    CALL 1                 
-     28    STORE_VAR 18           (_97)
+     28    STORE_VAR 18           (_107)
      29    LOAD_GLOBAL 2          (<fn baml.Array.at>)
      30    LOAD_VAR 1             (llm_client)
      31    LOAD_FIELD 2           
-     32    LOAD_VAR 17            (_92)
-     33    LOAD_VAR 18            (_97)
+     32    LOAD_VAR 17            (_102)
+     33    LOAD_VAR 18            (_107)
      34    BIN_OP %               
      35    CALL 2                 
-     36    STORE_VAR 19           (_102)
-     37    LOAD_GLOBAL 55         (<fn baml.llm.execute_client>)
-     38    LOAD_VAR 19            (_102)
+     36    STORE_VAR 19           (_112)
+     37    LOAD_GLOBAL 56         (<fn baml.llm.execute_client>)
+     38    LOAD_VAR 19            (_112)
      39    LOAD_VAR 2             (context)
      40    LOAD_VAR 3             (active_delay_ms)
      41    CALL 3                 
-     42    JUMP +103              (to 145)
+     42    JUMP +114              (to 156)
      43    LOAD_VAR 1             (llm_client)
      44    LOAD_FIELD 2           
      45    STORE_VAR 12           (_iter)
@@ -562,7 +579,7 @@ Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      61    COPY 0                 
      62    LOAD_CONST 3           (null)
      63    STORE_FIELD 1          
-     64    JUMP +81               (to 145)
+     64    JUMP +92               (to 156)
      65    LOAD_VAR 12            (_iter)
      66    LOAD_VAR 14            (_i)
      67    LOAD_ARRAY_ELEMENT     
@@ -571,111 +588,123 @@ Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      70    LOAD_CONST 1           (1)
      71    BIN_OP +               
      72    STORE_VAR 14           (_i)
-     73    LOAD_GLOBAL 55         (<fn baml.llm.execute_client>)
-     74    LOAD_VAR 15            (sub)
-     75    LOAD_VAR 2             (context)
-     76    LOAD_VAR 3             (active_delay_ms)
-     77    CALL 3                 
-     78    STORE_VAR 16           (result)
-     79    LOAD_VAR 16            (result)
-     80    LOAD_FIELD 0           
-     81    POP_JUMP_IF_FALSE +2   (to 83)
-     82    JUMP +2                (to 84)
-     83    JUMP -31               (to 52)
+     73    LOAD_GLOBAL 30         (<fn baml.sys.is_cancelled>)
+     74    DISPATCH_FUTURE 0      
+     75    AWAIT                  
+     76    POP_JUMP_IF_FALSE +2   (to 78)
+     77    JUMP +14               (to 91)
+     78    LOAD_GLOBAL 56         (<fn baml.llm.execute_client>)
+     79    LOAD_VAR 15            (sub)
+     80    LOAD_VAR 2             (context)
+     81    LOAD_VAR 3             (active_delay_ms)
+     82    CALL 3                 
+     83    STORE_VAR 16           (result)
      84    LOAD_VAR 16            (result)
-     85    RETURN                 
-     86    LOAD_GLOBAL 44         (<fn baml.llm.resolve_client>)
-     87    LOAD_VAR 1             (llm_client)
-     88    LOAD_FIELD 0           
-     89    DISPATCH_FUTURE 1      
-     90    AWAIT                  
-     91    STORE_VAR 4            (resolve_fn)
-     92    LOAD_VAR 4             (resolve_fn)
-     93    CALL 0                 
-     94    STORE_VAR 5            (primitive)
-     95    LOAD_GLOBAL 37         (<fn baml.llm.PrimitiveClient.render_prompt>)
-     96    LOAD_VAR 5             (primitive)
-     97    LOAD_VAR 2             (context)
-     98    LOAD_FIELD 0           
-     99    LOAD_VAR 2             (context)
-     100   LOAD_FIELD 1           
-     101   DISPATCH_FUTURE 3      
-     102   AWAIT                  
-     103   STORE_VAR 6            (prompt)
-     104   LOAD_GLOBAL 38         (<fn baml.llm.PrimitiveClient.specialize_prompt>)
-     105   LOAD_VAR 5             (primitive)
-     106   LOAD_VAR 6             (prompt)
-     107   DISPATCH_FUTURE 2      
-     108   AWAIT                  
-     109   STORE_VAR 7            (specialized)
-     110   LOAD_GLOBAL 39         (<fn baml.llm.PrimitiveClient.build_request>)
-     111   LOAD_VAR 5             (primitive)
-     112   LOAD_VAR 7             (specialized)
-     113   DISPATCH_FUTURE 2      
-     114   AWAIT                  
-     115   STORE_VAR 8            (http_request)
-     116   LOAD_GLOBAL 36         (<fn baml.http.send>)
-     117   LOAD_VAR 8             (http_request)
-     118   DISPATCH_FUTURE 1      
+     85    LOAD_FIELD 0           
+     86    POP_JUMP_IF_FALSE +2   (to 88)
+     87    JUMP +2                (to 89)
+     88    JUMP -36               (to 52)
+     89    LOAD_VAR 16            (result)
+     90    RETURN                 
+     91    RETURN                 
+     92    LOAD_GLOBAL 30         (<fn baml.sys.is_cancelled>)
+     93    DISPATCH_FUTURE 0      
+     94    AWAIT                  
+     95    POP_JUMP_IF_FALSE +2   (to 97)
+     96    JUMP +73               (to 169)
+     97    LOAD_GLOBAL 45         (<fn baml.llm.resolve_client>)
+     98    LOAD_VAR 1             (llm_client)
+     99    LOAD_FIELD 0           
+     100   DISPATCH_FUTURE 1      
+     101   AWAIT                  
+     102   STORE_VAR 4            (resolve_fn)
+     103   LOAD_VAR 4             (resolve_fn)
+     104   CALL 0                 
+     105   STORE_VAR 5            (primitive)
+     106   LOAD_GLOBAL 38         (<fn baml.llm.PrimitiveClient.render_prompt>)
+     107   LOAD_VAR 5             (primitive)
+     108   LOAD_VAR 2             (context)
+     109   LOAD_FIELD 0           
+     110   LOAD_VAR 2             (context)
+     111   LOAD_FIELD 1           
+     112   DISPATCH_FUTURE 3      
+     113   AWAIT                  
+     114   STORE_VAR 6            (prompt)
+     115   LOAD_GLOBAL 39         (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     116   LOAD_VAR 5             (primitive)
+     117   LOAD_VAR 6             (prompt)
+     118   DISPATCH_FUTURE 2      
      119   AWAIT                  
-     120   STORE_VAR 9            (http_response)
-     121   LOAD_GLOBAL 34         (<fn baml.http.Response.ok>)
-     122   LOAD_VAR 9             (http_response)
-     123   DISPATCH_FUTURE 1      
-     124   AWAIT                  
-     125   POP_JUMP_IF_FALSE +2   (to 127)
-     126   JUMP +20               (to 146)
-     127   LOAD_VAR 3             (active_delay_ms)
-     128   LOAD_CONST 0           (0)
-     129   CMP_OP >               
-     130   POP_JUMP_IF_FALSE +2   (to 132)
-     131   JUMP +2                (to 133)
-     132   JUMP +6                (to 138)
-     133   LOAD_GLOBAL 28         (<fn baml.sys.sleep>)
-     134   LOAD_VAR 3             (active_delay_ms)
-     135   DISPATCH_FUTURE 1      
-     136   AWAIT                  
-     137   POP 1                  
-     138   ALLOC_INSTANCE 8       (<class baml.llm.ExecutionResult>)
-     139   COPY 0                 
-     140   LOAD_CONST 2           (false)
-     141   STORE_FIELD 0          
-     142   COPY 0                 
-     143   LOAD_CONST 3           (null)
-     144   STORE_FIELD 1          
-     145   RETURN                 
-     146   LOAD_GLOBAL 33         (<fn baml.http.Response.text>)
-     147   LOAD_VAR 9             (http_response)
-     148   DISPATCH_FUTURE 1      
-     149   AWAIT                  
-     150   STORE_VAR 10           (body)
-     151   LOAD_GLOBAL 47         (<fn baml.llm.get_return_type>)
-     152   LOAD_VAR 2             (context)
-     153   LOAD_FIELD 2           
-     154   DISPATCH_FUTURE 1      
-     155   AWAIT                  
-     156   STORE_VAR 11           (return_type)
-     157   RETURN                 
+     120   STORE_VAR 7            (specialized)
+     121   LOAD_GLOBAL 40         (<fn baml.llm.PrimitiveClient.build_request>)
+     122   LOAD_VAR 5             (primitive)
+     123   LOAD_VAR 7             (specialized)
+     124   DISPATCH_FUTURE 2      
+     125   AWAIT                  
+     126   STORE_VAR 8            (http_request)
+     127   LOAD_GLOBAL 37         (<fn baml.http.send>)
+     128   LOAD_VAR 8             (http_request)
+     129   DISPATCH_FUTURE 1      
+     130   AWAIT                  
+     131   STORE_VAR 9            (http_response)
+     132   LOAD_GLOBAL 35         (<fn baml.http.Response.ok>)
+     133   LOAD_VAR 9             (http_response)
+     134   DISPATCH_FUTURE 1      
+     135   AWAIT                  
+     136   POP_JUMP_IF_FALSE +2   (to 138)
+     137   JUMP +20               (to 157)
+     138   LOAD_VAR 3             (active_delay_ms)
+     139   LOAD_CONST 0           (0)
+     140   CMP_OP >               
+     141   POP_JUMP_IF_FALSE +2   (to 143)
+     142   JUMP +2                (to 144)
+     143   JUMP +6                (to 149)
+     144   LOAD_GLOBAL 28         (<fn baml.sys.sleep>)
+     145   LOAD_VAR 3             (active_delay_ms)
+     146   DISPATCH_FUTURE 1      
+     147   AWAIT                  
+     148   POP 1                  
+     149   ALLOC_INSTANCE 8       (<class baml.llm.ExecutionResult>)
+     150   COPY 0                 
+     151   LOAD_CONST 2           (false)
+     152   STORE_FIELD 0          
+     153   COPY 0                 
+     154   LOAD_CONST 3           (null)
+     155   STORE_FIELD 1          
+     156   RETURN                 
+     157   LOAD_GLOBAL 34         (<fn baml.http.Response.text>)
+     158   LOAD_VAR 9             (http_response)
+     159   DISPATCH_FUTURE 1      
+     160   AWAIT                  
+     161   STORE_VAR 10           (body)
+     162   LOAD_GLOBAL 48         (<fn baml.llm.get_return_type>)
+     163   LOAD_VAR 2             (context)
+     164   LOAD_FIELD 2           
+     165   DISPATCH_FUTURE 1      
+     166   AWAIT                  
+     167   STORE_VAR 11           (return_type)
+     168   RETURN                 
+     169   RETURN                 
 
 Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
      0    INIT_LOCALS 3       
-     1    LOAD_GLOBAL 41      (<fn baml.llm.get_jinja_template>)
+     1    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
      2    LOAD_VAR 1          (function_name)
      3    DISPATCH_FUTURE 1   
      4    AWAIT               
      5    STORE_VAR 3         (jinja_string)
-     6    LOAD_GLOBAL 53      (<fn baml.llm.resolve_primitive>)
+     6    LOAD_GLOBAL 54      (<fn baml.llm.resolve_primitive>)
      7    LOAD_VAR 1          (function_name)
      8    CALL 1              
      9    STORE_VAR 4         (primitive_client)
-     10   LOAD_GLOBAL 37      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     10   LOAD_GLOBAL 38      (<fn baml.llm.PrimitiveClient.render_prompt>)
      11   LOAD_VAR 4          (primitive_client)
      12   LOAD_VAR 3          (jinja_string)
      13   LOAD_VAR 2          (args)
      14   DISPATCH_FUTURE 3   
      15   AWAIT               
      16   STORE_VAR 5         (prompt)
-     17   LOAD_GLOBAL 38      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     17   LOAD_GLOBAL 39      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
      18   LOAD_VAR 4          (primitive_client)
      19   LOAD_VAR 5          (prompt)
      20   DISPATCH_FUTURE 2   
@@ -684,12 +713,12 @@ Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
 
 Function baml.llm.resolve_primitive (arity: 1, kind: Bytecode):
      0    INIT_LOCALS 2       
-     1    LOAD_GLOBAL 43      (<fn baml.llm.get_client>)
+     1    LOAD_GLOBAL 44      (<fn baml.llm.get_client>)
      2    LOAD_VAR 1          (function_name)
      3    DISPATCH_FUTURE 1   
      4    AWAIT               
      5    STORE_VAR 2         (llm_client)
-     6    LOAD_GLOBAL 44      (<fn baml.llm.resolve_client>)
+     6    LOAD_GLOBAL 45      (<fn baml.llm.resolve_client>)
      7    LOAD_VAR 2          (llm_client)
      8    LOAD_FIELD 0        
      9    DISPATCH_FUTURE 1   

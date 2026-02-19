@@ -3,6 +3,7 @@
 import atexit
 
 from .baml_py import (
+    AbortController,
     BamlRuntime,
     Collector as _RustCollector,
     FunctionLog as _RustFunctionLog,
@@ -84,21 +85,26 @@ class Collector(_RustCollector):
         return _wrap_log(super().id(function_log_id))
 
 
-def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None):
+def call_function_sync(rt, function_name, kwargs, ctx=None, collectors=None, abort_controller=None):
     """Call a BAML function synchronously via protobuf serialization."""
     args_proto = encode_call_args(kwargs)
-    result_bytes = rt.call_function_sync(function_name, args_proto, ctx, collectors)
+    result_bytes = rt.call_function_sync(
+        function_name, args_proto, ctx, collectors, abort_controller
+    )
     return FunctionResult(decode_call_result(result_bytes))
 
 
-async def call_function(rt, function_name, kwargs, ctx=None, collectors=None):
+async def call_function(rt, function_name, kwargs, ctx=None, collectors=None, abort_controller=None):
     """Call a BAML function asynchronously via protobuf serialization."""
     args_proto = encode_call_args(kwargs)
-    result_bytes = await rt.call_function(function_name, args_proto, ctx, collectors)
+    result_bytes = await rt.call_function(
+        function_name, args_proto, ctx, collectors, abort_controller
+    )
     return FunctionResult(decode_call_result(result_bytes))
 
 
 __all__ = [
+    "AbortController",
     "BamlRuntime",
     "Collector",
     "FunctionLog",
