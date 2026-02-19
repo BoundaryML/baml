@@ -15,7 +15,8 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler_mir::{
-    BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator,
+    AggregateKind, BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind,
+    Terminator,
 };
 
 mod stack_carry;
@@ -891,6 +892,27 @@ fn is_phi_like(
 
     let use_loc = &du.uses[0];
     let use_block = use_loc.block;
+    let use_block_data = mir.block(use_block);
+
+    // The value is carried on stack into the join block, so it must be consumed
+    // immediately in a stack-order-safe position.
+    let use_is_stack_safe = match use_loc.statement_ref {
+        StatementRef::Statement(0) => use_block_data
+            .statements
+            .first()
+            .is_some_and(|stmt| is_first_stack_pull_local_in_statement(local, &stmt.kind)),
+        StatementRef::Terminator => {
+            use_block_data.statements.is_empty()
+                && use_block_data
+                    .terminator
+                    .as_ref()
+                    .is_some_and(|term| is_first_stack_pull_local_in_terminator(local, term))
+        }
+        StatementRef::Statement(_) => false,
+    };
+    if !use_is_stack_safe {
+        return false;
+    }
 
     // Get predecessors of the use block
     let preds = match predecessors.get(&use_block) {
@@ -952,6 +974,104 @@ fn is_phi_like(
     }
 
     true
+}
+
+/// Whether this local is the first stack-pulled value in a statement.
+///
+/// This mirrors emitter evaluation order for the "first pull" position and is
+/// used to validate stack-carried optimizations (`PhiLike`, `CallResultImmediate`).
+fn is_first_stack_pull_local_in_statement(local: Local, kind: &StatementKind) -> bool {
+    match kind {
+        StatementKind::Assign { destination, value } => match destination {
+            // For local stores, rvalue evaluation starts immediately.
+            Place::Local(_) => is_first_stack_pull_local_in_rvalue(local, value),
+            // For field/index stores, emission pulls destination base first.
+            Place::Field { base, .. } | Place::Index { base, .. } => {
+                is_first_stack_pull_local_in_place(local, base)
+            }
+        },
+        StatementKind::Drop(place) => is_first_stack_pull_local_in_place(local, place),
+        StatementKind::Assert(operand) => is_first_stack_pull_local_in_operand(local, operand),
+
+        // No pull-based reads from the eval stack here, or there are pushes before
+        // the first pull (`WatchOptions` emits channel const first), which is unsafe
+        // for stack-carried values.
+        StatementKind::Unwatch(_)
+        | StatementKind::NotifyBlock { .. }
+        | StatementKind::WatchOptions { .. }
+        | StatementKind::WatchNotify(_)
+        | StatementKind::VizEnter(_)
+        | StatementKind::VizExit(_)
+        | StatementKind::Nop => false,
+    }
+}
+
+/// Whether this local is the first stack-pulled value in a terminator.
+fn is_first_stack_pull_local_in_terminator(local: Local, term: &Terminator) -> bool {
+    match term {
+        Terminator::Goto { .. } | Terminator::Unreachable => false,
+        Terminator::Branch { condition, .. } => {
+            is_first_stack_pull_local_in_operand(local, condition)
+        }
+        Terminator::Switch { discriminant, .. } => {
+            is_first_stack_pull_local_in_operand(local, discriminant)
+        }
+        Terminator::Return => local == Local(0),
+        Terminator::Call { callee, .. } | Terminator::DispatchFuture { callee, .. } => {
+            is_first_stack_pull_local_in_operand(local, callee)
+        }
+        Terminator::Await { future, .. } => is_first_stack_pull_local_in_place(local, future),
+    }
+}
+
+/// Whether this local is the first stack-pulled value in an rvalue.
+fn is_first_stack_pull_local_in_rvalue(local: Local, rvalue: &Rvalue) -> bool {
+    match rvalue {
+        Rvalue::Use(operand) => is_first_stack_pull_local_in_operand(local, operand),
+        Rvalue::BinaryOp { left, .. } => is_first_stack_pull_local_in_operand(local, left),
+        Rvalue::UnaryOp { operand, .. } => is_first_stack_pull_local_in_operand(local, operand),
+        Rvalue::Array(elements) => elements
+            .first()
+            .is_some_and(|elem| is_first_stack_pull_local_in_operand(local, elem)),
+        Rvalue::Map(entries) => entries
+            .first()
+            // Emitter pushes all values first, so first value is first pull.
+            .is_some_and(|(_key, value)| is_first_stack_pull_local_in_operand(local, value)),
+        Rvalue::Aggregate { kind, fields } => match kind {
+            AggregateKind::Array => fields
+                .first()
+                .is_some_and(|field| is_first_stack_pull_local_in_operand(local, field)),
+            // Emitter pushes AllocInstance/Copy before field pulls, which can bury
+            // stack-carried values.
+            AggregateKind::Class(_) => false,
+            // Emitter does not pull operands for enum-variant construction.
+            AggregateKind::EnumVariant { .. } => false,
+        },
+        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+            is_first_stack_pull_local_in_place(local, place)
+        }
+        Rvalue::IsType { operand, .. } => is_first_stack_pull_local_in_operand(local, operand),
+    }
+}
+
+/// Whether this local is the first stack-pulled value in an operand.
+fn is_first_stack_pull_local_in_operand(local: Local, operand: &Operand) -> bool {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => {
+            is_first_stack_pull_local_in_place(local, place)
+        }
+        Operand::Constant(_) => false,
+    }
+}
+
+/// Whether this local is the first stack-pulled value in a place expression.
+fn is_first_stack_pull_local_in_place(local: Local, place: &Place) -> bool {
+    match place {
+        Place::Local(l) => *l == local,
+        Place::Field { base, .. } | Place::Index { base, .. } => {
+            is_first_stack_pull_local_in_place(local, base)
+        }
+    }
 }
 
 /// Check if a MIR statement is stack-neutral (doesn't push or pop from the eval stack).
