@@ -266,6 +266,10 @@ function execute_client_once(
         }
 
         baml.llm.ClientType.RoundRobin => {
+            // Early exit: skip counter mutation if cancelled.
+            if (baml.sys.cancellation_requested()) {
+                return baml.llm.ExecutionResult { ok: false, value: null };
+            }
             let idx = baml.llm.round_robin_next(llm_client.name) % llm_client.sub_clients.length();
             baml.llm.execute_client(
                 llm_client.sub_clients.at(idx),
