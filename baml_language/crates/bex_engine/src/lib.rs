@@ -931,8 +931,10 @@ impl BexEngine {
         // spawned tasks when cancellation fires. This keeps sys_op
         // implementations simple — new sys_ops never need to think about
         // cancellation.
-        #[cfg(not(target_arch = "wasm32"))]
-        let mut abort_handles: Vec<tokio::task::AbortHandle> = Vec::new();
+        //
+        // We use `futures::future::AbortHandle` (not `tokio::task::AbortHandle`)
+        // so the same mechanism works on both native and WASM targets.
+        let mut abort_handles: Vec<futures::future::AbortHandle> = Vec::new();
 
         'vm_exec: loop {
             match vm.exec()? {
@@ -999,31 +1001,29 @@ impl BexEngine {
                             vm.set_future_ready(id, value)?;
                         }
                         SysOpResult::Async(fut) => {
-                            // Async operation - spawn task
+                            // Async operation — wrap in Abortable and spawn.
                             let pending_futures = pending_futures.clone();
-                            #[cfg(not(target_arch = "wasm32"))]
-                            {
-                                let handle = tokio::spawn(async move {
+                            let (abort_handle, abort_reg) =
+                                futures::future::AbortHandle::new_pair();
+                            let abortable = futures::future::Abortable::new(
+                                async move {
                                     let result = fut.await;
                                     let _ = pending_futures.send(FutureResult {
                                         id,
                                         result: result.map_err(EngineError::from),
                                     });
-                                });
-                                abort_handles.push(handle.abort_handle());
-                            }
-                            // WASM: spawn_local has no abort handle, so on
-                            // cancellation these tasks run to completion as
-                            // orphans. Acceptable because WASM is single-threaded
-                            // and most ops are short-lived (no streaming).
+                                },
+                                abort_reg,
+                            );
+                            #[cfg(not(target_arch = "wasm32"))]
+                            tokio::spawn(async move {
+                                let _ = abortable.await;
+                            });
                             #[cfg(target_arch = "wasm32")]
                             wasm_bindgen_futures::spawn_local(async move {
-                                let result = fut.await;
-                                let _ = pending_futures.send(FutureResult {
-                                    id,
-                                    result: result.map_err(EngineError::from),
-                                });
+                                let _ = abortable.await;
                             });
+                            abort_handles.push(abort_handle);
                         }
                     }
                 }
@@ -1097,7 +1097,6 @@ impl BexEngine {
                             () = cancel.cancelled() => {
                                 // Abort all in-flight spawned tasks to stop
                                 // HTTP requests, sleeps, etc. immediately.
-                                #[cfg(not(target_arch = "wasm32"))]
                                 for handle in &abort_handles {
                                     handle.abort();
                                 }

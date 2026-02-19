@@ -14,6 +14,7 @@ bex_heap = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
+futures = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }
