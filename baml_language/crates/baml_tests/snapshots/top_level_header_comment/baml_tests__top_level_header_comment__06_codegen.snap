@@ -386,7 +386,7 @@ Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
      27   LOAD_FIELD 0           
      28   POP_JUMP_IF_FALSE +2   (to 30)
      29   JUMP +19               (to 48)
-     30   LOAD_GLOBAL 30         (<fn baml.sys.is_cancelled>)
+     30   LOAD_GLOBAL 30         (<fn baml.sys.cancellation_requested>)
      31   DISPATCH_FUTURE 0      
      32   AWAIT                  
      33   POP_JUMP_IF_FALSE +2   (to 35)
@@ -442,7 +442,7 @@ Function baml.llm.execute_client (arity: 3, kind: Bytecode):
      30    LOAD_CONST 0           (null)
      31    STORE_FIELD 1          
      32    JUMP +71               (to 103)
-     33    LOAD_GLOBAL 30         (<fn baml.sys.is_cancelled>)
+     33    LOAD_GLOBAL 30         (<fn baml.sys.cancellation_requested>)
      34    DISPATCH_FUTURE 0      
      35    AWAIT                  
      36    POP_JUMP_IF_FALSE +2   (to 38)
@@ -588,7 +588,7 @@ Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      70    LOAD_CONST 1           (1)
      71    BIN_OP +               
      72    STORE_VAR 14           (_i)
-     73    LOAD_GLOBAL 30         (<fn baml.sys.is_cancelled>)
+     73    LOAD_GLOBAL 30         (<fn baml.sys.cancellation_requested>)
      74    DISPATCH_FUTURE 0      
      75    AWAIT                  
      76    POP_JUMP_IF_FALSE +2   (to 78)
@@ -607,7 +607,7 @@ Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      89    LOAD_VAR 16            (result)
      90    RETURN                 
      91    RETURN                 
-     92    LOAD_GLOBAL 30         (<fn baml.sys.is_cancelled>)
+     92    LOAD_GLOBAL 30         (<fn baml.sys.cancellation_requested>)
      93    DISPATCH_FUTURE 0      
      94    AWAIT                  
      95    POP_JUMP_IF_FALSE +2   (to 97)

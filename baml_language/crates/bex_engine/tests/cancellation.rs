@@ -222,23 +222,23 @@ async fn selective_cancellation_only_affects_target() {
 }
 
 // ============================================================================
-// 5. Cooperative is_cancelled check — BAML code sees the cancellation
+// 5. Cooperative cancellation_requested check — BAML code sees the cancellation
 // ============================================================================
 
 #[tokio::test]
-async fn is_cancelled_returns_true_after_cancel() {
-    // Test that baml.sys.is_cancelled() reflects the token state.
+async fn cancellation_requested_returns_true_after_cancel() {
+    // Test that baml.sys.cancellation_requested() reflects the token state.
     // We cancel the token before the call and check that the BAML function
     // can observe it. Since the engine exits at the first Await, we need
-    // a purely synchronous program that checks is_cancelled before any await.
-    // However, is_cancelled is a sys_op (dispatched as ScheduleFuture + Await),
+    // a purely synchronous program that checks cancellation_requested before any await.
+    // However, cancellation_requested is a sys_op (dispatched as ScheduleFuture + Await),
     // so the engine will check the cancel branch first in the biased select.
     //
     // With an already-cancelled token, the engine should exit immediately
-    // at the first Await point (before is_cancelled even returns).
+    // at the first Await point (before cancellation_requested even returns).
     let source = r#"
         function main() -> bool {
-            baml.sys.is_cancelled()
+            baml.sys.cancellation_requested()
         }
     "#;
 
@@ -246,7 +246,7 @@ async fn is_cancelled_returns_true_after_cancel() {
     let engine =
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
-    // With a non-cancelled token, is_cancelled should return false.
+    // With a non-cancelled token, cancellation_requested should return false.
     let result = engine
         .call_function("main", vec![], None, &[], CancellationToken::new())
         .await

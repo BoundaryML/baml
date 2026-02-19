@@ -171,7 +171,7 @@ function execute_client(
             let current_delay = r.initial_delay_ms + 0.0;
 
             for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
-                if (baml.sys.is_cancelled()) {
+                if (baml.sys.cancellation_requested()) {
                     return baml.llm.ExecutionResult { ok: false, value: null };
                 }
 
@@ -215,7 +215,7 @@ function execute_client_once(
 ) -> baml.llm.ExecutionResult {
     match (llm_client.client_type) {
         baml.llm.ClientType.Primitive => {
-            if (baml.sys.is_cancelled()) {
+            if (baml.sys.cancellation_requested()) {
                 return baml.llm.ExecutionResult { ok: false, value: null };
             }
 
@@ -245,7 +245,7 @@ function execute_client_once(
 
         baml.llm.ClientType.Fallback => {
             for (let sub in llm_client.sub_clients) {
-                if (baml.sys.is_cancelled()) {
+                if (baml.sys.cancellation_requested()) {
                     return baml.llm.ExecutionResult { ok: false, value: null };
                 }
                 let result = baml.llm.execute_client(
@@ -317,7 +317,7 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
         return result.value;
     }
 
-    if (baml.sys.is_cancelled()) {
+    if (baml.sys.cancellation_requested()) {
         baml.sys.panic("Operation cancelled");
     }
 

@@ -123,7 +123,7 @@ impl SysOpSys for NativeSysOps {
         })
     }
 
-    fn baml_sys_is_cancelled(&self, ctx: &SysOpContext) -> SysOpOutput<bool> {
+    fn baml_sys_cancellation_requested(&self, ctx: &SysOpContext) -> SysOpOutput<bool> {
         SysOpOutput::ok(ctx.cancel.is_cancelled())
     }
 

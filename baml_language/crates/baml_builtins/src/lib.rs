@@ -271,7 +271,7 @@ macro_rules! with_builtins {
                     /// Check if the current function call has been cancelled.
                     #[sys_op]
                     #[uses(engine_ctx)]
-                    fn is_cancelled() -> bool;
+                    fn cancellation_requested() -> bool;
                 }
 
                 // =====================================================================
