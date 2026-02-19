@@ -793,26 +793,29 @@ impl<'db> TypeContext<'db> {
         self.expr_resolutions.insert(expr_id, resolution);
     }
 
+    fn fqn_symbol_table(&self) -> baml_compiler_hir::SymbolTable<'db> {
+        let project = self.db.project();
+        baml_compiler_hir::symbol_table(self.db, project)
+    }
+
+    fn def_to_error_location(&self, def: baml_compiler_hir::Definition<'db>) -> ErrorLocation {
+        ErrorLocation::Span(baml_compiler_hir::definition_name_span(self.db, def))
+    }
+
     fn function_definition_location(
         &self,
         fqn: &baml_compiler_hir::QualifiedName,
     ) -> Option<ErrorLocation> {
-        let project = self.db.project();
-        let symbol_table = baml_compiler_hir::symbol_table(self.db, project);
-        let def = symbol_table.lookup_value(self.db, fqn)?;
-        let span = baml_compiler_hir::definition_name_span(self.db, def);
-        Some(ErrorLocation::Span(span))
+        let def = self.fqn_symbol_table().lookup_value(self.db, fqn)?;
+        Some(self.def_to_error_location(def))
     }
 
     fn type_definition_location(
         &self,
         fqn: &baml_compiler_hir::QualifiedName,
     ) -> Option<ErrorLocation> {
-        let project = self.db.project();
-        let symbol_table = baml_compiler_hir::symbol_table(self.db, project);
-        let def = symbol_table.lookup_type(self.db, fqn)?;
-        let span = baml_compiler_hir::definition_name_span(self.db, def);
-        Some(ErrorLocation::Span(span))
+        let def = self.fqn_symbol_table().lookup_type(self.db, fqn)?;
+        Some(self.def_to_error_location(def))
     }
 
     fn call_definition_location(&self, callee: ExprId) -> Option<ErrorLocation> {
@@ -3335,15 +3338,12 @@ fn infer_field_access(
                 };
             }
             _ => {
-                let definition_location = match base {
-                    Ty::TypeAlias(fqn) | Ty::Class(fqn) => ctx.type_definition_location(fqn),
-                    _ => None,
-                };
+                // base is WatchAccessor here — no type definition to point to
                 ctx.push_error(TypeError::NoSuchField {
                     ty: base.clone(),
                     field: field.to_string(),
                     location,
-                    definition_location,
+                    definition_location: None,
                 });
                 return Ty::Unknown;
             }
@@ -3388,9 +3388,12 @@ fn infer_field_access(
                 .collect();
             if field_types.len() == members.len() {
                 // All members have the field — return union of field types
-                // (deduplicated: if all the same, just return that type)
-                if field_types.iter().all(|t| t == &field_types[0]) {
-                    Some(field_types.into_iter().next().unwrap())
+                // (deduplicated: if all the same, just return that single type)
+                let all_same = field_types.first().map_or(true, |first| {
+                    field_types.iter().all(|t| t == first)
+                });
+                if all_same {
+                    field_types.into_iter().next()
                 } else {
                     Some(Ty::Union(field_types))
                 }
