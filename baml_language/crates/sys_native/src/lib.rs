@@ -110,6 +110,19 @@ impl SysOpFs for NativeSysOps {
 // ============================================================================
 
 impl SysOpSys for NativeSysOps {
+    fn baml_sys_panic(&self, message: String) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Other(message))
+    }
+
+    fn baml_sys_sleep(&self, delay_ms: i64) -> SysOpOutput<()> {
+        #[allow(clippy::cast_sign_loss)]
+        let millis = delay_ms.max(0) as u64;
+        SysOpOutput::async_op(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+            Ok(())
+        })
+    }
+
     fn baml_sys_shell(&self, command: String) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
             let output = tokio::process::Command::new("sh")
@@ -211,25 +224,31 @@ impl SysOpHttp for NativeSysOps {
         response: builtin_types::owned::HttpResponse,
     ) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
-            let response_mutex = registry::REGISTRY
+            let body_mutex = registry::REGISTRY
                 .get_http_response_body(response._handle.key())
                 .ok_or_else(|| OpErrorKind::Other("Response handle is invalid".into()))?;
 
-            let resp = {
-                let mut guard = response_mutex.lock().await;
-                guard.take().ok_or_else(|| {
-                    OpErrorKind::Other("Response body has already been consumed".into())
-                })?
-            };
-
-            let text = resp.text().await.map_err(|e| {
-                OpErrorKind::Other(format!(
-                    "Failed to read response body: {}",
-                    ops::http::format_error_chain(&e)
-                ))
-            })?;
-
-            Ok(text)
+            let mut guard = body_mutex.lock().await;
+            match &mut *guard {
+                registry::ResponseBody::Real(opt) => {
+                    let resp = opt.take().ok_or_else(|| {
+                        OpErrorKind::Other("Response body has already been consumed".into())
+                    })?;
+                    let text = resp.text().await.map_err(|e| {
+                        OpErrorKind::Other(format!(
+                            "Failed to read response body: {}",
+                            ops::http::format_error_chain(&e)
+                        ))
+                    })?;
+                    Ok(text)
+                }
+                registry::ResponseBody::Error(opt) => {
+                    let msg = opt.take().ok_or_else(|| {
+                        OpErrorKind::Other("Error response body has already been consumed".into())
+                    })?;
+                    Ok(msg)
+                }
+            }
         })
     }
 

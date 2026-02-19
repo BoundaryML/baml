@@ -3,8 +3,6 @@
 //! The CST already distinguishes `LLM_FUNCTION_BODY` from `EXPR_FUNCTION_BODY`,
 //! so we just need to lower each type appropriately.
 
-use std::sync::Arc;
-
 use baml_base::{FileId, Span};
 use baml_compiler_diagnostics::HirDiagnostic;
 use baml_compiler_syntax::TypeExpr;
@@ -361,8 +359,10 @@ pub enum Expr {
     },
 
     /// Match expression: `match (scrutinee) { arm1, arm2, ... }`
+    /// Optional type annotation: `match (scrutinee: Type) { ... }`
     Match {
         scrutinee: ExprId,
+        scrutinee_type: Option<TypeId>,
         arms: Vec<MatchArmId>,
     },
 
@@ -557,7 +557,7 @@ pub struct MatchArm {
     pub body: ExprId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Literal {
     String(String),
     Int(i64),
@@ -615,7 +615,7 @@ impl FunctionBody {
     pub fn lower(
         func_node: &baml_compiler_syntax::ast::FunctionDef,
         file_id: FileId,
-    ) -> Arc<FunctionBody> {
+    ) -> FunctionBody {
         // Collect parameter names to add to scope so gensym avoids them
         let param_names: Vec<String> = func_node
             .param_list()
@@ -628,12 +628,12 @@ impl FunctionBody {
 
         // Check which body type we have
         if let Some(llm_body) = func_node.llm_body() {
-            Arc::new(Self::lower_llm_body(&llm_body))
+            Self::lower_llm_body(&llm_body)
         } else if let Some(expr_body) = func_node.expr_body() {
             let (body, source_map) = Self::lower_expr_body(&expr_body, file_id, &param_names);
-            Arc::new(FunctionBody::Expr(body, source_map))
+            FunctionBody::Expr(body, source_map)
         } else {
-            Arc::new(FunctionBody::Missing)
+            FunctionBody::Missing
         }
     }
 
@@ -783,12 +783,14 @@ struct LoweringContext {
 /// Helper enum for building pattern elements during lowering.
 /// Used to track partial state while scanning tokens in a pattern.
 enum PatternElement {
-    /// Simple identifier (could become binding or enum start)
-    /// Stores (name, `start_position`) for span tracking
-    Ident(Name, TextSize),
-    /// Seen `EnumName.` - waiting for variant name
-    /// Stores (`enum_name`, `start_position`) for span tracking
-    EnumStart(Name, TextSize),
+    /// Accumulated dotted path segments (e.g., `["baml", "llm", "ClientType"]`).
+    /// Single segment = plain identifier. Finalized as:
+    /// - 1 segment → `Binding(name)`
+    /// - 2+ segments → `EnumVariant { enum_name: join(all_but_last, "."), variant: last }`
+    Segments(Vec<Name>, TextSize),
+    /// After seeing DOT: waiting for next word to add to the path.
+    /// Stores accumulated segments so far and start position.
+    SegmentsAwaitingWord(Vec<Name>, TextSize),
     /// Seen `name:` - waiting for type expression
     /// Stores (name, `start_position`) for span tracking
     TypedBindingStart(Name, TextSize),
@@ -1422,6 +1424,7 @@ impl LoweringContext {
 
         let match_span = self.span_from_node(node);
         let mut scrutinee = None;
+        let mut scrutinee_type = None;
         let mut arm_ids = Vec::new();
 
         // Use children_with_tokens to handle both node and token children
@@ -1433,6 +1436,16 @@ impl LoweringContext {
                             let (arm, spans) = self.lower_match_arm(&child);
                             let arm_id = self.alloc_match_arm(arm, spans);
                             arm_ids.push(arm_id);
+                        }
+                        SyntaxKind::TYPE_EXPR => {
+                            // Optional type annotation: match (expr : Type)
+                            if let Some(type_expr) =
+                                baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
+                            {
+                                let type_ref = crate::type_ref::TypeRef::from_ast(&type_expr);
+                                scrutinee_type =
+                                    Some(self.alloc_type(type_ref, child.text_range()));
+                            }
                         }
                         _ => {
                             // First non-MATCH_ARM child is the scrutinee (as a node)
@@ -1499,6 +1512,7 @@ impl LoweringContext {
 
         let expr_id = self.exprs.alloc(Expr::Match {
             scrutinee,
+            scrutinee_type,
             arms: arm_ids,
         });
 
@@ -1694,18 +1708,13 @@ impl LoweringContext {
                         SyntaxKind::WORD => {
                             let text = token.text().to_string();
 
-                            // First, check if we're completing an enum variant
-                            if let Some(PatternElement::EnumStart(enum_name, start)) =
+                            // Check if we're continuing a dotted path (e.g., after "Enum.")
+                            if let Some(PatternElement::SegmentsAwaitingWord(mut segs, start)) =
                                 current_element.take()
                             {
-                                // Complete the enum variant: EnumName.Variant
-                                let variant = Name::new(&text);
-                                // Compute span from enum name start to variant end
-                                let range = TextRange::new(start, token.text_range().end());
-                                elements.push(self.alloc_pattern(
-                                    Pattern::EnumVariant { enum_name, variant },
-                                    range,
-                                ));
+                                // Add this word to the accumulated path
+                                segs.push(Name::new(&text));
+                                current_element = Some(PatternElement::Segments(segs, start));
                                 continue;
                             }
 
@@ -1714,53 +1723,69 @@ impl LoweringContext {
                                     if let Some(el) = current_element.take() {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
-                                    elements.push(
-                                        self.patterns.alloc(Pattern::Literal(Literal::Bool(true))),
-                                    );
+                                    elements.push(self.alloc_pattern(
+                                        Pattern::Literal(Literal::Bool(true)),
+                                        token.text_range(),
+                                    ));
                                 }
                                 "false" => {
                                     if let Some(el) = current_element.take() {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
-                                    elements.push(
-                                        self.patterns.alloc(Pattern::Literal(Literal::Bool(false))),
-                                    );
+                                    elements.push(self.alloc_pattern(
+                                        Pattern::Literal(Literal::Bool(false)),
+                                        token.text_range(),
+                                    ));
                                 }
                                 "null" => {
                                     if let Some(el) = current_element.take() {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
-                                    elements
-                                        .push(self.patterns.alloc(Pattern::Literal(Literal::Null)));
+                                    elements.push(self.alloc_pattern(
+                                        Pattern::Literal(Literal::Null),
+                                        token.text_range(),
+                                    ));
                                 }
                                 _ => {
                                     // Finalize any previous element before starting new one
                                     if let Some(el) = current_element.take() {
                                         elements.push(self.finalize_pattern_element(el));
                                     }
-                                    // Regular identifier - could be binding or start of enum variant
-                                    // Track the start position for span tracking
-                                    current_element = Some(PatternElement::Ident(
-                                        Name::new(&text),
+                                    // Start a new path segment
+                                    current_element = Some(PatternElement::Segments(
+                                        vec![Name::new(&text)],
                                         token.text_range().start(),
                                     ));
                                 }
                             }
                         }
                         SyntaxKind::DOT => {
-                            // Transition: Ident.Variant (enum variant pattern)
-                            if let Some(PatternElement::Ident(enum_name, start)) =
+                            // Transition: path segments awaiting next word
+                            if let Some(PatternElement::Segments(segs, start)) =
                                 current_element.take()
                             {
-                                current_element = Some(PatternElement::EnumStart(enum_name, start));
+                                current_element =
+                                    Some(PatternElement::SegmentsAwaitingWord(segs, start));
                             }
                         }
                         SyntaxKind::COLON => {
                             // Transition: ident: Type (typed binding pattern)
-                            if let Some(PatternElement::Ident(name, start)) = current_element.take()
+                            // Only valid for single-segment identifiers
+                            if let Some(PatternElement::Segments(segs, start)) =
+                                current_element.take()
                             {
-                                current_element =
-                                    Some(PatternElement::TypedBindingStart(name, start));
+                                if segs.len() == 1 {
+                                    current_element = Some(PatternElement::TypedBindingStart(
+                                        segs.into_iter().next().unwrap(),
+                                        start,
+                                    ));
+                                } else {
+                                    // Multi-segment path followed by colon — not valid,
+                                    // finalize as enum variant and ignore colon
+                                    elements.push(self.finalize_pattern_element(
+                                        PatternElement::Segments(segs, start),
+                                    ));
+                                }
                             }
                         }
                         SyntaxKind::MINUS => {
@@ -1771,18 +1796,21 @@ impl LoweringContext {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
+                            let range = token.text_range();
                             let mut value = token.text().parse::<i64>().unwrap_or(0);
                             if pending_negation {
                                 value = -value;
                                 pending_negation = false;
                             }
-                            elements
-                                .push(self.patterns.alloc(Pattern::Literal(Literal::Int(value))));
+                            elements.push(
+                                self.alloc_pattern(Pattern::Literal(Literal::Int(value)), range),
+                            );
                         }
                         SyntaxKind::FLOAT_LITERAL => {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
+                            let range = token.text_range();
                             let text = token.text().to_string();
                             let text = if pending_negation {
                                 pending_negation = false;
@@ -1790,13 +1818,15 @@ impl LoweringContext {
                             } else {
                                 text
                             };
-                            elements
-                                .push(self.patterns.alloc(Pattern::Literal(Literal::Float(text))));
+                            elements.push(
+                                self.alloc_pattern(Pattern::Literal(Literal::Float(text)), range),
+                            );
                         }
                         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
+                            let range = token.text_range();
                             let text = token.text().to_string();
                             let content = if text.starts_with("#\"") && text.ends_with("\"#") {
                                 text[2..text.len() - 2].to_string()
@@ -1806,8 +1836,10 @@ impl LoweringContext {
                                 text
                             };
                             elements.push(
-                                self.patterns
-                                    .alloc(Pattern::Literal(Literal::String(content))),
+                                self.alloc_pattern(
+                                    Pattern::Literal(Literal::String(content)),
+                                    range,
+                                ),
                             );
                         }
                         _ => {}
@@ -1820,6 +1852,7 @@ impl LoweringContext {
                             if let Some(el) = current_element.take() {
                                 elements.push(self.finalize_pattern_element(el));
                             }
+                            let range = child_node.text_range();
                             // Extract the string content from the node
                             // Trim whitespace trivia first, then remove quotes
                             let text = child_node.text().to_string();
@@ -1833,8 +1866,10 @@ impl LoweringContext {
                                 trimmed.to_string()
                             };
                             elements.push(
-                                self.patterns
-                                    .alloc(Pattern::Literal(Literal::String(content))),
+                                self.alloc_pattern(
+                                    Pattern::Literal(Literal::String(content)),
+                                    range,
+                                ),
                             );
                         }
                         SyntaxKind::TYPE_EXPR => {
@@ -1905,16 +1940,45 @@ impl LoweringContext {
     }
 
     /// Finalize a partially-built pattern element.
+    #[allow(clippy::cast_possible_truncation)]
     fn finalize_pattern_element(&mut self, element: PatternElement) -> PatId {
         match element {
-            PatternElement::Ident(name, _start) => self.patterns.alloc(Pattern::Binding(name)),
-            PatternElement::EnumStart(enum_name, _start) => {
-                // Incomplete enum variant (missing variant name) - treat as binding
-                self.patterns.alloc(Pattern::Binding(enum_name))
+            PatternElement::Segments(segs, start) => {
+                if segs.len() == 1 {
+                    // Single segment → binding
+                    let name = segs.into_iter().next().unwrap();
+                    let end = start + TextSize::new(name.as_str().len() as u32);
+                    self.alloc_pattern(Pattern::Binding(name), TextRange::new(start, end))
+                } else {
+                    // Multi-segment → enum variant (all-but-last = enum name, last = variant)
+                    // Compute span: total length is all segments + dots between them
+                    let total_len: usize =
+                        segs.iter().map(|s| s.as_str().len()).sum::<usize>() + segs.len() - 1; // dots between segments
+                    let end = start + TextSize::new(total_len as u32);
+                    let enum_name = Name::new(
+                        segs[..segs.len() - 1]
+                            .iter()
+                            .map(Name::as_str)
+                            .collect::<Vec<_>>()
+                            .join("."),
+                    );
+                    let variant = segs.into_iter().last().unwrap();
+                    self.alloc_pattern(
+                        Pattern::EnumVariant { enum_name, variant },
+                        TextRange::new(start, end),
+                    )
+                }
             }
-            PatternElement::TypedBindingStart(name, _start) => {
+            PatternElement::SegmentsAwaitingWord(segs, _start) => {
+                // Incomplete dotted path (e.g., "Foo.") — treat last segment as binding
+                // This is a parse error, but we handle it gracefully
+                let last = segs.into_iter().last().unwrap_or_else(|| Name::new("_"));
+                self.patterns.alloc(Pattern::Binding(last))
+            }
+            PatternElement::TypedBindingStart(name, start) => {
                 // Incomplete typed binding (missing type) - treat as simple binding
-                self.patterns.alloc(Pattern::Binding(name))
+                let end = start + TextSize::new(name.as_str().len() as u32);
+                self.alloc_pattern(Pattern::Binding(name), TextRange::new(start, end))
             }
         }
     }
@@ -1989,6 +2053,7 @@ impl LoweringContext {
                                     | SyntaxKind::ENV_ACCESS_EXPR
                                     | SyntaxKind::INDEX_EXPR
                                     | SyntaxKind::IF_EXPR
+                                    | SyntaxKind::MATCH_EXPR
                                     | SyntaxKind::BLOCK_EXPR
                                     | SyntaxKind::PAREN_EXPR
                                     | SyntaxKind::ARRAY_LITERAL
@@ -2315,12 +2380,29 @@ impl LoweringContext {
     fn lower_object_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
         use baml_compiler_syntax::SyntaxKind;
 
-        // Extract type name if present (before the brace)
+        // Extract type name if present (before the brace).
+        // Can be a simple WORD token (e.g., `MyClass { ... }`) or a PATH_EXPR
+        // node for dotted paths (e.g., `baml.llm.OrchestrationStep { ... }`).
         let type_name = node
-            .children_with_tokens()
-            .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
-            .map(|token| Name::new(token.text()));
+            .children()
+            .find(|child| child.kind() == SyntaxKind::PATH_EXPR)
+            .map(|path_node| {
+                // Join all WORD tokens with dots to reconstruct the FQN
+                let segments: Vec<String> = path_node
+                    .children_with_tokens()
+                    .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
+                    .filter(|token| token.kind() == SyntaxKind::WORD)
+                    .map(|token| token.text().to_string())
+                    .collect();
+                Name::new(segments.join("."))
+            })
+            .or_else(|| {
+                // Fallback: bare WORD token (simple class name without dots)
+                node.children_with_tokens()
+                    .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
+                    .find(|token| token.kind() == SyntaxKind::WORD)
+                    .map(|token| Name::new(token.text()))
+            });
 
         // Track position for override semantics
         let mut position = 0;
@@ -2455,6 +2537,7 @@ impl LoweringContext {
                                     | SyntaxKind::UNARY_EXPR
                                     | SyntaxKind::PAREN_EXPR
                                     | SyntaxKind::IF_EXPR
+                                    | SyntaxKind::MATCH_EXPR
                                     | SyntaxKind::BLOCK_EXPR
                                     | SyntaxKind::ARRAY_LITERAL
                                     | SyntaxKind::OBJECT_LITERAL
@@ -2688,6 +2771,7 @@ impl LoweringContext {
                     | SyntaxKind::ENV_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
+                    | SyntaxKind::MATCH_EXPR
                     | SyntaxKind::BLOCK_EXPR
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::STRING_LITERAL
@@ -2749,26 +2833,58 @@ impl LoweringContext {
         use baml_compiler_syntax::SyntaxKind;
 
         // ASSERT_STMT structure: assert keyword, expression
-        let condition = node
-            .children()
-            .find(|n| {
-                matches!(
-                    n.kind(),
-                    SyntaxKind::EXPR
-                        | SyntaxKind::BINARY_EXPR
-                        | SyntaxKind::UNARY_EXPR
-                        | SyntaxKind::CALL_EXPR
-                        | SyntaxKind::PATH_EXPR
-                        | SyntaxKind::FIELD_ACCESS_EXPR
-                        | SyntaxKind::ENV_ACCESS_EXPR
-                        | SyntaxKind::INDEX_EXPR
-                        | SyntaxKind::IF_EXPR
-                        | SyntaxKind::BLOCK_EXPR
-                        | SyntaxKind::PAREN_EXPR
-                )
-            })
-            .map(|n| self.lower_expr(&n))
-            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+        let condition = if let Some(child_node) = node.children().find(|n| {
+            matches!(
+                n.kind(),
+                SyntaxKind::EXPR
+                    | SyntaxKind::BINARY_EXPR
+                    | SyntaxKind::UNARY_EXPR
+                    | SyntaxKind::CALL_EXPR
+                    | SyntaxKind::PATH_EXPR
+                    | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::ENV_ACCESS_EXPR
+                    | SyntaxKind::INDEX_EXPR
+                    | SyntaxKind::IF_EXPR
+                    | SyntaxKind::MATCH_EXPR
+                    | SyntaxKind::BLOCK_EXPR
+                    | SyntaxKind::PAREN_EXPR
+                    | SyntaxKind::STRING_LITERAL
+                    | SyntaxKind::RAW_STRING_LITERAL
+            )
+        }) {
+            self.lower_expr(&child_node)
+        } else {
+            // Fallback: check for direct tokens (e.g., `assert false` where `false` is a WORD token)
+            node.children_with_tokens()
+                .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
+                .find_map(|token| {
+                    let span = token.text_range();
+                    match token.kind() {
+                        SyntaxKind::WORD => {
+                            let text = token.text();
+                            match text {
+                                "true" => {
+                                    Some(self.alloc_expr(Expr::Literal(Literal::Bool(true)), span))
+                                }
+                                "false" => {
+                                    Some(self.alloc_expr(Expr::Literal(Literal::Bool(false)), span))
+                                }
+                                _ => Some(self.alloc_expr(Expr::Path(vec![Name::new(text)]), span)),
+                            }
+                        }
+                        SyntaxKind::INTEGER_LITERAL => {
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span))
+                        }
+                        SyntaxKind::FLOAT_LITERAL => Some(self.alloc_expr(
+                            Expr::Literal(Literal::Float(token.text().to_string())),
+                            span,
+                        )),
+                        _ => None,
+                    }
+                })
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()))
+        };
 
         self.alloc_stmt(Stmt::Assert { condition }, node.text_range())
     }

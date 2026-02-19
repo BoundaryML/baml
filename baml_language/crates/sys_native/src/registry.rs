@@ -23,11 +23,19 @@ pub struct SocketResource {
     pub addr: String,
 }
 
+/// The body of an HTTP response: either a real response or a synthetic error.
+#[cfg(feature = "bundle-http")]
+pub enum ResponseBody {
+    /// A real HTTP response (None after body consumed).
+    Real(Option<reqwest::Response>),
+    /// A synthetic error response with the error message as body text.
+    Error(Option<String>),
+}
+
 /// An HTTP response resource with lazy body consumption.
 pub struct ResponseResource {
     #[cfg(feature = "bundle-http")]
-    /// The underlying reqwest response (None after body consumed).
-    pub response: Arc<TokioMutex<Option<reqwest::Response>>>,
+    pub body: Arc<TokioMutex<ResponseBody>>,
 }
 
 /// Registry entry for a resource.
@@ -124,7 +132,35 @@ impl ResourceRegistry {
     ) -> ResourceHandle {
         let key = self.next_key.fetch_add(1, Ordering::SeqCst);
         let resource = ResponseResource {
-            response: Arc::new(TokioMutex::new(Some(response))),
+            body: Arc::new(TokioMutex::new(ResponseBody::Real(Some(response)))),
+        };
+
+        self.entries
+            .write()
+            .unwrap()
+            .insert(key, RegistryEntry::Response(resource));
+
+        ResourceHandle::new(
+            key,
+            ResourceType::Response,
+            url,
+            Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
+        )
+    }
+
+    #[cfg(feature = "bundle-http")]
+    /// Register a synthetic error HTTP response with the error message as body.
+    ///
+    /// Used when a network error occurs, so BAML code can check `ok() == false`
+    /// and optionally read the error via `text()`.
+    pub fn register_error_http_response(
+        self: &Arc<Self>,
+        url: String,
+        error_message: String,
+    ) -> ResourceHandle {
+        let key = self.next_key.fetch_add(1, Ordering::SeqCst);
+        let resource = ResponseResource {
+            body: Arc::new(TokioMutex::new(ResponseBody::Error(Some(error_message)))),
         };
 
         self.entries
@@ -142,13 +178,10 @@ impl ResourceRegistry {
 
     #[cfg(feature = "bundle-http")]
     /// Get the HTTP response mutex for body consumption.
-    pub fn get_http_response_body(
-        &self,
-        key: usize,
-    ) -> Option<Arc<TokioMutex<Option<reqwest::Response>>>> {
+    pub fn get_http_response_body(&self, key: usize) -> Option<Arc<TokioMutex<ResponseBody>>> {
         let entries = self.entries.read().unwrap();
         match entries.get(&key) {
-            Some(RegistryEntry::Response(r)) => Some(r.response.clone()),
+            Some(RegistryEntry::Response(r)) => Some(r.body.clone()),
             _ => None,
         }
     }

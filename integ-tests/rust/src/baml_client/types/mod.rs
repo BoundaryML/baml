@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     AddTodoItem(AddTodoItem),
 
@@ -346,342 +348,350 @@ pub enum Types {
     ),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn ::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::AddTodoItem(_) => "AddTodoItem",
+            Self::AddTodoItem(_) => "AddTodoItem",
 
-            Types::AddressWithMeta(_) => "AddressWithMeta",
+            Self::AddressWithMeta(_) => "AddressWithMeta",
 
-            Types::AnotherObject(_) => "AnotherObject",
+            Self::AnotherObject(_) => "AnotherObject",
 
-            Types::BigNumbers(_) => "BigNumbers",
+            Self::BigNumbers(_) => "BigNumbers",
 
-            Types::BinaryNode(_) => "BinaryNode",
+            Self::BinaryNode(_) => "BinaryNode",
 
-            Types::Blah(_) => "Blah",
+            Self::Blah(_) => "Blah",
 
-            Types::BlockConstraint(_) => "BlockConstraint",
+            Self::BlockConstraint(_) => "BlockConstraint",
 
-            Types::BlockConstraintForParam(_) => "BlockConstraintForParam",
+            Self::BlockConstraintForParam(_) => "BlockConstraintForParam",
 
-            Types::BookOrder(_) => "BookOrder",
+            Self::BookOrder(_) => "BookOrder",
 
-            Types::ClassForNullLiteral(_) => "ClassForNullLiteral",
+            Self::ClassForNullLiteral(_) => "ClassForNullLiteral",
 
-            Types::ClassOptionalOutput(_) => "ClassOptionalOutput",
+            Self::ClassOptionalOutput(_) => "ClassOptionalOutput",
 
-            Types::ClassOptionalOutput2(_) => "ClassOptionalOutput2",
+            Self::ClassOptionalOutput2(_) => "ClassOptionalOutput2",
 
-            Types::ClassToRecAlias(_) => "ClassToRecAlias",
+            Self::ClassToRecAlias(_) => "ClassToRecAlias",
 
-            Types::ClassWithBlockDone(_) => "ClassWithBlockDone",
+            Self::ClassWithBlockDone(_) => "ClassWithBlockDone",
 
-            Types::ClassWithImage(_) => "ClassWithImage",
+            Self::ClassWithImage(_) => "ClassWithImage",
 
-            Types::ClassWithoutDone(_) => "ClassWithoutDone",
+            Self::ClassWithoutDone(_) => "ClassWithoutDone",
 
-            Types::ClientDetails1559(_) => "ClientDetails1559",
+            Self::ClientDetails1559(_) => "ClientDetails1559",
 
-            Types::ComplexMemoryObject(_) => "ComplexMemoryObject",
+            Self::ComplexMemoryObject(_) => "ComplexMemoryObject",
 
-            Types::CompoundBigNumbers(_) => "CompoundBigNumbers",
+            Self::CompoundBigNumbers(_) => "CompoundBigNumbers",
 
-            Types::ContactInfo(_) => "ContactInfo",
+            Self::ContactInfo(_) => "ContactInfo",
 
-            Types::CustomStory(_) => "CustomStory",
+            Self::CustomStory(_) => "CustomStory",
 
-            Types::CustomTaskResult(_) => "CustomTaskResult",
+            Self::CustomTaskResult(_) => "CustomTaskResult",
 
-            Types::Document1559(_) => "Document1559",
+            Self::Document1559(_) => "Document1559",
 
-            Types::DummyJsonTodo(_) => "DummyJsonTodo",
+            Self::DummyJsonTodo(_) => "DummyJsonTodo",
 
-            Types::DummyOutput(_) => "DummyOutput",
+            Self::DummyOutput(_) => "DummyOutput",
 
-            Types::DynInputOutput(_) => "DynInputOutput",
+            Self::DynInputOutput(_) => "DynInputOutput",
 
-            Types::DynamicClassOne(_) => "DynamicClassOne",
+            Self::DynamicClassOne(_) => "DynamicClassOne",
 
-            Types::DynamicClassTwo(_) => "DynamicClassTwo",
+            Self::DynamicClassTwo(_) => "DynamicClassTwo",
 
-            Types::DynamicOutput(_) => "DynamicOutput",
+            Self::DynamicOutput(_) => "DynamicOutput",
 
-            Types::DynamicSchema(_) => "DynamicSchema",
+            Self::DynamicSchema(_) => "DynamicSchema",
 
-            Types::Earthling(_) => "Earthling",
+            Self::Earthling(_) => "Earthling",
 
-            Types::Education(_) => "Education",
+            Self::Education(_) => "Education",
 
-            Types::Email(_) => "Email",
+            Self::Email(_) => "Email",
 
-            Types::EmailAddress(_) => "EmailAddress",
+            Self::EmailAddress(_) => "EmailAddress",
 
-            Types::Event(_) => "Event",
+            Self::Event(_) => "Event",
 
-            Types::FakeImage(_) => "FakeImage",
+            Self::FakeImage(_) => "FakeImage",
 
-            Types::FlightConfirmation(_) => "FlightConfirmation",
+            Self::FlightConfirmation(_) => "FlightConfirmation",
 
-            Types::FooAny(_) => "FooAny",
+            Self::FooAny(_) => "FooAny",
 
-            Types::Forest(_) => "Forest",
+            Self::Forest(_) => "Forest",
 
-            Types::FormatterTest0(_) => "FormatterTest0",
+            Self::FormatterTest0(_) => "FormatterTest0",
 
-            Types::FormatterTest1(_) => "FormatterTest1",
+            Self::FormatterTest1(_) => "FormatterTest1",
 
-            Types::FormatterTest2(_) => "FormatterTest2",
+            Self::FormatterTest2(_) => "FormatterTest2",
 
-            Types::FormatterTest3(_) => "FormatterTest3",
+            Self::FormatterTest3(_) => "FormatterTest3",
 
-            Types::GroceryReceipt(_) => "GroceryReceipt",
+            Self::GroceryReceipt(_) => "GroceryReceipt",
 
-            Types::Haiku(_) => "Haiku",
+            Self::Haiku(_) => "Haiku",
 
-            Types::InnerClass(_) => "InnerClass",
+            Self::InnerClass(_) => "InnerClass",
 
-            Types::InnerClass2(_) => "InnerClass2",
+            Self::InnerClass2(_) => "InnerClass2",
 
-            Types::InputClass(_) => "InputClass",
+            Self::InputClass(_) => "InputClass",
 
-            Types::InputClassNested(_) => "InputClassNested",
+            Self::InputClassNested(_) => "InputClassNested",
 
-            Types::LinkedList(_) => "LinkedList",
+            Self::LinkedList(_) => "LinkedList",
 
-            Types::LinkedListAliasNode(_) => "LinkedListAliasNode",
+            Self::LinkedListAliasNode(_) => "LinkedListAliasNode",
 
-            Types::LiteralClassHello(_) => "LiteralClassHello",
+            Self::LiteralClassHello(_) => "LiteralClassHello",
 
-            Types::LiteralClassOne(_) => "LiteralClassOne",
+            Self::LiteralClassOne(_) => "LiteralClassOne",
 
-            Types::LiteralClassTwo(_) => "LiteralClassTwo",
+            Self::LiteralClassTwo(_) => "LiteralClassTwo",
 
-            Types::MaintainFieldOrder(_) => "MaintainFieldOrder",
+            Self::MaintainFieldOrder(_) => "MaintainFieldOrder",
 
-            Types::MalformedConstraints(_) => "MalformedConstraints",
+            Self::MalformedConstraints(_) => "MalformedConstraints",
 
-            Types::MalformedConstraints2(_) => "MalformedConstraints2",
+            Self::MalformedConstraints2(_) => "MalformedConstraints2",
 
-            Types::Martian(_) => "Martian",
+            Self::Martian(_) => "Martian",
 
-            Types::MemoryObject(_) => "MemoryObject",
+            Self::MemoryObject(_) => "MemoryObject",
 
-            Types::MergeAttrs(_) => "MergeAttrs",
+            Self::MergeAttrs(_) => "MergeAttrs",
 
-            Types::NamedArgsSingleClass(_) => "NamedArgsSingleClass",
+            Self::NamedArgsSingleClass(_) => "NamedArgsSingleClass",
 
-            Types::Nested(_) => "Nested",
+            Self::Nested(_) => "Nested",
 
-            Types::Nested2(_) => "Nested2",
+            Self::Nested2(_) => "Nested2",
 
-            Types::NestedBlockConstraint(_) => "NestedBlockConstraint",
+            Self::NestedBlockConstraint(_) => "NestedBlockConstraint",
 
-            Types::NestedBlockConstraintForParam(_) => "NestedBlockConstraintForParam",
+            Self::NestedBlockConstraintForParam(_) => "NestedBlockConstraintForParam",
 
-            Types::Node(_) => "Node",
+            Self::Node(_) => "Node",
 
-            Types::NodeWithAliasIndirection(_) => "NodeWithAliasIndirection",
+            Self::NodeWithAliasIndirection(_) => "NodeWithAliasIndirection",
 
-            Types::Note1599(_) => "Note1599",
+            Self::Note1599(_) => "Note1599",
 
-            Types::OptionalListAndMap(_) => "OptionalListAndMap",
+            Self::OptionalListAndMap(_) => "OptionalListAndMap",
 
-            Types::OptionalTest_Prop1(_) => "OptionalTest_Prop1",
+            Self::OptionalTest_Prop1(_) => "OptionalTest_Prop1",
 
-            Types::OptionalTest_ReturnType(_) => "OptionalTest_ReturnType",
+            Self::OptionalTest_ReturnType(_) => "OptionalTest_ReturnType",
 
-            Types::OrderInfo(_) => "OrderInfo",
+            Self::OrderInfo(_) => "OrderInfo",
 
-            Types::OriginalA(_) => "OriginalA",
+            Self::OriginalA(_) => "OriginalA",
 
-            Types::OriginalB(_) => "OriginalB",
+            Self::OriginalB(_) => "OriginalB",
 
-            Types::Person(_) => "Person",
+            Self::Person(_) => "Person",
 
-            Types::PersonWithMeta(_) => "PersonWithMeta",
+            Self::PersonWithMeta(_) => "PersonWithMeta",
 
-            Types::PhoneNumber(_) => "PhoneNumber",
+            Self::PhoneNumber(_) => "PhoneNumber",
 
-            Types::Quantity(_) => "Quantity",
+            Self::Quantity(_) => "Quantity",
 
-            Types::RaysData(_) => "RaysData",
+            Self::RaysData(_) => "RaysData",
 
-            Types::ReceiptInfo(_) => "ReceiptInfo",
+            Self::ReceiptInfo(_) => "ReceiptInfo",
 
-            Types::ReceiptItem(_) => "ReceiptItem",
+            Self::ReceiptItem(_) => "ReceiptItem",
 
-            Types::Recipe(_) => "Recipe",
+            Self::Recipe(_) => "Recipe",
 
-            Types::RecursiveAliasDependency(_) => "RecursiveAliasDependency",
+            Self::RecursiveAliasDependency(_) => "RecursiveAliasDependency",
 
-            Types::RenderEnumInput(_) => "RenderEnumInput",
+            Self::RenderEnumInput(_) => "RenderEnumInput",
 
-            Types::RenderTestClass(_) => "RenderTestClass",
+            Self::RenderTestClass(_) => "RenderTestClass",
 
-            Types::Resume(_) => "Resume",
+            Self::Resume(_) => "Resume",
 
-            Types::Schema(_) => "Schema",
+            Self::Schema(_) => "Schema",
 
-            Types::SearchParams(_) => "SearchParams",
+            Self::SearchParams(_) => "SearchParams",
 
-            Types::SemanticContainer(_) => "SemanticContainer",
+            Self::SemanticContainer(_) => "SemanticContainer",
 
-            Types::SimpleTag(_) => "SimpleTag",
+            Self::SimpleTag(_) => "SimpleTag",
 
-            Types::SkipDynamicClass(_) => "SkipDynamicClass",
+            Self::SkipDynamicClass(_) => "SkipDynamicClass",
 
-            Types::SkipNonDynamicClass(_) => "SkipNonDynamicClass",
+            Self::SkipNonDynamicClass(_) => "SkipNonDynamicClass",
 
-            Types::SmallThing(_) => "SmallThing",
+            Self::SmallThing(_) => "SmallThing",
 
-            Types::SomeClassNestedDynamic(_) => "SomeClassNestedDynamic",
+            Self::SomeClassNestedDynamic(_) => "SomeClassNestedDynamic",
 
-            Types::StringToClassEntry(_) => "StringToClassEntry",
+            Self::StringToClassEntry(_) => "StringToClassEntry",
 
-            Types::TestClassAlias(_) => "TestClassAlias",
+            Self::TestClassAlias(_) => "TestClassAlias",
 
-            Types::TestClassNested(_) => "TestClassNested",
+            Self::TestClassNested(_) => "TestClassNested",
 
-            Types::TestClassWithEnum(_) => "TestClassWithEnum",
+            Self::TestClassWithEnum(_) => "TestClassWithEnum",
 
-            Types::TestMemoryOutput(_) => "TestMemoryOutput",
+            Self::TestMemoryOutput(_) => "TestMemoryOutput",
 
-            Types::TestOutputClass(_) => "TestOutputClass",
+            Self::TestOutputClass(_) => "TestOutputClass",
 
-            Types::TodoMessageToUser(_) => "TodoMessageToUser",
+            Self::TodoMessageToUser(_) => "TodoMessageToUser",
 
-            Types::Tree(_) => "Tree",
+            Self::Tree(_) => "Tree",
 
-            Types::TwoStoriesOneTitle(_) => "TwoStoriesOneTitle",
+            Self::TwoStoriesOneTitle(_) => "TwoStoriesOneTitle",
 
-            Types::TwoStoriesOneTitleCheck(_) => "TwoStoriesOneTitleCheck",
+            Self::TwoStoriesOneTitleCheck(_) => "TwoStoriesOneTitleCheck",
 
-            Types::UnionTest_ReturnType(_) => "UnionTest_ReturnType",
+            Self::UnionTest_ReturnType(_) => "UnionTest_ReturnType",
 
-            Types::UniverseQuestion(_) => "UniverseQuestion",
+            Self::UniverseQuestion(_) => "UniverseQuestion",
 
-            Types::UniverseQuestionInput(_) => "UniverseQuestionInput",
+            Self::UniverseQuestionInput(_) => "UniverseQuestionInput",
 
-            Types::WithReasoning(_) => "WithReasoning",
+            Self::WithReasoning(_) => "WithReasoning",
 
-            Types::AliasedEnum(_) => "AliasedEnum",
+            Self::AliasedEnum(_) => "AliasedEnum",
 
-            Types::Category(_) => "Category",
+            Self::Category(_) => "Category",
 
-            Types::Category2(_) => "Category2",
+            Self::Category2(_) => "Category2",
 
-            Types::Category3(_) => "Category3",
+            Self::Category3(_) => "Category3",
 
-            Types::Color(_) => "Color",
+            Self::Color(_) => "Color",
 
-            Types::DataType(_) => "DataType",
+            Self::DataType(_) => "DataType",
 
-            Types::DynEnumOne(_) => "DynEnumOne",
+            Self::DynEnumOne(_) => "DynEnumOne",
 
-            Types::DynEnumThree(_) => "DynEnumThree",
+            Self::DynEnumThree(_) => "DynEnumThree",
 
-            Types::DynEnumTwo(_) => "DynEnumTwo",
+            Self::DynEnumTwo(_) => "DynEnumTwo",
 
-            Types::EnumInClass(_) => "EnumInClass",
+            Self::EnumInClass(_) => "EnumInClass",
 
-            Types::EnumOutput(_) => "EnumOutput",
+            Self::EnumOutput(_) => "EnumOutput",
 
-            Types::Hobby(_) => "Hobby",
+            Self::Hobby(_) => "Hobby",
 
-            Types::MapKey(_) => "MapKey",
+            Self::MapKey(_) => "MapKey",
 
-            Types::NamedArgsSingleEnum(_) => "NamedArgsSingleEnum",
+            Self::NamedArgsSingleEnum(_) => "NamedArgsSingleEnum",
 
-            Types::NamedArgsSingleEnumList(_) => "NamedArgsSingleEnumList",
+            Self::NamedArgsSingleEnumList(_) => "NamedArgsSingleEnumList",
 
-            Types::OptionalTest_CategoryType(_) => "OptionalTest_CategoryType",
+            Self::OptionalTest_CategoryType(_) => "OptionalTest_CategoryType",
 
-            Types::OrderStatus(_) => "OrderStatus",
+            Self::OrderStatus(_) => "OrderStatus",
 
-            Types::RenderStatusEnum(_) => "RenderStatusEnum",
+            Self::RenderStatusEnum(_) => "RenderStatusEnum",
 
-            Types::RenderTestEnum(_) => "RenderTestEnum",
+            Self::RenderTestEnum(_) => "RenderTestEnum",
 
-            Types::Tag(_) => "Tag",
+            Self::Tag(_) => "Tag",
 
-            Types::TestEnum(_) => "TestEnum",
+            Self::TestEnum(_) => "TestEnum",
 
-            Types::Union2AddTodoItemOrTodoMessageToUser(_) => {
-                "Union2AddTodoItemOrTodoMessageToUser"
-            }
+            Self::Union2AddTodoItemOrTodoMessageToUser(_) => "Union2AddTodoItemOrTodoMessageToUser",
 
-            Types::Union2BoolOrFloat(_) => "Union2BoolOrFloat",
+            Self::Union2BoolOrFloat(_) => "Union2BoolOrFloat",
 
-            Types::Union2BoolOrString(_) => "Union2BoolOrString",
+            Self::Union2BoolOrString(_) => "Union2BoolOrString",
 
-            Types::Union2EarthlingOrMartian(_) => "Union2EarthlingOrMartian",
+            Self::Union2EarthlingOrMartian(_) => "Union2EarthlingOrMartian",
 
-            Types::Union2EmailAddressOrPhoneNumber(_) => "Union2EmailAddressOrPhoneNumber",
+            Self::Union2EmailAddressOrPhoneNumber(_) => "Union2EmailAddressOrPhoneNumber",
 
-            Types::Union2EventOrResume(_) => "Union2EventOrResume",
+            Self::Union2EventOrResume(_) => "Union2EventOrResume",
 
-            Types::Union2FloatOrInt(_) => "Union2FloatOrInt",
+            Self::Union2FloatOrInt(_) => "Union2FloatOrInt",
 
-            Types::Union2IntOrString(_) => "Union2IntOrString",
+            Self::Union2IntOrString(_) => "Union2IntOrString",
 
-            Types::Union2JsonTemplateOrSimpleTag(_) => "Union2JsonTemplateOrSimpleTag",
+            Self::Union2JsonTemplateOrSimpleTag(_) => "Union2JsonTemplateOrSimpleTag",
 
-            Types::Union2KbarisaOrKox_burger(_) => "Union2KbarisaOrKox_burger",
+            Self::Union2KbarisaOrKox_burger(_) => "Union2KbarisaOrKox_burger",
 
-            Types::Union2KbreakfastOrKdinner(_) => "Union2KbreakfastOrKdinner",
+            Self::Union2KbreakfastOrKdinner(_) => "Union2KbreakfastOrKdinner",
 
-            Types::Union2KcuriosityOrKpersonal_finance(_) => "Union2KcuriosityOrKpersonal_finance",
+            Self::Union2KcuriosityOrKpersonal_finance(_) => "Union2KcuriosityOrKpersonal_finance",
 
-            Types::Union2ListBoolOrListInt(_) => "Union2ListBoolOrListInt",
+            Self::Union2ListBoolOrListInt(_) => "Union2ListBoolOrListInt",
 
-            Types::Union2ListNestedOrString(_) => "Union2ListNestedOrString",
+            Self::Union2ListNestedOrString(_) => "Union2ListNestedOrString",
 
-            Types::Union2LiteralClassOneOrLiteralClassTwo(_) => {
+            Self::Union2LiteralClassOneOrLiteralClassTwo(_) => {
                 "Union2LiteralClassOneOrLiteralClassTwo"
             }
 
-            Types::Union2MapStringKeyRecursiveUnionValueOrString(_) => {
+            Self::Union2MapStringKeyRecursiveUnionValueOrString(_) => {
                 "Union2MapStringKeyRecursiveUnionValueOrString"
             }
 
-            Types::Union2NestedOrString(_) => "Union2NestedOrString",
+            Self::Union2NestedOrString(_) => "Union2NestedOrString",
 
-            Types::Union2OriginalAOrOriginalB(_) => "Union2OriginalAOrOriginalB",
+            Self::Union2OriginalAOrOriginalB(_) => "Union2OriginalAOrOriginalB",
 
-            Types::Union2StringOrTag(_) => "Union2StringOrTag",
+            Self::Union2StringOrTag(_) => "Union2StringOrTag",
 
-            Types::Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject(_) => {
+            Self::Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject(_) => {
                 "Union3AnotherObjectOrComplexMemoryObjectOrMemoryObject"
             }
 
-            Types::Union3BookOrderOrFlightConfirmationOrGroceryReceipt(_) => {
+            Self::Union3BookOrderOrFlightConfirmationOrGroceryReceipt(_) => {
                 "Union3BookOrderOrFlightConfirmationOrGroceryReceipt"
             }
 
-            Types::Union3BoolKTrueOrIntK1OrKstring_output(_) => {
+            Self::Union3BoolKTrueOrIntK1OrKstring_output(_) => {
                 "Union3BoolKTrueOrIntK1OrKstring_output"
             }
 
-            Types::Union3FloatOrIntOrString(_) => "Union3FloatOrIntOrString",
+            Self::Union3FloatOrIntOrString(_) => "Union3FloatOrIntOrString",
 
-            Types::Union4AudioOrImageOrPDFOrString(_) => "Union4AudioOrImageOrPDFOrString",
+            Self::Union4AudioOrImageOrPDFOrString(_) => "Union4AudioOrImageOrPDFOrString",
 
-            Types::Union4BoolOrFloatOrIntOrString(_) => "Union4BoolOrFloatOrIntOrString",
+            Self::Union4BoolOrFloatOrIntOrString(_) => "Union4BoolOrFloatOrIntOrString",
 
-            Types::Union4KfourOrKoneOrKthreeOrKtwo(_) => "Union4KfourOrKoneOrKthreeOrKtwo",
+            Self::Union4KfourOrKoneOrKthreeOrKtwo(_) => "Union4KfourOrKoneOrKthreeOrKtwo",
 
-            Types::Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString(_) => {
+            Self::Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString(_) => {
                 "Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString"
             }
 
-            Types::Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString(_) => {
+            Self::Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString(_) => {
                 "Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString"
             }
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

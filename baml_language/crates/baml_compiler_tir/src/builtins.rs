@@ -115,8 +115,14 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         // Use full display path (e.g., "baml.fs.File") for comparison
         (TypePattern::Builtin(pattern_path), Ty::Class(fqn)) => *pattern_path == fqn.display(),
 
+        // Builtin enums match exactly by path
+        (TypePattern::Enum(path), Ty::Enum(fqn)) => *path == fqn.display(),
+
         // Opaque runtime types match their corresponding patterns
         (TypePattern::Resource, Ty::Resource) => true,
+        (TypePattern::Type, Ty::Type) => true,
+        (TypePattern::Type, Ty::Unknown | Ty::Error) => true,
+        (TypePattern::Type, _) => false,
 
         // Unknown in Ty matches any pattern (for error recovery)
         (_, Ty::Unknown) => true,
@@ -181,6 +187,8 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
         },
         TypePattern::Resource => Ty::Resource,
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
+        TypePattern::Enum(path) => Ty::Enum(parse_builtin_path(path)),
+        TypePattern::Type => Ty::Type,
     }
 }
 
@@ -213,6 +221,8 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
         },
         TypePattern::Resource => Ty::Resource,
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
+        TypePattern::Enum(path) => Ty::Enum(parse_builtin_path(path)),
+        TypePattern::Type => Ty::Type,
     }
 }
 
@@ -410,19 +420,27 @@ mod tests {
     #[test]
     fn test_match_opaque_types() {
         assert!(match_pattern(&TypePattern::Resource, &Ty::Resource).is_some());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Type).is_some());
 
-        // Resource should not match other types
+        // Type also matches error recovery types
+        assert!(match_pattern(&TypePattern::Type, &Ty::Unknown).is_some());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Error).is_some());
+
+        // Neither matches unrelated types
         assert!(match_pattern(&TypePattern::Resource, &Ty::Int).is_none());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Int).is_none());
     }
 
     #[test]
     fn test_substitute_opaque_types() {
         let bindings = HashMap::new();
         assert_eq!(substitute(&TypePattern::Resource, &bindings), Ty::Resource);
+        assert_eq!(substitute(&TypePattern::Type, &bindings), Ty::Type);
     }
 
     #[test]
     fn test_substitute_unknown_opaque_types() {
         assert_eq!(substitute_unknown(&TypePattern::Resource), Ty::Resource);
+        assert_eq!(substitute_unknown(&TypePattern::Type), Ty::Type);
     }
 }

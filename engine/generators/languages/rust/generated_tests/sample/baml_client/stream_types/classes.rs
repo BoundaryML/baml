@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Example {
     #[baml(name = "type")]
     pub r#type: String,
@@ -23,14 +23,14 @@ pub struct Example {
     pub b: Option<String>,
 }
 
-impl AsRef<Example> for Example {
+impl ::std::convert::AsRef<Example> for Example {
     fn as_ref(&self) -> &Example {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Example2 {
     #[baml(name = "type")]
     pub r#type: String,
@@ -42,7 +42,7 @@ pub struct Example2 {
     pub element2: Option<String>,
 }
 
-impl AsRef<Example2> for Example2 {
+impl ::std::convert::AsRef<Example2> for Example2 {
     fn as_ref(&self) -> &Example2 {
         self
     }

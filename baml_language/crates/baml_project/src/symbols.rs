@@ -23,6 +23,7 @@ pub enum SymbolKind {
     Test,
     Generator,
     TemplateString,
+    RetryPolicy,
     /// A field within a class.
     Field,
     /// A variant within an enum.
@@ -421,6 +422,25 @@ fn item_to_symbol(db: &dyn Db, item: ItemId<'_>, name_to_find: &Name) -> Option<
                 Some(Symbol {
                     name: ts.name.to_string(),
                     kind: SymbolKind::TemplateString,
+                    file_path,
+                    span,
+                })
+            } else {
+                None
+            }
+        }
+        ItemId::RetryPolicy(rp_loc) => {
+            let file = rp_loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let rp = &item_tree[rp_loc.id(db)];
+
+            if &rp.name == name_to_find {
+                let file_path = file.path(db);
+                let span = Span::new(file.file_id(db), TextRange::empty(0.into()));
+
+                Some(Symbol {
+                    name: rp.name.to_string(),
+                    kind: SymbolKind::RetryPolicy,
                     file_path,
                     span,
                 })

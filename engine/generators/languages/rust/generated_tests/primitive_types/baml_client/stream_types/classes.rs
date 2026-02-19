@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedPrimitives {
     pub name: Option<String>,
 
@@ -34,14 +34,14 @@ pub struct MixedPrimitives {
     pub flags: Vec<bool>,
 }
 
-impl AsRef<MixedPrimitives> for MixedPrimitives {
+impl ::std::convert::AsRef<MixedPrimitives> for MixedPrimitives {
     fn as_ref(&self) -> &MixedPrimitives {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrimitiveArrays {
     pub stringArray: Vec<String>,
 
@@ -52,14 +52,14 @@ pub struct PrimitiveArrays {
     pub boolArray: Vec<bool>,
 }
 
-impl AsRef<PrimitiveArrays> for PrimitiveArrays {
+impl ::std::convert::AsRef<PrimitiveArrays> for PrimitiveArrays {
     fn as_ref(&self) -> &PrimitiveArrays {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrimitiveMaps {
     pub stringMap: std::collections::HashMap<String, String>,
 
@@ -70,14 +70,14 @@ pub struct PrimitiveMaps {
     pub boolMap: std::collections::HashMap<String, bool>,
 }
 
-impl AsRef<PrimitiveMaps> for PrimitiveMaps {
+impl ::std::convert::AsRef<PrimitiveMaps> for PrimitiveMaps {
     fn as_ref(&self) -> &PrimitiveMaps {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PrimitiveTypes {
     pub stringField: Option<String>,
 
@@ -90,7 +90,7 @@ pub struct PrimitiveTypes {
     pub nullField: (),
 }
 
-impl AsRef<PrimitiveTypes> for PrimitiveTypes {
+impl ::std::convert::AsRef<PrimitiveTypes> for PrimitiveTypes {
     fn as_ref(&self) -> &PrimitiveTypes {
         self
     }

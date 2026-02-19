@@ -5,7 +5,7 @@
 use baml_base::Span;
 use baml_compiler_lexer::{Token, TokenKind};
 use baml_compiler_syntax::SyntaxKind;
-use rowan::{GreenNode, GreenNodeBuilder, NodeCache};
+use rowan::{GreenNode, GreenNodeBuilder, NodeCache, TextSize};
 use text_size::TextRange;
 
 use crate::ParseError;
@@ -604,12 +604,16 @@ impl<'a> Parser<'a> {
     /// Returns true if a '>' was consumed (either standalone or as part of '>>').
     fn expect_greater(&mut self) -> bool {
         // First check if we have a pending '>' from a previous '>>' split.
-        // Don't emit anything - the '>>' token is already in the tree.
+        // Emit that pending `>` as a new token.
         if self.pending_greaters > 0 {
             self.pending_greaters -= 1;
             if self.pending_greaters == 0 {
                 self.pending_greater_span = None;
             }
+            self.events.push(Event::Token {
+                kind: SyntaxKind::GREATER,
+                text: ">".to_string(),
+            });
             return true;
         }
 
@@ -618,10 +622,20 @@ impl<'a> Parser<'a> {
             true
         } else if self.at(TokenKind::GreaterGreater) {
             // Handle '>>' as two '>':
-            // - Consume the '>>' token (adds it to tree once)
+            // - Consume the '>>' token and splits into two '>' tokens (first `>` is added to tree)
             // - Track that the second '>' is pending for the outer generic
-            let span = self.current().map(|t| t.span);
-            self.bump();
+            let span = self.current().map(|t| {
+                let mut span = t.span;
+                // Span should be on the second `>` token only
+                span.range =
+                    TextRange::new(span.range.start() + TextSize::from(1), span.range.end());
+                span
+            });
+            self.events.push(Event::Token {
+                kind: SyntaxKind::GREATER,
+                text: ">".to_string(),
+            });
+            self.current += 1;
             self.pending_greaters += 1;
             self.pending_greater_span = span;
             true
@@ -1472,6 +1486,11 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
             p.parse_type_primary();
 
+            if p.pending_greaters > 0 {
+                // Don't parse modifiers until we've used all
+                // pending `>`
+                return;
+            }
             // Type modifiers
             loop {
                 if p.at(TokenKind::LBracket) {
@@ -1559,6 +1578,12 @@ impl<'a> Parser<'a> {
                             ),
                             span,
                         );
+                    }
+                    for _ in 0..self.pending_greaters {
+                        self.events.push(Event::Token {
+                            kind: SyntaxKind::GREATER,
+                            text: ">".to_string(),
+                        });
                     }
                     self.pending_greaters = 0;
                     self.pending_greater_span = None;
@@ -2322,6 +2347,10 @@ impl<'a> Parser<'a> {
             if p.at(TokenKind::LParen) {
                 p.bump(); // (
                 p.parse_expr();
+                // Optional type annotation: match (expr : Type)
+                if p.eat(TokenKind::Colon) {
+                    p.parse_type();
+                }
                 p.expect(TokenKind::RParen);
             } else {
                 p.error_unexpected_token("'(' after 'match'".to_string());
@@ -2467,12 +2496,16 @@ impl<'a> Parser<'a> {
                 self.bump(); // First identifier
 
                 if self.at(TokenKind::Dot) {
-                    // Enum variant pattern: Ident.Ident
-                    self.bump(); // .
-                    if self.at(TokenKind::Word) {
-                        self.bump(); // variant name
-                    } else {
-                        self.error_unexpected_token("enum variant name after '.'".to_string());
+                    // Dotted path pattern: Ident.Ident or Ident.Ident.Ident...
+                    // (e.g., Status.Active or baml.llm.ClientType.Primitive)
+                    while self.at(TokenKind::Dot) {
+                        self.bump(); // .
+                        if self.at(TokenKind::Word) {
+                            self.bump(); // next segment
+                        } else {
+                            self.error_unexpected_token("identifier after '.'".to_string());
+                            break;
+                        }
                     }
                 } else if self.at(TokenKind::Colon) {
                     // Typed binding pattern: ident: Type
@@ -3043,12 +3076,12 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::Less);
 
             // Parse first type argument
-            if !p.at(TokenKind::Greater) {
+            if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
                 p.parse_type();
 
                 // Parse remaining type arguments
                 while p.eat(TokenKind::Comma) {
-                    if p.at(TokenKind::Greater) {
+                    if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
                         break; // Trailing comma
                     }
                     p.parse_type();
@@ -3069,6 +3102,12 @@ impl<'a> Parser<'a> {
                     ),
                     span,
                 );
+            }
+            for _ in 0..self.pending_greaters {
+                self.events.push(Event::Token {
+                    kind: SyntaxKind::GREATER,
+                    text: ">".to_string(),
+                });
             }
             self.pending_greaters = 0;
             self.pending_greater_span = None;
@@ -3405,6 +3444,7 @@ impl<'a> Parser<'a> {
 
             // Optional client type: <llm>
             if p.at(TokenKind::Less) {
+                p.type_args_depth += 1;
                 p.with_node(SyntaxKind::CLIENT_TYPE, |p| {
                     p.bump(); // <
                     if p.at(TokenKind::Word) {
@@ -3412,6 +3452,27 @@ impl<'a> Parser<'a> {
                     }
                     p.expect_greater(); // >
                 });
+                p.type_args_depth -= 1;
+
+                if p.pending_greaters > 0 {
+                    if let Some(span) = p.pending_greater_span {
+                        p.error(
+                            format!(
+                                "Unmatched '>' in client definition (found {} extra)",
+                                p.pending_greaters
+                            ),
+                            span,
+                        );
+                    }
+                    for _ in 0..p.pending_greaters {
+                        p.events.push(Event::Token {
+                            kind: SyntaxKind::GREATER,
+                            text: ">".to_string(),
+                        });
+                    }
+                    p.pending_greaters = 0;
+                    p.pending_greater_span = None;
+                }
             }
 
             // Client name
@@ -3933,13 +3994,21 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
     }
 
     while parser.current < parser.tokens.len() {
-        let token = &parser.tokens[parser.current];
-        let kind = token_kind_to_syntax_kind(token.kind);
-        parser.events.push(Event::Token {
-            kind,
-            text: token.text.clone(),
-        });
-        parser.current += 1;
+        if parser.at_header_comment_start() {
+            parser.consume_header_comment();
+        } else if parser.at_line_comment_start() {
+            parser.consume_line_comment();
+        } else if parser.at_block_comment_start() {
+            parser.consume_block_comment();
+        } else {
+            let token = &parser.tokens[parser.current];
+            let kind = token_kind_to_syntax_kind(token.kind);
+            parser.events.push(Event::Token {
+                kind,
+                text: token.text.clone(),
+            });
+            parser.current += 1;
+        }
     }
 
     parser.finish_node();

@@ -6,57 +6,71 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: ("light" | "dark")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2KdarkOrKlight {
     #[baml(name = "string_light", literal_string = "light")]
+    #[serde(with = "__baml_serde_union_literal_Union2KdarkOrKlight::Klight")]
     Klight,
 
     #[baml(name = "string_dark", literal_string = "dark")]
+    #[serde(with = "__baml_serde_union_literal_Union2KdarkOrKlight::Kdark")]
     Kdark,
 }
 
-impl AsRef<Union2KdarkOrKlight> for Union2KdarkOrKlight {
+impl ::std::convert::AsRef<Union2KdarkOrKlight> for Union2KdarkOrKlight {
     fn as_ref(&self) -> &Union2KdarkOrKlight {
         self
     }
 }
 
-impl Default for Union2KdarkOrKlight {
+impl ::std::default::Default for Union2KdarkOrKlight {
     fn default() -> Self {
         Self::Klight
     }
 }
 
 /// Generated from: ("grid" | "list")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2KgridOrKlist {
     #[baml(name = "string_grid", literal_string = "grid")]
+    #[serde(with = "__baml_serde_union_literal_Union2KgridOrKlist::Kgrid")]
     Kgrid,
 
     #[baml(name = "string_list", literal_string = "list")]
+    #[serde(with = "__baml_serde_union_literal_Union2KgridOrKlist::Klist")]
     Klist,
 }
 
-impl AsRef<Union2KgridOrKlist> for Union2KgridOrKlist {
+impl ::std::convert::AsRef<Union2KgridOrKlist> for Union2KgridOrKlist {
     fn as_ref(&self) -> &Union2KgridOrKlist {
         self
     }
 }
 
-impl Default for Union2KgridOrKlist {
+impl ::std::default::Default for Union2KgridOrKlist {
     fn default() -> Self {
         Self::Kgrid
     }
 }
 
 /// Generated from: (string | int | bool)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3BoolOrIntOrString {
     #[baml(name = "string")]
     String(String),
@@ -68,140 +82,183 @@ pub enum Union3BoolOrIntOrString {
     Bool(bool),
 }
 
-impl AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
+impl ::std::convert::AsRef<Union3BoolOrIntOrString> for Union3BoolOrIntOrString {
     fn as_ref(&self) -> &Union3BoolOrIntOrString {
         self
     }
 }
 
-impl Default for Union3BoolOrIntOrString {
+impl ::std::default::Default for Union3BoolOrIntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: ("immediate" | "daily" | "weekly")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3KdailyOrKimmediateOrKweekly {
     #[baml(name = "string_immediate", literal_string = "immediate")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdailyOrKimmediateOrKweekly::Kimmediate")]
     Kimmediate,
 
     #[baml(name = "string_daily", literal_string = "daily")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdailyOrKimmediateOrKweekly::Kdaily")]
     Kdaily,
 
     #[baml(name = "string_weekly", literal_string = "weekly")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdailyOrKimmediateOrKweekly::Kweekly")]
     Kweekly,
 }
 
-impl AsRef<Union3KdailyOrKimmediateOrKweekly> for Union3KdailyOrKimmediateOrKweekly {
+impl ::std::convert::AsRef<Union3KdailyOrKimmediateOrKweekly>
+    for Union3KdailyOrKimmediateOrKweekly
+{
     fn as_ref(&self) -> &Union3KdailyOrKimmediateOrKweekly {
         self
     }
 }
 
-impl Default for Union3KdailyOrKimmediateOrKweekly {
+impl ::std::default::Default for Union3KdailyOrKimmediateOrKweekly {
     fn default() -> Self {
         Self::Kimmediate
     }
 }
 
 /// Generated from: ("todo" | "in_progress" | "done")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3KdoneOrKin_progressOrKtodo {
     #[baml(name = "string_todo", literal_string = "todo")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdoneOrKin_progressOrKtodo::Ktodo")]
     Ktodo,
 
     #[baml(name = "string_in_progress", literal_string = "in_progress")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdoneOrKin_progressOrKtodo::Kin_progress")]
     Kin_progress,
 
     #[baml(name = "string_done", literal_string = "done")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdoneOrKin_progressOrKtodo::Kdone")]
     Kdone,
 }
 
-impl AsRef<Union3KdoneOrKin_progressOrKtodo> for Union3KdoneOrKin_progressOrKtodo {
+impl ::std::convert::AsRef<Union3KdoneOrKin_progressOrKtodo> for Union3KdoneOrKin_progressOrKtodo {
     fn as_ref(&self) -> &Union3KdoneOrKin_progressOrKtodo {
         self
     }
 }
 
-impl Default for Union3KdoneOrKin_progressOrKtodo {
+impl ::std::default::Default for Union3KdoneOrKin_progressOrKtodo {
     fn default() -> Self {
         Self::Ktodo
     }
 }
 
 /// Generated from: ("public" | "private" | "friends")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3KfriendsOrKprivateOrKpublic {
     #[baml(name = "string_public", literal_string = "public")]
+    #[serde(with = "__baml_serde_union_literal_Union3KfriendsOrKprivateOrKpublic::Kpublic")]
     Kpublic,
 
     #[baml(name = "string_private", literal_string = "private")]
+    #[serde(with = "__baml_serde_union_literal_Union3KfriendsOrKprivateOrKpublic::Kprivate")]
     Kprivate,
 
     #[baml(name = "string_friends", literal_string = "friends")]
+    #[serde(with = "__baml_serde_union_literal_Union3KfriendsOrKprivateOrKpublic::Kfriends")]
     Kfriends,
 }
 
-impl AsRef<Union3KfriendsOrKprivateOrKpublic> for Union3KfriendsOrKprivateOrKpublic {
+impl ::std::convert::AsRef<Union3KfriendsOrKprivateOrKpublic>
+    for Union3KfriendsOrKprivateOrKpublic
+{
     fn as_ref(&self) -> &Union3KfriendsOrKprivateOrKpublic {
         self
     }
 }
 
-impl Default for Union3KfriendsOrKprivateOrKpublic {
+impl ::std::default::Default for Union3KfriendsOrKprivateOrKpublic {
     fn default() -> Self {
         Self::Kpublic
     }
 }
 
 /// Generated from: ("low" | "medium" | "high")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3KhighOrKlowOrKmedium {
     #[baml(name = "string_low", literal_string = "low")]
+    #[serde(with = "__baml_serde_union_literal_Union3KhighOrKlowOrKmedium::Klow")]
     Klow,
 
     #[baml(name = "string_medium", literal_string = "medium")]
+    #[serde(with = "__baml_serde_union_literal_Union3KhighOrKlowOrKmedium::Kmedium")]
     Kmedium,
 
     #[baml(name = "string_high", literal_string = "high")]
+    #[serde(with = "__baml_serde_union_literal_Union3KhighOrKlowOrKmedium::Khigh")]
     Khigh,
 }
 
-impl AsRef<Union3KhighOrKlowOrKmedium> for Union3KhighOrKlowOrKmedium {
+impl ::std::convert::AsRef<Union3KhighOrKlowOrKmedium> for Union3KhighOrKlowOrKmedium {
     fn as_ref(&self) -> &Union3KhighOrKlowOrKmedium {
         self
     }
 }
 
-impl Default for Union3KhighOrKlowOrKmedium {
+impl ::std::default::Default for Union3KhighOrKlowOrKmedium {
     fn default() -> Self {
         Self::Klow
     }
 }
 
 /// Generated from: ("planning" | "active" | "completed" | "cancelled")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4KactiveOrKcancelledOrKcompletedOrKplanning {
     #[baml(name = "string_planning", literal_string = "planning")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KactiveOrKcancelledOrKcompletedOrKplanning::Kplanning"
+    )]
     Kplanning,
 
     #[baml(name = "string_active", literal_string = "active")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KactiveOrKcancelledOrKcompletedOrKplanning::Kactive"
+    )]
     Kactive,
 
     #[baml(name = "string_completed", literal_string = "completed")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KactiveOrKcancelledOrKcompletedOrKplanning::Kcompleted"
+    )]
     Kcompleted,
 
     #[baml(name = "string_cancelled", literal_string = "cancelled")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KactiveOrKcancelledOrKcompletedOrKplanning::Kcancelled"
+    )]
     Kcancelled,
 }
 
-impl AsRef<Union4KactiveOrKcancelledOrKcompletedOrKplanning>
+impl ::std::convert::AsRef<Union4KactiveOrKcancelledOrKcompletedOrKplanning>
     for Union4KactiveOrKcancelledOrKcompletedOrKplanning
 {
     fn as_ref(&self) -> &Union4KactiveOrKcancelledOrKcompletedOrKplanning {
@@ -209,30 +266,45 @@ impl AsRef<Union4KactiveOrKcancelledOrKcompletedOrKplanning>
     }
 }
 
-impl Default for Union4KactiveOrKcancelledOrKcompletedOrKplanning {
+impl ::std::default::Default for Union4KactiveOrKcancelledOrKcompletedOrKplanning {
     fn default() -> Self {
         Self::Kplanning
     }
 }
 
 /// Generated from: ("small" | "medium" | "large" | "enterprise")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4KenterpriseOrKlargeOrKmediumOrKsmall {
     #[baml(name = "string_small", literal_string = "small")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KenterpriseOrKlargeOrKmediumOrKsmall::Ksmall"
+    )]
     Ksmall,
 
     #[baml(name = "string_medium", literal_string = "medium")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KenterpriseOrKlargeOrKmediumOrKsmall::Kmedium"
+    )]
     Kmedium,
 
     #[baml(name = "string_large", literal_string = "large")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KenterpriseOrKlargeOrKmediumOrKsmall::Klarge"
+    )]
     Klarge,
 
     #[baml(name = "string_enterprise", literal_string = "enterprise")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KenterpriseOrKlargeOrKmediumOrKsmall::Kenterprise"
+    )]
     Kenterprise,
 }
 
-impl AsRef<Union4KenterpriseOrKlargeOrKmediumOrKsmall>
+impl ::std::convert::AsRef<Union4KenterpriseOrKlargeOrKmediumOrKsmall>
     for Union4KenterpriseOrKlargeOrKmediumOrKsmall
 {
     fn as_ref(&self) -> &Union4KenterpriseOrKlargeOrKmediumOrKsmall {
@@ -240,7 +312,7 @@ impl AsRef<Union4KenterpriseOrKlargeOrKmediumOrKsmall>
     }
 }
 
-impl Default for Union4KenterpriseOrKlargeOrKmediumOrKsmall {
+impl ::std::default::Default for Union4KenterpriseOrKlargeOrKmediumOrKsmall {
     fn default() -> Self {
         Self::Ksmall
     }

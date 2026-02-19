@@ -213,6 +213,15 @@ fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Optio
                     return Some(format_template_string_signature(&sig));
                 }
             }
+            ItemId::RetryPolicy(rp_loc) => {
+                let file = rp_loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let rp = &item_tree[rp_loc.id(db)];
+
+                if rp.name == name_to_find {
+                    return Some(format!("retry_policy {}", rp.name));
+                }
+            }
         }
     }
 

@@ -303,6 +303,11 @@ fn format_hir_file(
                 write!(result, ")").unwrap();
                 writeln!(result).unwrap(); // blank line after template_string
             }
+            ItemId::RetryPolicy(rp_loc) => {
+                let rp = &item_tree[rp_loc.id(db)];
+                writeln!(result, "retry_policy {}", rp.name).unwrap();
+                writeln!(result).unwrap();
+            }
         }
     }
 

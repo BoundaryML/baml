@@ -101,7 +101,7 @@ fn basic_assign_add() -> anyhow::Result<()> {
             // x is Real (used 3 times: init, compound assign read, return)
             // Compound assignment x += 2 expands to x = x + 2
             vec![
-                Instruction::LoadConst(Value::Null), // slot for x
+                Instruction::InitLocals(1), // slot for x
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("x".to_string()), // let x = 1
                 Instruction::LoadVar("x".to_string()),  // read x

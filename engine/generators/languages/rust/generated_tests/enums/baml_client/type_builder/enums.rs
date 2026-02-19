@@ -11,22 +11,22 @@
 /// Access values via methods: `builder.ValueName()`
 
 pub struct TestEnumEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl TestEnumEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("TestEnum is statically defined in .baml and should always have a type")
@@ -37,49 +37,49 @@ impl TestEnumEnumBuilder {
     // =========================================================================
 
     /// Access the `Angry` value builder.
-    pub fn value_Angry(&self) -> baml::EnumValueBuilder {
+    pub fn value_Angry(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Angry")
             .expect("TestEnum.Angry is statically defined in .baml and should always be present")
     }
 
     /// Access the `Happy` value builder.
-    pub fn value_Happy(&self) -> baml::EnumValueBuilder {
+    pub fn value_Happy(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Happy")
             .expect("TestEnum.Happy is statically defined in .baml and should always be present")
     }
 
     /// Access the `Sad` value builder.
-    pub fn value_Sad(&self) -> baml::EnumValueBuilder {
+    pub fn value_Sad(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Sad")
             .expect("TestEnum.Sad is statically defined in .baml and should always be present")
     }
 
     /// Access the `Confused` value builder.
-    pub fn value_Confused(&self) -> baml::EnumValueBuilder {
+    pub fn value_Confused(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Confused")
             .expect("TestEnum.Confused is statically defined in .baml and should always be present")
     }
 
     /// Access the `Excited` value builder.
-    pub fn value_Excited(&self) -> baml::EnumValueBuilder {
+    pub fn value_Excited(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Excited")
             .expect("TestEnum.Excited is statically defined in .baml and should always be present")
     }
 
     /// Access the `Exclamation` value builder.
-    pub fn value_Exclamation(&self) -> baml::EnumValueBuilder {
+    pub fn value_Exclamation(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("Exclamation").expect(
             "TestEnum.Exclamation is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `Bored` value builder.
-    pub fn value_Bored(&self) -> baml::EnumValueBuilder {
+    pub fn value_Bored(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Bored")
             .expect("TestEnum.Bored is statically defined in .baml and should always be present")

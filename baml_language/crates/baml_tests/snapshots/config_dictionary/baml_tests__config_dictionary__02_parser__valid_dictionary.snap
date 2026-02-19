@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -105,18 +105,6 @@ SOURCE_FILE
                 QUOTE """
                 HASH "#"
           CONFIG_ITEM
-            WORD "keyStringNoSpacesWorksWithoutQuotes"
-            CONFIG_VALUE "NoQuotes!!123"
-              WORD "NoQuotes"
-              NOT "!"
-              NOT "!"
-              INTEGER_LITERAL "123"
-          CONFIG_ITEM
-            WORD "unquoted_string_whitespace"
-            CONFIG_VALUE "hello world"
-              WORD "hello"
-              WORD "world"
-          CONFIG_ITEM
             STRING_LITERAL "string key"
               QUOTE """
               WORD "string"
@@ -129,13 +117,6 @@ SOURCE_FILE
                 WORD "with"
                 WORD "spaces"
                 QUOTE """
-          CONFIG_ITEM
-            WORD "filePathString"
-            CONFIG_VALUE "../this-is-also-a-string"
-              DOT "."
-              DOT "."
-              SLASH "/"
-              WORD "this-is-also-a-string"
           CONFIG_ITEM
             WORD "booleanValue"
             CONFIG_VALUE "true"

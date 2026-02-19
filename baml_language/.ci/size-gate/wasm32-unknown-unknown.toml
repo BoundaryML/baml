@@ -7,5 +7,5 @@ file_bytes = 4611019
 gzip_bytes = 1287246
 
 [artifacts.bridge_wasm]
-file_bytes = 4611019
-gzip_bytes = 1287246
+file_bytes = 4675946
+gzip_bytes = 1308021

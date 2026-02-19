@@ -10,6 +10,7 @@
 )]
 
 pub(crate) mod commands;
+pub(crate) mod format;
 pub(crate) mod lsp;
 
 // TODO: These modules are disabled for now as they depend on baml_runtime

@@ -95,6 +95,7 @@ pub(super) fn parse_anthropic_response(
         content,
         model: response.model,
         finish_reason,
+        finish_reason_raw: response.stop_reason,
         usage,
         metadata,
     })

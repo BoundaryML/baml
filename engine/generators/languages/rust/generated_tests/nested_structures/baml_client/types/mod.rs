@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     Address(Address),
 
@@ -104,94 +106,104 @@ pub enum Types {
     Union4KenterpriseOrKlargeOrKmediumOrKsmall(Union4KenterpriseOrKlargeOrKmediumOrKsmall),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::Address(_) => "Address",
+            Self::Address(_) => "Address",
 
-            Types::Approval(_) => "Approval",
+            Self::Approval(_) => "Approval",
 
-            Types::Budget(_) => "Budget",
+            Self::Budget(_) => "Budget",
 
-            Types::Company(_) => "Company",
+            Self::Company(_) => "Company",
 
-            Types::CompanyMetadata(_) => "CompanyMetadata",
+            Self::CompanyMetadata(_) => "CompanyMetadata",
 
-            Types::ComplexNested(_) => "ComplexNested",
+            Self::ComplexNested(_) => "ComplexNested",
 
-            Types::Contact(_) => "Contact",
+            Self::Contact(_) => "Contact",
 
-            Types::Coordinates(_) => "Coordinates",
+            Self::Coordinates(_) => "Coordinates",
 
-            Types::DeeplyNested(_) => "DeeplyNested",
+            Self::DeeplyNested(_) => "DeeplyNested",
 
-            Types::Department(_) => "Department",
+            Self::Department(_) => "Department",
 
-            Types::DisplaySettings(_) => "DisplaySettings",
+            Self::DisplaySettings(_) => "DisplaySettings",
 
-            Types::Employee(_) => "Employee",
+            Self::Employee(_) => "Employee",
 
-            Types::Level1(_) => "Level1",
+            Self::Level1(_) => "Level1",
 
-            Types::Level2(_) => "Level2",
+            Self::Level2(_) => "Level2",
 
-            Types::Level3(_) => "Level3",
+            Self::Level3(_) => "Level3",
 
-            Types::Level4(_) => "Level4",
+            Self::Level4(_) => "Level4",
 
-            Types::Level5(_) => "Level5",
+            Self::Level5(_) => "Level5",
 
-            Types::Metadata(_) => "Metadata",
+            Self::Metadata(_) => "Metadata",
 
-            Types::Milestone(_) => "Milestone",
+            Self::Milestone(_) => "Milestone",
 
-            Types::NotificationSettings(_) => "NotificationSettings",
+            Self::NotificationSettings(_) => "NotificationSettings",
 
-            Types::Preferences(_) => "Preferences",
+            Self::Preferences(_) => "Preferences",
 
-            Types::PrivacySettings(_) => "PrivacySettings",
+            Self::PrivacySettings(_) => "PrivacySettings",
 
-            Types::Profile(_) => "Profile",
+            Self::Profile(_) => "Profile",
 
-            Types::Project(_) => "Project",
+            Self::Project(_) => "Project",
 
-            Types::RecursiveStructure(_) => "RecursiveStructure",
+            Self::RecursiveStructure(_) => "RecursiveStructure",
 
-            Types::SimpleNested(_) => "SimpleNested",
+            Self::SimpleNested(_) => "SimpleNested",
 
-            Types::SocialLinks(_) => "SocialLinks",
+            Self::SocialLinks(_) => "SocialLinks",
 
-            Types::Task(_) => "Task",
+            Self::Task(_) => "Task",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::UserSettings(_) => "UserSettings",
+            Self::UserSettings(_) => "UserSettings",
 
-            Types::Union2KdarkOrKlight(_) => "Union2KdarkOrKlight",
+            Self::Union2KdarkOrKlight(_) => "Union2KdarkOrKlight",
 
-            Types::Union2KgridOrKlist(_) => "Union2KgridOrKlist",
+            Self::Union2KgridOrKlist(_) => "Union2KgridOrKlist",
 
-            Types::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
+            Self::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
 
-            Types::Union3KdailyOrKimmediateOrKweekly(_) => "Union3KdailyOrKimmediateOrKweekly",
+            Self::Union3KdailyOrKimmediateOrKweekly(_) => "Union3KdailyOrKimmediateOrKweekly",
 
-            Types::Union3KdoneOrKin_progressOrKtodo(_) => "Union3KdoneOrKin_progressOrKtodo",
+            Self::Union3KdoneOrKin_progressOrKtodo(_) => "Union3KdoneOrKin_progressOrKtodo",
 
-            Types::Union3KfriendsOrKprivateOrKpublic(_) => "Union3KfriendsOrKprivateOrKpublic",
+            Self::Union3KfriendsOrKprivateOrKpublic(_) => "Union3KfriendsOrKprivateOrKpublic",
 
-            Types::Union3KhighOrKlowOrKmedium(_) => "Union3KhighOrKlowOrKmedium",
+            Self::Union3KhighOrKlowOrKmedium(_) => "Union3KhighOrKlowOrKmedium",
 
-            Types::Union4KactiveOrKcancelledOrKcompletedOrKplanning(_) => {
+            Self::Union4KactiveOrKcancelledOrKcompletedOrKplanning(_) => {
                 "Union4KactiveOrKcancelledOrKcompletedOrKplanning"
             }
 
-            Types::Union4KenterpriseOrKlargeOrKmediumOrKsmall(_) => {
+            Self::Union4KenterpriseOrKlargeOrKmediumOrKsmall(_) => {
                 "Union4KenterpriseOrKlargeOrKmediumOrKsmall"
             }
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

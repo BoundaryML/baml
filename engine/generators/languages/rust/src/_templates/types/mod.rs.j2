@@ -13,10 +13,12 @@ pub use type_aliases::*;
 // Re-export types from baml runtime
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
+use baml::__internal::serde as serde;
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
 {% for class in classes %}
     {{ class.name }}({{ class.name }}),
@@ -29,25 +31,31 @@ pub enum Types {
 {% endfor %}
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn ::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
 {% for class in classes %}
-            Types::{{ class.name }}(_) => "{{ class.name }}",
+            Self::{{ class.name }}(_) => "{{ class.name }}",
 {% endfor %}
 {% for enum_ in enums %}
-            Types::{{ enum_.name }}(_) => "{{ enum_.name }}",
+            Self::{{ enum_.name }}(_) => "{{ enum_.name }}",
 {% endfor %}
 {% for union_ in unions %}
-            Types::{{ union_.name }}(_) => "{{ union_.name }}",
+            Self::{{ union_.name }}(_) => "{{ union_.name }}",
 {% endfor %}
 {% if classes.is_empty() && enums.is_empty() && unions.is_empty() %}
             _ => unreachable!("Types has no variants"),
 {% endif %}
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom("Types is not deserializable, as we cannot disambiguate the type."))
     }
 }

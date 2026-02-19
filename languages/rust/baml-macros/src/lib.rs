@@ -32,6 +32,7 @@
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, DeriveInput};
 
+mod baml_serde;
 mod decode;
 mod encode;
 mod shared;
@@ -92,6 +93,17 @@ pub fn derive_baml_encode(input: TokenStream) -> TokenStream {
 pub fn derive_baml_decode(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     decode::derive_decode(&input)
+        .unwrap_or_else(|e| e.to_compile_error())
+        .into()
+}
+
+/// Helper for serde support.
+/// 
+/// Currently only adds helpers for deserializing unions with literal values.
+#[proc_macro_derive(BamlSerde, attributes(baml))]
+pub fn derive_baml_serde(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    baml_serde::derive_serde(&input)
         .unwrap_or_else(|e| e.to_compile_error())
         .into()
 }

@@ -58,6 +58,13 @@ pub enum LoweringError {
     LlmFunction,
     /// No root expression in the body.
     NoRootExpression,
+    /// Invalid retry policy value encountered during compilation metadata extraction.
+    InvalidRetryPolicyValue {
+        policy_name: String,
+        field_name: String,
+        value: String,
+        reason: String,
+    },
     /// Error occurred while lowering a specific function.
     InFunction {
         function_name: String,
@@ -110,6 +117,15 @@ impl std::fmt::Display for LoweringError {
             LoweringError::MissingBody => write!(f, "function body is missing"),
             LoweringError::LlmFunction => write!(f, "LLM function - no MIR"),
             LoweringError::NoRootExpression => write!(f, "no root expression in body"),
+            LoweringError::InvalidRetryPolicyValue {
+                policy_name,
+                field_name,
+                value,
+                reason,
+            } => write!(
+                f,
+                "invalid retry policy value: `{policy_name}.{field_name}` = `{value}` ({reason})"
+            ),
             LoweringError::InFunction {
                 function_name,
                 error,
@@ -526,7 +542,9 @@ impl<'a> LoweringContext<'a> {
                 self.weave_block(stmts, *tail_expr, hir_body)
             }
 
-            HirExpr::Match { scrutinee, arms } => {
+            HirExpr::Match {
+                scrutinee, arms, ..
+            } => {
                 let scrutinee_id = self.lower_expr(*scrutinee, hir_body)?;
                 let mut lowered_arms = Vec::with_capacity(arms.len());
                 for arm_id in arms {

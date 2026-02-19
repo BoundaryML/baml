@@ -11,22 +11,22 @@
 /// Access fields via methods: `builder.field_name()`
 
 pub struct AddTodoItemClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl AddTodoItemClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("AddTodoItem is statically defined in .baml and should always have a type")
@@ -37,28 +37,28 @@ impl AddTodoItemClassBuilder {
     // =========================================================================
 
     /// Access the `r#type` field builder.
-    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_type(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("type")
             .expect("AddTodoItem.type is statically defined in .baml and should always be present")
     }
 
     /// Access the `item` field builder.
-    pub fn property_item(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_item(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("item")
             .expect("AddTodoItem.item is statically defined in .baml and should always be present")
     }
 
     /// Access the `time` field builder.
-    pub fn property_time(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_time(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("time")
             .expect("AddTodoItem.time is statically defined in .baml and should always be present")
     }
 
     /// Access the `description` field builder.
-    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("description").expect(
             "AddTodoItem.description is statically defined in .baml and should always be present",
         )
@@ -71,22 +71,22 @@ impl AddTodoItemClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct AddressWithMetaClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl AddressWithMetaClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("AddressWithMeta is statically defined in .baml and should always have a type")
@@ -97,21 +97,21 @@ impl AddressWithMetaClassBuilder {
     // =========================================================================
 
     /// Access the `street` field builder.
-    pub fn property_street(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_street(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("street").expect(
             "AddressWithMeta.street is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `city` field builder.
-    pub fn property_city(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_city(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("city").expect(
             "AddressWithMeta.city is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `zipcode` field builder.
-    pub fn property_zipcode(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_zipcode(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("zipcode").expect(
             "AddressWithMeta.zipcode is statically defined in .baml and should always be present",
         )
@@ -124,22 +124,22 @@ impl AddressWithMetaClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct AnotherObjectClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl AnotherObjectClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("AnotherObject is statically defined in .baml and should always have a type")
@@ -150,21 +150,21 @@ impl AnotherObjectClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
             .expect("AnotherObject.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `thingy2` field builder.
-    pub fn property_thingy2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_thingy2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("thingy2").expect(
             "AnotherObject.thingy2 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `thingy3` field builder.
-    pub fn property_thingy3(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_thingy3(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("thingy3").expect(
             "AnotherObject.thingy3 is statically defined in .baml and should always be present",
         )
@@ -177,22 +177,22 @@ impl AnotherObjectClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct BigNumbersClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl BigNumbersClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("BigNumbers is statically defined in .baml and should always have a type")
@@ -203,14 +203,14 @@ impl BigNumbersClassBuilder {
     // =========================================================================
 
     /// Access the `a` field builder.
-    pub fn property_a(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_a(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("a")
             .expect("BigNumbers.a is statically defined in .baml and should always be present")
     }
 
     /// Access the `b` field builder.
-    pub fn property_b(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_b(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("b")
             .expect("BigNumbers.b is statically defined in .baml and should always be present")
@@ -223,22 +223,22 @@ impl BigNumbersClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct BinaryNodeClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl BinaryNodeClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("BinaryNode is statically defined in .baml and should always have a type")
@@ -249,21 +249,21 @@ impl BinaryNodeClassBuilder {
     // =========================================================================
 
     /// Access the `data` field builder.
-    pub fn property_data(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_data(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("data")
             .expect("BinaryNode.data is statically defined in .baml and should always be present")
     }
 
     /// Access the `left` field builder.
-    pub fn property_left(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_left(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("left")
             .expect("BinaryNode.left is statically defined in .baml and should always be present")
     }
 
     /// Access the `right` field builder.
-    pub fn property_right(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_right(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("right")
             .expect("BinaryNode.right is statically defined in .baml and should always be present")
@@ -276,22 +276,22 @@ impl BinaryNodeClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct BlahClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl BlahClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Blah is statically defined in .baml and should always have a type")
@@ -302,7 +302,7 @@ impl BlahClassBuilder {
     // =========================================================================
 
     /// Access the `prop4` field builder.
-    pub fn property_prop4(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop4(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop4")
             .expect("Blah.prop4 is statically defined in .baml and should always be present")
@@ -315,22 +315,22 @@ impl BlahClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct BlockConstraintClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl BlockConstraintClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("BlockConstraint is statically defined in .baml and should always have a type")
@@ -341,14 +341,14 @@ impl BlockConstraintClassBuilder {
     // =========================================================================
 
     /// Access the `foo` field builder.
-    pub fn property_foo(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_foo(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("foo").expect(
             "BlockConstraint.foo is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `bar` field builder.
-    pub fn property_bar(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_bar(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("bar").expect(
             "BlockConstraint.bar is statically defined in .baml and should always be present",
         )
@@ -361,22 +361,22 @@ impl BlockConstraintClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct BlockConstraintForParamClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl BlockConstraintForParamClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "BlockConstraintForParam is statically defined in .baml and should always have a type",
         )
@@ -387,13 +387,13 @@ impl BlockConstraintForParamClassBuilder {
     // =========================================================================
 
     /// Access the `bcfp` field builder.
-    pub fn property_bcfp(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_bcfp(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("bcfp")
             .expect("BlockConstraintForParam.bcfp is statically defined in .baml and should always be present")
     }
 
     /// Access the `bcfp2` field builder.
-    pub fn property_bcfp2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_bcfp2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("bcfp2")
             .expect("BlockConstraintForParam.bcfp2 is statically defined in .baml and should always be present")
     }
@@ -405,22 +405,22 @@ impl BlockConstraintForParamClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct BookOrderClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl BookOrderClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("BookOrder is statically defined in .baml and should always have a type")
@@ -431,28 +431,28 @@ impl BookOrderClassBuilder {
     // =========================================================================
 
     /// Access the `orderId` field builder.
-    pub fn property_orderId(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_orderId(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("orderId")
             .expect("BookOrder.orderId is statically defined in .baml and should always be present")
     }
 
     /// Access the `title` field builder.
-    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_title(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("title")
             .expect("BookOrder.title is statically defined in .baml and should always be present")
     }
 
     /// Access the `quantity` field builder.
-    pub fn property_quantity(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_quantity(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("quantity").expect(
             "BookOrder.quantity is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `price` field builder.
-    pub fn property_price(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_price(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("price")
             .expect("BookOrder.price is statically defined in .baml and should always be present")
@@ -465,22 +465,22 @@ impl BookOrderClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ClassForNullLiteralClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ClassForNullLiteralClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "ClassForNullLiteral is statically defined in .baml and should always have a type",
         )
@@ -491,7 +491,7 @@ impl ClassForNullLiteralClassBuilder {
     // =========================================================================
 
     /// Access the `a` field builder.
-    pub fn property_a(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_a(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("a").expect(
             "ClassForNullLiteral.a is statically defined in .baml and should always be present",
         )
@@ -504,22 +504,22 @@ impl ClassForNullLiteralClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ClassOptionalOutputClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ClassOptionalOutputClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "ClassOptionalOutput is statically defined in .baml and should always have a type",
         )
@@ -530,14 +530,14 @@ impl ClassOptionalOutputClassBuilder {
     // =========================================================================
 
     /// Access the `prop1` field builder.
-    pub fn property_prop1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop1").expect(
             "ClassOptionalOutput.prop1 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop2").expect(
             "ClassOptionalOutput.prop2 is statically defined in .baml and should always be present",
         )
@@ -550,22 +550,22 @@ impl ClassOptionalOutputClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ClassOptionalOutput2ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ClassOptionalOutput2ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "ClassOptionalOutput2 is statically defined in .baml and should always have a type",
         )
@@ -576,19 +576,19 @@ impl ClassOptionalOutput2ClassBuilder {
     // =========================================================================
 
     /// Access the `prop1` field builder.
-    pub fn property_prop1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop1")
             .expect("ClassOptionalOutput2.prop1 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop2")
             .expect("ClassOptionalOutput2.prop2 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop3` field builder.
-    pub fn property_prop3(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop3(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop3")
             .expect("ClassOptionalOutput2.prop3 is statically defined in .baml and should always be present")
     }
@@ -600,22 +600,22 @@ impl ClassOptionalOutput2ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ClassToRecAliasClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ClassToRecAliasClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("ClassToRecAlias is statically defined in .baml and should always have a type")
@@ -626,7 +626,7 @@ impl ClassToRecAliasClassBuilder {
     // =========================================================================
 
     /// Access the `list` field builder.
-    pub fn property_list(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_list(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("list").expect(
             "ClassToRecAlias.list is statically defined in .baml and should always be present",
         )
@@ -639,22 +639,22 @@ impl ClassToRecAliasClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ClassWithBlockDoneClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ClassWithBlockDoneClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "ClassWithBlockDone is statically defined in .baml and should always have a type",
         )
@@ -665,13 +665,13 @@ impl ClassWithBlockDoneClassBuilder {
     // =========================================================================
 
     /// Access the `i_16_digits` field builder.
-    pub fn property_i_16_digits(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_i_16_digits(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("i_16_digits")
             .expect("ClassWithBlockDone.i_16_digits is statically defined in .baml and should always be present")
     }
 
     /// Access the `s_20_words` field builder.
-    pub fn property_s_20_words(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_s_20_words(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("s_20_words")
             .expect("ClassWithBlockDone.s_20_words is statically defined in .baml and should always be present")
     }
@@ -683,22 +683,22 @@ impl ClassWithBlockDoneClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ClassWithImageClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ClassWithImageClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("ClassWithImage is statically defined in .baml and should always have a type")
@@ -709,21 +709,21 @@ impl ClassWithImageClassBuilder {
     // =========================================================================
 
     /// Access the `myImage` field builder.
-    pub fn property_myImage(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_myImage(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("myImage").expect(
             "ClassWithImage.myImage is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `param2` field builder.
-    pub fn property_param2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_param2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("param2").expect(
             "ClassWithImage.param2 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `fake_image` field builder.
-    pub fn property_fake_image(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_fake_image(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("fake_image").expect(
             "ClassWithImage.fake_image is statically defined in .baml and should always be present",
         )
@@ -736,22 +736,22 @@ impl ClassWithImageClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ClassWithoutDoneClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ClassWithoutDoneClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("ClassWithoutDone is statically defined in .baml and should always have a type")
@@ -762,13 +762,13 @@ impl ClassWithoutDoneClassBuilder {
     // =========================================================================
 
     /// Access the `i_16_digits` field builder.
-    pub fn property_i_16_digits(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_i_16_digits(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("i_16_digits")
             .expect("ClassWithoutDone.i_16_digits is statically defined in .baml and should always be present")
     }
 
     /// Access the `s_20_words` field builder.
-    pub fn property_s_20_words(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_s_20_words(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("s_20_words")
             .expect("ClassWithoutDone.s_20_words is statically defined in .baml and should always be present")
     }
@@ -780,22 +780,22 @@ impl ClassWithoutDoneClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ClientDetails1559ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ClientDetails1559ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "ClientDetails1559 is statically defined in .baml and should always have a type",
         )
@@ -806,43 +806,43 @@ impl ClientDetails1559ClassBuilder {
     // =========================================================================
 
     /// Access the `client_name` field builder.
-    pub fn property_client_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_client_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("client_name")
             .expect("ClientDetails1559.client_name is statically defined in .baml and should always be present")
     }
 
     /// Access the `client_address` field builder.
-    pub fn property_client_address(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_client_address(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("client_address")
             .expect("ClientDetails1559.client_address is statically defined in .baml and should always be present")
     }
 
     /// Access the `client_postal_code` field builder.
-    pub fn property_client_postal_code(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_client_postal_code(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("client_postal_code")
             .expect("ClientDetails1559.client_postal_code is statically defined in .baml and should always be present")
     }
 
     /// Access the `client_city` field builder.
-    pub fn property_client_city(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_client_city(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("client_city")
             .expect("ClientDetails1559.client_city is statically defined in .baml and should always be present")
     }
 
     /// Access the `client_country` field builder.
-    pub fn property_client_country(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_client_country(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("client_country")
             .expect("ClientDetails1559.client_country is statically defined in .baml and should always be present")
     }
 
     /// Access the `client_phone` field builder.
-    pub fn property_client_phone(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_client_phone(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("client_phone")
             .expect("ClientDetails1559.client_phone is statically defined in .baml and should always be present")
     }
 
     /// Access the `client_email` field builder.
-    pub fn property_client_email(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_client_email(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("client_email")
             .expect("ClientDetails1559.client_email is statically defined in .baml and should always be present")
     }
@@ -854,22 +854,22 @@ impl ClientDetails1559ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ComplexMemoryObjectClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ComplexMemoryObjectClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "ComplexMemoryObject is statically defined in .baml and should always have a type",
         )
@@ -880,27 +880,27 @@ impl ComplexMemoryObjectClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("id").expect(
             "ComplexMemoryObject.id is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("name").expect(
             "ComplexMemoryObject.name is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `description` field builder.
-    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("description")
             .expect("ComplexMemoryObject.description is statically defined in .baml and should always be present")
     }
 
     /// Access the `metadata` field builder.
-    pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_metadata(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("metadata")
             .expect("ComplexMemoryObject.metadata is statically defined in .baml and should always be present")
     }
@@ -912,22 +912,22 @@ impl ComplexMemoryObjectClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct CompoundBigNumbersClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl CompoundBigNumbersClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "CompoundBigNumbers is statically defined in .baml and should always have a type",
         )
@@ -938,20 +938,20 @@ impl CompoundBigNumbersClassBuilder {
     // =========================================================================
 
     /// Access the `big` field builder.
-    pub fn property_big(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_big(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("big").expect(
             "CompoundBigNumbers.big is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `big_nums` field builder.
-    pub fn property_big_nums(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_big_nums(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("big_nums")
             .expect("CompoundBigNumbers.big_nums is statically defined in .baml and should always be present")
     }
 
     /// Access the `another` field builder.
-    pub fn property_another(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_another(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("another")
             .expect("CompoundBigNumbers.another is statically defined in .baml and should always be present")
     }
@@ -963,22 +963,22 @@ impl CompoundBigNumbersClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ContactInfoClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ContactInfoClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("ContactInfo is statically defined in .baml and should always have a type")
@@ -989,14 +989,14 @@ impl ContactInfoClassBuilder {
     // =========================================================================
 
     /// Access the `primary` field builder.
-    pub fn property_primary(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_primary(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("primary").expect(
             "ContactInfo.primary is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `secondary` field builder.
-    pub fn property_secondary(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_secondary(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("secondary").expect(
             "ContactInfo.secondary is statically defined in .baml and should always be present",
         )
@@ -1009,22 +1009,22 @@ impl ContactInfoClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct CustomStoryClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl CustomStoryClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("CustomStory is statically defined in .baml and should always have a type")
@@ -1035,21 +1035,21 @@ impl CustomStoryClassBuilder {
     // =========================================================================
 
     /// Access the `title` field builder.
-    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_title(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("title")
             .expect("CustomStory.title is statically defined in .baml and should always be present")
     }
 
     /// Access the `characters` field builder.
-    pub fn property_characters(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_characters(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("characters").expect(
             "CustomStory.characters is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `content` field builder.
-    pub fn property_content(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_content(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("content").expect(
             "CustomStory.content is statically defined in .baml and should always be present",
         )
@@ -1062,22 +1062,22 @@ impl CustomStoryClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct CustomTaskResultClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl CustomTaskResultClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("CustomTaskResult is statically defined in .baml and should always have a type")
@@ -1088,19 +1088,19 @@ impl CustomTaskResultClassBuilder {
     // =========================================================================
 
     /// Access the `bookOrder` field builder.
-    pub fn property_bookOrder(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_bookOrder(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("bookOrder")
             .expect("CustomTaskResult.bookOrder is statically defined in .baml and should always be present")
     }
 
     /// Access the `flightConfirmation` field builder.
-    pub fn property_flightConfirmation(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_flightConfirmation(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("flightConfirmation")
             .expect("CustomTaskResult.flightConfirmation is statically defined in .baml and should always be present")
     }
 
     /// Access the `groceryReceipt` field builder.
-    pub fn property_groceryReceipt(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_groceryReceipt(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("groceryReceipt")
             .expect("CustomTaskResult.groceryReceipt is statically defined in .baml and should always be present")
     }
@@ -1112,22 +1112,22 @@ impl CustomTaskResultClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct Document1559ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl Document1559ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Document1559 is statically defined in .baml and should always have a type")
@@ -1138,13 +1138,13 @@ impl Document1559ClassBuilder {
     // =========================================================================
 
     /// Access the `client_details` field builder.
-    pub fn property_client_details(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_client_details(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("client_details")
             .expect("Document1559.client_details is statically defined in .baml and should always be present")
     }
 
     /// Access the `notes` field builder.
-    pub fn property_notes(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_notes(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("notes").expect(
             "Document1559.notes is statically defined in .baml and should always be present",
         )
@@ -1157,22 +1157,22 @@ impl Document1559ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct DummyJsonTodoClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl DummyJsonTodoClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DummyJsonTodo is statically defined in .baml and should always have a type")
@@ -1183,28 +1183,28 @@ impl DummyJsonTodoClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
             .expect("DummyJsonTodo.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `todo` field builder.
-    pub fn property_todo(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_todo(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("todo").expect(
             "DummyJsonTodo.todo is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `completed` field builder.
-    pub fn property_completed(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_completed(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("completed").expect(
             "DummyJsonTodo.completed is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `userId` field builder.
-    pub fn property_userId(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_userId(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("userId").expect(
             "DummyJsonTodo.userId is statically defined in .baml and should always be present",
         )
@@ -1220,22 +1220,22 @@ impl DummyJsonTodoClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct DummyOutputClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl DummyOutputClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DummyOutput is statically defined in .baml and should always have a type")
@@ -1245,8 +1245,8 @@ impl DummyOutputClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1255,14 +1255,14 @@ impl DummyOutputClassBuilder {
     // =========================================================================
 
     /// Access the `nonce` field builder.
-    pub fn property_nonce(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_nonce(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("nonce")
             .expect("DummyOutput.nonce is statically defined in .baml and should always be present")
     }
 
     /// Access the `nonce2` field builder.
-    pub fn property_nonce2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_nonce2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("nonce2").expect(
             "DummyOutput.nonce2 is statically defined in .baml and should always be present",
         )
@@ -1278,22 +1278,22 @@ impl DummyOutputClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct DynInputOutputClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl DynInputOutputClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DynInputOutput is statically defined in .baml and should always have a type")
@@ -1303,8 +1303,8 @@ impl DynInputOutputClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1313,7 +1313,7 @@ impl DynInputOutputClassBuilder {
     // =========================================================================
 
     /// Access the `testKey` field builder.
-    pub fn property_testKey(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_testKey(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("testKey").expect(
             "DynInputOutput.testKey is statically defined in .baml and should always be present",
         )
@@ -1329,22 +1329,22 @@ impl DynInputOutputClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct DynamicClassOneClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl DynamicClassOneClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DynamicClassOne is statically defined in .baml and should always have a type")
@@ -1354,8 +1354,8 @@ impl DynamicClassOneClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1373,22 +1373,22 @@ impl DynamicClassOneClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct DynamicClassTwoClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl DynamicClassTwoClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DynamicClassTwo is statically defined in .baml and should always have a type")
@@ -1398,8 +1398,8 @@ impl DynamicClassTwoClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1408,20 +1408,20 @@ impl DynamicClassTwoClassBuilder {
     // =========================================================================
 
     /// Access the `hi` field builder.
-    pub fn property_hi(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_hi(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("hi").expect(
             "DynamicClassTwo.hi is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `some_class` field builder.
-    pub fn property_some_class(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_some_class(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("some_class")
             .expect("DynamicClassTwo.some_class is statically defined in .baml and should always be present")
     }
 
     /// Access the `status` field builder.
-    pub fn property_status(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_status(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("status").expect(
             "DynamicClassTwo.status is statically defined in .baml and should always be present",
         )
@@ -1437,22 +1437,22 @@ impl DynamicClassTwoClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct DynamicOutputClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl DynamicOutputClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DynamicOutput is statically defined in .baml and should always have a type")
@@ -1462,8 +1462,8 @@ impl DynamicOutputClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1481,22 +1481,22 @@ impl DynamicOutputClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct DynamicSchemaClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl DynamicSchemaClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DynamicSchema is statically defined in .baml and should always have a type")
@@ -1506,8 +1506,8 @@ impl DynamicSchemaClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -1522,22 +1522,22 @@ impl DynamicSchemaClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct EarthlingClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl EarthlingClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Earthling is statically defined in .baml and should always have a type")
@@ -1548,7 +1548,7 @@ impl EarthlingClassBuilder {
     // =========================================================================
 
     /// Access the `age` field builder.
-    pub fn property_age(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_age(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("age")
             .expect("Earthling.age is statically defined in .baml and should always be present")
@@ -1561,22 +1561,22 @@ impl EarthlingClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct EducationClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl EducationClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Education is statically defined in .baml and should always have a type")
@@ -1587,35 +1587,35 @@ impl EducationClassBuilder {
     // =========================================================================
 
     /// Access the `institution` field builder.
-    pub fn property_institution(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_institution(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("institution").expect(
             "Education.institution is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `location` field builder.
-    pub fn property_location(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_location(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("location").expect(
             "Education.location is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `degree` field builder.
-    pub fn property_degree(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_degree(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("degree")
             .expect("Education.degree is statically defined in .baml and should always be present")
     }
 
     /// Access the `major` field builder.
-    pub fn property_major(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_major(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("major")
             .expect("Education.major is statically defined in .baml and should always be present")
     }
 
     /// Access the `graduation_date` field builder.
-    pub fn property_graduation_date(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_graduation_date(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("graduation_date").expect(
             "Education.graduation_date is statically defined in .baml and should always be present",
         )
@@ -1628,22 +1628,22 @@ impl EducationClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct EmailClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl EmailClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Email is statically defined in .baml and should always have a type")
@@ -1654,21 +1654,21 @@ impl EmailClassBuilder {
     // =========================================================================
 
     /// Access the `subject` field builder.
-    pub fn property_subject(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_subject(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("subject")
             .expect("Email.subject is statically defined in .baml and should always be present")
     }
 
     /// Access the `body` field builder.
-    pub fn property_body(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_body(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("body")
             .expect("Email.body is statically defined in .baml and should always be present")
     }
 
     /// Access the `from_address` field builder.
-    pub fn property_from_address(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_from_address(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("from_address").expect(
             "Email.from_address is statically defined in .baml and should always be present",
         )
@@ -1681,22 +1681,22 @@ impl EmailClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct EmailAddressClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl EmailAddressClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("EmailAddress is statically defined in .baml and should always have a type")
@@ -1707,7 +1707,7 @@ impl EmailAddressClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("value").expect(
             "EmailAddress.value is statically defined in .baml and should always be present",
         )
@@ -1720,22 +1720,22 @@ impl EmailAddressClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct EventClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl EventClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Event is statically defined in .baml and should always have a type")
@@ -1746,28 +1746,28 @@ impl EventClassBuilder {
     // =========================================================================
 
     /// Access the `title` field builder.
-    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_title(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("title")
             .expect("Event.title is statically defined in .baml and should always be present")
     }
 
     /// Access the `date` field builder.
-    pub fn property_date(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_date(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("date")
             .expect("Event.date is statically defined in .baml and should always be present")
     }
 
     /// Access the `location` field builder.
-    pub fn property_location(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_location(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("location")
             .expect("Event.location is statically defined in .baml and should always be present")
     }
 
     /// Access the `description` field builder.
-    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("description")
             .expect("Event.description is statically defined in .baml and should always be present")
@@ -1780,22 +1780,22 @@ impl EventClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct FakeImageClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl FakeImageClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("FakeImage is statically defined in .baml and should always have a type")
@@ -1806,7 +1806,7 @@ impl FakeImageClassBuilder {
     // =========================================================================
 
     /// Access the `url` field builder.
-    pub fn property_url(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_url(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("url")
             .expect("FakeImage.url is statically defined in .baml and should always be present")
@@ -1819,22 +1819,22 @@ impl FakeImageClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct FlightConfirmationClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl FlightConfirmationClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "FlightConfirmation is statically defined in .baml and should always have a type",
         )
@@ -1845,31 +1845,31 @@ impl FlightConfirmationClassBuilder {
     // =========================================================================
 
     /// Access the `confirmationNumber` field builder.
-    pub fn property_confirmationNumber(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_confirmationNumber(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("confirmationNumber")
             .expect("FlightConfirmation.confirmationNumber is statically defined in .baml and should always be present")
     }
 
     /// Access the `flightNumber` field builder.
-    pub fn property_flightNumber(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_flightNumber(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("flightNumber")
             .expect("FlightConfirmation.flightNumber is statically defined in .baml and should always be present")
     }
 
     /// Access the `departureTime` field builder.
-    pub fn property_departureTime(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_departureTime(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("departureTime")
             .expect("FlightConfirmation.departureTime is statically defined in .baml and should always be present")
     }
 
     /// Access the `arrivalTime` field builder.
-    pub fn property_arrivalTime(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_arrivalTime(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("arrivalTime")
             .expect("FlightConfirmation.arrivalTime is statically defined in .baml and should always be present")
     }
 
     /// Access the `seatNumber` field builder.
-    pub fn property_seatNumber(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_seatNumber(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("seatNumber")
             .expect("FlightConfirmation.seatNumber is statically defined in .baml and should always be present")
     }
@@ -1881,22 +1881,22 @@ impl FlightConfirmationClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct FooAnyClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl FooAnyClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("FooAny is statically defined in .baml and should always have a type")
@@ -1907,21 +1907,21 @@ impl FooAnyClassBuilder {
     // =========================================================================
 
     /// Access the `planetary_age` field builder.
-    pub fn property_planetary_age(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_planetary_age(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("planetary_age").expect(
             "FooAny.planetary_age is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `certainty` field builder.
-    pub fn property_certainty(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_certainty(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("certainty")
             .expect("FooAny.certainty is statically defined in .baml and should always be present")
     }
 
     /// Access the `species` field builder.
-    pub fn property_species(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_species(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("species")
             .expect("FooAny.species is statically defined in .baml and should always be present")
@@ -1934,22 +1934,22 @@ impl FooAnyClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ForestClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ForestClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Forest is statically defined in .baml and should always have a type")
@@ -1960,7 +1960,7 @@ impl ForestClassBuilder {
     // =========================================================================
 
     /// Access the `trees` field builder.
-    pub fn property_trees(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_trees(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("trees")
             .expect("Forest.trees is statically defined in .baml and should always be present")
@@ -1973,22 +1973,22 @@ impl ForestClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct FormatterTest0ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl FormatterTest0ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("FormatterTest0 is statically defined in .baml and should always have a type")
@@ -1999,14 +1999,14 @@ impl FormatterTest0ClassBuilder {
     // =========================================================================
 
     /// Access the `lorem` field builder.
-    pub fn property_lorem(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_lorem(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("lorem").expect(
             "FormatterTest0.lorem is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `ipsum` field builder.
-    pub fn property_ipsum(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_ipsum(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("ipsum").expect(
             "FormatterTest0.ipsum is statically defined in .baml and should always be present",
         )
@@ -2019,22 +2019,22 @@ impl FormatterTest0ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct FormatterTest1ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl FormatterTest1ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("FormatterTest1 is statically defined in .baml and should always have a type")
@@ -2045,14 +2045,14 @@ impl FormatterTest1ClassBuilder {
     // =========================================================================
 
     /// Access the `lorem` field builder.
-    pub fn property_lorem(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_lorem(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("lorem").expect(
             "FormatterTest1.lorem is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `ipsum` field builder.
-    pub fn property_ipsum(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_ipsum(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("ipsum").expect(
             "FormatterTest1.ipsum is statically defined in .baml and should always be present",
         )
@@ -2065,22 +2065,22 @@ impl FormatterTest1ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct FormatterTest2ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl FormatterTest2ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("FormatterTest2 is statically defined in .baml and should always have a type")
@@ -2091,14 +2091,14 @@ impl FormatterTest2ClassBuilder {
     // =========================================================================
 
     /// Access the `lorem` field builder.
-    pub fn property_lorem(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_lorem(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("lorem").expect(
             "FormatterTest2.lorem is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `ipsum` field builder.
-    pub fn property_ipsum(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_ipsum(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("ipsum").expect(
             "FormatterTest2.ipsum is statically defined in .baml and should always be present",
         )
@@ -2111,22 +2111,22 @@ impl FormatterTest2ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct FormatterTest3ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl FormatterTest3ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("FormatterTest3 is statically defined in .baml and should always have a type")
@@ -2137,14 +2137,14 @@ impl FormatterTest3ClassBuilder {
     // =========================================================================
 
     /// Access the `lorem` field builder.
-    pub fn property_lorem(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_lorem(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("lorem").expect(
             "FormatterTest3.lorem is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `ipsum` field builder.
-    pub fn property_ipsum(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_ipsum(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("ipsum").expect(
             "FormatterTest3.ipsum is statically defined in .baml and should always be present",
         )
@@ -2157,22 +2157,22 @@ impl FormatterTest3ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct GroceryReceiptClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl GroceryReceiptClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("GroceryReceipt is statically defined in .baml and should always have a type")
@@ -2183,28 +2183,28 @@ impl GroceryReceiptClassBuilder {
     // =========================================================================
 
     /// Access the `receiptId` field builder.
-    pub fn property_receiptId(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_receiptId(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("receiptId").expect(
             "GroceryReceipt.receiptId is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `storeName` field builder.
-    pub fn property_storeName(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_storeName(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("storeName").expect(
             "GroceryReceipt.storeName is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `items` field builder.
-    pub fn property_items(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_items(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("items").expect(
             "GroceryReceipt.items is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `totalAmount` field builder.
-    pub fn property_totalAmount(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_totalAmount(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("totalAmount")
             .expect("GroceryReceipt.totalAmount is statically defined in .baml and should always be present")
     }
@@ -2216,22 +2216,22 @@ impl GroceryReceiptClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct HaikuClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl HaikuClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Haiku is statically defined in .baml and should always have a type")
@@ -2242,21 +2242,21 @@ impl HaikuClassBuilder {
     // =========================================================================
 
     /// Access the `line1` field builder.
-    pub fn property_line1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_line1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("line1")
             .expect("Haiku.line1 is statically defined in .baml and should always be present")
     }
 
     /// Access the `line2` field builder.
-    pub fn property_line2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_line2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("line2")
             .expect("Haiku.line2 is statically defined in .baml and should always be present")
     }
 
     /// Access the `line3` field builder.
-    pub fn property_line3(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_line3(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("line3")
             .expect("Haiku.line3 is statically defined in .baml and should always be present")
@@ -2269,22 +2269,22 @@ impl HaikuClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct InnerClassClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl InnerClassClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("InnerClass is statically defined in .baml and should always have a type")
@@ -2295,21 +2295,21 @@ impl InnerClassClassBuilder {
     // =========================================================================
 
     /// Access the `prop1` field builder.
-    pub fn property_prop1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop1")
             .expect("InnerClass.prop1 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop2")
             .expect("InnerClass.prop2 is statically defined in .baml and should always be present")
     }
 
     /// Access the `inner` field builder.
-    pub fn property_inner(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_inner(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("inner")
             .expect("InnerClass.inner is statically defined in .baml and should always be present")
@@ -2322,22 +2322,22 @@ impl InnerClassClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct InnerClass2ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl InnerClass2ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("InnerClass2 is statically defined in .baml and should always have a type")
@@ -2348,14 +2348,14 @@ impl InnerClass2ClassBuilder {
     // =========================================================================
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop2")
             .expect("InnerClass2.prop2 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop3` field builder.
-    pub fn property_prop3(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop3(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop3")
             .expect("InnerClass2.prop3 is statically defined in .baml and should always be present")
@@ -2368,22 +2368,22 @@ impl InnerClass2ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct InputClassClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl InputClassClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("InputClass is statically defined in .baml and should always have a type")
@@ -2394,14 +2394,14 @@ impl InputClassClassBuilder {
     // =========================================================================
 
     /// Access the `key` field builder.
-    pub fn property_key(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("key")
             .expect("InputClass.key is statically defined in .baml and should always be present")
     }
 
     /// Access the `key2` field builder.
-    pub fn property_key2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("key2")
             .expect("InputClass.key2 is statically defined in .baml and should always be present")
@@ -2414,22 +2414,22 @@ impl InputClassClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct InputClassNestedClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl InputClassNestedClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("InputClassNested is statically defined in .baml and should always have a type")
@@ -2440,14 +2440,14 @@ impl InputClassNestedClassBuilder {
     // =========================================================================
 
     /// Access the `key` field builder.
-    pub fn property_key(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key").expect(
             "InputClassNested.key is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `nested` field builder.
-    pub fn property_nested(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_nested(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("nested").expect(
             "InputClassNested.nested is statically defined in .baml and should always be present",
         )
@@ -2460,22 +2460,22 @@ impl InputClassNestedClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct LinkedListClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl LinkedListClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("LinkedList is statically defined in .baml and should always have a type")
@@ -2486,14 +2486,14 @@ impl LinkedListClassBuilder {
     // =========================================================================
 
     /// Access the `head` field builder.
-    pub fn property_head(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_head(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("head")
             .expect("LinkedList.head is statically defined in .baml and should always be present")
     }
 
     /// Access the `len` field builder.
-    pub fn property_len(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_len(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("len")
             .expect("LinkedList.len is statically defined in .baml and should always be present")
@@ -2506,22 +2506,22 @@ impl LinkedListClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct LinkedListAliasNodeClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl LinkedListAliasNodeClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "LinkedListAliasNode is statically defined in .baml and should always have a type",
         )
@@ -2532,14 +2532,14 @@ impl LinkedListAliasNodeClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("value").expect(
             "LinkedListAliasNode.value is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `next` field builder.
-    pub fn property_next(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_next(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("next").expect(
             "LinkedListAliasNode.next is statically defined in .baml and should always be present",
         )
@@ -2552,22 +2552,22 @@ impl LinkedListAliasNodeClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct LiteralClassHelloClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl LiteralClassHelloClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "LiteralClassHello is statically defined in .baml and should always have a type",
         )
@@ -2578,7 +2578,7 @@ impl LiteralClassHelloClassBuilder {
     // =========================================================================
 
     /// Access the `prop` field builder.
-    pub fn property_prop(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop").expect(
             "LiteralClassHello.prop is statically defined in .baml and should always be present",
         )
@@ -2591,22 +2591,22 @@ impl LiteralClassHelloClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct LiteralClassOneClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl LiteralClassOneClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("LiteralClassOne is statically defined in .baml and should always have a type")
@@ -2617,7 +2617,7 @@ impl LiteralClassOneClassBuilder {
     // =========================================================================
 
     /// Access the `prop` field builder.
-    pub fn property_prop(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop").expect(
             "LiteralClassOne.prop is statically defined in .baml and should always be present",
         )
@@ -2630,22 +2630,22 @@ impl LiteralClassOneClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct LiteralClassTwoClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl LiteralClassTwoClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("LiteralClassTwo is statically defined in .baml and should always have a type")
@@ -2656,7 +2656,7 @@ impl LiteralClassTwoClassBuilder {
     // =========================================================================
 
     /// Access the `prop` field builder.
-    pub fn property_prop(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop").expect(
             "LiteralClassTwo.prop is statically defined in .baml and should always be present",
         )
@@ -2669,22 +2669,22 @@ impl LiteralClassTwoClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MaintainFieldOrderClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MaintainFieldOrderClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "MaintainFieldOrder is statically defined in .baml and should always have a type",
         )
@@ -2695,21 +2695,21 @@ impl MaintainFieldOrderClassBuilder {
     // =========================================================================
 
     /// Access the `c` field builder.
-    pub fn property_c(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_c(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("c").expect(
             "MaintainFieldOrder.c is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `b` field builder.
-    pub fn property_b(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_b(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("b").expect(
             "MaintainFieldOrder.b is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `a` field builder.
-    pub fn property_a(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_a(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("a").expect(
             "MaintainFieldOrder.a is statically defined in .baml and should always be present",
         )
@@ -2722,22 +2722,22 @@ impl MaintainFieldOrderClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MalformedConstraintsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MalformedConstraintsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "MalformedConstraints is statically defined in .baml and should always have a type",
         )
@@ -2748,7 +2748,7 @@ impl MalformedConstraintsClassBuilder {
     // =========================================================================
 
     /// Access the `foo` field builder.
-    pub fn property_foo(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_foo(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("foo").expect(
             "MalformedConstraints.foo is statically defined in .baml and should always be present",
         )
@@ -2761,22 +2761,22 @@ impl MalformedConstraintsClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MalformedConstraints2ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MalformedConstraints2ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "MalformedConstraints2 is statically defined in .baml and should always have a type",
         )
@@ -2787,7 +2787,7 @@ impl MalformedConstraints2ClassBuilder {
     // =========================================================================
 
     /// Access the `foo` field builder.
-    pub fn property_foo(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_foo(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("foo").expect(
             "MalformedConstraints2.foo is statically defined in .baml and should always be present",
         )
@@ -2800,22 +2800,22 @@ impl MalformedConstraints2ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MartianClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MartianClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Martian is statically defined in .baml and should always have a type")
@@ -2826,7 +2826,7 @@ impl MartianClassBuilder {
     // =========================================================================
 
     /// Access the `age` field builder.
-    pub fn property_age(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_age(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("age")
             .expect("Martian.age is statically defined in .baml and should always be present")
@@ -2839,22 +2839,22 @@ impl MartianClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MemoryObjectClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MemoryObjectClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("MemoryObject is statically defined in .baml and should always have a type")
@@ -2865,21 +2865,21 @@ impl MemoryObjectClassBuilder {
     // =========================================================================
 
     /// Access the `id` field builder.
-    pub fn property_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("id")
             .expect("MemoryObject.id is statically defined in .baml and should always be present")
     }
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("MemoryObject.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `description` field builder.
-    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("description").expect(
             "MemoryObject.description is statically defined in .baml and should always be present",
         )
@@ -2892,22 +2892,22 @@ impl MemoryObjectClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct MergeAttrsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl MergeAttrsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("MergeAttrs is statically defined in .baml and should always have a type")
@@ -2918,7 +2918,7 @@ impl MergeAttrsClassBuilder {
     // =========================================================================
 
     /// Access the `amount` field builder.
-    pub fn property_amount(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_amount(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("amount")
             .expect("MergeAttrs.amount is statically defined in .baml and should always be present")
@@ -2931,22 +2931,22 @@ impl MergeAttrsClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct NamedArgsSingleClassClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl NamedArgsSingleClassClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "NamedArgsSingleClass is statically defined in .baml and should always have a type",
         )
@@ -2957,20 +2957,20 @@ impl NamedArgsSingleClassClassBuilder {
     // =========================================================================
 
     /// Access the `key` field builder.
-    pub fn property_key(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key").expect(
             "NamedArgsSingleClass.key is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `key_two` field builder.
-    pub fn property_key_two(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key_two(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key_two")
             .expect("NamedArgsSingleClass.key_two is statically defined in .baml and should always be present")
     }
 
     /// Access the `key_three` field builder.
-    pub fn property_key_three(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key_three(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key_three")
             .expect("NamedArgsSingleClass.key_three is statically defined in .baml and should always be present")
     }
@@ -2982,22 +2982,22 @@ impl NamedArgsSingleClassClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct NestedClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl NestedClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Nested is statically defined in .baml and should always have a type")
@@ -3008,21 +3008,21 @@ impl NestedClassBuilder {
     // =========================================================================
 
     /// Access the `prop3` field builder.
-    pub fn property_prop3(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop3(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop3")
             .expect("Nested.prop3 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop4` field builder.
-    pub fn property_prop4(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop4(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop4")
             .expect("Nested.prop4 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop20` field builder.
-    pub fn property_prop20(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop20(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop20")
             .expect("Nested.prop20 is statically defined in .baml and should always be present")
@@ -3035,22 +3035,22 @@ impl NestedClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct Nested2ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl Nested2ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Nested2 is statically defined in .baml and should always have a type")
@@ -3061,14 +3061,14 @@ impl Nested2ClassBuilder {
     // =========================================================================
 
     /// Access the `prop11` field builder.
-    pub fn property_prop11(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop11(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop11")
             .expect("Nested2.prop11 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop12` field builder.
-    pub fn property_prop12(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop12(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop12")
             .expect("Nested2.prop12 is statically defined in .baml and should always be present")
@@ -3081,22 +3081,22 @@ impl Nested2ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct NestedBlockConstraintClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl NestedBlockConstraintClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "NestedBlockConstraint is statically defined in .baml and should always have a type",
         )
@@ -3107,7 +3107,7 @@ impl NestedBlockConstraintClassBuilder {
     // =========================================================================
 
     /// Access the `nbc` field builder.
-    pub fn property_nbc(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_nbc(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("nbc").expect(
             "NestedBlockConstraint.nbc is statically defined in .baml and should always be present",
         )
@@ -3120,22 +3120,22 @@ impl NestedBlockConstraintClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct NestedBlockConstraintForParamClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl NestedBlockConstraintForParamClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type()
             .expect("NestedBlockConstraintForParam is statically defined in .baml and should always have a type")
     }
@@ -3145,7 +3145,7 @@ impl NestedBlockConstraintForParamClassBuilder {
     // =========================================================================
 
     /// Access the `nbcfp` field builder.
-    pub fn property_nbcfp(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_nbcfp(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("nbcfp")
             .expect("NestedBlockConstraintForParam.nbcfp is statically defined in .baml and should always be present")
     }
@@ -3157,22 +3157,22 @@ impl NestedBlockConstraintForParamClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct NodeClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl NodeClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Node is statically defined in .baml and should always have a type")
@@ -3183,14 +3183,14 @@ impl NodeClassBuilder {
     // =========================================================================
 
     /// Access the `data` field builder.
-    pub fn property_data(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_data(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("data")
             .expect("Node.data is statically defined in .baml and should always be present")
     }
 
     /// Access the `next` field builder.
-    pub fn property_next(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_next(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("next")
             .expect("Node.next is statically defined in .baml and should always be present")
@@ -3203,22 +3203,22 @@ impl NodeClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct NodeWithAliasIndirectionClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl NodeWithAliasIndirectionClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "NodeWithAliasIndirection is statically defined in .baml and should always have a type",
         )
@@ -3229,13 +3229,13 @@ impl NodeWithAliasIndirectionClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("value")
             .expect("NodeWithAliasIndirection.value is statically defined in .baml and should always be present")
     }
 
     /// Access the `next` field builder.
-    pub fn property_next(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_next(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("next")
             .expect("NodeWithAliasIndirection.next is statically defined in .baml and should always be present")
     }
@@ -3247,22 +3247,22 @@ impl NodeWithAliasIndirectionClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct Note1599ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl Note1599ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Note1599 is statically defined in .baml and should always have a type")
@@ -3273,21 +3273,21 @@ impl Note1599ClassBuilder {
     // =========================================================================
 
     /// Access the `note_title` field builder.
-    pub fn property_note_title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_note_title(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("note_title").expect(
             "Note1599.note_title is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `note_description` field builder.
-    pub fn property_note_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_note_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("note_description").expect(
             "Note1599.note_description is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `note_amount` field builder.
-    pub fn property_note_amount(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_note_amount(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("note_amount").expect(
             "Note1599.note_amount is statically defined in .baml and should always be present",
         )
@@ -3300,22 +3300,22 @@ impl Note1599ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct OptionalListAndMapClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl OptionalListAndMapClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "OptionalListAndMap is statically defined in .baml and should always have a type",
         )
@@ -3326,14 +3326,14 @@ impl OptionalListAndMapClassBuilder {
     // =========================================================================
 
     /// Access the `p` field builder.
-    pub fn property_p(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_p(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("p").expect(
             "OptionalListAndMap.p is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `q` field builder.
-    pub fn property_q(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_q(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("q").expect(
             "OptionalListAndMap.q is statically defined in .baml and should always be present",
         )
@@ -3346,22 +3346,22 @@ impl OptionalListAndMapClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct OptionalTest_Prop1ClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl OptionalTest_Prop1ClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "OptionalTest_Prop1 is statically defined in .baml and should always have a type",
         )
@@ -3372,13 +3372,13 @@ impl OptionalTest_Prop1ClassBuilder {
     // =========================================================================
 
     /// Access the `omega_a` field builder.
-    pub fn property_omega_a(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_omega_a(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("omega_a")
             .expect("OptionalTest_Prop1.omega_a is statically defined in .baml and should always be present")
     }
 
     /// Access the `omega_b` field builder.
-    pub fn property_omega_b(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_omega_b(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("omega_b")
             .expect("OptionalTest_Prop1.omega_b is statically defined in .baml and should always be present")
     }
@@ -3390,22 +3390,22 @@ impl OptionalTest_Prop1ClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct OptionalTest_ReturnTypeClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl OptionalTest_ReturnTypeClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "OptionalTest_ReturnType is statically defined in .baml and should always have a type",
         )
@@ -3416,19 +3416,19 @@ impl OptionalTest_ReturnTypeClassBuilder {
     // =========================================================================
 
     /// Access the `omega_1` field builder.
-    pub fn property_omega_1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_omega_1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("omega_1")
             .expect("OptionalTest_ReturnType.omega_1 is statically defined in .baml and should always be present")
     }
 
     /// Access the `omega_2` field builder.
-    pub fn property_omega_2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_omega_2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("omega_2")
             .expect("OptionalTest_ReturnType.omega_2 is statically defined in .baml and should always be present")
     }
 
     /// Access the `omega_3` field builder.
-    pub fn property_omega_3(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_omega_3(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("omega_3")
             .expect("OptionalTest_ReturnType.omega_3 is statically defined in .baml and should always be present")
     }
@@ -3440,22 +3440,22 @@ impl OptionalTest_ReturnTypeClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct OrderInfoClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl OrderInfoClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("OrderInfo is statically defined in .baml and should always have a type")
@@ -3466,21 +3466,21 @@ impl OrderInfoClassBuilder {
     // =========================================================================
 
     /// Access the `order_status` field builder.
-    pub fn property_order_status(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_order_status(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("order_status").expect(
             "OrderInfo.order_status is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `tracking_number` field builder.
-    pub fn property_tracking_number(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_tracking_number(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("tracking_number").expect(
             "OrderInfo.tracking_number is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `estimated_arrival_date` field builder.
-    pub fn property_estimated_arrival_date(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_estimated_arrival_date(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("estimated_arrival_date")
             .expect("OrderInfo.estimated_arrival_date is statically defined in .baml and should always be present")
     }
@@ -3492,22 +3492,22 @@ impl OrderInfoClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct OriginalAClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl OriginalAClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("OriginalA is statically defined in .baml and should always have a type")
@@ -3518,7 +3518,7 @@ impl OriginalAClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("value")
             .expect("OriginalA.value is statically defined in .baml and should always be present")
@@ -3534,22 +3534,22 @@ impl OriginalAClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct OriginalBClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl OriginalBClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("OriginalB is statically defined in .baml and should always have a type")
@@ -3559,8 +3559,8 @@ impl OriginalBClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -3569,7 +3569,7 @@ impl OriginalBClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("value")
             .expect("OriginalB.value is statically defined in .baml and should always be present")
@@ -3585,22 +3585,22 @@ impl OriginalBClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct PersonClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl PersonClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Person is statically defined in .baml and should always have a type")
@@ -3610,8 +3610,8 @@ impl PersonClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -3620,14 +3620,14 @@ impl PersonClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("Person.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `hair_color` field builder.
-    pub fn property_hair_color(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_hair_color(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("hair_color")
             .expect("Person.hair_color is statically defined in .baml and should always be present")
@@ -3640,22 +3640,22 @@ impl PersonClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct PersonWithMetaClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl PersonWithMetaClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("PersonWithMeta is statically defined in .baml and should always have a type")
@@ -3666,28 +3666,28 @@ impl PersonWithMetaClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("name").expect(
             "PersonWithMeta.name is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `age` field builder.
-    pub fn property_age(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_age(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("age").expect(
             "PersonWithMeta.age is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `address` field builder.
-    pub fn property_address(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_address(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("address").expect(
             "PersonWithMeta.address is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `tags` field builder.
-    pub fn property_tags(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_tags(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("tags").expect(
             "PersonWithMeta.tags is statically defined in .baml and should always be present",
         )
@@ -3700,22 +3700,22 @@ impl PersonWithMetaClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct PhoneNumberClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl PhoneNumberClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("PhoneNumber is statically defined in .baml and should always have a type")
@@ -3726,7 +3726,7 @@ impl PhoneNumberClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("value")
             .expect("PhoneNumber.value is statically defined in .baml and should always be present")
@@ -3739,22 +3739,22 @@ impl PhoneNumberClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct QuantityClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl QuantityClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Quantity is statically defined in .baml and should always have a type")
@@ -3765,14 +3765,14 @@ impl QuantityClassBuilder {
     // =========================================================================
 
     /// Access the `amount` field builder.
-    pub fn property_amount(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_amount(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("amount")
             .expect("Quantity.amount is statically defined in .baml and should always be present")
     }
 
     /// Access the `unit` field builder.
-    pub fn property_unit(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_unit(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("unit")
             .expect("Quantity.unit is statically defined in .baml and should always be present")
@@ -3785,22 +3785,22 @@ impl QuantityClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct RaysDataClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl RaysDataClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("RaysData is statically defined in .baml and should always have a type")
@@ -3811,14 +3811,14 @@ impl RaysDataClassBuilder {
     // =========================================================================
 
     /// Access the `dataType` field builder.
-    pub fn property_dataType(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_dataType(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("dataType")
             .expect("RaysData.dataType is statically defined in .baml and should always be present")
     }
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("value")
             .expect("RaysData.value is statically defined in .baml and should always be present")
@@ -3831,22 +3831,22 @@ impl RaysDataClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ReceiptInfoClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ReceiptInfoClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("ReceiptInfo is statically defined in .baml and should always have a type")
@@ -3857,21 +3857,21 @@ impl ReceiptInfoClassBuilder {
     // =========================================================================
 
     /// Access the `items` field builder.
-    pub fn property_items(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_items(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("items")
             .expect("ReceiptInfo.items is statically defined in .baml and should always be present")
     }
 
     /// Access the `total_cost` field builder.
-    pub fn property_total_cost(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_total_cost(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("total_cost").expect(
             "ReceiptInfo.total_cost is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `venue` field builder.
-    pub fn property_venue(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_venue(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("venue")
             .expect("ReceiptInfo.venue is statically defined in .baml and should always be present")
@@ -3884,22 +3884,22 @@ impl ReceiptInfoClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ReceiptItemClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ReceiptItemClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("ReceiptItem is statically defined in .baml and should always have a type")
@@ -3910,28 +3910,28 @@ impl ReceiptItemClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("ReceiptItem.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `description` field builder.
-    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("description").expect(
             "ReceiptItem.description is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `quantity` field builder.
-    pub fn property_quantity(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_quantity(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("quantity").expect(
             "ReceiptItem.quantity is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `price` field builder.
-    pub fn property_price(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_price(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("price")
             .expect("ReceiptItem.price is statically defined in .baml and should always be present")
@@ -3944,22 +3944,22 @@ impl ReceiptItemClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct RecipeClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl RecipeClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Recipe is statically defined in .baml and should always have a type")
@@ -3970,14 +3970,14 @@ impl RecipeClassBuilder {
     // =========================================================================
 
     /// Access the `ingredients` field builder.
-    pub fn property_ingredients(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_ingredients(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("ingredients").expect(
             "Recipe.ingredients is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `recipe_type` field builder.
-    pub fn property_recipe_type(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_recipe_type(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("recipe_type").expect(
             "Recipe.recipe_type is statically defined in .baml and should always be present",
         )
@@ -3990,22 +3990,22 @@ impl RecipeClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct RecursiveAliasDependencyClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl RecursiveAliasDependencyClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "RecursiveAliasDependency is statically defined in .baml and should always have a type",
         )
@@ -4016,7 +4016,7 @@ impl RecursiveAliasDependencyClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("value")
             .expect("RecursiveAliasDependency.value is statically defined in .baml and should always be present")
     }
@@ -4031,22 +4031,22 @@ impl RecursiveAliasDependencyClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct RenderEnumInputClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl RenderEnumInputClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("RenderEnumInput is statically defined in .baml and should always have a type")
@@ -4056,8 +4056,8 @@ impl RenderEnumInputClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -4066,7 +4066,7 @@ impl RenderEnumInputClassBuilder {
     // =========================================================================
 
     /// Access the `testKey` field builder.
-    pub fn property_testKey(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_testKey(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("testKey").expect(
             "RenderEnumInput.testKey is statically defined in .baml and should always be present",
         )
@@ -4082,22 +4082,22 @@ impl RenderEnumInputClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct RenderTestClassClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl RenderTestClassClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("RenderTestClass is statically defined in .baml and should always have a type")
@@ -4107,8 +4107,8 @@ impl RenderTestClassClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -4117,14 +4117,14 @@ impl RenderTestClassClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("name").expect(
             "RenderTestClass.name is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `status` field builder.
-    pub fn property_status(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_status(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("status").expect(
             "RenderTestClass.status is statically defined in .baml and should always be present",
         )
@@ -4137,22 +4137,22 @@ impl RenderTestClassClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct ResumeClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl ResumeClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Resume is statically defined in .baml and should always have a type")
@@ -4163,42 +4163,42 @@ impl ResumeClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("name")
             .expect("Resume.name is statically defined in .baml and should always be present")
     }
 
     /// Access the `email` field builder.
-    pub fn property_email(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_email(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("email")
             .expect("Resume.email is statically defined in .baml and should always be present")
     }
 
     /// Access the `phone` field builder.
-    pub fn property_phone(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_phone(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("phone")
             .expect("Resume.phone is statically defined in .baml and should always be present")
     }
 
     /// Access the `experience` field builder.
-    pub fn property_experience(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_experience(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("experience")
             .expect("Resume.experience is statically defined in .baml and should always be present")
     }
 
     /// Access the `education` field builder.
-    pub fn property_education(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_education(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("education")
             .expect("Resume.education is statically defined in .baml and should always be present")
     }
 
     /// Access the `skills` field builder.
-    pub fn property_skills(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_skills(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("skills")
             .expect("Resume.skills is statically defined in .baml and should always be present")
@@ -4211,22 +4211,22 @@ impl ResumeClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct SchemaClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SchemaClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Schema is statically defined in .baml and should always have a type")
@@ -4237,49 +4237,49 @@ impl SchemaClassBuilder {
     // =========================================================================
 
     /// Access the `prop1` field builder.
-    pub fn property_prop1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop1")
             .expect("Schema.prop1 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop2")
             .expect("Schema.prop2 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop5` field builder.
-    pub fn property_prop5(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop5(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop5")
             .expect("Schema.prop5 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop6` field builder.
-    pub fn property_prop6(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop6(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("prop6")
             .expect("Schema.prop6 is statically defined in .baml and should always be present")
     }
 
     /// Access the `nested_attrs` field builder.
-    pub fn property_nested_attrs(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_nested_attrs(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("nested_attrs").expect(
             "Schema.nested_attrs is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `parens` field builder.
-    pub fn property_parens(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_parens(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("parens")
             .expect("Schema.parens is statically defined in .baml and should always be present")
     }
 
     /// Access the `other_group` field builder.
-    pub fn property_other_group(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_other_group(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("other_group").expect(
             "Schema.other_group is statically defined in .baml and should always be present",
         )
@@ -4292,22 +4292,22 @@ impl SchemaClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct SearchParamsClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SearchParamsClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("SearchParams is statically defined in .baml and should always have a type")
@@ -4318,42 +4318,42 @@ impl SearchParamsClassBuilder {
     // =========================================================================
 
     /// Access the `dateRange` field builder.
-    pub fn property_dateRange(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_dateRange(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("dateRange").expect(
             "SearchParams.dateRange is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `location` field builder.
-    pub fn property_location(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_location(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("location").expect(
             "SearchParams.location is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `jobTitle` field builder.
-    pub fn property_jobTitle(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_jobTitle(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("jobTitle").expect(
             "SearchParams.jobTitle is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `company` field builder.
-    pub fn property_company(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_company(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("company").expect(
             "SearchParams.company is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `description` field builder.
-    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("description").expect(
             "SearchParams.description is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `tags` field builder.
-    pub fn property_tags(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_tags(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("tags")
             .expect("SearchParams.tags is statically defined in .baml and should always be present")
@@ -4366,22 +4366,22 @@ impl SearchParamsClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct SemanticContainerClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SemanticContainerClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "SemanticContainer is statically defined in .baml and should always have a type",
         )
@@ -4392,51 +4392,51 @@ impl SemanticContainerClassBuilder {
     // =========================================================================
 
     /// Access the `sixteen_digit_number` field builder.
-    pub fn property_sixteen_digit_number(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_sixteen_digit_number(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("sixteen_digit_number")
             .expect("SemanticContainer.sixteen_digit_number is statically defined in .baml and should always be present")
     }
 
     /// Access the `string_with_twenty_words` field builder.
-    pub fn property_string_with_twenty_words(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_string_with_twenty_words(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("string_with_twenty_words")
             .expect("SemanticContainer.string_with_twenty_words is statically defined in .baml and should always be present")
     }
 
     /// Access the `class_1` field builder.
-    pub fn property_class_1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_class_1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("class_1").expect(
             "SemanticContainer.class_1 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `class_2` field builder.
-    pub fn property_class_2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_class_2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("class_2").expect(
             "SemanticContainer.class_2 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `class_done_needed` field builder.
-    pub fn property_class_done_needed(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_class_done_needed(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("class_done_needed")
             .expect("SemanticContainer.class_done_needed is statically defined in .baml and should always be present")
     }
 
     /// Access the `class_needed` field builder.
-    pub fn property_class_needed(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_class_needed(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("class_needed")
             .expect("SemanticContainer.class_needed is statically defined in .baml and should always be present")
     }
 
     /// Access the `three_small_things` field builder.
-    pub fn property_three_small_things(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_three_small_things(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("three_small_things")
             .expect("SemanticContainer.three_small_things is statically defined in .baml and should always be present")
     }
 
     /// Access the `final_string` field builder.
-    pub fn property_final_string(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_final_string(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("final_string")
             .expect("SemanticContainer.final_string is statically defined in .baml and should always be present")
     }
@@ -4448,22 +4448,22 @@ impl SemanticContainerClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct SimpleTagClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SimpleTagClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("SimpleTag is statically defined in .baml and should always have a type")
@@ -4474,7 +4474,7 @@ impl SimpleTagClassBuilder {
     // =========================================================================
 
     /// Access the `field` field builder.
-    pub fn property_field(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_field(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("field")
             .expect("SimpleTag.field is statically defined in .baml and should always be present")
@@ -4490,22 +4490,22 @@ impl SimpleTagClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct SkipDynamicClassClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SkipDynamicClassClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("SkipDynamicClass is statically defined in .baml and should always have a type")
@@ -4515,8 +4515,8 @@ impl SkipDynamicClassClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -4525,14 +4525,14 @@ impl SkipDynamicClassClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("value").expect(
             "SkipDynamicClass.value is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `internal_id` field builder.
-    pub fn property_internal_id(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_internal_id(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("internal_id")
             .expect("SkipDynamicClass.internal_id is statically defined in .baml and should always be present")
     }
@@ -4544,22 +4544,22 @@ impl SkipDynamicClassClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct SkipNonDynamicClassClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SkipNonDynamicClassClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "SkipNonDynamicClass is statically defined in .baml and should always have a type",
         )
@@ -4570,20 +4570,20 @@ impl SkipNonDynamicClassClassBuilder {
     // =========================================================================
 
     /// Access the `name` field builder.
-    pub fn property_name(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_name(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("name").expect(
             "SkipNonDynamicClass.name is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `description` field builder.
-    pub fn property_description(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_description(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("description")
             .expect("SkipNonDynamicClass.description is statically defined in .baml and should always be present")
     }
 
     /// Access the `metadata` field builder.
-    pub fn property_metadata(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_metadata(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("metadata")
             .expect("SkipNonDynamicClass.metadata is statically defined in .baml and should always be present")
     }
@@ -4595,22 +4595,22 @@ impl SkipNonDynamicClassClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct SmallThingClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SmallThingClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("SmallThing is statically defined in .baml and should always have a type")
@@ -4621,14 +4621,14 @@ impl SmallThingClassBuilder {
     // =========================================================================
 
     /// Access the `i_16_digits` field builder.
-    pub fn property_i_16_digits(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_i_16_digits(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("i_16_digits").expect(
             "SmallThing.i_16_digits is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `i_8_digits` field builder.
-    pub fn property_i_8_digits(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_i_8_digits(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("i_8_digits").expect(
             "SmallThing.i_8_digits is statically defined in .baml and should always be present",
         )
@@ -4644,22 +4644,22 @@ impl SmallThingClassBuilder {
 /// This class is marked `@@dynamic` - you can add new properties at runtime.
 
 pub struct SomeClassNestedDynamicClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl SomeClassNestedDynamicClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "SomeClassNestedDynamic is statically defined in .baml and should always have a type",
         )
@@ -4669,8 +4669,8 @@ impl SomeClassNestedDynamicClassBuilder {
     pub fn add_property(
         &self,
         name: &str,
-        field_type: &baml::TypeDef,
-    ) -> Result<baml::ClassPropertyBuilder, baml::BamlError> {
+        field_type: &::baml::TypeDef,
+    ) -> ::std::result::Result<baml::ClassPropertyBuilder, ::baml::BamlError> {
         self.inner.add_property(name, field_type)
     }
 
@@ -4679,7 +4679,7 @@ impl SomeClassNestedDynamicClassBuilder {
     // =========================================================================
 
     /// Access the `hi` field builder.
-    pub fn property_hi(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_hi(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("hi").expect(
             "SomeClassNestedDynamic.hi is statically defined in .baml and should always be present",
         )
@@ -4692,22 +4692,22 @@ impl SomeClassNestedDynamicClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct StringToClassEntryClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl StringToClassEntryClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "StringToClassEntry is statically defined in .baml and should always have a type",
         )
@@ -4718,7 +4718,7 @@ impl StringToClassEntryClassBuilder {
     // =========================================================================
 
     /// Access the `word` field builder.
-    pub fn property_word(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_word(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("word").expect(
             "StringToClassEntry.word is statically defined in .baml and should always be present",
         )
@@ -4731,22 +4731,22 @@ impl StringToClassEntryClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TestClassAliasClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TestClassAliasClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("TestClassAlias is statically defined in .baml and should always have a type")
@@ -4757,35 +4757,35 @@ impl TestClassAliasClassBuilder {
     // =========================================================================
 
     /// Access the `key` field builder.
-    pub fn property_key(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key").expect(
             "TestClassAlias.key is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `key2` field builder.
-    pub fn property_key2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key2").expect(
             "TestClassAlias.key2 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `key3` field builder.
-    pub fn property_key3(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key3(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key3").expect(
             "TestClassAlias.key3 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `key4` field builder.
-    pub fn property_key4(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key4(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key4").expect(
             "TestClassAlias.key4 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `key5` field builder.
-    pub fn property_key5(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_key5(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("key5").expect(
             "TestClassAlias.key5 is statically defined in .baml and should always be present",
         )
@@ -4798,22 +4798,22 @@ impl TestClassAliasClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TestClassNestedClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TestClassNestedClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("TestClassNested is statically defined in .baml and should always have a type")
@@ -4824,14 +4824,14 @@ impl TestClassNestedClassBuilder {
     // =========================================================================
 
     /// Access the `prop1` field builder.
-    pub fn property_prop1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop1").expect(
             "TestClassNested.prop1 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop2").expect(
             "TestClassNested.prop2 is statically defined in .baml and should always be present",
         )
@@ -4844,22 +4844,22 @@ impl TestClassNestedClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TestClassWithEnumClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TestClassWithEnumClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "TestClassWithEnum is statically defined in .baml and should always have a type",
         )
@@ -4870,14 +4870,14 @@ impl TestClassWithEnumClassBuilder {
     // =========================================================================
 
     /// Access the `prop1` field builder.
-    pub fn property_prop1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop1").expect(
             "TestClassWithEnum.prop1 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop2").expect(
             "TestClassWithEnum.prop2 is statically defined in .baml and should always be present",
         )
@@ -4890,22 +4890,22 @@ impl TestClassWithEnumClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TestMemoryOutputClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TestMemoryOutputClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("TestMemoryOutput is statically defined in .baml and should always have a type")
@@ -4916,14 +4916,14 @@ impl TestMemoryOutputClassBuilder {
     // =========================================================================
 
     /// Access the `items` field builder.
-    pub fn property_items(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_items(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("items").expect(
             "TestMemoryOutput.items is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `more_items` field builder.
-    pub fn property_more_items(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_more_items(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("more_items")
             .expect("TestMemoryOutput.more_items is statically defined in .baml and should always be present")
     }
@@ -4935,22 +4935,22 @@ impl TestMemoryOutputClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TestOutputClassClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TestOutputClassClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("TestOutputClass is statically defined in .baml and should always have a type")
@@ -4961,14 +4961,14 @@ impl TestOutputClassClassBuilder {
     // =========================================================================
 
     /// Access the `prop1` field builder.
-    pub fn property_prop1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop1").expect(
             "TestOutputClass.prop1 is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop2").expect(
             "TestOutputClass.prop2 is statically defined in .baml and should always be present",
         )
@@ -4981,22 +4981,22 @@ impl TestOutputClassClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TodoMessageToUserClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TodoMessageToUserClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "TodoMessageToUser is statically defined in .baml and should always have a type",
         )
@@ -5007,14 +5007,14 @@ impl TodoMessageToUserClassBuilder {
     // =========================================================================
 
     /// Access the `r#type` field builder.
-    pub fn property_type(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_type(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("type").expect(
             "TodoMessageToUser.type is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `message` field builder.
-    pub fn property_message(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_message(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("message").expect(
             "TodoMessageToUser.message is statically defined in .baml and should always be present",
         )
@@ -5027,22 +5027,22 @@ impl TodoMessageToUserClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TreeClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TreeClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Tree is statically defined in .baml and should always have a type")
@@ -5053,14 +5053,14 @@ impl TreeClassBuilder {
     // =========================================================================
 
     /// Access the `data` field builder.
-    pub fn property_data(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_data(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("data")
             .expect("Tree.data is statically defined in .baml and should always be present")
     }
 
     /// Access the `children` field builder.
-    pub fn property_children(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_children(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("children")
             .expect("Tree.children is statically defined in .baml and should always be present")
@@ -5073,22 +5073,22 @@ impl TreeClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TwoStoriesOneTitleClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TwoStoriesOneTitleClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "TwoStoriesOneTitle is statically defined in .baml and should always have a type",
         )
@@ -5099,20 +5099,20 @@ impl TwoStoriesOneTitleClassBuilder {
     // =========================================================================
 
     /// Access the `title` field builder.
-    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_title(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("title").expect(
             "TwoStoriesOneTitle.title is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `story_a` field builder.
-    pub fn property_story_a(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_story_a(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("story_a")
             .expect("TwoStoriesOneTitle.story_a is statically defined in .baml and should always be present")
     }
 
     /// Access the `story_b` field builder.
-    pub fn property_story_b(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_story_b(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("story_b")
             .expect("TwoStoriesOneTitle.story_b is statically defined in .baml and should always be present")
     }
@@ -5124,22 +5124,22 @@ impl TwoStoriesOneTitleClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct TwoStoriesOneTitleCheckClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl TwoStoriesOneTitleCheckClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "TwoStoriesOneTitleCheck is statically defined in .baml and should always have a type",
         )
@@ -5150,19 +5150,19 @@ impl TwoStoriesOneTitleCheckClassBuilder {
     // =========================================================================
 
     /// Access the `title` field builder.
-    pub fn property_title(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_title(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("title")
             .expect("TwoStoriesOneTitleCheck.title is statically defined in .baml and should always be present")
     }
 
     /// Access the `story_a` field builder.
-    pub fn property_story_a(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_story_a(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("story_a")
             .expect("TwoStoriesOneTitleCheck.story_a is statically defined in .baml and should always be present")
     }
 
     /// Access the `story_b` field builder.
-    pub fn property_story_b(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_story_b(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("story_b")
             .expect("TwoStoriesOneTitleCheck.story_b is statically defined in .baml and should always be present")
     }
@@ -5174,22 +5174,22 @@ impl TwoStoriesOneTitleCheckClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct UnionTest_ReturnTypeClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl UnionTest_ReturnTypeClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "UnionTest_ReturnType is statically defined in .baml and should always have a type",
         )
@@ -5200,19 +5200,19 @@ impl UnionTest_ReturnTypeClassBuilder {
     // =========================================================================
 
     /// Access the `prop1` field builder.
-    pub fn property_prop1(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop1(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop1")
             .expect("UnionTest_ReturnType.prop1 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop2` field builder.
-    pub fn property_prop2(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop2(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop2")
             .expect("UnionTest_ReturnType.prop2 is statically defined in .baml and should always be present")
     }
 
     /// Access the `prop3` field builder.
-    pub fn property_prop3(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_prop3(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("prop3")
             .expect("UnionTest_ReturnType.prop3 is statically defined in .baml and should always be present")
     }
@@ -5224,22 +5224,22 @@ impl UnionTest_ReturnTypeClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct UniverseQuestionClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl UniverseQuestionClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("UniverseQuestion is statically defined in .baml and should always have a type")
@@ -5250,14 +5250,14 @@ impl UniverseQuestionClassBuilder {
     // =========================================================================
 
     /// Access the `question` field builder.
-    pub fn property_question(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_question(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("question").expect(
             "UniverseQuestion.question is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `answer` field builder.
-    pub fn property_answer(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_answer(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("answer").expect(
             "UniverseQuestion.answer is statically defined in .baml and should always be present",
         )
@@ -5270,22 +5270,22 @@ impl UniverseQuestionClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct UniverseQuestionInputClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl UniverseQuestionInputClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "UniverseQuestionInput is statically defined in .baml and should always have a type",
         )
@@ -5296,7 +5296,7 @@ impl UniverseQuestionInputClassBuilder {
     // =========================================================================
 
     /// Access the `question` field builder.
-    pub fn property_question(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_question(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("question")
             .expect("UniverseQuestionInput.question is statically defined in .baml and should always be present")
     }
@@ -5308,22 +5308,22 @@ impl UniverseQuestionInputClassBuilder {
 /// Access fields via methods: `builder.field_name()`
 
 pub struct WithReasoningClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl WithReasoningClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("WithReasoning is statically defined in .baml and should always have a type")
@@ -5334,14 +5334,14 @@ impl WithReasoningClassBuilder {
     // =========================================================================
 
     /// Access the `value` field builder.
-    pub fn property_value(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_value(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("value").expect(
             "WithReasoning.value is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `reasoning` field builder.
-    pub fn property_reasoning(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_reasoning(&self) -> ::baml::ClassPropertyBuilder {
         self.inner.get_property("reasoning").expect(
             "WithReasoning.reasoning is statically defined in .baml and should always be present",
         )

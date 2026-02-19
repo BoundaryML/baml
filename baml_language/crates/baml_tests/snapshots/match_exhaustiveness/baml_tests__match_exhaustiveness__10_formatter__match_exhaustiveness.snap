@@ -1,0 +1,949 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+// Test: Match expression exhaustiveness and unreachable arm detection
+class Success {
+    data string
+}
+
+class Failure {
+    reason string
+}
+
+// ============================================================================
+// UNREACHABLE ARM TESTS
+// These test that arms after a catch-all are marked as unreachable
+// ============================================================================
+
+// Unreachable arm: catch-all before typed pattern
+function UnreachableAfterCatchAll(x: int) -> string {
+    match (x) {
+        _ => "catch all",
+        n: int => "never reached",
+    }
+}
+
+// Unreachable arm: multiple arms after catch-all
+function UnreachableMultiple(x: int) -> string {
+    match (x) {
+        _ => "catch all",
+        n: int => "unreachable 1",
+        m: int => "unreachable 2",
+    }
+}
+
+// ============================================================================
+// EXHAUSTIVE WITH CATCH-ALL
+// Catch-all patterns should make the match exhaustive
+// ============================================================================
+
+// Exhaustive: underscore catch-all
+function ExhaustiveWithUnderscore(x: int) -> int {
+    match (x) {
+        1 => 100,
+        2 => 200,
+        _ => 0,
+    }
+}
+
+// Exhaustive: named catch-all (acts same as _)
+function ExhaustiveWithNamedCatchAll(x: int) -> int {
+    match (x) {
+        1 => 100,
+        other => other + 1,
+    }
+}
+
+// ============================================================================
+// GUARDS DON'T CONTRIBUTE TO EXHAUSTIVENESS
+// ============================================================================
+
+// Non-exhaustive: only guarded patterns (guards don't guarantee coverage)
+function GuardedOnlyNonExhaustive(x: int) -> int {
+    match (x) {
+        n: int if n > 0 => n * 2,
+        n: int if n < 0 => n * -1,
+    }
+}
+
+// Exhaustive: guarded patterns followed by unguarded catch-all
+function GuardedWithFallback(x: int) -> int {
+    match (x) {
+        n: int if n > 0 => n * 2,
+        _ => 0,
+    }
+}
+
+// ============================================================================
+// TYPE ALIAS EXPANSION TESTS
+// Type aliases should be expanded to their underlying types for exhaustiveness
+// ============================================================================
+
+type Result = Success | Failure
+
+// Exhaustive: type alias union with all members covered
+function ExhaustiveTypeAlias(r: Result) -> string {
+    match (r) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+    }
+}
+
+// Exhaustive: type alias with catch-all
+function ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
+    match (r) {
+        s: Success => s.data,
+        _ => "fallback",
+    }
+}
+
+// ============================================================================
+// ENUM VARIANT EXHAUSTIVENESS TESTS
+// All enum variants must be covered
+// ============================================================================
+
+enum Status {
+    Active,
+    Inactive,
+    Pending,
+}
+
+// Exhaustive: all enum variants covered
+function ExhaustiveEnumAllVariants(s: Status) -> string {
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+    }
+}
+
+// Exhaustive: enum with catch-all
+function ExhaustiveEnumWithCatchAll(s: Status) -> string {
+    match (s) {
+        Status.Active => "active",
+        _ => "other",
+    }
+}
+
+// ============================================================================
+// LITERAL TYPE EXHAUSTIVENESS TESTS
+// Literal values in unions should be tracked for exhaustiveness
+// ============================================================================
+
+// Exhaustive: typed pattern covering int base type covers all int literals
+function ExhaustiveLiteralWithBaseType(x: int) -> string {
+    match (x) {
+        200 => "ok",
+        n: int => "other",
+    }
+}
+
+// ============================================================================
+// OVERLAPPING PATTERN TESTS (BEP: First-Match Semantics)
+// Overlapping typed patterns are fine - first match wins
+// ============================================================================
+
+// Exhaustive: first pattern covers A, second covers remaining B
+// The second arm SHOULD NOT be flagged as unreachable because it still covers B
+function OverlappingTypedPatterns(r: Result) -> string {
+    match (r) {
+        _: Success => "success",
+        _: Success | Failure => "covers failure only (success already handled)",
+    }
+}
+
+// Exhaustive: similar but with bindings
+function OverlappingWithBindings(r: Result) -> string {
+    match (r) {
+        s: Success => s.data,
+        x: Success | Failure => "remaining",
+    }
+}
+
+// ============================================================================
+// UNION TYPE PATTERN TESTS
+// A pattern like `x: A | B` should cover both A and B types
+// ============================================================================
+
+// Exhaustive: single union pattern covers entire type alias
+function UnionPatternCoversAll(r: Result) -> string {
+    match (r) {
+        x: Success | Failure => "covered",
+    }
+}
+
+class Pending {
+    eta int
+}
+
+type FullResult = Success | Failure | Pending
+
+// Exhaustive: partial union + remaining covered
+function PartialUnionPlusCatchAll(r: FullResult) -> string {
+    match (r) {
+        x: Success | Failure => "success or failure",
+        _: Pending => "pending",
+    }
+}
+
+// ============================================================================
+// LITERAL UNION PATTERN TESTS
+// Union patterns with literals: 200 | 201 | 204
+// ============================================================================
+
+// Exhaustive: literal union with catch-all
+function LiteralUnionWithCatchAll(code: int) -> string {
+    match (code) {
+        200 | 201 => "success",
+        400 | 404 => "client error",
+        _ => "other",
+    }
+}
+
+// ============================================================================
+// ENUM VARIANT UNION PATTERN TESTS
+// Union patterns with enum variants: Status.Active | Status.Pending
+// ============================================================================
+
+// Exhaustive: enum variant union covers subset, remaining covered explicitly
+function EnumVariantUnion(s: Status) -> string {
+    match (s) {
+        Status.Active | Status.Pending => "actionable",
+        Status.Inactive => "inactive",
+    }
+}
+
+// Exhaustive: enum variant union with catch-all
+function EnumVariantUnionWithCatchAll(s: Status) -> string {
+    match (s) {
+        Status.Active | Status.Pending => "actionable",
+        _ => "other",
+    }
+}
+
+// ============================================================================
+// BOOLEAN EXHAUSTIVENESS TESTS
+// true and false together should be exhaustive
+// ============================================================================
+
+// Exhaustive: both boolean values covered
+function ExhaustiveBool(b: bool) -> string {
+    match (b) {
+        true => "yes",
+        false => "no",
+    }
+}
+
+// Exhaustive: boolean with catch-all
+function BoolWithCatchAll(b: bool) -> string {
+    match (b) {
+        true => "yes",
+        _ => "no",
+    }
+}
+
+// Non-exhaustive: only true covered (missing false)
+function NonExhaustiveBoolMissingFalse(b: bool) -> string {
+    match (b) {
+        true => "yes",
+    }
+}
+
+// Non-exhaustive: only false covered (missing true)
+function NonExhaustiveBoolMissingTrue(b: bool) -> string {
+    match (b) {
+        false => "no",
+    }
+}
+
+// Exhaustive: boolean union pattern
+function BoolUnionPattern(b: bool) -> string {
+    match (b) {
+        true | false => "covered",
+    }
+}
+
+// ============================================================================
+// BOOLEAN LITERAL TYPE TESTS (Singleton boolean types)
+// type X = true means only accepts the value true
+// ============================================================================
+
+type AlwaysTrue = true
+type AlwaysFalse = false
+type CustomBool = true | false
+
+// Exhaustive: singleton true type
+function ExhaustiveTrueType(t: AlwaysTrue) -> string {
+    match (t) {
+        true => "always true",
+    }
+}
+
+// Exhaustive: singleton false type
+function ExhaustiveFalseType(f: AlwaysFalse) -> string {
+    match (f) {
+        false => "always false",
+    }
+}
+
+// Exhaustive: custom bool type with both literals
+function ExhaustiveCustomBool(b: CustomBool) -> string {
+    match (b) {
+        true => "yes",
+        false => "no",
+    }
+}
+
+// Non-exhaustive: wrong literal for singleton type
+function NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
+    match (t) {
+        false => "wrong!",
+    }
+}
+
+// Non-exhaustive: custom bool missing one literal
+function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
+    match (b) {
+        true => "yes",
+    }
+}
+
+// ============================================================================
+// OPTIONAL TYPE TESTS
+// Optional types are T | null
+// ============================================================================
+
+// Exhaustive: optional fully covered
+function ExhaustiveOptional(x: int?) -> string {
+    match (x) {
+        n: int => "has value",
+        null => "no value",
+    }
+}
+
+// Exhaustive: optional with catch-all
+function OptionalWithCatchAll(x: int?) -> string {
+    match (x) {
+        null => "no value",
+        _ => "has value",
+    }
+}
+
+// ============================================================================
+// STRING LITERAL TYPE TESTS
+// String literals like "user" | "assistant"
+// ============================================================================
+
+type Role = "user" | "assistant" | "system"
+
+// Exhaustive: string literal union with catch-all
+function StringLiteralWithCatchAll(role: Role) -> string {
+    match (role) {
+        "user" => "User message",
+        "assistant" => "Assistant message",
+        _ => "Other",
+    }
+}
+
+// Exhaustive: all string literals covered
+function ExhaustiveStringLiterals(role: Role) -> string {
+    match (role) {
+        "user" => "User",
+        "assistant" => "Assistant",
+        "system" => "System",
+    }
+}
+
+// Non-exhaustive: missing string literal
+function NonExhaustiveStringLiteral(role: Role) -> string {
+    match (role) {
+        "user" => "User",
+        "assistant" => "Assistant",
+    }
+}
+
+// Exhaustive: string literal union pattern
+function StringLiteralUnionPattern(role: Role) -> string {
+    match (role) {
+        "user" | "assistant" => "chat participant",
+        "system" => "system",
+    }
+}
+
+// ============================================================================
+// INTEGER LITERAL TYPE TESTS
+// Singleton integer types for exhaustiveness
+// ============================================================================
+
+type HttpOk = 200
+type HttpCreated = 201
+type SuccessCode = 200 | 201 | 204
+
+// Exhaustive: singleton int type
+function ExhaustiveSingletonInt(code: HttpOk) -> string {
+    match (code) {
+        200 => "OK",
+    }
+}
+
+// Exhaustive: all int literals in union covered
+function ExhaustiveIntLiterals(code: SuccessCode) -> string {
+    match (code) {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+    }
+}
+
+// Non-exhaustive: missing int literal
+function NonExhaustiveIntLiteral(code: SuccessCode) -> string {
+    match (code) {
+        200 => "OK",
+        201 => "Created",
+    }
+}
+
+// Exhaustive: int literal union pattern
+function IntLiteralUnionPattern(code: SuccessCode) -> string {
+    match (code) {
+        200 | 201 => "success with body",
+        204 => "no content",
+    }
+}
+
+// ============================================================================
+// COMPLEX NESTED TYPE ALIAS TESTS
+// Type aliases that reference other type aliases
+// ============================================================================
+
+type MaybeResult = Result?
+
+// Exhaustive: nested type alias (Result? = Success | Failure | null)
+function NestedTypeAlias(mr: MaybeResult) -> string {
+    match (mr) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+        null => "nothing",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: EMPTY MATCH ON UNINHABITED TYPE
+// An empty match on a type with no values should be fine
+// ============================================================================
+
+// Note: We don't have a way to define uninhabited types in BAML yet,
+// but Ty::Unknown and Ty::Error are treated as uninhabited for error recovery.
+
+// ============================================================================
+// MIXED PATTERN TESTS
+// Combining different pattern types in one match
+// ============================================================================
+
+// Exhaustive: literals, typed patterns, and catch-all together
+function MixedPatterns(x: int) -> string {
+    match (x) {
+        0 => "zero",
+        1 => "one",
+        n: int if n > 0 => "positive",
+        _ => "negative",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: NON-EXHAUSTIVE ENUM TESTS
+// Missing enum variants should be reported
+// ============================================================================
+
+// Non-exhaustive: missing enum variant
+function NonExhaustiveEnumMissingOne(s: Status) -> string {
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+    }
+}
+
+// Non-exhaustive: missing multiple enum variants
+function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
+    match (s) {
+        Status.Active => "active",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: DUPLICATE/REDUNDANT PATTERNS
+// Same pattern appearing multiple times
+// ============================================================================
+
+// Unreachable: duplicate enum variant
+function DuplicateEnumVariant(s: Status) -> string {
+    match (s) {
+        Status.Active => "first",
+        Status.Active => "second",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+    }
+}
+
+// Unreachable: duplicate int literal
+function DuplicateIntLiteral(x: int) -> string {
+    match (x) {
+        1 => "first one",
+        1 => "second one",
+        _ => "other",
+    }
+}
+
+// Unreachable: duplicate boolean literal
+function DuplicateBoolLiteral(b: bool) -> string {
+    match (b) {
+        true => "first true",
+        true => "second true",
+        false => "false",
+    }
+}
+
+// Unreachable: duplicate string literal
+function DuplicateStringLiteral(role: Role) -> string {
+    match (role) {
+        "user" => "first user",
+        "user" => "second user",
+        "assistant" => "assistant",
+        "system" => "system",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: OPTIONAL WITH LITERAL TYPES
+// Optional of literal types
+// ============================================================================
+
+type MaybeOk = 200?
+
+// Exhaustive: optional singleton int
+function ExhaustiveOptionalSingleton(code: MaybeOk) -> string {
+    match (code) {
+        200 => "OK",
+        null => "no code",
+    }
+}
+
+// Non-exhaustive: optional singleton missing null
+function NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
+    match (code) {
+        200 => "OK",
+    }
+}
+
+// Non-exhaustive: optional singleton missing value
+function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
+    match (code) {
+        null => "no code",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: MIXED LITERAL TYPES IN UNION
+// Union of different literal types
+// ============================================================================
+
+type MixedLiterals = 200 | "success" | true
+
+// Exhaustive: all mixed literals covered
+function ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+    match (x) {
+        200 => "http ok",
+        "success" => "string success",
+        true => "boolean true",
+    }
+}
+
+// Non-exhaustive: missing one from mixed literals
+function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+    match (x) {
+        200 => "http ok",
+        "success" => "string success",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: TYPE ALIAS REFERENCING LITERAL TYPE
+// Type alias chain with literal types
+// ============================================================================
+
+type OkCode = 200
+type OkOrCreated = OkCode | 201
+
+// Exhaustive: type alias of literals
+function ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
+    match (code) {
+        200 => "ok",
+        201 => "created",
+    }
+}
+
+// Non-exhaustive: type alias of literals missing one
+function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
+    match (code) {
+        200 => "ok",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: DEEPLY NESTED OPTIONAL
+// Optional of optional (T??)
+// ============================================================================
+
+type DoubleMaybe = MaybeResult?
+
+// Exhaustive: double optional (Result?? should be Success | Failure | null)
+// Note: T?? typically flattens to T? since (T | null) | null = T | null
+function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
+    match (dm) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+        null => "nothing",
+    }
+}
+
+// Non-exhaustive: double optional missing null
+function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
+    match (dm) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+    }
+}
+
+// ============================================================================
+// EDGE CASE: NON-EXHAUSTIVE TYPE ALIAS UNION
+// Missing one member from type alias union
+// ============================================================================
+
+// Non-exhaustive: type alias missing one member
+function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
+    match (r) {
+        s: Success => s.data,
+    }
+}
+
+// Non-exhaustive: FullResult (3 members) missing one
+function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
+    match (r) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+    }
+}
+
+// ============================================================================
+// EDGE CASE: STRING LITERAL AFTER STRING TYPE PATTERN
+// Typed string pattern should subsume all string literals
+// ============================================================================
+
+// Unreachable: string literal after string type pattern
+function StringLiteralAfterStringType(s: string) -> string {
+    match (s) {
+        x: string => "any string",
+        "hello" => "unreachable",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: NULLABLE ENUM
+// Enum type with optional (Status?)
+// ============================================================================
+
+// Exhaustive: nullable enum with all variants + null
+function ExhaustiveNullableEnum(s: Status?) -> string {
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+        null => "no status",
+    }
+}
+
+// Exhaustive: nullable enum with typed pattern + null
+function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
+    match (s) {
+        x: Status => "some status",
+        null => "no status",
+    }
+}
+
+// Non-exhaustive: nullable enum missing null
+function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+    }
+}
+
+// Non-exhaustive: nullable enum missing variant
+function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        null => "no status",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: CLASS + LITERAL MIXED UNION
+// Union of class type and literal type
+// ============================================================================
+
+type SuccessOr200 = Success | 200
+
+// Exhaustive: class + int literal union
+function ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
+    match (x) {
+        s: Success => s.data,
+        200 => "http ok",
+    }
+}
+
+// Non-exhaustive: class + int literal union missing literal
+function NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
+    match (x) {
+        s: Success => s.data,
+    }
+}
+
+// Non-exhaustive: class + int literal union missing class
+function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
+    match (x) {
+        200 => "http ok",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: TYPED PATTERN COVERING ENTIRE ENUM
+// _: Status should cover all Status variants
+// ============================================================================
+
+// Exhaustive: typed pattern covers all enum variants
+function ExhaustiveEnumWithTypedPattern(s: Status) -> string {
+    match (s) {
+        x: Status => "any status",
+    }
+}
+
+// Unreachable: variant after typed enum pattern
+function EnumVariantAfterTypedEnum(s: Status) -> string {
+    match (s) {
+        x: Status => "any status",
+        Status.Active => "unreachable",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: WRONG TYPE LITERAL FOR SCRUTINEE
+// Matching wrong literal type against scrutinee
+// ============================================================================
+
+// Non-exhaustive: int literal pattern on bool scrutinee (type mismatch)
+// The literal 42 should NOT cover the bool type
+function WrongLiteralTypeBoolWithInt(b: bool) -> string {
+    match (b) {
+        42 => "wrong type",
+    }
+}
+
+// Non-exhaustive: string literal on int scrutinee
+function WrongLiteralTypeIntWithString(x: int) -> string {
+    match (x) {
+        "hello" => "wrong type",
+    }
+}
+
+// ============================================================================
+// EDGE CASE: PARTIAL COVERAGE WITH UNION PATTERNS
+// Union pattern that only partially covers
+// ============================================================================
+
+// Non-exhaustive: union pattern missing one from 3-member union
+function PartialUnionPatternCoverage(r: FullResult) -> string {
+    match (r) {
+        x: Success | Failure => "not pending",
+    }
+}
+
+// ============================================================================
+// NOTE: ENUM VARIANT TYPES NOT SUPPORTED
+// Per BEP-002: "Enum variants like `Status.Active` are VALUES, not types."
+// So `type X = Status.Active | Status.Pending` is intentionally NOT valid syntax.
+// Use the full enum type and match on specific variants instead.
+// ============================================================================
+
+// ============================================================================
+// EDGE CASE: TYPED PATTERN SUBSUMES LITERALS
+// Typed pattern like n: int covers all int literals
+// ============================================================================
+
+// Unreachable: literal after typed pattern
+function LiteralAfterTypedPattern(x: int) -> string {
+    match (x) {
+        n: int => "int",
+        42 => "unreachable",
+    }
+}
+
+// Unreachable: bool literal after typed bool pattern
+function BoolLiteralAfterTypedBool(b: bool) -> string {
+    match (b) {
+        x: bool => "any bool",
+        true => "unreachable",
+    }
+}
+
+// ============================================================================
+// NESTED UNION PATTERN TESTS
+// Parenthesized groups in union patterns should flatten correctly
+// Union associativity: (A | B) | C = A | (B | C) = A | B | C
+// ============================================================================
+
+// Exhaustive: nested type bindings with parenthesized union types
+function NestedTypeBindings(r: Result) -> int {
+    match (r) {
+        s: Success | (Failure) => 0,
+        f: Failure => 1,
+    }
+}
+
+// Exhaustive: nested literal unions with catch-all
+function NestedLiteralUnions(code: int) -> string {
+    match (code) {
+        200 | 201 | (202 | 204) => "success",
+        400 | 404 | (405 | (406 | 409)) => "client error",
+        _ => "other",
+    }
+}
+
+// Exhaustive: deeply nested literal unions covering all SuccessCode values
+function DeeplyNestedLiterals(x: SuccessCode) -> string {
+    match (x) {
+        (200 | 201) | 204 => "all success codes",
+    }
+}
+
+// Exhaustive: parenthesized single literal (degenerate case)
+function ParenthesizedSingleLiteral(b: bool) -> string {
+    match (b) {
+        (true) => "yes",
+        (false) => "no",
+    }
+}
+
+// Exhaustive: nested enum variant unions
+function NestedEnumVariantUnions(s: Status) -> string {
+    match (s) {
+        (Status.Active | Status.Pending) | Status.Inactive => "all statuses",
+    }
+}
+
+// ============================================================================
+// ERROR SPAN VERIFICATION TESTS
+// These tests verify that error messages point to accurate source locations.
+// Each test is designed to produce errors at specific, verifiable line numbers.
+// ============================================================================
+
+// Span test: Nested match with unreachable arm in inner match
+// The error should point to the exact line of the unreachable arm inside the nested match
+function NestedMatchSpans(x: int, y: bool) -> string {
+    match (x) {
+        0 => match (y) {
+            true => "zero true",
+            false => "zero false",
+            true => "unreachable nested",
+        },
+        _ => "other",
+    }
+}
+
+// Span test: Multiple unreachable arms in the same match
+// Each unreachable arm should get its own error with correct span
+function MultipleUnreachableSpans(s: Status) -> string {
+    match (s) {
+        Status.Active => "active",
+        Status.Active => "duplicate 1",
+        Status.Inactive => "inactive",
+        Status.Active => "duplicate 2",
+        Status.Pending => "pending",
+    }
+}
+
+// Span test: Non-exhaustive match at high line number
+// Verifies spans work correctly for code late in the file (line ~880)
+function HighLineNumberNonExhaustive(s: Status) -> string {
+    match (s) {
+        Status.Active => "active only",
+    }
+}
+
+// ============================================================================
+// Complex Scrutinee Tests
+// ============================================================================
+
+// Test: Match with function call as scrutinee
+function GetStatus() -> Status {
+    Status.Active
+}
+
+function MatchFunctionCallScrutinee() -> string {
+    match (GetStatus()) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+    }
+}
+
+// Test: Match with arithmetic expression as scrutinee
+function MatchArithmeticScrutinee(a: int, b: int) -> string {
+    match (a + b) {
+        0 => "zero",
+        1 => "one",
+        _ => "other",
+    }
+}
+
+// Test: Match with complex expression as scrutinee
+function MatchComplexScrutinee(x: int) -> string {
+    match (x * 2 + 1) {
+        1 => "x was 0",
+        3 => "x was 1",
+        _ => "other",
+    }
+}
+
+// ============================================================================
+// Deeply Nested Match Tests
+// ============================================================================
+
+// Test: Three levels of nested match expressions
+function ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
+    match (x) {
+        0 => match (y) {
+            0 => match (z) {
+                0 => "all zero",
+                _ => "z nonzero",
+            },
+            _ => "y nonzero",
+        },
+        _ => "x nonzero",
+    }
+}
+
+// Test: Nested match with enum scrutinee at each level
+function NestedEnumMatch(s1: Status, s2: Status) -> string {
+    match (s1) {
+        Status.Active => match (s2) {
+            Status.Active => "both active",
+            Status.Inactive => "first active, second inactive",
+            Status.Pending => "first active, second pending",
+        },
+        Status.Inactive => "first inactive",
+        Status.Pending => "first pending",
+    }
+}

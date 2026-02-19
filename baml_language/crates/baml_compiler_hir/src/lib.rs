@@ -33,6 +33,7 @@ mod ids;
 mod item_tree;
 mod loc;
 mod path;
+pub mod path_resolve;
 pub mod pretty;
 pub mod reserved_names;
 mod signature;
@@ -290,15 +291,15 @@ pub const BUILTIN_PATH_PREFIX: &str = "<builtin>/";
 /// # Examples
 ///
 /// ```ignore
-/// // Builtin file
+/// // Builtin file "<builtin>/baml/llm.baml"
 /// let ns = file_namespace(db, builtin_llm_file);
-/// assert_eq!(ns, Some(vec![Name::new("baml"), Name::new("llm")]));
+/// assert_eq!(ns, Some(Namespace::BamlStd { path: vec![Name::new("llm")] }));
 ///
 /// // User file
 /// let ns = file_namespace(db, user_file);
 /// assert_eq!(ns, None);
 /// ```
-pub fn file_namespace(db: &dyn Db, file: SourceFile) -> Option<Vec<Name>> {
+pub fn file_namespace(db: &dyn Db, file: SourceFile) -> Option<Namespace> {
     let path = file.path(db);
     let path_str = path.to_string_lossy();
 
@@ -314,9 +315,19 @@ pub fn file_namespace(db: &dyn Db, file: SourceFile) -> Option<Vec<Name>> {
     let segments: Vec<Name> = without_ext.split('/').map(Name::new).collect();
 
     if segments.is_empty() {
-        None
+        return None;
+    }
+
+    // Builtin files under "baml/" get BamlStd namespace with "baml" prefix stripped.
+    // E.g., ["baml", "llm"] -> BamlStd { path: ["llm"] }
+    if segments.first().is_some_and(|s| s.as_str() == "baml") {
+        Some(Namespace::BamlStd {
+            path: segments[1..].to_vec(),
+        })
     } else {
-        Some(segments)
+        Some(Namespace::UserModule {
+            module_path: segments,
+        })
     }
 }
 
@@ -341,28 +352,60 @@ pub fn function_qualified_name<'db>(db: &'db dyn Db, function: FunctionLoc<'db>)
     let file = function.file(db);
     let signature = function_signature(db, function);
 
-    match file_namespace(db, file) {
-        None => {
-            // Regular user file - local namespace
-            QualifiedName::local(signature.name.clone())
-        }
-        Some(namespace_segments) => {
-            // Builtin file - use BamlStd namespace
-            // namespace_segments is like ["baml", "llm"]
-            // We want BamlStd { path: ["llm"] } for "baml.llm.render_prompt"
-            if namespace_segments
-                .first()
-                .is_some_and(|s| s.as_str() == "baml")
-            {
-                // Strip the "baml" prefix - it's implicit in BamlStd
-                let path = namespace_segments[1..].to_vec();
-                QualifiedName::baml_std(path, signature.name.clone())
-            } else {
-                // Non-baml namespace (future use)
-                QualifiedName::user_module(namespace_segments, signature.name.clone())
-            }
-        }
+    let namespace = file_namespace(db, file).unwrap_or(Namespace::Local);
+    QualifiedName {
+        namespace,
+        name: signature.name.clone(),
     }
+}
+
+/// Returns the qualified name of a class.
+///
+/// Mirrors `function_qualified_name` — classes in builtin BAML files
+/// get `baml.llm.*` names, user classes get local names.
+#[salsa::tracked]
+pub fn class_qualified_name<'db>(db: &'db dyn Db, class: ClassLoc<'db>) -> QualifiedName {
+    let file = class.file(db);
+    let item_tree = file_item_tree(db, file);
+    let class_def = &item_tree[class.id(db)];
+
+    let namespace = file_namespace(db, file).unwrap_or(Namespace::Local);
+    QualifiedName {
+        namespace,
+        name: class_def.name.clone(),
+    }
+}
+
+/// Returns the qualified name of an enum.
+///
+/// Mirrors `class_qualified_name` — enums in builtin BAML files
+/// get `baml.llm.*` names, user enums get local names.
+#[salsa::tracked]
+pub fn enum_qualified_name<'db>(db: &'db dyn Db, enum_loc: EnumLoc<'db>) -> QualifiedName {
+    let file = enum_loc.file(db);
+    let item_tree = file_item_tree(db, file);
+    let enum_def = &item_tree[enum_loc.id(db)];
+
+    let namespace = file_namespace(db, file).unwrap_or(Namespace::Local);
+    QualifiedName {
+        namespace,
+        name: enum_def.name.clone(),
+    }
+}
+
+/// Returns the set of variant names for an enum.
+///
+/// Per-enum Salsa query — only invalidated when that enum's file changes.
+/// Used by path resolution so that modifying one enum doesn't force
+/// re-resolution of paths involving other enums.
+#[salsa::tracked(returns(ref))]
+pub fn enum_variant_names<'db>(
+    db: &'db dyn Db,
+    enum_loc: EnumLoc<'db>,
+) -> rustc_hash::FxHashSet<Name> {
+    let item_tree = file_item_tree(db, enum_loc.file(db));
+    let enum_data = &item_tree[enum_loc.id(db)];
+    enum_data.variants.iter().map(|v| v.name.clone()).collect()
 }
 
 /// Internal helper that computes both signature and source map together.
@@ -429,7 +472,13 @@ fn function_signature_with_source_map<'db>(
                 let qualified_method_name =
                     QualifiedName::local_method_from_str(class_name_text, method_name.text());
                 if qualified_method_name.as_str() == func_name.as_str() {
-                    Some(lower_method_signature(&method, &func_name, class_name_text))
+                    let namespace = file_namespace(db, file).unwrap_or(baml_base::Namespace::Local);
+                    let self_type_name = baml_base::QualifiedName {
+                        namespace,
+                        name: Name::new(class_name_text),
+                    }
+                    .display_name();
+                    Some(lower_method_signature(&method, &func_name, &self_type_name))
                 } else {
                     None
                 }
@@ -445,7 +494,7 @@ fn function_signature_with_source_map<'db>(
 fn lower_method_signature(
     method_node: &baml_compiler_syntax::ast::FunctionDef,
     method_name: &Name,
-    class_name: &str,
+    self_type_name: &Name,
 ) -> (Arc<FunctionSignature>, SignatureSourceMap) {
     let mut source_map = SignatureSourceMap::new();
 
@@ -458,7 +507,7 @@ fn lower_method_signature(
                 let type_node = param_node.ty();
                 let type_ref = if param_name == "self" {
                     // 'self' gets the class type
-                    TypeRef::named(class_name.into())
+                    TypeRef::named(self_type_name.clone())
                 } else {
                     type_node
                         .as_ref()
@@ -1057,6 +1106,11 @@ pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(S
 /// Can't we keep a hash map from `FunctionLoc` to `FunctionBody`?
 #[salsa::tracked]
 pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<FunctionBody> {
+    Arc::new(build_function_body(db, function))
+}
+
+/// Build a function body (pure syntactic lowering, no name resolution).
+fn build_function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> FunctionBody {
     let file = function.file(db);
     let item_tree = file_item_tree(db, file);
     let func = &item_tree[function.id(db)];
@@ -1128,7 +1182,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
                                 &default_role,
                                 &allowed_roles,
                             );
-                        return Arc::new(FunctionBody::Expr(body, source_map));
+                        return FunctionBody::Expr(body, source_map);
                     }
                 }
             }
@@ -1141,7 +1195,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
                 &default_role,
                 &allowed_roles,
             );
-            return Arc::new(FunctionBody::Expr(body, source_map));
+            return FunctionBody::Expr(body, source_map);
         }
     }
 
@@ -1155,7 +1209,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
         let param_names: Vec<Name> = sig.params.iter().map(|p| p.name.clone()).collect();
         let (expr_body, source_map) =
             body::lower_llm_to_call_llm_function(func_name.as_str(), &param_names);
-        return Arc::new(FunctionBody::Expr(expr_body, source_map));
+        return FunctionBody::Expr(expr_body, source_map);
     }
 
     // Regular function - find it in the source file
@@ -1192,9 +1246,7 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
 
     // Lower the function with file_id for span tracking.
     let file_id = file.file_id(db);
-    function_def.map_or(Arc::new(FunctionBody::Missing), |f| {
-        FunctionBody::lower(&f, file_id)
-    })
+    function_def.map_or(FunctionBody::Missing, |f| FunctionBody::lower(&f, file_id))
 }
 
 /// Returns `true` if this function is an LLM function (has `CompilerGenerated::LlmFunction` marker).
@@ -1427,6 +1479,14 @@ fn intern_all_items<'db>(db: &'db dyn Db, file: SourceFile, tree: &ItemTree) -> 
         items.push(ItemId::TemplateString(loc));
     }
 
+    // Intern retry policies
+    let mut retry_policies: Vec<_> = tree.retry_policies.keys().copied().collect();
+    retry_policies.sort_by_key(|id| id.as_u32());
+    for local_id in retry_policies {
+        let loc = RetryPolicyLoc::new(db, file, local_id);
+        items.push(ItemId::RetryPolicy(loc));
+    }
+
     items
 }
 
@@ -1535,6 +1595,11 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
         SyntaxKind::TEMPLATE_STRING_DEF => {
             if let Some(ts) = lower_template_string(node) {
                 tree.alloc_template_string(ts);
+            }
+        }
+        SyntaxKind::RETRY_POLICY_DEF => {
+            if let Some(rp) = lower_retry_policy(node) {
+                tree.alloc_retry_policy(rp);
             }
         }
         SyntaxKind::LET_STMT => {
@@ -2061,6 +2126,79 @@ fn lower_template_string(node: &SyntaxNode) -> Option<item_tree::TemplateString>
     Some(item_tree::TemplateString { name })
 }
 
+/// Extract retry policy from CST.
+fn lower_retry_policy(node: &SyntaxNode) -> Option<item_tree::RetryPolicy> {
+    use baml_compiler_syntax::ast::RetryPolicyDef;
+
+    let rp = RetryPolicyDef::cast(node.clone())?;
+    let name = rp.name()?.text().into();
+
+    let mut max_retries = None;
+    let mut initial_delay_ms = None;
+    let mut multiplier = None;
+    let mut max_delay_ms = None;
+
+    if let Some(config_block) = rp.config_block() {
+        // Extract max_retries from the top-level config block
+        if let Some(item) = config_block.items().find(|i| i.matches_key("max_retries")) {
+            max_retries = item.value_int().map(|v| v.to_string());
+        }
+
+        // Extract delay/multiplier/max_delay fields from either:
+        // 1. A `strategy` sub-block (traditional syntax):
+        //      strategy { type exponential_backoff  delay_ms 100  multiplier 2 }
+        // 2. Top-level config keys (flat syntax):
+        //      initial_delay_ms 100  multiplier 2  max_delay_ms 1000
+        if let Some(strategy_item) = config_block.items().find(|i| i.matches_key("strategy")) {
+            if let Some(strategy_block) = strategy_item.nested_block() {
+                for item in strategy_block.items() {
+                    let Some(key) = item.key() else { continue };
+                    match key.text() {
+                        "delay_ms" => {
+                            initial_delay_ms = item.value_int().map(|v| v.to_string());
+                        }
+                        "multiplier" => {
+                            // multiplier can be a float, so use value_str
+                            multiplier = item.value_str();
+                        }
+                        "max_delay_ms" => {
+                            max_delay_ms = item.value_int().map(|v| v.to_string());
+                        }
+                        _ => {
+                            // Ignore unknown fields like "type" for now
+                        }
+                    }
+                }
+            }
+        } else {
+            // Flat syntax: delay fields at top level
+            for item in config_block.items() {
+                let Some(key) = item.key() else { continue };
+                match key.text() {
+                    "initial_delay_ms" | "delay_ms" => {
+                        initial_delay_ms = item.value_int().map(|v| v.to_string());
+                    }
+                    "multiplier" => {
+                        multiplier = item.value_str();
+                    }
+                    "max_delay_ms" => {
+                        max_delay_ms = item.value_int().map(|v| v.to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    Some(item_tree::RetryPolicy {
+        name,
+        max_retries,
+        initial_delay_ms,
+        multiplier,
+        max_delay_ms,
+    })
+}
+
 /// Extract type alias from CST.
 pub(crate) fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     use baml_compiler_syntax::ast::TypeAliasDef;
@@ -2112,7 +2250,8 @@ pub struct HirValidationResult {
 /// - Reserved name validation (field names that are keywords in target languages)
 /// - Field name matches type name validation (Python-specific)
 pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidationResult {
-    let hir_diagnostics = validate_reserved_names(db, root);
+    let mut hir_diagnostics = validate_reserved_names(db, root);
+    hir_diagnostics.extend(validate_retry_policy_refs(db, root));
     let mut name_errors = validate_duplicate_names(db, root);
     name_errors.extend(validate_test_functions(db, root));
 
@@ -2120,6 +2259,49 @@ pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidation
         hir_diagnostics,
         name_errors,
     }
+}
+
+/// Validate that retry policy references in clients point to existing policies.
+fn validate_retry_policy_refs(db: &dyn Db, root: baml_workspace::Project) -> Vec<HirDiagnostic> {
+    // Collect all retry policy names across all files.
+    let mut known_policies: rustc_hash::FxHashSet<Name> = rustc_hash::FxHashSet::default();
+    for file in root.files(db) {
+        let item_tree = file_item_tree(db, *file);
+        let items_struct = file_items(db, *file);
+        for item in items_struct.items(db) {
+            if let ItemId::RetryPolicy(rp_loc) = item {
+                let rp = &item_tree[rp_loc.id(db)];
+                known_policies.insert(rp.name.clone());
+            }
+        }
+    }
+
+    // Check each client's retry_policy_name against the known set.
+    let mut errors = Vec::new();
+    for file in root.files(db) {
+        let item_tree = file_item_tree(db, *file);
+        let items_struct = file_items(db, *file);
+        let file_id = file.file_id(db);
+        for item in items_struct.items(db) {
+            if let ItemId::Client(client_loc) = item {
+                let client = &item_tree[client_loc.id(db)];
+                if let Some(ref policy_name) = client.retry_policy_name {
+                    if !known_policies.contains(policy_name) {
+                        let span = client
+                            .retry_policy_span
+                            .map(|range| Span::new(file_id, range))
+                            .unwrap_or_else(|| Span::new(file_id, TextRange::empty(0.into())));
+                        errors.push(HirDiagnostic::UnknownRetryPolicy {
+                            client_name: client.name.to_string(),
+                            policy_name: policy_name.to_string(),
+                            span,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    errors
 }
 
 fn validate_test_functions(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
@@ -2158,20 +2340,12 @@ fn validate_test_functions(db: &dyn Db, root: baml_workspace::Project) -> Vec<Na
 /// targeting the same function are considered duplicates.
 fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<NameError> {
     fn item_name_key(db: &dyn Db, file: SourceFile, name: &Name) -> Name {
-        match file_namespace(db, file) {
-            None => name.clone(),
-            Some(namespace_segments) => {
-                if namespace_segments
-                    .first()
-                    .is_some_and(|s| s.as_str() == "baml")
-                {
-                    let path = namespace_segments[1..].to_vec();
-                    QualifiedName::baml_std(path, name.clone()).display_name()
-                } else {
-                    QualifiedName::user_module(namespace_segments, name.clone()).display_name()
-                }
-            }
+        let namespace = file_namespace(db, file).unwrap_or(Namespace::Local);
+        QualifiedName {
+            namespace,
+            name: name.clone(),
         }
+        .display_name()
     }
 
     let items = project_items(db, root);
@@ -2322,6 +2496,23 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                     span,
                     path,
                 );
+            }
+            ItemId::RetryPolicy(loc) => {
+                let file = loc.file(db);
+                let item_tree = file_item_tree(db, file);
+                let local_id = loc.id(db);
+                let rp = &item_tree[local_id];
+                let name_key = item_name_key(db, file, &rp.name);
+                let span = get_item_name_span(
+                    db,
+                    file,
+                    "retry_policy",
+                    rp.name.as_str(),
+                    local_id.index(),
+                )
+                .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                let path = file.path(db).display().to_string();
+                check_duplicate(&mut seen, &mut errors, name_key, "retry_policy", span, path);
             }
         }
     }

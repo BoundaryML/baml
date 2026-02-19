@@ -17,6 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_fmt = { workspace = true }
 baml_lsp_server = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true, features = [ "color", "env" ] }

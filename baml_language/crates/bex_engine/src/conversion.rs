@@ -6,6 +6,7 @@
 
 use baml_type::Literal;
 use bex_external_types::{BexExternalAdt, BexExternalValue, EpochGuard, Ty, UnionMetadata};
+use bex_heap::BexValue;
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, Value};
 
@@ -62,14 +63,11 @@ impl BexEngine {
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Array(arr) => {
-                // Get element type from declared type
+                // Get element type from declared type, falling back to Null when
+                // the declared type doesn't resolve (e.g., builtin class arrays)
                 let element_type = match effective_type {
                     Ty::List(elem_ty) => elem_ty.as_ref(),
-                    other => {
-                        return Err(EngineError::TypeMismatch {
-                            message: format!("VM has Array but declared type is {other:?}"),
-                        });
-                    }
+                    _ => &Ty::Null,
                 };
 
                 let items: Result<Vec<_>, _> = arr
@@ -83,14 +81,11 @@ impl BexEngine {
             }
 
             Object::Map(map) => {
-                // Get key and value types from declared type
+                // Get key and value types from declared type, falling back to
+                // Null when the declared type doesn't resolve
                 let (key_type, value_type) = match effective_type {
                     Ty::Map { key, value } => (key.as_ref(), value.as_ref()),
-                    other => {
-                        return Err(EngineError::TypeMismatch {
-                            message: format!("VM has Map but declared type is {other:?}"),
-                        });
-                    }
+                    _ => (&Ty::String, &Ty::Null),
                 };
 
                 let entries: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
@@ -192,6 +187,8 @@ impl BexEngine {
             Object::PromptAst(ast) => Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(
                 ast.clone(),
             ))),
+            Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
+            Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -263,14 +260,33 @@ impl BexEngine {
                 }
                 vm.alloc_instance(*class_ptr, values)
             }
-            BexExternalValue::Variant { .. } => {
-                panic!("Unexpected Variant from sys op")
+            BexExternalValue::Variant {
+                enum_name,
+                variant_name,
+            } => {
+                let enum_ptr = self.resolved_enum_names.get(&enum_name).unwrap_or_else(|| {
+                    panic!("Enum '{enum_name}' not found in resolved_enum_names")
+                });
+                #[allow(unsafe_code)]
+                let bex_vm_types::Object::Enum(enum_obj) = (unsafe { enum_ptr.get() }) else {
+                    panic!("Expected Object::Enum for '{enum_name}'");
+                };
+                let index = enum_obj
+                    .variants
+                    .iter()
+                    .position(|v| v.name == variant_name)
+                    .unwrap_or_else(|| {
+                        panic!("Variant '{variant_name}' not found in enum '{enum_name}'")
+                    });
+                vm.alloc_variant(*enum_ptr, index)
             }
             BexExternalValue::Union { value, .. } => {
                 self.convert_external_to_vm_value(vm, *value, guard)
             }
             BexExternalValue::Adt(BexExternalAdt::Media(media)) => vm.alloc_media(media),
             BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => vm.alloc_prompt_ast(ast),
+            BexExternalValue::Adt(BexExternalAdt::Collector(c)) => vm.alloc_collector(c),
+            BexExternalValue::Adt(BexExternalAdt::Type(ty)) => vm.alloc_type(ty),
             BexExternalValue::FunctionRef { global_index } => {
                 let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
                 assert!(
@@ -300,6 +316,32 @@ impl BexEngine {
                 let handle = self.heap.create_handle(*ptr);
                 BexExternalValue::Handle(handle)
             }
+        }
+    }
+
+    /// Convert a VM value to a fully owned `BexExternalValue` (deep copy).
+    ///
+    /// Unlike `vm_arg_to_bex_value` which creates `Handle` references for objects,
+    /// this method deep-copies heap objects into standalone values. Use this for
+    /// trace event payloads that escape the engine scope (e.g. event collectors).
+    pub(crate) fn vm_value_to_owned(&self, value: &Value) -> BexExternalValue {
+        match value {
+            Value::Null => BexExternalValue::Null,
+            Value::Int(i) => BexExternalValue::Int(*i),
+            Value::Float(f) => BexExternalValue::Float(*f),
+            Value::Bool(b) => BexExternalValue::Bool(*b),
+            Value::Object(ptr) => self
+                .heap
+                .with_gc_protection(|protected| {
+                    BexValue::HeapPtr(ptr).as_owned_but_very_slow(&protected)
+                })
+                .unwrap_or_else(|_| {
+                    #[allow(clippy::print_stderr)]
+                    {
+                        eprintln!("Failed to deep-copy VM value for trace payload");
+                    }
+                    BexExternalValue::Null
+                }),
         }
     }
 
@@ -386,7 +428,17 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
             enum_name.as_str() == tn.display_name.as_str()
         }
         (BexExternalValue::Adt(BexExternalAdt::Media(_)), Ty::Media(_)) => true,
-        (BexExternalValue::Adt(BexExternalAdt::PromptAst(_)), Ty::PromptAst) => true,
+        (BexExternalValue::Adt(BexExternalAdt::PromptAst(_)), ty)
+            if ty.is_opaque("baml.llm.PromptAst") =>
+        {
+            true
+        }
+        (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
+        (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
+            if ty.is_opaque("baml.reflect.Type") =>
+        {
+            true
+        }
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         // Handle nested unions/optionals in the type
         (value, Ty::Union(members)) => members.iter().any(|m| value_matches_type(value, m)),
@@ -465,7 +517,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                 }
                 Object::Map(_) => members.iter().find(|m| matches!(m, Ty::Map { .. })),
                 Object::Media(_) => members.iter().find(|m| matches!(m, Ty::Media(_))),
-                Object::PromptAst(_) => members.iter().find(|m| matches!(m, Ty::PromptAst)),
+                Object::PromptAst(_) => members.iter().find(|m| m.is_opaque("baml.llm.PromptAst")),
                 _ => None,
             }
         }

@@ -1,0 +1,35 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+// Deeply nested type references
+class Level5 {
+    value string
+}
+
+class Level4 {
+    field Level5
+}
+
+class Level3 {
+    field Level4
+}
+
+class Level2 {
+    field Level3
+}
+
+class Level1 {
+    field Level2
+}
+
+// Deeply nested expressions
+function DeepExpression() -> int {
+    return ((((((((((1 + 2) * 3) - 4) / 5) + 6) * 7) - 8) / 9) + 10));
+}
+
+// Deeply nested type expression
+function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+    // Type with deep generic nesting
+    return {  };
+}

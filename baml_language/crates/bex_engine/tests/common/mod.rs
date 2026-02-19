@@ -73,7 +73,9 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     let engine =
         BexEngine::new(snapshot, sys_types::SysOps::native()).expect("Failed to create engine");
 
-    let result = engine.call_function(input.entry, input.inputs).await;
+    let result = engine
+        .call_function(input.entry, input.inputs, None, &[])
+        .await;
 
     match (result, input.expected) {
         (Ok(value), Ok(expected)) => {

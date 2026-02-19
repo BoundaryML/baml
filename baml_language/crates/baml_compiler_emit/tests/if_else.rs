@@ -511,7 +511,7 @@ fn parenthesized_if_else_in_arithmetic() -> anyhow::Result<()> {
             // Phi-like optimization: second if-else result stays on stack.
             // First if-else (_1) needs Store/Load because second if-else is computed before use.
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
@@ -547,7 +547,7 @@ fn chained_if_else_in_arithmetic() -> anyhow::Result<()> {
             // Phi-like optimization: second if-else result stays on stack.
             // First if-else (_1) needs Store/Load because second if-else is computed before use.
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(4),
@@ -616,7 +616,7 @@ fn if_without_else_statement() -> anyhow::Result<()> {
             // Stackification with fall-through elimination:
             // if-without-else is void - no temporary needed
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
@@ -650,7 +650,7 @@ fn if_without_else_with_local_var() -> anyhow::Result<()> {
             "main",
             // 'result' is Virtual (single-use, inlined as 0). 'temp' is Real (assigned but unused):
             vec![
-                Instruction::LoadConst(Value::Null), // Pre-allocate for 'temp'
+                Instruction::InitLocals(1), // Pre-allocate for 'temp'
                 Instruction::LoadConst(Value::Bool(true)),
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(2),
@@ -707,7 +707,7 @@ fn consecutive_if_without_else() -> anyhow::Result<()> {
             // Stackification with fall-through elimination:
             // Both if-without-else are void - no temporaries needed
             vec![
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("x".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
@@ -821,8 +821,7 @@ fn if_else_normal_statement() -> anyhow::Result<()> {
             // Only unused user-named variables (x in else, y in then) need slots
             vec![
                 // Pre-allocate 2 slots for unused user-named variables
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(2),
                 // Check condition b
                 Instruction::LoadVar("b".to_string()),
                 Instruction::PopJumpIfFalse(2),
@@ -910,7 +909,7 @@ fn else_if_assignment() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate result
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 // Check condition a
                 Instruction::LoadVar("a".to_string()),
                 Instruction::PopJumpIfFalse(2),
@@ -963,7 +962,7 @@ fn else_if_assignment_with_locals() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate result
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 // Check condition a
                 Instruction::LoadVar("a".to_string()),
                 Instruction::PopJumpIfFalse(2),
@@ -1017,7 +1016,7 @@ fn nested_block_expr_with_ending_normal_if() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate a
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(1),
                 // a = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),

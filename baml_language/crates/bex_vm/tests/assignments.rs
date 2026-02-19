@@ -1,6 +1,9 @@
 //! VM tests for field assignments and complex assignment scenarios.
 
-use baml_tests::bytecode::{ExecState, Program, Value, assert_vm_executes};
+use baml_tests::bytecode::{
+    ExecState, FailingProgram, Program, Value, assert_vm_executes, assert_vm_fails,
+};
+use bex_vm::RuntimeError;
 
 // Block expressions
 #[test]
@@ -53,6 +56,121 @@ fn mutable_param() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: ExecState::Complete(Value::Int(3)),
+    })
+}
+
+// Regression: Virtual inlining must not re-evaluate rvalue when a dependency
+// is modified in an intermediate block between def and use.
+#[test]
+fn virtual_cross_block_soundness() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main(c: bool) -> int {
+                let a = 1;
+                let b = a;
+                if (c) {
+                    a = 2;
+                }
+                b
+            }
+
+            function entry() -> int {
+                main(true)
+            }
+        "#,
+        function: "entry",
+        expected: ExecState::Complete(Value::Int(1)),
+    })
+}
+
+// Regression: Virtual inlining of a rvalue that reads a parameter must not
+// re-evaluate when the parameter is reassigned on an intermediate path.
+// Parameters have an implicit entry definition NOT tracked in `all_defs`,
+// so even a single explicit reassignment means multiple definitions.
+#[test]
+fn virtual_cross_block_param_mutation_soundness() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main(c: bool, p: int) -> int {
+                let x = p;
+                if (c) {
+                    p = 2;
+                }
+                x
+            }
+
+            function entry() -> int {
+                main(true, 42)
+            }
+        "#,
+        function: "entry",
+        expected: ExecState::Complete(Value::Int(42)),
+    })
+}
+
+// Regression: CopyOf must not propagate through mutable parameters.
+#[test]
+fn copy_of_mutable_param_soundness() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main(x: int) -> int {
+                let y = x;
+                x = 2;
+                y
+            }
+
+            function entry() -> int {
+                main(42)
+            }
+        "#,
+        function: "entry",
+        expected: ExecState::Complete(Value::Int(42)),
+    })
+}
+
+// Regression: cross-block virtualization must account for transitive
+// dependencies; `x = t` where `t = p` must not be re-evaluated as latest `p`.
+#[test]
+fn virtual_cross_block_transitive_param_mutation_soundness() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main(c: bool, p: int) -> int {
+                let t = p;
+                let x = t;
+                if (c) {
+                    p = 2;
+                }
+                x
+            }
+
+            function entry() -> int {
+                main(true, 42)
+            }
+        "#,
+        function: "entry",
+        expected: ExecState::Complete(Value::Int(42)),
+    })
+}
+
+// Regression: multiple definitions of a local must not allow inlining that
+// skips side-effecting call evaluation.
+#[test]
+fn virtual_multiple_defs_preserve_side_effects() -> anyhow::Result<()> {
+    assert_vm_fails(FailingProgram {
+        source: r#"
+            function fail() -> int {
+                assert(false);
+                1
+            }
+
+            function main() -> int {
+                let x = fail();
+                x = 2;
+                x
+            }
+        "#,
+        function: "main",
+        expected: RuntimeError::AssertionError.into(),
     })
 }
 

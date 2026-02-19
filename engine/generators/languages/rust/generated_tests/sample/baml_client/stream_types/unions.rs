@@ -7,11 +7,15 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{
+    BamlDecode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (Streaming.Example | Streaming.Example2)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ExampleOrExample2 {
     #[baml(name = "Example")]
     Example(Example),
@@ -20,14 +24,14 @@ pub enum Union2ExampleOrExample2 {
     Example2(Example2),
 }
 
-impl AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
+impl ::std::convert::AsRef<Union2ExampleOrExample2> for Union2ExampleOrExample2 {
     fn as_ref(&self) -> &Union2ExampleOrExample2 {
         self
     }
 }
 
-impl Default for Union2ExampleOrExample2 {
+impl ::std::default::Default for Union2ExampleOrExample2 {
     fn default() -> Self {
-        Self::Example(Default::default())
+        Self::Example(::std::default::Default::default())
     }
 }

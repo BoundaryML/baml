@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 Client "client"
@@ -79,14 +79,6 @@ Comma ","
 Comma ","
 Quote "\""
 Hash "#"
-Word "keyStringNoSpacesWorksWithoutQuotes"
-Word "NoQuotes"
-Not "!"
-Not "!"
-IntegerLiteral "123"
-Word "unquoted_string_whitespace"
-Word "hello"
-Word "world"
 Quote "\""
 Word "string"
 Word "key"
@@ -96,11 +88,6 @@ Word "value"
 Word "with"
 Word "spaces"
 Quote "\""
-Word "filePathString"
-Dot "."
-Dot "."
-Slash "/"
-Word "this-is-also-a-string"
 Word "booleanValue"
 Word "true"
 Word "stringKey"

@@ -1,0 +1,33 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+class Point {
+    x int
+    y int
+}
+
+function stringArray() -> string[] {
+    ["hello", "world", "test"]
+}
+
+function intArray() -> int[] {
+    [1, 2, 3]
+}
+
+function floatArray() -> float[] {
+    [1.0, 2.0, 3.0]
+}
+
+function boolArray() -> bool[] {
+    [true, false, true]
+}
+
+function pointArray() -> Point[] {
+    [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }]
+}
+
+// Heterogeneous array - array of union type
+function mixedArray() -> (int | string)[] {
+    [1, "two", 3]
+}

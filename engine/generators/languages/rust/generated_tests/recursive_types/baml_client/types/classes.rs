@@ -6,15 +6,18 @@
 //! Generated class types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, Default, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
 }
 
-impl AsRef<UseMyUnion> for UseMyUnion {
+impl ::std::convert::AsRef<UseMyUnion> for UseMyUnion {
     fn as_ref(&self) -> &UseMyUnion {
         self
     }

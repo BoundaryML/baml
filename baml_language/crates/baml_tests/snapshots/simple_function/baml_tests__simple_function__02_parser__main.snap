@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-c19fbc584be79396/out/generated_tests.rs
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -54,14 +54,6 @@ SOURCE_FILE
       TYPE_EXPR "int"
         WORD "int"
     R_BRACE "}"
-  SLASH "/"
-  SLASH "/"
-  WORD "Added"
-  WORD "comment"
-  SLASH "/"
-  SLASH "/"
-  WORD "Test"
-  WORD "comment"
 
 === ERRORS ===
 None

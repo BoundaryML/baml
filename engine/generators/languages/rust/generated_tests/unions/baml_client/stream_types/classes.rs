@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct ExistingSystemComponent {
     pub id: Option<i64>,
 
@@ -27,19 +27,19 @@ pub struct ExistingSystemComponent {
     pub explanation: Option<String>,
 }
 
-impl AsRef<ExistingSystemComponent> for ExistingSystemComponent {
+impl ::std::convert::AsRef<ExistingSystemComponent> for ExistingSystemComponent {
     fn as_ref(&self) -> &ExistingSystemComponent {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct UseMyUnion {
     pub u: Option<Union3IntOrRecursive1OrString>,
 }
 
-impl AsRef<UseMyUnion> for UseMyUnion {
+impl ::std::convert::AsRef<UseMyUnion> for UseMyUnion {
     fn as_ref(&self) -> &UseMyUnion {
         self
     }

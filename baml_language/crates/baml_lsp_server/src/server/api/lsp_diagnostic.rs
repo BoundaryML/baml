@@ -28,18 +28,30 @@ pub struct LspConversionConfig<'a> {
     pub position_encoding: PositionEncoding,
 }
 
-/// Convert a diagnostic to an LSP diagnostic.
+/// Convert a diagnostic to LSP diagnostics.
 ///
-/// Returns `None` if the primary span's file is not in the provided file maps.
-pub fn to_lsp_diagnostic(
+/// Returns a vec of `(Url, Diagnostic)` pairs. The first element is the primary
+/// diagnostic. Additional hint-severity diagnostics are emitted for each
+/// `related_info` span so that editors render squigglies at those locations too
+/// (matching rust-analyzer's behaviour).
+///
+/// Returns an empty vec if the primary span's file is not in the provided file maps.
+pub fn to_lsp_diagnostics(
     diagnostic: &Diagnostic,
     config: &LspConversionConfig,
-) -> Option<(Url, lsp_types::Diagnostic)> {
-    let primary_span = diagnostic.primary_span()?;
-    let path = config.file_paths.get(&primary_span.file_id)?;
-    let url = Url::from_file_path(path).ok()?;
-
-    let (source_text, line_starts) = config.file_sources.get(&primary_span.file_id)?;
+) -> Vec<(Url, lsp_types::Diagnostic)> {
+    let Some(primary_span) = diagnostic.primary_span() else {
+        return Vec::new();
+    };
+    let Some(path) = config.file_paths.get(&primary_span.file_id) else {
+        return Vec::new();
+    };
+    let Ok(url) = Url::from_file_path(path) else {
+        return Vec::new();
+    };
+    let Some((source_text, line_starts)) = config.file_sources.get(&primary_span.file_id) else {
+        return Vec::new();
+    };
 
     let range = span_to_lsp_range(
         primary_span.range,
@@ -118,7 +130,14 @@ pub fn to_lsp_diagnostic(
         Some(related_information)
     };
 
-    Some((
+    let primary_location = Location {
+        uri: url.clone(),
+        range,
+    };
+
+    let mut result = Vec::new();
+
+    result.push((
         url,
         lsp_types::Diagnostic {
             range,
@@ -131,7 +150,45 @@ pub fn to_lsp_diagnostic(
             tags: None,
             data: None,
         },
-    ))
+    ));
+
+    // Emit hint-severity diagnostics at each related info location so that
+    // editors render squigglies there too (à la rust-analyzer).
+    for info in &diagnostic.related_info {
+        if let Some(path) = config.file_paths.get(&info.span.file_id) {
+            if let Ok(info_url) = Url::from_file_path(path) {
+                if let Some((info_source, info_line_starts)) =
+                    config.file_sources.get(&info.span.file_id)
+                {
+                    let info_range = span_to_lsp_range(
+                        info.span.range,
+                        info_source,
+                        info_line_starts,
+                        config.position_encoding,
+                    );
+                    result.push((
+                        info_url,
+                        lsp_types::Diagnostic {
+                            range: info_range,
+                            severity: Some(DiagnosticSeverity::HINT),
+                            code: Some(NumberOrString::String(diagnostic.code().to_string())),
+                            code_description: None,
+                            source: Some("baml".to_string()),
+                            message: info.message.clone(),
+                            related_information: Some(vec![DiagnosticRelatedInformation {
+                                location: primary_location.clone(),
+                                message: diagnostic.message.clone(),
+                            }]),
+                            tags: None,
+                            data: None,
+                        },
+                    ));
+                }
+            }
+        }
+    }
+
+    result
 }
 
 /// Convert a TextRange to an LSP Range.
@@ -397,10 +454,10 @@ mod tests {
             position_encoding: PositionEncoding::UTF16, // Default LSP encoding
         };
 
-        let result = to_lsp_diagnostic(&diag, &config);
-        assert!(result.is_some());
+        let result = to_lsp_diagnostics(&diag, &config);
+        assert_eq!(result.len(), 1);
 
-        let (url, lsp_diag) = result.unwrap();
+        let (url, lsp_diag) = &result[0];
         assert!(url.as_str().contains("test.baml"));
         assert_eq!(lsp_diag.message, "Type mismatch");
         assert_eq!(lsp_diag.severity, Some(DiagnosticSeverity::ERROR));
@@ -438,10 +495,10 @@ mod tests {
             position_encoding: PositionEncoding::UTF16,
         };
 
-        let result = to_lsp_diagnostic(&diag, &config);
-        assert!(result.is_some());
+        let result = to_lsp_diagnostics(&diag, &config);
+        assert_eq!(result.len(), 1);
 
-        let (_, lsp_diag) = result.unwrap();
+        let (_, lsp_diag) = &result[0];
         // UTF-16: 'o' is at character 4 (not byte offset 5)
         assert_eq!(lsp_diag.range.start.line, 0);
         assert_eq!(lsp_diag.range.start.character, 4);

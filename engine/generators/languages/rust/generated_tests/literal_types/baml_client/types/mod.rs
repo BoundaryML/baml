@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     BooleanLiterals(BooleanLiterals),
 
@@ -66,58 +68,68 @@ pub enum Types {
     ),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::BooleanLiterals(_) => "BooleanLiterals",
+            Self::BooleanLiterals(_) => "BooleanLiterals",
 
-            Types::ComplexLiterals(_) => "ComplexLiterals",
+            Self::ComplexLiterals(_) => "ComplexLiterals",
 
-            Types::IntegerLiterals(_) => "IntegerLiterals",
+            Self::IntegerLiterals(_) => "IntegerLiterals",
 
-            Types::MixedLiterals(_) => "MixedLiterals",
+            Self::MixedLiterals(_) => "MixedLiterals",
 
-            Types::StringLiterals(_) => "StringLiterals",
+            Self::StringLiterals(_) => "StringLiterals",
 
-            Types::Union2BoolKFalseOrBoolKTrue(_) => "Union2BoolKFalseOrBoolKTrue",
+            Self::Union2BoolKFalseOrBoolKTrue(_) => "Union2BoolKFalseOrBoolKTrue",
 
-            Types::Union3IntK1OrIntK2OrIntK3(_) => "Union3IntK1OrIntK2OrIntK3",
+            Self::Union3IntK1OrIntK2OrIntK3(_) => "Union3IntK1OrIntK2OrIntK3",
 
-            Types::Union3IntK200OrIntK404OrIntK500(_) => "Union3IntK200OrIntK404OrIntK500",
+            Self::Union3IntK200OrIntK404OrIntK500(_) => "Union3IntK200OrIntK404OrIntK500",
 
-            Types::Union3KactiveOrKinactiveOrKpending(_) => "Union3KactiveOrKinactiveOrKpending",
+            Self::Union3KactiveOrKinactiveOrKpending(_) => "Union3KactiveOrKinactiveOrKpending",
 
-            Types::Union3KadminOrKguestOrKuser(_) => "Union3KadminOrKguestOrKuser",
+            Self::Union3KadminOrKguestOrKuser(_) => "Union3KadminOrKguestOrKuser",
 
-            Types::Union3KdevOrKprodOrKstaging(_) => "Union3KdevOrKprodOrKstaging",
+            Self::Union3KdevOrKprodOrKstaging(_) => "Union3KdevOrKprodOrKstaging",
 
-            Types::Union3KerrorOrKsuccessOrKtimeout(_) => "Union3KerrorOrKsuccessOrKtimeout",
+            Self::Union3KerrorOrKsuccessOrKtimeout(_) => "Union3KerrorOrKsuccessOrKtimeout",
 
-            Types::Union3Kv1OrKv2OrKv3(_) => "Union3Kv1OrKv2OrKv3",
+            Self::Union3Kv1OrKv2OrKv3(_) => "Union3Kv1OrKv2OrKv3",
 
-            Types::Union4IntK0OrIntK1OrIntK3OrIntK5(_) => "Union4IntK0OrIntK1OrIntK3OrIntK5",
+            Self::Union4IntK0OrIntK1OrIntK3OrIntK5(_) => "Union4IntK0OrIntK1OrIntK3OrIntK5",
 
-            Types::Union4KDELETEOrKGETOrKPOSTOrKPUT(_) => "Union4KDELETEOrKGETOrKPOSTOrKPUT",
+            Self::Union4KDELETEOrKGETOrKPOSTOrKPUT(_) => "Union4KDELETEOrKGETOrKPOSTOrKPUT",
 
-            Types::Union4KarchivedOrKdeletedOrKdraftOrKpublished(_) => {
+            Self::Union4KarchivedOrKdeletedOrKdraftOrKpublished(_) => {
                 "Union4KarchivedOrKdeletedOrKdraftOrKpublished"
             }
 
-            Types::Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5(_) => {
+            Self::Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5(_) => {
                 "Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5"
             }
 
-            Types::Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500(_) => {
+            Self::Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500(_) => {
                 "Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500"
             }
 
-            Types::Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8(_) => {
+            Self::Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8(_) => {
                 "Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8"
             }
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

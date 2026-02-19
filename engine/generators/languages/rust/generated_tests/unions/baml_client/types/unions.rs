@@ -6,11 +6,15 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (int | Recursive1[])
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2IntOrListRecursive1 {
     #[baml(name = "int")]
     Int(i64),
@@ -19,44 +23,50 @@ pub enum Union2IntOrListRecursive1 {
     ListRecursive1(Vec<Recursive1>),
 }
 
-impl AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
+impl ::std::convert::AsRef<Union2IntOrListRecursive1> for Union2IntOrListRecursive1 {
     fn as_ref(&self) -> &Union2IntOrListRecursive1 {
         self
     }
 }
 
-impl Default for Union2IntOrListRecursive1 {
+impl ::std::default::Default for Union2IntOrListRecursive1 {
     fn default() -> Self {
-        Self::Int(Default::default())
+        Self::Int(::std::default::Default::default())
     }
 }
 
 /// Generated from: ("service" | "resource")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2KresourceOrKservice {
     #[baml(name = "string_service", literal_string = "service")]
+    #[serde(with = "__baml_serde_union_literal_Union2KresourceOrKservice::Kservice")]
     Kservice,
 
     #[baml(name = "string_resource", literal_string = "resource")]
+    #[serde(with = "__baml_serde_union_literal_Union2KresourceOrKservice::Kresource")]
     Kresource,
 }
 
-impl AsRef<Union2KresourceOrKservice> for Union2KresourceOrKservice {
+impl ::std::convert::AsRef<Union2KresourceOrKservice> for Union2KresourceOrKservice {
     fn as_ref(&self) -> &Union2KresourceOrKservice {
         self
     }
 }
 
-impl Default for Union2KresourceOrKservice {
+impl ::std::default::Default for Union2KresourceOrKservice {
     fn default() -> Self {
         Self::Kservice
     }
 }
 
 /// Generated from: (Recursive1 | int | string | null)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3IntOrRecursive1OrString {
     #[baml(name = "Recursive1")]
     Recursive1(Recursive1),
@@ -68,14 +78,14 @@ pub enum Union3IntOrRecursive1OrString {
     String(String),
 }
 
-impl AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
+impl ::std::convert::AsRef<Union3IntOrRecursive1OrString> for Union3IntOrRecursive1OrString {
     fn as_ref(&self) -> &Union3IntOrRecursive1OrString {
         self
     }
 }
 
-impl Default for Union3IntOrRecursive1OrString {
+impl ::std::default::Default for Union3IntOrRecursive1OrString {
     fn default() -> Self {
-        Self::Recursive1(Default::default())
+        Self::Recursive1(::std::default::Default::default())
     }
 }

@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -58,6 +58,8 @@ type Role = "user" | "assistant" | "system"
 type UnionOfArrays = int[] | string[]
 
 type MixedMap = map<string, int | string>
+
+type ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | string | bool | float | int[] | string[] | map<string, int | string> | map<string, map<string, int | string>> | map<string, map<string, map<string, int | string>>> | map<string, map<string, map<string, map<string, int | string>>>>>
 
 type OptionalFlag = true?
 

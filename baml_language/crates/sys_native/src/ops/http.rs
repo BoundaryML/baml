@@ -52,13 +52,24 @@ pub(crate) async fn send_async(
         builder = builder.body(req.body);
     }
 
-    let response = builder.send().await.map_err(|e| {
-        OpErrorKind::Other(format!(
-            "HTTP request failed for '{}': {}",
-            req.url,
-            format_error_chain(&e)
-        ))
-    })?;
+    let response = match builder.send().await {
+        Ok(resp) => resp,
+        Err(e) => {
+            // Network error: return a synthetic response with status_code=0
+            // so BAML orchestration code can check ok() and fall back.
+            // The error message is available via text() for debugging.
+            let error_msg = format_error_chain(&e);
+            let handle = REGISTRY.register_error_http_response(req.url.clone(), error_msg.clone());
+            let mut headers = indexmap::IndexMap::new();
+            headers.insert("x-baml-error".to_string(), error_msg);
+            return Ok(builtin_types::owned::HttpResponse {
+                status_code: 0,
+                headers,
+                url: req.url,
+                _handle: handle,
+            });
+        }
+    };
 
     // Capture metadata before storing
     let status = response.status().as_u16();

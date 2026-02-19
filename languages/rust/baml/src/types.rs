@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     codec::{BamlDecode, BamlEncode},
     error::BamlError,
@@ -7,7 +9,7 @@ use crate::{
 };
 
 /// Result of a @check constraint
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Checked<T> {
     pub value: T,
     pub checks: HashMap<String, Check>,
@@ -23,7 +25,7 @@ impl<T: Default> Default for Checked<T> {
 }
 
 /// Individual check result
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Check {
     pub name: String,
@@ -32,7 +34,7 @@ pub struct Check {
 }
 
 /// Status of a check constraint
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
     Succeeded,
@@ -113,14 +115,14 @@ impl<T> Checked<T> {
 }
 
 /// Streaming state wrapper for @`stream.with_state`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamState<T> {
     pub value: T,
     pub state: StreamingState,
 }
 
 /// Current streaming state
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StreamingState {
     Pending,

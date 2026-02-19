@@ -24,6 +24,13 @@ pub(crate) struct LlmProviderResponse {
     /// (i.e. the model stopped naturally, not due to token limits).
     pub finish_reason: FinishReason,
 
+    /// Raw provider-reported finish reason string, if present.
+    ///
+    /// Examples:
+    /// - `OpenAI`: `"stop"`, `"length"`, `"tool_calls"`
+    /// - `Anthropic`: `"end_turn"`, `"stop_sequence"`, `"max_tokens"`, `"tool_use"`
+    pub finish_reason_raw: Option<String>,
+
     /// Token usage information, if the provider reported it.
     pub usage: TokenUsage,
 

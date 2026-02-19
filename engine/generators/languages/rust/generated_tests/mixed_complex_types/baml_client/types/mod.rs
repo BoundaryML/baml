@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     Action(Action),
 
@@ -130,122 +132,132 @@ pub enum Types {
     Union5KcontainsOrKeqOrKgtOrKltOrKne(Union5KcontainsOrKeqOrKgtOrKltOrKne),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::Action(_) => "Action",
+            Self::Action(_) => "Action",
 
-            Types::Asset(_) => "Asset",
+            Self::Asset(_) => "Asset",
 
-            Types::AssetMetadata(_) => "AssetMetadata",
+            Self::AssetMetadata(_) => "AssetMetadata",
 
-            Types::ButtonWidget(_) => "ButtonWidget",
+            Self::ButtonWidget(_) => "ButtonWidget",
 
-            Types::ComplexData(_) => "ComplexData",
+            Self::ComplexData(_) => "ComplexData",
 
-            Types::Condition(_) => "Condition",
+            Self::Condition(_) => "Condition",
 
-            Types::Configuration(_) => "Configuration",
+            Self::Configuration(_) => "Configuration",
 
-            Types::ContainerWidget(_) => "ContainerWidget",
+            Self::ContainerWidget(_) => "ContainerWidget",
 
-            Types::DataObject(_) => "DataObject",
+            Self::DataObject(_) => "DataObject",
 
-            Types::Dimensions(_) => "Dimensions",
+            Self::Dimensions(_) => "Dimensions",
 
-            Types::Environment(_) => "Environment",
+            Self::Environment(_) => "Environment",
 
-            Types::Error(_) => "Error",
+            Self::Error(_) => "Error",
 
-            Types::ErrorDetail(_) => "ErrorDetail",
+            Self::ErrorDetail(_) => "ErrorDetail",
 
-            Types::Feature(_) => "Feature",
+            Self::Feature(_) => "Feature",
 
-            Types::ImageWidget(_) => "ImageWidget",
+            Self::ImageWidget(_) => "ImageWidget",
 
-            Types::Item(_) => "Item",
+            Self::Item(_) => "Item",
 
-            Types::KitchenSink(_) => "KitchenSink",
+            Self::KitchenSink(_) => "KitchenSink",
 
-            Types::Node(_) => "Node",
+            Self::Node(_) => "Node",
 
-            Types::NodeMetadata(_) => "NodeMetadata",
+            Self::NodeMetadata(_) => "NodeMetadata",
 
-            Types::PrimaryData(_) => "PrimaryData",
+            Self::PrimaryData(_) => "PrimaryData",
 
-            Types::Record(_) => "Record",
+            Self::Record(_) => "Record",
 
-            Types::ResponseMetadata(_) => "ResponseMetadata",
+            Self::ResponseMetadata(_) => "ResponseMetadata",
 
-            Types::Rule(_) => "Rule",
+            Self::Rule(_) => "Rule",
 
-            Types::SecondaryData(_) => "SecondaryData",
+            Self::SecondaryData(_) => "SecondaryData",
 
-            Types::Setting(_) => "Setting",
+            Self::Setting(_) => "Setting",
 
-            Types::SimpleCondition(_) => "SimpleCondition",
+            Self::SimpleCondition(_) => "SimpleCondition",
 
-            Types::Success(_) => "Success",
+            Self::Success(_) => "Success",
 
-            Types::TertiaryData(_) => "TertiaryData",
+            Self::TertiaryData(_) => "TertiaryData",
 
-            Types::TextWidget(_) => "TextWidget",
+            Self::TextWidget(_) => "TextWidget",
 
-            Types::UltraComplex(_) => "UltraComplex",
+            Self::UltraComplex(_) => "UltraComplex",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::UserProfile(_) => "UserProfile",
+            Self::UserProfile(_) => "UserProfile",
 
-            Types::UserResponse(_) => "UserResponse",
+            Self::UserResponse(_) => "UserResponse",
 
-            Types::Variant(_) => "Variant",
+            Self::Variant(_) => "Variant",
 
-            Types::Widget(_) => "Widget",
+            Self::Widget(_) => "Widget",
 
-            Types::Union2ConditionOrSimpleCondition(_) => "Union2ConditionOrSimpleCondition",
+            Self::Union2ConditionOrSimpleCondition(_) => "Union2ConditionOrSimpleCondition",
 
-            Types::Union2ErrorOrSuccess(_) => "Union2ErrorOrSuccess",
+            Self::Union2ErrorOrSuccess(_) => "Union2ErrorOrSuccess",
 
-            Types::Union2KbranchOrKleaf(_) => "Union2KbranchOrKleaf",
+            Self::Union2KbranchOrKleaf(_) => "Union2KbranchOrKleaf",
 
-            Types::Union2KerrorOrKsuccess(_) => "Union2KerrorOrKsuccess",
+            Self::Union2KerrorOrKsuccess(_) => "Union2KerrorOrKsuccess",
 
-            Types::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
+            Self::Union3BoolOrIntOrString(_) => "Union3BoolOrIntOrString",
 
-            Types::Union3DataObjectOrIntOrString(_) => "Union3DataObjectOrIntOrString",
+            Self::Union3DataObjectOrIntOrString(_) => "Union3DataObjectOrIntOrString",
 
-            Types::Union3FloatOrIntOrString(_) => "Union3FloatOrIntOrString",
+            Self::Union3FloatOrIntOrString(_) => "Union3FloatOrIntOrString",
 
-            Types::Union3KandOrKnotOrKor(_) => "Union3KandOrKnotOrKor",
+            Self::Union3KandOrKnotOrKor(_) => "Union3KandOrKnotOrKor",
 
-            Types::Union3KarchivedOrKdraftOrKpublished(_) => "Union3KarchivedOrKdraftOrKpublished",
+            Self::Union3KarchivedOrKdraftOrKpublished(_) => "Union3KarchivedOrKdraftOrKpublished",
 
-            Types::Union3KaudioOrKdocumentOrKimage(_) => "Union3KaudioOrKdocumentOrKimage",
+            Self::Union3KaudioOrKdocumentOrKimage(_) => "Union3KaudioOrKdocumentOrKimage",
 
-            Types::Union3KflexOrKgridOrKstack(_) => "Union3KflexOrKgridOrKstack",
+            Self::Union3KflexOrKgridOrKstack(_) => "Union3KflexOrKgridOrKstack",
 
-            Types::Union3KhtmlOrKmarkdownOrKplain(_) => "Union3KhtmlOrKmarkdownOrKplain",
+            Self::Union3KhtmlOrKmarkdownOrKplain(_) => "Union3KhtmlOrKmarkdownOrKplain",
 
-            Types::Union4BoolOrFloatOrIntOrString(_) => "Union4BoolOrFloatOrIntOrString",
+            Self::Union4BoolOrFloatOrIntOrString(_) => "Union4BoolOrFloatOrIntOrString",
 
-            Types::Union4IntOrListNodeOrMapStringKeyNodeValueOrString(_) => {
+            Self::Union4IntOrListNodeOrMapStringKeyNodeValueOrString(_) => {
                 "Union4IntOrListNodeOrMapStringKeyNodeValueOrString"
             }
 
-            Types::Union4KbuttonOrKcontainerOrKimageOrKtext(_) => {
+            Self::Union4KbuttonOrKcontainerOrKimageOrKtext(_) => {
                 "Union4KbuttonOrKcontainerOrKimageOrKtext"
             }
 
-            Types::Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5(_) => {
+            Self::Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5(_) => {
                 "Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5"
             }
 
-            Types::Union5KcontainsOrKeqOrKgtOrKltOrKne(_) => "Union5KcontainsOrKeqOrKgtOrKltOrKne",
+            Self::Union5KcontainsOrKeqOrKgtOrKltOrKne(_) => "Union5KcontainsOrKeqOrKgtOrKltOrKne",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

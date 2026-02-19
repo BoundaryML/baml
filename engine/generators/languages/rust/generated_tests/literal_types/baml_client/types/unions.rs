@@ -6,289 +6,370 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (true | false)
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2BoolKFalseOrBoolKTrue {
     #[baml(name = "bool_true", literal_bool = true)]
+    #[serde(with = "__baml_serde_union_literal_Union2BoolKFalseOrBoolKTrue::BoolKTrue")]
     BoolKTrue,
 
     #[baml(name = "bool_false", literal_bool = false)]
+    #[serde(with = "__baml_serde_union_literal_Union2BoolKFalseOrBoolKTrue::BoolKFalse")]
     BoolKFalse,
 }
 
-impl AsRef<Union2BoolKFalseOrBoolKTrue> for Union2BoolKFalseOrBoolKTrue {
+impl ::std::convert::AsRef<Union2BoolKFalseOrBoolKTrue> for Union2BoolKFalseOrBoolKTrue {
     fn as_ref(&self) -> &Union2BoolKFalseOrBoolKTrue {
         self
     }
 }
 
-impl Default for Union2BoolKFalseOrBoolKTrue {
+impl ::std::default::Default for Union2BoolKFalseOrBoolKTrue {
     fn default() -> Self {
         Self::BoolKTrue
     }
 }
 
 /// Generated from: (1 | 2 | 3)
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3IntK1OrIntK2OrIntK3 {
     #[baml(name = "int_1", literal_int = 1)]
+    #[serde(with = "__baml_serde_union_literal_Union3IntK1OrIntK2OrIntK3::IntK1")]
     IntK1,
 
     #[baml(name = "int_2", literal_int = 2)]
+    #[serde(with = "__baml_serde_union_literal_Union3IntK1OrIntK2OrIntK3::IntK2")]
     IntK2,
 
     #[baml(name = "int_3", literal_int = 3)]
+    #[serde(with = "__baml_serde_union_literal_Union3IntK1OrIntK2OrIntK3::IntK3")]
     IntK3,
 }
 
-impl AsRef<Union3IntK1OrIntK2OrIntK3> for Union3IntK1OrIntK2OrIntK3 {
+impl ::std::convert::AsRef<Union3IntK1OrIntK2OrIntK3> for Union3IntK1OrIntK2OrIntK3 {
     fn as_ref(&self) -> &Union3IntK1OrIntK2OrIntK3 {
         self
     }
 }
 
-impl Default for Union3IntK1OrIntK2OrIntK3 {
+impl ::std::default::Default for Union3IntK1OrIntK2OrIntK3 {
     fn default() -> Self {
         Self::IntK1
     }
 }
 
 /// Generated from: (200 | 404 | 500)
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3IntK200OrIntK404OrIntK500 {
     #[baml(name = "int_200", literal_int = 200)]
+    #[serde(with = "__baml_serde_union_literal_Union3IntK200OrIntK404OrIntK500::IntK200")]
     IntK200,
 
     #[baml(name = "int_404", literal_int = 404)]
+    #[serde(with = "__baml_serde_union_literal_Union3IntK200OrIntK404OrIntK500::IntK404")]
     IntK404,
 
     #[baml(name = "int_500", literal_int = 500)]
+    #[serde(with = "__baml_serde_union_literal_Union3IntK200OrIntK404OrIntK500::IntK500")]
     IntK500,
 }
 
-impl AsRef<Union3IntK200OrIntK404OrIntK500> for Union3IntK200OrIntK404OrIntK500 {
+impl ::std::convert::AsRef<Union3IntK200OrIntK404OrIntK500> for Union3IntK200OrIntK404OrIntK500 {
     fn as_ref(&self) -> &Union3IntK200OrIntK404OrIntK500 {
         self
     }
 }
 
-impl Default for Union3IntK200OrIntK404OrIntK500 {
+impl ::std::default::Default for Union3IntK200OrIntK404OrIntK500 {
     fn default() -> Self {
         Self::IntK200
     }
 }
 
 /// Generated from: ("active" | "inactive" | "pending")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3KactiveOrKinactiveOrKpending {
     #[baml(name = "string_active", literal_string = "active")]
+    #[serde(with = "__baml_serde_union_literal_Union3KactiveOrKinactiveOrKpending::Kactive")]
     Kactive,
 
     #[baml(name = "string_inactive", literal_string = "inactive")]
+    #[serde(with = "__baml_serde_union_literal_Union3KactiveOrKinactiveOrKpending::Kinactive")]
     Kinactive,
 
     #[baml(name = "string_pending", literal_string = "pending")]
+    #[serde(with = "__baml_serde_union_literal_Union3KactiveOrKinactiveOrKpending::Kpending")]
     Kpending,
 }
 
-impl AsRef<Union3KactiveOrKinactiveOrKpending> for Union3KactiveOrKinactiveOrKpending {
+impl ::std::convert::AsRef<Union3KactiveOrKinactiveOrKpending>
+    for Union3KactiveOrKinactiveOrKpending
+{
     fn as_ref(&self) -> &Union3KactiveOrKinactiveOrKpending {
         self
     }
 }
 
-impl Default for Union3KactiveOrKinactiveOrKpending {
+impl ::std::default::Default for Union3KactiveOrKinactiveOrKpending {
     fn default() -> Self {
         Self::Kactive
     }
 }
 
 /// Generated from: ("user" | "admin" | "guest")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3KadminOrKguestOrKuser {
     #[baml(name = "string_user", literal_string = "user")]
+    #[serde(with = "__baml_serde_union_literal_Union3KadminOrKguestOrKuser::Kuser")]
     Kuser,
 
     #[baml(name = "string_admin", literal_string = "admin")]
+    #[serde(with = "__baml_serde_union_literal_Union3KadminOrKguestOrKuser::Kadmin")]
     Kadmin,
 
     #[baml(name = "string_guest", literal_string = "guest")]
+    #[serde(with = "__baml_serde_union_literal_Union3KadminOrKguestOrKuser::Kguest")]
     Kguest,
 }
 
-impl AsRef<Union3KadminOrKguestOrKuser> for Union3KadminOrKguestOrKuser {
+impl ::std::convert::AsRef<Union3KadminOrKguestOrKuser> for Union3KadminOrKguestOrKuser {
     fn as_ref(&self) -> &Union3KadminOrKguestOrKuser {
         self
     }
 }
 
-impl Default for Union3KadminOrKguestOrKuser {
+impl ::std::default::Default for Union3KadminOrKguestOrKuser {
     fn default() -> Self {
         Self::Kuser
     }
 }
 
 /// Generated from: ("dev" | "staging" | "prod")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3KdevOrKprodOrKstaging {
     #[baml(name = "string_dev", literal_string = "dev")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdevOrKprodOrKstaging::Kdev")]
     Kdev,
 
     #[baml(name = "string_staging", literal_string = "staging")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdevOrKprodOrKstaging::Kstaging")]
     Kstaging,
 
     #[baml(name = "string_prod", literal_string = "prod")]
+    #[serde(with = "__baml_serde_union_literal_Union3KdevOrKprodOrKstaging::Kprod")]
     Kprod,
 }
 
-impl AsRef<Union3KdevOrKprodOrKstaging> for Union3KdevOrKprodOrKstaging {
+impl ::std::convert::AsRef<Union3KdevOrKprodOrKstaging> for Union3KdevOrKprodOrKstaging {
     fn as_ref(&self) -> &Union3KdevOrKprodOrKstaging {
         self
     }
 }
 
-impl Default for Union3KdevOrKprodOrKstaging {
+impl ::std::default::Default for Union3KdevOrKprodOrKstaging {
     fn default() -> Self {
         Self::Kdev
     }
 }
 
 /// Generated from: ("success" | "error" | "timeout")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3KerrorOrKsuccessOrKtimeout {
     #[baml(name = "string_success", literal_string = "success")]
+    #[serde(with = "__baml_serde_union_literal_Union3KerrorOrKsuccessOrKtimeout::Ksuccess")]
     Ksuccess,
 
     #[baml(name = "string_error", literal_string = "error")]
+    #[serde(with = "__baml_serde_union_literal_Union3KerrorOrKsuccessOrKtimeout::Kerror")]
     Kerror,
 
     #[baml(name = "string_timeout", literal_string = "timeout")]
+    #[serde(with = "__baml_serde_union_literal_Union3KerrorOrKsuccessOrKtimeout::Ktimeout")]
     Ktimeout,
 }
 
-impl AsRef<Union3KerrorOrKsuccessOrKtimeout> for Union3KerrorOrKsuccessOrKtimeout {
+impl ::std::convert::AsRef<Union3KerrorOrKsuccessOrKtimeout> for Union3KerrorOrKsuccessOrKtimeout {
     fn as_ref(&self) -> &Union3KerrorOrKsuccessOrKtimeout {
         self
     }
 }
 
-impl Default for Union3KerrorOrKsuccessOrKtimeout {
+impl ::std::default::Default for Union3KerrorOrKsuccessOrKtimeout {
     fn default() -> Self {
         Self::Ksuccess
     }
 }
 
 /// Generated from: ("v1" | "v2" | "v3")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3Kv1OrKv2OrKv3 {
     #[baml(name = "string_v1", literal_string = "v1")]
+    #[serde(with = "__baml_serde_union_literal_Union3Kv1OrKv2OrKv3::Kv1")]
     Kv1,
 
     #[baml(name = "string_v2", literal_string = "v2")]
+    #[serde(with = "__baml_serde_union_literal_Union3Kv1OrKv2OrKv3::Kv2")]
     Kv2,
 
     #[baml(name = "string_v3", literal_string = "v3")]
+    #[serde(with = "__baml_serde_union_literal_Union3Kv1OrKv2OrKv3::Kv3")]
     Kv3,
 }
 
-impl AsRef<Union3Kv1OrKv2OrKv3> for Union3Kv1OrKv2OrKv3 {
+impl ::std::convert::AsRef<Union3Kv1OrKv2OrKv3> for Union3Kv1OrKv2OrKv3 {
     fn as_ref(&self) -> &Union3Kv1OrKv2OrKv3 {
         self
     }
 }
 
-impl Default for Union3Kv1OrKv2OrKv3 {
+impl ::std::default::Default for Union3Kv1OrKv2OrKv3 {
     fn default() -> Self {
         Self::Kv1
     }
 }
 
 /// Generated from: (0 | 1 | 3 | 5)
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4IntK0OrIntK1OrIntK3OrIntK5 {
     #[baml(name = "int_0", literal_int = 0)]
+    #[serde(with = "__baml_serde_union_literal_Union4IntK0OrIntK1OrIntK3OrIntK5::IntK0")]
     IntK0,
 
     #[baml(name = "int_1", literal_int = 1)]
+    #[serde(with = "__baml_serde_union_literal_Union4IntK0OrIntK1OrIntK3OrIntK5::IntK1")]
     IntK1,
 
     #[baml(name = "int_3", literal_int = 3)]
+    #[serde(with = "__baml_serde_union_literal_Union4IntK0OrIntK1OrIntK3OrIntK5::IntK3")]
     IntK3,
 
     #[baml(name = "int_5", literal_int = 5)]
+    #[serde(with = "__baml_serde_union_literal_Union4IntK0OrIntK1OrIntK3OrIntK5::IntK5")]
     IntK5,
 }
 
-impl AsRef<Union4IntK0OrIntK1OrIntK3OrIntK5> for Union4IntK0OrIntK1OrIntK3OrIntK5 {
+impl ::std::convert::AsRef<Union4IntK0OrIntK1OrIntK3OrIntK5> for Union4IntK0OrIntK1OrIntK3OrIntK5 {
     fn as_ref(&self) -> &Union4IntK0OrIntK1OrIntK3OrIntK5 {
         self
     }
 }
 
-impl Default for Union4IntK0OrIntK1OrIntK3OrIntK5 {
+impl ::std::default::Default for Union4IntK0OrIntK1OrIntK3OrIntK5 {
     fn default() -> Self {
         Self::IntK0
     }
 }
 
 /// Generated from: ("GET" | "POST" | "PUT" | "DELETE")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4KDELETEOrKGETOrKPOSTOrKPUT {
     #[baml(name = "string_GET", literal_string = "GET")]
+    #[serde(with = "__baml_serde_union_literal_Union4KDELETEOrKGETOrKPOSTOrKPUT::KGET")]
     KGET,
 
     #[baml(name = "string_POST", literal_string = "POST")]
+    #[serde(with = "__baml_serde_union_literal_Union4KDELETEOrKGETOrKPOSTOrKPUT::KPOST")]
     KPOST,
 
     #[baml(name = "string_PUT", literal_string = "PUT")]
+    #[serde(with = "__baml_serde_union_literal_Union4KDELETEOrKGETOrKPOSTOrKPUT::KPUT")]
     KPUT,
 
     #[baml(name = "string_DELETE", literal_string = "DELETE")]
+    #[serde(with = "__baml_serde_union_literal_Union4KDELETEOrKGETOrKPOSTOrKPUT::KDELETE")]
     KDELETE,
 }
 
-impl AsRef<Union4KDELETEOrKGETOrKPOSTOrKPUT> for Union4KDELETEOrKGETOrKPOSTOrKPUT {
+impl ::std::convert::AsRef<Union4KDELETEOrKGETOrKPOSTOrKPUT> for Union4KDELETEOrKGETOrKPOSTOrKPUT {
     fn as_ref(&self) -> &Union4KDELETEOrKGETOrKPOSTOrKPUT {
         self
     }
 }
 
-impl Default for Union4KDELETEOrKGETOrKPOSTOrKPUT {
+impl ::std::default::Default for Union4KDELETEOrKGETOrKPOSTOrKPUT {
     fn default() -> Self {
         Self::KGET
     }
 }
 
 /// Generated from: ("draft" | "published" | "archived" | "deleted")
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union4KarchivedOrKdeletedOrKdraftOrKpublished {
     #[baml(name = "string_draft", literal_string = "draft")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KarchivedOrKdeletedOrKdraftOrKpublished::Kdraft"
+    )]
     Kdraft,
 
     #[baml(name = "string_published", literal_string = "published")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KarchivedOrKdeletedOrKdraftOrKpublished::Kpublished"
+    )]
     Kpublished,
 
     #[baml(name = "string_archived", literal_string = "archived")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KarchivedOrKdeletedOrKdraftOrKpublished::Karchived"
+    )]
     Karchived,
 
     #[baml(name = "string_deleted", literal_string = "deleted")]
+    #[serde(
+        with = "__baml_serde_union_literal_Union4KarchivedOrKdeletedOrKdraftOrKpublished::Kdeleted"
+    )]
     Kdeleted,
 }
 
-impl AsRef<Union4KarchivedOrKdeletedOrKdraftOrKpublished>
+impl ::std::convert::AsRef<Union4KarchivedOrKdeletedOrKdraftOrKpublished>
     for Union4KarchivedOrKdeletedOrKdraftOrKpublished
 {
     fn as_ref(&self) -> &Union4KarchivedOrKdeletedOrKdraftOrKpublished {
@@ -296,65 +377,93 @@ impl AsRef<Union4KarchivedOrKdeletedOrKdraftOrKpublished>
     }
 }
 
-impl Default for Union4KarchivedOrKdeletedOrKdraftOrKpublished {
+impl ::std::default::Default for Union4KarchivedOrKdeletedOrKdraftOrKpublished {
     fn default() -> Self {
         Self::Kdraft
     }
 }
 
 /// Generated from: (1 | 2 | 3 | 4 | 5)
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     #[baml(name = "int_1", literal_int = 1)]
+    #[serde(with = "__baml_serde_union_literal_Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK1")]
     IntK1,
 
     #[baml(name = "int_2", literal_int = 2)]
+    #[serde(with = "__baml_serde_union_literal_Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK2")]
     IntK2,
 
     #[baml(name = "int_3", literal_int = 3)]
+    #[serde(with = "__baml_serde_union_literal_Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK3")]
     IntK3,
 
     #[baml(name = "int_4", literal_int = 4)]
+    #[serde(with = "__baml_serde_union_literal_Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK4")]
     IntK4,
 
     #[baml(name = "int_5", literal_int = 5)]
+    #[serde(with = "__baml_serde_union_literal_Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5::IntK5")]
     IntK5,
 }
 
-impl AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5> for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
+impl ::std::convert::AsRef<Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5>
+    for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5
+{
     fn as_ref(&self) -> &Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
         self
     }
 }
 
-impl Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
+impl ::std::default::Default for Union5IntK1OrIntK2OrIntK3OrIntK4OrIntK5 {
     fn default() -> Self {
         Self::IntK1
     }
 }
 
 /// Generated from: (200 | 201 | 400 | 404 | 500)
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
     #[baml(name = "int_200", literal_int = 200)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500::IntK200"
+    )]
     IntK200,
 
     #[baml(name = "int_201", literal_int = 201)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500::IntK201"
+    )]
     IntK201,
 
     #[baml(name = "int_400", literal_int = 400)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500::IntK400"
+    )]
     IntK400,
 
     #[baml(name = "int_404", literal_int = 404)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500::IntK404"
+    )]
     IntK404,
 
     #[baml(name = "int_500", literal_int = 500)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500::IntK500"
+    )]
     IntK500,
 }
 
-impl AsRef<Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500>
+impl ::std::convert::AsRef<Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500>
     for Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500
 {
     fn as_ref(&self) -> &Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
@@ -362,39 +471,63 @@ impl AsRef<Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500>
     }
 }
 
-impl Default for Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
+impl ::std::default::Default for Union5IntK200OrIntK201OrIntK400OrIntK404OrIntK500 {
     fn default() -> Self {
         Self::IntK200
     }
 }
 
 /// Generated from: (0 | 1 | 2 | 3 | 5 | 8 | 13)
-#[derive(Debug, Clone, BamlEncode, BamlDecode, PartialEq, Eq, Hash)]
+#[derive(
+    Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize, PartialEq, Eq, Hash,
+)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
     #[baml(name = "int_0", literal_int = 0)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK0"
+    )]
     IntK0,
 
     #[baml(name = "int_1", literal_int = 1)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK1"
+    )]
     IntK1,
 
     #[baml(name = "int_2", literal_int = 2)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK2"
+    )]
     IntK2,
 
     #[baml(name = "int_3", literal_int = 3)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK3"
+    )]
     IntK3,
 
     #[baml(name = "int_5", literal_int = 5)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK5"
+    )]
     IntK5,
 
     #[baml(name = "int_8", literal_int = 8)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK8"
+    )]
     IntK8,
 
     #[baml(name = "int_13", literal_int = 13)]
+    #[serde(
+        with = "__baml_serde_union_literal_Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8::IntK13"
+    )]
     IntK13,
 }
 
-impl AsRef<Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8>
+impl ::std::convert::AsRef<Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8>
     for Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8
 {
     fn as_ref(&self) -> &Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
@@ -402,7 +535,7 @@ impl AsRef<Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8>
     }
 }
 
-impl Default for Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
+impl ::std::default::Default for Union7IntK0OrIntK1OrIntK13OrIntK2OrIntK3OrIntK5OrIntK8 {
     fn default() -> Self {
         Self::IntK0
     }

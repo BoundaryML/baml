@@ -7,12 +7,13 @@
 use std::ops::Index;
 
 use baml_base::Name;
+use rowan::TextRange;
 use rustc_hash::FxHashMap;
 
 use crate::{
     ids::{ItemKind, LocalItemId, hash_name},
     loc::{
-        ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker,
+        ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, RetryPolicyMarker,
         TemplateStringMarker, TestMarker, TypeAliasMarker,
     },
     type_ref::TypeRef,
@@ -76,6 +77,7 @@ pub struct ItemTree {
     pub(crate) generators: FxHashMap<LocalItemId<GeneratorMarker>, Generator>,
     pub(crate) tests: FxHashMap<LocalItemId<TestMarker>, Test>,
     pub(crate) template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
+    pub(crate) retry_policies: FxHashMap<LocalItemId<RetryPolicyMarker>, RetryPolicy>,
 
     /// Collision tracker: (`ItemKind`, hash) -> next available index.
     /// Single map for all item types, following rust-analyzer's pattern.
@@ -100,6 +102,7 @@ impl ItemTree {
             generators: FxHashMap::default(),
             tests: FxHashMap::default(),
             template_strings: FxHashMap::default(),
+            retry_policies: FxHashMap::default(),
             next_index: FxHashMap::default(),
         }
     }
@@ -170,6 +173,16 @@ impl ItemTree {
     ) -> LocalItemId<TemplateStringMarker> {
         let id = self.alloc_id(ItemKind::TemplateString, &template_string.name);
         self.template_strings.insert(id, template_string);
+        id
+    }
+
+    /// Add a retry policy and return its local ID.
+    pub fn alloc_retry_policy(
+        &mut self,
+        retry_policy: RetryPolicy,
+    ) -> LocalItemId<RetryPolicyMarker> {
+        let id = self.alloc_id(ItemKind::RetryPolicy, &retry_policy.name);
+        self.retry_policies.insert(id, retry_policy);
         id
     }
 
@@ -282,6 +295,30 @@ pub struct Client {
     pub default_role: Option<String>,
     /// Allowed roles for chat messages.
     pub allowed_roles: Vec<String>,
+    /// Name of the retry policy (references a top-level `retry_policy` definition).
+    pub retry_policy_name: Option<Name>,
+    /// Span of the retry policy reference (for diagnostics).
+    pub retry_policy_span: Option<TextRange>,
+    /// Sub-client names for composite clients (fallback/round-robin).
+    /// Empty for primitive clients.
+    pub sub_client_names: Vec<Name>,
+    /// Optional round-robin start index (`options { start ... }`).
+    /// Only used by `round-robin` providers.
+    pub round_robin_start: Option<i32>,
+}
+
+/// Retry policy configuration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetryPolicy {
+    pub name: Name,
+    /// Maximum number of retries.
+    pub max_retries: Option<String>,
+    /// Initial delay before first retry (milliseconds).
+    pub initial_delay_ms: Option<String>,
+    /// Delay multiplier for exponential backoff.
+    pub multiplier: Option<String>,
+    /// Maximum delay between retries (milliseconds).
+    pub max_delay_ms: Option<String>,
 }
 
 /// Test definition.
@@ -425,5 +462,15 @@ impl Index<LocalItemId<TemplateStringMarker>> for ItemTree {
         self.template_strings
             .get(&index)
             .expect("TemplateString not found in ItemTree")
+    }
+}
+
+/// Index `ItemTree` by `RetryPolicyMarker` to get `RetryPolicy` data.
+impl Index<LocalItemId<RetryPolicyMarker>> for ItemTree {
+    type Output = RetryPolicy;
+    fn index(&self, index: LocalItemId<RetryPolicyMarker>) -> &Self::Output {
+        self.retry_policies
+            .get(&index)
+            .expect("RetryPolicy not found in ItemTree")
     }
 }

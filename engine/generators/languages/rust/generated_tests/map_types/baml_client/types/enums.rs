@@ -5,10 +5,13 @@
 
 //! Generated enum types.
 
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode,
+    __internal::serde::{Deserialize, Serialize},
+};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode)]
-
+#[derive(Debug, Clone, PartialEq, Eq, Hash, BamlEncode, BamlDecode, Serialize, Deserialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub enum Status {
     ACTIVE,
 
@@ -17,14 +20,14 @@ pub enum Status {
     PENDING,
 }
 
-impl Default for Status {
+impl ::std::default::Default for Status {
     fn default() -> Self {
         Self::ACTIVE
     }
 }
 
-impl std::fmt::Display for Status {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ::std::fmt::Display for Status {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         match self {
             Self::ACTIVE => write!(f, "ACTIVE"),
 
@@ -35,23 +38,23 @@ impl std::fmt::Display for Status {
     }
 }
 
-impl std::str::FromStr for Status {
+impl ::std::str::FromStr for Status {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ::std::result::Result<Self, Self::Err> {
         match s {
-            "ACTIVE" => Ok(Self::ACTIVE),
+            "ACTIVE" => ::std::result::Result::Ok(Self::ACTIVE),
 
-            "INACTIVE" => Ok(Self::INACTIVE),
+            "INACTIVE" => ::std::result::Result::Ok(Self::INACTIVE),
 
-            "PENDING" => Ok(Self::PENDING),
+            "PENDING" => ::std::result::Result::Ok(Self::PENDING),
 
-            _ => Err(()),
+            _ => ::std::result::Result::Err(()),
         }
     }
 }
 
-impl AsRef<Status> for Status {
+impl ::std::convert::AsRef<Status> for Status {
     fn as_ref(&self) -> &Status {
         self
     }

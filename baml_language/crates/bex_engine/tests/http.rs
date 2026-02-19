@@ -167,20 +167,22 @@ async fn http_response_url() -> anyhow::Result<()> {
 }
 
 /// Test network error handling.
+/// Network errors return a synthetic response with `status_code=0`
+/// so orchestration code can check `ok()` and fall back.
 #[tokio::test]
 async fn http_fetch_network_error() -> anyhow::Result<()> {
     // Use an address that will definitely fail to connect
     assert_engine_executes(EngineProgram {
         fs: indexmap! {},
         source: r#"
-            function main() -> string {
+            function main() -> int {
                 let response = baml.http.fetch("http://localhost:1");
-                response.text()
+                response.status_code
             }
         "#,
         entry: "main",
         inputs: vec![],
-        expected: Err("HTTP request failed"),
+        expected: Ok(BexExternalValue::Int(0)),
     })
     .await
 }

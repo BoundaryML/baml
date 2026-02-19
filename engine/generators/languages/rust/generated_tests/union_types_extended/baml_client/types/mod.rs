@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     Admin(Admin),
 
@@ -102,92 +104,102 @@ pub enum Types {
     Union4BoolOrFloatOrIntOrString(Union4BoolOrFloatOrIntOrString),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::Admin(_) => "Admin",
+            Self::Admin(_) => "Admin",
 
-            Types::ApiError(_) => "ApiError",
+            Self::ApiError(_) => "ApiError",
 
-            Types::ApiPending(_) => "ApiPending",
+            Self::ApiPending(_) => "ApiPending",
 
-            Types::ApiSuccess(_) => "ApiSuccess",
+            Self::ApiSuccess(_) => "ApiSuccess",
 
-            Types::Bird(_) => "Bird",
+            Self::Bird(_) => "Bird",
 
-            Types::Cat(_) => "Cat",
+            Self::Cat(_) => "Cat",
 
-            Types::Circle(_) => "Circle",
+            Self::Circle(_) => "Circle",
 
-            Types::ComplexUnions(_) => "ComplexUnions",
+            Self::ComplexUnions(_) => "ComplexUnions",
 
-            Types::DataResponse(_) => "DataResponse",
+            Self::DataResponse(_) => "DataResponse",
 
-            Types::DiscriminatedUnions(_) => "DiscriminatedUnions",
+            Self::DiscriminatedUnions(_) => "DiscriminatedUnions",
 
-            Types::Dog(_) => "Dog",
+            Self::Dog(_) => "Dog",
 
-            Types::Error(_) => "Error",
+            Self::Error(_) => "Error",
 
-            Types::ErrorResponse(_) => "ErrorResponse",
+            Self::ErrorResponse(_) => "ErrorResponse",
 
-            Types::PrimitiveUnions(_) => "PrimitiveUnions",
+            Self::PrimitiveUnions(_) => "PrimitiveUnions",
 
-            Types::Product(_) => "Product",
+            Self::Product(_) => "Product",
 
-            Types::Rectangle(_) => "Rectangle",
+            Self::Rectangle(_) => "Rectangle",
 
-            Types::RecursiveUnion(_) => "RecursiveUnion",
+            Self::RecursiveUnion(_) => "RecursiveUnion",
 
-            Types::Result(_) => "Result",
+            Self::Result(_) => "Result",
 
-            Types::Success(_) => "Success",
+            Self::Success(_) => "Success",
 
-            Types::Triangle(_) => "Triangle",
+            Self::Triangle(_) => "Triangle",
 
-            Types::UnionArrays(_) => "UnionArrays",
+            Self::UnionArrays(_) => "UnionArrays",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::Warning(_) => "Warning",
+            Self::Warning(_) => "Warning",
 
-            Types::Union2BoolOrString(_) => "Union2BoolOrString",
+            Self::Union2BoolOrString(_) => "Union2BoolOrString",
 
-            Types::Union2DataResponseOrErrorResponse(_) => "Union2DataResponseOrErrorResponse",
+            Self::Union2DataResponseOrErrorResponse(_) => "Union2DataResponseOrErrorResponse",
 
-            Types::Union2FloatOrInt(_) => "Union2FloatOrInt",
+            Self::Union2FloatOrInt(_) => "Union2FloatOrInt",
 
-            Types::Union2FloatOrString(_) => "Union2FloatOrString",
+            Self::Union2FloatOrString(_) => "Union2FloatOrString",
 
-            Types::Union2IntOrString(_) => "Union2IntOrString",
+            Self::Union2IntOrString(_) => "Union2IntOrString",
 
-            Types::Union2ListIntOrString(_) => "Union2ListIntOrString",
+            Self::Union2ListIntOrString(_) => "Union2ListIntOrString",
 
-            Types::Union2ProductOrUser(_) => "Union2ProductOrUser",
+            Self::Union2ProductOrUser(_) => "Union2ProductOrUser",
 
-            Types::Union2RecursiveUnionOrString(_) => "Union2RecursiveUnionOrString",
+            Self::Union2RecursiveUnionOrString(_) => "Union2RecursiveUnionOrString",
 
-            Types::Union3AdminOrProductOrUser(_) => "Union3AdminOrProductOrUser",
+            Self::Union3AdminOrProductOrUser(_) => "Union3AdminOrProductOrUser",
 
-            Types::Union3ApiErrorOrApiPendingOrApiSuccess(_) => {
+            Self::Union3ApiErrorOrApiPendingOrApiSuccess(_) => {
                 "Union3ApiErrorOrApiPendingOrApiSuccess"
             }
 
-            Types::Union3BirdOrCatOrDog(_) => "Union3BirdOrCatOrDog",
+            Self::Union3BirdOrCatOrDog(_) => "Union3BirdOrCatOrDog",
 
-            Types::Union3CircleOrRectangleOrTriangle(_) => "Union3CircleOrRectangleOrTriangle",
+            Self::Union3CircleOrRectangleOrTriangle(_) => "Union3CircleOrRectangleOrTriangle",
 
-            Types::Union3ErrorOrSuccessOrWarning(_) => "Union3ErrorOrSuccessOrWarning",
+            Self::Union3ErrorOrSuccessOrWarning(_) => "Union3ErrorOrSuccessOrWarning",
 
-            Types::Union3FloatOrIntOrString(_) => "Union3FloatOrIntOrString",
+            Self::Union3FloatOrIntOrString(_) => "Union3FloatOrIntOrString",
 
-            Types::Union3IntOrRecursiveUnionOrString(_) => "Union3IntOrRecursiveUnionOrString",
+            Self::Union3IntOrRecursiveUnionOrString(_) => "Union3IntOrRecursiveUnionOrString",
 
-            Types::Union4BoolOrFloatOrIntOrString(_) => "Union4BoolOrFloatOrIntOrString",
+            Self::Union4BoolOrFloatOrIntOrString(_) => "Union4BoolOrFloatOrIntOrString",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

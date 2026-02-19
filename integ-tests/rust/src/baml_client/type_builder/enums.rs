@@ -11,22 +11,22 @@
 /// Access values via methods: `builder.ValueName()`
 
 pub struct AliasedEnumEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl AliasedEnumEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("AliasedEnum is statically defined in .baml and should always have a type")
@@ -37,14 +37,14 @@ impl AliasedEnumEnumBuilder {
     // =========================================================================
 
     /// Access the `KEY_ONE` value builder.
-    pub fn value_KEY_ONE(&self) -> baml::EnumValueBuilder {
+    pub fn value_KEY_ONE(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("KEY_ONE").expect(
             "AliasedEnum.KEY_ONE is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `KEY_TWO` value builder.
-    pub fn value_KEY_TWO(&self) -> baml::EnumValueBuilder {
+    pub fn value_KEY_TWO(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("KEY_TWO").expect(
             "AliasedEnum.KEY_TWO is statically defined in .baml and should always be present",
         )
@@ -57,22 +57,22 @@ impl AliasedEnumEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct CategoryEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl CategoryEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Category is statically defined in .baml and should always have a type")
@@ -83,35 +83,35 @@ impl CategoryEnumBuilder {
     // =========================================================================
 
     /// Access the `Refund` value builder.
-    pub fn value_Refund(&self) -> baml::EnumValueBuilder {
+    pub fn value_Refund(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Refund")
             .expect("Category.Refund is statically defined in .baml and should always be present")
     }
 
     /// Access the `CancelOrder` value builder.
-    pub fn value_CancelOrder(&self) -> baml::EnumValueBuilder {
+    pub fn value_CancelOrder(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("CancelOrder").expect(
             "Category.CancelOrder is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `TechnicalSupport` value builder.
-    pub fn value_TechnicalSupport(&self) -> baml::EnumValueBuilder {
+    pub fn value_TechnicalSupport(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("TechnicalSupport").expect(
             "Category.TechnicalSupport is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `AccountIssue` value builder.
-    pub fn value_AccountIssue(&self) -> baml::EnumValueBuilder {
+    pub fn value_AccountIssue(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("AccountIssue").expect(
             "Category.AccountIssue is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `Question` value builder.
-    pub fn value_Question(&self) -> baml::EnumValueBuilder {
+    pub fn value_Question(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Question")
             .expect("Category.Question is statically defined in .baml and should always be present")
@@ -124,22 +124,22 @@ impl CategoryEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct Category2EnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl Category2EnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Category2 is statically defined in .baml and should always have a type")
@@ -150,34 +150,34 @@ impl Category2EnumBuilder {
     // =========================================================================
 
     /// Access the `Refund` value builder.
-    pub fn value_Refund(&self) -> baml::EnumValueBuilder {
+    pub fn value_Refund(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Refund")
             .expect("Category2.Refund is statically defined in .baml and should always be present")
     }
 
     /// Access the `CancelOrder` value builder.
-    pub fn value_CancelOrder(&self) -> baml::EnumValueBuilder {
+    pub fn value_CancelOrder(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("CancelOrder").expect(
             "Category2.CancelOrder is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `TechnicalSupport` value builder.
-    pub fn value_TechnicalSupport(&self) -> baml::EnumValueBuilder {
+    pub fn value_TechnicalSupport(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("TechnicalSupport")
             .expect("Category2.TechnicalSupport is statically defined in .baml and should always be present")
     }
 
     /// Access the `AccountIssue` value builder.
-    pub fn value_AccountIssue(&self) -> baml::EnumValueBuilder {
+    pub fn value_AccountIssue(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("AccountIssue").expect(
             "Category2.AccountIssue is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `Question` value builder.
-    pub fn value_Question(&self) -> baml::EnumValueBuilder {
+    pub fn value_Question(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("Question").expect(
             "Category2.Question is statically defined in .baml and should always be present",
         )
@@ -190,22 +190,22 @@ impl Category2EnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct Category3EnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl Category3EnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Category3 is statically defined in .baml and should always have a type")
@@ -216,34 +216,34 @@ impl Category3EnumBuilder {
     // =========================================================================
 
     /// Access the `Refund` value builder.
-    pub fn value_Refund(&self) -> baml::EnumValueBuilder {
+    pub fn value_Refund(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Refund")
             .expect("Category3.Refund is statically defined in .baml and should always be present")
     }
 
     /// Access the `CancelOrder` value builder.
-    pub fn value_CancelOrder(&self) -> baml::EnumValueBuilder {
+    pub fn value_CancelOrder(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("CancelOrder").expect(
             "Category3.CancelOrder is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `TechnicalSupport` value builder.
-    pub fn value_TechnicalSupport(&self) -> baml::EnumValueBuilder {
+    pub fn value_TechnicalSupport(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("TechnicalSupport")
             .expect("Category3.TechnicalSupport is statically defined in .baml and should always be present")
     }
 
     /// Access the `AccountIssue` value builder.
-    pub fn value_AccountIssue(&self) -> baml::EnumValueBuilder {
+    pub fn value_AccountIssue(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("AccountIssue").expect(
             "Category3.AccountIssue is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `Question` value builder.
-    pub fn value_Question(&self) -> baml::EnumValueBuilder {
+    pub fn value_Question(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("Question").expect(
             "Category3.Question is statically defined in .baml and should always be present",
         )
@@ -259,29 +259,32 @@ impl Category3EnumBuilder {
 /// This enum is marked `@@dynamic` - you can add new values at runtime.
 
 pub struct ColorEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl ColorEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Color is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
-    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+    pub fn add_value(
+        &self,
+        value: &str,
+    ) -> ::std::result::Result<::baml::EnumValueBuilder, ::baml::BamlError> {
         self.inner.add_value(value)
     }
 
@@ -290,42 +293,42 @@ impl ColorEnumBuilder {
     // =========================================================================
 
     /// Access the `RED` value builder.
-    pub fn value_RED(&self) -> baml::EnumValueBuilder {
+    pub fn value_RED(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("RED")
             .expect("Color.RED is statically defined in .baml and should always be present")
     }
 
     /// Access the `BLUE` value builder.
-    pub fn value_BLUE(&self) -> baml::EnumValueBuilder {
+    pub fn value_BLUE(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("BLUE")
             .expect("Color.BLUE is statically defined in .baml and should always be present")
     }
 
     /// Access the `GREEN` value builder.
-    pub fn value_GREEN(&self) -> baml::EnumValueBuilder {
+    pub fn value_GREEN(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("GREEN")
             .expect("Color.GREEN is statically defined in .baml and should always be present")
     }
 
     /// Access the `YELLOW` value builder.
-    pub fn value_YELLOW(&self) -> baml::EnumValueBuilder {
+    pub fn value_YELLOW(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("YELLOW")
             .expect("Color.YELLOW is statically defined in .baml and should always be present")
     }
 
     /// Access the `BLACK` value builder.
-    pub fn value_BLACK(&self) -> baml::EnumValueBuilder {
+    pub fn value_BLACK(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("BLACK")
             .expect("Color.BLACK is statically defined in .baml and should always be present")
     }
 
     /// Access the `WHITE` value builder.
-    pub fn value_WHITE(&self) -> baml::EnumValueBuilder {
+    pub fn value_WHITE(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("WHITE")
             .expect("Color.WHITE is statically defined in .baml and should always be present")
@@ -338,22 +341,22 @@ impl ColorEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct DataTypeEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl DataTypeEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DataType is statically defined in .baml and should always have a type")
@@ -364,14 +367,14 @@ impl DataTypeEnumBuilder {
     // =========================================================================
 
     /// Access the `Resume` value builder.
-    pub fn value_Resume(&self) -> baml::EnumValueBuilder {
+    pub fn value_Resume(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Resume")
             .expect("DataType.Resume is statically defined in .baml and should always be present")
     }
 
     /// Access the `Event` value builder.
-    pub fn value_Event(&self) -> baml::EnumValueBuilder {
+    pub fn value_Event(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Event")
             .expect("DataType.Event is statically defined in .baml and should always be present")
@@ -387,29 +390,32 @@ impl DataTypeEnumBuilder {
 /// This enum is marked `@@dynamic` - you can add new values at runtime.
 
 pub struct DynEnumOneEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl DynEnumOneEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DynEnumOne is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
-    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+    pub fn add_value(
+        &self,
+        value: &str,
+    ) -> ::std::result::Result<::baml::EnumValueBuilder, ::baml::BamlError> {
         self.inner.add_value(value)
     }
 
@@ -427,29 +433,32 @@ impl DynEnumOneEnumBuilder {
 /// This enum is marked `@@dynamic` - you can add new values at runtime.
 
 pub struct DynEnumThreeEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl DynEnumThreeEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DynEnumThree is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
-    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+    pub fn add_value(
+        &self,
+        value: &str,
+    ) -> ::std::result::Result<::baml::EnumValueBuilder, ::baml::BamlError> {
         self.inner.add_value(value)
     }
 
@@ -458,14 +467,14 @@ impl DynEnumThreeEnumBuilder {
     // =========================================================================
 
     /// Access the `TRICYCLE` value builder.
-    pub fn value_TRICYCLE(&self) -> baml::EnumValueBuilder {
+    pub fn value_TRICYCLE(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("TRICYCLE").expect(
             "DynEnumThree.TRICYCLE is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `TRIANGLE` value builder.
-    pub fn value_TRIANGLE(&self) -> baml::EnumValueBuilder {
+    pub fn value_TRIANGLE(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("TRIANGLE").expect(
             "DynEnumThree.TRIANGLE is statically defined in .baml and should always be present",
         )
@@ -481,29 +490,32 @@ impl DynEnumThreeEnumBuilder {
 /// This enum is marked `@@dynamic` - you can add new values at runtime.
 
 pub struct DynEnumTwoEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl DynEnumTwoEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("DynEnumTwo is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
-    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+    pub fn add_value(
+        &self,
+        value: &str,
+    ) -> ::std::result::Result<::baml::EnumValueBuilder, ::baml::BamlError> {
         self.inner.add_value(value)
     }
 
@@ -518,22 +530,22 @@ impl DynEnumTwoEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct EnumInClassEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl EnumInClassEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("EnumInClass is statically defined in .baml and should always have a type")
@@ -544,14 +556,14 @@ impl EnumInClassEnumBuilder {
     // =========================================================================
 
     /// Access the `ONE` value builder.
-    pub fn value_ONE(&self) -> baml::EnumValueBuilder {
+    pub fn value_ONE(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("ONE")
             .expect("EnumInClass.ONE is statically defined in .baml and should always be present")
     }
 
     /// Access the `TWO` value builder.
-    pub fn value_TWO(&self) -> baml::EnumValueBuilder {
+    pub fn value_TWO(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("TWO")
             .expect("EnumInClass.TWO is statically defined in .baml and should always be present")
@@ -564,22 +576,22 @@ impl EnumInClassEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct EnumOutputEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl EnumOutputEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("EnumOutput is statically defined in .baml and should always have a type")
@@ -590,21 +602,21 @@ impl EnumOutputEnumBuilder {
     // =========================================================================
 
     /// Access the `ONE` value builder.
-    pub fn value_ONE(&self) -> baml::EnumValueBuilder {
+    pub fn value_ONE(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("ONE")
             .expect("EnumOutput.ONE is statically defined in .baml and should always be present")
     }
 
     /// Access the `TWO` value builder.
-    pub fn value_TWO(&self) -> baml::EnumValueBuilder {
+    pub fn value_TWO(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("TWO")
             .expect("EnumOutput.TWO is statically defined in .baml and should always be present")
     }
 
     /// Access the `THREE` value builder.
-    pub fn value_THREE(&self) -> baml::EnumValueBuilder {
+    pub fn value_THREE(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("THREE")
             .expect("EnumOutput.THREE is statically defined in .baml and should always be present")
@@ -620,29 +632,32 @@ impl EnumOutputEnumBuilder {
 /// This enum is marked `@@dynamic` - you can add new values at runtime.
 
 pub struct HobbyEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl HobbyEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Hobby is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
-    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+    pub fn add_value(
+        &self,
+        value: &str,
+    ) -> ::std::result::Result<::baml::EnumValueBuilder, ::baml::BamlError> {
         self.inner.add_value(value)
     }
 
@@ -651,21 +666,21 @@ impl HobbyEnumBuilder {
     // =========================================================================
 
     /// Access the `SPORTS` value builder.
-    pub fn value_SPORTS(&self) -> baml::EnumValueBuilder {
+    pub fn value_SPORTS(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("SPORTS")
             .expect("Hobby.SPORTS is statically defined in .baml and should always be present")
     }
 
     /// Access the `MUSIC` value builder.
-    pub fn value_MUSIC(&self) -> baml::EnumValueBuilder {
+    pub fn value_MUSIC(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("MUSIC")
             .expect("Hobby.MUSIC is statically defined in .baml and should always be present")
     }
 
     /// Access the `READING` value builder.
-    pub fn value_READING(&self) -> baml::EnumValueBuilder {
+    pub fn value_READING(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("READING")
             .expect("Hobby.READING is statically defined in .baml and should always be present")
@@ -678,22 +693,22 @@ impl HobbyEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct MapKeyEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl MapKeyEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("MapKey is statically defined in .baml and should always have a type")
@@ -704,21 +719,21 @@ impl MapKeyEnumBuilder {
     // =========================================================================
 
     /// Access the `A` value builder.
-    pub fn value_A(&self) -> baml::EnumValueBuilder {
+    pub fn value_A(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("A")
             .expect("MapKey.A is statically defined in .baml and should always be present")
     }
 
     /// Access the `B` value builder.
-    pub fn value_B(&self) -> baml::EnumValueBuilder {
+    pub fn value_B(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("B")
             .expect("MapKey.B is statically defined in .baml and should always be present")
     }
 
     /// Access the `C` value builder.
-    pub fn value_C(&self) -> baml::EnumValueBuilder {
+    pub fn value_C(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("C")
             .expect("MapKey.C is statically defined in .baml and should always be present")
@@ -731,22 +746,22 @@ impl MapKeyEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct NamedArgsSingleEnumEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl NamedArgsSingleEnumEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "NamedArgsSingleEnum is statically defined in .baml and should always have a type",
         )
@@ -757,14 +772,14 @@ impl NamedArgsSingleEnumEnumBuilder {
     // =========================================================================
 
     /// Access the `ONE` value builder.
-    pub fn value_ONE(&self) -> baml::EnumValueBuilder {
+    pub fn value_ONE(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("ONE").expect(
             "NamedArgsSingleEnum.ONE is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `TWO` value builder.
-    pub fn value_TWO(&self) -> baml::EnumValueBuilder {
+    pub fn value_TWO(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("TWO").expect(
             "NamedArgsSingleEnum.TWO is statically defined in .baml and should always be present",
         )
@@ -777,22 +792,22 @@ impl NamedArgsSingleEnumEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct NamedArgsSingleEnumListEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl NamedArgsSingleEnumListEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type().expect(
             "NamedArgsSingleEnumList is statically defined in .baml and should always have a type",
         )
@@ -803,13 +818,13 @@ impl NamedArgsSingleEnumListEnumBuilder {
     // =========================================================================
 
     /// Access the `ONE` value builder.
-    pub fn value_ONE(&self) -> baml::EnumValueBuilder {
+    pub fn value_ONE(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("ONE")
             .expect("NamedArgsSingleEnumList.ONE is statically defined in .baml and should always be present")
     }
 
     /// Access the `TWO` value builder.
-    pub fn value_TWO(&self) -> baml::EnumValueBuilder {
+    pub fn value_TWO(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("TWO")
             .expect("NamedArgsSingleEnumList.TWO is statically defined in .baml and should always be present")
     }
@@ -821,22 +836,22 @@ impl NamedArgsSingleEnumListEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct OptionalTest_CategoryTypeEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl OptionalTest_CategoryTypeEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner.as_type()
             .expect("OptionalTest_CategoryType is statically defined in .baml and should always have a type")
     }
@@ -846,19 +861,19 @@ impl OptionalTest_CategoryTypeEnumBuilder {
     // =========================================================================
 
     /// Access the `Aleph` value builder.
-    pub fn value_Aleph(&self) -> baml::EnumValueBuilder {
+    pub fn value_Aleph(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("Aleph")
             .expect("OptionalTest_CategoryType.Aleph is statically defined in .baml and should always be present")
     }
 
     /// Access the `Beta` value builder.
-    pub fn value_Beta(&self) -> baml::EnumValueBuilder {
+    pub fn value_Beta(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("Beta")
             .expect("OptionalTest_CategoryType.Beta is statically defined in .baml and should always be present")
     }
 
     /// Access the `Gamma` value builder.
-    pub fn value_Gamma(&self) -> baml::EnumValueBuilder {
+    pub fn value_Gamma(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("Gamma")
             .expect("OptionalTest_CategoryType.Gamma is statically defined in .baml and should always be present")
     }
@@ -870,22 +885,22 @@ impl OptionalTest_CategoryTypeEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct OrderStatusEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl OrderStatusEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("OrderStatus is statically defined in .baml and should always have a type")
@@ -896,28 +911,28 @@ impl OrderStatusEnumBuilder {
     // =========================================================================
 
     /// Access the `ORDERED` value builder.
-    pub fn value_ORDERED(&self) -> baml::EnumValueBuilder {
+    pub fn value_ORDERED(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("ORDERED").expect(
             "OrderStatus.ORDERED is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `SHIPPED` value builder.
-    pub fn value_SHIPPED(&self) -> baml::EnumValueBuilder {
+    pub fn value_SHIPPED(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("SHIPPED").expect(
             "OrderStatus.SHIPPED is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `DELIVERED` value builder.
-    pub fn value_DELIVERED(&self) -> baml::EnumValueBuilder {
+    pub fn value_DELIVERED(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("DELIVERED").expect(
             "OrderStatus.DELIVERED is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `CANCELLED` value builder.
-    pub fn value_CANCELLED(&self) -> baml::EnumValueBuilder {
+    pub fn value_CANCELLED(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("CANCELLED").expect(
             "OrderStatus.CANCELLED is statically defined in .baml and should always be present",
         )
@@ -933,29 +948,32 @@ impl OrderStatusEnumBuilder {
 /// This enum is marked `@@dynamic` - you can add new values at runtime.
 
 pub struct RenderStatusEnumEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl RenderStatusEnumEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("RenderStatusEnum is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
-    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+    pub fn add_value(
+        &self,
+        value: &str,
+    ) -> ::std::result::Result<::baml::EnumValueBuilder, ::baml::BamlError> {
         self.inner.add_value(value)
     }
 
@@ -964,14 +982,14 @@ impl RenderStatusEnumEnumBuilder {
     // =========================================================================
 
     /// Access the `ACTIVE` value builder.
-    pub fn value_ACTIVE(&self) -> baml::EnumValueBuilder {
+    pub fn value_ACTIVE(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("ACTIVE").expect(
             "RenderStatusEnum.ACTIVE is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `INACTIVE` value builder.
-    pub fn value_INACTIVE(&self) -> baml::EnumValueBuilder {
+    pub fn value_INACTIVE(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("INACTIVE").expect(
             "RenderStatusEnum.INACTIVE is statically defined in .baml and should always be present",
         )
@@ -987,29 +1005,32 @@ impl RenderStatusEnumEnumBuilder {
 /// This enum is marked `@@dynamic` - you can add new values at runtime.
 
 pub struct RenderTestEnumEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl RenderTestEnumEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("RenderTestEnum is statically defined in .baml and should always have a type")
     }
 
     /// Add a new value to this dynamic enum.
-    pub fn add_value(&self, value: &str) -> Result<baml::EnumValueBuilder, baml::BamlError> {
+    pub fn add_value(
+        &self,
+        value: &str,
+    ) -> ::std::result::Result<::baml::EnumValueBuilder, ::baml::BamlError> {
         self.inner.add_value(value)
     }
 
@@ -1018,14 +1039,14 @@ impl RenderTestEnumEnumBuilder {
     // =========================================================================
 
     /// Access the `BIKE` value builder.
-    pub fn value_BIKE(&self) -> baml::EnumValueBuilder {
+    pub fn value_BIKE(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("BIKE").expect(
             "RenderTestEnum.BIKE is statically defined in .baml and should always be present",
         )
     }
 
     /// Access the `SCOOTER` value builder.
-    pub fn value_SCOOTER(&self) -> baml::EnumValueBuilder {
+    pub fn value_SCOOTER(&self) -> ::baml::EnumValueBuilder {
         self.inner.get_value("SCOOTER").expect(
             "RenderTestEnum.SCOOTER is statically defined in .baml and should always be present",
         )
@@ -1038,22 +1059,22 @@ impl RenderTestEnumEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct TagEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl TagEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("Tag is statically defined in .baml and should always have a type")
@@ -1064,21 +1085,21 @@ impl TagEnumBuilder {
     // =========================================================================
 
     /// Access the `Security` value builder.
-    pub fn value_Security(&self) -> baml::EnumValueBuilder {
+    pub fn value_Security(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Security")
             .expect("Tag.Security is statically defined in .baml and should always be present")
     }
 
     /// Access the `AI` value builder.
-    pub fn value_AI(&self) -> baml::EnumValueBuilder {
+    pub fn value_AI(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("AI")
             .expect("Tag.AI is statically defined in .baml and should always be present")
     }
 
     /// Access the `Blockchain` value builder.
-    pub fn value_Blockchain(&self) -> baml::EnumValueBuilder {
+    pub fn value_Blockchain(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("Blockchain")
             .expect("Tag.Blockchain is statically defined in .baml and should always be present")
@@ -1091,22 +1112,22 @@ impl TagEnumBuilder {
 /// Access values via methods: `builder.ValueName()`
 
 pub struct TestEnumEnumBuilder {
-    inner: baml::EnumBuilder,
+    inner: ::baml::EnumBuilder,
 }
 
 impl TestEnumEnumBuilder {
     /// Create wrapper from runtime EnumBuilder.
-    pub(crate) fn new(inner: baml::EnumBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::EnumBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying EnumBuilder.
-    pub fn inner(&self) -> &baml::EnumBuilder {
+    pub fn inner(&self) -> &::baml::EnumBuilder {
         &self.inner
     }
 
     /// Get the enum as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("TestEnum is statically defined in .baml and should always have a type")
@@ -1117,49 +1138,49 @@ impl TestEnumEnumBuilder {
     // =========================================================================
 
     /// Access the `A` value builder.
-    pub fn value_A(&self) -> baml::EnumValueBuilder {
+    pub fn value_A(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("A")
             .expect("TestEnum.A is statically defined in .baml and should always be present")
     }
 
     /// Access the `B` value builder.
-    pub fn value_B(&self) -> baml::EnumValueBuilder {
+    pub fn value_B(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("B")
             .expect("TestEnum.B is statically defined in .baml and should always be present")
     }
 
     /// Access the `C` value builder.
-    pub fn value_C(&self) -> baml::EnumValueBuilder {
+    pub fn value_C(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("C")
             .expect("TestEnum.C is statically defined in .baml and should always be present")
     }
 
     /// Access the `D` value builder.
-    pub fn value_D(&self) -> baml::EnumValueBuilder {
+    pub fn value_D(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("D")
             .expect("TestEnum.D is statically defined in .baml and should always be present")
     }
 
     /// Access the `E` value builder.
-    pub fn value_E(&self) -> baml::EnumValueBuilder {
+    pub fn value_E(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("E")
             .expect("TestEnum.E is statically defined in .baml and should always be present")
     }
 
     /// Access the `F` value builder.
-    pub fn value_F(&self) -> baml::EnumValueBuilder {
+    pub fn value_F(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("F")
             .expect("TestEnum.F is statically defined in .baml and should always be present")
     }
 
     /// Access the `G` value builder.
-    pub fn value_G(&self) -> baml::EnumValueBuilder {
+    pub fn value_G(&self) -> ::baml::EnumValueBuilder {
         self.inner
             .get_value("G")
             .expect("TestEnum.G is statically defined in .baml and should always be present")

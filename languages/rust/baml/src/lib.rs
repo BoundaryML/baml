@@ -49,7 +49,7 @@ pub use args::{CancellationToken, FunctionArgs};
 // New dynamic type exports
 pub use async_stream::AsyncStreamingCall;
 // Re-export derive macros
-pub use baml_macros::{BamlDecode, BamlEncode};
+pub use baml_macros::{BamlDecode, BamlEncode, BamlSerde};
 pub use client_registry::ClientRegistry;
 pub use codec::{
     decode_enum, decode_field, encode_class, encode_class_dynamic, encode_enum, BamlClass,
@@ -100,7 +100,13 @@ pub use types::{Check, CheckStatus, Checked, StreamState, StreamingState};
 #[doc(hidden)]
 pub mod __internal {
     use crate::{codec::traits::BamlClass, error::BamlError};
-    pub use crate::{ffi::callbacks, proto::baml_cffi_v1::*};
+    pub use crate::{
+        ffi::callbacks,
+        proto::baml_cffi_v1::*,
+        raw_objects::{BamlMediaRepr, BamlMediaReprContent},
+    };
+    /// re-export
+    pub use serde;
 
     /// Decode a class from a `CffiValueHolder`.
     /// Used by derive macros to implement `BamlDecode` for structs.

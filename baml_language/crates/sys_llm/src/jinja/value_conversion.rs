@@ -79,6 +79,16 @@ pub(crate) fn external_value_to_jinja(
             })
         }
 
+        BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
+            Err(RenderPromptError::ConversionError {
+                reason: "Collector should not be passed to Jinja templates".to_string(),
+            })
+        }
+
+        BexExternalValue::Adt(BexExternalAdt::Type(_)) => Err(RenderPromptError::ConversionError {
+            reason: "Type values cannot be passed to Jinja templates".to_string(),
+        }),
+
         BexExternalValue::FunctionRef { .. } => Err(RenderPromptError::ConversionError {
             reason: "FunctionRef should not be passed to Jinja templates".to_string(),
         }),

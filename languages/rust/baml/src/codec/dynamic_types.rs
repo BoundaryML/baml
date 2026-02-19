@@ -2,6 +2,9 @@
 
 use std::collections::HashMap;
 
+use serde::ser::SerializeMap as _;
+use serde::Serialize;
+
 use super::{
     baml_value::BamlValue, from_baml_value::FromBamlValue, from_baml_value_ref::FromBamlValueRef,
     known_types::KnownTypes,
@@ -84,6 +87,23 @@ impl<T: KnownTypes, S: KnownTypes> DynamicClass<T, S> {
     }
 }
 
+impl<T: KnownTypes + serde::Serialize, S: KnownTypes + serde::Serialize> serde::Serialize
+    for DynamicClass<T, S>
+{
+    fn serialize<Ser: serde::Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+        self.fields.serialize(serializer)
+    }
+}
+impl<'de, T: KnownTypes + serde::Deserialize<'de>, S: KnownTypes + serde::Deserialize<'de>>
+    serde::Deserialize<'de> for DynamicClass<T, S>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "DynamicClass cannot be deserialized as the class name is not known",
+        ))
+    }
+}
+
 /// A dynamic enum - name and value as strings
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DynamicEnum {
@@ -95,6 +115,20 @@ impl DynamicEnum {
     /// Get the enum name (e.g., "Sentiment", "Status").
     pub fn name(&self) -> &str {
         &self.name
+    }
+}
+
+impl Serialize for DynamicEnum {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.value)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DynamicEnum {
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "DynamicEnum cannot be deserialized as the enum name is not known",
+        ))
     }
 }
 
@@ -110,6 +144,24 @@ impl<T: KnownTypes, S: KnownTypes> DynamicUnion<T, S> {
     /// Get the union name (e.g., "`FooOrBar`", "`ResultOrError`").
     pub fn name(&self) -> &str {
         &self.name
+    }
+}
+
+impl<T: KnownTypes + serde::Serialize, S: KnownTypes + serde::Serialize> serde::Serialize
+    for DynamicUnion<T, S>
+{
+    fn serialize<Ser: serde::Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+        self.value.serialize(serializer)
+    }
+}
+
+impl<'de, T: KnownTypes + serde::Deserialize<'de>, S: KnownTypes + serde::Deserialize<'de>>
+    serde::Deserialize<'de> for DynamicUnion<T, S>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "DynamicUnion cannot be deserialized as the union name is not known",
+        ))
     }
 }
 

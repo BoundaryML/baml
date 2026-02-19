@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct AllNullable {
     pub nullString: Option<String>,
 
@@ -28,14 +28,14 @@ pub struct AllNullable {
     pub nullObject: Option<User>,
 }
 
-impl AsRef<AllNullable> for AllNullable {
+impl ::std::convert::AsRef<AllNullable> for AllNullable {
     fn as_ref(&self) -> &AllNullable {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct BooleanEdgeCases {
     pub explicitTrue: Option<bool>,
 
@@ -48,14 +48,14 @@ pub struct BooleanEdgeCases {
     pub mixedBoolArray: Vec<bool>,
 }
 
-impl AsRef<BooleanEdgeCases> for BooleanEdgeCases {
+impl ::std::convert::AsRef<BooleanEdgeCases> for BooleanEdgeCases {
     fn as_ref(&self) -> &BooleanEdgeCases {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct CircularReference {
     pub id: Option<i64>,
 
@@ -68,28 +68,28 @@ pub struct CircularReference {
     pub relatedItems: Vec<Box<CircularReference>>,
 }
 
-impl AsRef<CircularReference> for CircularReference {
+impl ::std::convert::AsRef<CircularReference> for CircularReference {
     fn as_ref(&self) -> &CircularReference {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct DeepRecursion {
     pub value: Option<String>,
 
     pub next: Option<Box<DeepRecursion>>,
 }
 
-impl AsRef<DeepRecursion> for DeepRecursion {
+impl ::std::convert::AsRef<DeepRecursion> for DeepRecursion {
     fn as_ref(&self) -> &DeepRecursion {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct EmptyCollections {
     pub emptyStringArray: Vec<String>,
 
@@ -102,26 +102,26 @@ pub struct EmptyCollections {
     pub emptyNestedArray: Vec<Vec<String>>,
 }
 
-impl AsRef<EmptyCollections> for EmptyCollections {
+impl ::std::convert::AsRef<EmptyCollections> for EmptyCollections {
     fn as_ref(&self) -> &EmptyCollections {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct InnerNullable {
     pub value: Option<String>,
 }
 
-impl AsRef<InnerNullable> for InnerNullable {
+impl ::std::convert::AsRef<InnerNullable> for InnerNullable {
     fn as_ref(&self) -> &InnerNullable {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct LargeStructure {
     pub field1: Option<String>,
 
@@ -184,14 +184,14 @@ pub struct LargeStructure {
     pub map5: std::collections::HashMap<String, User>,
 }
 
-impl AsRef<LargeStructure> for LargeStructure {
+impl ::std::convert::AsRef<LargeStructure> for LargeStructure {
     fn as_ref(&self) -> &LargeStructure {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct MixedEdgeCases {
     pub emptyString: Option<String>,
 
@@ -209,26 +209,26 @@ pub struct MixedEdgeCases {
     pub optionalEverything: Option<OptionalEverything>,
 }
 
-impl AsRef<MixedEdgeCases> for MixedEdgeCases {
+impl ::std::convert::AsRef<MixedEdgeCases> for MixedEdgeCases {
     fn as_ref(&self) -> &MixedEdgeCases {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NestedNullable {
     pub outer: Option<OuterNullable>,
 }
 
-impl AsRef<NestedNullable> for NestedNullable {
+impl ::std::convert::AsRef<NestedNullable> for NestedNullable {
     fn as_ref(&self) -> &NestedNullable {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NullEdgeCases {
     pub allNull: Option<AllNullable>,
 
@@ -237,14 +237,14 @@ pub struct NullEdgeCases {
     pub nestedNull: Option<NestedNullable>,
 }
 
-impl AsRef<NullEdgeCases> for NullEdgeCases {
+impl ::std::convert::AsRef<NullEdgeCases> for NullEdgeCases {
     fn as_ref(&self) -> &NullEdgeCases {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct NumberEdgeCases {
     pub zero: Option<i64>,
 
@@ -267,14 +267,14 @@ pub struct NumberEdgeCases {
     pub notANumber: Option<f64>,
 }
 
-impl AsRef<NumberEdgeCases> for NumberEdgeCases {
+impl ::std::convert::AsRef<NumberEdgeCases> for NumberEdgeCases {
     fn as_ref(&self) -> &NumberEdgeCases {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OptionalEverything {
     pub optString: Option<String>,
 
@@ -291,26 +291,26 @@ pub struct OptionalEverything {
     pub optObject: Option<User>,
 }
 
-impl AsRef<OptionalEverything> for OptionalEverything {
+impl ::std::convert::AsRef<OptionalEverything> for OptionalEverything {
     fn as_ref(&self) -> &OptionalEverything {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct OuterNullable {
     pub inner: Option<InnerNullable>,
 }
 
-impl AsRef<OuterNullable> for OuterNullable {
+impl ::std::convert::AsRef<OuterNullable> for OuterNullable {
     fn as_ref(&self) -> &OuterNullable {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SomeNullable {
     pub presentString: Option<String>,
 
@@ -321,14 +321,14 @@ pub struct SomeNullable {
     pub nullInt: Option<i64>,
 }
 
-impl AsRef<SomeNullable> for SomeNullable {
+impl ::std::convert::AsRef<SomeNullable> for SomeNullable {
     fn as_ref(&self) -> &SomeNullable {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct SpecialCharacters {
     pub normalText: Option<String>,
 
@@ -347,28 +347,28 @@ pub struct SpecialCharacters {
     pub withMixedSpecial: Option<String>,
 }
 
-impl AsRef<SpecialCharacters> for SpecialCharacters {
+impl ::std::convert::AsRef<SpecialCharacters> for SpecialCharacters {
     fn as_ref(&self) -> &SpecialCharacters {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct User {
     pub id: Option<i64>,
 
     pub name: Option<String>,
 }
 
-impl AsRef<User> for User {
+impl ::std::convert::AsRef<User> for User {
     fn as_ref(&self) -> &User {
         self
     }
 }
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct VeryLongStrings {
     pub shortString: Option<String>,
 
@@ -381,7 +381,7 @@ pub struct VeryLongStrings {
     pub extremelyLongString: Option<String>,
 }
 
-impl AsRef<VeryLongStrings> for VeryLongStrings {
+impl ::std::convert::AsRef<VeryLongStrings> for VeryLongStrings {
     fn as_ref(&self) -> &VeryLongStrings {
         self
     }

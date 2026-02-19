@@ -1083,6 +1083,24 @@ impl ClientDef {
     }
 }
 
+impl RetryPolicyDef {
+    /// Get the retry policy name.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| {
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
+            })
+            .nth(0)
+    }
+
+    /// Get the config block.
+    pub fn config_block(&self) -> Option<ConfigBlock> {
+        self.syntax.children().find_map(ConfigBlock::cast)
+    }
+}
+
 impl GeneratorDef {
     /// Get the generator name.
     pub fn name(&self) -> Option<SyntaxToken> {
@@ -1172,12 +1190,15 @@ impl DynamicTypeDef {
 }
 
 impl ConfigItem {
-    /// Get the config item key (first WORD token).
+    /// Get the config item key (first WORD or keyword token).
+    ///
+    /// Config items can have keyword tokens as keys (e.g., `retry_policy` inside
+    /// a client block is lexed as `KW_RETRY_POLICY`, not `WORD`).
     pub fn key(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_RETRY_POLICY))
     }
 
     /// Get the config item value (WORD token inside `CONFIG_VALUE`, if present).
@@ -2151,6 +2172,7 @@ impl LetStmt {
                     | SyntaxKind::FIELD_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
+                    | SyntaxKind::MATCH_EXPR
                     | SyntaxKind::BLOCK_EXPR
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::ARRAY_LITERAL

@@ -1,0 +1,25 @@
+[package]
+name = "baml_fmt"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_db = { workspace = true }
+baml_project = { workspace = true }
+ouroboros = { workspace = true }
+rowan = { workspace = true }
+salsa = { workspace = true }
+thiserror = { workspace = true }

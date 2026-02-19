@@ -10,10 +10,10 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{BamlDecode, __internal::serde::Serialize};
 
-#[derive(Debug, Clone, Default, BamlDecode)]
-
+#[derive(Debug, Clone, Default, BamlDecode, Serialize)]
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Address {
     pub street: Option<String>,
 
@@ -22,15 +22,15 @@ pub struct Address {
     pub country: Option<String>,
 }
 
-impl AsRef<Address> for Address {
+impl ::std::convert::AsRef<Address> for Address {
     fn as_ref(&self) -> &Address {
         self
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Article {
     pub title: Option<String>,
 
@@ -42,23 +42,24 @@ pub struct Article {
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+    #[serde(flatten)]
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
 impl Article {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<crate::baml_client::types::Types, super::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<crate::baml_client::types::Types, super::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -67,7 +68,9 @@ impl Article {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -79,41 +82,41 @@ impl Article {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
-            &baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+            &::baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
         ),
     > {
         self.__dynamic.iter().map(|(k, v)| (k.as_str(), v))
     }
 }
 
-impl Default for Article {
+impl ::std::default::Default for Article {
     fn default() -> Self {
         Self {
-            title: Default::default(),
+            title: ::std::default::Default::default(),
 
-            category: Default::default(),
+            category: ::std::default::Default::default(),
 
-            author: Default::default(),
+            author: ::std::default::Default::default(),
 
-            status: Default::default(),
+            status: ::std::default::Default::default(),
 
-            __dynamic: std::collections::HashMap::new(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<Article> for Article {
+impl ::std::convert::AsRef<Article> for Article {
     fn as_ref(&self) -> &Article {
         self
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct Person {
     pub name: Option<String>,
 
@@ -121,23 +124,24 @@ pub struct Person {
 
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+    #[serde(flatten)]
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
 impl Person {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<crate::baml_client::types::Types, super::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<crate::baml_client::types::Types, super::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -146,7 +150,9 @@ impl Person {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -158,57 +164,58 @@ impl Person {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
-            &baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+            &::baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
         ),
     > {
         self.__dynamic.iter().map(|(k, v)| (k.as_str(), v))
     }
 }
 
-impl Default for Person {
+impl ::std::default::Default for Person {
     fn default() -> Self {
         Self {
-            name: Default::default(),
+            name: ::std::default::Default::default(),
 
-            age: Default::default(),
+            age: ::std::default::Default::default(),
 
-            __dynamic: std::collections::HashMap::new(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<Person> for Person {
+impl ::std::convert::AsRef<Person> for Person {
     fn as_ref(&self) -> &Person {
         self
     }
 }
 
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, Serialize)]
 #[baml(dynamic)]
-
+#[serde(crate = "::baml::__internal::serde")]
 pub struct PureDynamic {
     /// Dynamic fields added at runtime via TypeBuilder.
     #[baml(dynamic_fields)]
-    pub __dynamic: std::collections::HashMap<
-        String,
-        baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+    #[serde(flatten)]
+    pub __dynamic: ::std::collections::HashMap<
+        ::std::string::String,
+        ::baml::BamlValue<super::super::Types, super::StreamTypes>,
     >,
 }
 
 impl PureDynamic {
     /// Get a dynamic field by name and convert to the specified type.
-    pub fn get<V: baml::FromBamlValue<crate::baml_client::types::Types, super::StreamTypes>>(
+    pub fn get<V: ::baml::FromBamlValue<crate::baml_client::types::Types, super::StreamTypes>>(
         &self,
         field: &str,
-    ) -> Result<V, baml::BamlError> {
+    ) -> Result<V, ::baml::BamlError> {
         self.__dynamic
             .get(field)
             .cloned()
             .ok_or_else(|| {
-                baml::BamlError::internal(format!("dynamic field '{}' not found", field))
+                ::baml::BamlError::internal(format!("dynamic field '{}' not found", field))
             })
             .and_then(|v| v.get())
     }
@@ -217,7 +224,9 @@ impl PureDynamic {
     pub fn get_ref(
         &self,
         field: &str,
-    ) -> Option<&baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>> {
+    ) -> ::std::option::Option<
+        &::baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+    > {
         self.__dynamic.get(field)
     }
 
@@ -229,25 +238,25 @@ impl PureDynamic {
     /// Iterate over all dynamic fields.
     pub fn dynamic_fields(
         &self,
-    ) -> impl Iterator<
+    ) -> impl ::std::iter::Iterator<
         Item = (
             &str,
-            &baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
+            &::baml::BamlValue<crate::baml_client::types::Types, super::StreamTypes>,
         ),
     > {
         self.__dynamic.iter().map(|(k, v)| (k.as_str(), v))
     }
 }
 
-impl Default for PureDynamic {
+impl ::std::default::Default for PureDynamic {
     fn default() -> Self {
         Self {
-            __dynamic: std::collections::HashMap::new(),
+            __dynamic: ::std::collections::HashMap::new(),
         }
     }
 }
 
-impl AsRef<PureDynamic> for PureDynamic {
+impl ::std::convert::AsRef<PureDynamic> for PureDynamic {
     fn as_ref(&self) -> &PureDynamic {
         self
     }

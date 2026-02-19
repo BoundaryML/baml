@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 === SYNTAX TREE ===
@@ -138,6 +138,135 @@ SOURCE_FILE
       WORD "string"
       L_BRACKET "["
       R_BRACKET "]"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "ReallyLongMapType"
+    EQUALS "="
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR
+          STRING_LITERAL "fieopwaiwjepfoiwajpoweijf"
+            QUOTE """
+            WORD "fieopwaiwjepfoiwajpoweijf"
+            QUOTE """
+          PIPE "|"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+          PIPE "|"
+          WORD "bool"
+          PIPE "|"
+          WORD "float"
+          PIPE "|"
+          WORD "int"
+          L_BRACKET "["
+          R_BRACKET "]"
+          PIPE "|"
+          WORD "string"
+          L_BRACKET "["
+          R_BRACKET "]"
+          PIPE "|"
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int | string"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+            GREATER ">"
+          PIPE "|"
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int | string"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "string"
+                GREATER ">"
+            GREATER ">"
+          PIPE "|"
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR
+                  WORD "map"
+                  TYPE_ARGS
+                    LESS "<"
+                    TYPE_EXPR "string"
+                      WORD "string"
+                    COMMA ","
+                    TYPE_EXPR "int | string"
+                      WORD "int"
+                      PIPE "|"
+                      WORD "string"
+                    GREATER ">"
+                GREATER ">"
+            GREATER ">"
+          PIPE "|"
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR
+                  WORD "map"
+                  TYPE_ARGS
+                    LESS "<"
+                    TYPE_EXPR "string"
+                      WORD "string"
+                    COMMA ","
+                    TYPE_EXPR
+                      WORD "map"
+                      TYPE_ARGS
+                        LESS "<"
+                        TYPE_EXPR "string"
+                          WORD "string"
+                        COMMA ","
+                        TYPE_EXPR "int | string"
+                          WORD "int"
+                          PIPE "|"
+                          WORD "string"
+                        GREATER ">"
+                    GREATER ">"
+                GREATER ">"
+            GREATER ">"
+        GREATER ">"
 
 === ERRORS ===
 None

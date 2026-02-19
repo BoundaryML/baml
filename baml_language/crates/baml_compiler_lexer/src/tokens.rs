@@ -786,6 +786,32 @@ mod tests {
     }
 
     #[test]
+    fn test_keyword_in_identifier() {
+        // `get_client` should be a single WORD, not `get_` + keyword `client`
+        let tokens = lex_no_whitespace("get_client");
+        assert_eq!(tokens, vec![TokenKind::Word]);
+
+        let all = lex("get_client");
+        assert_eq!(all[0].text, "get_client");
+    }
+
+    #[test]
+    fn test_path_with_keyword_segment() {
+        // `baml.llm.get_client` should be 5 tokens: WORD DOT WORD DOT WORD
+        let tokens = lex_no_whitespace("baml.llm.get_client");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word, // baml
+                TokenKind::Dot,
+                TokenKind::Word, // llm
+                TokenKind::Dot,
+                TokenKind::Word, // get_client
+            ]
+        );
+    }
+
+    #[test]
     fn test_block_comment() {
         // Test that block comments are lexed as individual tokens
         let source = "/* block comment */ code";

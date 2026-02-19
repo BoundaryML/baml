@@ -7,11 +7,15 @@
 
 use super::*;
 use crate::baml_client::types;
-use baml::BamlDecode;
+use baml::{
+    BamlDecode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (Streaming.DataResponse | Streaming.ErrorResponse | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2DataResponseOrErrorResponse {
     #[baml(name = "DataResponse")]
     DataResponse(DataResponse),
@@ -20,21 +24,24 @@ pub enum Union2DataResponseOrErrorResponse {
     ErrorResponse(ErrorResponse),
 }
 
-impl AsRef<Union2DataResponseOrErrorResponse> for Union2DataResponseOrErrorResponse {
+impl ::std::convert::AsRef<Union2DataResponseOrErrorResponse>
+    for Union2DataResponseOrErrorResponse
+{
     fn as_ref(&self) -> &Union2DataResponseOrErrorResponse {
         self
     }
 }
 
-impl Default for Union2DataResponseOrErrorResponse {
+impl ::std::default::Default for Union2DataResponseOrErrorResponse {
     fn default() -> Self {
-        Self::DataResponse(Default::default())
+        Self::DataResponse(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Streaming.User | Streaming.Product | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ProductOrUser {
     #[baml(name = "User")]
     User(User),
@@ -43,21 +50,22 @@ pub enum Union2ProductOrUser {
     Product(Product),
 }
 
-impl AsRef<Union2ProductOrUser> for Union2ProductOrUser {
+impl ::std::convert::AsRef<Union2ProductOrUser> for Union2ProductOrUser {
     fn as_ref(&self) -> &Union2ProductOrUser {
         self
     }
 }
 
-impl Default for Union2ProductOrUser {
+impl ::std::default::Default for Union2ProductOrUser {
     fn default() -> Self {
-        Self::User(Default::default())
+        Self::User(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | Streaming.RecursiveUnion)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2RecursiveUnionOrString {
     #[baml(name = "string")]
     String(String),
@@ -66,21 +74,22 @@ pub enum Union2RecursiveUnionOrString {
     RecursiveUnion(Box<RecursiveUnion>),
 }
 
-impl AsRef<Union2RecursiveUnionOrString> for Union2RecursiveUnionOrString {
+impl ::std::convert::AsRef<Union2RecursiveUnionOrString> for Union2RecursiveUnionOrString {
     fn as_ref(&self) -> &Union2RecursiveUnionOrString {
         self
     }
 }
 
-impl Default for Union2RecursiveUnionOrString {
+impl ::std::default::Default for Union2RecursiveUnionOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Streaming.User | Streaming.Product | Streaming.Admin | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3AdminOrProductOrUser {
     #[baml(name = "User")]
     User(User),
@@ -92,21 +101,22 @@ pub enum Union3AdminOrProductOrUser {
     Admin(Admin),
 }
 
-impl AsRef<Union3AdminOrProductOrUser> for Union3AdminOrProductOrUser {
+impl ::std::convert::AsRef<Union3AdminOrProductOrUser> for Union3AdminOrProductOrUser {
     fn as_ref(&self) -> &Union3AdminOrProductOrUser {
         self
     }
 }
 
-impl Default for Union3AdminOrProductOrUser {
+impl ::std::default::Default for Union3AdminOrProductOrUser {
     fn default() -> Self {
-        Self::User(Default::default())
+        Self::User(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Streaming.ApiSuccess | Streaming.ApiError | Streaming.ApiPending | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3ApiErrorOrApiPendingOrApiSuccess {
     #[baml(name = "ApiSuccess")]
     ApiSuccess(ApiSuccess),
@@ -118,21 +128,24 @@ pub enum Union3ApiErrorOrApiPendingOrApiSuccess {
     ApiPending(ApiPending),
 }
 
-impl AsRef<Union3ApiErrorOrApiPendingOrApiSuccess> for Union3ApiErrorOrApiPendingOrApiSuccess {
+impl ::std::convert::AsRef<Union3ApiErrorOrApiPendingOrApiSuccess>
+    for Union3ApiErrorOrApiPendingOrApiSuccess
+{
     fn as_ref(&self) -> &Union3ApiErrorOrApiPendingOrApiSuccess {
         self
     }
 }
 
-impl Default for Union3ApiErrorOrApiPendingOrApiSuccess {
+impl ::std::default::Default for Union3ApiErrorOrApiPendingOrApiSuccess {
     fn default() -> Self {
-        Self::ApiSuccess(Default::default())
+        Self::ApiSuccess(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Streaming.Dog | Streaming.Cat | Streaming.Bird | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3BirdOrCatOrDog {
     #[baml(name = "Dog")]
     Dog(Dog),
@@ -144,21 +157,22 @@ pub enum Union3BirdOrCatOrDog {
     Bird(Bird),
 }
 
-impl AsRef<Union3BirdOrCatOrDog> for Union3BirdOrCatOrDog {
+impl ::std::convert::AsRef<Union3BirdOrCatOrDog> for Union3BirdOrCatOrDog {
     fn as_ref(&self) -> &Union3BirdOrCatOrDog {
         self
     }
 }
 
-impl Default for Union3BirdOrCatOrDog {
+impl ::std::default::Default for Union3BirdOrCatOrDog {
     fn default() -> Self {
-        Self::Dog(Default::default())
+        Self::Dog(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Streaming.Circle | Streaming.Rectangle | Streaming.Triangle | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3CircleOrRectangleOrTriangle {
     #[baml(name = "Circle")]
     Circle(Circle),
@@ -170,21 +184,24 @@ pub enum Union3CircleOrRectangleOrTriangle {
     Triangle(Triangle),
 }
 
-impl AsRef<Union3CircleOrRectangleOrTriangle> for Union3CircleOrRectangleOrTriangle {
+impl ::std::convert::AsRef<Union3CircleOrRectangleOrTriangle>
+    for Union3CircleOrRectangleOrTriangle
+{
     fn as_ref(&self) -> &Union3CircleOrRectangleOrTriangle {
         self
     }
 }
 
-impl Default for Union3CircleOrRectangleOrTriangle {
+impl ::std::default::Default for Union3CircleOrRectangleOrTriangle {
     fn default() -> Self {
-        Self::Circle(Default::default())
+        Self::Circle(::std::default::Default::default())
     }
 }
 
 /// Generated from: (Streaming.Success | Streaming.Warning | Streaming.Error | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3ErrorOrSuccessOrWarning {
     #[baml(name = "Success")]
     Success(Success),
@@ -196,21 +213,22 @@ pub enum Union3ErrorOrSuccessOrWarning {
     Error(Error),
 }
 
-impl AsRef<Union3ErrorOrSuccessOrWarning> for Union3ErrorOrSuccessOrWarning {
+impl ::std::convert::AsRef<Union3ErrorOrSuccessOrWarning> for Union3ErrorOrSuccessOrWarning {
     fn as_ref(&self) -> &Union3ErrorOrSuccessOrWarning {
         self
     }
 }
 
-impl Default for Union3ErrorOrSuccessOrWarning {
+impl ::std::default::Default for Union3ErrorOrSuccessOrWarning {
     fn default() -> Self {
-        Self::Success(Default::default())
+        Self::Success(::std::default::Default::default())
     }
 }
 
 /// Generated from: (string | int @stream.done | Streaming.RecursiveUnion | null)
-#[derive(Debug, Clone, BamlDecode)]
+#[derive(Debug, Clone, BamlDecode, BamlSerde, Serialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union3IntOrRecursiveUnionOrString {
     #[baml(name = "string")]
     String(String),
@@ -222,14 +240,16 @@ pub enum Union3IntOrRecursiveUnionOrString {
     RecursiveUnion(Box<RecursiveUnion>),
 }
 
-impl AsRef<Union3IntOrRecursiveUnionOrString> for Union3IntOrRecursiveUnionOrString {
+impl ::std::convert::AsRef<Union3IntOrRecursiveUnionOrString>
+    for Union3IntOrRecursiveUnionOrString
+{
     fn as_ref(&self) -> &Union3IntOrRecursiveUnionOrString {
         self
     }
 }
 
-impl Default for Union3IntOrRecursiveUnionOrString {
+impl ::std::default::Default for Union3IntOrRecursiveUnionOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }

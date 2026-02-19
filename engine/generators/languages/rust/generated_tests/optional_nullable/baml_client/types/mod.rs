@@ -16,12 +16,14 @@ pub use type_aliases::*;
 pub use unions::*;
 
 // Re-export types from baml runtime
+use baml::__internal::serde;
 pub use baml::{Audio, Image, Pdf, Video};
 pub use baml::{Checked, StreamState};
 
 /// All known types in this BAML project.
 /// Serves as the compile-time type registry for BamlValue.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Types {
     ComplexOptional(ComplexOptional),
 
@@ -48,36 +50,46 @@ pub enum Types {
     Union2ProductOrUser(Union2ProductOrUser),
 }
 
-impl baml::KnownTypes for Types {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ::baml::KnownTypes for Types {
+    fn as_any(&self) -> &dyn::std::any::Any {
         self
     }
 
     fn type_name(&self) -> &'static str {
         match self {
-            Types::ComplexOptional(_) => "ComplexOptional",
+            Self::ComplexOptional(_) => "ComplexOptional",
 
-            Types::MixedOptionalNullable(_) => "MixedOptionalNullable",
+            Self::MixedOptionalNullable(_) => "MixedOptionalNullable",
 
-            Types::NullableTypes(_) => "NullableTypes",
+            Self::NullableTypes(_) => "NullableTypes",
 
-            Types::OptionalData(_) => "OptionalData",
+            Self::OptionalData(_) => "OptionalData",
 
-            Types::OptionalFields(_) => "OptionalFields",
+            Self::OptionalFields(_) => "OptionalFields",
 
-            Types::OptionalItem(_) => "OptionalItem",
+            Self::OptionalItem(_) => "OptionalItem",
 
-            Types::OptionalValue(_) => "OptionalValue",
+            Self::OptionalValue(_) => "OptionalValue",
 
-            Types::Product(_) => "Product",
+            Self::Product(_) => "Product",
 
-            Types::UnionWithNull(_) => "UnionWithNull",
+            Self::UnionWithNull(_) => "UnionWithNull",
 
-            Types::User(_) => "User",
+            Self::User(_) => "User",
 
-            Types::Union2IntOrString(_) => "Union2IntOrString",
+            Self::Union2IntOrString(_) => "Union2IntOrString",
 
-            Types::Union2ProductOrUser(_) => "Union2ProductOrUser",
+            Self::Union2ProductOrUser(_) => "Union2ProductOrUser",
         }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Types {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        _deserializer: D,
+    ) -> ::std::result::Result<Self, D::Error> {
+        ::std::result::Result::Err(serde::de::Error::custom(
+            "Types is not deserializable, as we cannot disambiguate the type.",
+        ))
     }
 }

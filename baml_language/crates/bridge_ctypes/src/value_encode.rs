@@ -109,7 +109,9 @@ pub fn external_to_cffi_value(value: &BexExternalValue) -> Result<CffiValueHolde
         }
         // Runtime-only types not representable in CFFI; map to null (caller receives null value).
         BexExternalValue::Resource(_handle) => None,
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(_))
+        BexExternalValue::Adt(
+            BexExternalAdt::PromptAst(_) | BexExternalAdt::Collector(_) | BexExternalAdt::Type(_),
+        )
         | BexExternalValue::FunctionRef { .. } => None,
     };
 
@@ -148,8 +150,8 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
             value: Some(Box::new(ty_to_field_type(inner))),
         }))),
         Ty::Media(_) | Ty::Literal(_) => Some(FieldType::AnyType(CffiFieldTypeAny {})),
-        Ty::Resource | Ty::PromptAst => {
-            unreachable!("runtime-only variant should not reach FFI type encoding")
+        Ty::Opaque(tn) => {
+            unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
         Ty::TypeAlias(_)
         | Ty::Function { .. }

@@ -6,11 +6,15 @@
 //! Generated union types.
 
 use super::*;
-use baml::{BamlDecode, BamlEncode};
+use baml::{
+    BamlDecode, BamlEncode, BamlSerde,
+    __internal::serde::{Deserialize, Serialize},
+};
 
 /// Generated from: (string | int | null)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2IntOrString {
     #[baml(name = "string")]
     String(String),
@@ -19,21 +23,22 @@ pub enum Union2IntOrString {
     Int(i64),
 }
 
-impl AsRef<Union2IntOrString> for Union2IntOrString {
+impl ::std::convert::AsRef<Union2IntOrString> for Union2IntOrString {
     fn as_ref(&self) -> &Union2IntOrString {
         self
     }
 }
 
-impl Default for Union2IntOrString {
+impl ::std::default::Default for Union2IntOrString {
     fn default() -> Self {
-        Self::String(Default::default())
+        Self::String(::std::default::Default::default())
     }
 }
 
 /// Generated from: (User | Product | null)
-#[derive(Debug, Clone, BamlEncode, BamlDecode)]
+#[derive(Debug, Clone, BamlEncode, BamlDecode, BamlSerde, Serialize, Deserialize)]
 #[baml(union)]
+#[serde(crate = "::baml::__internal::serde", untagged)]
 pub enum Union2ProductOrUser {
     #[baml(name = "User")]
     User(User),
@@ -42,14 +47,14 @@ pub enum Union2ProductOrUser {
     Product(Product),
 }
 
-impl AsRef<Union2ProductOrUser> for Union2ProductOrUser {
+impl ::std::convert::AsRef<Union2ProductOrUser> for Union2ProductOrUser {
     fn as_ref(&self) -> &Union2ProductOrUser {
         self
     }
 }
 
-impl Default for Union2ProductOrUser {
+impl ::std::default::Default for Union2ProductOrUser {
     fn default() -> Self {
-        Self::User(Default::default())
+        Self::User(::std::default::Default::default())
     }
 }

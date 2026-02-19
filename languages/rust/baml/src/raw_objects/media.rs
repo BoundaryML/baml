@@ -6,6 +6,7 @@ use std::ffi::c_void;
 
 use super::{RawObject, RawObjectTrait};
 use crate::{baml_unreachable, proto::baml_cffi_v1::BamlObjectType};
+use serde::{Deserialize, Serialize};
 
 // =============================================================================
 // Media type macro - generates Image, Audio, Pdf, Video
@@ -97,6 +98,32 @@ macro_rules! define_media_type {
                 ))
             }
         }
+
+        impl serde::Serialize for $name {
+            /// See https://github.com/BoundaryML/baml/blob/canary/engine/language_client_python/src/types/media_repr.rs
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                let content = if let Some(base64) = self.as_base64() {
+                    BamlMediaReprContent::Base64 { base64 }
+                } else if let Some(url) = self.as_url() {
+                    BamlMediaReprContent::Url { url }
+                } else {
+                    return Err(serde::ser::Error::custom(
+                        "media cannot be serialized: was not URL or base64",
+                    ));
+                };
+                BamlMediaRepr {
+                    mime_type: self.mime_type(),
+                    content,
+                }
+                .serialize(serializer)
+            }
+        }
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+                // we don't have access to the runtime here
+                Err(serde::de::Error::custom(format!("Cannot deserialize {} directly", stringify!($name))))
+            }
+        }
     };
 }
 
@@ -122,4 +149,23 @@ define_media_type! {
 define_media_type! {
     /// Video media type
     Video => ObjectMediaVideo
+}
+
+/// Used for serializing BAML media types in serde
+///
+/// See https://github.com/BoundaryML/baml/blob/canary/engine/language_client_python/src/types/media_repr.rs
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BamlMediaRepr {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "media_type")]
+    pub mime_type: Option<String>,
+    #[serde(flatten)]
+    pub content: BamlMediaReprContent,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BamlMediaReprContent {
+    Url { url: String },
+    Base64 { base64: String },
 }

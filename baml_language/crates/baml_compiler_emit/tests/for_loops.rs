@@ -31,10 +31,7 @@ fn for_loop_sum() -> anyhow::Result<()> {
             // Note: _iter is eliminated by copy propagation (uses xs directly)
             vec![
                 // Pre-allocate locals (4: result, _len, _i, x)
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(4),
                 // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
@@ -100,10 +97,7 @@ fn for_with_break() -> anyhow::Result<()> {
             // Note: _iter is eliminated by copy propagation (uses xs directly)
             vec![
                 // Pre-allocate locals (4: result, _len, _i, x)
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(4),
                 // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
@@ -175,10 +169,7 @@ fn for_with_continue() -> anyhow::Result<()> {
             // Note: _iter is eliminated by copy propagation (uses xs directly)
             vec![
                 // Pre-allocate locals (4: result, _len, _i, x)
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(4),
                 // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
@@ -253,13 +244,7 @@ fn for_nested() -> anyhow::Result<()> {
             // Note: _iter and _iter1 are eliminated by copy propagation (use params directly)
             vec![
                 // Pre-allocate locals (7: result, _len, _i, a, _len1, _i1, b)
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
-                Instruction::LoadConst(Value::Null),
+                Instruction::InitLocals(7),
                 // Initialize result = 0
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),

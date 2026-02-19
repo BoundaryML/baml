@@ -22,7 +22,10 @@ async fn test_handle_prevents_gc_collection() {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     // Get a handle to a string object
-    let result = engine.call_function("return_string", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_string", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(
         matches!(result, BexExternalValue::String(_)),
         "Expected String, got {result:?}"
@@ -49,7 +52,10 @@ async fn test_array_preserved_through_gc() {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     // Get a handle to the array
-    let result = engine.call_function("return_array", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_array", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(
         matches!(result, BexExternalValue::Array { .. }),
         "Expected Array, got {result:?}"
@@ -92,7 +98,7 @@ async fn test_gc_updates_forwarding_pointers() {
 
     // Create objects
     let result = engine
-        .call_function("create_objects", vec![])
+        .call_function("create_objects", vec![], None, &[])
         .await
         .unwrap();
 
@@ -129,15 +135,15 @@ async fn test_multiple_handles_survive_gc() {
 
     // Create multiple handles
     let h1 = engine
-        .call_function("make_string", vec!["hello".into()])
+        .call_function("make_string", vec!["hello".into()], None, &[])
         .await
         .unwrap();
     let h2 = engine
-        .call_function("make_string", vec!["world".into()])
+        .call_function("make_string", vec!["world".into()], None, &[])
         .await
         .unwrap();
     let h3 = engine
-        .call_function("make_string", vec!["test".into()])
+        .call_function("make_string", vec!["test".into()], None, &[])
         .await
         .unwrap();
 
@@ -169,14 +175,23 @@ async fn test_primitive_returns_are_external_values() {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native()).unwrap();
 
     // Int should be BexExternalValue::Int
-    let result = engine.call_function("return_int", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_int", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Int(42)));
 
     // Null should be BexExternalValue::Null
-    let result = engine.call_function("return_null", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_null", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Null));
 
     // Bool should be BexExternalValue::Bool
-    let result = engine.call_function("return_bool", vec![]).await.unwrap();
+    let result = engine
+        .call_function("return_bool", vec![], None, &[])
+        .await
+        .unwrap();
     assert!(matches!(result, BexExternalValue::Bool(true)));
 }

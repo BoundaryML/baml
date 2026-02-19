@@ -39,7 +39,9 @@ async fn test_concurrent_calls_no_race() {
     for _ in 0..10 {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
-            engine.call_function("test_function", vec![]).await
+            engine
+                .call_function("test_function", vec![], None, &[])
+                .await
         }));
     }
 
@@ -79,7 +81,9 @@ async fn test_concurrent_allocations_no_overlap() {
         let count = Arc::clone(&allocation_count);
         handles.push(tokio::spawn(async move {
             // Function that allocates many objects
-            let result = engine.call_function("allocate_many", vec![]).await?;
+            let result = engine
+                .call_function("allocate_many", vec![], None, &[])
+                .await?;
             count.fetch_add(1, Ordering::SeqCst);
             Ok::<_, bex_engine::EngineError>(result)
         }));
@@ -128,7 +132,9 @@ async fn test_heap_stats_during_concurrent_execution() {
     for _ in 0..3 {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
-            engine.call_function("test_function", vec![]).await
+            engine
+                .call_function("test_function", vec![], None, &[])
+                .await
         }));
     }
 
@@ -181,7 +187,7 @@ async fn test_concurrent_string_allocations() {
         let engine = Arc::clone(&engine);
         let func = (*func_name).to_string();
         handles.push(tokio::spawn(async move {
-            let result = engine.call_function(&func, vec![]).await?;
+            let result = engine.call_function(&func, vec![], None, &[]).await?;
             Ok::<_, bex_engine::EngineError>((func, result))
         }));
     }
@@ -229,7 +235,7 @@ async fn test_concurrent_array_allocations() {
     ] {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
-            let result = engine.call_function(func_name, vec![]).await?;
+            let result = engine.call_function(func_name, vec![], None, &[]).await?;
             Ok::<_, bex_engine::EngineError>((size, result))
         }));
     }
@@ -276,7 +282,12 @@ async fn test_call_function_with_external_args() {
 
     // Test passing strings via BexExternalValue
     let result = engine
-        .call_function("concat_strings", vec!["Hello".into(), "World".into()])
+        .call_function(
+            "concat_strings",
+            vec!["Hello".into(), "World".into()],
+            None,
+            &[],
+        )
         .await
         .expect("call_function failed");
 
@@ -293,7 +304,7 @@ async fn test_call_function_with_external_args() {
         ],
     };
     let result = engine
-        .call_function("sum_array", vec![arr])
+        .call_function("sum_array", vec![arr], None, &[])
         .await
         .expect("call_function failed");
 
@@ -304,6 +315,8 @@ async fn test_call_function_with_external_args() {
         .call_function(
             "add_numbers",
             vec![BexExternalValue::from(15i64), BexExternalValue::from(27i64)],
+            None,
+            &[],
         )
         .await
         .expect("call_function failed");

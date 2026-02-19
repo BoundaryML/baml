@@ -278,10 +278,10 @@ impl ProjectDatabase {
     fn load_builtin_baml_files(&mut self) -> Vec<SourceFile> {
         let mut builtin_files = Vec::new();
 
-        // Load all builtin BAML sources using normal file ID allocation
+        // Load all builtin BAML sources (disk read on native, embedded on WASM)
         for builtin_source in baml_builtins::baml_sources() {
             let path = PathBuf::from(builtin_source.path);
-            let file = self.add_file_internal(&path, builtin_source.source.to_string());
+            let file = self.add_file_internal(&path, builtin_source.source());
             let file_id = file.file_id(self);
 
             // Register in file_id_to_path for diagnostic filename display

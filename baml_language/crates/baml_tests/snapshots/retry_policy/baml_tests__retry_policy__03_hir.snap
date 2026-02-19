@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
+source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
 expression: output
 ---
 === HIR ITEMS ===
@@ -10,3 +10,5 @@ function MyClient.resolve() -> baml.llm.PrimitiveClient {
 client MyClient {
   provider: openai
 }
+
+retry_policy MyRetry

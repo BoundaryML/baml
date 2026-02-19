@@ -142,6 +142,23 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
         })
         .collect();
 
+    // Generate builtin enum definitions.
+    let enum_definitions: Vec<_> = collected
+        .enum_defs
+        .iter()
+        .map(|ed| {
+            let path = &ed.path;
+            let variants: Vec<_> = ed.variants.iter().map(|v| quote!(#v)).collect();
+
+            quote! {
+                BuiltinEnumDefinition {
+                    path: #path,
+                    variants: vec![#(#variants),*],
+                }
+            }
+        })
+        .collect();
+
     // Generate sys_op entries.
     let sys_op_entries: Vec<_> = collected
         .native_defs
@@ -216,6 +233,13 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
         static BUILTIN_TYPES: std::sync::LazyLock<Vec<BuiltinTypeDefinition>> = std::sync::LazyLock::new(|| {
             vec![
                 #(#type_definitions),*
+            ]
+        });
+
+        /// All built-in enum definitions.
+        static BUILTIN_ENUMS: std::sync::LazyLock<Vec<BuiltinEnumDefinition>> = std::sync::LazyLock::new(|| {
+            vec![
+                #(#enum_definitions),*
             ]
         });
     }

@@ -12,7 +12,7 @@ bex_resource_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
 reqwest = { workspace = true, features = [ "rustls" ], optional = true }
-tokio = { workspace = true, features = [ "sync", "fs", "net", "process", "io-util" ] }
+tokio = { workspace = true, features = [ "sync", "fs", "net", "process", "io-util", "time" ] }
 
 [features]
 default = [  ]

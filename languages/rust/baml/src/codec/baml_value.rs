@@ -329,3 +329,116 @@ impl<T: KnownTypes, S: KnownTypes> BamlDecode for BamlValue<T, S> {
         }
     }
 }
+
+impl<T: KnownTypes + serde::Serialize, S: KnownTypes + serde::Serialize> serde::Serialize
+    for BamlValue<T, S>
+{
+    fn serialize<Ser: serde::Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+        match self {
+            BamlValue::Null => serializer.serialize_none(),
+            BamlValue::String(s) => serializer.serialize_str(s),
+            BamlValue::Int(i) => serializer.serialize_i64(*i),
+            BamlValue::Float(f) => serializer.serialize_f64(*f),
+            BamlValue::Bool(b) => serializer.serialize_bool(*b),
+            BamlValue::List(items) => items.serialize(serializer),
+            BamlValue::Map(map) => map.serialize(serializer),
+            BamlValue::DynamicClass(dc) => dc.fields.serialize(serializer),
+            BamlValue::DynamicEnum(de) => serializer.serialize_str(&de.value),
+            BamlValue::DynamicUnion(du) => du.serialize(serializer),
+            BamlValue::Known(known) => known.serialize(serializer),
+            BamlValue::StreamKnown(known) => known.serialize(serializer),
+            BamlValue::Checked(c) => c.serialize(serializer),
+            BamlValue::StreamState(ss) => ss.serialize(serializer),
+        }
+    }
+}
+
+impl<'de, T: KnownTypes + serde::Deserialize<'de>, S: KnownTypes + serde::Deserialize<'de>>
+    serde::Deserialize<'de> for BamlValue<T, S>
+{
+    /// BamlValue deserialization is currently lossy:
+    /// Everything is deserialized as scalars, maps, and arrays.
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor<'de, T, S>(std::marker::PhantomData<(&'de (), T, S)>)
+        where
+            T: KnownTypes + serde::Deserialize<'de>,
+            S: KnownTypes + serde::Deserialize<'de>;
+
+        impl<'de, T, S> serde::de::Visitor<'de> for Visitor<'de, T, S>
+        where
+            T: KnownTypes + serde::Deserialize<'de>,
+            S: KnownTypes + serde::Deserialize<'de>,
+        {
+            type Value = BamlValue<T, S>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("BAML value")
+            }
+
+            fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(BamlValue::Null)
+            }
+
+            fn visit_some<D: serde::Deserializer<'de>>(
+                self,
+                deserializer: D,
+            ) -> Result<Self::Value, D::Error> {
+                deserializer.deserialize_any(Visitor(std::marker::PhantomData))
+            }
+
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(BamlValue::Null)
+            }
+
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut list = Vec::new();
+                while let Some(value) = seq.next_element()? {
+                    list.push(value);
+                }
+                Ok(BamlValue::List(list))
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut hashmap: HashMap<String, BamlValue<T, S>> = HashMap::new();
+                while let Some((key, value)) = map.next_entry()? {
+                    hashmap.insert(key, value);
+                }
+                Ok(BamlValue::Map(hashmap))
+            }
+
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(BamlValue::String(v.to_string()))
+            }
+
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(Self::Value::Int(v))
+            }
+
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                let v = i64::try_from(v).map_err(|_| {
+                    E::invalid_value(
+                        serde::de::Unexpected::Unsigned(v),
+                        &"a value fitting in an i64",
+                    )
+                })?;
+                Ok(Self::Value::Int(v))
+            }
+
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(Self::Value::Bool(v))
+            }
+
+            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+                Ok(Self::Value::Float(v))
+            }
+        }
+
+        deserializer.deserialize_any(Visitor(std::marker::PhantomData))
+    }
+}

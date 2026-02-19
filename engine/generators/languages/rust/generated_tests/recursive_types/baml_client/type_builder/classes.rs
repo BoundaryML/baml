@@ -11,22 +11,22 @@
 /// Access fields via methods: `builder.field_name()`
 
 pub struct UseMyUnionClassBuilder {
-    inner: baml::ClassBuilder,
+    inner: ::baml::ClassBuilder,
 }
 
 impl UseMyUnionClassBuilder {
     /// Create wrapper from runtime ClassBuilder.
-    pub(crate) fn new(inner: baml::ClassBuilder) -> Self {
+    pub(crate) fn new(inner: ::baml::ClassBuilder) -> Self {
         Self { inner }
     }
 
     /// Get the underlying ClassBuilder.
-    pub fn inner(&self) -> &baml::ClassBuilder {
+    pub fn inner(&self) -> &::baml::ClassBuilder {
         &self.inner
     }
 
     /// Get the class as a type definition.
-    pub fn r#type(&self) -> baml::TypeDef {
+    pub fn r#type(&self) -> ::baml::TypeDef {
         self.inner
             .as_type()
             .expect("UseMyUnion is statically defined in .baml and should always have a type")
@@ -37,7 +37,7 @@ impl UseMyUnionClassBuilder {
     // =========================================================================
 
     /// Access the `u` field builder.
-    pub fn property_u(&self) -> baml::ClassPropertyBuilder {
+    pub fn property_u(&self) -> ::baml::ClassPropertyBuilder {
         self.inner
             .get_property("u")
             .expect("UseMyUnion.u is statically defined in .baml and should always be present")
