@@ -325,17 +325,21 @@ impl<'a> ExhaustivenessChecker<'a> {
             }
 
             Ty::TypeAlias(fqn) => {
-                if visiting.contains(&fqn.name) {
+                // Use display_name() consistently with Ty::Enum and Ty::Class.
+                // For local type aliases (the only kind that exist), display_name() == fqn.name,
+                // so the type_aliases map lookup is always correct.
+                let name = fqn.display_name();
+                if visiting.contains(&name) {
                     // Cycle detected: treat as opaque to prevent infinite recursion.
-                    return vec![ValueSet::OfType(fqn.name.clone())];
+                    return vec![ValueSet::OfType(name)];
                 }
-                visiting.insert(fqn.name.clone());
-                let result = if let Some(alias_ty) = self.type_aliases.get(&fqn.name) {
+                visiting.insert(name.clone());
+                let result = if let Some(alias_ty) = self.type_aliases.get(&name) {
                     self.expand_ty(alias_ty, visiting)
                 } else {
-                    vec![ValueSet::OfType(fqn.name.clone())]
+                    vec![ValueSet::OfType(name.clone())]
                 };
-                visiting.remove(&fqn.name);
+                visiting.remove(&name);
                 result
             }
 
@@ -490,8 +494,13 @@ impl<'a> ExhaustivenessChecker<'a> {
 /// - Empty  → `Empty` (error/void/unreachable types produce no values)
 /// - Single → the element itself (no unnecessary wrapping)
 /// - Many   → `Union` (flat, since `expand_ty` never nests unions)
+///
+/// `Empty` entries are stripped before the union is built: a guarded or
+/// void-typed sub-pattern contributes nothing, so including it in a
+/// `Union` would be semantically misleading and would leave a dead entry
+/// in the coverage list via `add_to_coverage`'s catch-all arm.
 fn values_into_value_set(values: Vec<ValueSet>) -> ValueSet {
-    let mut iter = values.into_iter();
+    let mut iter = values.into_iter().filter(|v| v != &ValueSet::Empty);
     match (iter.next(), iter.next()) {
         (None, _) => ValueSet::Empty,
         (Some(only), None) => only,
@@ -955,26 +964,51 @@ mod tests {
 
     #[test]
     fn test_cyclic_alias_does_not_overflow() {
-        // type A = A | int — invalid cycle, handled gracefully
+        // type A = A | int — invalid self-referential cycle, handled gracefully.
+        //
+        // Trace: expand(A, visiting={})
+        //   → insert A, visiting={A}
+        //   → expand Union([A, int], visiting={A})
+        //     → expand A: A ∈ visiting → [OfType("A")]   (cycle guard)
+        //     → expand int            → [OfType("int")]
+        //   → remove A, visiting={}
+        //   → [OfType("A"), OfType("int")]
         let mut aliases = HashMap::new();
         aliases.insert(make_name("A"), Ty::Union(vec![ty_alias("A"), Ty::Int]));
         let ctx = TestCtx::new(HashMap::new(), aliases);
 
-        // Must not stack-overflow; result is non-empty (A as opaque + int)
         let values = ctx.checker().expand_type_to_values(&ty_alias("A"));
-        assert!(!values.is_empty());
+        assert_eq!(
+            values,
+            vec![ValueSet::OfType(make_name("A")), ValueSet::OfType(make_name("int"))],
+            "cyclic alias should expand to [OfType(A), OfType(int)]"
+        );
     }
 
     #[test]
     fn test_mutually_recursive_aliases_do_not_overflow() {
-        // type A = B; type B = A — invalid cycle
+        // type A = B; type B = A — invalid mutual cycle, handled gracefully.
+        //
+        // Trace: expand(A, visiting={})
+        //   → insert A, visiting={A}
+        //   → expand B, visiting={A}
+        //     → insert B, visiting={A,B}
+        //     → expand A: A ∈ visiting → [OfType("A")]   (cycle guard)
+        //     → remove B, visiting={A}
+        //     → [OfType("A")]
+        //   → remove A, visiting={}
+        //   → [OfType("A")]
         let mut aliases = HashMap::new();
         aliases.insert(make_name("A"), ty_alias("B"));
         aliases.insert(make_name("B"), ty_alias("A"));
         let ctx = TestCtx::new(HashMap::new(), aliases);
 
         let values = ctx.checker().expand_type_to_values(&ty_alias("A"));
-        assert!(!values.is_empty());
+        assert_eq!(
+            values,
+            vec![ValueSet::OfType(make_name("A"))],
+            "mutually recursive aliases should expand to [OfType(A)]"
+        );
     }
 
     /// Regression: `x: MyStatus` must cover a scrutinee of type `MyStatus`
