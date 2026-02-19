@@ -11,7 +11,7 @@ use baml_project::{ProjectDatabase, list_functions};
 use bex_engine::BexEngine;
 use bex_external_types::BexExternalValue;
 
-use crate::{Bex, BexArgs, RuntimeError, SysOps, render_lowering_error};
+use crate::{Bex, BexArgs, CancellationToken, RuntimeError, SysOps, render_lowering_error};
 
 /// Result of `add_source` / `set_source`: whether the engine was updated and any diagnostics.
 #[derive(Debug, Clone)]
@@ -28,10 +28,13 @@ pub struct AddSourceResult {
 #[async_trait(?Send)]
 pub trait BexIncremental {
     /// Call a BAML function.
+    ///
+    /// The `cancel` token allows the caller to cancel the function mid-execution.
     async fn call_function(
         &self,
         function_name: &str,
         args: BexArgs,
+        cancel: CancellationToken,
     ) -> Result<BexExternalValue, RuntimeError>;
 
     /// Add or update a source file. Recompiles and swaps the engine on success; returns diagnostics on failure.
@@ -135,6 +138,7 @@ impl BexIncrementalRuntime {
         &self,
         function_name: &str,
         args: BexArgs,
+        cancel: CancellationToken,
     ) -> Result<BexExternalValue, RuntimeError> {
         let engine = self
             .engine
@@ -143,7 +147,7 @@ impl BexIncrementalRuntime {
                 message: "No engine: compile failed or no source yet. Fix errors and try again."
                     .to_string(),
             })?;
-        Bex::call_function(engine, function_name, args).await
+        Bex::call_function(engine, function_name, args, cancel).await
     }
 }
 
@@ -165,7 +169,8 @@ impl BexIncremental for BexIncrementalRuntime {
         &self,
         function_name: &str,
         args: BexArgs,
+        cancel: CancellationToken,
     ) -> Result<BexExternalValue, RuntimeError> {
-        BexIncrementalRuntime::call_function(self, function_name, args).await
+        BexIncrementalRuntime::call_function(self, function_name, args, cancel).await
     }
 }

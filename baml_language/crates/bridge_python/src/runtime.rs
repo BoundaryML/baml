@@ -13,6 +13,7 @@ use pyo3::{
 use sys_native::SysOpsExt;
 
 use crate::{
+    abort_controller::AbortController,
     errors::{BamlInvalidArgumentError, engine_error_to_py},
     types::collector::Collector,
 };
@@ -88,7 +89,8 @@ impl BamlRuntime {
     /// * `args_proto` - Protobuf-encoded HostFunctionArguments bytes
     /// * `ctx` - Host span manager; if active spans exist, nests under host trace
     /// * `collectors` - Optional list of Collector objects to track this call
-    #[pyo3(signature = (function_name, args_proto, ctx=None, collectors=None))]
+    /// * `abort_controller` - Optional AbortController to cancel the call
+    #[pyo3(signature = (function_name, args_proto, ctx=None, collectors=None, abort_controller=None))]
     fn call_function<'py>(
         &self,
         py: Python<'py>,
@@ -96,10 +98,14 @@ impl BamlRuntime {
         args_proto: Vec<u8>,
         ctx: Option<&crate::types::HostSpanManager>,
         collectors: Option<Vec<pyo3::PyRef<'py, Collector>>>,
+        abort_controller: Option<&AbortController>,
     ) -> PyResult<PyObject> {
         let engine = self.engine.clone();
         let ordered_args = Self::prepare_args(&engine, &function_name, &args_proto)?;
         let host_ctx = ctx.and_then(|c| c.host_span_context());
+        let cancel = abort_controller
+            .map(AbortController::token)
+            .unwrap_or_default();
 
         let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
             .as_ref()
@@ -108,7 +114,13 @@ impl BamlRuntime {
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let result = engine
-                .call_function(&function_name, ordered_args, host_ctx, &collector_arcs)
+                .call_function(
+                    &function_name,
+                    ordered_args,
+                    host_ctx,
+                    &collector_arcs,
+                    cancel,
+                )
                 .await
                 .map_err(engine_error_to_py)?;
 
@@ -130,7 +142,8 @@ impl BamlRuntime {
     /// * `args_proto` - Protobuf-encoded HostFunctionArguments bytes
     /// * `ctx` - Host span manager; if active spans exist, nests under host trace
     /// * `collectors` - Optional list of Collector objects to track this call
-    #[pyo3(signature = (function_name, args_proto, ctx=None, collectors=None))]
+    /// * `abort_controller` - Optional AbortController to cancel the call
+    #[pyo3(signature = (function_name, args_proto, ctx=None, collectors=None, abort_controller=None))]
     fn call_function_sync(
         &self,
         py: Python<'_>,
@@ -138,10 +151,14 @@ impl BamlRuntime {
         args_proto: Vec<u8>,
         ctx: Option<&crate::types::HostSpanManager>,
         collectors: Option<Vec<pyo3::PyRef<'_, Collector>>>,
+        abort_controller: Option<&AbortController>,
     ) -> PyResult<Vec<u8>> {
         let engine = self.engine.clone();
         let ordered_args = Self::prepare_args(&engine, &function_name, &args_proto)?;
         let host_ctx = ctx.and_then(|c| c.host_span_context());
+        let cancel = abort_controller
+            .map(AbortController::token)
+            .unwrap_or_default();
 
         let collector_arcs: Vec<Arc<bex_events::Collector>> = collectors
             .as_ref()
@@ -157,6 +174,7 @@ impl BamlRuntime {
                     ordered_args,
                     host_ctx,
                     &collector_arcs,
+                    cancel,
                 ))
             })
             .map_err(engine_error_to_py)?;

@@ -11,6 +11,7 @@ pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::SysOp;
+pub use tokio_util::sync::CancellationToken;
 // ============================================================================
 // Operation Errors
 // ============================================================================
@@ -237,27 +238,42 @@ pub type SysOpFn = Arc<
 ///
 /// All `sys_ops` receive `&SysOpContext` for signature uniformity (keeps `SysOpFn`
 /// as a plain `fn` pointer). Ops that don't use it ignore the parameter.
+///
+/// # Per-call fields
+///
+/// The `cancel` field is per-call, not per-engine. All other fields are
+/// `Arc`-wrapped so that [`with_cancel`](Self::with_cancel) is O(1) — just
+/// reference-count increments, no data cloning. This is necessary because
+/// `SysOpFn` takes a single `&SysOpContext`; splitting into shared + per-call
+/// parts would require changing that signature and the proc macro codegen.
+#[derive(Clone)]
 pub struct SysOpContext {
     /// Pre-extracted LLM function metadata, keyed by function name.
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
-    pub llm_functions: std::collections::HashMap<String, LlmFunctionInfo>,
+    pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
 
     /// Maps function names to their global indices in the VM.
     /// Used by `resolve_client` to return `FunctionRef` values.
-    pub function_global_indices: std::collections::HashMap<String, usize>,
+    pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
 
     /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
     /// Prepended to templates by `get_jinja_template`.
-    pub template_strings_macros: String,
+    pub template_strings_macros: Arc<String>,
 
     /// Client metadata for building full client trees, keyed by client name.
     /// Used by `get_client` to recursively construct `LlmClient` with sub-clients and retry policies.
-    pub client_metadata: std::collections::HashMap<String, ClientBuildMeta>,
+    pub client_metadata: Arc<std::collections::HashMap<String, ClientBuildMeta>>,
 
     /// Atomic round-robin counters, keyed by client name.
     /// Used by `round_robin_next` to cycle through sub-clients.
     pub round_robin_counters:
-        std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+        Arc<std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicUsize>>>,
+
+    /// Per-call cancellation token.
+    ///
+    /// Defaults to a never-cancelled token for the shared engine context.
+    /// In `execute_sys_op`, a per-call clone is created with the real token.
+    pub cancel: CancellationToken,
 }
 
 /// Pre-extracted metadata for building a Client tree at runtime.
@@ -293,11 +309,23 @@ impl SysOpContext {
     /// Create an empty context (for testing or when no LLM functions exist).
     pub fn empty() -> Self {
         Self {
-            llm_functions: std::collections::HashMap::new(),
-            function_global_indices: std::collections::HashMap::new(),
-            template_strings_macros: String::new(),
-            client_metadata: std::collections::HashMap::new(),
-            round_robin_counters: std::collections::HashMap::new(),
+            llm_functions: Arc::new(std::collections::HashMap::new()),
+            function_global_indices: Arc::new(std::collections::HashMap::new()),
+            template_strings_macros: Arc::new(String::new()),
+            client_metadata: Arc::new(std::collections::HashMap::new()),
+            round_robin_counters: Arc::new(std::collections::HashMap::new()),
+            cancel: CancellationToken::new(),
+        }
+    }
+
+    /// Create a per-call clone with the given cancellation token.
+    ///
+    /// All `Arc`-wrapped fields are shared (just reference-count increments).
+    #[must_use]
+    pub fn with_cancel(&self, cancel: CancellationToken) -> Self {
+        Self {
+            cancel,
+            ..self.clone()
         }
     }
 }

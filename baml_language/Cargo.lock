@@ -737,6 +737,7 @@ dependencies = [
  "bex_heap",
  "bex_vm",
  "bex_vm_types",
+ "futures",
  "indexmap",
  "sys_llm",
  "sys_native",
@@ -744,6 +745,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
  "wasm-bindgen-futures",
  "wiremock",
@@ -786,6 +788,7 @@ dependencies = [
  "bex_resource_types",
  "sys_types",
  "thiserror 2.0.18",
+ "tokio-util",
 ]
 
 [[package]]
@@ -908,6 +911,7 @@ dependencies = [
  "sys_native",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4420,6 +4424,7 @@ dependencies = [
  "sys_llm",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

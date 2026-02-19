@@ -123,6 +123,10 @@ impl SysOpSys for NativeSysOps {
         })
     }
 
+    fn baml_sys_cancellation_requested(&self, ctx: &SysOpContext) -> SysOpOutput<bool> {
+        SysOpOutput::ok(ctx.cancel.is_cancelled())
+    }
+
     fn baml_sys_shell(&self, command: String) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
             let output = tokio::process::Command::new("sh")

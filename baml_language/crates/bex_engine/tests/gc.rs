@@ -5,7 +5,7 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue};
+use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -23,7 +23,7 @@ async fn test_handle_prevents_gc_collection() {
 
     // Get a handle to a string object
     let result = engine
-        .call_function("return_string", vec![], None, &[])
+        .call_function("return_string", vec![], None, &[], CancellationToken::new())
         .await
         .unwrap();
     assert!(
@@ -53,7 +53,7 @@ async fn test_array_preserved_through_gc() {
 
     // Get a handle to the array
     let result = engine
-        .call_function("return_array", vec![], None, &[])
+        .call_function("return_array", vec![], None, &[], CancellationToken::new())
         .await
         .unwrap();
     assert!(
@@ -98,7 +98,13 @@ async fn test_gc_updates_forwarding_pointers() {
 
     // Create objects
     let result = engine
-        .call_function("create_objects", vec![], None, &[])
+        .call_function(
+            "create_objects",
+            vec![],
+            None,
+            &[],
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
 
@@ -135,15 +141,33 @@ async fn test_multiple_handles_survive_gc() {
 
     // Create multiple handles
     let h1 = engine
-        .call_function("make_string", vec!["hello".into()], None, &[])
+        .call_function(
+            "make_string",
+            vec!["hello".into()],
+            None,
+            &[],
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
     let h2 = engine
-        .call_function("make_string", vec!["world".into()], None, &[])
+        .call_function(
+            "make_string",
+            vec!["world".into()],
+            None,
+            &[],
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
     let h3 = engine
-        .call_function("make_string", vec!["test".into()], None, &[])
+        .call_function(
+            "make_string",
+            vec!["test".into()],
+            None,
+            &[],
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
 
@@ -176,21 +200,21 @@ async fn test_primitive_returns_are_external_values() {
 
     // Int should be BexExternalValue::Int
     let result = engine
-        .call_function("return_int", vec![], None, &[])
+        .call_function("return_int", vec![], None, &[], CancellationToken::new())
         .await
         .unwrap();
     assert!(matches!(result, BexExternalValue::Int(42)));
 
     // Null should be BexExternalValue::Null
     let result = engine
-        .call_function("return_null", vec![], None, &[])
+        .call_function("return_null", vec![], None, &[], CancellationToken::new())
         .await
         .unwrap();
     assert!(matches!(result, BexExternalValue::Null));
 
     // Bool should be BexExternalValue::Bool
     let result = engine
-        .call_function("return_bool", vec![], None, &[])
+        .call_function("return_bool", vec![], None, &[], CancellationToken::new())
         .await
         .unwrap();
     assert!(matches!(result, BexExternalValue::Bool(true)));

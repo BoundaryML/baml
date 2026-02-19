@@ -4,8 +4,8 @@ expression: output
 ---
 === BYTECODE ===
 Functions: 115
-Objects: 1486
-Globals: 165
+Objects: 1488
+Globals: 166
 
 Function BodyTorture (arity: 0, kind: Bytecode):
      0    LOAD_CONST 0           (null)
@@ -56,7 +56,7 @@ Function Process1 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process10 (arity: 1, kind: Bytecode):
@@ -64,7 +64,7 @@ Function Process10 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process100 (arity: 1, kind: Bytecode):
@@ -72,7 +72,7 @@ Function Process100 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process11 (arity: 1, kind: Bytecode):
@@ -80,7 +80,7 @@ Function Process11 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process12 (arity: 1, kind: Bytecode):
@@ -88,7 +88,7 @@ Function Process12 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process13 (arity: 1, kind: Bytecode):
@@ -96,7 +96,7 @@ Function Process13 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process14 (arity: 1, kind: Bytecode):
@@ -104,7 +104,7 @@ Function Process14 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process15 (arity: 1, kind: Bytecode):
@@ -112,7 +112,7 @@ Function Process15 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process16 (arity: 1, kind: Bytecode):
@@ -120,7 +120,7 @@ Function Process16 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process17 (arity: 1, kind: Bytecode):
@@ -128,7 +128,7 @@ Function Process17 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process18 (arity: 1, kind: Bytecode):
@@ -136,7 +136,7 @@ Function Process18 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process19 (arity: 1, kind: Bytecode):
@@ -144,7 +144,7 @@ Function Process19 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process2 (arity: 1, kind: Bytecode):
@@ -152,7 +152,7 @@ Function Process2 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process20 (arity: 1, kind: Bytecode):
@@ -160,7 +160,7 @@ Function Process20 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process21 (arity: 1, kind: Bytecode):
@@ -168,7 +168,7 @@ Function Process21 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process22 (arity: 1, kind: Bytecode):
@@ -176,7 +176,7 @@ Function Process22 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process23 (arity: 1, kind: Bytecode):
@@ -184,7 +184,7 @@ Function Process23 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process24 (arity: 1, kind: Bytecode):
@@ -192,7 +192,7 @@ Function Process24 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process25 (arity: 1, kind: Bytecode):
@@ -200,7 +200,7 @@ Function Process25 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process26 (arity: 1, kind: Bytecode):
@@ -208,7 +208,7 @@ Function Process26 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process27 (arity: 1, kind: Bytecode):
@@ -216,7 +216,7 @@ Function Process27 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process28 (arity: 1, kind: Bytecode):
@@ -224,7 +224,7 @@ Function Process28 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process29 (arity: 1, kind: Bytecode):
@@ -232,7 +232,7 @@ Function Process29 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process3 (arity: 1, kind: Bytecode):
@@ -240,7 +240,7 @@ Function Process3 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process30 (arity: 1, kind: Bytecode):
@@ -248,7 +248,7 @@ Function Process30 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process31 (arity: 1, kind: Bytecode):
@@ -256,7 +256,7 @@ Function Process31 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process32 (arity: 1, kind: Bytecode):
@@ -264,7 +264,7 @@ Function Process32 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process33 (arity: 1, kind: Bytecode):
@@ -272,7 +272,7 @@ Function Process33 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process34 (arity: 1, kind: Bytecode):
@@ -280,7 +280,7 @@ Function Process34 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process35 (arity: 1, kind: Bytecode):
@@ -288,7 +288,7 @@ Function Process35 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process36 (arity: 1, kind: Bytecode):
@@ -296,7 +296,7 @@ Function Process36 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process37 (arity: 1, kind: Bytecode):
@@ -304,7 +304,7 @@ Function Process37 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process38 (arity: 1, kind: Bytecode):
@@ -312,7 +312,7 @@ Function Process38 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process39 (arity: 1, kind: Bytecode):
@@ -320,7 +320,7 @@ Function Process39 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process4 (arity: 1, kind: Bytecode):
@@ -328,7 +328,7 @@ Function Process4 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process40 (arity: 1, kind: Bytecode):
@@ -336,7 +336,7 @@ Function Process40 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process41 (arity: 1, kind: Bytecode):
@@ -344,7 +344,7 @@ Function Process41 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process42 (arity: 1, kind: Bytecode):
@@ -352,7 +352,7 @@ Function Process42 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process43 (arity: 1, kind: Bytecode):
@@ -360,7 +360,7 @@ Function Process43 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process44 (arity: 1, kind: Bytecode):
@@ -368,7 +368,7 @@ Function Process44 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process45 (arity: 1, kind: Bytecode):
@@ -376,7 +376,7 @@ Function Process45 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process46 (arity: 1, kind: Bytecode):
@@ -384,7 +384,7 @@ Function Process46 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process47 (arity: 1, kind: Bytecode):
@@ -392,7 +392,7 @@ Function Process47 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process48 (arity: 1, kind: Bytecode):
@@ -400,7 +400,7 @@ Function Process48 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process49 (arity: 1, kind: Bytecode):
@@ -408,7 +408,7 @@ Function Process49 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process5 (arity: 1, kind: Bytecode):
@@ -416,7 +416,7 @@ Function Process5 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process50 (arity: 1, kind: Bytecode):
@@ -424,7 +424,7 @@ Function Process50 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process51 (arity: 1, kind: Bytecode):
@@ -432,7 +432,7 @@ Function Process51 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process52 (arity: 1, kind: Bytecode):
@@ -440,7 +440,7 @@ Function Process52 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process53 (arity: 1, kind: Bytecode):
@@ -448,7 +448,7 @@ Function Process53 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process54 (arity: 1, kind: Bytecode):
@@ -456,7 +456,7 @@ Function Process54 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process55 (arity: 1, kind: Bytecode):
@@ -464,7 +464,7 @@ Function Process55 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process56 (arity: 1, kind: Bytecode):
@@ -472,7 +472,7 @@ Function Process56 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process57 (arity: 1, kind: Bytecode):
@@ -480,7 +480,7 @@ Function Process57 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process58 (arity: 1, kind: Bytecode):
@@ -488,7 +488,7 @@ Function Process58 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process59 (arity: 1, kind: Bytecode):
@@ -496,7 +496,7 @@ Function Process59 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process6 (arity: 1, kind: Bytecode):
@@ -504,7 +504,7 @@ Function Process6 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process60 (arity: 1, kind: Bytecode):
@@ -512,7 +512,7 @@ Function Process60 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process61 (arity: 1, kind: Bytecode):
@@ -520,7 +520,7 @@ Function Process61 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process62 (arity: 1, kind: Bytecode):
@@ -528,7 +528,7 @@ Function Process62 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process63 (arity: 1, kind: Bytecode):
@@ -536,7 +536,7 @@ Function Process63 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process64 (arity: 1, kind: Bytecode):
@@ -544,7 +544,7 @@ Function Process64 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process65 (arity: 1, kind: Bytecode):
@@ -552,7 +552,7 @@ Function Process65 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process66 (arity: 1, kind: Bytecode):
@@ -560,7 +560,7 @@ Function Process66 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process67 (arity: 1, kind: Bytecode):
@@ -568,7 +568,7 @@ Function Process67 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process68 (arity: 1, kind: Bytecode):
@@ -576,7 +576,7 @@ Function Process68 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process69 (arity: 1, kind: Bytecode):
@@ -584,7 +584,7 @@ Function Process69 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process7 (arity: 1, kind: Bytecode):
@@ -592,7 +592,7 @@ Function Process7 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process70 (arity: 1, kind: Bytecode):
@@ -600,7 +600,7 @@ Function Process70 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process71 (arity: 1, kind: Bytecode):
@@ -608,7 +608,7 @@ Function Process71 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process72 (arity: 1, kind: Bytecode):
@@ -616,7 +616,7 @@ Function Process72 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process73 (arity: 1, kind: Bytecode):
@@ -624,7 +624,7 @@ Function Process73 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process74 (arity: 1, kind: Bytecode):
@@ -632,7 +632,7 @@ Function Process74 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process75 (arity: 1, kind: Bytecode):
@@ -640,7 +640,7 @@ Function Process75 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process76 (arity: 1, kind: Bytecode):
@@ -648,7 +648,7 @@ Function Process76 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process77 (arity: 1, kind: Bytecode):
@@ -656,7 +656,7 @@ Function Process77 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process78 (arity: 1, kind: Bytecode):
@@ -664,7 +664,7 @@ Function Process78 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process79 (arity: 1, kind: Bytecode):
@@ -672,7 +672,7 @@ Function Process79 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process8 (arity: 1, kind: Bytecode):
@@ -680,7 +680,7 @@ Function Process8 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process80 (arity: 1, kind: Bytecode):
@@ -688,7 +688,7 @@ Function Process80 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process81 (arity: 1, kind: Bytecode):
@@ -696,7 +696,7 @@ Function Process81 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process82 (arity: 1, kind: Bytecode):
@@ -704,7 +704,7 @@ Function Process82 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process83 (arity: 1, kind: Bytecode):
@@ -712,7 +712,7 @@ Function Process83 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process84 (arity: 1, kind: Bytecode):
@@ -720,7 +720,7 @@ Function Process84 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process85 (arity: 1, kind: Bytecode):
@@ -728,7 +728,7 @@ Function Process85 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process86 (arity: 1, kind: Bytecode):
@@ -736,7 +736,7 @@ Function Process86 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process87 (arity: 1, kind: Bytecode):
@@ -744,7 +744,7 @@ Function Process87 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process88 (arity: 1, kind: Bytecode):
@@ -752,7 +752,7 @@ Function Process88 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process89 (arity: 1, kind: Bytecode):
@@ -760,7 +760,7 @@ Function Process89 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process9 (arity: 1, kind: Bytecode):
@@ -768,7 +768,7 @@ Function Process9 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process90 (arity: 1, kind: Bytecode):
@@ -776,7 +776,7 @@ Function Process90 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process91 (arity: 1, kind: Bytecode):
@@ -784,7 +784,7 @@ Function Process91 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process92 (arity: 1, kind: Bytecode):
@@ -792,7 +792,7 @@ Function Process92 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process93 (arity: 1, kind: Bytecode):
@@ -800,7 +800,7 @@ Function Process93 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process94 (arity: 1, kind: Bytecode):
@@ -808,7 +808,7 @@ Function Process94 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process95 (arity: 1, kind: Bytecode):
@@ -816,7 +816,7 @@ Function Process95 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process96 (arity: 1, kind: Bytecode):
@@ -824,7 +824,7 @@ Function Process96 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process97 (arity: 1, kind: Bytecode):
@@ -832,7 +832,7 @@ Function Process97 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process98 (arity: 1, kind: Bytecode):
@@ -840,7 +840,7 @@ Function Process98 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function Process99 (arity: 1, kind: Bytecode):
@@ -848,7 +848,7 @@ Function Process99 (arity: 1, kind: Bytecode):
      1   LOAD_VAR 1     (input)
      2   LOAD_CONST 1   ("input")
      3   ALLOC_MAP 1    
-     4   CALL 59        (<fn baml.llm.call_llm_function>)
+     4   CALL 60        (<fn baml.llm.call_llm_function>)
      5   RETURN         
 
 Function baml.llm.PlannerState.rr_local_offset (arity: 2, kind: Bytecode):
@@ -890,14 +890,14 @@ Function baml.llm.PlannerState.rr_local_offset (arity: 2, kind: Bytecode):
 Function baml.llm.PlannerState.rr_pick_index (arity: 3, kind: Bytecode):
      0    LOAD_VAR 1          (self)
      1    LOAD_VAR 2          (client_name)
-     2    CALL 60             (<fn baml.llm.PlannerState.rr_local_offset>)
+     2    CALL 61             (<fn baml.llm.PlannerState.rr_local_offset>)
      3    STORE_VAR 4         (local_offset)
      4    LOAD_VAR 1          (self)
      5    LOAD_FIELD 0        
      6    LOAD_VAR 2          (client_name)
      7    CALL 1              (<fn baml.Array.push>)
      8    POP 1               
-     9    LOAD_GLOBAL 46      (<fn baml.llm.round_robin_peek>)
+     9    LOAD_GLOBAL 47      (<fn baml.llm.round_robin_peek>)
      10   LOAD_VAR 2          (client_name)
      11   DISPATCH_FUTURE 1   
      12   AWAIT               
@@ -913,7 +913,7 @@ Function baml.llm.build_attempt (arity: 1, kind: Bytecode):
      2   COPY 0              
      3   ALLOC_ARRAY 0       
      4   STORE_FIELD 0       
-     5   CALL 50             (<fn baml.llm.build_attempt_with_state>)
+     5   CALL 51             (<fn baml.llm.build_attempt_with_state>)
      6   RETURN              
 
 Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
@@ -950,14 +950,14 @@ Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
      30    LOAD_VAR 2              (planner_state)
      31    LOAD_VAR 14             (_69)
      32    LOAD_VAR 15             (_71)
-     33    CALL 61                 (<fn baml.llm.PlannerState.rr_pick_index>)
+     33    CALL 62                 (<fn baml.llm.PlannerState.rr_pick_index>)
      34    STORE_VAR 13            (idx)
      35    LOAD_VAR 1              (llm_client)
      36    LOAD_FIELD 2            
      37    LOAD_VAR 13             (idx)
      38    CALL 2                  (<fn baml.Array.at>)
      39    LOAD_VAR 2              (planner_state)
-     40    CALL 51                 (<fn baml.llm.build_plan_with_state>)
+     40    CALL 52                 (<fn baml.llm.build_plan_with_state>)
      41    JUMP +69                (to 110)
      42    ALLOC_ARRAY 0           
      43    JUMP +67                (to 110)
@@ -988,7 +988,7 @@ Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
      68    STORE_VAR 7             (_i)
      69    LOAD_VAR 8              (sub)
      70    LOAD_VAR 2              (planner_state)
-     71    CALL 51                 (<fn baml.llm.build_plan_with_state>)
+     71    CALL 52                 (<fn baml.llm.build_plan_with_state>)
      72    STORE_VAR 9             (_iter1)
      73    LOAD_VAR 9              (_iter1)
      74    CALL 0                  (<fn baml.Array.length>)
@@ -1012,7 +1012,7 @@ Function baml.llm.build_attempt_with_state (arity: 2, kind: Bytecode):
      92    CALL 1                  (<fn baml.Array.push>)
      93    POP 1                   
      94    JUMP -16                (to 78)
-     95    LOAD_GLOBAL 44          (<fn baml.llm.resolve_client>)
+     95    LOAD_GLOBAL 45          (<fn baml.llm.resolve_client>)
      96    LOAD_VAR 1              (llm_client)
      97    LOAD_FIELD 0            
      98    DISPATCH_FUTURE 1       
@@ -1035,7 +1035,7 @@ Function baml.llm.build_plan (arity: 1, kind: Bytecode):
      2   COPY 0              
      3   ALLOC_ARRAY 0       
      4   STORE_FIELD 0       
-     5   CALL 51             (<fn baml.llm.build_plan_with_state>)
+     5   CALL 52             (<fn baml.llm.build_plan_with_state>)
      6   RETURN              
 
 Function baml.llm.build_plan_with_state (arity: 2, kind: Bytecode):
@@ -1098,7 +1098,7 @@ Function baml.llm.build_plan_with_state (arity: 2, kind: Bytecode):
      56   STORE_VAR 6             (current_delay)
      57   LOAD_VAR 1              (llm_client)
      58   LOAD_VAR 2              (planner_state)
-     59   CALL 50                 (<fn baml.llm.build_attempt_with_state>)
+     59   CALL 51                 (<fn baml.llm.build_attempt_with_state>)
      60   STORE_VAR 10            (_iter)
      61   LOAD_VAR 10             (_iter)
      62   CALL 0                  (<fn baml.Array.length>)
@@ -1137,18 +1137,18 @@ Function baml.llm.build_plan_with_state (arity: 2, kind: Bytecode):
      95   JUMP -29                (to 66)
      96   LOAD_VAR 1              (llm_client)
      97   LOAD_VAR 2              (planner_state)
-     98   CALL 50                 (<fn baml.llm.build_attempt_with_state>)
+     98   CALL 51                 (<fn baml.llm.build_attempt_with_state>)
      99   RETURN                  
 
 Function baml.llm.build_request (arity: 2, kind: Bytecode):
      0    LOAD_VAR 1          (function_name)
-     1    CALL 53             (<fn baml.llm.resolve_primitive>)
+     1    CALL 54             (<fn baml.llm.resolve_primitive>)
      2    STORE_VAR 3         (primitive_client)
      3    LOAD_VAR 1          (function_name)
      4    LOAD_VAR 2          (args)
-     5    CALL 52             (<fn baml.llm.render_prompt>)
+     5    CALL 53             (<fn baml.llm.render_prompt>)
      6    STORE_VAR 4         (specialized_prompt)
-     7    LOAD_GLOBAL 39      (<fn baml.llm.PrimitiveClient.build_request>)
+     7    LOAD_GLOBAL 40      (<fn baml.llm.PrimitiveClient.build_request>)
      8    LOAD_VAR 3          (primitive_client)
      9    LOAD_VAR 4          (specialized_prompt)
      10   DISPATCH_FUTURE 2   
@@ -1156,12 +1156,12 @@ Function baml.llm.build_request (arity: 2, kind: Bytecode):
      12   RETURN              
 
 Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
-     0    LOAD_GLOBAL 41         (<fn baml.llm.get_jinja_template>)
+     0    LOAD_GLOBAL 42         (<fn baml.llm.get_jinja_template>)
      1    LOAD_VAR 1             (function_name)
      2    DISPATCH_FUTURE 1      
      3    AWAIT                  
      4    STORE_VAR 3            (jinja_string)
-     5    LOAD_GLOBAL 43         (<fn baml.llm.get_client>)
+     5    LOAD_GLOBAL 44         (<fn baml.llm.get_client>)
      6    LOAD_VAR 1             (function_name)
      7    DISPATCH_FUTURE 1      
      8    AWAIT                  
@@ -1176,22 +1176,31 @@ Function baml.llm.call_llm_function (arity: 2, kind: Bytecode):
      17   LOAD_VAR 1             (function_name)
      18   STORE_FIELD 2          
      19   LOAD_CONST 0           (0)
-     20   CALL 55                (<fn baml.llm.execute_client>)
+     20   CALL 56                (<fn baml.llm.execute_client>)
      21   STORE_VAR 4            (result)
      22   LOAD_VAR 4             (result)
      23   LOAD_FIELD 0           
      24   POP_JUMP_IF_FALSE +2   (to 26)
-     25   JUMP +8                (to 33)
-     26   LOAD_GLOBAL 29         (<fn baml.sys.panic>)
-     27   LOAD_CONST 1           ("All orchestration steps failed")
-     28   DISPATCH_FUTURE 1      
-     29   AWAIT                  
-     30   POP 1                  
-     31   LOAD_CONST 2           (null)
-     32   RETURN                 
-     33   LOAD_VAR 4             (result)
-     34   LOAD_FIELD 1           
-     35   RETURN                 
+     25   JUMP +17               (to 42)
+     26   LOAD_GLOBAL 30         (<fn baml.sys.cancellation_requested>)
+     27   DISPATCH_FUTURE 0      
+     28   AWAIT                  
+     29   POP_JUMP_IF_FALSE +6   (to 35)
+     30   LOAD_GLOBAL 29         (<fn baml.sys.panic>)
+     31   LOAD_CONST 1           ("Operation cancelled")
+     32   DISPATCH_FUTURE 1      
+     33   AWAIT                  
+     34   POP 1                  
+     35   LOAD_GLOBAL 29         (<fn baml.sys.panic>)
+     36   LOAD_CONST 2           ("All orchestration steps failed")
+     37   DISPATCH_FUTURE 1      
+     38   AWAIT                  
+     39   POP 1                  
+     40   LOAD_CONST 3           (null)
+     41   RETURN                 
+     42   LOAD_VAR 4             (result)
+     43   LOAD_FIELD 1           
+     44   RETURN                 
 
 Function baml.llm.execute_client (arity: 3, kind: Bytecode):
      0    LOAD_VAR 1              (llm_client)
@@ -1201,7 +1210,7 @@ Function baml.llm.execute_client (arity: 3, kind: Bytecode):
      4    LOAD_CONST 0            (null)
      5    CMP_OP ==               
      6    POP_JUMP_IF_FALSE +2    (to 8)
-     7    JUMP +77                (to 84)
+     7    JUMP +83                (to 90)
      8    LOAD_VAR 4              (_4)
      9    STORE_VAR 5             (r)
      10   LOAD_VAR 5              (r)
@@ -1224,65 +1233,71 @@ Function baml.llm.execute_client (arity: 3, kind: Bytecode):
      27   COPY 0                  
      28   LOAD_CONST 0            (null)
      29   STORE_FIELD 1           
-     30   JUMP +58                (to 88)
-     31   LOAD_VAR 3              (inherited_delay_ms)
-     32   STORE_VAR 8             (attempt_delay)
-     33   LOAD_VAR 7              (attempt)
-     34   LOAD_CONST 2            (0)
-     35   CMP_OP >                
-     36   POP_JUMP_IF_FALSE +25   (to 61)
-     37   LOAD_VAR 6              (current_delay)
-     38   CALL 19                 (<fn baml.math.trunc>)
-     39   STORE_VAR 8             (attempt_delay)
-     40   LOAD_VAR 6              (current_delay)
-     41   LOAD_VAR 5              (r)
-     42   LOAD_FIELD 2            
-     43   BIN_OP *                
-     44   STORE_VAR 9             (next)
-     45   LOAD_VAR 9              (next)
+     30   JUMP +64                (to 94)
+     31   LOAD_GLOBAL 30          (<fn baml.sys.cancellation_requested>)
+     32   DISPATCH_FUTURE 0       
+     33   AWAIT                   
+     34   POP_JUMP_IF_FALSE +2    (to 36)
+     35   JUMP +54                (to 89)
+     36   LOAD_VAR 3              (inherited_delay_ms)
+     37   STORE_VAR 8             (attempt_delay)
+     38   LOAD_VAR 7              (attempt)
+     39   LOAD_CONST 2            (0)
+     40   CMP_OP >                
+     41   POP_JUMP_IF_FALSE +25   (to 66)
+     42   LOAD_VAR 6              (current_delay)
+     43   CALL 19                 (<fn baml.math.trunc>)
+     44   STORE_VAR 8             (attempt_delay)
+     45   LOAD_VAR 6              (current_delay)
      46   LOAD_VAR 5              (r)
-     47   LOAD_FIELD 3            
-     48   LOAD_CONST 1            (0)
-     49   BIN_OP +                
-     50   CMP_OP >                
-     51   POP_JUMP_IF_FALSE +2    (to 53)
-     52   JUMP +4                 (to 56)
-     53   LOAD_VAR 9              (next)
-     54   STORE_VAR 6             (current_delay)
-     55   JUMP +6                 (to 61)
-     56   LOAD_VAR 5              (r)
-     57   LOAD_FIELD 3            
-     58   LOAD_CONST 1            (0)
-     59   BIN_OP +                
-     60   STORE_VAR 6             (current_delay)
-     61   LOAD_VAR 7              (attempt)
-     62   LOAD_VAR 5              (r)
-     63   LOAD_FIELD 0            
-     64   CMP_OP ==               
-     65   POP_JUMP_IF_FALSE +3    (to 68)
-     66   LOAD_VAR 3              (inherited_delay_ms)
-     67   STORE_VAR 8             (attempt_delay)
-     68   LOAD_VAR 1              (llm_client)
-     69   LOAD_VAR 2              (context)
-     70   LOAD_VAR 8              (attempt_delay)
-     71   CALL 56                 (<fn baml.llm.execute_client_once>)
-     72   STORE_VAR 10            (result)
-     73   LOAD_VAR 10             (result)
-     74   LOAD_FIELD 0            
-     75   POP_JUMP_IF_FALSE +2    (to 77)
-     76   JUMP +6                 (to 82)
-     77   LOAD_VAR 7              (attempt)
-     78   LOAD_CONST 4            (1)
-     79   BIN_OP +                
-     80   STORE_VAR 7             (attempt)
-     81   JUMP -64                (to 17)
-     82   LOAD_VAR 10             (result)
-     83   RETURN                  
-     84   LOAD_VAR 1              (llm_client)
-     85   LOAD_VAR 2              (context)
-     86   LOAD_VAR 3              (inherited_delay_ms)
-     87   CALL 56                 (<fn baml.llm.execute_client_once>)
+     47   LOAD_FIELD 2            
+     48   BIN_OP *                
+     49   STORE_VAR 9             (next)
+     50   LOAD_VAR 9              (next)
+     51   LOAD_VAR 5              (r)
+     52   LOAD_FIELD 3            
+     53   LOAD_CONST 1            (0)
+     54   BIN_OP +                
+     55   CMP_OP >                
+     56   POP_JUMP_IF_FALSE +2    (to 58)
+     57   JUMP +4                 (to 61)
+     58   LOAD_VAR 9              (next)
+     59   STORE_VAR 6             (current_delay)
+     60   JUMP +6                 (to 66)
+     61   LOAD_VAR 5              (r)
+     62   LOAD_FIELD 3            
+     63   LOAD_CONST 1            (0)
+     64   BIN_OP +                
+     65   STORE_VAR 6             (current_delay)
+     66   LOAD_VAR 7              (attempt)
+     67   LOAD_VAR 5              (r)
+     68   LOAD_FIELD 0            
+     69   CMP_OP ==               
+     70   POP_JUMP_IF_FALSE +3    (to 73)
+     71   LOAD_VAR 3              (inherited_delay_ms)
+     72   STORE_VAR 8             (attempt_delay)
+     73   LOAD_VAR 1              (llm_client)
+     74   LOAD_VAR 2              (context)
+     75   LOAD_VAR 8              (attempt_delay)
+     76   CALL 57                 (<fn baml.llm.execute_client_once>)
+     77   STORE_VAR 10            (result)
+     78   LOAD_VAR 10             (result)
+     79   LOAD_FIELD 0            
+     80   POP_JUMP_IF_FALSE +2    (to 82)
+     81   JUMP +6                 (to 87)
+     82   LOAD_VAR 7              (attempt)
+     83   LOAD_CONST 4            (1)
+     84   BIN_OP +                
+     85   STORE_VAR 7             (attempt)
+     86   JUMP -69                (to 17)
+     87   LOAD_VAR 10             (result)
      88   RETURN                  
+     89   RETURN                  
+     90   LOAD_VAR 1              (llm_client)
+     91   LOAD_VAR 2              (context)
+     92   LOAD_VAR 3              (inherited_delay_ms)
+     93   CALL 57                 (<fn baml.llm.execute_client_once>)
+     94   RETURN                  
 
 Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      0     LOAD_VAR 1              (llm_client)
@@ -1293,159 +1308,177 @@ Function baml.llm.execute_client_once (arity: 3, kind: Bytecode):
      5     CMP_OP ==               
      6     POP_JUMP_IF_FALSE +3    (to 9)
      7     POP 1                   
-     8     JUMP +67                (to 75)
+     8     JUMP +79                (to 87)
      9     COPY 0                  
      10    LOAD_CONST 1            (1)
      11    CMP_OP ==               
      12    POP_JUMP_IF_FALSE +3    (to 15)
      13    POP 1                   
-     14    JUMP +22                (to 36)
+     14    JUMP +28                (to 42)
      15    POP 1                   
-     16    LOAD_GLOBAL 45          (<fn baml.llm.round_robin_next>)
-     17    LOAD_VAR 1              (llm_client)
-     18    LOAD_FIELD 0            
-     19    DISPATCH_FUTURE 1       
-     20    AWAIT                   
-     21    STORE_VAR 16            (_92)
+     16    LOAD_GLOBAL 30          (<fn baml.sys.cancellation_requested>)
+     17    DISPATCH_FUTURE 0       
+     18    AWAIT                   
+     19    POP_JUMP_IF_FALSE +2    (to 21)
+     20    JUMP +21                (to 41)
+     21    LOAD_GLOBAL 46          (<fn baml.llm.round_robin_next>)
      22    LOAD_VAR 1              (llm_client)
-     23    LOAD_FIELD 2            
-     24    CALL 0                  (<fn baml.Array.length>)
-     25    STORE_VAR 17            (_97)
-     26    LOAD_VAR 1              (llm_client)
-     27    LOAD_FIELD 2            
-     28    LOAD_VAR 16             (_92)
-     29    LOAD_VAR 17             (_97)
-     30    BIN_OP %                
-     31    CALL 2                  (<fn baml.Array.at>)
-     32    LOAD_VAR 2              (context)
-     33    LOAD_VAR 3              (active_delay_ms)
-     34    CALL 55                 (<fn baml.llm.execute_client>)
-     35    JUMP +95                (to 130)
-     36    LOAD_VAR 1              (llm_client)
-     37    LOAD_FIELD 2            
-     38    STORE_VAR 11            (_iter)
-     39    LOAD_VAR 11             (_iter)
-     40    CALL 0                  (<fn baml.Array.length>)
-     41    STORE_VAR 12            (_len)
-     42    LOAD_CONST 0            (0)
-     43    STORE_VAR 13            (_i)
-     44    LOAD_VAR 13             (_i)
-     45    LOAD_VAR 12             (_len)
-     46    CMP_OP <                
-     47    POP_JUMP_IF_FALSE +2    (to 49)
-     48    JUMP +9                 (to 57)
-     49    ALLOC_INSTANCE 8        (<class baml.llm.ExecutionResult>)
-     50    COPY 0                  
-     51    LOAD_CONST 2            (false)
-     52    STORE_FIELD 0           
-     53    COPY 0                  
-     54    LOAD_CONST 3            (null)
-     55    STORE_FIELD 1           
-     56    JUMP +74                (to 130)
-     57    LOAD_VAR 11             (_iter)
-     58    LOAD_VAR 13             (_i)
-     59    LOAD_ARRAY_ELEMENT      
-     60    STORE_VAR 14            (sub)
-     61    LOAD_VAR 13             (_i)
-     62    LOAD_CONST 1            (1)
-     63    BIN_OP +                
-     64    STORE_VAR 13            (_i)
-     65    LOAD_VAR 14             (sub)
-     66    LOAD_VAR 2              (context)
-     67    LOAD_VAR 3              (active_delay_ms)
-     68    CALL 55                 (<fn baml.llm.execute_client>)
-     69    STORE_VAR 15            (result)
-     70    LOAD_VAR 15             (result)
-     71    LOAD_FIELD 0            
-     72    POP_JUMP_IF_FALSE -28   (to 44)
-     73    LOAD_VAR 15             (result)
-     74    RETURN                  
-     75    LOAD_GLOBAL 44          (<fn baml.llm.resolve_client>)
-     76    LOAD_VAR 1              (llm_client)
-     77    LOAD_FIELD 0            
-     78    DISPATCH_FUTURE 1       
-     79    AWAIT                   
-     80    CALL_INDIRECT           
-     81    STORE_VAR 4             (primitive)
-     82    LOAD_GLOBAL 37          (<fn baml.llm.PrimitiveClient.render_prompt>)
-     83    LOAD_VAR 4              (primitive)
-     84    LOAD_VAR 2              (context)
-     85    LOAD_FIELD 0            
-     86    LOAD_VAR 2              (context)
-     87    LOAD_FIELD 1            
-     88    DISPATCH_FUTURE 3       
+     23    LOAD_FIELD 0            
+     24    DISPATCH_FUTURE 1       
+     25    AWAIT                   
+     26    STORE_VAR 16            (_107)
+     27    LOAD_VAR 1              (llm_client)
+     28    LOAD_FIELD 2            
+     29    CALL 0                  (<fn baml.Array.length>)
+     30    STORE_VAR 17            (_112)
+     31    LOAD_VAR 1              (llm_client)
+     32    LOAD_FIELD 2            
+     33    LOAD_VAR 16             (_107)
+     34    LOAD_VAR 17             (_112)
+     35    BIN_OP %                
+     36    CALL 2                  (<fn baml.Array.at>)
+     37    LOAD_VAR 2              (context)
+     38    LOAD_VAR 3              (active_delay_ms)
+     39    CALL 56                 (<fn baml.llm.execute_client>)
+     40    JUMP +107               (to 147)
+     41    RETURN                  
+     42    LOAD_VAR 1              (llm_client)
+     43    LOAD_FIELD 2            
+     44    STORE_VAR 11            (_iter)
+     45    LOAD_VAR 11             (_iter)
+     46    CALL 0                  (<fn baml.Array.length>)
+     47    STORE_VAR 12            (_len)
+     48    LOAD_CONST 0            (0)
+     49    STORE_VAR 13            (_i)
+     50    LOAD_VAR 13             (_i)
+     51    LOAD_VAR 12             (_len)
+     52    CMP_OP <                
+     53    POP_JUMP_IF_FALSE +2    (to 55)
+     54    JUMP +9                 (to 63)
+     55    ALLOC_INSTANCE 8        (<class baml.llm.ExecutionResult>)
+     56    COPY 0                  
+     57    LOAD_CONST 2            (false)
+     58    STORE_FIELD 0           
+     59    COPY 0                  
+     60    LOAD_CONST 3            (null)
+     61    STORE_FIELD 1           
+     62    JUMP +85                (to 147)
+     63    LOAD_VAR 11             (_iter)
+     64    LOAD_VAR 13             (_i)
+     65    LOAD_ARRAY_ELEMENT      
+     66    STORE_VAR 14            (sub)
+     67    LOAD_VAR 13             (_i)
+     68    LOAD_CONST 1            (1)
+     69    BIN_OP +                
+     70    STORE_VAR 13            (_i)
+     71    LOAD_GLOBAL 30          (<fn baml.sys.cancellation_requested>)
+     72    DISPATCH_FUTURE 0       
+     73    AWAIT                   
+     74    POP_JUMP_IF_FALSE +2    (to 76)
+     75    JUMP +11                (to 86)
+     76    LOAD_VAR 14             (sub)
+     77    LOAD_VAR 2              (context)
+     78    LOAD_VAR 3              (active_delay_ms)
+     79    CALL 56                 (<fn baml.llm.execute_client>)
+     80    STORE_VAR 15            (result)
+     81    LOAD_VAR 15             (result)
+     82    LOAD_FIELD 0            
+     83    POP_JUMP_IF_FALSE -33   (to 50)
+     84    LOAD_VAR 15             (result)
+     85    RETURN                  
+     86    RETURN                  
+     87    LOAD_GLOBAL 30          (<fn baml.sys.cancellation_requested>)
+     88    DISPATCH_FUTURE 0       
      89    AWAIT                   
-     90    STORE_VAR 5             (prompt)
-     91    LOAD_GLOBAL 38          (<fn baml.llm.PrimitiveClient.specialize_prompt>)
-     92    LOAD_VAR 4              (primitive)
-     93    LOAD_VAR 5              (prompt)
-     94    DISPATCH_FUTURE 2       
-     95    AWAIT                   
-     96    STORE_VAR 6             (specialized)
-     97    LOAD_GLOBAL 39          (<fn baml.llm.PrimitiveClient.build_request>)
-     98    LOAD_VAR 4              (primitive)
-     99    LOAD_VAR 6              (specialized)
-     100   DISPATCH_FUTURE 2       
-     101   AWAIT                   
-     102   STORE_VAR 7             (http_request)
-     103   LOAD_GLOBAL 36          (<fn baml.http.send>)
-     104   LOAD_VAR 7              (http_request)
-     105   DISPATCH_FUTURE 1       
+     90    POP_JUMP_IF_FALSE +2    (to 92)
+     91    JUMP +69                (to 160)
+     92    LOAD_GLOBAL 45          (<fn baml.llm.resolve_client>)
+     93    LOAD_VAR 1              (llm_client)
+     94    LOAD_FIELD 0            
+     95    DISPATCH_FUTURE 1       
+     96    AWAIT                   
+     97    CALL_INDIRECT           
+     98    STORE_VAR 4             (primitive)
+     99    LOAD_GLOBAL 38          (<fn baml.llm.PrimitiveClient.render_prompt>)
+     100   LOAD_VAR 4              (primitive)
+     101   LOAD_VAR 2              (context)
+     102   LOAD_FIELD 0            
+     103   LOAD_VAR 2              (context)
+     104   LOAD_FIELD 1            
+     105   DISPATCH_FUTURE 3       
      106   AWAIT                   
-     107   STORE_VAR 8             (http_response)
-     108   LOAD_GLOBAL 34          (<fn baml.http.Response.ok>)
-     109   LOAD_VAR 8              (http_response)
-     110   DISPATCH_FUTURE 1       
-     111   AWAIT                   
-     112   POP_JUMP_IF_FALSE +2    (to 114)
-     113   JUMP +18                (to 131)
-     114   LOAD_VAR 3              (active_delay_ms)
-     115   LOAD_CONST 0            (0)
-     116   CMP_OP >                
-     117   POP_JUMP_IF_FALSE +6    (to 123)
-     118   LOAD_GLOBAL 28          (<fn baml.sys.sleep>)
-     119   LOAD_VAR 3              (active_delay_ms)
-     120   DISPATCH_FUTURE 1       
-     121   AWAIT                   
-     122   POP 1                   
-     123   ALLOC_INSTANCE 8        (<class baml.llm.ExecutionResult>)
-     124   COPY 0                  
-     125   LOAD_CONST 2            (false)
-     126   STORE_FIELD 0           
-     127   COPY 0                  
-     128   LOAD_CONST 3            (null)
-     129   STORE_FIELD 1           
-     130   RETURN                  
-     131   LOAD_GLOBAL 33          (<fn baml.http.Response.text>)
-     132   LOAD_VAR 8              (http_response)
-     133   DISPATCH_FUTURE 1       
-     134   AWAIT                   
-     135   STORE_VAR 9             (body)
-     136   LOAD_GLOBAL 47          (<fn baml.llm.get_return_type>)
-     137   LOAD_VAR 2              (context)
-     138   LOAD_FIELD 2            
-     139   DISPATCH_FUTURE 1       
-     140   AWAIT                   
-     141   STORE_VAR 10            (return_type)
-     142   RETURN                  
+     107   STORE_VAR 5             (prompt)
+     108   LOAD_GLOBAL 39          (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     109   LOAD_VAR 4              (primitive)
+     110   LOAD_VAR 5              (prompt)
+     111   DISPATCH_FUTURE 2       
+     112   AWAIT                   
+     113   STORE_VAR 6             (specialized)
+     114   LOAD_GLOBAL 40          (<fn baml.llm.PrimitiveClient.build_request>)
+     115   LOAD_VAR 4              (primitive)
+     116   LOAD_VAR 6              (specialized)
+     117   DISPATCH_FUTURE 2       
+     118   AWAIT                   
+     119   STORE_VAR 7             (http_request)
+     120   LOAD_GLOBAL 37          (<fn baml.http.send>)
+     121   LOAD_VAR 7              (http_request)
+     122   DISPATCH_FUTURE 1       
+     123   AWAIT                   
+     124   STORE_VAR 8             (http_response)
+     125   LOAD_GLOBAL 35          (<fn baml.http.Response.ok>)
+     126   LOAD_VAR 8              (http_response)
+     127   DISPATCH_FUTURE 1       
+     128   AWAIT                   
+     129   POP_JUMP_IF_FALSE +2    (to 131)
+     130   JUMP +18                (to 148)
+     131   LOAD_VAR 3              (active_delay_ms)
+     132   LOAD_CONST 0            (0)
+     133   CMP_OP >                
+     134   POP_JUMP_IF_FALSE +6    (to 140)
+     135   LOAD_GLOBAL 28          (<fn baml.sys.sleep>)
+     136   LOAD_VAR 3              (active_delay_ms)
+     137   DISPATCH_FUTURE 1       
+     138   AWAIT                   
+     139   POP 1                   
+     140   ALLOC_INSTANCE 8        (<class baml.llm.ExecutionResult>)
+     141   COPY 0                  
+     142   LOAD_CONST 2            (false)
+     143   STORE_FIELD 0           
+     144   COPY 0                  
+     145   LOAD_CONST 3            (null)
+     146   STORE_FIELD 1           
+     147   RETURN                  
+     148   LOAD_GLOBAL 34          (<fn baml.http.Response.text>)
+     149   LOAD_VAR 8              (http_response)
+     150   DISPATCH_FUTURE 1       
+     151   AWAIT                   
+     152   STORE_VAR 9             (body)
+     153   LOAD_GLOBAL 48          (<fn baml.llm.get_return_type>)
+     154   LOAD_VAR 2              (context)
+     155   LOAD_FIELD 2            
+     156   DISPATCH_FUTURE 1       
+     157   AWAIT                   
+     158   STORE_VAR 10            (return_type)
+     159   RETURN                  
+     160   RETURN                  
 
 Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
-     0    LOAD_GLOBAL 41      (<fn baml.llm.get_jinja_template>)
+     0    LOAD_GLOBAL 42      (<fn baml.llm.get_jinja_template>)
      1    LOAD_VAR 1          (function_name)
      2    DISPATCH_FUTURE 1   
      3    AWAIT               
      4    STORE_VAR 3         (jinja_string)
      5    LOAD_VAR 1          (function_name)
-     6    CALL 53             (<fn baml.llm.resolve_primitive>)
+     6    CALL 54             (<fn baml.llm.resolve_primitive>)
      7    STORE_VAR 4         (primitive_client)
-     8    LOAD_GLOBAL 37      (<fn baml.llm.PrimitiveClient.render_prompt>)
+     8    LOAD_GLOBAL 38      (<fn baml.llm.PrimitiveClient.render_prompt>)
      9    LOAD_VAR 4          (primitive_client)
      10   LOAD_VAR 3          (jinja_string)
      11   LOAD_VAR 2          (args)
      12   DISPATCH_FUTURE 3   
      13   AWAIT               
      14   STORE_VAR 5         (prompt)
-     15   LOAD_GLOBAL 38      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
+     15   LOAD_GLOBAL 39      (<fn baml.llm.PrimitiveClient.specialize_prompt>)
      16   LOAD_VAR 4          (primitive_client)
      17   LOAD_VAR 5          (prompt)
      18   DISPATCH_FUTURE 2   
@@ -1453,12 +1486,12 @@ Function baml.llm.render_prompt (arity: 2, kind: Bytecode):
      20   RETURN              
 
 Function baml.llm.resolve_primitive (arity: 1, kind: Bytecode):
-     0    LOAD_GLOBAL 43      (<fn baml.llm.get_client>)
+     0    LOAD_GLOBAL 44      (<fn baml.llm.get_client>)
      1    LOAD_VAR 1          (function_name)
      2    DISPATCH_FUTURE 1   
      3    AWAIT               
      4    STORE_VAR 2         (llm_client)
-     5    LOAD_GLOBAL 44      (<fn baml.llm.resolve_client>)
+     5    LOAD_GLOBAL 45      (<fn baml.llm.resolve_client>)
      6    LOAD_VAR 2          (llm_client)
      7    LOAD_FIELD 0        
      8    DISPATCH_FUTURE 1   

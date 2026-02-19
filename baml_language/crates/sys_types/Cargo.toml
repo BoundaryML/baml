@@ -16,6 +16,7 @@ bex_vm_types = { workspace = true }
 sys_llm = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }
+tokio-util = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }

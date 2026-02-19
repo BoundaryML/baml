@@ -35,6 +35,12 @@
 //!
 //! // Call a function (protobuf in/out)
 //! const result = await runtime.callFunction('Greet', argsProtoBytes);
+//!
+//! // Call a function with cancellation support
+//! const callId = 42; // caller-provided unique ID
+//! const resultPromise = runtime.callFunction('Greet', argsProtoBytes, callId);
+//! // Cancel from another microtask:
+//! runtime.cancelCall(callId);
 //! ```
 
 mod error;
@@ -43,9 +49,9 @@ mod send_wrapper;
 mod wasm_env;
 mod wasm_http;
 
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
-use bex_factory::BexIncremental;
+use bex_factory::{BexIncremental, CancellationToken};
 pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
@@ -111,6 +117,8 @@ extern "C" {
 #[wasm_bindgen]
 pub struct BamlWasmRuntime {
     bex: Box<dyn BexIncremental>,
+    /// Active calls keyed by caller-provided ID. WASM is single-threaded so `RefCell` suffices.
+    active_calls: RefCell<HashMap<u32, CancellationToken>>,
 }
 
 #[wasm_bindgen]
@@ -144,7 +152,10 @@ impl BamlWasmRuntime {
         // Create the engine via factory
         let bex = bex_factory::new_incremental(root_path, &src_files, sys_ops);
 
-        Ok(BamlWasmRuntime { bex })
+        Ok(BamlWasmRuntime {
+            bex,
+            active_calls: RefCell::new(HashMap::new()),
+        })
     }
 
     /// Call a BAML function.
@@ -153,12 +164,19 @@ impl BamlWasmRuntime {
     ///
     /// * `name` - The function name to call
     /// * `args_proto` - Protobuf-encoded `HostFunctionArguments`
+    /// * `call_id` - Optional caller-provided ID for cancellation. If provided,
+    ///   the call can be cancelled via `cancelCall(callId)`.
     ///
     /// # Returns
     ///
     /// Protobuf-encoded `CffiValueHolder` containing the result.
     #[wasm_bindgen(js_name = callFunction)]
-    pub async fn call_function(&self, name: &str, args_proto: &[u8]) -> Result<Vec<u8>, JsError> {
+    pub async fn call_function(
+        &self,
+        name: &str,
+        args_proto: &[u8],
+        call_id: Option<u32>,
+    ) -> Result<Vec<u8>, JsValue> {
         // Decode protobuf arguments
         let args = baml::cffi::HostFunctionArguments::decode(args_proto)
             .map_err(|e| JsError::new(&format!("Failed to decode arguments: {e}")))?;
@@ -167,18 +185,57 @@ impl BamlWasmRuntime {
         let kwargs = kwargs_to_bex_values(args.kwargs)
             .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
 
+        // Create cancellation token and register if call_id is provided.
+        let cancel = CancellationToken::new();
+        if let Some(id) = call_id {
+            let mut calls = self.active_calls.borrow_mut();
+            if calls.contains_key(&id) {
+                return Err(JsError::new(&format!(
+                    "call_id {id} is already in use by an active call"
+                ))
+                .into());
+            }
+            calls.insert(id, cancel.clone());
+        }
+
         // Call the function (Bex trait)
-        let result: bex_factory::BexExternalValue = self
-            .bex
-            .call_function(name, kwargs.into())
-            .await
-            .map_err(|e| JsError::new(&format!("Function call failed: {e}")))?;
+        let result = self.bex.call_function(name, kwargs.into(), cancel).await;
+
+        // Unregister from active calls.
+        if let Some(id) = call_id {
+            self.active_calls.borrow_mut().remove(&id);
+        }
+
+        let result = result.map_err(|e| -> JsValue {
+            if matches!(
+                e,
+                bex_factory::RuntimeError::Engine(bex_factory::EngineError::Cancelled)
+            ) {
+                let err = js_sys::Error::new("Operation cancelled");
+                err.set_name("BamlCancelledError");
+                err.into()
+            } else {
+                JsError::new(&format!("Function call failed: {e}")).into()
+            }
+        })?;
 
         // Encode result as protobuf
         let cffi_value = external_to_cffi_value(&result)
             .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
 
         Ok(cffi_value.encode_to_vec())
+    }
+
+    /// Cancel an in-flight function call by its ID.
+    ///
+    /// If the call is still running, it will be interrupted at the next
+    /// cancellation check point. If the call has already completed or the ID
+    /// is unknown, this is a no-op.
+    #[wasm_bindgen(js_name = cancelCall)]
+    pub fn cancel_call(&self, call_id: u32) {
+        if let Some(token) = self.active_calls.borrow_mut().remove(&call_id) {
+            token.cancel();
+        }
     }
 
     /// Add a source file to the runtime.

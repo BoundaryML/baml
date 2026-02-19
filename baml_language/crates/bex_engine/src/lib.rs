@@ -77,6 +77,8 @@ use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
 use sys_types::{OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
+// Re-export CancellationToken for callers.
+pub use tokio_util::sync::CancellationToken;
 
 // ============================================================================
 // Engine Types
@@ -183,6 +185,9 @@ pub enum EngineError {
 
     #[error("Schema inconsistency: {message}")]
     SchemaInconsistency { message: String },
+
+    #[error("Operation cancelled")]
+    Cancelled,
 
     #[cfg(feature = "heap_debug")]
     #[error("Snapshot not possible for type: {type_name}")]
@@ -451,11 +456,12 @@ impl BexEngine {
             .collect();
 
         let sys_op_ctx = sys_types::SysOpContext {
-            llm_functions,
-            function_global_indices: bytecode.function_global_indices,
-            template_strings_macros: bytecode.template_strings_macros,
-            client_metadata,
-            round_robin_counters,
+            llm_functions: Arc::new(llm_functions),
+            function_global_indices: Arc::new(bytecode.function_global_indices),
+            template_strings_macros: Arc::new(bytecode.template_strings_macros),
+            client_metadata: Arc::new(client_metadata),
+            round_robin_counters: Arc::new(round_robin_counters),
+            cancel: CancellationToken::new(),
         };
 
         Ok(Self {
@@ -666,7 +672,14 @@ impl BexEngine {
         args: Vec<BexExternalValue>,
         host_ctx: Option<HostSpanContext>,
         collectors: &[Arc<bex_events::Collector>],
+        cancel: CancellationToken,
     ) -> Result<BexExternalValue, EngineError> {
+        // Fail fast if already cancelled — guarantees pre-cancelled tokens
+        // always produce Err(Cancelled) regardless of function contents.
+        if cancel.is_cancelled() {
+            return Err(EngineError::Cancelled);
+        }
+
         // Wait for any in-progress GC to complete.
         while self.gc_in_progress.load(Ordering::Acquire) {
             self.gc_complete.notified().await;
@@ -767,7 +780,7 @@ impl BexEngine {
 
         // Run the event loop with span tracking
         let result = self
-            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch, &mut span_state)
+            .run_event_loop_with_epoch(return_type, &mut vm, my_epoch, &mut span_state, &cancel)
             .await;
 
         // Unregister from epoch
@@ -779,7 +792,15 @@ impl BexEngine {
             self.epoch_drained.notify_one();
         }
 
-        result
+        // If the call failed and the token is cancelled, upgrade to
+        // EngineError::Cancelled. This ensures cooperative BAML-level checks
+        // (which produce SysOpError via baml.sys.panic) are reported as
+        // Cancelled so callers can programmatically distinguish cancellation
+        // from genuine failures.
+        match result {
+            Err(_) if cancel.is_cancelled() => Err(EngineError::Cancelled),
+            other => other,
+        }
     }
 
     /// Look up a function by name and return its heap pointer.
@@ -891,8 +912,29 @@ impl BexEngine {
         vm: &mut BexVm,
         my_epoch: u64,
         span_state: &mut Option<SpanState>,
+        cancel: &CancellationToken,
     ) -> Result<BexExternalValue, EngineError> {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
+        // Abort handles for spawned async tasks.
+        //
+        // Cancellation design: the VM event loop uses a biased `tokio::select!`
+        // at every `Await` instruction, so cancellation is detected immediately
+        // regardless of whether the in-flight sys_op is cancel-aware. However,
+        // without abort handles the *spawned task* running the sys_op would
+        // continue as an orphan until it completes naturally. For short-lived
+        // ops (env.get, render_prompt, parse) this is irrelevant, but for
+        // long-running ops (HTTP requests burning provider tokens, multi-second
+        // sleeps) orphans waste real resources.
+        //
+        // Rather than making individual sys_ops cancel-aware (wrapping each in
+        // its own `tokio::select!`), we store abort handles here and kill all
+        // spawned tasks when cancellation fires. This keeps sys_op
+        // implementations simple — new sys_ops never need to think about
+        // cancellation.
+        //
+        // We use `futures::future::AbortHandle` (not `tokio::task::AbortHandle`)
+        // so the same mechanism works on both native and WASM targets.
+        let mut abort_handles: Vec<futures::future::AbortHandle> = Vec::new();
 
         'vm_exec: loop {
             match vm.exec()? {
@@ -942,7 +984,7 @@ impl BexEngine {
                         .map(|v| self.vm_arg_to_bex_value(v))
                         .collect();
 
-                    match self.execute_sys_op(pending.operation, &args) {
+                    match self.execute_sys_op(pending.operation, &args, cancel) {
                         SysOpResult::Ready(result) => {
                             // Sync operation - set future to Ready without touching stack.
                             // The VM will continue to the Await instruction which will
@@ -959,24 +1001,29 @@ impl BexEngine {
                             vm.set_future_ready(id, value)?;
                         }
                         SysOpResult::Async(fut) => {
-                            // Async operation - spawn task
+                            // Async operation — wrap in Abortable and spawn.
                             let pending_futures = pending_futures.clone();
+                            let (abort_handle, abort_reg) =
+                                futures::future::AbortHandle::new_pair();
+                            let abortable = futures::future::Abortable::new(
+                                async move {
+                                    let result = fut.await;
+                                    let _ = pending_futures.send(FutureResult {
+                                        id,
+                                        result: result.map_err(EngineError::from),
+                                    });
+                                },
+                                abort_reg,
+                            );
                             #[cfg(not(target_arch = "wasm32"))]
                             tokio::spawn(async move {
-                                let result = fut.await;
-                                let _ = pending_futures.send(FutureResult {
-                                    id,
-                                    result: result.map_err(EngineError::from),
-                                });
+                                let _ = abortable.await;
                             });
                             #[cfg(target_arch = "wasm32")]
                             wasm_bindgen_futures::spawn_local(async move {
-                                let result = fut.await;
-                                let _ = pending_futures.send(FutureResult {
-                                    id,
-                                    result: result.map_err(EngineError::from),
-                                });
+                                let _ = abortable.await;
                             });
+                            abort_handles.push(abort_handle);
                         }
                     }
                 }
@@ -1042,23 +1089,35 @@ impl BexEngine {
                     }
 
                     // We gotta wait for the target future.
+                    // Race against cancellation — `biased` ensures the cancel
+                    // branch is checked first, matching legacy orchestrator behavior.
                     loop {
-                        let future = processed_futures
-                            .recv()
-                            .await
-                            .ok_or(EngineError::FutureChannelClosed)?;
-
-                        let external = future.result?;
-                        let value = self.heap.with_gc_protection(|protected| {
-                            self.convert_external_to_vm_value(
-                                vm,
-                                external,
-                                &protected.epoch_guard(),
-                            )
-                        });
-                        vm.fulfil_future(future.id, value)?;
-                        if future.id == future_id {
-                            break;
+                        tokio::select! {
+                            biased;
+                            () = cancel.cancelled() => {
+                                // Abort all in-flight spawned tasks to stop
+                                // HTTP requests, sleeps, etc. immediately.
+                                for handle in &abort_handles {
+                                    handle.abort();
+                                }
+                                return Err(EngineError::Cancelled);
+                            }
+                            future = processed_futures.recv() => {
+                                let future = future
+                                    .ok_or(EngineError::FutureChannelClosed)?;
+                                let external = future.result?;
+                                let value = self.heap.with_gc_protection(|protected| {
+                                    self.convert_external_to_vm_value(
+                                        vm,
+                                        external,
+                                        &protected.epoch_guard(),
+                                    )
+                                });
+                                vm.fulfil_future(future.id, value)?;
+                                if future.id == future_id {
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -1154,10 +1213,19 @@ impl BexEngine {
     /// All `sys_ops` (including LLM ops) go through the `SysOps` function pointer table.
     /// No more special-case matching — adding a new `#[sys_op]` in the DSL automatically
     /// gets dispatched here via the generated `SysOps::get()`.
-    fn execute_sys_op(&self, op: SysOp, args: &[BexExternalValue]) -> SysOpResult {
+    ///
+    /// A per-call context is created by cloning the shared `sys_op_ctx` with the
+    /// call's cancellation token. This is O(1) since all fields are `Arc`-wrapped.
+    fn execute_sys_op(
+        &self,
+        op: SysOp,
+        args: &[BexExternalValue],
+        cancel: &CancellationToken,
+    ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        fn_ptr(&self.heap, args, &self.sys_op_ctx)
+        let ctx = self.sys_op_ctx.with_cancel(cancel.clone());
+        fn_ptr(&self.heap, args, &ctx)
     }
 }
 

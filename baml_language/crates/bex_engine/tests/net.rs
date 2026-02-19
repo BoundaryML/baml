@@ -2,7 +2,7 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue};
+use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 use tokio::{io::AsyncWriteExt, net::TcpListener};
@@ -32,7 +32,9 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
 
     let snapshot = compile_for_engine(&source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
-    let result = engine.call_function("main", vec![], None, &[]).await?;
+    let result = engine
+        .call_function("main", vec![], None, &[], CancellationToken::new())
+        .await?;
 
     // Wait for server to finish
     server.await?;
@@ -60,7 +62,9 @@ async fn net_connect_failure() -> anyhow::Result<()> {
 
     let snapshot = compile_for_engine(source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
-    let result = engine.call_function("main", vec![], None, &[]).await;
+    let result = engine
+        .call_function("main", vec![], None, &[], CancellationToken::new())
+        .await;
 
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
@@ -101,7 +105,9 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
 
     let snapshot = compile_for_engine(&source);
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
-    let result = engine.call_function("main", vec![], None, &[]).await?;
+    let result = engine
+        .call_function("main", vec![], None, &[], CancellationToken::new())
+        .await?;
 
     server.await?;
 
