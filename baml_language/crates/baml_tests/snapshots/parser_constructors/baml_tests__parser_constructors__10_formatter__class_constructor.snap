@@ -2,13 +2,13 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Point {
-    x int
-    y int
+    x: int
+    y: int
 }
 
 class Vec2D {
-    p Point
-    q Point
+    p: Point
+    q: Point
 }
 
 function point() -> Point {

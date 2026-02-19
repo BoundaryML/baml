@@ -21,6 +21,7 @@ pub enum TopLevelDeclaration {
     RetryPolicy(RetryPolicyDecl),
     TemplateString(TemplateStringDecl),
     TypeAlias(TypeAliasDecl),
+    Generator(GeneratorDecl),
     Unknown(TextRange),
 }
 
@@ -42,6 +43,9 @@ impl FromCST for TopLevelDeclaration {
             }
             SyntaxKind::TYPE_ALIAS_DEF => {
                 TopLevelDeclaration::TypeAlias(TypeAliasDecl::from_cst(elem)?)
+            }
+            SyntaxKind::GENERATOR_DEF => {
+                TopLevelDeclaration::Generator(GeneratorDecl::from_cst(elem)?)
             }
             _ => return Ok(TopLevelDeclaration::Unknown(elem.text_range())),
         };
@@ -66,6 +70,7 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::TypeAlias(type_alias_decl) => {
                 type_alias_decl.print(shape, printer)
             }
+            TopLevelDeclaration::Generator(generator_decl) => generator_decl.print(shape, printer),
             TopLevelDeclaration::Unknown(range) => {
                 // May not be idempotent due to whitespace changes, but that's okay because we shouldn't
                 // have unknown stuff anyway.
@@ -84,6 +89,7 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::RetryPolicy(r) => r.leftmost_token(),
             TopLevelDeclaration::TemplateString(t) => t.leftmost_token(),
             TopLevelDeclaration::TypeAlias(t) => t.leftmost_token(),
+            TopLevelDeclaration::Generator(g) => g.leftmost_token(),
             TopLevelDeclaration::Unknown(range) => *range,
         }
     }
@@ -97,6 +103,7 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::RetryPolicy(r) => r.rightmost_token(),
             TopLevelDeclaration::TemplateString(t) => t.rightmost_token(),
             TopLevelDeclaration::TypeAlias(t) => t.rightmost_token(),
+            TopLevelDeclaration::Generator(g) => g.rightmost_token(),
             TopLevelDeclaration::Unknown(range) => *range,
         }
     }
@@ -445,13 +452,8 @@ impl KnownKind for FunctionParam {
 impl Printable for FunctionParam {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.name);
-        if let Some((colon, ty)) = &self.ty {
-            if let Some(colon) = colon {
-                printer.print_raw_token(colon);
-            } else {
-                printer.print_str(":");
-            }
-            printer.print_str(" ");
+        if let Some((_, ty)) = &self.ty {
+            printer.print_str(": ");
             let ty_shape = Shape {
                 width: shape
                     .width
@@ -969,7 +971,7 @@ impl PrintMultiLine for ClassField {
         };
 
         printer.print_raw_token(&self.name);
-        printer.print_str(" ");
+        printer.print_str(": ");
         printer.print(&self.ty, shape);
         printer.print_trivia_all_trailing_for(self.ty.rightmost_token());
         for attr in &self.attributes {
@@ -999,7 +1001,7 @@ impl Printable for ClassField {
         let mut single_line_printer =
             Printer::new_empty(printer.input, printer.config, printer.trivia);
         single_line_printer.print_raw_token(&self.name);
-        single_line_printer.print_str(" ");
+        single_line_printer.print_str(": ");
         let mut multi_lined = single_line_printer
             .print(&self.ty, Shape::unlimited_single_line())
             .multi_lined;
@@ -1566,11 +1568,14 @@ impl Printable for ConfigBlock {
             printer.print_trivia_all_leading_with_newline_for(item.leftmost_token(), inner_indent);
             printer.print_spaces(inner_indent);
             printer.print(item, inner_shape.clone());
+
             if let Some(comma) = comma {
                 printer.print_raw_token(comma);
                 printer.print_trivia_all_trailing_for(comma.span());
             } else {
-                printer.print_str(",");
+                if !matches!(item, ConfigBlockMember::BlockAttribute(_)) {
+                    printer.print_str(",");
+                }
                 printer.print_trivia_all_trailing_for(item.rightmost_token());
             }
             printer.print_newline();
@@ -1625,8 +1630,7 @@ impl Printable for ConfigBlockMember {
 #[derive(Debug)]
 pub struct ConfigItem {
     pub key: ConfigItemKey,
-    // /// Colons are currently invalid, it seems
-    // pub colon: Option<t::Colon>,
+    pub colon: Option<t::Colon>,
     pub value: ConfigItemValue,
 }
 
@@ -1640,24 +1644,17 @@ impl FromCST for ConfigItem {
         let key = it.expect_next("a CONFIG_ITEM key")?;
         let key = ConfigItemKey::from_cst(key)?;
 
-        // let colon = it
-        //     .next_if_kind(SyntaxKind::COLON)
-        //     .map(|elem| {
-        //         let colon = StrongAstError::assert_is_token(elem)?;
-        //         Ok(t::Colon::new_from_span(colon.text_range()))
-        //     })
-        //     .transpose()?;
+        let colon = it
+            .next_if_kind(SyntaxKind::COLON)
+            .map(t::Colon::from_cst)
+            .transpose()?;
 
         let value = it.expect_next("a config value")?;
         let value = ConfigItemValue::from_cst(value)?;
 
         it.expect_end()?;
 
-        Ok(ConfigItem {
-            key,
-            // colon,
-            value,
-        })
+        Ok(ConfigItem { key, colon, value })
     }
 }
 
@@ -1671,7 +1668,7 @@ impl Printable for ConfigItem {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         multi_lined |= printer.print(&self.key, shape.clone()).multi_lined;
-        printer.print_str(" ");
+        printer.print_str(": ");
         let remaining_width = printer.current_line_remaining_width();
         let value_shape = Shape {
             width: remaining_width.saturating_sub(const { ",".len() }),
@@ -2422,5 +2419,58 @@ impl Printable for TypeAliasDecl {
         } else {
             self.type_expr.rightmost_token()
         }
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::GENERATOR_DEF`] node.
+#[derive(Debug)]
+pub struct GeneratorDecl {
+    pub keyword: t::Generator,
+    pub name: t::Word,
+    pub config: ConfigBlock,
+}
+
+impl FromCST for GeneratorDecl {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERATOR_DEF)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let keyword = it.expect_parse()?;
+
+        let name = it.expect_parse()?;
+
+        let config = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(GeneratorDecl {
+            keyword,
+            name,
+            config,
+        })
+    }
+}
+
+impl KnownKind for GeneratorDecl {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::GENERATOR_DEF
+    }
+}
+
+impl Printable for GeneratorDecl {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        printer.print_str(" ");
+        printer.print(&self.config, shape)
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.config.rightmost_token()
     }
 }

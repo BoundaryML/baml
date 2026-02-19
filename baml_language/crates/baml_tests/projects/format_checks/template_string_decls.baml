@@ -56,12 +56,13 @@ TriviaTemplate // 4 name trailing
 ( // 6 open paren trailing
 // 7 param leading
 x // 8 param name trailing
-: // 9 colon trailing
-// 10 type leading
-string // 11 type trailing
-// 12 close paren leading
-) // 13 close paren trailing
-// 14 body leading
+// 9 colon leading
+:  // 10 colon trailing
+// 11 type leading
+string // 12 type trailing
+// 13 close paren leading
+) // 14 close paren trailing
+// 15 body leading
 #"
     Hello {{ x }}
 "#
@@ -152,7 +153,7 @@ template_string DeepGenericParams(data: map<string, map<string, map<string, int 
 "#
 
 // ===== Params with constrained types =====
-template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string @description("the name")) #"
+template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
     {{ value }} {{ name }}
 "#
 

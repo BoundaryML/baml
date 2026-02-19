@@ -969,8 +969,7 @@ SOURCE_FILE
         SEMICOLON ";"
         BINARY_EXPR
           BINARY_EXPR
-            STRING_LITERAL "// ===== Long string concatenation exceeding limit =====
-    "a very long string prefix that is already quite long""
+            STRING_LITERAL "a very long string prefix that is already quite long"
               QUOTE """
               WORD "a"
               WORD "very"

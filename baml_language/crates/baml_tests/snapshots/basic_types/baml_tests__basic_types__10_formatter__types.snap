@@ -1,10 +1,11 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
 ---
 class User {
-    id int
-    name string
-    email string
+    id: int
+    name: string
+    email: string
 }
 
 enum Status {

@@ -2238,22 +2238,6 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "EmptyReturn"
-    PARAMETER_LIST "()"
-      L_PAREN "("
-      R_PAREN ")"
-    ARROW "->"
-    TYPE_EXPR "int"
-      WORD "int"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR
-        L_BRACE "{"
-        RETURN_STMT "return;"
-          KW_RETURN "return"
-          SEMICOLON ";"
-        R_BRACE "}"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
     WORD "AssertStmts"
     PARAMETER_LIST
       L_PAREN "("
@@ -2614,12 +2598,4 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected expression, found ';'
-     ╭─[ loop_stmts.baml:577:11 ]
-     │
- 577 │     return;
-     │           ┬  
-     │           ╰── Expected expression, found ';'
-     │ 
-     │ Note: Error code: E0010
-─────╯
+None

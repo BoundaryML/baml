@@ -114,7 +114,7 @@ type DeepPostfix = ((int | string | bool | float)?[])[]?
 
 // ===== Constrained types exceeding limit =====
 type Constrained = int @check("positive", {{ this > 0 }})
-type ConstrainedLong = map<string, int | string | bool> @check("valid", {{ this != null }}) @description("a constrained type")
+type ConstrainedLong = map<string, int | string | bool> @check("valid", {{ this != null }})
 
 // ===== Union of classes =====
 class TypeAliasSuccess {

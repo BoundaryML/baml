@@ -213,9 +213,7 @@ SOURCE_FILE
         0"
               INTEGER_LITERAL "0"
             FAT_ARROW "=>"
-            STRING_LITERAL "// 10 arrow trailing
-        // 11 body leading
-        "zero""
+            STRING_LITERAL "zero"
               QUOTE """
               WORD "zero"
               QUOTE """
@@ -226,9 +224,7 @@ SOURCE_FILE
         _"
               WORD "_"
             FAT_ARROW "=>"
-            STRING_LITERAL "// 18 second arrow trailing
-        // 19 second body leading
-        "other""
+            STRING_LITERAL "other"
               QUOTE """
               WORD "other"
               QUOTE """
@@ -245,9 +241,7 @@ SOURCE_FILE
         0"
               INTEGER_LITERAL "0"
             FAT_ARROW "=>"
-            STRING_LITERAL "/* 10 arrow trailing */
-        /* 11 body leading */
-        "zero""
+            STRING_LITERAL "zero"
               QUOTE """
               WORD "zero"
               QUOTE """
@@ -258,9 +252,7 @@ SOURCE_FILE
         _"
               WORD "_"
             FAT_ARROW "=>"
-            STRING_LITERAL "/* 18 second arrow trailing */
-        /* 19 second body leading */
-        "other""
+            STRING_LITERAL "other"
               QUOTE """
               WORD "other"
               QUOTE """
@@ -286,9 +278,7 @@ SOURCE_FILE
                 GREATER ">"
                 INTEGER_LITERAL "0"
             FAT_ARROW "=>"
-            STRING_LITERAL "// 11 arrow trailing
-        // 12 body leading
-        "positive""
+            STRING_LITERAL "positive"
               QUOTE """
               WORD "positive"
               QUOTE """
@@ -324,9 +314,7 @@ SOURCE_FILE
                 GREATER ">"
                 INTEGER_LITERAL "0"
             FAT_ARROW "=>"
-            STRING_LITERAL "/* 11 arrow trailing */
-        /* 12 body leading */
-        "positive""
+            STRING_LITERAL "positive"
               QUOTE """
               WORD "positive"
               QUOTE """
@@ -1165,9 +1153,7 @@ SOURCE_FILE
                   NOT_EQUALS "!="
                   INTEGER_LITERAL "7"
             FAT_ARROW "=>"
-            STRING_LITERAL "// 11 arrow trailing
-        // 12 body leading
-        "acceptable small positive number that passes all the defined filter conditions""
+            STRING_LITERAL "acceptable small positive number that passes all the defined filter conditions"
               QUOTE """
               WORD "acceptable"
               WORD "small"
@@ -1237,9 +1223,7 @@ SOURCE_FILE
                   NOT_EQUALS "!="
                   INTEGER_LITERAL "7"
             FAT_ARROW "=>"
-            STRING_LITERAL "/* 11 arrow trailing */
-        /* 12 body leading */
-        "acceptable small positive number that passes all the defined filter conditions""
+            STRING_LITERAL "acceptable small positive number that passes all the defined filter conditions"
               QUOTE """
               WORD "acceptable"
               WORD "small"

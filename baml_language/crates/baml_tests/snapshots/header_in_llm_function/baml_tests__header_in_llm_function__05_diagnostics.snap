@@ -1,7 +1,48 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 === DIAGNOSTICS ===
+  [parse] Error: Expected config key, found '.'
+   ╭─[ test.baml:8:23 ]
+   │
+ 8 │         model gemini-2.0-flash
+   │                       ┬  
+   │                       ╰── Expected config key, found '.'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected config key, found integer
+   ╭─[ test.baml:8:24 ]
+   │
+ 8 │         model gemini-2.0-flash
+   │                        ┬  
+   │                        ╰── Expected config key, found integer
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected config key, found '-'
+   ╭─[ test.baml:8:25 ]
+   │
+ 8 │         model gemini-2.0-flash
+   │                         ┬  
+   │                         ╰── Expected config key, found '-'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected identifier, found '}'
+   ╭─[ test.baml:9:5 ]
+   │
+ 9 │     }
+   │     ┬  
+   │     ╰── Expected identifier, found '}'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
   [parse] Error: Header comments (//#) are not allowed inside LLM functions
     ╭─[ test.baml:13:5 ]
     │

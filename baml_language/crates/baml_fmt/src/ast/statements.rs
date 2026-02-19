@@ -629,6 +629,8 @@ impl Printable for ForIteratorArgs {
 #[derive(Debug)]
 pub struct ReturnStmt {
     pub keyword: t::Return,
+    /// Currently since all functions return a value, this should always be `Some` for valid code.
+    /// However, we still handle the case of a missing return value here.
     pub value: Option<Expression>,
     pub semicolon: Option<t::Semicolon>,
 }

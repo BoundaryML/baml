@@ -1,6 +1,286 @@
 ---
 source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+expression: first
 ---
-=== FORMATTER ERROR ===
-[UnexpectedToken { expected: "template string body", found: "'#'", span: Span { file_id: FileId(0), range: 2045..2046 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 2045..2046 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 2046..2047 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 2052..2057 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 2058..2059 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 2059..2060 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 2061..2062 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 2063..2064 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 2064..2065 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 2066..2067 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 2067..2068 } }, UnexpectedToken { expected: "template string body", found: "'#'", span: Span { file_id: FileId(0), range: 2558..2559 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 2558..2559 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 2559..2560 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 2565..2570 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 2571..2572 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 2572..2573 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 2574..2575 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 2576..2577 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 2577..2578 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 2579..2580 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 2580..2581 } }, UnexpectedToken { expected: "')'", found: "':'", span: Span { file_id: FileId(0), range: 4618..4619 } }, UnexpectedToken { expected: "template string body", found: "':'", span: Span { file_id: FileId(0), range: 4618..4619 } }, UnexpectedToken { expected: "top-level declaration", found: "':'", span: Span { file_id: FileId(0), range: 4618..4619 } }, UnexpectedToken { expected: "top-level declaration", found: "'('", span: Span { file_id: FileId(0), range: 4620..4621 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 4621..4622 } }, UnexpectedToken { expected: "top-level declaration", found: "':'", span: Span { file_id: FileId(0), range: 4622..4623 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 4624..4627 } }, UnexpectedToken { expected: "top-level declaration", found: "')'", span: Span { file_id: FileId(0), range: 4627..4628 } }, UnexpectedToken { expected: "top-level declaration", found: "'->'", span: Span { file_id: FileId(0), range: 4629..4631 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 4632..4638 } }, UnexpectedToken { expected: "top-level declaration", found: "')'", span: Span { file_id: FileId(0), range: 4638..4639 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 4640..4641 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 4641..4642 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 4647..4648 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 4648..4649 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 4650..4665 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 4666..4667 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 4667..4668 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 4669..4670 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 4670..4671 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 4672..4688 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 4689..4690 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 4690..4691 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 4692..4693 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 4693..4694 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 4695..4710 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 4711..4712 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 4712..4713 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 4714..4715 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 4715..4716 } }, UnexpectedToken { expected: "template string body", found: "'#'", span: Span { file_id: FileId(0), range: 7196..7197 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 7196..7197 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 7197..7198 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 7203..7204 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 7204..7205 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 7206..7221 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 7222..7223 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 7223..7224 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 7225..7226 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 7226..7227 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 7228..7244 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 7245..7246 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 7246..7247 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 7248..7249 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 7249..7250 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 7251..7266 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 7267..7268 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 7268..7269 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 7270..7271 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 7271..7272 } }, UnexpectedToken { expected: "template string body", found: "'#'", span: Span { file_id: FileId(0), range: 8256..8257 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 8256..8257 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 8257..8258 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 8263..8264 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 8264..8265 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 8266..8281 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 8282..8283 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 8283..8284 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 8285..8286 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 8286..8287 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 8288..8304 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 8305..8306 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 8306..8307 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 8308..8309 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 8309..8310 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 8311..8326 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 8327..8328 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 8328..8329 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 8330..8331 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 8331..8332 } }, UnexpectedToken { expected: "template string body", found: "'#'", span: Span { file_id: FileId(0), range: 9195..9196 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 9195..9196 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 9196..9197 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 9202..9203 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 9203..9204 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 9205..9220 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 9221..9222 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 9222..9223 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 9224..9225 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 9225..9226 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 9227..9243 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 9244..9245 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 9245..9246 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 9247..9248 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 9248..9249 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 9250..9265 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 9266..9267 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 9267..9268 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 9269..9270 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 9270..9271 } }, UnexpectedToken { expected: "template string body", found: "'#'", span: Span { file_id: FileId(0), range: 10218..10219 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 10218..10219 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 10219..10220 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 10225..10226 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 10226..10227 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 10228..10243 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 10244..10245 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 10245..10246 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 10247..10248 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 10248..10249 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 10250..10266 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 10267..10268 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 10268..10269 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 10270..10271 } }, UnexpectedToken { expected: "top-level declaration", found: "'{'", span: Span { file_id: FileId(0), range: 10271..10272 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 10273..10288 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 10289..10290 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 10290..10291 } }, UnexpectedToken { expected: "top-level declaration", found: "'\"'", span: Span { file_id: FileId(0), range: 10292..10293 } }, UnexpectedToken { expected: "top-level declaration", found: "'#'", span: Span { file_id: FileId(0), range: 10293..10294 } }]
+// Testing all the formatter cases for template string declarations
+// as well as any special cases inside the template string
+
+// ===== Basic template string =====
+template_string BasicTemplate (name: string) #"
+    Hello, {{ name }}!
+"#
+
+// ===== Template string with no params =====
+template_string NoParams () #"
+    A static template with no parameters.
+"#
+
+// ===== Template string with multiple params =====
+template_string MultiParam (first: string, last: string, age: int) #"
+    Name: {{ first }} {{ last }}
+    Age: {{ age }}
+"#
+
+// ===== Template string with complex param types =====
+template_string ComplexParams (items: string[], config: map<string, int>) #"
+    Items: {{ items }}
+    Config: {{ config }}
+"#
+
+// ===== Template string with single-line body =====
+template_string SingleLine (x: int) #"Value is {{ x }}"#
+
+// ===== Template string with many params that should wrap =====
+template_string ManyParams (first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) #"
+    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }} {{ fourth_parameter }}
+"#
+
+// ===== Very long param list =====
+template_string VeryLongParams (extremely_long_parameter_name: string, another_very_long_parameter_name: int) #"
+    {{ extremely_long_parameter_name }} {{ another_very_long_parameter_name }}
+"#
+
+// ===== Params without colons =====
+template_string NoColonParams (name: string, age: int) #"
+    {{ name }} is {{ age }}
+"#
+
+// ===== Template with template comments =====
+template_string WithComment (x: string) #"
+    {# This is a template comment #}
+    Value: {{ x }}
+"#
+
+// ===== Trivia on template string declaration (line comments) =====
+// 1 keyword leading
+template_string TriviaTemplate ( // 6 open paren trailing
+    // 7 param leading
+    x: string, // 12 type trailing
+    // 13 close paren leading
+) #"
+    Hello {{ x }}
+"#
+
+///////////////////
+
+// ===== Trivia on template string declaration (block comments) =====
+/* 1 keyword leading */
+template_string TriviaTemplateBlock ( /* 6 open paren trailing */
+    /* 7 param leading */
+    x: string, /* 11 type trailing */
+    /* 12 close paren leading */
+) #"
+    Hello {{ x }}
+"#
+
+///////////////////
+
+// ===== Multi param trivia (line comments) =====
+template_string MultiParamTrivia (
+    // 1 first param leading
+    a: string, // 6 comma trailing
+    // 7 second param leading
+    b: int, // 11 second type trailing
+) #"
+    {{ a }} {{ b }}
+"#
+
+// ===== Multi param trivia (block comments) =====
+template_string MultiParamTriviaBlock (
+    /* 1 first param leading */
+    a: string, /* 6 comma trailing */
+    /* 7 second param leading */
+    b: int, /* 11 second type trailing */
+) #"
+    {{ a }} {{ b }}
+"#
+
+// ===== Short name =====
+template_string T (x: int) #"{{ x }}"#
+
+// ===== Long name exceeding limit =====
+template_string ThisIsAnExtremelyLongTemplateStringNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns (x: int) #"
+    {{ x }}
+"#
+
+// ===== Long name + many params exceeding limit =====
+template_string VeryLongTemplateNameWithManyParameters (first_parameter: string, second_parameter: int, third_parameter: bool, fourth_parameter: float) #"
+    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }} {{ fourth_parameter }}
+"#
+
+// ===== Many params with complex types exceeding limit =====
+template_string ComplexTypesWrap (
+    items: (int | string | bool)[],
+    config: map<string, int | string>,
+    callback: (x: int, y: int) -> string,
+) #"
+    {{ items }} {{ config }}
+"#
+
+// ===== Very long param list with many complex params far exceeding limit =====
+template_string VeryLongComplexParams (
+    first_parameter: map<string, int | string | bool>,
+    second_parameter: (int | string)[],
+    third_parameter: map<string, map<string, int>>,
+    fourth_parameter: (x: int) -> string,
+) #"
+    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+"#
+
+// ===== Params with deeply nested generic types exceeding limit =====
+template_string DeepGenericParams (data: map<string, map<string, map<string, int | string | bool | float | null>>>) #"
+    {{ data }}
+"#
+
+// ===== Params with constrained types =====
+template_string ConstrainedParams (value: int @check("positive", {{ this > 0 }}), name: string) #"
+    {{ value }} {{ name }}
+"#
+
+// ===== Params with union types =====
+template_string UnionParams (result: string | int | bool | null, items: (string | int)[]) #"
+    {{ result }} {{ items }}
+"#
+
+// ===== Params with optional types =====
+template_string OptionalParams (name: string?, age: int?, items: string[]?) #"
+    {{ name }} {{ age }} {{ items }}
+"#
+
+// ===== Params with function types =====
+template_string FnTypeParams (transform: (x: int) -> int, combine: (a: string, b: string) -> string) #"
+    transformed
+"#
+
+// ===== Long name + long complex params far exceeding limit =====
+template_string ExtremelyLongNamePlusComplexParameters (
+    first_very_long_parameter_name: map<string, int | string | bool>,
+    second_very_long_parameter_name: (int | string | bool | float | null)[],
+) #"
+    {{ first_very_long_parameter_name }} {{ second_very_long_parameter_name }}
+"#
+
+// ===== Six params all with long names and types exceeding limit =====
+template_string SixLongParams (
+    first_param: string,
+    second_param: int,
+    third_param: bool,
+    fourth_param: float,
+    fifth_param: string[],
+    sixth_param: map<string, int>,
+) #"
+    {{ first_param }} {{ second_param }} {{ third_param }} {{ fourth_param }} {{ fifth_param }} {{ sixth_param }}
+"#
+
+// ===== Trivia on wrapping many params (line comments) =====
+// 1 keyword leading
+template_string TriviaWrappingParams ( // 6 open paren trailing
+    // 7 first param leading
+    first_parameter: map<string, int | string | bool>, // 12 comma trailing
+    // 13 second param leading
+    second_parameter: (int | string)[], // 18 comma trailing
+    // 19 third param leading
+    third_parameter: map<string, map<string, int>>, // 23 third type trailing
+    // 24 close paren leading
+) #"
+    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+"#
+
+///////////////////
+
+// ===== Trivia on wrapping many params (block comments) =====
+/* 1 keyword leading */
+template_string TriviaWrappingParamsBlock ( /* 6 open paren trailing */
+    /* 7 first param leading */
+    first_parameter: map<string, int | string | bool>, /* 12 comma trailing */
+    /* 13 second param leading */
+    second_parameter: (int | string)[], /* 18 comma trailing */
+    /* 19 third param leading */
+    third_parameter: map<string, map<string, int>>, /* 23 third type trailing */
+    /* 24 close paren leading */
+) #"
+    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+"#
+
+///////////////////
+
+// ===== Trivia on wrapping long name + params (line comments) =====
+// 1 keyword leading
+template_string TriviaVeryLongTemplateNameWithParameters ( // 6 open paren trailing
+    // 7 first param leading
+    first_parameter: string, // 12 comma trailing
+    // 13 second param leading
+    second_parameter: int, // 18 comma trailing
+    // 19 third param leading
+    third_parameter: bool, // 23 third type trailing
+    // 24 close paren leading
+) #"
+    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+"#
+
+///////////////////
+
+// ===== Trivia on wrapping long name + params (block comments) =====
+/* 1 keyword leading */
+template_string TriviaVeryLongTemplateNameWithParametersBlock ( /* 6 open paren trailing */
+    /* 7 first param leading */
+    first_parameter: string, /* 12 comma trailing */
+    /* 13 second param leading */
+    second_parameter: int, /* 18 comma trailing */
+    /* 19 third param leading */
+    third_parameter: bool, /* 23 third type trailing */
+    /* 24 close paren leading */
+) #"
+    {{ first_parameter }} {{ second_parameter }} {{ third_parameter }}
+"#
+
+///////////////////
+
+// ===== Trivia on param with deeply nested generic type (line comments) =====
+template_string TriviaDeepGenericParam (
+    // 1 param leading
+    data: map< // 6 open angle trailing
+        // 7 key type leading
+        string, // 8 key type trailing
+        // 10 value type leading
+        map< // 12 inner open angle trailing
+            // 13 inner key leading
+            string, // 14 inner key trailing
+            // 16 inner value leading
+            int // 17 inner value trailing
+                | string // 20 union member trailing // 20 union member trailing
+        > // 21 inner close angle trailing
+    >, // 22 outer close angle trailing
+) #"
+    {{ data }}
+"#
+
+// ===== Trivia on param with deeply nested generic type (block comments) =====
+template_string TriviaDeepGenericParamBlock (
+    /* 1 param leading */
+    data: map< /* 6 open angle trailing */
+        /* 7 key type leading */
+        string, /* 8 key type trailing */
+        /* 10 value type leading */
+        map< /* 12 inner open angle trailing */
+            /* 13 inner key leading */
+            string, /* 14 inner key trailing */
+            /* 16 inner value leading */
+            int | string /* 20 union member trailing */
+        > /* 21 inner close angle trailing */
+    >, /* 22 outer close angle trailing */
+) #"
+    {{ data }}
+"#
+
+// ===== Extraneous whitespace =====
+template_string ExtraWhitespace (a: string, b: int) #"
+    {{ a }} {{ b }}
+"#
+
+// ===== Template with control flow =====
+template_string WithControl (items: string[]) #"
+    {% for item in items %}
+    - {{ item }}
+    {% endfor %}
+"#

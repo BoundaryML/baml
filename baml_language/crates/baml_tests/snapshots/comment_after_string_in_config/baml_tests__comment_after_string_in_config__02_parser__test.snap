@@ -1,5 +1,6 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -86,8 +87,7 @@ SOURCE_FILE
                     WORD "com"
                     QUOTE """
               CONFIG_ITEM
-                STRING_LITERAL "// Optional
-      "X-Title""
+                STRING_LITERAL "X-Title"
                   QUOTE """
                   WORD "X-Title"
                   QUOTE """

@@ -84,8 +84,7 @@ SOURCE_FILE
         SEMICOLON ";"
         FLOAT_LITERAL "99.999"
         SEMICOLON ";"
-        STRING_LITERAL "// ===== String literals =====
-    "hello""
+        STRING_LITERAL "hello"
           QUOTE """
           WORD "hello"
           QUOTE """
@@ -135,13 +134,14 @@ SOURCE_FILE
         SEMICOLON ";"
         WORD "null"
         SEMICOLON ";"
-        HASH "#"
-        STRING_LITERAL "raw string"
+        RAW_STRING_LITERAL
+          HASH "#"
           QUOTE """
-          WORD "raw"
-          WORD "string"
+          PROMPT_TEXT "raw string"
+            WORD "raw"
+            WORD "string"
           QUOTE """
-        HASH "#"
+          HASH "#"
         SEMICOLON ";"
         RAW_STRING_LITERAL
           HASH "#"
@@ -786,9 +786,7 @@ SOURCE_FILE
         SEMICOLON ";"
         ARRAY_LITERAL
           L_BRACKET "["
-          STRING_LITERAL "// 1 trailing
-    // 2 leading
-    "this is a long string""
+          STRING_LITERAL "this is a long string"
             QUOTE """
             WORD "this"
             WORD "is"
@@ -797,9 +795,7 @@ SOURCE_FILE
             WORD "string"
             QUOTE """
           COMMA ","
-          STRING_LITERAL "// 4 trailing
-    // 5 leading
-    "another long string value""
+          STRING_LITERAL "another long string value"
             QUOTE """
             WORD "another"
             WORD "long"
@@ -807,9 +803,7 @@ SOURCE_FILE
             WORD "value"
             QUOTE """
           COMMA ","
-          STRING_LITERAL "// 7 trailing
-    // 8 leading
-    "yet another that is quite long""
+          STRING_LITERAL "yet another that is quite long"
             QUOTE """
             WORD "yet"
             WORD "another"
@@ -819,9 +813,7 @@ SOURCE_FILE
             WORD "long"
             QUOTE """
           COMMA ","
-          STRING_LITERAL "// 10 trailing
-    // 11 leading
-    "and one more string element""
+          STRING_LITERAL "and one more string element"
             QUOTE """
             WORD "and"
             WORD "one"
@@ -833,9 +825,7 @@ SOURCE_FILE
         SEMICOLON ";"
         ARRAY_LITERAL
           L_BRACKET "["
-          STRING_LITERAL "/* 1 trailing */
-    /* 2 leading */
-    "this is a long string""
+          STRING_LITERAL "this is a long string"
             QUOTE """
             WORD "this"
             WORD "is"
@@ -844,9 +834,7 @@ SOURCE_FILE
             WORD "string"
             QUOTE """
           COMMA ","
-          STRING_LITERAL "/* 4 trailing */
-    /* 5 leading */
-    "another long string value""
+          STRING_LITERAL "another long string value"
             QUOTE """
             WORD "another"
             WORD "long"
@@ -854,9 +842,7 @@ SOURCE_FILE
             WORD "value"
             QUOTE """
           COMMA ","
-          STRING_LITERAL "/* 7 trailing */
-    /* 8 leading */
-    "yet another that is quite long""
+          STRING_LITERAL "yet another that is quite long"
             QUOTE """
             WORD "yet"
             WORD "another"
@@ -866,9 +852,7 @@ SOURCE_FILE
             WORD "long"
             QUOTE """
           COMMA ","
-          STRING_LITERAL "/* 10 trailing */
-    /* 11 leading */
-    "and one more string element""
+          STRING_LITERAL "and one more string element"
             QUOTE """
             WORD "and"
             WORD "one"
@@ -1085,9 +1069,7 @@ SOURCE_FILE
         MAP_LITERAL
           L_BRACE "{"
           OBJECT_FIELD
-            STRING_LITERAL "// 2 open brace trailing
-    // 3 key leading
-    "k""
+            STRING_LITERAL "k"
               QUOTE """
               WORD "k"
               QUOTE """
@@ -1098,9 +1080,7 @@ SOURCE_FILE
         MAP_LITERAL
           L_BRACE "{"
           OBJECT_FIELD
-            STRING_LITERAL "/* 2 open brace trailing */
-    /* 3 key leading */
-    "k""
+            STRING_LITERAL "k"
               QUOTE """
               WORD "k"
               QUOTE """
@@ -1613,22 +1593,4 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected expression, found '#'
-    ╭─[ other_exprs.baml:45:5 ]
-    │
- 45 │     #"raw string"#;
-    │     ┬  
-    │     ╰── Expected expression, found '#'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected expression, found '#'
-    ╭─[ other_exprs.baml:45:18 ]
-    │
- 45 │     #"raw string"#;
-    │                  ┬  
-    │                  ╰── Expected expression, found '#'
-    │ 
-    │ Note: Error code: E0010
-────╯
+None

@@ -3,9 +3,9 @@
 
 // ===== Basic client declaration =====
 client<llm> BasicClient {
-    provider openai
+    provider openai,
     options {
-        model "gpt-4"
+        model "gpt-4",
     }
 }
 
@@ -14,9 +14,9 @@ client<llm> FullClient {
     provider openai
     retry_policy MyRetryPolicy
     options {
-        model "gpt-4"
+        model: "gpt-4"
         max_tokens 100
-        temperature 0.7
+        temperature 0.7,
         top_p 0.9
     }
 }
@@ -46,8 +46,8 @@ client<llm> NestedConfigClient {
 client<llm> ArrayConfigClient {
     provider openai
     options {
-        model "gpt-4"
-        stop_sequences ["END", "STOP", "DONE"]
+        model "gpt-4",
+        stop_sequences: ["END", "STOP", "DONE"]
     }
 }
 
@@ -65,7 +65,7 @@ client<llm> TypedValuesClient {
     provider openai
     options {
         model "gpt-4"
-        temperature 0.5
+        temperature: 0.5
         max_tokens 2048
         stream true
     }
@@ -73,7 +73,7 @@ client<llm> TypedValuesClient {
 
 // ===== Client with env access in config =====
 client<llm> EnvClient {
-    provider openai
+    provider: openai
     options {
         api_key env.OPENAI_API_KEY
         model "gpt-4"
@@ -83,8 +83,8 @@ client<llm> EnvClient {
 // ===== Client with array of objects in config =====
 client<llm> ArrayOfObjectsClient {
     provider openai
-    options {
-        model "gpt-4"
+    options: {
+        model "gpt-4",
         tools [
             {
                 server_label "web_search"
@@ -101,14 +101,14 @@ client<llm> ArrayOfObjectsClient {
 
 // ===== Client with raw string in config =====
 client<llm> RawStringConfigClient {
-    provider openai
-    options {
-        model "gpt-4"
+    provider openai,
+    options: {
+        model: "gpt-4"
         system_prompt #"
             You are a helpful assistant.
             Always be concise.
         "#
-    }
+    },
 }
 
 // ===== Client with mixed value types =====
@@ -139,7 +139,7 @@ TriviaClient // 10 name trailing
 // 11 open brace leading
 { // 12 open brace trailing
     // 13 provider key leading
-    provider // 14 provider key trailing
+    provider: // 14 provider key trailing
     // 15 provider value leading
     openai // 16 provider value trailing
     // 17 options key leading
@@ -175,7 +175,7 @@ TriviaClientBlock /* 10 name trailing */
     /* 15 provider value leading */
     openai /* 16 provider value trailing */
     /* 17 options key leading */
-    options /* 18 options key trailing */
+    options: /* 18 options key trailing */
     /* 19 options brace leading */
     { /* 20 options open brace trailing */
         /* 21 first option leading */
@@ -357,8 +357,10 @@ TriviaDeeplyNestedClientBlock /* 7 name trailing */
         } /* 35 headers close trailing */
     /* 36 options close leading */
     } /* 37 options close trailing */
-/* 38 close brace leading */
-} /* 39 close brace trailing */
+    /* 38 comma leading */
+    , /* 39 comma trailing */
+/* 40 close brace leading */
+} /* 41 close brace trailing */
 
 ///////////////////
 
@@ -471,7 +473,7 @@ test TypeBuilderTest {
             Q
         }
         type InnerAlias = string | int
-    }
+    },
     args {
 
     }
@@ -485,7 +487,7 @@ TriviaTest // 4 name trailing
 // 5 open brace leading
 { // 6 open brace trailing
     // 7 functions key leading
-    functions // 8 functions key trailing
+    functions: // 8 functions key trailing
     // 9 functions value leading
     [TestTarget] // 10 functions value trailing
     // 11 args key leading
@@ -558,7 +560,7 @@ TriviaTypeBuilderTest // 4 name trailing
         // 19 class brace leading
         { // 20 class brace trailing
             // 21 field leading
-            field_name // 22 field name trailing
+            field_name: // 22 field name trailing
             // 23 type leading
             int // 24 type trailing
         // 25 class close leading
@@ -616,7 +618,7 @@ TriviaTypeBuilderTestBlock /* 4 name trailing */
         /* 19 class brace leading */
         { /* 20 class brace trailing */
             /* 21 field leading */
-            field_name /* 22 field name trailing */
+            field_name :/* 22 field name trailing */
             /* 23 type leading */
             int /* 24 type trailing */
         /* 25 class close leading */

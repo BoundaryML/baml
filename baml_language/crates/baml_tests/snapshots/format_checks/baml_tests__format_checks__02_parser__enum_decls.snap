@@ -323,9 +323,7 @@ SOURCE_FILE
         WORD "description"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "// 6 open paren trailing
-    // 7 arg leading
-    "active""
+          STRING_LITERAL "active"
             QUOTE """
             WORD "active"
             QUOTE """
@@ -342,9 +340,7 @@ SOURCE_FILE
         WORD "description"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "/* 6 open paren trailing */
-    /* 7 arg leading */
-    "active""
+          STRING_LITERAL "active"
             QUOTE """
             WORD "active"
             QUOTE """
@@ -361,9 +357,7 @@ SOURCE_FILE
         WORD "description"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "// 6 open paren trailing
-    // 7 arg leading
-    "a configured variant with many attributes""
+          STRING_LITERAL "a configured variant with many attributes"
             QUOTE """
             WORD "a"
             WORD "configured"
@@ -378,9 +372,7 @@ SOURCE_FILE
         WORD "alias"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "// 14 open paren trailing
-    // 15 arg leading
-    "configured""
+          STRING_LITERAL "configured"
             QUOTE """
             WORD "configured"
             QUOTE """
@@ -411,9 +403,7 @@ SOURCE_FILE
         WORD "description"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "/* 6 open paren trailing */
-    /* 7 arg leading */
-    "a configured variant with many attributes""
+          STRING_LITERAL "a configured variant with many attributes"
             QUOTE """
             WORD "a"
             WORD "configured"
@@ -428,9 +418,7 @@ SOURCE_FILE
         WORD "alias"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "/* 14 open paren trailing */
-    /* 15 arg leading */
-    "configured""
+          STRING_LITERAL "configured"
             QUOTE """
             WORD "configured"
             QUOTE """

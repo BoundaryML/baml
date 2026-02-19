@@ -572,11 +572,6 @@ function LoopStmts(items: int[], flag: bool) -> int {
     return result;
 }
 
-// ===== Standalone return without value =====
-function EmptyReturn() -> int {
-    return;
-}
-
 // ===== Assert statements =====
 function AssertStmts(x: int, y: int) -> int {
     assert x > 0;

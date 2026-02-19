@@ -876,8 +876,7 @@ string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        STRING_LITERAL "// 35 trailing
-    "result""
+        STRING_LITERAL "result"
           QUOTE """
           WORD "result"
           QUOTE """
@@ -927,8 +926,7 @@ string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        STRING_LITERAL "/* 35 trailing */
-    "result""
+        STRING_LITERAL "result"
           QUOTE """
           WORD "result"
           QUOTE """

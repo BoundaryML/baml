@@ -1,6 +1,292 @@
 ---
 source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+expression: first
 ---
-=== FORMATTER ERROR ===
-[InvalidSyntax { message: "field 'name' is missing a type annotation", span: Span { file_id: FileId(0), range: 2733..2737 } }, InvalidSyntax { message: "field 'string' is missing a type annotation", span: Span { file_id: FileId(0), range: 2789..2795 } }, InvalidSyntax { message: "field 'name' is missing a type annotation", span: Span { file_id: FileId(0), range: 3167..3171 } }, InvalidSyntax { message: "field 'string' is missing a type annotation", span: Span { file_id: FileId(0), range: 3229..3235 } }, InvalidSyntax { message: "field 'name' is missing a type annotation", span: Span { file_id: FileId(0), range: 3457..3461 } }, InvalidSyntax { message: "field 'string' is missing a type annotation", span: Span { file_id: FileId(0), range: 3513..3519 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'@'", span: Span { file_id: FileId(0), range: 3565..3566 } }, InvalidSyntax { message: "field 'description' is missing a type annotation", span: Span { file_id: FileId(0), range: 3566..3577 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'('", span: Span { file_id: FileId(0), range: 3634..3635 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 3686..3687 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 3695..3696 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "')'", span: Span { file_id: FileId(0), range: 3750..3751 } }, InvalidSyntax { message: "field 'name' is missing a type annotation", span: Span { file_id: FileId(0), range: 3906..3910 } }, InvalidSyntax { message: "field 'string' is missing a type annotation", span: Span { file_id: FileId(0), range: 3968..3974 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'@'", span: Span { file_id: FileId(0), range: 4026..4027 } }, InvalidSyntax { message: "field 'description' is missing a type annotation", span: Span { file_id: FileId(0), range: 4027..4038 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'('", span: Span { file_id: FileId(0), range: 4101..4102 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 4159..4160 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 4168..4169 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "')'", span: Span { file_id: FileId(0), range: 4229..4230 } }, InvalidSyntax { message: "field 'data' is missing a type annotation", span: Span { file_id: FileId(0), range: 4390..4394 } }, InvalidSyntax { message: "field 'map' is missing a type annotation", span: Span { file_id: FileId(0), range: 4446..4449 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'<'", span: Span { file_id: FileId(0), range: 4472..4473 } }, InvalidSyntax { message: "field 'string' is missing a type annotation", span: Span { file_id: FileId(0), range: 4529..4535 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "','", span: Span { file_id: FileId(0), range: 4563..4564 } }, InvalidSyntax { message: "field 'int' is missing a type annotation", span: Span { file_id: FileId(0), range: 4617..4620 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'|'", span: Span { file_id: FileId(0), range: 4646..4647 } }, InvalidSyntax { message: "field 'string' is missing a type annotation", span: Span { file_id: FileId(0), range: 4697..4703 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'|'", span: Span { file_id: FileId(0), range: 4730..4731 } }, InvalidSyntax { message: "field 'bool' is missing a type annotation", span: Span { file_id: FileId(0), range: 4780..4784 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'|'", span: Span { file_id: FileId(0), range: 4810..4811 } }, InvalidSyntax { message: "field 'float' is missing a type annotation", span: Span { file_id: FileId(0), range: 4861..4866 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'|'", span: Span { file_id: FileId(0), range: 4893..4894 } }, InvalidSyntax { message: "field 'null' is missing a type annotation", span: Span { file_id: FileId(0), range: 4943..4947 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'>'", span: Span { file_id: FileId(0), range: 4973..4974 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'@'", span: Span { file_id: FileId(0), range: 5029..5030 } }, InvalidSyntax { message: "field 'description' is missing a type annotation", span: Span { file_id: FileId(0), range: 5030..5041 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'('", span: Span { file_id: FileId(0), range: 5071..5072 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 5129..5130 } }, UnexpectedToken { expected: "Unclosed string literal", found: "EOF", span: Span { file_id: FileId(0), range: 9475..9476 } }, UnexpectedToken { expected: "'}'", found: "EOF", span: Span { file_id: FileId(0), range: 9475..9476 } }]
+// Testing all the formatter cases for class declarations
+
+// ===== Empty class =====
+class EmptyClass {
+}
+
+// ===== Single field =====
+class SingleField {
+    name: string
+}
+
+// ===== Multiple fields =====
+class MultiField {
+    name: string
+    age: int
+    active: bool
+}
+
+// ===== Fields with colons =====
+class ColonFields {
+    name: string
+    age: int
+}
+
+// ===== Fields with trailing commas =====
+class TrailingCommaFields {
+    name: string
+    age: int
+    active: bool
+}
+
+// ===== Field with single attribute =====
+class SingleAttrField {
+    name: string @description("The user's name")
+}
+
+// ===== Field with multiple attributes =====
+class MultiAttrField {
+    name: string @description("The user's name") @alias("user_name")
+    summary: string? @description("A summary") @alias("sum") @stream.done @stream.not_null
+}
+
+// ===== Field type + attr exceeding limit =====
+class LongAttrField {
+    name: string
+        @description(
+            "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns",
+        )
+    data: map<string, int | string | bool>
+        @description("complex data")
+        @alias("payload")
+        @stream.done
+    config: map<string, map<string, int | string | bool | null>>
+        @description("deeply nested config structure for testing wrapping")
+}
+
+// ===== Field name + long union type exceeding limit =====
+class LongFieldTypes {
+    very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
+    another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
+    callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>
+    deeply_nested: (int | (string | (bool | (float | null))))[]?
+}
+
+// ===== Various type expressions on fields =====
+class TypeVariety {
+    simple: string
+    optional: string?
+    array: int[]
+    nested_array: int[][]
+    union_type: int | string
+    optional_union: (int | string)?
+    union_array: (int | string)[]
+    generic: map<string, int>
+    complex_generic: map<string, int | string | bool>
+    deep_generic: map<string, map<string, int[]>>
+    fn_type: (x: int, y: int) -> string
+    paren_union_array: (int | string | bool)[]
+    triple_nested: map<string, map<string, map<string, int>>>
+}
+
+// ===== Block attribute =====
+class DynamicClass {
+    name: string
+    @@dynamic
+}
+
+// ===== Multiple block attributes =====
+class MultiBlockAttr {
+    name: string
+    @@dynamic
+    @@streaming
+}
+
+// ===== Trivia on class declaration (line comments) =====
+// 1 class keyword leading
+class TriviaClass { // 6 open brace trailing
+    // 7 field leading
+    name: string // 12 type trailing // 12 type trailing
+    // 13 close brace leading
+} // 14 close brace trailing
+
+///////////////////
+
+// ===== Trivia on class declaration (block comments) =====
+/* 1 class keyword leading */
+class TriviaClassBlock { /* 6 open brace trailing */
+    /* 7 field leading */
+    name: string /* 12 type trailing */
+    /* 13 close brace leading */
+} /* 14 close brace trailing */
+
+///////////////////
+
+// ===== Trivia on field with attributes (line comments) =====
+class TriviaFieldAttrs {
+    // 1 field leading
+    name: string // 6 type trailing
+        @description( // 10 open paren trailing
+            // 11 arg leading
+            "the name", // 12 arg trailing
+            // 13 close paren leading
+        ) // 14 close paren trailing
+}
+
+// ===== Trivia on field with attributes (block comments) =====
+class TriviaFieldAttrsBlock {
+    /* 1 field leading */
+    name: string /* 6 type trailing */
+        @description( /* 10 open paren trailing */
+            /* 11 arg leading */
+            "the name", /* 12 arg trailing */
+            /* 13 close paren leading */
+        ) /* 14 close paren trailing */
+}
+
+// ===== Trivia on field with long wrapping type (line comments) =====
+class TriviaLongFieldType {
+    // 1 field leading
+    data: map< // 7 open angle trailing
+        // 8 key type leading
+        string, // 9 key type trailing
+        // 11 value type leading
+        int // 12 first trailing
+            | string // 15 second trailing
+            | bool // 18 third trailing
+            | float // 21 fourth trailing
+            | null // 24 fifth trailing // 24 fifth trailing
+    > // 25 close angle trailing
+        @description( // 28 attr open trailing
+            // 29 attr arg leading
+            "a long description", // 30 attr arg trailing
+        ) // 31 attr close trailing
+}
+
+// ===== Trivia on field with long wrapping type (block comments) =====
+class TriviaLongFieldTypeBlock {
+    /* 1 field leading */
+    data: map< /* 7 open angle trailing */
+        /* 8 key type leading */
+        string, /* 9 key type trailing */
+        /* 11 value type leading */
+        int | string | bool | float | null /* 24 fifth trailing */
+    > /* 25 close angle trailing */
+        @description( /* 28 attr open trailing */
+            /* 29 attr arg leading */
+            "a long description", /* 30 attr arg trailing */
+        ) /* 31 attr close trailing */
+}
+
+// ===== Trivia on field with multiple attributes (line comments) =====
+class TriviaMultiAttr {
+    // 1 field leading
+    name: string // 6 type trailing
+        @description( // 9 first attr open trailing
+            // 10 arg leading
+            "name", // 11 arg trailing
+        )
+        @alias( // 15 second attr open trailing
+            // 16 arg leading
+            "user_name", // 17 arg trailing
+        )
+        @stream.done // 20 third attr trailing
+}
+
+// ===== Trivia on field with multiple attributes (block comments) =====
+class TriviaMultiAttrBlock {
+    /* 1 field leading */
+    name: string /* 6 type trailing */
+        @description(/* 9 first attr open trailing *//* 10 arg leading */"name"/* 11 arg trailing */)
+        @alias(/* 15 second attr open trailing *//* 16 arg leading */"user_name"/* 17 arg trailing */)
+        @stream.done /* 20 third attr trailing */
+}
+
+// ===== Short class name =====
+class A {
+    x: int
+}
+
+// ===== Long class name exceeding limit =====
+class ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
+    x: int
+}
+
+// ===== Fields with various attribute types =====
+class AttributeVariety {
+    a: string @skip
+    b: string @alias("alt_name")
+    c: string @description("desc")
+    d: string @stream.done
+    e: string @stream.not_null
+    f: string @stream.with_state
+}
+
+// ===== Extraneous whitespace =====
+class ExtraWhitespace {
+    name: string @description("name") @alias("n")
+    age: int
+}
+
+// ===== Many fields =====
+class ManyFields {
+    field1: int
+    field2: int
+    field3: int
+    field4: int
+    field5: int
+    field6: int
+    field7: int
+    field8: int
+    field9: int
+    field10: int
+}
+
+// ===== Nested class types =====
+class Outer {
+    inner: InnerNested
+    list: InnerNested[]
+    optional: InnerNested?
+    mapping: map<string, InnerNested>
+}
+
+class InnerNested {
+    value: int
+}
+
+// ===== Class with function member =====
+class WithMethod {
+    name: string
+
+    function greet() -> string {
+        "hello"
+    }
+}
+
+// ===== Class with function member that has wrapping signature =====
+class WithLongMethod {
+    name: string
+
+    function processData(
+        first_input: map<string, int>,
+        second_input: (int | string | bool)[],
+        third_input: string,
+    ) -> map<string, int | string | bool> {
+        { "result": 1 }
+    }
+}
+
+// ===== Deeply nested class structure =====
+class DeepOuter {
+    level1: DeepLevel1
+}
+
+class DeepLevel1 {
+    level2: DeepLevel2
+    items: DeepLevel2[]
+    mapping: map<string, DeepLevel2>
+}
+
+class DeepLevel2 {
+    level3: DeepLevel3
+    value: int | string | bool | float | null
+}
+
+class DeepLevel3 {
+    data: string
+    nested: map<string, map<string, int>>
+}

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
@@ -510,8 +509,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _502: "jfeiowajpwoeifj"
     let _503: string
     let _504: string
-    let _505: "// ===== Long string concatenation exceeding limit =====
-    "a very long string prefix that is already quite long""
+    let _505: "a very long string prefix that is already quite long"
     let _506: " concatenated with "
     let _507: "another very long string that together exceeds the line limit easily and comfortably"
     let _508: void
@@ -1474,7 +1472,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     }
 
     bb73: {
-        _505 = const "// ===== Long string concatenation exceeding limit =====\n    \"a very long string prefix that is already quite long\"";
+        _505 = const "a very long string prefix that is already quite long";
         _506 = const " concatenated with ";
         _504 = copy _505 + copy _506;
         _507 = const "another very long string that together exceeds the line limit easily and comfortably";
@@ -1729,7 +1727,6 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
         _0 = copy _645 + copy _646;
         goto -> bb1;
     }
-
 }
 
 fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {
@@ -2604,7 +2601,41 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
         _0 = copy _364.0;
         goto -> bb1;
     }
+}
 
+fn WithMethod.greet() -> string {
+    // Locals:
+    let _0: string // return
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+    // Locals:
+    let _0: map<string, int | string | bool> // return
+    let _1: map<string, int> // first_input // param
+    let _2: int | string | bool[] // second_input // param
+    let _3: string // third_input // param
+    let _4: "result"
+    let _5: 1
+
+    bb0: {
+        _4 = const "result";
+        _5 = const 1_i64;
+        _0 = { copy _4: copy _5 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
 }
 
 fn ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
@@ -2707,7 +2738,6 @@ fn ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
     bb5: {
         goto -> bb1;
     }
-
 }
 
 fn TestTarget() -> string {
@@ -2731,7 +2761,6 @@ fn TestTarget() -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
@@ -2739,7 +2768,7 @@ fn TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     let _0: baml.llm.PrimitiveClient // return
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaDeeplyNestedClient"
-    let _3: "unknown"
+    let _3: "openai"
     let _4: "user"
     let _5: string[]
     let _6: "user"
@@ -2747,9 +2776,7 @@ fn TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     let _8: "system"
     let _9: map<string, unknown>
     let _10: "model"
-    let _11: "// 19 model trailing
-        // 20 model value leading
-        "gpt-4""
+    let _11: "gpt-4"
     let _12: "headers"
     let _13: map<null, null>
     let _14: null
@@ -2757,14 +2784,14 @@ fn TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     bb0: {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaDeeplyNestedClient";
-        _3 = const "unknown";
+        _3 = const "openai";
         _4 = const "user";
         _6 = const "user";
         _7 = const "assistant";
         _8 = const "system";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
-        _11 = const "// 19 model trailing\n        // 20 model value leading\n        \"gpt-4\"";
+        _11 = const "gpt-4";
         _12 = const "headers";
         _13 = {  };
         _9 = { copy _10: copy _11, copy _12: copy _13 };
@@ -2782,7 +2809,6 @@ fn TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
@@ -2859,7 +2885,29 @@ fn LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
+}
 
+fn TestTarget.build_request() -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: null
+    let _2: "TestTarget"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.build_request;
+        _2 = const "TestTarget";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn StringProviderClient.resolve() -> baml.llm.PrimitiveClient {
@@ -2908,7 +2956,6 @@ fn StringProviderClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn TriviaClient.resolve() -> baml.llm.PrimitiveClient {
@@ -2916,7 +2963,7 @@ fn TriviaClient.resolve() -> baml.llm.PrimitiveClient {
     let _0: baml.llm.PrimitiveClient // return
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaClient"
-    let _3: "unknown"
+    let _3: "openai"
     let _4: "user"
     let _5: string[]
     let _6: "user"
@@ -2924,22 +2971,20 @@ fn TriviaClient.resolve() -> baml.llm.PrimitiveClient {
     let _8: "system"
     let _9: map<string, unknown>
     let _10: "model"
-    let _11: "// 22 model key trailing
-        // 23 model value leading
-        "gpt-4""
+    let _11: "gpt-4"
     let _12: null
 
     bb0: {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaClient";
-        _3 = const "unknown";
+        _3 = const "openai";
         _4 = const "user";
         _6 = const "user";
         _7 = const "assistant";
         _8 = const "system";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
-        _11 = const "// 22 model key trailing\n        // 23 model value leading\n        \"gpt-4\"";
+        _11 = const "gpt-4";
         _9 = { copy _10: copy _11 };
         _12 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
     }
@@ -2955,7 +3000,6 @@ fn TriviaClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn TypedValuesClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3012,7 +3056,6 @@ fn TypedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn FullClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3069,7 +3112,6 @@ fn FullClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn SameLineClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3114,7 +3156,6 @@ fn SameLineClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3173,7 +3214,6 @@ fn LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
@@ -3189,13 +3229,9 @@ fn TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
     let _8: "system"
     let _9: map<string, unknown>
     let _10: "model"
-    let _11: "/* 2 key trailing */
-        /* 3 value leading */
-        "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit""
+    let _11: "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
     let _12: "base_url"
-    let _13: "/* 6 next key trailing */
-        /* 7 next value leading */
-        "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions""
+    let _13: "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
     let _14: null
 
     bb0: {
@@ -3208,9 +3244,9 @@ fn TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
         _8 = const "system";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
-        _11 = const "/* 2 key trailing */\n        /* 3 value leading */\n        \"some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit\"";
+        _11 = const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit";
         _12 = const "base_url";
-        _13 = const "/* 6 next key trailing */\n        /* 7 next value leading */\n        \"https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions\"";
+        _13 = const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions";
         _9 = { copy _10: copy _11, copy _12: copy _13 };
         _14 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
     }
@@ -3226,7 +3262,6 @@ fn TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn EnvClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3287,7 +3322,6 @@ fn EnvClient.resolve() -> baml.llm.PrimitiveClient {
     bb5: {
         goto -> bb1;
     }
-
 }
 
 fn LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3340,7 +3374,6 @@ fn LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn DeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3413,7 +3446,6 @@ fn DeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3429,13 +3461,9 @@ fn TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
     let _8: "system"
     let _9: map<string, unknown>
     let _10: "model"
-    let _11: "// 2 key trailing
-        // 3 value leading
-        "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit""
+    let _11: "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
     let _12: "base_url"
-    let _13: "// 6 next key trailing
-        // 7 next value leading
-        "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions""
+    let _13: "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
     let _14: null
 
     bb0: {
@@ -3448,9 +3476,9 @@ fn TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
         _8 = const "system";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
-        _11 = const "// 2 key trailing\n        // 3 value leading\n        \"some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit\"";
+        _11 = const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit";
         _12 = const "base_url";
-        _13 = const "// 6 next key trailing\n        // 7 next value leading\n        \"https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions\"";
+        _13 = const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions";
         _9 = { copy _10: copy _11, copy _12: copy _13 };
         _14 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
     }
@@ -3466,7 +3494,6 @@ fn TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn BasicClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3511,7 +3538,6 @@ fn BasicClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn ExtraWhitespaceClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3556,7 +3582,6 @@ fn ExtraWhitespaceClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn CommaClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3605,7 +3630,6 @@ fn CommaClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn C.resolve() -> baml.llm.PrimitiveClient {
@@ -3650,7 +3674,6 @@ fn C.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3702,7 +3725,6 @@ fn RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn ArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3775,7 +3797,6 @@ fn ArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn NestedConfigClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3824,7 +3845,6 @@ fn NestedConfigClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
@@ -3832,7 +3852,7 @@ fn TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
     let _0: baml.llm.PrimitiveClient // return
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaDeeplyNestedClientBlock"
-    let _3: "unknown"
+    let _3: "openai"
     let _4: "user"
     let _5: string[]
     let _6: "user"
@@ -3840,9 +3860,7 @@ fn TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
     let _8: "system"
     let _9: map<string, unknown>
     let _10: "model"
-    let _11: "/* 19 model trailing */
-        /* 20 model value leading */
-        "gpt-4""
+    let _11: "gpt-4"
     let _12: "headers"
     let _13: map<null, null>
     let _14: null
@@ -3850,14 +3868,14 @@ fn TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
     bb0: {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaDeeplyNestedClientBlock";
-        _3 = const "unknown";
+        _3 = const "openai";
         _4 = const "user";
         _6 = const "user";
         _7 = const "assistant";
         _8 = const "system";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
-        _11 = const "/* 19 model trailing */\n        /* 20 model value leading */\n        \"gpt-4\"";
+        _11 = const "gpt-4";
         _12 = const "headers";
         _13 = {  };
         _9 = { copy _10: copy _11, copy _12: copy _13 };
@@ -3875,7 +3893,6 @@ fn TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3930,7 +3947,6 @@ fn ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
@@ -3997,7 +4013,29 @@ fn MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
+}
 
+fn TestTarget.render_prompt() -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: null
+    let _2: "TestTarget"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.render_prompt;
+        _2 = const "TestTarget";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns.resolve() -> baml.llm.PrimitiveClient {
@@ -4042,7 +4080,6 @@ fn ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneH
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn LongOptionClient.resolve() -> baml.llm.PrimitiveClient {
@@ -4091,7 +4128,6 @@ fn LongOptionClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
@@ -4099,7 +4135,7 @@ fn TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
     let _0: baml.llm.PrimitiveClient // return
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaClientBlock"
-    let _3: "unknown"
+    let _3: "openai"
     let _4: "user"
     let _5: string[]
     let _6: "user"
@@ -4107,22 +4143,20 @@ fn TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
     let _8: "system"
     let _9: map<string, unknown>
     let _10: "model"
-    let _11: "/* 22 model key trailing */
-        /* 23 model value leading */
-        "gpt-4""
+    let _11: "gpt-4"
     let _12: null
 
     bb0: {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaClientBlock";
-        _3 = const "unknown";
+        _3 = const "openai";
         _4 = const "user";
         _6 = const "user";
         _7 = const "assistant";
         _8 = const "system";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
-        _11 = const "/* 22 model key trailing */\n        /* 23 model value leading */\n        \"gpt-4\"";
+        _11 = const "gpt-4";
         _9 = { copy _10: copy _11 };
         _12 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
     }
@@ -4138,7 +4172,6 @@ fn TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
@@ -4150,14 +4183,13 @@ fn TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_p
     let _4: float // fourth_parameter // param
 
     bb0: {
-        _0 = const "/* 35 trailing */\n    \"result\"";
+        _0 = const "result";
         goto -> bb1;
     }
 
     bb1: {
         return;
     }
-
 }
 
 fn SingleParam(x: int) -> int {
@@ -4173,7 +4205,6 @@ fn SingleParam(x: int) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
@@ -4194,7 +4225,6 @@ fn SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: 
     bb1: {
         return;
     }
-
 }
 
 fn LlmMultiLine(text: string) -> string {
@@ -4223,7 +4253,6 @@ fn LlmMultiLine(text: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> {
@@ -4250,7 +4279,34 @@ fn NestedGenericReturn() -> map<string, map<string, map<string, int | string | b
     bb1: {
         return;
     }
+}
 
+fn LlmBasic.render_prompt(name: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: string // name // param
+    let _2: null
+    let _3: "LlmBasic"
+    let _4: map<string, unknown>
+    let _5: "name"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.render_prompt;
+        _3 = const "LlmBasic";
+        _5 = const "name";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn MultiParamTrivia(a: int, b: string) -> int {
@@ -4267,7 +4323,6 @@ fn MultiParamTrivia(a: int, b: string) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn F() -> int {
@@ -4282,7 +4337,34 @@ fn F() -> int {
     bb1: {
         return;
     }
+}
 
+fn LlmMultiLine.render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: string // text // param
+    let _2: null
+    let _3: "LlmMultiLine"
+    let _4: map<string, unknown>
+    let _5: "text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.render_prompt;
+        _3 = const "LlmMultiLine";
+        _5 = const "text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn MultipleParams(a: int, b: int, c: string) -> int {
@@ -4304,7 +4386,6 @@ fn MultipleParams(a: int, b: int, c: string) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn ConstrainedParams(name: string, score: int) -> string {
@@ -4321,7 +4402,6 @@ fn ConstrainedParams(name: string, score: int) -> string {
     bb1: {
         return;
     }
-
 }
 
 fn ExtraWhitespace(a: int, b: int) -> int {
@@ -4342,7 +4422,6 @@ fn ExtraWhitespace(a: int, b: int) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
@@ -4357,7 +4436,6 @@ fn ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithN
     bb1: {
         return;
     }
-
 }
 
 fn NestedLoops(matrix: int[][]) -> int {
@@ -4569,7 +4647,6 @@ fn NestedLoops(matrix: int[][]) -> int {
     bb20: {
         return;
     }
-
 }
 
 fn TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
@@ -4590,7 +4667,6 @@ fn TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int
     bb1: {
         return;
     }
-
 }
 
 fn LlmBasic(name: string) -> string {
@@ -4619,7 +4695,6 @@ fn LlmBasic(name: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
@@ -4637,7 +4712,62 @@ fn LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, s
     bb1: {
         return;
     }
+}
 
+fn LlmBasic.build_request(name: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: string // name // param
+    let _2: null
+    let _3: "LlmBasic"
+    let _4: map<string, unknown>
+    let _5: "name"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.build_request;
+        _3 = const "LlmBasic";
+        _5 = const "name";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn LlmStringClient.render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: string // text // param
+    let _2: null
+    let _3: "LlmStringClient"
+    let _4: map<string, unknown>
+    let _5: "text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.render_prompt;
+        _3 = const "LlmStringClient";
+        _5 = const "text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
@@ -4658,7 +4788,49 @@ fn TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string
     bb1: {
         return;
     }
+}
 
+fn LlmWithLongSignature.build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: string // first_context // param
+    let _2: string // second_context // param
+    let _3: string // third_context // param
+    let _4: string // user_query // param
+    let _5: null
+    let _6: "LlmWithLongSignature"
+    let _7: map<string, unknown>
+    let _8: "first_context"
+    let _9: string
+    let _10: "second_context"
+    let _11: string
+    let _12: "third_context"
+    let _13: string
+    let _14: "user_query"
+    let _15: string
+
+    bb0: {
+        _5 = const fn baml.llm.build_request;
+        _6 = const "LlmWithLongSignature";
+        _8 = const "first_context";
+        _9 = copy _1;
+        _10 = const "second_context";
+        _11 = copy _2;
+        _12 = const "third_context";
+        _13 = copy _3;
+        _14 = const "user_query";
+        _15 = copy _4;
+        _7 = { copy _8: copy _9, copy _10: copy _11, copy _12: copy _13, copy _14: copy _15 };
+        _0 = call copy _5(copy _6, copy _7) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn LlmReversedOrder(text: string) -> string {
@@ -4687,7 +4859,6 @@ fn LlmReversedOrder(text: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
@@ -4705,7 +4876,6 @@ fn VeryLongParamList(extremely_long_parameter_name: int, another_very_long_param
     bb1: {
         return;
     }
-
 }
 
 fn LlmStringClient(text: string) -> string {
@@ -4734,7 +4904,6 @@ fn LlmStringClient(text: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> (int) -> (int) -> string) -> string {
@@ -4751,7 +4920,6 @@ fn DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback
     bb1: {
         return;
     }
-
 }
 
 fn NoColonParams(x: int, y: int) -> int {
@@ -4772,7 +4940,6 @@ fn NoColonParams(x: int, y: int) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
@@ -4788,7 +4955,6 @@ fn TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
     bb1: {
         return;
     }
-
 }
 
 fn LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
@@ -4832,7 +4998,6 @@ fn LlmWithLongSignature(first_context: string, second_context: string, third_con
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn ManyNestedExprs(items: int[]) -> int {
@@ -4928,7 +5093,6 @@ fn ManyNestedExprs(items: int[]) -> int {
         _12 = copy _13 * copy _14;
         goto -> bb5;
     }
-
 }
 
 fn LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
@@ -4952,7 +5116,6 @@ fn LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<str
     bb1: {
         return;
     }
-
 }
 
 fn ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
@@ -4971,7 +5134,6 @@ fn ManyParams(first_parameter: int, second_parameter: string, third_parameter: b
     bb1: {
         return;
     }
-
 }
 
 fn Minimal() -> int {
@@ -4986,7 +5148,34 @@ fn Minimal() -> int {
     bb1: {
         return;
     }
+}
 
+fn LlmReversedOrder.build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: string // text // param
+    let _2: null
+    let _3: "LlmReversedOrder"
+    let _4: map<string, unknown>
+    let _5: "text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.build_request;
+        _3 = const "LlmReversedOrder";
+        _5 = const "text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn TriviaWrapParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
@@ -4998,14 +5187,56 @@ fn TriviaWrapParams(first_parameter: int, second_parameter: string, third_parame
     let _4: float // fourth_parameter // param
 
     bb0: {
-        _0 = const "// 35 trailing\n    \"result\"";
+        _0 = const "result";
         goto -> bb1;
     }
 
     bb1: {
         return;
     }
+}
 
+fn LlmWithLongSignature.render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: string // first_context // param
+    let _2: string // second_context // param
+    let _3: string // third_context // param
+    let _4: string // user_query // param
+    let _5: null
+    let _6: "LlmWithLongSignature"
+    let _7: map<string, unknown>
+    let _8: "first_context"
+    let _9: string
+    let _10: "second_context"
+    let _11: string
+    let _12: "third_context"
+    let _13: string
+    let _14: "user_query"
+    let _15: string
+
+    bb0: {
+        _5 = const fn baml.llm.render_prompt;
+        _6 = const "LlmWithLongSignature";
+        _8 = const "first_context";
+        _9 = copy _1;
+        _10 = const "second_context";
+        _11 = copy _2;
+        _12 = const "third_context";
+        _13 = copy _3;
+        _14 = const "user_query";
+        _15 = copy _4;
+        _7 = { copy _8: copy _9, copy _10: copy _11, copy _12: copy _13, copy _14: copy _15 };
+        _0 = call copy _5(copy _6, copy _7) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn ComplexReturn(x: int) -> int | string | null {
@@ -5021,7 +5252,62 @@ fn ComplexReturn(x: int) -> int | string | null {
     bb1: {
         return;
     }
+}
 
+fn LlmMultiLine.build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: string // text // param
+    let _2: null
+    let _3: "LlmMultiLine"
+    let _4: map<string, unknown>
+    let _5: "text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.build_request;
+        _3 = const "LlmMultiLine";
+        _5 = const "text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn LlmStringClient.build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: string // text // param
+    let _2: null
+    let _3: "LlmStringClient"
+    let _4: map<string, unknown>
+    let _5: "text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.build_request;
+        _3 = const "LlmStringClient";
+        _5 = const "text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
@@ -5042,7 +5328,6 @@ fn EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, sec
     bb1: {
         return;
     }
-
 }
 
 fn TriviaFuncBlock(x: int) -> int {
@@ -5058,7 +5343,6 @@ fn TriviaFuncBlock(x: int) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn TriviaFunc(x: int) -> int {
@@ -5074,7 +5358,34 @@ fn TriviaFunc(x: int) -> int {
     bb1: {
         return;
     }
+}
 
+fn LlmReversedOrder.render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: string // text // param
+    let _2: null
+    let _3: "LlmReversedOrder"
+    let _4: map<string, unknown>
+    let _5: "text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.render_prompt;
+        _3 = const "LlmReversedOrder";
+        _5 = const "text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
 }
 
 fn DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
@@ -5246,7 +5557,6 @@ fn DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
     bb14: {
         return;
     }
-
 }
 
 fn MultiStatement(a: int, b: int) -> int {
@@ -5306,7 +5616,6 @@ fn MultiStatement(a: int, b: int) -> int {
     bb6: {
         return;
     }
-
 }
 
 fn DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
@@ -5321,7 +5630,6 @@ fn DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | strin
     bb1: {
         return;
     }
-
 }
 
 fn TriviaWrapReturnType(x: int) -> int | string | bool | null {
@@ -5337,7 +5645,6 @@ fn TriviaWrapReturnType(x: int) -> int | string | bool | null {
     bb1: {
         return;
     }
-
 }
 
 fn DeeplyNestedBody(a: int, b: int, c: int) -> int {
@@ -5502,7 +5809,6 @@ fn DeeplyNestedBody(a: int, b: int, c: int) -> int {
     bb22: {
         return;
     }
-
 }
 
 fn FinalExpr(a: int, b: int) -> int {
@@ -5523,7 +5829,6 @@ fn FinalExpr(a: int, b: int) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn MultiParamTriviaBlock(a: int, b: string) -> int {
@@ -5540,7 +5845,6 @@ fn MultiParamTriviaBlock(a: int, b: string) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn MyFunction(a: int, b: int) -> int {
@@ -5632,26 +5936,6 @@ fn MyFunction(a: int, b: int) -> int {
         _0 = const 1_i64;
         goto -> bb1;
     }
-
-}
-
-fn EmptyReturn() -> int {
-    // Locals:
-    let _0: int // return
-    let _1: void
-
-    bb0: {
-        goto -> bb2;
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        return;
-    }
-
 }
 
 fn AssertStmts(x: int, y: int) -> int {
@@ -6497,7 +6781,6 @@ fn AssertStmts(x: int, y: int) -> int {
         _0 = copy _1;
         goto -> bb1;
     }
-
 }
 
 fn LoopStmts(items: int[], flag: bool) -> int {
@@ -10210,7 +10493,6 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     bb312: {
         return;
     }
-
 }
 
 fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -> string {
@@ -10228,215 +10510,192 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     let _10: int
     let _11: 1
     let _12: "other"
-    let _13: "// 10 arrow trailing
-        // 11 body leading
-        "zero"" | "// 18 second arrow trailing
-        // 19 second body leading
-        "other""
-    let _14: "/* 10 arrow trailing */
-        /* 11 body leading */
-        "zero"" | "/* 18 second arrow trailing */
-        /* 19 second body leading */
-        "other""
-    let _15: "// 11 arrow trailing
-        // 12 body leading
-        "positive"" | "other"
+    let _13: "zero" | "other"
+    let _14: "zero" | "other"
+    let _15: "positive" | "other"
     let _16: bool
     let _17: int // n
     let _18: bool
     let _19: int
     let _20: 0
-    let _21: int // _
-    let _22: "/* 11 arrow trailing */
-        /* 12 body leading */
-        "positive"" | "other"
-    let _23: bool
-    let _24: int // n
-    let _25: bool
-    let _26: int
-    let _27: 0
-    let _28: int // _
-    let _29: "zero" | "one" | "the answer" | "unknown"
-    let _30: "greeting" | "farewell" | "other"
-    let _31: "hello"
-    let _32: bool
+    let _21: "positive" | "other"
+    let _22: bool
+    let _23: int // n
+    let _24: bool
+    let _25: int
+    let _26: 0
+    let _27: "zero" | "one" | "the answer" | "unknown"
+    let _28: "greeting" | "farewell" | "other"
+    let _29: "hello"
+    let _30: bool
+    let _31: bool
+    let _32: "yes" | "no"
     let _33: bool
-    let _34: "hello" // _
-    let _35: "yes" | "no"
-    let _36: bool
-    let _37: bool
-    let _38: "zero" | "nonzero"
+    let _34: bool
+    let _35: "zero" | "nonzero"
+    let _36: int // n
+    let _37: "an integer"
+    let _38: bool
     let _39: int // n
-    let _40: "an integer"
-    let _41: bool
-    let _42: int // n
-    let _43: "active" | "inactive" | "pending"
-    let _44: int
-    let _45: "binary" | "small" | "big"
-    let _46: "zero" | "small" | "other"
-    let _47: "actionable" | "done"
-    let _48: int
-    let _49: string
+    let _40: "active" | "inactive" | "pending"
+    let _41: int
+    let _42: "binary" | "small" | "big"
+    let _43: "zero" | "small" | "other"
+    let _44: "actionable" | "done"
+    let _45: int
+    let _46: string
+    let _47: bool
+    let _48: MatchSuccess // s
+    let _49: MatchSuccess
     let _50: bool
-    let _51: MatchSuccess // s
-    let _52: MatchSuccess
-    let _53: bool
-    let _54: MatchFailure // f
-    let _55: MatchFailure
-    let _56: "something"
-    let _57: bool
-    let _58: MatchSuccess | MatchFailure // x
-    let _59: "small" | "big"
-    let _60: "positive" | "negative" | "zero"
-    let _61: bool
-    let _62: int // n
+    let _51: MatchFailure // f
+    let _52: MatchFailure
+    let _53: "something"
+    let _54: bool
+    let _55: MatchSuccess | MatchFailure // x
+    let _56: "small" | "big"
+    let _57: "positive" | "negative" | "zero"
+    let _58: bool
+    let _59: int // n
+    let _60: bool
+    let _61: int
+    let _62: 0
     let _63: bool
-    let _64: int
-    let _65: 0
-    let _66: bool
-    let _67: int // n
-    let _68: bool
-    let _69: int
-    let _70: 0
-    let _71: int // _
-    let _72: "acceptable small positive number that passes all the filters" | "other"
+    let _64: int // n
+    let _65: bool
+    let _66: int
+    let _67: 0
+    let _68: "acceptable small positive number that passes all the filters" | "other"
+    let _69: bool
+    let _70: int // n
+    let _71: bool
+    let _72: bool
     let _73: bool
-    let _74: int // n
+    let _74: bool
     let _75: bool
     let _76: bool
-    let _77: bool
-    let _78: bool
-    let _79: bool
-    let _80: bool
+    let _77: int
+    let _78: 0
+    let _79: int
+    let _80: 100
     let _81: int
-    let _82: 0
+    let _82: 42
     let _83: int
-    let _84: 100
+    let _84: 13
     let _85: int
-    let _86: 42
+    let _86: 7
     let _87: int
-    let _88: 13
-    let _89: int
-    let _90: 7
-    let _91: int
-    let _92: 99
-    let _93: int // _
-    let _94: "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now" | "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm" | "short"
-    let _95: "lots of literals" | "other"
-    let _96: "this arm has many long enum variant names that together push past the limit easily"
-    let _97: int
-    let _98: string | "short"
-    let _99: string // result
+    let _88: 99
+    let _89: "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now" | "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm" | "short"
+    let _90: "lots of literals" | "other"
+    let _91: "this arm has many long enum variant names that together push past the limit easily"
+    let _92: int
+    let _93: string | "short"
+    let _94: string // result
+    let _95: bool
+    let _96: "acceptable small positive number that passes all the defined filter conditions" | "other"
+    let _97: bool
+    let _98: int // n
+    let _99: bool
     let _100: bool
-    let _101: "// 11 arrow trailing
-        // 12 body leading
-        "acceptable small positive number that passes all the defined filter conditions"" | "other"
+    let _101: bool
     let _102: bool
-    let _103: int // n
-    let _104: bool
-    let _105: bool
-    let _106: bool
-    let _107: bool
-    let _108: bool
-    let _109: int
-    let _110: 0
-    let _111: int
-    let _112: 100
-    let _113: int
-    let _114: 42
-    let _115: int
-    let _116: 13
-    let _117: int
-    let _118: 7
-    let _119: int // _
-    let _120: "/* 11 arrow trailing */
-        /* 12 body leading */
-        "acceptable small positive number that passes all the defined filter conditions"" | "other"
+    let _103: bool
+    let _104: int
+    let _105: 0
+    let _106: int
+    let _107: 100
+    let _108: int
+    let _109: 42
+    let _110: int
+    let _111: 13
+    let _112: int
+    let _113: 7
+    let _114: "acceptable small positive number that passes all the defined filter conditions" | "other"
+    let _115: bool
+    let _116: int // n
+    let _117: bool
+    let _118: bool
+    let _119: bool
+    let _120: bool
     let _121: bool
-    let _122: int // n
-    let _123: bool
-    let _124: bool
-    let _125: bool
-    let _126: bool
-    let _127: bool
+    let _122: int
+    let _123: 0
+    let _124: int
+    let _125: 100
+    let _126: int
+    let _127: 42
     let _128: int
-    let _129: 0
+    let _129: 13
     let _130: int
-    let _131: 100
-    let _132: int
-    let _133: 42
+    let _131: 7
+    let _132: "was minus one" | "other"
+    let _133: int
     let _134: int
-    let _135: 13
-    let _136: int
-    let _137: 7
-    let _138: int // _
-    let _139: "was minus one" | "other"
-    let _140: int
-    let _141: int
-    let _142: 1
-    let _143: "zero polynomial" | "nonzero"
+    let _135: 1
+    let _136: "zero polynomial" | "nonzero"
+    let _137: null
+    let _138: null
+    let _139: null
+    let _140: null
+    let _141: null
+    let _142: null
+    let _143: null
     let _144: null
-    let _145: null
-    let _146: null
-    let _147: null
+    let _145: int
+    let _146: int
+    let _147: int
     let _148: null
-    let _149: null
-    let _150: null
+    let _149: bool
+    let _150: bool
     let _151: null
     let _152: int
-    let _153: int
+    let _153: bool
     let _154: int
-    let _155: null
-    let _156: bool
-    let _157: bool
-    let _158: null
+    let _155: bool
+    let _156: int
+    let _157: int
+    let _158: int
     let _159: int
-    let _160: bool
-    let _161: int
-    let _162: bool
-    let _163: int
-    let _164: int
-    let _165: int
-    let _166: int
-    let _167: int
-    let _168: null
-    let _169: null
-    let _170: bool
-    let _171: bool
-    let _172: bool
-    let _173: null
-    let _174: null
-    let _175: int
-    let _176: bool
+    let _160: int
+    let _161: null
+    let _162: null
+    let _163: bool
+    let _164: bool
+    let _165: bool
+    let _166: null
+    let _167: null
+    let _168: int
+    let _169: bool
+    let _170: int
+    let _171: null
+    let _172: null
+    let _173: bool
+    let _174: int
+    let _175: bool
+    let _176: "whitespace" | "other"
     let _177: int
-    let _178: null
-    let _179: null
-    let _180: bool
-    let _181: int
+    let _178: int
+    let _179: 1
+    let _180: "zero" | "other"
+    let _181: "zero-true" | "zero-false" | "nonzero"
     let _182: bool
-    let _183: "whitespace" | "other"
-    let _184: int
-    let _185: int
-    let _186: 1
-    let _187: "zero" | "other"
-    let _188: "zero-true" | "zero-false" | "nonzero"
-    let _189: bool
+    let _183: bool
+    let _184: "zero-true-active" | "zero-true-inactive" | "zero-true-pending" | "zero-false" | string | "one-success-false" | string | "other"
+    let _185: bool
+    let _186: int
+    let _187: bool
+    let _188: bool
+    let _189: MatchSuccess // s
     let _190: bool
-    let _191: "zero-true-active" | "zero-true-inactive" | "zero-true-pending" | "zero-false" | string | "one-success-false" | string | "other"
+    let _191: MatchSuccess
     let _192: bool
-    let _193: int
-    let _194: bool
-    let _195: bool
-    let _196: MatchSuccess // s
+    let _193: bool
+    let _194: MatchFailure // f
+    let _195: MatchFailure
+    let _196: "active" | "inactive" | "pending" | string | "other"
     let _197: bool
-    let _198: MatchSuccess
-    let _199: bool
-    let _200: bool
-    let _201: MatchFailure // f
-    let _202: MatchFailure
-    let _203: "active" | "inactive" | "pending" | string | "other"
-    let _204: bool
-    let _205: int
+    let _198: int
 
     bb0: {
         switch copy _1 [0: bb3, otherwise: bb4];
@@ -10518,12 +10777,12 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb16: {
-        _13 = const "// 10 arrow trailing\n        // 11 body leading\n        \"zero\"";
+        _13 = const "zero";
         goto -> bb15;
     }
 
     bb17: {
-        _13 = const "// 18 second arrow trailing\n        // 19 second body leading\n        \"other\"";
+        _13 = const "other";
         goto -> bb15;
     }
 
@@ -10533,18 +10792,18 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb19: {
-        _14 = const "/* 10 arrow trailing */\n        /* 11 body leading */\n        \"zero\"";
+        _14 = const "zero";
         goto -> bb18;
     }
 
     bb20: {
-        _14 = const "/* 18 second arrow trailing */\n        /* 19 second body leading */\n        \"other\"";
+        _14 = const "other";
         goto -> bb18;
     }
 
     bb21: {
-        _23 = is_type(copy _1, Int);
-        branch copy _23 -> [bb32, bb31];
+        _22 = is_type(copy _1, Int);
+        branch copy _22 -> [bb32, bb31];
     }
 
     bb22: {
@@ -10559,7 +10818,6 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb24: {
-        _21 = copy _1;
         goto -> bb27;
     }
 
@@ -10569,7 +10827,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb26: {
-        _15 = const "// 11 arrow trailing\n        // 12 body leading\n        \"positive\"";
+        _15 = const "positive";
         goto -> bb21;
     }
 
@@ -10587,61 +10845,60 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb30: {
-        _26 = copy _24;
-        _27 = const 0_i64;
-        _25 = copy _26 > copy _27;
-        branch copy _25 -> [bb33, bb31];
+        _25 = copy _23;
+        _26 = const 0_i64;
+        _24 = copy _25 > copy _26;
+        branch copy _24 -> [bb33, bb31];
     }
 
     bb31: {
-        _28 = copy _1;
         goto -> bb34;
     }
 
     bb32: {
-        _24 = copy _1;
+        _23 = copy _1;
         goto -> bb30;
     }
 
     bb33: {
-        _22 = const "/* 11 arrow trailing */\n        /* 12 body leading */\n        \"positive\"";
+        _21 = const "positive";
         goto -> bb28;
     }
 
     bb34: {
-        _22 = const "other";
+        _21 = const "other";
         goto -> bb28;
     }
 
     bb35: {
-        _31 = const "hello";
-        _32 = copy _31 == const "hello";
-        branch copy _32 -> [bb42, bb43];
+        _29 = const "hello";
+        _30 = copy _29 == const "hello";
+        branch copy _30 -> [bb42, bb43];
     }
 
     bb36: {
-        _29 = const "zero";
+        _27 = const "zero";
         goto -> bb35;
     }
 
     bb37: {
-        _29 = const "one";
+        _27 = const "one";
         goto -> bb35;
     }
 
     bb38: {
-        _29 = const "the answer";
+        _27 = const "the answer";
         goto -> bb35;
     }
 
     bb39: {
-        _29 = const "unknown";
+        _27 = const "unknown";
         goto -> bb35;
     }
 
     bb40: {
-        _36 = copy _4 == const true;
-        branch copy _36 -> [bb49, bb50];
+        _33 = copy _4 == const true;
+        branch copy _33 -> [bb49, bb50];
     }
 
     bb41: {
@@ -10649,27 +10906,26 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb42: {
-        _30 = const "greeting";
+        _28 = const "greeting";
         goto -> bb40;
     }
 
     bb43: {
-        _33 = copy _31 == const "bye";
-        branch copy _33 -> [bb44, bb45];
+        _31 = copy _29 == const "bye";
+        branch copy _31 -> [bb44, bb45];
     }
 
     bb44: {
-        _30 = const "farewell";
+        _28 = const "farewell";
         goto -> bb40;
     }
 
     bb45: {
-        _34 = copy _31;
         goto -> bb46;
     }
 
     bb46: {
-        _30 = const "other";
+        _28 = const "other";
         goto -> bb40;
     }
 
@@ -10682,39 +10938,39 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb49: {
-        _35 = const "yes";
+        _32 = const "yes";
         goto -> bb47;
     }
 
     bb50: {
-        _37 = copy _4 == const false;
-        branch copy _37 -> [bb51, bb48];
+        _34 = copy _4 == const false;
+        branch copy _34 -> [bb51, bb48];
     }
 
     bb51: {
-        _35 = const "no";
+        _32 = const "no";
         goto -> bb47;
     }
 
     bb52: {
-        _41 = is_type(copy _1, Int);
-        branch copy _41 -> [bb58, bb56];
+        _38 = is_type(copy _1, Int);
+        branch copy _38 -> [bb58, bb56];
     }
 
     bb53: {
-        _38 = const "zero";
+        _35 = const "zero";
         goto -> bb52;
     }
 
     bb54: {
-        _39 = copy _1;
-        _38 = const "nonzero";
+        _36 = copy _1;
+        _35 = const "nonzero";
         goto -> bb52;
     }
 
     bb55: {
-        _44 = discriminant(_2);
-        switch copy _44 [0: bb60, 1: bb61, 2: bb62, otherwise: bb63] (exhaustive);
+        _41 = discriminant(_2);
+        switch copy _41 [MatchStatus.Active: bb60, MatchStatus.Inactive: bb61, MatchStatus.Pending: bb62, otherwise: bb63] (exhaustive);
     }
 
     bb56: {
@@ -10722,12 +10978,12 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb57: {
-        _40 = const "an integer";
+        _37 = const "an integer";
         goto -> bb55;
     }
 
     bb58: {
-        _42 = copy _1;
+        _39 = copy _1;
         goto -> bb57;
     }
 
@@ -10736,17 +10992,17 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb60: {
-        _43 = const "active";
+        _40 = const "active";
         goto -> bb59;
     }
 
     bb61: {
-        _43 = const "inactive";
+        _40 = const "inactive";
         goto -> bb59;
     }
 
     bb62: {
-        _43 = const "pending";
+        _40 = const "pending";
         goto -> bb59;
     }
 
@@ -10759,52 +11015,52 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb65: {
-        _45 = const "binary";
+        _42 = const "binary";
         goto -> bb64;
     }
 
     bb66: {
-        _45 = const "small";
+        _42 = const "small";
         goto -> bb64;
     }
 
     bb67: {
-        _45 = const "big";
+        _42 = const "big";
         goto -> bb64;
     }
 
     bb68: {
-        _48 = discriminant(_2);
-        switch copy _48 [0: bb73, 2: bb73, 1: bb74, otherwise: bb75] (exhaustive);
+        _45 = discriminant(_2);
+        switch copy _45 [MatchStatus.Active: bb73, MatchStatus.Pending: bb73, MatchStatus.Inactive: bb74, otherwise: bb75] (exhaustive);
     }
 
     bb69: {
-        _46 = const "zero";
+        _43 = const "zero";
         goto -> bb68;
     }
 
     bb70: {
-        _46 = const "small";
+        _43 = const "small";
         goto -> bb68;
     }
 
     bb71: {
-        _46 = const "other";
+        _43 = const "other";
         goto -> bb68;
     }
 
     bb72: {
-        _50 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }));
-        branch copy _50 -> [bb80, bb79];
+        _47 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }));
+        branch copy _47 -> [bb80, bb79];
     }
 
     bb73: {
-        _47 = const "actionable";
+        _44 = const "actionable";
         goto -> bb72;
     }
 
     bb74: {
-        _47 = const "done";
+        _44 = const "done";
         goto -> bb72;
     }
 
@@ -10813,8 +11069,8 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb76: {
-        _57 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }), Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" })]));
-        branch copy _57 -> [bb86, bb84];
+        _54 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }), Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" })]));
+        branch copy _54 -> [bb86, bb84];
     }
 
     bb77: {
@@ -10822,34 +11078,34 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb78: {
-        _52 = copy _51;
-        _49 = copy _52.0;
+        _49 = copy _48;
+        _46 = copy _49.0;
         goto -> bb76;
     }
 
     bb79: {
-        _53 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }));
-        branch copy _53 -> [bb82, bb77];
+        _50 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }));
+        branch copy _50 -> [bb82, bb77];
     }
 
     bb80: {
-        _51 = copy _3;
+        _48 = copy _3;
         goto -> bb78;
     }
 
     bb81: {
-        _55 = copy _54;
-        _49 = copy _55.0;
+        _52 = copy _51;
+        _46 = copy _52.0;
         goto -> bb76;
     }
 
     bb82: {
-        _54 = copy _3;
+        _51 = copy _3;
         goto -> bb81;
     }
 
     bb83: {
-        switch copy _58 [0: bb88, 1: bb88, 2: bb88, 3: bb88, 4: bb88, 5: bb88, otherwise: bb89];
+        switch copy _55 [0: bb88, 1: bb88, 2: bb88, 3: bb88, 4: bb88, 5: bb88, otherwise: bb89];
     }
 
     bb84: {
@@ -10857,33 +11113,33 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb85: {
-        _56 = const "something";
+        _53 = const "something";
         goto -> bb83;
     }
 
     bb86: {
-        _58 = copy _3;
+        _55 = copy _3;
         goto -> bb85;
     }
 
     bb87: {
-        _61 = is_type(copy _58, Int);
-        branch copy _61 -> [bb94, bb93];
+        _58 = is_type(copy _55, Int);
+        branch copy _58 -> [bb94, bb93];
     }
 
     bb88: {
-        _59 = const "small";
+        _56 = const "small";
         goto -> bb87;
     }
 
     bb89: {
-        _59 = const "big";
+        _56 = const "big";
         goto -> bb87;
     }
 
     bb90: {
-        _73 = is_type(copy _58, Int);
-        branch copy _73 -> [bb105, bb104];
+        _69 = is_type(copy _55, Int);
+        branch copy _69 -> [bb105, bb104];
     }
 
     bb91: {
@@ -10891,56 +11147,55 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb92: {
-        _64 = copy _62;
-        _65 = const 0_i64;
-        _63 = copy _64 > copy _65;
-        branch copy _63 -> [bb95, bb93];
+        _61 = copy _59;
+        _62 = const 0_i64;
+        _60 = copy _61 > copy _62;
+        branch copy _60 -> [bb95, bb93];
     }
 
     bb93: {
-        _66 = is_type(copy _58, Int);
-        branch copy _66 -> [bb98, bb97];
+        _63 = is_type(copy _55, Int);
+        branch copy _63 -> [bb98, bb97];
     }
 
     bb94: {
-        _62 = copy _58;
+        _59 = copy _55;
         goto -> bb92;
     }
 
     bb95: {
-        _60 = const "positive";
+        _57 = const "positive";
         goto -> bb90;
     }
 
     bb96: {
-        _69 = copy _67;
-        _70 = const 0_i64;
-        _68 = copy _69 < copy _70;
-        branch copy _68 -> [bb99, bb97];
+        _66 = copy _64;
+        _67 = const 0_i64;
+        _65 = copy _66 < copy _67;
+        branch copy _65 -> [bb99, bb97];
     }
 
     bb97: {
-        _71 = copy _58;
         goto -> bb100;
     }
 
     bb98: {
-        _67 = copy _58;
+        _64 = copy _55;
         goto -> bb96;
     }
 
     bb99: {
-        _60 = const "negative";
+        _57 = const "negative";
         goto -> bb90;
     }
 
     bb100: {
-        _60 = const "zero";
+        _57 = const "zero";
         goto -> bb90;
     }
 
     bb101: {
-        switch copy _58 [0: bb124, 1: bb125, otherwise: bb126];
+        switch copy _55 [0: bb124, 1: bb125, otherwise: bb126];
     }
 
     bb102: {
@@ -10948,152 +11203,151 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb103: {
-        _81 = copy _74;
-        _82 = const 0_i64;
-        _80 = copy _81 > copy _82;
-        branch copy _80 -> [bb107, bb108];
+        _77 = copy _70;
+        _78 = const 0_i64;
+        _76 = copy _77 > copy _78;
+        branch copy _76 -> [bb107, bb108];
     }
 
     bb104: {
-        _93 = copy _58;
         goto -> bb122;
     }
 
     bb105: {
-        _74 = copy _58;
+        _70 = copy _55;
         goto -> bb103;
     }
 
     bb106: {
-        _72 = const "acceptable small positive number that passes all the filters";
+        _68 = const "acceptable small positive number that passes all the filters";
         goto -> bb101;
     }
 
     bb107: {
-        _83 = copy _74;
-        _84 = const 100_i64;
-        _79 = copy _83 < copy _84;
+        _79 = copy _70;
+        _80 = const 100_i64;
+        _75 = copy _79 < copy _80;
         goto -> bb109;
     }
 
     bb108: {
-        _79 = const false;
+        _75 = const false;
         goto -> bb109;
     }
 
     bb109: {
-        branch copy _79 -> [bb110, bb111];
+        branch copy _75 -> [bb110, bb111];
     }
 
     bb110: {
-        _85 = copy _74;
-        _86 = const 42_i64;
-        _78 = copy _85 != copy _86;
+        _81 = copy _70;
+        _82 = const 42_i64;
+        _74 = copy _81 != copy _82;
         goto -> bb112;
     }
 
     bb111: {
-        _78 = const false;
+        _74 = const false;
         goto -> bb112;
     }
 
     bb112: {
-        branch copy _78 -> [bb113, bb114];
+        branch copy _74 -> [bb113, bb114];
     }
 
     bb113: {
-        _87 = copy _74;
-        _88 = const 13_i64;
-        _77 = copy _87 != copy _88;
+        _83 = copy _70;
+        _84 = const 13_i64;
+        _73 = copy _83 != copy _84;
         goto -> bb115;
     }
 
     bb114: {
-        _77 = const false;
+        _73 = const false;
         goto -> bb115;
     }
 
     bb115: {
-        branch copy _77 -> [bb116, bb117];
+        branch copy _73 -> [bb116, bb117];
     }
 
     bb116: {
-        _89 = copy _74;
-        _90 = const 7_i64;
-        _76 = copy _89 != copy _90;
+        _85 = copy _70;
+        _86 = const 7_i64;
+        _72 = copy _85 != copy _86;
         goto -> bb118;
     }
 
     bb117: {
-        _76 = const false;
+        _72 = const false;
         goto -> bb118;
     }
 
     bb118: {
-        branch copy _76 -> [bb119, bb120];
+        branch copy _72 -> [bb119, bb120];
     }
 
     bb119: {
-        _91 = copy _74;
-        _92 = const 99_i64;
-        _75 = copy _91 != copy _92;
+        _87 = copy _70;
+        _88 = const 99_i64;
+        _71 = copy _87 != copy _88;
         goto -> bb121;
     }
 
     bb120: {
-        _75 = const false;
+        _71 = const false;
         goto -> bb121;
     }
 
     bb121: {
-        branch copy _75 -> [bb106, bb104];
+        branch copy _71 -> [bb106, bb104];
     }
 
     bb122: {
-        _72 = const "other";
+        _68 = const "other";
         goto -> bb101;
     }
 
     bb123: {
-        switch copy _58 [0: bb128, 1: bb128, 2: bb128, 3: bb128, 4: bb128, 5: bb128, 6: bb128, 7: bb128, 8: bb128, 9: bb128, 10: bb128, 11: bb128, 12: bb128, 13: bb128, 14: bb128, 15: bb128, 16: bb128, 17: bb128, 18: bb128, 19: bb128, 20: bb128, 21: bb128, 22: bb128, 23: bb128, 24: bb128, otherwise: bb129];
+        switch copy _55 [0: bb128, 1: bb128, 2: bb128, 3: bb128, 4: bb128, 5: bb128, 6: bb128, 7: bb128, 8: bb128, 9: bb128, 10: bb128, 11: bb128, 12: bb128, 13: bb128, 14: bb128, 15: bb128, 16: bb128, 17: bb128, 18: bb128, 19: bb128, 20: bb128, 21: bb128, 22: bb128, 23: bb128, 24: bb128, otherwise: bb129];
     }
 
     bb124: {
-        _94 = const "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now";
+        _89 = const "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now";
         goto -> bb123;
     }
 
     bb125: {
-        _94 = const "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm";
+        _89 = const "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm";
         goto -> bb123;
     }
 
     bb126: {
-        _94 = const "short";
+        _89 = const "short";
         goto -> bb123;
     }
 
     bb127: {
-        _97 = discriminant(_51);
-        switch copy _97 [0: bb131, 1: bb131, 2: bb131, otherwise: bb132] (exhaustive);
+        _92 = discriminant(_48);
+        switch copy _92 [MatchStatus.Active: bb131, MatchStatus.Inactive: bb131, MatchStatus.Pending: bb131, otherwise: bb132] (exhaustive);
     }
 
     bb128: {
-        _95 = const "lots of literals";
+        _90 = const "lots of literals";
         goto -> bb127;
     }
 
     bb129: {
-        _95 = const "other";
+        _90 = const "other";
         goto -> bb127;
     }
 
     bb130: {
-        switch copy _58 [0: bb134, otherwise: bb135];
+        switch copy _55 [0: bb134, otherwise: bb135];
     }
 
     bb131: {
-        _96 = const "this arm has many long enum variant names that together push past the limit easily";
+        _91 = const "this arm has many long enum variant names that together push past the limit easily";
         goto -> bb130;
     }
 
@@ -11102,38 +11356,38 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb133: {
-        _102 = is_type(copy _58, Int);
-        branch copy _102 -> [bb143, bb142];
+        _97 = is_type(copy _55, Int);
+        branch copy _97 -> [bb143, bb142];
     }
 
     bb134: {
-        _100 = copy _4;
-        branch copy _100 -> [bb136, bb137];
+        _95 = copy _4;
+        branch copy _95 -> [bb136, bb137];
     }
 
     bb135: {
-        _98 = const "short";
+        _93 = const "short";
         goto -> bb133;
     }
 
     bb136: {
-        _99 = const "this is the true branch with a very long string";
+        _94 = const "this is the true branch with a very long string";
         goto -> bb138;
     }
 
     bb137: {
-        _99 = const "this is the false branch also very long";
+        _94 = const "this is the false branch also very long";
         goto -> bb138;
     }
 
     bb138: {
-        _98 = copy _99;
+        _93 = copy _94;
         goto -> bb133;
     }
 
     bb139: {
-        _121 = is_type(copy _58, Int);
-        branch copy _121 -> [bb162, bb161];
+        _115 = is_type(copy _55, Int);
+        branch copy _115 -> [bb162, bb161];
     }
 
     bb140: {
@@ -11141,101 +11395,100 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb141: {
-        _109 = copy _103;
-        _110 = const 0_i64;
-        _108 = copy _109 > copy _110;
-        branch copy _108 -> [bb145, bb146];
+        _104 = copy _98;
+        _105 = const 0_i64;
+        _103 = copy _104 > copy _105;
+        branch copy _103 -> [bb145, bb146];
     }
 
     bb142: {
-        _119 = copy _58;
         goto -> bb157;
     }
 
     bb143: {
-        _103 = copy _58;
+        _98 = copy _55;
         goto -> bb141;
     }
 
     bb144: {
-        _101 = const "// 11 arrow trailing\n        // 12 body leading\n        \"acceptable small positive number that passes all the defined filter conditions\"";
+        _96 = const "acceptable small positive number that passes all the defined filter conditions";
         goto -> bb139;
     }
 
     bb145: {
-        _111 = copy _103;
-        _112 = const 100_i64;
-        _107 = copy _111 < copy _112;
+        _106 = copy _98;
+        _107 = const 100_i64;
+        _102 = copy _106 < copy _107;
         goto -> bb147;
     }
 
     bb146: {
-        _107 = const false;
+        _102 = const false;
         goto -> bb147;
     }
 
     bb147: {
-        branch copy _107 -> [bb148, bb149];
+        branch copy _102 -> [bb148, bb149];
     }
 
     bb148: {
-        _113 = copy _103;
-        _114 = const 42_i64;
-        _106 = copy _113 != copy _114;
+        _108 = copy _98;
+        _109 = const 42_i64;
+        _101 = copy _108 != copy _109;
         goto -> bb150;
     }
 
     bb149: {
-        _106 = const false;
+        _101 = const false;
         goto -> bb150;
     }
 
     bb150: {
-        branch copy _106 -> [bb151, bb152];
+        branch copy _101 -> [bb151, bb152];
     }
 
     bb151: {
-        _115 = copy _103;
-        _116 = const 13_i64;
-        _105 = copy _115 != copy _116;
+        _110 = copy _98;
+        _111 = const 13_i64;
+        _100 = copy _110 != copy _111;
         goto -> bb153;
     }
 
     bb152: {
-        _105 = const false;
+        _100 = const false;
         goto -> bb153;
     }
 
     bb153: {
-        branch copy _105 -> [bb154, bb155];
+        branch copy _100 -> [bb154, bb155];
     }
 
     bb154: {
-        _117 = copy _103;
-        _118 = const 7_i64;
-        _104 = copy _117 != copy _118;
+        _112 = copy _98;
+        _113 = const 7_i64;
+        _99 = copy _112 != copy _113;
         goto -> bb156;
     }
 
     bb155: {
-        _104 = const false;
+        _99 = const false;
         goto -> bb156;
     }
 
     bb156: {
-        branch copy _104 -> [bb144, bb142];
+        branch copy _99 -> [bb144, bb142];
     }
 
     bb157: {
-        _101 = const "other";
+        _96 = const "other";
         goto -> bb139;
     }
 
     bb158: {
-        _141 = copy _58;
-        _142 = const 1_i64;
-        _140 = copy _141 + copy _142;
-        switch copy _140 [0: bb178, otherwise: bb179];
+        _134 = copy _55;
+        _135 = const 1_i64;
+        _133 = copy _134 + copy _135;
+        switch copy _133 [0: bb178, otherwise: bb179];
     }
 
     bb159: {
@@ -11243,205 +11496,204 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb160: {
-        _128 = copy _122;
-        _129 = const 0_i64;
-        _127 = copy _128 > copy _129;
-        branch copy _127 -> [bb164, bb165];
+        _122 = copy _116;
+        _123 = const 0_i64;
+        _121 = copy _122 > copy _123;
+        branch copy _121 -> [bb164, bb165];
     }
 
     bb161: {
-        _138 = copy _58;
         goto -> bb176;
     }
 
     bb162: {
-        _122 = copy _58;
+        _116 = copy _55;
         goto -> bb160;
     }
 
     bb163: {
-        _120 = const "/* 11 arrow trailing */\n        /* 12 body leading */\n        \"acceptable small positive number that passes all the defined filter conditions\"";
+        _114 = const "acceptable small positive number that passes all the defined filter conditions";
         goto -> bb158;
     }
 
     bb164: {
-        _130 = copy _122;
-        _131 = const 100_i64;
-        _126 = copy _130 < copy _131;
+        _124 = copy _116;
+        _125 = const 100_i64;
+        _120 = copy _124 < copy _125;
         goto -> bb166;
     }
 
     bb165: {
-        _126 = const false;
+        _120 = const false;
         goto -> bb166;
     }
 
     bb166: {
-        branch copy _126 -> [bb167, bb168];
+        branch copy _120 -> [bb167, bb168];
     }
 
     bb167: {
-        _132 = copy _122;
-        _133 = const 42_i64;
-        _125 = copy _132 != copy _133;
+        _126 = copy _116;
+        _127 = const 42_i64;
+        _119 = copy _126 != copy _127;
         goto -> bb169;
     }
 
     bb168: {
-        _125 = const false;
+        _119 = const false;
         goto -> bb169;
     }
 
     bb169: {
-        branch copy _125 -> [bb170, bb171];
+        branch copy _119 -> [bb170, bb171];
     }
 
     bb170: {
-        _134 = copy _122;
-        _135 = const 13_i64;
-        _124 = copy _134 != copy _135;
+        _128 = copy _116;
+        _129 = const 13_i64;
+        _118 = copy _128 != copy _129;
         goto -> bb172;
     }
 
     bb171: {
-        _124 = const false;
+        _118 = const false;
         goto -> bb172;
     }
 
     bb172: {
-        branch copy _124 -> [bb173, bb174];
+        branch copy _118 -> [bb173, bb174];
     }
 
     bb173: {
-        _136 = copy _122;
-        _137 = const 7_i64;
-        _123 = copy _136 != copy _137;
+        _130 = copy _116;
+        _131 = const 7_i64;
+        _117 = copy _130 != copy _131;
         goto -> bb175;
     }
 
     bb174: {
-        _123 = const false;
+        _117 = const false;
         goto -> bb175;
     }
 
     bb175: {
-        branch copy _123 -> [bb163, bb161];
+        branch copy _117 -> [bb163, bb161];
     }
 
     bb176: {
-        _120 = const "other";
+        _114 = const "other";
         goto -> bb158;
     }
 
     bb177: {
-        _153 = copy _58;
-        _154 = copy _58;
-        _152 = copy _153 * copy _154;
-        _156 = copy _4;
-        _157 = copy _4;
-        _155 = copy _156 * copy _157;
-        _151 = copy _152 + copy _155;
-        _159 = copy _58;
-        _160 = copy _4;
-        _158 = copy _159 * copy _160;
-        _150 = copy _151 + copy _158;
-        _161 = copy _58;
-        _149 = copy _150 + copy _161;
-        _162 = copy _4;
-        _148 = copy _149 + copy _162;
-        _165 = copy _58;
-        _166 = copy _58;
-        _164 = copy _165 * copy _166;
-        _167 = copy _58;
-        _163 = copy _164 * copy _167;
-        _147 = copy _148 + copy _163;
-        _170 = copy _4;
-        _171 = copy _4;
-        _169 = copy _170 * copy _171;
-        _172 = copy _4;
-        _168 = copy _169 * copy _172;
-        _146 = copy _147 + copy _168;
-        _175 = copy _58;
-        _176 = copy _4;
-        _174 = copy _175 * copy _176;
-        _177 = copy _58;
-        _173 = copy _174 * copy _177;
-        _145 = copy _146 + copy _173;
-        _180 = copy _4;
-        _181 = copy _58;
-        _179 = copy _180 * copy _181;
-        _182 = copy _4;
-        _178 = copy _179 * copy _182;
-        _144 = copy _145 + copy _178;
-        switch copy _144 [0: bb181, otherwise: bb182];
+        _146 = copy _55;
+        _147 = copy _55;
+        _145 = copy _146 * copy _147;
+        _149 = copy _4;
+        _150 = copy _4;
+        _148 = copy _149 * copy _150;
+        _144 = copy _145 + copy _148;
+        _152 = copy _55;
+        _153 = copy _4;
+        _151 = copy _152 * copy _153;
+        _143 = copy _144 + copy _151;
+        _154 = copy _55;
+        _142 = copy _143 + copy _154;
+        _155 = copy _4;
+        _141 = copy _142 + copy _155;
+        _158 = copy _55;
+        _159 = copy _55;
+        _157 = copy _158 * copy _159;
+        _160 = copy _55;
+        _156 = copy _157 * copy _160;
+        _140 = copy _141 + copy _156;
+        _163 = copy _4;
+        _164 = copy _4;
+        _162 = copy _163 * copy _164;
+        _165 = copy _4;
+        _161 = copy _162 * copy _165;
+        _139 = copy _140 + copy _161;
+        _168 = copy _55;
+        _169 = copy _4;
+        _167 = copy _168 * copy _169;
+        _170 = copy _55;
+        _166 = copy _167 * copy _170;
+        _138 = copy _139 + copy _166;
+        _173 = copy _4;
+        _174 = copy _55;
+        _172 = copy _173 * copy _174;
+        _175 = copy _4;
+        _171 = copy _172 * copy _175;
+        _137 = copy _138 + copy _171;
+        switch copy _137 [0: bb181, otherwise: bb182];
     }
 
     bb178: {
-        _139 = const "was minus one";
+        _132 = const "was minus one";
         goto -> bb177;
     }
 
     bb179: {
-        _139 = const "other";
+        _132 = const "other";
         goto -> bb177;
     }
 
     bb180: {
-        _185 = copy _58;
-        _186 = const 1_i64;
-        _184 = copy _185 + copy _186;
-        switch copy _184 [0: bb184, otherwise: bb185];
+        _178 = copy _55;
+        _179 = const 1_i64;
+        _177 = copy _178 + copy _179;
+        switch copy _177 [0: bb184, otherwise: bb185];
     }
 
     bb181: {
-        _143 = const "zero polynomial";
+        _136 = const "zero polynomial";
         goto -> bb180;
     }
 
     bb182: {
-        _143 = const "nonzero";
+        _136 = const "nonzero";
         goto -> bb180;
     }
 
     bb183: {
-        switch copy _58 [0: bb187, otherwise: bb188];
+        switch copy _55 [0: bb187, otherwise: bb188];
     }
 
     bb184: {
-        _183 = const "whitespace";
+        _176 = const "whitespace";
         goto -> bb183;
     }
 
     bb185: {
-        _183 = const "other";
+        _176 = const "other";
         goto -> bb183;
     }
 
     bb186: {
-        switch copy _58 [0: bb190, otherwise: bb191];
+        switch copy _55 [0: bb190, otherwise: bb191];
     }
 
     bb187: {
-        _187 = const "zero";
+        _180 = const "zero";
         goto -> bb186;
     }
 
     bb188: {
-        _187 = const "other";
+        _180 = const "other";
         goto -> bb186;
     }
 
     bb189: {
-        switch copy _58 [0: bb198, 1: bb199, otherwise: bb200];
+        switch copy _55 [0: bb198, 1: bb199, otherwise: bb200];
     }
 
     bb190: {
-        _189 = copy _4 == const true;
-        branch copy _189 -> [bb194, bb195];
+        _182 = copy _4 == const true;
+        branch copy _182 -> [bb194, bb195];
     }
 
     bb191: {
-        _188 = const "nonzero";
+        _181 = const "nonzero";
         goto -> bb189;
     }
 
@@ -11454,36 +11706,36 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb194: {
-        _188 = const "zero-true";
+        _181 = const "zero-true";
         goto -> bb192;
     }
 
     bb195: {
-        _190 = copy _4 == const false;
-        branch copy _190 -> [bb196, bb193];
+        _183 = copy _4 == const false;
+        branch copy _183 -> [bb196, bb193];
     }
 
     bb196: {
-        _188 = const "zero-false";
+        _181 = const "zero-false";
         goto -> bb192;
     }
 
     bb197: {
-        switch copy _58 [0: bb224, otherwise: bb225];
+        switch copy _55 [0: bb224, otherwise: bb225];
     }
 
     bb198: {
-        _192 = copy _4 == const true;
-        branch copy _192 -> [bb203, bb204];
+        _185 = copy _4 == const true;
+        branch copy _185 -> [bb203, bb204];
     }
 
     bb199: {
-        _195 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }));
-        branch copy _195 -> [bb215, bb214];
+        _188 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }));
+        branch copy _188 -> [bb215, bb214];
     }
 
     bb200: {
-        _191 = const "other";
+        _184 = const "other";
         goto -> bb197;
     }
 
@@ -11496,13 +11748,13 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb203: {
-        _193 = discriminant(_51);
-        switch copy _193 [0: bb206, 1: bb207, 2: bb208, otherwise: bb209] (exhaustive);
+        _186 = discriminant(_48);
+        switch copy _186 [MatchStatus.Active: bb206, MatchStatus.Inactive: bb207, MatchStatus.Pending: bb208, otherwise: bb209] (exhaustive);
     }
 
     bb204: {
-        _194 = copy _4 == const false;
-        branch copy _194 -> [bb210, bb202];
+        _187 = copy _4 == const false;
+        branch copy _187 -> [bb210, bb202];
     }
 
     bb205: {
@@ -11510,17 +11762,17 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb206: {
-        _191 = const "zero-true-active";
+        _184 = const "zero-true-active";
         goto -> bb205;
     }
 
     bb207: {
-        _191 = const "zero-true-inactive";
+        _184 = const "zero-true-inactive";
         goto -> bb205;
     }
 
     bb208: {
-        _191 = const "zero-true-pending";
+        _184 = const "zero-true-pending";
         goto -> bb205;
     }
 
@@ -11529,7 +11781,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb210: {
-        _191 = const "zero-false";
+        _184 = const "zero-false";
         goto -> bb201;
     }
 
@@ -11542,17 +11794,17 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb213: {
-        _197 = copy _4 == const true;
-        branch copy _197 -> [bb218, bb219];
+        _190 = copy _4 == const true;
+        branch copy _190 -> [bb218, bb219];
     }
 
     bb214: {
-        _200 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }));
-        branch copy _200 -> [bb222, bb212];
+        _193 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }));
+        branch copy _193 -> [bb222, bb212];
     }
 
     bb215: {
-        _196 = copy _3;
+        _189 = copy _3;
         goto -> bb213;
     }
 
@@ -11565,53 +11817,53 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb218: {
-        _198 = copy _196;
-        _191 = copy _198.0;
+        _191 = copy _189;
+        _184 = copy _191.0;
         goto -> bb216;
     }
 
     bb219: {
-        _199 = copy _4 == const false;
-        branch copy _199 -> [bb220, bb217];
+        _192 = copy _4 == const false;
+        branch copy _192 -> [bb220, bb217];
     }
 
     bb220: {
-        _191 = const "one-success-false";
+        _184 = const "one-success-false";
         goto -> bb216;
     }
 
     bb221: {
-        _202 = copy _201;
-        _191 = copy _202.0;
+        _195 = copy _194;
+        _184 = copy _195.0;
         goto -> bb211;
     }
 
     bb222: {
-        _201 = copy _3;
+        _194 = copy _3;
         goto -> bb221;
     }
 
     bb223: {
-        switch copy _58 [0: bb235, otherwise: bb236];
+        switch copy _55 [0: bb235, otherwise: bb236];
     }
 
     bb224: {
-        _204 = copy _4;
-        branch copy _204 -> [bb226, bb227];
+        _197 = copy _4;
+        branch copy _197 -> [bb226, bb227];
     }
 
     bb225: {
-        _203 = const "other";
+        _196 = const "other";
         goto -> bb223;
     }
 
     bb226: {
-        _205 = discriminant(_196);
-        switch copy _205 [0: bb230, 1: bb231, 2: bb232, otherwise: bb233] (exhaustive);
+        _198 = discriminant(_189);
+        switch copy _198 [MatchStatus.Active: bb230, MatchStatus.Inactive: bb231, MatchStatus.Pending: bb232, otherwise: bb233] (exhaustive);
     }
 
     bb227: {
-        _203 = const "not bool";
+        _196 = const "not bool";
         goto -> bb228;
     }
 
@@ -11624,17 +11876,17 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb230: {
-        _203 = const "active";
+        _196 = const "active";
         goto -> bb229;
     }
 
     bb231: {
-        _203 = const "inactive";
+        _196 = const "inactive";
         goto -> bb229;
     }
 
     bb232: {
-        _203 = const "pending";
+        _196 = const "pending";
         goto -> bb229;
     }
 
@@ -11655,7 +11907,6 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
         _0 = const "other";
         goto -> bb234;
     }
-
 }
 
 fn OtherExprs(a: int, b: int) -> int {
@@ -11670,8 +11921,7 @@ fn OtherExprs(a: int, b: int) -> int {
     let _7: 0.0
     let _8: 3.14
     let _9: 99.999
-    let _10: "// ===== String literals =====
-    "hello""
+    let _10: "hello"
     let _11: "a short string"
     let _12: "a much longer string that contains quite a lot of text and definitely exceeds one hundred characters to test how the formatter handles longer string literals in expressions"
     let _13: true
@@ -11856,31 +12106,15 @@ fn OtherExprs(a: int, b: int) -> int {
     let _188: 1
     let _189: 2
     let _190: string[]
-    let _191: "// 1 trailing
-    // 2 leading
-    "this is a long string""
-    let _192: "// 4 trailing
-    // 5 leading
-    "another long string value""
-    let _193: "// 7 trailing
-    // 8 leading
-    "yet another that is quite long""
-    let _194: "// 10 trailing
-    // 11 leading
-    "and one more string element""
+    let _191: "this is a long string"
+    let _192: "another long string value"
+    let _193: "yet another that is quite long"
+    let _194: "and one more string element"
     let _195: string[]
-    let _196: "/* 1 trailing */
-    /* 2 leading */
-    "this is a long string""
-    let _197: "/* 4 trailing */
-    /* 5 leading */
-    "another long string value""
-    let _198: "/* 7 trailing */
-    /* 8 leading */
-    "yet another that is quite long""
-    let _199: "/* 10 trailing */
-    /* 11 leading */
-    "and one more string element""
+    let _196: "this is a long string"
+    let _197: "another long string value"
+    let _198: "yet another that is quite long"
+    let _199: "and one more string element"
     let _200: map<string, int>
     let _201: "key"
     let _202: 1
@@ -11929,14 +12163,10 @@ fn OtherExprs(a: int, b: int) -> int {
     let _245: "inner_f"
     let _246: 6
     let _247: map<string, int>
-    let _248: "// 2 open brace trailing
-    // 3 key leading
-    "k""
+    let _248: "k"
     let _249: 1
     let _250: map<string, int>
-    let _251: "/* 2 open brace trailing */
-    /* 3 key leading */
-    "k""
+    let _251: "k"
     let _252: 1
     let _253: OtherPoint
     let _254: 1
@@ -12044,7 +12274,7 @@ fn OtherExprs(a: int, b: int) -> int {
         _7 = const 0_f64;
         _8 = const 3.14_f64;
         _9 = const 99.999_f64;
-        _10 = const "// ===== String literals =====\n    \"hello\"";
+        _10 = const "hello";
         _11 = const "a short string";
         _12 = const "a much longer string that contains quite a lot of text and definitely exceeds one hundred characters to test how the formatter handles longer string literals in expressions";
         _13 = const true;
@@ -12224,15 +12454,15 @@ fn OtherExprs(a: int, b: int) -> int {
         _188 = const 1_i64;
         _189 = const 2_i64;
         _187 = [copy _188, copy _189];
-        _191 = const "// 1 trailing\n    // 2 leading\n    \"this is a long string\"";
-        _192 = const "// 4 trailing\n    // 5 leading\n    \"another long string value\"";
-        _193 = const "// 7 trailing\n    // 8 leading\n    \"yet another that is quite long\"";
-        _194 = const "// 10 trailing\n    // 11 leading\n    \"and one more string element\"";
+        _191 = const "this is a long string";
+        _192 = const "another long string value";
+        _193 = const "yet another that is quite long";
+        _194 = const "and one more string element";
         _190 = [copy _191, copy _192, copy _193, copy _194];
-        _196 = const "/* 1 trailing */\n    /* 2 leading */\n    \"this is a long string\"";
-        _197 = const "/* 4 trailing */\n    /* 5 leading */\n    \"another long string value\"";
-        _198 = const "/* 7 trailing */\n    /* 8 leading */\n    \"yet another that is quite long\"";
-        _199 = const "/* 10 trailing */\n    /* 11 leading */\n    \"and one more string element\"";
+        _196 = const "this is a long string";
+        _197 = const "another long string value";
+        _198 = const "yet another that is quite long";
+        _199 = const "and one more string element";
         _195 = [copy _196, copy _197, copy _198, copy _199];
         _201 = const "key";
         _202 = const 1_i64;
@@ -12281,10 +12511,10 @@ fn OtherExprs(a: int, b: int) -> int {
         _246 = const 6_i64;
         _240 = { copy _241: copy _242, copy _243: copy _244, copy _245: copy _246 };
         _230 = { copy _231: copy _232, copy _239: copy _240 };
-        _248 = const "// 2 open brace trailing\n    // 3 key leading\n    \"k\"";
+        _248 = const "k";
         _249 = const 1_i64;
         _247 = { copy _248: copy _249 };
-        _251 = const "/* 2 open brace trailing */\n    /* 3 key leading */\n    \"k\"";
+        _251 = const "k";
         _252 = const 1_i64;
         _250 = { copy _251: copy _252 };
         _254 = const 1_i64;
@@ -12417,5 +12647,4 @@ fn OtherExprs(a: int, b: int) -> int {
         _329 = copy _1;
         goto -> bb5;
     }
-
 }

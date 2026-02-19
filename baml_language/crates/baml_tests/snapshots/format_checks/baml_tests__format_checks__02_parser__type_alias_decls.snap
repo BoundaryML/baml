@@ -946,18 +946,6 @@ SOURCE_FILE
             R_BRACE "}"
             R_BRACE "}"
           R_PAREN ")"
-    ATTRIBUTE
-      AT "@"
-      WORD "description"
-      ATTRIBUTE_ARGS
-        L_PAREN "("
-        STRING_LITERAL "a constrained type"
-          QUOTE """
-          WORD "a"
-          WORD "constrained"
-          WORD "type"
-          QUOTE """
-        R_PAREN ")"
   CLASS_DEF
     KW_CLASS "class"
     WORD "TypeAliasSuccess"
@@ -1050,57 +1038,42 @@ int"
     WORD "TriviaLongUnion"
     EQUALS "="
     TYPE_EXPR
-      STRING_LITERAL "// 1 leading
-    "alpha""
+      STRING_LITERAL "alpha"
         QUOTE """
         WORD "alpha"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "// 4 trailing
-    // 5 leading
-    "bravo""
+      STRING_LITERAL "bravo"
         QUOTE """
         WORD "bravo"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "// 8 trailing
-    // 9 leading
-    "charlie""
+      STRING_LITERAL "charlie"
         QUOTE """
         WORD "charlie"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "// 12 trailing
-    // 13 leading
-    "delta""
+      STRING_LITERAL "delta"
         QUOTE """
         WORD "delta"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "// 16 trailing
-    // 17 leading
-    "echo""
+      STRING_LITERAL "echo"
         QUOTE """
         WORD "echo"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "// 20 trailing
-    // 21 leading
-    "foxtrot""
+      STRING_LITERAL "foxtrot"
         QUOTE """
         WORD "foxtrot"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "// 24 trailing
-    // 25 leading
-    "golf""
+      STRING_LITERAL "golf"
         QUOTE """
         WORD "golf"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "// 28 trailing
-    // 29 leading
-    "hotel""
+      STRING_LITERAL "hotel"
         QUOTE """
         WORD "hotel"
         QUOTE """
@@ -1109,57 +1082,42 @@ int"
     WORD "TriviaLongUnionBlock"
     EQUALS "="
     TYPE_EXPR
-      STRING_LITERAL "/* 1 leading */
-    "alpha""
+      STRING_LITERAL "alpha"
         QUOTE """
         WORD "alpha"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "/* 4 trailing */
-    /* 5 leading */
-    "bravo""
+      STRING_LITERAL "bravo"
         QUOTE """
         WORD "bravo"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "/* 8 trailing */
-    /* 9 leading */
-    "charlie""
+      STRING_LITERAL "charlie"
         QUOTE """
         WORD "charlie"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "/* 12 trailing */
-    /* 13 leading */
-    "delta""
+      STRING_LITERAL "delta"
         QUOTE """
         WORD "delta"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "/* 16 trailing */
-    /* 17 leading */
-    "echo""
+      STRING_LITERAL "echo"
         QUOTE """
         WORD "echo"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "/* 20 trailing */
-    /* 21 leading */
-    "foxtrot""
+      STRING_LITERAL "foxtrot"
         QUOTE """
         WORD "foxtrot"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "/* 24 trailing */
-    /* 25 leading */
-    "golf""
+      STRING_LITERAL "golf"
         QUOTE """
         WORD "golf"
         QUOTE """
       PIPE "|"
-      STRING_LITERAL "/* 28 trailing */
-    /* 29 leading */
-    "hotel""
+      STRING_LITERAL "hotel"
         QUOTE """
         WORD "hotel"
         QUOTE """

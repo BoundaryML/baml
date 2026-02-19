@@ -3,11 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // Test: Match expression exhaustiveness and unreachable arm detection
 class Success {
-    data string
+    data: string
 }
 
 class Failure {
-    reason string
+    reason: string
 }
 
 // ============================================================================
@@ -173,7 +173,7 @@ function UnionPatternCoversAll(r: Result) -> string {
 }
 
 class Pending {
-    eta int
+    eta: int
 }
 
 type FullResult = Success | Failure | Pending
@@ -980,19 +980,19 @@ function JumpTableTypeTag(value: int | string | bool | float) -> string {
 }
 
 class Cat {
-    name string
+    name: string
 }
 
 class Dog {
-    name string
+    name: string
 }
 
 class Bird {
-    name string
+    name: string
 }
 
 class Fish {
-    name string
+    name: string
 }
 
 // 4 user-defined classes should use JumpTable with CLASS_BASE tags.

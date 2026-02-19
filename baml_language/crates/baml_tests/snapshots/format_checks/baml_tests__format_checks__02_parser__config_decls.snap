@@ -17,6 +17,7 @@ SOURCE_FILE
         WORD "provider"
         CONFIG_VALUE "openai"
           WORD "openai"
+      COMMA ","
       CONFIG_ITEM
         WORD "options"
         CONFIG_BLOCK
@@ -28,6 +29,7 @@ SOURCE_FILE
                 QUOTE """
                 WORD "gpt-4"
                 QUOTE """
+          COMMA ","
           R_BRACE "}"
       R_BRACE "}"
   CLIENT_DEF
@@ -53,6 +55,7 @@ SOURCE_FILE
           L_BRACE "{"
           CONFIG_ITEM
             WORD "model"
+            COLON ":"
             CONFIG_VALUE
               STRING_LITERAL "gpt-4"
                 QUOTE """
@@ -66,6 +69,7 @@ SOURCE_FILE
             WORD "temperature"
             CONFIG_VALUE "0.7"
               FLOAT_LITERAL "0.7"
+          COMMA ","
           CONFIG_ITEM
             WORD "top_p"
             CONFIG_VALUE "0.9"
@@ -201,8 +205,10 @@ SOURCE_FILE
                 QUOTE """
                 WORD "gpt-4"
                 QUOTE """
+          COMMA ","
           CONFIG_ITEM
             WORD "stop_sequences"
+            COLON ":"
             CONFIG_VALUE
               ARRAY_LITERAL
                 L_BRACKET "["
@@ -301,6 +307,7 @@ SOURCE_FILE
                 QUOTE """
           CONFIG_ITEM
             WORD "temperature"
+            COLON ":"
             CONFIG_VALUE "0.5"
               FLOAT_LITERAL "0.5"
           CONFIG_ITEM
@@ -324,6 +331,7 @@ SOURCE_FILE
       L_BRACE "{"
       CONFIG_ITEM
         WORD "provider"
+        COLON ":"
         CONFIG_VALUE "openai"
           WORD "openai"
       CONFIG_ITEM
@@ -361,6 +369,7 @@ SOURCE_FILE
           WORD "openai"
       CONFIG_ITEM
         WORD "options"
+        COLON ":"
         CONFIG_BLOCK
           L_BRACE "{"
           CONFIG_ITEM
@@ -370,6 +379,7 @@ SOURCE_FILE
                 QUOTE """
                 WORD "gpt-4"
                 QUOTE """
+          COMMA ","
           CONFIG_ITEM
             WORD "tools"
             CONFIG_VALUE
@@ -446,12 +456,15 @@ SOURCE_FILE
         WORD "provider"
         CONFIG_VALUE "openai"
           WORD "openai"
+      COMMA ","
       CONFIG_ITEM
         WORD "options"
+        COLON ":"
         CONFIG_BLOCK
           L_BRACE "{"
           CONFIG_ITEM
             WORD "model"
+            COLON ":"
             CONFIG_VALUE
               STRING_LITERAL "gpt-4"
                 QUOTE """
@@ -478,6 +491,7 @@ SOURCE_FILE
                 QUOTE """
                 HASH "#"
           R_BRACE "}"
+      COMMA ","
       R_BRACE "}"
   CLIENT_DEF
     KW_CLIENT "client"
@@ -569,10 +583,11 @@ llm // 6 type trailing
       L_BRACE "{"
       CONFIG_ITEM
         WORD "provider"
-        CONFIG_VALUE
-      CONFIG_ITEM
-        WORD "openai"
-        CONFIG_VALUE
+        COLON ":"
+        CONFIG_VALUE "// 14 provider key trailing
+    // 15 provider value leading
+    openai"
+          WORD "openai"
       CONFIG_ITEM
         WORD "options"
         CONFIG_BLOCK
@@ -580,9 +595,7 @@ llm // 6 type trailing
           CONFIG_ITEM
             WORD "model"
             CONFIG_VALUE
-              STRING_LITERAL "// 22 model key trailing
-        // 23 model value leading
-        "gpt-4""
+              STRING_LITERAL "gpt-4"
                 QUOTE """
                 WORD "gpt-4"
                 QUOTE """
@@ -605,20 +618,19 @@ llm /* 6 type trailing */
       L_BRACE "{"
       CONFIG_ITEM
         WORD "provider"
-        CONFIG_VALUE
-      CONFIG_ITEM
-        WORD "openai"
-        CONFIG_VALUE
+        CONFIG_VALUE "/* 14 provider key trailing */
+    /* 15 provider value leading */
+    openai"
+          WORD "openai"
       CONFIG_ITEM
         WORD "options"
+        COLON ":"
         CONFIG_BLOCK
           L_BRACE "{"
           CONFIG_ITEM
             WORD "model"
             CONFIG_VALUE
-              STRING_LITERAL "/* 22 model key trailing */
-        /* 23 model value leading */
-        "gpt-4""
+              STRING_LITERAL "gpt-4"
                 QUOTE """
                 WORD "gpt-4"
                 QUOTE """
@@ -1140,10 +1152,10 @@ llm // 4 type trailing
       L_BRACE "{"
       CONFIG_ITEM
         WORD "provider"
-        CONFIG_VALUE
-      CONFIG_ITEM
-        WORD "openai"
-        CONFIG_VALUE
+        CONFIG_VALUE "// 11 provider trailing
+    // 12 value leading
+    openai"
+          WORD "openai"
       CONFIG_ITEM
         WORD "options"
         CONFIG_BLOCK
@@ -1151,9 +1163,7 @@ llm // 4 type trailing
           CONFIG_ITEM
             WORD "model"
             CONFIG_VALUE
-              STRING_LITERAL "// 19 model trailing
-        // 20 model value leading
-        "gpt-4""
+              STRING_LITERAL "gpt-4"
                 QUOTE """
                 WORD "gpt-4"
                 QUOTE """
@@ -1162,30 +1172,22 @@ llm // 4 type trailing
             CONFIG_BLOCK
               L_BRACE "{"
               CONFIG_ITEM
-                STRING_LITERAL "// 25 headers brace trailing
-            // 26 first header leading
-            "X-API-Key""
+                STRING_LITERAL "X-API-Key"
                   QUOTE """
                   WORD "X-API-Key"
                   QUOTE """
                 CONFIG_VALUE
-                  STRING_LITERAL "// 27 first header trailing
-            // 28 first value leading
-            "my-key""
+                  STRING_LITERAL "my-key"
                     QUOTE """
                     WORD "my-key"
                     QUOTE """
               CONFIG_ITEM
-                STRING_LITERAL "// 29 first value trailing
-            // 30 second header leading
-            "Authorization""
+                STRING_LITERAL "Authorization"
                   QUOTE """
                   WORD "Authorization"
                   QUOTE """
                 CONFIG_VALUE
-                  STRING_LITERAL "// 31 second header trailing
-            // 32 second value leading
-            "Bearer token""
+                  STRING_LITERAL "Bearer token"
                     QUOTE """
                     WORD "Bearer"
                     WORD "token"
@@ -1207,10 +1209,10 @@ llm /* 4 type trailing */
       L_BRACE "{"
       CONFIG_ITEM
         WORD "provider"
-        CONFIG_VALUE
-      CONFIG_ITEM
-        WORD "openai"
-        CONFIG_VALUE
+        CONFIG_VALUE "/* 11 provider trailing */
+    /* 12 value leading */
+    openai"
+          WORD "openai"
       CONFIG_ITEM
         WORD "options"
         CONFIG_BLOCK
@@ -1218,9 +1220,7 @@ llm /* 4 type trailing */
           CONFIG_ITEM
             WORD "model"
             CONFIG_VALUE
-              STRING_LITERAL "/* 19 model trailing */
-        /* 20 model value leading */
-        "gpt-4""
+              STRING_LITERAL "gpt-4"
                 QUOTE """
                 WORD "gpt-4"
                 QUOTE """
@@ -1229,36 +1229,29 @@ llm /* 4 type trailing */
             CONFIG_BLOCK
               L_BRACE "{"
               CONFIG_ITEM
-                STRING_LITERAL "/* 25 headers brace trailing */
-            /* 26 first header leading */
-            "X-API-Key""
+                STRING_LITERAL "X-API-Key"
                   QUOTE """
                   WORD "X-API-Key"
                   QUOTE """
                 CONFIG_VALUE
-                  STRING_LITERAL "/* 27 first header trailing */
-            /* 28 first value leading */
-            "my-key""
+                  STRING_LITERAL "my-key"
                     QUOTE """
                     WORD "my-key"
                     QUOTE """
               CONFIG_ITEM
-                STRING_LITERAL "/* 29 first value trailing */
-            /* 30 second header leading */
-            "Authorization""
+                STRING_LITERAL "Authorization"
                   QUOTE """
                   WORD "Authorization"
                   QUOTE """
                 CONFIG_VALUE
-                  STRING_LITERAL "/* 31 second header trailing */
-            /* 32 second value leading */
-            "Bearer token""
+                  STRING_LITERAL "Bearer token"
                     QUOTE """
                     WORD "Bearer"
                     WORD "token"
                     QUOTE """
               R_BRACE "}"
           R_BRACE "}"
+      COMMA ","
       R_BRACE "}"
   CLIENT_DEF
     KW_CLIENT "client"
@@ -1280,18 +1273,14 @@ llm /* 4 type trailing */
           CONFIG_ITEM
             WORD "model"
             CONFIG_VALUE
-              STRING_LITERAL "// 2 key trailing
-        // 3 value leading
-        "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit""
+              STRING_LITERAL "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
                 QUOTE """
                 WORD "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
                 QUOTE """
           CONFIG_ITEM
             WORD "base_url"
             CONFIG_VALUE
-              STRING_LITERAL "// 6 next key trailing
-        // 7 next value leading
-        "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions""
+              STRING_LITERAL "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
                 QUOTE """
                 WORD "https"
                 COLON ":"
@@ -1333,18 +1322,14 @@ llm /* 4 type trailing */
           CONFIG_ITEM
             WORD "model"
             CONFIG_VALUE
-              STRING_LITERAL "/* 2 key trailing */
-        /* 3 value leading */
-        "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit""
+              STRING_LITERAL "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
                 QUOTE """
                 WORD "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
                 QUOTE """
           CONFIG_ITEM
             WORD "base_url"
             CONFIG_VALUE
-              STRING_LITERAL "/* 6 next key trailing */
-        /* 7 next value leading */
-        "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions""
+              STRING_LITERAL "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
                 QUOTE """
                 WORD "https"
                 COLON ":"
@@ -1546,6 +1531,7 @@ llm /* 4 type trailing */
             PIPE "|"
             WORD "int"
         R_BRACE "}"
+      COMMA ","
       CONFIG_ITEM
         WORD "args"
         CONFIG_BLOCK "{
@@ -1561,6 +1547,7 @@ llm /* 4 type trailing */
       L_BRACE "{"
       CONFIG_ITEM
         WORD "functions"
+        COLON ":"
         CONFIG_VALUE
           ARRAY_LITERAL
             L_BRACKET "["
@@ -1689,14 +1676,13 @@ llm /* 4 type trailing */
           KW_CLASS "class"
           WORD "TbInnerClass"
           L_BRACE "{"
-          FIELD "// 20 class brace trailing
-            // 21 field leading
-            field_name"
+          FIELD
             WORD "field_name"
-          FIELD "// 22 field name trailing
+            COLON ":"
+            TYPE_EXPR "// 22 field name trailing
             // 23 type leading
             int"
-            WORD "int"
+              WORD "int"
           R_BRACE "}"
         ENUM_DEF
           KW_ENUM "enum"
@@ -1746,14 +1732,13 @@ llm /* 4 type trailing */
           KW_CLASS "class"
           WORD "TbInnerClassBlock"
           L_BRACE "{"
-          FIELD "/* 20 class brace trailing */
-            /* 21 field leading */
-            field_name"
+          FIELD
             WORD "field_name"
-          FIELD "/* 22 field name trailing */
+            COLON ":"
+            TYPE_EXPR "/* 22 field name trailing */
             /* 23 type leading */
             int"
-            WORD "int"
+              WORD "int"
           R_BRACE "}"
         ENUM_DEF
           KW_ENUM "enum"
@@ -1916,42 +1901,4 @@ llm /* 4 type trailing */
       R_BRACE "}"
 
 === ERRORS ===
-Error: field 'field_name' is missing a type annotation
-     ╭─[ config_decls.baml:561:13 ]
-     │
- 561 │             field_name // 22 field name trailing
-     │             ─────┬────  
-     │                  ╰────── field 'field_name' is missing a type annotation
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: field 'int' is missing a type annotation
-     ╭─[ config_decls.baml:563:13 ]
-     │
- 563 │             int // 24 type trailing
-     │             ─┬─  
-     │              ╰─── field 'int' is missing a type annotation
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: field 'field_name' is missing a type annotation
-     ╭─[ config_decls.baml:619:13 ]
-     │
- 619 │             field_name /* 22 field name trailing */
-     │             ─────┬────  
-     │                  ╰────── field 'field_name' is missing a type annotation
-     │ 
-     │ Note: Error code: E0010
-─────╯
-
-Error: field 'int' is missing a type annotation
-     ╭─[ config_decls.baml:621:13 ]
-     │
- 621 │             int /* 24 type trailing */
-     │             ─┬─  
-     │              ╰─── field 'int' is missing a type annotation
-     │ 
-     │ Note: Error code: E0010
-─────╯
+None
