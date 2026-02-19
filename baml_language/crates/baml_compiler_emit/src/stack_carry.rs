@@ -687,10 +687,11 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn len(&mut self) -> Result<(), Self::Error> {
-        // Emitter lowers Len as: LoadGlobal(length), Call(1).
-        // Net stack effect: consume the input value, push result.
-        if !self.sim.pop_n(1) {
+    fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error> {
+        // Emitter lowers Len as: LoadGlobal(length), <place>, Call(1).
+        self.sim.push(); // LoadGlobal pushes callee.
+        pull_semantics::walk_place_pull(self, place)?;
+        if !self.sim.pop_n(2) {
             return Err(());
         }
         self.sim.push();

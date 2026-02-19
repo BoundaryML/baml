@@ -46,7 +46,7 @@ pub(crate) trait PullSink {
     fn discriminant(&mut self) -> Result<(), Self::Error>;
     fn type_tag(&mut self) -> Result<(), Self::Error>;
 
-    fn len(&mut self) -> Result<(), Self::Error>;
+    fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
 }
 
@@ -282,10 +282,7 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             walk_place_pull(sink, place)?;
             sink.type_tag()
         }
-        Rvalue::Len(place) => {
-            walk_place_pull(sink, place)?;
-            sink.len()
-        }
+        Rvalue::Len(place) => sink.len_of_place(place),
         Rvalue::IsType { operand, ty } => {
             walk_operand_pull(sink, operand)?;
             sink.is_type(ty)

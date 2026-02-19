@@ -291,10 +291,14 @@ fn compute_rpo(mir: &MirFunction) -> Vec<BlockId> {
     postorder
 }
 
-/// Check if a block is a "dead" unreachable block that can be skipped during emission.
+// ============================================================================
+// Emission Helpers
+// ============================================================================
+
+/// Check if a block is a "dead" unreachable block that may be skipped during
+/// emission without changing observable behavior.
 ///
 /// A block is dead if it has no statements and terminates with `Unreachable`.
-/// Such blocks exist only as targets for impossible control flow paths.
 pub(crate) fn is_dead_unreachable_block(block: &baml_compiler_mir::BasicBlock) -> bool {
     block.statements.is_empty() && matches!(block.terminator, Some(Terminator::Unreachable))
 }
@@ -849,7 +853,7 @@ fn classify_locals(
             // Stack-carry candidate validated in a later stack simulation pass.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::ReturnPhi);
             LocalClassification::Real
-        } else if is_call_result_immediate(local, du, mir, redirect_targets) {
+        } else if is_call_result_immediate(local, du, mir) {
             // Stack-carry candidate validated in a later stack simulation pass.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::CallResultImmediate);
             LocalClassification::Real
@@ -1417,12 +1421,7 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
 /// - At use site: don't emit `LoadVar` (value already on stack from Call)
 ///
 /// This eliminates the redundant `StoreVar("_X"); LoadVar("_X")` pattern for call results.
-fn is_call_result_immediate(
-    local: Local,
-    du: &LocalDefUse,
-    mir: &MirFunction,
-    _redirect_targets: &HashMap<BlockId, BlockId>,
-) -> bool {
+fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -> bool {
     // Must have exactly one use
     if du.uses.len() != 1 {
         return false;

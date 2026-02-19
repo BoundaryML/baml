@@ -1605,10 +1605,10 @@ fn match_enum_four_variants_jump_table() -> anyhow::Result<()> {
                 // Extract discriminant (variant index) from enum value
                 Instruction::LoadVar("d".to_string()),
                 Instruction::Discriminant,
-                // JumpTable: table_idx=0, default jumps +1 (to first body for exhaustive match)
+                // JumpTable: exhaustive default points to a shared trap target.
                 Instruction::JumpTable {
                     table_idx: 0,
-                    default: 1,
+                    default: 9,
                 },
                 // Bodies in reverse order: West (3), South (2), East (1), North (0)
                 Instruction::LoadConst(Value::string("W")),
@@ -1619,6 +1619,7 @@ fn match_enum_four_variants_jump_table() -> anyhow::Result<()> {
                 Instruction::Jump(2),
                 Instruction::LoadConst(Value::string("N")),
                 Instruction::Return,
+                Instruction::Unreachable,
             ],
         )],
     })
@@ -1767,10 +1768,10 @@ fn match_union_type_four_patterns_type_tag() -> anyhow::Result<()> {
                 // Extract type tag from union value
                 Instruction::LoadVar("x".to_string()),
                 Instruction::TypeTag,
-                // JumpTable: table_idx=0, default jumps +1 (exhaustive match)
+                // JumpTable: exhaustive default points to a shared trap target.
                 Instruction::JumpTable {
                     table_idx: 0,
-                    default: 1,
+                    default: 9,
                 },
                 // Bodies in reverse order: float (4), bool (2), string (1), int (0)
                 Instruction::LoadConst(Value::string("decimal")),
@@ -1781,6 +1782,7 @@ fn match_union_type_four_patterns_type_tag() -> anyhow::Result<()> {
                 Instruction::Jump(2),
                 Instruction::LoadConst(Value::string("integer")),
                 Instruction::Return,
+                Instruction::Unreachable,
             ],
         )],
     })

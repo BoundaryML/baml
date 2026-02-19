@@ -102,11 +102,20 @@ struct PendingJumpTable {
     /// Instruction index where the `JumpTable` instruction is.
     jump_table_pc: usize,
     /// Arms with their target blocks (values will be patched to offsets).
-    arms: Vec<(i64, BlockId)>,
+    arms: Vec<(i64, PendingJumpTarget)>,
     /// Default target block.
-    otherwise: BlockId,
+    otherwise: PendingJumpTarget,
     /// The jump table data being built.
     table: JumpTableData,
+}
+
+/// Target kind for a pending jump patch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PendingJumpTarget {
+    /// A normal emitted MIR block target.
+    Block(BlockId),
+    /// Shared trap target for dead-unreachable MIR targets.
+    Trap,
 }
 
 /// MIR to bytecode compiler with stackification.
@@ -135,10 +144,16 @@ struct StackifyCodegen<'ctx, 'obj> {
     block_addresses: HashMap<BlockId, usize>,
 
     /// Pending jumps that need patching: (`instruction_index`, `target_block`).
-    pending_jumps: Vec<(usize, BlockId)>,
+    pending_jumps: Vec<(usize, PendingJumpTarget)>,
 
     /// Pending jump tables that need patching after all blocks are emitted.
     pending_jump_tables: Vec<PendingJumpTable>,
+
+    /// Dead-unreachable MIR blocks for this function.
+    dead_unreachable_blocks: HashSet<BlockId>,
+
+    /// Shared trap PC used when pending jumps target dead-unreachable MIR blocks.
+    trap_pc: Option<usize>,
 
     /// Bytecode being generated.
     bytecode: Bytecode,
@@ -173,6 +188,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             block_addresses: HashMap::new(),
             pending_jumps: Vec::new(),
             pending_jump_tables: Vec::new(),
+            dead_unreachable_blocks: HashSet::new(),
+            trap_pc: None,
             bytecode: Bytecode::new(),
             current_source_line: 0,
             next_block: None,
@@ -189,18 +206,27 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         // 2. Emit blocks in RPO order.
         //
         // We skip:
-        // - dead unreachable blocks (already handled before), and
+        // - dead unreachable blocks, and
         // - non-entry redirect-source blocks (threaded through by analysis).
         //
         // Redirect-source blocks are effectively empty at bytecode level and keeping
-        // them would emit dead jumps. We still record their address at current PC so
-        // any accidental unresolved reference remains patchable.
+        // them would emit dead jumps. We intentionally do not assign those blocks
+        // bytecode addresses so unresolved references fail loudly during patching.
         let rpo = self.analysis.rpo.clone();
+        let is_dead_unreachable: Vec<bool> = rpo
+            .iter()
+            .map(|&block_id| crate::analysis::is_dead_unreachable_block(mir.block(block_id)))
+            .collect();
+        self.dead_unreachable_blocks = rpo
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &block_id)| is_dead_unreachable[i].then_some(block_id))
+            .collect();
         let should_emit: Vec<bool> = rpo
             .iter()
-            .map(|&block_id| {
-                let block = mir.block(block_id);
-                !crate::analysis::is_dead_unreachable_block(block)
+            .enumerate()
+            .map(|(i, &block_id)| {
+                !is_dead_unreachable[i]
                     && (block_id == mir.entry
                         || !self.analysis.redirect_targets.contains_key(&block_id))
             })
@@ -216,17 +242,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
 
         for (i, &block_id) in rpo.iter().enumerate() {
-            self.block_addresses.insert(block_id, self.current_pc());
             // Track the next *emitted* block for fall-through optimization.
             self.next_block = next_emitted_after[i];
+
+            if is_dead_unreachable[i] {
+                continue;
+            }
 
             if !should_emit[i] {
                 continue;
             }
 
+            self.block_addresses.insert(block_id, self.current_pc());
             let block = mir.block(block_id);
             self.emit_block(block, mir);
         }
+
+        // If any pending edges target dead-unreachable MIR blocks, patch them
+        // through a shared trap target instead of assigning fake block addresses.
+        self.ensure_trap_pc_if_needed();
 
         // 3. Patch all jump targets and jump tables
         self.patch_jumps();
@@ -356,19 +390,53 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     ///
     /// Returns true if a jump was emitted, false if it was elided.
     fn emit_jump_unless_fallthrough(&mut self, target: BlockId) -> bool {
-        // Apply jump threading: resolve through redirect map
-        let resolved_target = self.analysis.resolve_jump_target(target);
-
+        let target = self.resolve_pending_target(target);
         // Check if we can fall through to the next emitted block directly.
-        let can_fall_through = self.next_block.is_some_and(|next| resolved_target == next);
+        let can_fall_through = match target {
+            PendingJumpTarget::Block(block_id) => {
+                self.next_block.is_some_and(|next| block_id == next)
+            }
+            PendingJumpTarget::Trap => false,
+        };
 
         if can_fall_through {
             // No jump needed - fall through will get us there
             false
         } else {
             let jump_idx = self.emit(Instruction::Jump(0));
-            self.pending_jumps.push((jump_idx, resolved_target));
+            self.pending_jumps.push((jump_idx, target));
             true
+        }
+    }
+
+    /// Resolve a MIR block target into an emitted patch target.
+    fn resolve_pending_target(&self, target: BlockId) -> PendingJumpTarget {
+        let resolved = self.analysis.resolve_jump_target(target);
+        if self.dead_unreachable_blocks.contains(&resolved) {
+            PendingJumpTarget::Trap
+        } else {
+            PendingJumpTarget::Block(resolved)
+        }
+    }
+
+    /// Ensure a shared trap PC exists if any pending targets require it.
+    fn ensure_trap_pc_if_needed(&mut self) {
+        if self.trap_pc.is_some() {
+            return;
+        }
+        let needs_trap = self
+            .pending_jumps
+            .iter()
+            .any(|(_, target)| matches!(target, PendingJumpTarget::Trap))
+            || self.pending_jump_tables.iter().any(|pending| {
+                matches!(pending.otherwise, PendingJumpTarget::Trap)
+                    || pending
+                        .arms
+                        .iter()
+                        .any(|(_, target)| matches!(target, PendingJumpTarget::Trap))
+            });
+        if needs_trap {
+            self.trap_pc = Some(self.emit(Instruction::Unreachable));
         }
     }
 
@@ -403,7 +471,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         }
                         LocalAssignBehavior::EvalNoStore => {
                             // PhiLike/ReturnPhi: evaluate value and keep it on stack.
-                            self.emit_rvalue_pull(value, mir);
+                            self.emit_rvalue_pull(value);
                             return;
                         }
                         LocalAssignBehavior::EvalAndStore => {}
@@ -421,8 +489,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 match destination {
                     Place::Local(local) => {
                         // Local assignment: emit rvalue then store
-                        self.emit_rvalue_pull(value, mir);
-                        self.emit_store_place(destination, mir);
+                        self.emit_rvalue_pull(value);
+                        self.emit_store_place(destination);
                         // Emit Watch only once for watched locals (at initialization)
                         let local_decl = mir.local(*local);
                         if local_decl.is_watched && !self.watched_locals_initialized.contains(local)
@@ -505,14 +573,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     ///
     /// For Virtual locals, this recursively emits the definition's rvalue inline.
     /// For Real locals, this emits a `LoadVar` instruction.
-    fn emit_operand_pull(&mut self, operand: &Operand, _mir: &MirFunction) {
+    fn emit_operand_pull(&mut self, operand: &Operand) {
         if let Err(never) = pull_semantics::walk_operand_pull(self, operand) {
             match never {}
         }
     }
 
     /// Emit an rvalue using the pull model.
-    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue, _mir: &MirFunction) {
+    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue) {
         if let Err(never) = pull_semantics::walk_rvalue_pull(self, rvalue) {
             match never {}
         }
@@ -593,7 +661,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Note: Field and Index stores from statements are handled directly in
     /// `emit_statement` to emit base/index before the value. This function
     /// is primarily used for Call/Await destinations which are always locals.
-    fn emit_store_place(&mut self, place: &Place, _mir: &MirFunction) {
+    fn emit_store_place(&mut self, place: &Place) {
         match place {
             Place::Local(local) => {
                 let classification = self.analysis.classifications[local];
@@ -644,10 +712,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     // Don't evaluate condition - just go directly to then_block
                     self.emit_jump_unless_fallthrough(*then_block);
                 } else {
-                    self.emit_operand_pull(condition, mir);
+                    self.emit_operand_pull(condition);
                     // PopJumpIfFalse to else_block (pops condition from stack)
                     // Apply jump threading to resolve through empty blocks
-                    let resolved_else = self.analysis.resolve_jump_target(*else_block);
+                    let resolved_else = self.resolve_pending_target(*else_block);
                     let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
                     self.pending_jumps.push((else_jump, resolved_else));
                     // Jump to then_block (may be elided if it's next)
@@ -666,19 +734,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 match strategy {
                     SwitchStrategy::JumpTable { min, max } => {
-                        self.emit_switch_jump_table(discriminant, arms, *otherwise, min, max, mir);
+                        self.emit_switch_jump_table(discriminant, arms, *otherwise, min, max);
                     }
                     SwitchStrategy::BinarySearch => {
-                        self.emit_switch_binary_search(
-                            discriminant,
-                            arms,
-                            *otherwise,
-                            *exhaustive,
-                            mir,
-                        );
+                        self.emit_switch_binary_search(discriminant, arms, *otherwise, *exhaustive);
                     }
                     SwitchStrategy::IfElseChain => {
-                        self.emit_switch_if_else(discriminant, arms, *otherwise, *exhaustive, mir);
+                        self.emit_switch_if_else(discriminant, arms, *otherwise, *exhaustive);
                     }
                 }
             }
@@ -702,7 +764,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     match never {}
                 }
                 self.emit(Instruction::Call(args.len()));
-                self.emit_store_place(destination, mir);
+                self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
             }
 
@@ -724,7 +786,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     match never {}
                 }
                 self.emit(Instruction::DispatchFuture(args.len()));
-                self.emit_store_place(future, mir);
+                self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
             }
 
@@ -738,7 +800,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     match never {}
                 }
                 self.emit(Instruction::Await);
-                self.emit_store_place(destination, mir);
+                self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
             }
         }
@@ -750,9 +812,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Patch all pending jumps with actual addresses.
     fn patch_jumps(&mut self) {
-        for (instruction_idx, target_block) in self.pending_jumps.clone() {
-            let target_pc = self.block_addresses[&target_block];
+        for (instruction_idx, target) in self.pending_jumps.clone() {
+            let target_pc = self.resolve_pending_target_pc(target);
             self.patch_jump_to(instruction_idx, target_pc);
+        }
+    }
+
+    /// Resolve a pending jump target to a concrete bytecode PC.
+    fn resolve_pending_target_pc(&self, target: PendingJumpTarget) -> usize {
+        match target {
+            PendingJumpTarget::Block(target_block) => {
+                *self.block_addresses.get(&target_block).unwrap_or_else(|| {
+                    panic!(
+                        "missing block address for jump target {target_block:?}; target may have been skipped without redirect resolution"
+                    )
+                })
+            }
+            PendingJumpTarget::Trap => self.trap_pc.unwrap_or_else(|| {
+                panic!("missing trap PC for dead-unreachable jump target")
+            }),
         }
     }
 
@@ -780,13 +858,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
             // Patch each arm's offset
             for (value, target) in &pending.arms {
-                let target_pc = self.block_addresses[target];
+                let target_pc = self.resolve_pending_target_pc(*target);
                 let offset = target_pc as isize - jump_table_pc as isize;
                 table.set(*value, offset);
             }
 
             // Patch default offset
-            let otherwise_pc = self.block_addresses[&pending.otherwise];
+            let otherwise_pc = self.resolve_pending_target_pc(pending.otherwise);
             let default_offset = otherwise_pc as isize - jump_table_pc as isize;
 
             // Update the instruction with the correct default offset
@@ -816,9 +894,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         exhaustive: bool,
-        mir: &MirFunction,
     ) {
-        self.emit_operand_pull(discriminant, mir);
+        self.emit_operand_pull(discriminant);
 
         let num_arms = arms.len();
         for (i, (value, target)) in arms.iter().enumerate() {
@@ -856,10 +933,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         otherwise: BlockId,
         min: i64,
         max: i64,
-        mir: &MirFunction,
     ) {
         // 1. Push discriminant onto stack
-        self.emit_operand_pull(discriminant, mir);
+        self.emit_operand_pull(discriminant);
 
         // 2. Create jump table data structure with placeholder offsets
         let table_idx = self.pending_jump_tables.len();
@@ -867,11 +943,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Resolve all jump targets through redirect threading so we don't retain
         // references to skipped redirect-source blocks.
-        let resolved_arms: Vec<(i64, BlockId)> = arms
+        let resolved_arms: Vec<(i64, PendingJumpTarget)> = arms
             .iter()
-            .map(|(value, target)| (*value, self.analysis.resolve_jump_target(*target)))
+            .map(|(value, target)| (*value, self.resolve_pending_target(*target)))
             .collect();
-        let resolved_otherwise = self.analysis.resolve_jump_target(otherwise);
+        let resolved_otherwise = self.resolve_pending_target(otherwise);
 
         // 3. Emit JumpTable instruction with placeholder default offset
         let jump_table_pc = self.emit(Instruction::JumpTable {
@@ -902,10 +978,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         _exhaustive: bool,
-        mir: &MirFunction,
     ) {
         // Push discriminant onto stack (will be popped by comparisons)
-        self.emit_operand_pull(discriminant, mir);
+        self.emit_operand_pull(discriminant);
 
         // Sort arms by value for binary search
         let mut sorted_arms: Vec<_> = arms.to_vec();
@@ -1195,7 +1270,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn len(&mut self) -> Result<(), Self::Error> {
+    fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error> {
         // MIR `Rvalue::Len` is array length.
         let global_idx = self
             .globals
@@ -1203,6 +1278,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
             .copied()
             .unwrap_or_else(|| panic!("undefined function: baml.Array.length"));
         self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
+        pull_semantics::walk_place_pull(self, place)?;
         self.emit(Instruction::Call(1));
         Ok(())
     }

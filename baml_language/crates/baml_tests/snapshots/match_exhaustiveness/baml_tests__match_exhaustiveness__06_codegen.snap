@@ -1,5 +1,6 @@
 ---
 source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
+assertion_line: 7762
 expression: output
 ---
 === BYTECODE ===
@@ -56,9 +57,10 @@ Function DeeplyNestedLiterals (arity: 1, kind: Bytecode):
      14   POP_JUMP_IF_FALSE +2   (to 16)
      15   POP 1                  
      16   POP 1                  
-     17   JUMP +1                (to 18)
+     17   JUMP +3                (to 20)
      18   LOAD_CONST 3           ("all success codes")
      19   RETURN                 
+     20   UNREACHABLE            
 
 Function DuplicateBoolLiteral (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (b)
@@ -211,11 +213,12 @@ Function ExhaustiveAliasOfLiterals (arity: 1, kind: Bytecode):
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   POP 1                  
      12   POP 1                  
-     13   JUMP +1                (to 14)
+     13   JUMP +5                (to 18)
      14   LOAD_CONST 2           ("created")
      15   JUMP +2                (to 17)
      16   LOAD_CONST 3           ("ok")
      17   RETURN                 
+     18   UNREACHABLE            
 
 Function ExhaustiveBool (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (b)
@@ -353,13 +356,14 @@ Function ExhaustiveIntLiterals (arity: 1, kind: Bytecode):
      16   POP_JUMP_IF_FALSE +2   (to 18)
      17   POP 1                  
      18   POP 1                  
-     19   JUMP +1                (to 20)
+     19   JUMP +7                (to 26)
      20   LOAD_CONST 3           ("No Content")
      21   JUMP +4                (to 25)
      22   LOAD_CONST 4           ("Created")
      23   JUMP +2                (to 25)
      24   LOAD_CONST 5           ("OK")
      25   RETURN                 
+     26   UNREACHABLE            
 
 Function ExhaustiveLiteralWithBaseType (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (x)
@@ -460,16 +464,17 @@ Function ExhaustiveOptionalSingleton (arity: 1, kind: Bytecode):
      12   RETURN                 
 
 Function ExhaustiveSingletonInt (arity: 1, kind: Bytecode):
-     0   LOAD_VAR 1             (code)
-     1   COPY 0                 
-     2   LOAD_CONST 0           (200)
-     3   CMP_OP ==              
-     4   POP_JUMP_IF_FALSE +2   (to 6)
-     5   POP 1                  
-     6   POP 1                  
-     7   JUMP +1                (to 8)
-     8   LOAD_CONST 1           ("OK")
-     9   RETURN                 
+     0    LOAD_VAR 1             (code)
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +2   (to 6)
+     5    POP 1                  
+     6    POP 1                  
+     7    JUMP +3                (to 10)
+     8    LOAD_CONST 1           ("OK")
+     9    RETURN                 
+     10   UNREACHABLE            
 
 Function ExhaustiveStringLiterals (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (role)
@@ -627,9 +632,10 @@ Function HighLineNumberNonExhaustive (arity: 1, kind: Bytecode):
      5    POP_JUMP_IF_FALSE +2   (to 7)
      6    POP 1                  
      7    POP 1                  
-     8    JUMP +1                (to 9)
+     8    JUMP +3                (to 11)
      9    LOAD_CONST 1           ("active only")
      10   RETURN                 
+     11   UNREACHABLE            
 
 Function IntLiteralUnionPattern (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (code)
@@ -651,11 +657,12 @@ Function IntLiteralUnionPattern (arity: 1, kind: Bytecode):
      16   POP_JUMP_IF_FALSE +2   (to 18)
      17   POP 1                  
      18   POP 1                  
-     19   JUMP +1                (to 20)
+     19   JUMP +5                (to 24)
      20   LOAD_CONST 3           ("no content")
      21   JUMP +2                (to 23)
      22   LOAD_CONST 4           ("success with body")
      23   RETURN                 
+     24   UNREACHABLE            
 
 Function LiteralAfterTypedPattern (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (x)
@@ -1035,16 +1042,17 @@ Function NestedTypeBindings (arity: 1, kind: Bytecode):
      12   RETURN                 
 
 Function NonExhaustiveAliasOfLiterals (arity: 1, kind: Bytecode):
-     0   LOAD_VAR 1             (code)
-     1   COPY 0                 
-     2   LOAD_CONST 0           (200)
-     3   CMP_OP ==              
-     4   POP_JUMP_IF_FALSE +2   (to 6)
-     5   POP 1                  
-     6   POP 1                  
-     7   JUMP +1                (to 8)
-     8   LOAD_CONST 1           ("ok")
-     9   RETURN                 
+     0    LOAD_VAR 1             (code)
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +2   (to 6)
+     5    POP 1                  
+     6    POP 1                  
+     7    JUMP +3                (to 10)
+     8    LOAD_CONST 1           ("ok")
+     9    RETURN                 
+     10   UNREACHABLE            
 
 Function NonExhaustiveBoolMissingFalse (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (b)
@@ -1063,16 +1071,17 @@ Function NonExhaustiveBoolMissingTrue (arity: 1, kind: Bytecode):
      5   RETURN                 
 
 Function NonExhaustiveClassPlusLiteralMissingClass (arity: 1, kind: Bytecode):
-     0   LOAD_VAR 1             (x)
-     1   COPY 0                 
-     2   LOAD_CONST 0           (200)
-     3   CMP_OP ==              
-     4   POP_JUMP_IF_FALSE +2   (to 6)
-     5   POP 1                  
-     6   POP 1                  
-     7   JUMP +1                (to 8)
-     8   LOAD_CONST 1           ("http ok")
-     9   RETURN                 
+     0    LOAD_VAR 1             (x)
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +2   (to 6)
+     5    POP 1                  
+     6    POP 1                  
+     7    JUMP +3                (to 10)
+     8    LOAD_CONST 1           ("http ok")
+     9    RETURN                 
+     10   UNREACHABLE            
 
 Function NonExhaustiveClassPlusLiteralMissingLiteral (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (x)
@@ -1117,9 +1126,10 @@ Function NonExhaustiveEnumMissingMultiple (arity: 1, kind: Bytecode):
      5    POP_JUMP_IF_FALSE +2   (to 7)
      6    POP 1                  
      7    POP 1                  
-     8    JUMP +1                (to 9)
+     8    JUMP +3                (to 11)
      9    LOAD_CONST 1           ("active")
      10   RETURN                 
+     11   UNREACHABLE            
 
 Function NonExhaustiveEnumMissingOne (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
@@ -1136,11 +1146,12 @@ Function NonExhaustiveEnumMissingOne (arity: 1, kind: Bytecode):
      11   POP_JUMP_IF_FALSE +2   (to 13)
      12   POP 1                  
      13   POP 1                  
-     14   JUMP +1                (to 15)
+     14   JUMP +5                (to 19)
      15   LOAD_CONST 2           ("inactive")
      16   JUMP +2                (to 18)
      17   LOAD_CONST 3           ("active")
      18   RETURN                 
+     19   UNREACHABLE            
 
 Function NonExhaustiveFullResultMissingOne (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (r)
@@ -1173,11 +1184,12 @@ Function NonExhaustiveIntLiteral (arity: 1, kind: Bytecode):
      10   POP_JUMP_IF_FALSE +2   (to 12)
      11   POP 1                  
      12   POP 1                  
-     13   JUMP +1                (to 14)
+     13   JUMP +5                (to 18)
      14   LOAD_CONST 2           ("Created")
      15   JUMP +2                (to 17)
      16   LOAD_CONST 3           ("OK")
      17   RETURN                 
+     18   UNREACHABLE            
 
 Function NonExhaustiveMixedLiterals (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (x)
@@ -1215,13 +1227,14 @@ Function NonExhaustiveNullableEnumMissingNull (arity: 1, kind: Bytecode):
      17   POP_JUMP_IF_FALSE +2   (to 19)
      18   POP 1                  
      19   POP 1                  
-     20   JUMP +1                (to 21)
+     20   JUMP +7                (to 27)
      21   LOAD_CONST 3           ("pending")
      22   JUMP +4                (to 26)
      23   LOAD_CONST 4           ("inactive")
      24   JUMP +2                (to 26)
      25   LOAD_CONST 5           ("active")
      26   RETURN                 
+     27   UNREACHABLE            
 
 Function NonExhaustiveNullableEnumMissingVariant (arity: 1, kind: Bytecode):
      0    LOAD_VAR 1             (s)
@@ -1248,16 +1261,17 @@ Function NonExhaustiveNullableEnumMissingVariant (arity: 1, kind: Bytecode):
      21   RETURN                 
 
 Function NonExhaustiveOptionalMissingNull (arity: 1, kind: Bytecode):
-     0   LOAD_VAR 1             (code)
-     1   COPY 0                 
-     2   LOAD_CONST 0           (200)
-     3   CMP_OP ==              
-     4   POP_JUMP_IF_FALSE +2   (to 6)
-     5   POP 1                  
-     6   POP 1                  
-     7   JUMP +1                (to 8)
-     8   LOAD_CONST 1           ("OK")
-     9   RETURN                 
+     0    LOAD_VAR 1             (code)
+     1    COPY 0                 
+     2    LOAD_CONST 0           (200)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +2   (to 6)
+     5    POP 1                  
+     6    POP 1                  
+     7    JUMP +3                (to 10)
+     8    LOAD_CONST 1           ("OK")
+     9    RETURN                 
+     10   UNREACHABLE            
 
 Function NonExhaustiveOptionalMissingValue (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (code)
@@ -1475,16 +1489,17 @@ Function UnreachableMultiple (arity: 1, kind: Bytecode):
      1   RETURN         
 
 Function WrongLiteralTypeBoolWithInt (arity: 1, kind: Bytecode):
-     0   LOAD_VAR 1             (b)
-     1   COPY 0                 
-     2   LOAD_CONST 0           (42)
-     3   CMP_OP ==              
-     4   POP_JUMP_IF_FALSE +2   (to 6)
-     5   POP 1                  
-     6   POP 1                  
-     7   JUMP +1                (to 8)
-     8   LOAD_CONST 1           ("wrong type")
-     9   RETURN                 
+     0    LOAD_VAR 1             (b)
+     1    COPY 0                 
+     2    LOAD_CONST 0           (42)
+     3    CMP_OP ==              
+     4    POP_JUMP_IF_FALSE +2   (to 6)
+     5    POP 1                  
+     6    POP 1                  
+     7    JUMP +3                (to 10)
+     8    LOAD_CONST 1           ("wrong type")
+     9    RETURN                 
+     10   UNREACHABLE            
 
 Function WrongLiteralTypeIntWithString (arity: 1, kind: Bytecode):
      0   LOAD_VAR 1             (x)
