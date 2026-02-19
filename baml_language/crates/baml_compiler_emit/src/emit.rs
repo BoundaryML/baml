@@ -1371,6 +1371,8 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
 pub(crate) fn compile_mir_function(mir: &MirFunction, ctx: MirCodegenContext<'_, '_>) -> Function {
     // Run analysis
     let analysis = AnalysisResult::analyze(mir);
+    #[cfg(debug_assertions)]
+    crate::verifier::verify_mir_emit_invariants(mir, &analysis);
 
     // Compile with stackification
     let codegen = StackifyCodegen::new(ctx, analysis);

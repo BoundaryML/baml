@@ -23,6 +23,7 @@ mod analysis;
 mod emit;
 mod pull_semantics;
 mod stack_carry;
+mod verifier;
 
 use bex_vm_types::ObjectPool;
 pub(crate) use emit::compile_mir_function;
