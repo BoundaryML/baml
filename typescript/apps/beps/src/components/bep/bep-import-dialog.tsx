@@ -35,6 +35,7 @@ import {
   sanitizeSlug,
   hasContent,
 } from "@/lib/import-utils";
+import type { VersionMode } from "@/lib/types";
 
 interface BepImportDialogProps {
   bepId: Id<"beps">;
@@ -50,8 +51,6 @@ interface ParsedFile {
   isNew?: boolean; // true if this page doesn't exist yet
   error?: string;
 }
-
-type VersionMode = "new" | "current";
 
 export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -111,7 +110,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
         // Determine file type based on path
         const isReadme = innerPath.toLowerCase() === "readme.md";
         const isPage = innerPath.toLowerCase().startsWith("pages/") &&
-                       pathParts.length === 3; // Only direct children of pages/
+          pathParts.length === 3; // Only direct children of pages/
 
         // Skip files that aren't README or in pages/
         if (!isReadme && !isPage) {
@@ -338,6 +337,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
               <button
                 type="button"
                 onClick={() => setVersionMode("new")}
+                aria-pressed={versionMode === "new"}
                 className={cn(
                   "rounded-lg border p-3 text-left transition-colors",
                   versionMode === "new"
@@ -353,6 +353,7 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
               <button
                 type="button"
                 onClick={() => setVersionMode("current")}
+                aria-pressed={versionMode === "current"}
                 className={cn(
                   "rounded-lg border p-3 text-left transition-colors",
                   versionMode === "current"

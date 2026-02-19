@@ -16,8 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, FileText, FilePlus, Trash2, Send } from "lucide-react";
 import { useEditContext } from "./bep-edit-context";
 import { cn } from "@/lib/utils";
-
-type VersionMode = "new" | "current";
+import type { VersionMode } from "@/lib/types";
 
 interface BepSubmitModalProps {
   open: boolean;
@@ -71,11 +70,12 @@ export function BepSubmitModal({
         </DialogHeader>
 
         <div className="space-y-2">
-          <Label>How should these edits be applied?</Label>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <Label id="version-mode-label">How should these edits be applied?</Label>
+          <div className="grid gap-2 sm:grid-cols-2" role="group" aria-labelledby="version-mode-label">
             <button
               type="button"
               onClick={() => setVersionMode("new")}
+              aria-pressed={versionMode === "new"}
               className={cn(
                 "rounded-lg border p-3 text-left transition-colors",
                 versionMode === "new"
@@ -91,6 +91,7 @@ export function BepSubmitModal({
             <button
               type="button"
               onClick={() => setVersionMode("current")}
+              aria-pressed={versionMode === "current"}
               className={cn(
                 "rounded-lg border p-3 text-left transition-colors",
                 versionMode === "current"
@@ -154,13 +155,12 @@ export function BepSubmitModal({
                   <span>{change.title}</span>
                   <Badge
                     variant="outline"
-                    className={`text-xs ${
-                      change.status === "new"
+                    className={`text-xs ${change.status === "new"
                         ? "text-green-600"
                         : change.status === "deleted"
                           ? "text-red-600"
                           : "text-blue-600"
-                    }`}
+                      }`}
                   >
                     {change.status}
                   </Badge>
