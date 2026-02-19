@@ -215,6 +215,7 @@ beps-app/
 │   │   ├── layout.tsx                # Root layout with providers
 │   │   ├── page.tsx                  # Home (BEP list)
 │   │   ├── login/page.tsx            # Login page
+│   │   ├── api/agent/beps/route.ts   # Public read-only BEP context API
 │   │   └── beps/
 │   │       ├── new/page.tsx          # Create BEP
 │   │       └── [number]/
@@ -430,6 +431,19 @@ Both can be created from comments to maintain traceability.
 | Endpoint                   | Method | Description                 |
 | -------------------------- | ------ | --------------------------- |
 | `/api/ai/stream-assistant` | POST   | Stream AI responses for Q&A |
+| `/api/agent/beps`          | GET    | Public read-only BEP listing/fetch for agents |
+
+### Public Agent Endpoint
+
+`GET /api/agent/beps`
+
+- Without query params: lists all BEPs.
+- With `name=<bep-name-or-id>`: fuzzy-matches and returns a BEP markdown bundle (content, comments, issues, decisions).
+- Defaults to including all versions/history.
+- Add `omitOtherVersions=true` to omit historical versions from the returned bundle.
+- Add `format=markdown` to get raw markdown output instead of JSON.
+
+You should install the `beps` skill through our [https://github.com/BoundaryML/skills](skills) repository.
 
 ---
 
