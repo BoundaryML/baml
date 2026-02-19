@@ -39,3 +39,6 @@ tracing-subscriber = { workspace = true }
 url = { workspace = true }
 vfs = { workspace = true }
 webbrowser = { workspace = true }
+
+[package.metadata.ci]
+wasm_support = false
