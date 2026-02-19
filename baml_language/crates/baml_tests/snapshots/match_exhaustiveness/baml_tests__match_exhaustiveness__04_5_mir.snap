@@ -1,5 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
+source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
 expression: output
 ---
 === MIR ===
@@ -191,14 +191,12 @@ fn UnreachableMultiple(x: int) -> string {
     // Locals:
     let _0: string // return
     let _1: int // x // param
-    let _2: int // _
-    let _3: bool
-    let _4: int // n
-    let _5: bool
-    let _6: int // m
+    let _2: bool
+    let _3: int // n
+    let _4: bool
+    let _5: int // m
 
     bb0: {
-        _2 = copy _1;
         goto -> bb4;
     }
 
@@ -220,8 +218,8 @@ fn UnreachableMultiple(x: int) -> string {
     }
 
     bb5: {
-        _3 = is_type(copy _1, Int);
-        branch copy _3 -> [bb8, bb7];
+        _2 = is_type(copy _1, Int);
+        branch copy _2 -> [bb8, bb7];
     }
 
     bb6: {
@@ -230,12 +228,12 @@ fn UnreachableMultiple(x: int) -> string {
     }
 
     bb7: {
-        _5 = is_type(copy _1, Int);
-        branch copy _5 -> [bb10, bb3];
+        _4 = is_type(copy _1, Int);
+        branch copy _4 -> [bb10, bb3];
     }
 
     bb8: {
-        _4 = copy _1;
+        _3 = copy _1;
         goto -> bb6;
     }
 
@@ -245,7 +243,7 @@ fn UnreachableMultiple(x: int) -> string {
     }
 
     bb10: {
-        _6 = copy _1;
+        _5 = copy _1;
         goto -> bb9;
     }
 
@@ -721,7 +719,6 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     let _2: bool
     let _3: Success // s
     let _4: Success
-    let _5: Success | Failure // _
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
@@ -747,7 +744,6 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     }
 
     bb5: {
-        _5 = copy _1;
         goto -> bb7;
     }
 
@@ -1266,7 +1262,6 @@ fn BoolWithCatchAll(b: bool) -> string {
     let _0: string // return
     let _1: bool // b // param
     let _2: bool
-    let _3: bool // _
 
     bb0: {
         _2 = copy _1 == const true;
@@ -1291,7 +1286,6 @@ fn BoolWithCatchAll(b: bool) -> string {
     }
 
     bb5: {
-        _3 = copy _1;
         goto -> bb6;
     }
 
@@ -1720,7 +1714,6 @@ fn PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     let _2: bool
     let _3: Success | Failure // x
     let _4: bool
-    let _5: Pending // _
 
     bb0: {
         _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
@@ -1760,7 +1753,6 @@ fn PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     }
 
     bb8: {
-        _5 = copy _1;
         goto -> bb7;
     }
 
@@ -2319,7 +2311,6 @@ fn GuardedWithFallback(x: int) -> int {
     let _6: 0
     let _7: int
     let _8: 2
-    let _9: int // _
 
     bb0: {
         _2 = is_type(copy _1, Int);
@@ -2346,7 +2337,6 @@ fn GuardedWithFallback(x: int) -> int {
     }
 
     bb5: {
-        _9 = copy _1;
         goto -> bb8;
     }
 
@@ -2982,12 +2972,10 @@ fn UnreachableAfterCatchAll(x: int) -> string {
     // Locals:
     let _0: string // return
     let _1: int // x // param
-    let _2: int // _
-    let _3: bool
-    let _4: int // n
+    let _2: bool
+    let _3: int // n
 
     bb0: {
-        _2 = copy _1;
         goto -> bb4;
     }
 
@@ -3009,8 +2997,8 @@ fn UnreachableAfterCatchAll(x: int) -> string {
     }
 
     bb5: {
-        _3 = is_type(copy _1, Int);
-        branch copy _3 -> [bb7, bb3];
+        _2 = is_type(copy _1, Int);
+        branch copy _2 -> [bb7, bb3];
     }
 
     bb6: {
@@ -3019,7 +3007,7 @@ fn UnreachableAfterCatchAll(x: int) -> string {
     }
 
     bb7: {
-        _4 = copy _1;
+        _3 = copy _1;
         goto -> bb6;
     }
 
@@ -3030,7 +3018,6 @@ fn OptionalWithCatchAll(x: int?) -> string {
     let _0: string // return
     let _1: int? // x // param
     let _2: bool
-    let _3: int? // _
 
     bb0: {
         _2 = copy _1 == const null;
@@ -3055,7 +3042,6 @@ fn OptionalWithCatchAll(x: int?) -> string {
     }
 
     bb5: {
-        _3 = copy _1;
         goto -> bb6;
     }
 
@@ -3123,9 +3109,7 @@ fn OverlappingTypedPatterns(r: Success | Failure) -> string {
     let _0: string // return
     let _1: Success | Failure // r // param
     let _2: bool
-    let _3: Success // _
-    let _4: bool
-    let _5: Success | Failure // _
+    let _3: bool
 
     bb0: {
         _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
@@ -3150,12 +3134,11 @@ fn OverlappingTypedPatterns(r: Success | Failure) -> string {
     }
 
     bb5: {
-        _4 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
-        branch copy _4 -> [bb8, bb3];
+        _3 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
+        branch copy _3 -> [bb8, bb3];
     }
 
     bb6: {
-        _3 = copy _1;
         goto -> bb4;
     }
 
@@ -3165,7 +3148,6 @@ fn OverlappingTypedPatterns(r: Success | Failure) -> string {
     }
 
     bb8: {
-        _5 = copy _1;
         goto -> bb7;
     }
 
@@ -3447,7 +3429,6 @@ fn StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> string {
     let _1: "user" | "assistant" | "system" // role // param
     let _2: bool
     let _3: bool
-    let _4: "user" | "assistant" | "system" // _
 
     bb0: {
         _2 = copy _1 == const "user";
@@ -3482,7 +3463,6 @@ fn StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> string {
     }
 
     bb7: {
-        _4 = copy _1;
         goto -> bb8;
     }
 
@@ -3534,7 +3514,6 @@ fn MixedPatterns(x: int) -> string {
     let _6: bool
     let _7: int
     let _8: 0
-    let _9: int // _
 
     bb0: {
         _2 = copy _1 == const 0_i64;
@@ -3581,7 +3560,6 @@ fn MixedPatterns(x: int) -> string {
     }
 
     bb9: {
-        _9 = copy _1;
         goto -> bb12;
     }
 
