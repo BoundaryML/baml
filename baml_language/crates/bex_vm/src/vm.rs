@@ -826,7 +826,7 @@ impl BexVm {
                 Ok(ErrorLocation {
                     function_name: function.name.clone(),
                     function_span: function.span,
-                    error_line: function.bytecode.source_lines[last_executed_instruction],
+                    error_line: function.bytecode.meta[last_executed_instruction].source_line,
                 })
             })
             .collect::<Result<Vec<_>, VmError>>()
@@ -2227,8 +2227,7 @@ impl BexVm {
                         },
                     );
 
-                    let watched_var_name =
-                        &function.locals_in_scope[function.bytecode.scopes[instruction_ptr]][index];
+                    let watched_var_name = &function.local_names[index];
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
                         local_var_index,

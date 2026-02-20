@@ -245,10 +245,11 @@ pub struct Function {
     /// Type of function.
     pub kind: FunctionKind,
 
-    /// Local variable names.
+    /// Local variable names indexed by slot number.
     ///
-    /// This is basically debug info, VM doesn't need it all to run.
-    pub locals_in_scope: Vec<Vec<String>>,
+    /// Debug info: maps eval-stack slot indices to variable names.
+    /// Slot 0 is the function reference, slots 1..arity are parameters.
+    pub local_names: Vec<String>,
 
     /// Span of the function as computed by the parser.
     pub span: baml_base::Span,

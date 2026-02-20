@@ -18,8 +18,7 @@ function MyClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "some random value"
     load_const "world"
     load_const "hello"
-    load_const "hello there my frien
-                d"
+    load_const "hello there my frien\n                d"
     load_const "inline "raw" string,,"
     load_const true
     load_const "true"
@@ -61,10 +60,7 @@ function MyClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "another_tool"
     alloc_map 1
     alloc_array 2
-    load_const "
-      hello there my friend
-      {# a comment in a prompt #}
-    "
+    load_const "\n      hello there my friend\n      {# a comment in a prompt #}\n    "
     load_const "max_tokens"
     load_const "array_key_with_quoted_unquoted"
     load_const "key2"

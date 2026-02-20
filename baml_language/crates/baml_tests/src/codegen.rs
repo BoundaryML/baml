@@ -15,32 +15,13 @@ pub struct Program {
     pub expected: Vec<(&'static str, Vec<Instruction>)>,
 }
 
-/// Resolve a variable index to its name using scope information.
-fn resolve_var_name(
-    var_idx: usize,
-    inst_idx: usize,
-    function: &bex_vm_types::Function,
-) -> anyhow::Result<String> {
-    // Get the scope ID for this instruction
-    let scope_id = function
-        .bytecode
-        .scopes
-        .get(inst_idx)
-        .ok_or_else(|| anyhow::anyhow!("No scope ID for instruction at index {inst_idx}"))?;
-
-    // Get the locals for this scope
-    let scope_locals = function
-        .locals_in_scope
-        .get(*scope_id)
-        .ok_or_else(|| anyhow::anyhow!("No locals for scope {scope_id}"))?;
-
-    // Direct lookup: the Vec is indexed by variable index
-    scope_locals.get(var_idx).cloned().ok_or_else(|| {
+/// Resolve a variable index to its name.
+fn resolve_var_name(var_idx: usize, function: &bex_vm_types::Function) -> anyhow::Result<String> {
+    function.local_names.get(var_idx).cloned().ok_or_else(|| {
         anyhow::anyhow!(
-            "Variable index {} not found in scope {} (scope has {} variables)",
+            "Variable index {} not found (function has {} locals)",
             var_idx,
-            scope_id,
-            scope_locals.len()
+            function.local_names.len()
         )
     })
 }
@@ -48,7 +29,6 @@ fn resolve_var_name(
 /// Convert a runtime Instruction to a test Instruction by resolving indices to values.
 fn convert_instruction(
     inst: &bex_vm_types::Instruction,
-    inst_idx: usize,
     constants: &[bex_vm_types::ConstValue],
     objects: &bex_vm_types::ObjectPool,
     globals: &HashMap<String, usize>,
@@ -67,11 +47,11 @@ fn convert_instruction(
             Instruction::LoadConst(test_value)
         }
         bex_vm_types::Instruction::LoadVar(idx) => {
-            let var_name = resolve_var_name(*idx, inst_idx, function)?;
+            let var_name = resolve_var_name(*idx, function)?;
             Instruction::LoadVar(var_name)
         }
         bex_vm_types::Instruction::StoreVar(idx) => {
-            let var_name = resolve_var_name(*idx, inst_idx, function)?;
+            let var_name = resolve_var_name(*idx, function)?;
             Instruction::StoreVar(var_name)
         }
         bex_vm_types::Instruction::LoadGlobal(global_idx) => {
@@ -276,8 +256,7 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
             .bytecode
             .instructions
             .iter()
-            .enumerate()
-            .map(|(inst_idx, inst)| match inst {
+            .map(|inst| match inst {
                 bex_vm_types::Instruction::Call(callee) => Ok(Instruction::Call(
                     globals_by_index
                         .get(&callee.raw())
@@ -295,7 +274,6 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
                 }
                 _ => convert_instruction(
                     inst,
-                    inst_idx,
                     &function.bytecode.constants,
                     objects,
                     &globals,

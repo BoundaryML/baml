@@ -13,6 +13,25 @@
 //!
 //! The `TypeTag` instruction extracts a type identifier from any value,
 //! enabling efficient jump table dispatch on union types.
+//!
+//! # Limitations: Class Type Tags and Jump Tables
+//!
+//! Class type tags are **globally assigned** in declaration order. When a
+//! `match` operates on a union of a few classes out of many, the tags may be
+//! sparse across the range. The emitter's jump table strategy requires ≥50%
+//! density, so in projects with many classes it will typically fall back to
+//! sequential `instanceof` chains — making the jump table path for class
+//! matching effectively dead code.
+//!
+//! This matches how other languages handle it: Rust/Haskell use dense
+//! per-enum discriminants for ADTs (always jump-table friendly), while
+//! Java/Kotlin/C# always use `instanceof` chains for class type matching.
+//!
+//! A proper fix would be **tagged union wrapping**: treat `Cat | Dog | Bird`
+//! as a runtime type that wraps its payload with a union-local discriminant
+//! `0..N-1`, assigned at the point a value enters the union. This would make
+//! class matching O(1) via dense jump tables, but requires the runtime to
+//! distinguish union types from their constituents.
 
 /// Integer type tag.
 pub const INT: i64 = 0;

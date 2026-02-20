@@ -288,21 +288,24 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         bytecode: {
             let num_instructions = input.instructions.len();
             bex_vm_types::Bytecode {
-                source_lines: vec![1; num_instructions],
-                scopes: vec![0; num_instructions],
-                field_names: vec![None; num_instructions],
+                meta: vec![
+                    bex_vm_types::bytecode::InstructionMeta {
+                        source_line: 1,
+                        operand: None,
+                    };
+                    num_instructions
+                ],
                 instructions: input.instructions,
                 constants: input.constants,
-                resolved_constants: Vec::new(), // Populated by BexHeap at load time
+                resolved_constants: Vec::new(),
                 jump_tables: Vec::new(),
             }
         },
         kind: bex_vm_types::FunctionKind::Bytecode,
-        locals_in_scope: {
-            let mut names = Vec::with_capacity(input.arity + input.real_local_count + 1);
-            names.push("<fn test_fn>".to_string());
+        local_names: {
+            let mut names = Vec::with_capacity(input.arity + input.real_local_count);
             names.resize_with(names.capacity(), String::new);
-            vec![names]
+            names
         },
         span: baml_base::Span::fake(),
         block_notifications: Vec::new(),

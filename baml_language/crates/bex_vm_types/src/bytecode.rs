@@ -551,6 +551,52 @@ impl std::fmt::Display for Instruction {
     }
 }
 
+/// Resolved operand name for debug/display purposes.
+///
+/// Populated by the compiler at emit time so that debug display doesn't
+/// need to resolve names from the `ObjectPool` or runtime stack.
+#[derive(Clone, Debug)]
+pub enum OperandMeta {
+    /// `LoadVar`, `StoreVar`, `Watch`, `Unwatch`, `Notify` — variable name.
+    Var(String),
+    /// `LoadField`, `StoreField` — field name.
+    Field(String),
+    /// `Call`, `DispatchFuture` — function name.
+    Callable(String),
+    /// `LoadGlobal`, `StoreGlobal` — display value.
+    Global(String),
+    /// `AllocInstance`, `AllocVariant` — class/enum name.
+    Object(String),
+    /// `LoadConst` — display value.
+    Const(String),
+}
+
+impl OperandMeta {
+    /// Get the inner string regardless of variant.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Var(s)
+            | Self::Field(s)
+            | Self::Callable(s)
+            | Self::Global(s)
+            | Self::Object(s)
+            | Self::Const(s) => s,
+        }
+    }
+}
+
+/// Per-instruction debug metadata, populated by the compiler.
+///
+/// Parallel to `Bytecode::instructions`. Contains source location
+/// and resolved operand names for debug display.
+#[derive(Clone, Debug, Default)]
+pub struct InstructionMeta {
+    /// Source line number this instruction was generated from.
+    pub source_line: usize,
+    /// Resolved operand name (if applicable to the instruction type).
+    pub operand: Option<OperandMeta>,
+}
+
 /// Executable bytecode.
 ///
 /// Contains the instructions to run and all the associated constants.
@@ -570,20 +616,10 @@ pub struct Bytecode {
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
     pub jump_tables: Vec<JumpTableData>,
 
-    /// Source line mapping.
+    /// Per-instruction debug metadata (source lines, resolved operand names).
     ///
-    /// Maps instruction indices to their source line numbers.
-    /// Each element corresponds to an instruction at the same index.
-    pub source_lines: Vec<usize>,
-
-    pub scopes: Vec<usize>,
-
-    /// Debug info: field name annotations per instruction.
-    ///
-    /// Parallel to `instructions`. `Some(name)` for `LoadField`/`StoreField`
-    /// instructions, `None` for everything else. Populated by the compiler,
-    /// used only for debug display.
-    pub field_names: Vec<Option<String>>,
+    /// Parallel to `instructions`. Populated by the compiler at emit time.
+    pub meta: Vec<InstructionMeta>,
 }
 
 impl Default for Bytecode {
@@ -599,9 +635,7 @@ impl Bytecode {
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
-            source_lines: Vec::new(),
-            scopes: Vec::new(),
-            field_names: Vec::new(),
+            meta: Vec::new(),
         }
     }
 

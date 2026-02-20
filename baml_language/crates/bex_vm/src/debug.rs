@@ -114,11 +114,7 @@ pub fn display_instruction(
         | Instruction::Notify(index) => {
             format!(
                 "({})",
-                function
-                    .locals_in_scope
-                    .get(function.bytecode.scopes[instruction_ptr])
-                    .and_then(|locals| locals.get(*index))
-                    .unwrap_or(&"?".to_string())
+                function.local_names.get(*index).unwrap_or(&"?".to_string())
             )
         }
         Instruction::LoadField(index) | Instruction::StoreField(index) => 'field: {
@@ -230,27 +226,17 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
     }
 }
 
-/// Resolve a global index to a plain function name (no angle brackets).
-fn resolve_callable_name(
-    index: usize,
-    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
-    objects: Option<&ObjectPool>,
-) -> String {
-    if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
-        if let Some(bex_vm_types::ConstValue::Object(obj_idx)) = ct_globals.get(index) {
-            if let Some(Object::Function(f)) = objs.get(obj_idx.raw()) {
-                return f.name.clone();
-            }
-        }
-    }
-    format!("?{index}")
-}
-
 /// Display an object from the compile-time `ObjectPool`.
 fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
         match obj {
-            Object::String(s) => format!("\"{s}\""),
+            Object::String(s) => {
+                let escaped = s
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r")
+                    .replace('\t', "\\t");
+                format!("\"{escaped}\"")
+            }
             Object::Function(f) => format!("<fn {}>", f.name),
             Object::Class(c) => format!("<class {}>", c.name),
             Object::Enum(e) => format!("<enum {}>", e.name),
@@ -414,7 +400,12 @@ pub fn display_bytecode(
 
         // decide whether to show the line number
         // since a single line could emit multiple instructions
-        let source_line = match function.bytecode.source_lines.get(instruction_ptr) {
+        let source_line = match function
+            .bytecode
+            .meta
+            .get(instruction_ptr)
+            .map(|m| &m.source_line)
+        {
             Some(line) if last_line != *line => {
                 last_line = *line;
                 line.to_string()
@@ -534,11 +525,7 @@ pub fn disassemble(function: &Function, stack: &EvalStack, globals: &GlobalPool)
 ///
 /// This format is stable across global index changes (adding builtins won't
 /// shift indices) making it suitable for snapshot tests.
-pub fn display_bytecode_textual(
-    function: &Function,
-    objects: Option<&ObjectPool>,
-    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
-) -> String {
+pub fn display_bytecode_textual(function: &Function) -> String {
     use std::collections::{BTreeMap, BTreeSet};
 
     let instructions = &function.bytecode.instructions;
@@ -585,14 +572,7 @@ pub fn display_bytecode_textual(
     let mut lines: Vec<String> = Vec::with_capacity(instructions.len());
 
     for (ip, instruction) in instructions.iter().enumerate() {
-        let text = display_instruction_textual(
-            ip,
-            instruction,
-            function,
-            objects,
-            compile_time_globals,
-            &label_map,
-        );
+        let text = display_instruction_textual(ip, instruction, function, &label_map);
 
         if let Some(label) = label_map.get(&ip) {
             if ip > 0 {
@@ -611,65 +591,45 @@ pub fn display_bytecode_textual(
 
 /// Render a single instruction in textual format.
 ///
-/// All indices are resolved to human-readable names. Jump offsets become
-/// label references.
+/// Reads resolved operand names from `InstructionMeta` (populated by the compiler).
+/// Jump offsets are resolved to label references.
 fn display_instruction_textual(
     ip: usize,
     instruction: &Instruction,
     function: &Function,
-    objects: Option<&ObjectPool>,
-    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
     label_map: &std::collections::BTreeMap<usize, String>,
 ) -> String {
+    // Helper: get the operand string from metadata, with a fallback.
+    let meta_str = |fallback: &dyn std::fmt::Display| -> String {
+        function
+            .bytecode
+            .meta
+            .get(ip)
+            .and_then(|m| m.operand.as_ref())
+            .map(|o| o.as_str().to_string())
+            .unwrap_or_else(|| format!("?{fallback}"))
+    };
+
     match instruction {
         // --- Constants ---
-        Instruction::LoadConst(index) => {
-            let value = resolve_const(*index, function, objects);
-            format!("load_const {value}")
-        }
+        Instruction::LoadConst(_) => format!("load_const {}", meta_str(&"")),
 
-        // --- Variables (resolved to names) ---
-        Instruction::LoadVar(index) => {
-            let name = resolve_var_name(*index, ip, function);
-            format!("load_var {name}")
-        }
-        Instruction::StoreVar(index) => {
-            let name = resolve_var_name(*index, ip, function);
-            format!("store_var {name}")
-        }
+        // --- Variables ---
+        Instruction::LoadVar(idx) => format!("load_var {}", meta_str(idx)),
+        Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
 
-        // --- Globals (resolved to names) ---
-        Instruction::LoadGlobal(index) => {
-            let name = resolve_global(index.raw(), compile_time_globals, objects);
-            format!("load_global {name}")
-        }
-        Instruction::StoreGlobal(index) => {
-            let name = resolve_global(index.raw(), compile_time_globals, objects);
-            format!("store_global {name}")
-        }
+        // --- Globals ---
+        Instruction::LoadGlobal(idx) => format!("load_global {}", meta_str(&idx.raw())),
+        Instruction::StoreGlobal(idx) => format!("store_global {}", meta_str(&idx.raw())),
 
-        // --- Fields (resolved from compile-time annotations when available) ---
-        Instruction::LoadField(index) => {
-            match function
-                .bytecode
-                .field_names
-                .get(ip)
-                .and_then(|n| n.as_deref())
-            {
-                Some(name) => format!("load_field .{name}"),
-                None => format!("load_field {index}"),
-            }
+        // --- Fields ---
+        Instruction::LoadField(idx) => {
+            let name = meta_str(idx);
+            format!("load_field .{name}")
         }
-        Instruction::StoreField(index) => {
-            match function
-                .bytecode
-                .field_names
-                .get(ip)
-                .and_then(|n| n.as_deref())
-            {
-                Some(name) => format!("store_field .{name}"),
-                None => format!("store_field {index}"),
-            }
+        Instruction::StoreField(idx) => {
+            let name = meta_str(idx);
+            format!("store_field .{name}")
         }
 
         // --- Stack ---
@@ -735,14 +695,8 @@ fn display_instruction_textual(
         // --- Allocation ---
         Instruction::AllocArray(n) => format!("alloc_array {n}"),
         Instruction::AllocMap(n) => format!("alloc_map {n}"),
-        Instruction::AllocInstance(index) => {
-            let name = resolve_object_plain_name(index.raw(), objects);
-            format!("alloc_instance {name}")
-        }
-        Instruction::AllocVariant(index) => {
-            let name = resolve_object_plain_name(index.raw(), objects);
-            format!("alloc_variant {name}")
-        }
+        Instruction::AllocInstance(_) => format!("alloc_instance {}", meta_str(&"")),
+        Instruction::AllocVariant(_) => format!("alloc_variant {}", meta_str(&"")),
 
         // --- Array/Map element access ---
         Instruction::LoadArrayElement => "load_array_element".to_string(),
@@ -751,15 +705,9 @@ fn display_instruction_textual(
         Instruction::StoreMapElement => "store_map_element".to_string(),
 
         // --- Calls ---
-        Instruction::Call(index) => {
-            let name = resolve_callable_name(index.raw(), compile_time_globals, objects);
-            format!("call {name}")
-        }
+        Instruction::Call(_) => format!("call {}", meta_str(&"")),
         Instruction::CallIndirect => "call_indirect".to_string(),
-        Instruction::DispatchFuture(index) => {
-            let name = resolve_callable_name(index.raw(), compile_time_globals, objects);
-            format!("dispatch_future {name}")
-        }
+        Instruction::DispatchFuture(_) => format!("dispatch_future {}", meta_str(&"")),
         Instruction::Await => "await".to_string(),
 
         // --- Control ---
@@ -768,18 +716,9 @@ fn display_instruction_textual(
         Instruction::Unreachable => "unreachable".to_string(),
 
         // --- Watch/Notify ---
-        Instruction::Watch(index) => {
-            let name = resolve_var_name(*index, ip, function);
-            format!("watch {name}")
-        }
-        Instruction::Unwatch(index) => {
-            let name = resolve_var_name(*index, ip, function);
-            format!("unwatch {name}")
-        }
-        Instruction::Notify(index) => {
-            let name = resolve_var_name(*index, ip, function);
-            format!("notify {name}")
-        }
+        Instruction::Watch(idx) => format!("watch {}", meta_str(idx)),
+        Instruction::Unwatch(idx) => format!("unwatch {}", meta_str(idx)),
+        Instruction::Notify(idx) => format!("notify {}", meta_str(idx)),
         Instruction::NotifyBlock(block_index) => {
             if let Some(notification) = function.block_notifications.get(*block_index) {
                 format!("notify_block {}", notification.block_name)
@@ -810,57 +749,6 @@ fn display_instruction_textual(
     }
 }
 
-/// Resolve a constant index to its display string.
-fn resolve_const(index: usize, function: &Function, objects: Option<&ObjectPool>) -> String {
-    // Prefer resolved_constants (runtime), fall back to constants (compile-time).
-    if let Some(value) = function.bytecode.resolved_constants.get(index) {
-        display_value(value)
-    } else if let Some(const_value) = function.bytecode.constants.get(index) {
-        display_const_value(const_value, objects)
-    } else {
-        format!("?{index}")
-    }
-}
-
-/// Resolve a local variable index to its name.
-fn resolve_var_name(var_index: usize, instruction_ptr: usize, function: &Function) -> String {
-    function
-        .locals_in_scope
-        .get(function.bytecode.scopes[instruction_ptr])
-        .and_then(|locals| locals.get(var_index))
-        .cloned()
-        .unwrap_or_else(|| format!("?{var_index}"))
-}
-
-/// Resolve a global index to a readable name.
-fn resolve_global(
-    index: usize,
-    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
-    objects: Option<&ObjectPool>,
-) -> String {
-    if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
-        if let Some(const_val) = ct_globals.get(index) {
-            return display_const_value(const_val, Some(objs));
-        }
-    }
-    format!("?{index}")
-}
-
-/// Resolve an object pool index to a plain name (no angle brackets or type prefix).
-fn resolve_object_plain_name(index: usize, objects: Option<&ObjectPool>) -> String {
-    if let Some(objs) = objects {
-        if let Some(obj) = objs.get(index) {
-            return match obj {
-                Object::Class(c) => c.name.clone(),
-                Object::Enum(e) => e.name.clone(),
-                Object::Function(f) => f.name.clone(),
-                _ => format!("?{index}"),
-            };
-        }
-    }
-    format!("?{index}")
-}
-
 /// Display a full program in textual format.
 ///
 /// Renders all functions with their parameter names:
@@ -881,11 +769,7 @@ fn resolve_object_plain_name(index: usize, objects: Option<&ObjectPool>) -> Stri
 ///     return
 /// }
 /// ```
-pub fn display_program_textual(
-    functions: &[(String, &Function)],
-    objects: Option<&ObjectPool>,
-    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
-) -> String {
+pub fn display_program_textual(functions: &[(String, &Function)]) -> String {
     let mut output = String::new();
 
     for (i, (name, func)) in functions.iter().enumerate() {
@@ -907,7 +791,7 @@ pub fn display_program_textual(
             func.return_type
         );
 
-        let body = display_bytecode_textual(func, objects, compile_time_globals);
+        let body = display_bytecode_textual(func);
         output.push_str(&body);
         output.push_str("}\n");
     }

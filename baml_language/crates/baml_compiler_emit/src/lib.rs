@@ -356,7 +356,7 @@ pub fn compile_files(
             real_local_count: 0,
             bytecode: Bytecode::default(),
             kind,
-            locals_in_scope: Vec::new(),
+            local_names: Vec::new(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
             viz_nodes: Vec::new(),
@@ -413,12 +413,10 @@ pub fn compile_files(
                             real_local_count: 0,
                             bytecode: Bytecode::new(),
                             kind: FunctionKind::Bytecode,
-                            locals_in_scope: vec![
-                                params
-                                    .iter()
-                                    .map(std::string::ToString::to_string)
-                                    .collect(),
-                            ],
+                            local_names: params
+                                .iter()
+                                .map(std::string::ToString::to_string)
+                                .collect(),
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
                             viz_nodes: Vec::new(),

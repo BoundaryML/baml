@@ -943,3 +943,61 @@ function NestedEnumMatch(s1: Status, s2: Status) -> string {
         Status.Pending => "first pending"
     }
 }
+
+// ============================================================================
+// JUMP TABLE CODEGEN TESTS
+// Ensure we hit JumpTable strategy for Discriminant and TypeTag switches.
+// ============================================================================
+
+enum DispatchState {
+    Alpha
+    Beta
+    Gamma
+    Delta
+}
+
+// 4 dense enum discriminants (0..3) should use JumpTable.
+function JumpTableEnumDiscriminant(state: DispatchState) -> int {
+    match (state) {
+        DispatchState.Alpha => 10,
+        DispatchState.Beta => 20,
+        DispatchState.Gamma => 30,
+        DispatchState.Delta => 40
+    }
+}
+
+// 4 typed arms with dense type tags (int/string/bool/float) should use JumpTable.
+function JumpTableTypeTag(value: int | string | bool | float) -> string {
+    match (value) {
+        i: int => "int",
+        s: string => "string",
+        b: bool => "bool",
+        f: float => "float"
+    }
+}
+
+class Cat {
+    name string
+}
+
+class Dog {
+    name string
+}
+
+class Bird {
+    name string
+}
+
+class Fish {
+    name string
+}
+
+// 4 user-defined classes should use JumpTable with CLASS_BASE tags.
+function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
+    match (pet) {
+        c: Cat => "cat",
+        d: Dog => "dog",
+        b: Bird => "bird",
+        f: Fish => "fish"
+    }
+}

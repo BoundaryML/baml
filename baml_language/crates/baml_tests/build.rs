@@ -725,8 +725,6 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
 
                     output = bex_vm::debug::display_program_textual(
                         &functions,
-                        Some(&program.objects),
-                        Some(&program.globals),
                     );
                 }
                 Err(err) => {

@@ -587,7 +587,7 @@ function ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
 
 function ExhaustiveNullableEnum(s: Status?) -> string {
     load_var s
-    load_const 0
+    load_const 0 /* Status.Active */
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L0
@@ -595,7 +595,7 @@ function ExhaustiveNullableEnum(s: Status?) -> string {
 
   L0:
     load_var s
-    load_const 1
+    load_const 1 /* Status.Inactive */
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L1
@@ -603,7 +603,7 @@ function ExhaustiveNullableEnum(s: Status?) -> string {
 
   L1:
     load_var s
-    load_const 2
+    load_const 2 /* Status.Pending */
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L2
@@ -848,7 +848,7 @@ function ExhaustiveWithUnderscore(x: int) -> int {
 }
 
 function GetStatus() -> Status {
-    load_const 0
+    load_const 0 /* Status.Active */
     alloc_variant Status
     return
 }
@@ -963,6 +963,87 @@ function IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
 
   L3:
     load_const "success with body"
+
+  L4:
+    return
+
+  L5:
+    unreachable
+}
+
+function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
+    load_var pet
+    type_tag
+    jump_table [L0, L1, L3, L2], default L5
+
+  L0:
+    load_const "fish"
+    jump L4
+
+  L1:
+    load_const "bird"
+    jump L4
+
+  L2:
+    load_const "dog"
+    jump L4
+
+  L3:
+    load_const "cat"
+
+  L4:
+    return
+
+  L5:
+    unreachable
+}
+
+function JumpTableEnumDiscriminant(state: DispatchState) -> int {
+    load_var state
+    discriminant
+    jump_table [L3, L2, L1, L0], default L5
+
+  L0:
+    load_const 40
+    jump L4
+
+  L1:
+    load_const 30
+    jump L4
+
+  L2:
+    load_const 20
+    jump L4
+
+  L3:
+    load_const 10
+
+  L4:
+    return
+
+  L5:
+    unreachable
+}
+
+function JumpTableTypeTag(value: int | string | bool | float) -> string {
+    load_var value
+    type_tag
+    jump_table [L3, L2, L1, _, L0], default L5
+
+  L0:
+    load_const "float"
+    jump L4
+
+  L1:
+    load_const "bool"
+    jump L4
+
+  L2:
+    load_const "string"
+    jump L4
+
+  L3:
+    load_const "int"
 
   L4:
     return
@@ -1792,7 +1873,7 @@ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
 
 function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     load_var s
-    load_const 0
+    load_const 0 /* Status.Active */
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L0
@@ -1800,7 +1881,7 @@ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
 
   L0:
     load_var s
-    load_const 1
+    load_const 1 /* Status.Inactive */
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L1
