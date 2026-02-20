@@ -28,9 +28,9 @@
 //! - Transport (stdio reader/writer, WS server)
 //! - Native implementations of `SysOps` (with playground interception)
 //! - `LspClientSenderTrait` and `PlaygroundSender` implementations
-
-#[cfg(all(feature = "native-tls", feature = "rustls"))]
-compile_error!("features `native-tls` and `rustls` cannot be enabled simultaneously");
+//!
+//! **TLS:** Enable exactly one of `native-tls` or `rustls`. CI may build with
+//! `--all-features` (both enabled); prefer one when building the LSP binary.
 
 mod native_lsp_sender;
 mod native_vfs;

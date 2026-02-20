@@ -172,10 +172,10 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
             broadcast_msg = broadcast_rx.recv() => {
                 match broadcast_msg {
                     Ok(msg) => {
-                        if let Some(ws_msg) = to_ws_text(&msg) {
-                            if sink.send(ws_msg).await.is_err() {
-                                break;
-                            }
+                        if let Some(ws_msg) = to_ws_text(&msg)
+                            && sink.send(ws_msg).await.is_err()
+                        {
+                            break;
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
