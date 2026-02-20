@@ -736,11 +736,11 @@ fn display_instruction_textual(
         Instruction::AllocArray(n) => format!("alloc_array {n}"),
         Instruction::AllocMap(n) => format!("alloc_map {n}"),
         Instruction::AllocInstance(index) => {
-            let name = resolve_object_name(index.raw(), objects);
+            let name = resolve_object_plain_name(index.raw(), objects);
             format!("alloc_instance {name}")
         }
         Instruction::AllocVariant(index) => {
-            let name = resolve_object_name(index.raw(), objects);
+            let name = resolve_object_plain_name(index.raw(), objects);
             format!("alloc_variant {name}")
         }
 
@@ -846,13 +846,19 @@ fn resolve_global(
     format!("?{index}")
 }
 
-/// Resolve an object pool index to a readable name.
-fn resolve_object_name(index: usize, objects: Option<&ObjectPool>) -> String {
+/// Resolve an object pool index to a plain name (no angle brackets or type prefix).
+fn resolve_object_plain_name(index: usize, objects: Option<&ObjectPool>) -> String {
     if let Some(objs) = objects {
-        display_object_from_pool(index, objs)
-    } else {
-        format!("?{index}")
+        if let Some(obj) = objs.get(index) {
+            return match obj {
+                Object::Class(c) => c.name.clone(),
+                Object::Enum(e) => e.name.clone(),
+                Object::Function(f) => f.name.clone(),
+                _ => format!("?{index}"),
+            };
+        }
     }
+    format!("?{index}")
 }
 
 /// Display a full program in textual format.

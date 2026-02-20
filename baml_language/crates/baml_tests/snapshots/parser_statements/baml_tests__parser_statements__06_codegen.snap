@@ -134,7 +134,7 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
 
 function baml.llm.build_attempt(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
-    alloc_instance <class baml.llm.PlannerState>
+    alloc_instance baml.llm.PlannerState
     copy 0
     alloc_array 0
     store_field .rr_client_names
@@ -264,7 +264,7 @@ function baml.llm.build_attempt_with_state(llm_client: baml.llm.Client, planner_
     await
     call_indirect
     store_var primitive
-    alloc_instance <class baml.llm.OrchestrationStep>
+    alloc_instance baml.llm.OrchestrationStep
     copy 0
     load_var primitive
     store_field .primitive_client
@@ -279,7 +279,7 @@ function baml.llm.build_attempt_with_state(llm_client: baml.llm.Client, planner_
 
 function baml.llm.build_plan(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
-    alloc_instance <class baml.llm.PlannerState>
+    alloc_instance baml.llm.PlannerState
     copy 0
     alloc_array 0
     store_field .rr_client_names
@@ -393,7 +393,7 @@ function baml.llm.build_plan_with_state(llm_client: baml.llm.Client, planner_sta
     bin_op +
     store_var _i
     load_var result
-    alloc_instance <class baml.llm.OrchestrationStep>
+    alloc_instance baml.llm.OrchestrationStep
     copy 0
     load_var step
     load_field .primitive_client
@@ -437,7 +437,7 @@ function baml.llm.call_llm_function(function_name: string, args: map<string, unk
     load_var function_name
     dispatch_future baml.llm.get_client
     await
-    alloc_instance <class baml.llm.ExecutionContext>
+    alloc_instance baml.llm.ExecutionContext
     copy 0
     load_var jinja_string
     store_field .jinja_string
@@ -508,7 +508,7 @@ function baml.llm.execute_client(llm_client: baml.llm.Client, context: baml.llm.
     jump L3
 
   L2:
-    alloc_instance <class baml.llm.ExecutionResult>
+    alloc_instance baml.llm.ExecutionResult
     copy 0
     load_const false
     store_field .ok
@@ -671,7 +671,7 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
     jump L7
 
   L6:
-    alloc_instance <class baml.llm.ExecutionResult>
+    alloc_instance baml.llm.ExecutionResult
     copy 0
     load_const false
     store_field .ok
@@ -759,7 +759,7 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
     pop 1
 
   L13:
-    alloc_instance <class baml.llm.ExecutionResult>
+    alloc_instance baml.llm.ExecutionResult
     copy 0
     load_const false
     store_field .ok
@@ -975,7 +975,7 @@ function let_statements() -> int {
     load_const 3
     alloc_array 3
     store_var z
-    alloc_instance <class Point>
+    alloc_instance Point
     copy 0
     load_const 1
     store_field .x
