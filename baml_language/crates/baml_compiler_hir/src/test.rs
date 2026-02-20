@@ -242,26 +242,14 @@ fn lower_config_value_node(node: &SyntaxNode) -> TestArgValue {
         }
     }
 
-    // Extract text, filtering whitespace/comments/quotes
-    let text: String = node
-        .descendants_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .filter(|token| {
-            !matches!(
-                token.kind(),
-                SyntaxKind::WHITESPACE
-                    | SyntaxKind::NEWLINE
-                    | SyntaxKind::LINE_COMMENT
-                    | SyntaxKind::BLOCK_COMMENT
-                    | SyntaxKind::QUOTE
-            )
-        })
-        .map(|token| token.text().to_string())
-        .collect();
-
-    if text.is_empty() {
-        return TestArgValue::Null;
-    }
+    // Extract scalar text, filtering trivia and quotes
+    let text = match baml_compiler_syntax::ast::ConfigValue::cast(node.clone()) {
+        Some(cv) => match cv.scalar_text() {
+            Some(t) => t,
+            None => return TestArgValue::Null,
+        },
+        None => return TestArgValue::Null,
+    };
 
     // Try parsing as integer first
     if let Ok(i) = text.parse::<i64>() {

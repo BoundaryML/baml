@@ -135,7 +135,7 @@ impl TestArgs {
 
         for (func_name, test_name) in selected.keys() {
             // Look up the compiled test case from the engine.
-            let test_case = match engine.test_case(test_name) {
+            let test_case = match engine.test_case(func_name, test_name) {
                 Some(tc) => tc,
                 None => {
                     eprintln!(

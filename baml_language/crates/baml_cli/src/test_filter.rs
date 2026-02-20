@@ -6,37 +6,29 @@ pub struct TestFilter {
 }
 
 impl TestFilter {
+    fn parse_patterns<'a>(patterns: impl Iterator<Item = &'a str>) -> Vec<(String, String)> {
+        patterns
+            .flat_map(|s| match s.split_once("::") {
+                Some((function_match, test_match)) => {
+                    vec![(function_match.to_string(), test_match.to_string())]
+                }
+                None => {
+                    vec![
+                        (s.to_string(), "".to_string()),
+                        ("".to_string(), s.to_string()),
+                    ]
+                }
+            })
+            .collect()
+    }
+
     pub fn new<'a>(
         include: impl Iterator<Item = &'a str>,
         exclude: impl Iterator<Item = &'a str>,
     ) -> TestFilter {
         TestFilter {
-            include: include
-                .flat_map(|s| match s.split_once("::") {
-                    Some((function_match, test_match)) => {
-                        vec![(function_match.to_string(), test_match.to_string())]
-                    }
-                    None => {
-                        vec![
-                            (s.to_string(), "".to_string()),
-                            ("".to_string(), s.to_string()),
-                        ]
-                    }
-                })
-                .collect(),
-            exclude: exclude
-                .flat_map(|s| match s.split_once("::") {
-                    Some((function_match, test_match)) => {
-                        vec![(function_match.to_string(), test_match.to_string())]
-                    }
-                    None => {
-                        vec![
-                            (s.to_string(), "".to_string()),
-                            ("".to_string(), s.to_string()),
-                        ]
-                    }
-                })
-                .collect(),
+            include: Self::parse_patterns(include),
+            exclude: Self::parse_patterns(exclude),
         }
     }
 

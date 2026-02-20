@@ -978,8 +978,18 @@ impl BexEngine {
     }
 
     /// Find a test case by name.
-    pub fn test_case(&self, name: &str) -> Option<&bex_vm_types::TestCase> {
-        self.test_cases.iter().find(|t| t.name == name)
+    pub fn test_case(
+        &self,
+        function_name: &str,
+        test_name: &str,
+    ) -> Option<&bex_vm_types::TestCase> {
+        self.test_cases.iter().find(|t| {
+            t.function_names
+                .iter()
+                .find(|n| &function_name == n)
+                .is_some()
+                && t.name == test_name
+        })
     }
 
     /// Collect roots from a yielded VM.
