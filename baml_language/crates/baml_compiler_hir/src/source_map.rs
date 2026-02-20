@@ -9,7 +9,7 @@
 
 use std::{collections::HashMap, hash::Hash};
 
-use baml_base::{FileId, Name, Span};
+use baml_base::{FileId, Name, QualifiedName, Span};
 use baml_compiler_diagnostics::ErrorContext;
 use rowan::TextRange;
 
@@ -30,6 +30,10 @@ pub struct SpanResolutionContext<'a> {
 
     /// Maps type item names (classes, enums, type aliases) to their definition spans.
     pub type_spans: &'a HashMap<Name, Span>,
+
+    /// Maps function FQNs to their definition name spans.
+    /// Populated from `project_function_item_spans` at render time.
+    pub function_spans: &'a HashMap<QualifiedName, Span>,
 
     /// Maps (`class_name`, `field_index`) to the field's type annotation span.
     pub field_type_spans: &'a HashMap<(Name, usize), Span>,
@@ -105,6 +109,12 @@ pub enum ErrorLocation {
     },
     /// Error at a pattern (e.g., a typed binding in a match arm).
     Pattern(PatId),
+    /// Secondary location pointing at a function definition (e.g. for arity errors).
+    ///
+    /// Stores the function's fully-qualified name; resolved to a span at render time
+    /// via `project_function_item_spans`. Keeps `InferenceResult` position-independent
+    /// so Salsa early-cutoff fires even when the callee's file is whitespace-edited.
+    FunctionItem(QualifiedName),
     /// Fallback to a direct span (for errors from signatures or other non-body contexts).
     /// This should be minimized over time as we add more ID-based tracking.
     Span(Span),
@@ -171,6 +181,11 @@ impl ErrorLocation {
             ErrorLocation::Pattern(id) => {
                 ctx.expr_fn_source_map.pattern_span(*id).unwrap_or_default()
             }
+            ErrorLocation::FunctionItem(fqn) => ctx
+                .function_spans
+                .get(fqn)
+                .copied()
+                .unwrap_or_else(Span::default),
             ErrorLocation::Span(span) => *span,
         }
     }

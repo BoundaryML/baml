@@ -775,6 +775,50 @@ pub fn project_type_item_spans(
     std::sync::Arc::new(spans)
 }
 
+/// Returns a map of function FQNs to their definition name spans.
+///
+/// This is the counterpart of `project_type_item_spans` for functions.
+/// Used by `ErrorLocation::FunctionItem` to resolve to a span at render time,
+/// keeping type inference results position-independent.
+///
+/// Note: Like `project_type_item_spans`, this query recomputes on file content
+/// changes (spans come from the syntax tree). The incrementality benefit is that
+/// type inference stores `ErrorLocation::FunctionItem(fqn)` instead of a raw
+/// `Span`, so `InferenceResult` is stable across whitespace edits to callee files.
+#[salsa::tracked]
+pub fn project_function_item_spans(
+    db: &dyn Db,
+    root: baml_workspace::Project,
+) -> std::sync::Arc<std::collections::HashMap<QualifiedName, Span>> {
+    let items = project_items(db, root);
+    let mut spans = std::collections::HashMap::new();
+
+    for item in items.items(db) {
+        if let ItemId::Function(loc) = item {
+            let file = loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let func = &item_tree[loc.id(db)];
+
+            // Skip compiler-generated functions — they have no user-visible source span.
+            if func.compiler_generated.is_some() {
+                continue;
+            }
+
+            // Use the same FQN that the symbol table registers so the key matches
+            // what `function_definition_location` stores in `ErrorLocation::FunctionItem`.
+            let fqn = function_qualified_name(db, *loc);
+
+            if let Some(span) =
+                get_item_name_span(db, file, "function", func.name.as_str(), loc.id(db).index())
+            {
+                spans.insert(fqn, span);
+            }
+        }
+    }
+
+    std::sync::Arc::new(spans)
+}
+
 /// Returns class field type spans for error location resolution.
 ///
 /// Maps (`class_name`, `field_index`) to the span of the field's type annotation.

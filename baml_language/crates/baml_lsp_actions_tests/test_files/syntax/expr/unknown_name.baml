@@ -97,6 +97,12 @@ function Go3(x:int) -> int {
 //  9 │     Go(z,a,b)
 //    │     ────┬────  
 //    │         ╰────── Expected 1 arguments, found 3
+//    │
+//    ├─[ expr_unknown_name.baml:9:5 ]
+//    │
+//  1 │ function Go(x: int) -> int {
+//    │          ─┬  
+//    │           ╰── Function defined here
 //    │ 
 //    │ Note: Error code: E0005
 // ───╯

@@ -798,24 +798,33 @@ impl<'db> TypeContext<'db> {
         baml_compiler_hir::symbol_table(self.db, project)
     }
 
-    fn def_to_error_location(&self, def: baml_compiler_hir::Definition<'db>) -> ErrorLocation {
-        ErrorLocation::Span(baml_compiler_hir::definition_name_span(self.db, def))
-    }
-
+    /// Returns a position-independent location for the definition of a callable value.
+    ///
+    /// Uses `ErrorLocation::FunctionItem` so that `InferenceResult` does not embed
+    /// spans from the callee's file.  Span resolution happens at render time via
+    /// `project_function_item_spans`, which is intentionally separate from the
+    /// type-inference Salsa query graph.
     fn function_definition_location(
         &self,
         fqn: &baml_compiler_hir::QualifiedName,
     ) -> Option<ErrorLocation> {
-        let def = self.fqn_symbol_table().lookup_value(self.db, fqn)?;
-        Some(self.def_to_error_location(def))
+        // Verify the function exists before recording the location.
+        self.fqn_symbol_table().lookup_value(self.db, fqn)?;
+        Some(ErrorLocation::FunctionItem(fqn.clone()))
     }
 
+    /// Returns a position-independent location for a type definition.
+    ///
+    /// Uses the existing `ErrorLocation::TypeItem(Name)` variant, resolved at
+    /// render time by `project_type_item_spans`.  No syntax-tree access occurs
+    /// inside the type-inference query.
     fn type_definition_location(
         &self,
         fqn: &baml_compiler_hir::QualifiedName,
     ) -> Option<ErrorLocation> {
-        let def = self.fqn_symbol_table().lookup_type(self.db, fqn)?;
-        Some(self.def_to_error_location(def))
+        // Verify the type exists before recording the location.
+        self.fqn_symbol_table().lookup_type(self.db, fqn)?;
+        Some(ErrorLocation::TypeItem(fqn.name.clone()))
     }
 
     fn call_definition_location(&self, callee: ExprId) -> Option<ErrorLocation> {
@@ -3389,9 +3398,9 @@ fn infer_field_access(
             if field_types.len() == members.len() {
                 // All members have the field — return union of field types
                 // (deduplicated: if all the same, just return that single type)
-                let all_same = field_types.first().map_or(true, |first| {
-                    field_types.iter().all(|t| t == first)
-                });
+                let all_same = field_types
+                    .first()
+                    .map_or(true, |first| field_types.iter().all(|t| t == first));
                 if all_same {
                     field_types.into_iter().next()
                 } else {

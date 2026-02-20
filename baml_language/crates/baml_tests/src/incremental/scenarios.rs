@@ -792,3 +792,71 @@ function Greet(name: string) -> string {
         inference_count
     );
 }
+
+/// Test that whitespace-only changes in a calle do not invalidate
+/// type inference in a caller when there is an arity error.
+///
+/// This guards against a regression where span changes inside the callee
+/// would progate into the caller's cached InferenceResult.
+#[test]
+fn callee_whitespace_change_does_not_invalidate_caller_inference_on_arity_error() {
+    let mut test_db = IncrementalTestDb::new();
+
+    // Callee: a function with one parameter.
+    let callee_file = test_db.db_mut().add_file(
+        "callee.baml",
+        r##"
+function Add(x: int, y: int) -> int {
+    client GPT4
+    prompt #"Add {{x}} and {{y}}"#
+}
+"##,
+    );
+
+    // Caller: calls Add with the wrong number of arguments → ArgumentCountMismatch.
+    // The error's `definition_location` must not embed callee file spans.
+    let caller_file = test_db.db_mut().add_file(
+        "caller.baml",
+        r##"
+function UseAdd(n: int) -> int {
+    client GPT4
+    prompt #"Use {{n}}"#
+}
+"##,
+    );
+
+    // First run — both functions get type-checked.
+    test_db.assert_executed(
+        |db| {
+            query_all_type_inference(db, callee_file);
+            query_all_type_inference(db, caller_file);
+        },
+        &[("function_type_inference", 2)],
+    );
+
+    // Whitespace-only change to the callee file (blank line before the function).
+    // This shifts every span inside callee.baml but changes no semantics.
+    callee_file.set_text(test_db.db_mut()).to(r##"
+
+function Add(x: int, y: int) -> int {
+    client GPT4
+    prompt #"Add {{x}} and {{y}}"#
+}
+"##
+    .to_string());
+
+    // After a whitespace-only change to callee:
+    // - lex/parse re-run for the callee
+    // - both callee and caller type inference remain cached
+    test_db.assert_executed(
+        |db| {
+            query_all_type_inference(db, callee_file);
+            query_all_type_inference(db, caller_file);
+        },
+        &[
+            ("lex_file", 1),                // callee re-lexed
+            ("parse_result", 1),            // callee re-parsed
+            ("function_type_inference", 0), // caller inference cached — the regression guard
+        ],
+    );
+}

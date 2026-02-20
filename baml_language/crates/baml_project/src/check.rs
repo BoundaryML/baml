@@ -19,7 +19,8 @@ use baml_compiler_hir::{
     self, FunctionBody, HirSourceMap, ItemId, SpanResolutionContext, file_items, file_lowering,
     function_body, function_signature, function_signature_source_map, is_llm_function,
     llm_function_file_offset, llm_function_meta, project_class_field_type_spans,
-    project_type_alias_type_spans, project_type_item_spans, template_string_file_offset,
+    project_function_item_spans, project_type_alias_type_spans, project_type_item_spans,
+    template_string_file_offset,
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
@@ -58,8 +59,9 @@ pub fn collect_diagnostics(
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    // Get cached type item spans for error location resolution
+    // Get cached item spans for error location resolution (all render-time, none inside inference)
     let type_spans = project_type_item_spans(db, project);
+    let function_spans = project_function_item_spans(db, project);
     let field_type_spans = project_class_field_type_spans(db, project);
     let type_alias_type_spans = project_type_alias_type_spans(db, project);
 
@@ -99,6 +101,7 @@ pub fn collect_diagnostics(
     let type_level_ctx = SpanResolutionContext {
         expr_fn_source_map: &HirSourceMap::default(),
         type_spans: &type_spans,
+        function_spans: &function_spans,
         field_type_spans: &field_type_spans,
         type_alias_type_spans: &type_alias_type_spans,
         jinja_file_id: FileId::default(),
@@ -165,6 +168,7 @@ pub fn collect_diagnostics(
                 let ctx = SpanResolutionContext {
                     expr_fn_source_map: &HirSourceMap::default(),
                     type_spans: &type_spans,
+                    function_spans: &function_spans,
                     field_type_spans: &field_type_spans,
                     type_alias_type_spans: &type_alias_type_spans,
                     jinja_file_id: file_id,
@@ -235,6 +239,7 @@ pub fn collect_diagnostics(
                 let ctx = SpanResolutionContext {
                     expr_fn_source_map,
                     type_spans: &type_spans,
+                    function_spans: &function_spans,
                     field_type_spans: &field_type_spans,
                     type_alias_type_spans: &type_alias_type_spans,
                     jinja_file_id: file_id,
