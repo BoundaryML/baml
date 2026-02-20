@@ -29,7 +29,7 @@ import initWasm, {
   LspResponse,
   type PlaygroundNotification,
   start as setupLogger,
-  hotReloadTestString,
+  getBuildTime,
 } from "@b/bridge_wasm";
 
 import type {
@@ -45,6 +45,21 @@ declare const self: DedicatedWorkerGlobalScope;
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
+
+let disposed = false;
+
+function dispose(): void {
+  if (disposed) return;
+  disposed = true;
+  if (connection) {
+    connection.dispose();
+    connection = null;
+  }
+  if (runtime) {
+    runtime.free();
+    runtime = null;
+  }
+}
 
 let connection: Connection | null = null;
 let runtime: BamlWasmRuntime | null = null;
@@ -265,11 +280,14 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
 // ---------------------------------------------------------------------------
 
 self.onmessage = async (event: MessageEvent) => {
+  if (disposed) return;
   const data = event.data;
 
   // ── Init message (contains the LSP MessagePort) ──────────────────────
   if (data.port) {
-    const { port, initialFiles, rootPath: initRootPath } = data as WorkerInitMessage;
+    if (disposed) return;
+    const { port, initialFiles, rootPath: initRootPath } =
+      data as WorkerInitMessage;
 
     // Populate VFS with the initial file snapshot from the main thread
     if (initRootPath) vfs = new BamlVfs(initRootPath);
@@ -293,6 +311,7 @@ self.onmessage = async (event: MessageEvent) => {
     const reader = new BrowserMessageReader(port);
     const writer = new BrowserMessageWriter(port);
     connection = createConnection(reader, writer);
+    connection.sendNotification
 
     let requestPromises = new Map<
       number | string,
@@ -331,6 +350,19 @@ self.onmessage = async (event: MessageEvent) => {
       },
       vfs.wasmVfs,
     );
+
+    connection.onShutdown(() => {
+      console.log("[LSP] shutdown requested");
+      if (runtime) {
+        runtime.free();
+        runtime = null;
+      }
+    });
+
+    connection.onExit(() => {
+      console.log("[LSP] exit received");
+      disposed = true;
+    });
 
     // The LSP library dispatches "initialize" to onInitialize, not to onRequest.
     // We must handle it here and forward to the WASM runtime so the client gets a response.
@@ -392,7 +424,7 @@ self.onmessage = async (event: MessageEvent) => {
 
     // 7. Notify main thread and push initial state
     postOut({ type: "ready" });
-    postOut({ type: "hotReloadTestString", value: hotReloadTestString() });
+    postOut({ type: "buildTime", value: getBuildTime() });
     // notifySourceChanged();
 
     return;
@@ -463,7 +495,11 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "requestState":
       runtime?.requestPlaygroundState();
-      postOut({ type: "hotReloadTestString", value: hotReloadTestString() });
+      postOut({ type: "buildTime", value: getBuildTime() });
+      return;
+
+    case "dispose":
+      dispose();
       return;
   }
   msg satisfies never;

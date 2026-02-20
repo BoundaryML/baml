@@ -72,7 +72,7 @@ export type WorkerOutMessage =
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }
-  | { type: 'hotReloadTestString'; value: string };
+  | { type: 'buildTime'; value: string };
 
 // ---------------------------------------------------------------------------
 // Main thread → Worker messages
@@ -85,7 +85,8 @@ export type WorkerInMessage =
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }
   | { type: 'requestState' }
-  | { type: 'filesChanged'; files: Record<string, string> };
+  | { type: 'filesChanged'; files: Record<string, string> }
+  | { type: 'dispose' };
 
 // ---------------------------------------------------------------------------
 // Init message (sent once with MessagePort)

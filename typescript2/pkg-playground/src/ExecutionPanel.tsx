@@ -30,6 +30,18 @@ function tryFormatJson(str: string): string {
   try { return JSON.stringify(JSON.parse(str), null, 2); } catch { return str; }
 }
 
+function formatBuildTime(epochSecs: number): { absolute: string; relative: string } {
+  const d = new Date(epochSecs * 1000);
+  const absolute = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const delta = Math.floor(Date.now() / 1000) - epochSecs;
+  let relative: string;
+  if (delta < 60) relative = `${delta}s ago`;
+  else if (delta < 3600) relative = `${Math.floor(delta / 60)}m ago`;
+  else if (delta < 86400) relative = `${Math.floor(delta / 3600)}h ago`;
+  else relative = `${Math.floor(delta / 86400)}d ago`;
+  return { absolute, relative };
+}
+
 /** Shared classes for <pre> code blocks */
 const codeBlockCls = 'whitespace-pre-wrap break-all font-vsc-mono text-xs leading-relaxed p-2 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[200px] m-0';
 
@@ -40,13 +52,15 @@ const codeBlockCls = 'whitespace-pre-wrap break-all font-vsc-mono text-xs leadin
 export interface ExecutionPanelProps {
   /** Transport-agnostic port for communicating with the BAML runtime. */
   port: RuntimePort;
+  /** Dev-only: connection version so we can verify the port changed on restart. */
+  connectionVersion?: number;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -60,7 +74,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
-  const [hotReloadValue, setHotReloadValue] = useState<string | null>(null);
+  const [buildTime, setBuildTime] = useState<number | null>(null);
   const [envRequests, setEnvRequests] = useState<EnvVarRequest[]>([]);
   const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
   const [envInputs, setEnvInputs] = useState<Record<number, string>>({});
@@ -155,8 +169,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
         case "ready": 
           break;
 
-        case 'hotReloadTestString':
-          setHotReloadValue(data.value);
+        case 'buildTime':
+          setBuildTime(Number(data.value) || null);
           break;
 
         case "vfsFileChanged":
@@ -278,8 +292,29 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
 
   return (
     <>
-      {hotReloadValue != null && (
-        <span data-testid="hot-reload-test" style={{ display: 'none' }}>{hotReloadValue}</span>
+      {buildTime != null && (
+        <span data-testid="hot-reload-test" style={{ display: 'none' }}>{buildTime}</span>
+      )}
+      {(connectionVersion != null || buildTime != null) && (
+        <div className="flex items-center gap-1.5 px-2.5 py-0.5 shrink-0 border-b border-vsc-border bg-vsc-surface">
+          {connectionVersion != null && (
+            <>
+              <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PORT</span>
+              <code className="text-[10px] font-vsc-mono text-vsc-text-muted">v{connectionVersion}</code>
+            </>
+          )}
+          {buildTime != null && (() => {
+            const { absolute, relative } = formatBuildTime(buildTime);
+            return (
+              <>
+                <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none ml-2">Built</span>
+                <code className="text-[10px] font-vsc-mono text-vsc-text-muted">
+                  {absolute} ({relative})
+                </code>
+              </>
+            );
+          })()}
+        </div>
       )}
       {/* ──── Env vars ──── */}
       <div className="flex items-center gap-1.5 px-2.5 py-1 flex-wrap shrink-0 border-b border-vsc-border bg-vsc-surface">
@@ -388,9 +423,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
           <span className="text-[10px] font-vsc-mono text-vsc-text-muted">
             {projectRoots[0]}
           </span>
-          {currentUpdate && !currentUpdate.isBexCurrent && (
-            <span className="text-[10px] text-vsc-yellow font-vsc-mono">rebuilding...</span>
-          )}
         </div>
       )}
 
@@ -398,7 +430,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
       {(hasErrors || engineStale) && (
         <div className="px-2.5 py-1 border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
           <div className="font-vsc-mono text-[10px] text-[#f48771]">
-            {hasErrors ? `${errors.length} error${errors.length !== 1 ? 's' : ''}` : 'Engine stale'} — using last successful build
+            {hasErrors ? `${errors.length} error${errors.length !== 1 ? 's' : ''}` : 'Build is stale'} — using last successful build
           </div>
         </div>
       )}

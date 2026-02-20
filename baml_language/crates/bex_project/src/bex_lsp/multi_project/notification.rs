@@ -9,6 +9,16 @@ impl BexLspNotification for BexMulitProject {
         Box::new(move |notif| sender.send_notification(notif))
     }
 
+    fn on_notification_exit(
+        &self,
+        _params: lsp_notification_params!("exit"),
+    ) -> Result<(), LspError> {
+        tracing::info!("LSP exit received");
+        let mut projects = self.projects.lock().unwrap();
+        projects.clear();
+        Ok(())
+    }
+
     fn on_notification_initialized(
         &self,
         _params: lsp_notification_params!("initialized"),

@@ -27,6 +27,10 @@
     "//#dev:cargo": {
       "cache": false,
       "persistent": true
+    },
+    "//#dev:wasm": {
+      "cache": false,
+      "persistent": true
     }
   }
 }

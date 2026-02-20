@@ -177,6 +177,8 @@ export class WebSocketRuntimePort implements RuntimePort {
         return null; // handled locally, not sent to server
       case 'requestState':
         return { type: 'requestState' };
+      case 'dispose':
+        return null; // worker-only; no server equivalent
     }
     msg satisfies never;
     return null;

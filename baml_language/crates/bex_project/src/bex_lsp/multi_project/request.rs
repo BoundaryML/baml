@@ -73,6 +73,15 @@ impl BexLspRequest for BexMulitProject {
         )
     }
 
+    fn on_request_shutdown(
+        &self,
+        _params: lsp_request_params!("shutdown"),
+    ) -> Result<lsp_request_result!("shutdown"), LspError> {
+        let mut projects = self.projects.lock().unwrap();
+        projects.clear();
+        Ok(())
+    }
+
     fn on_request_initialize(
         &self,
         params: lsp_request_params!("initialize"),

@@ -23,6 +23,13 @@ let portResolve: ((port: RuntimePort) => void) | null = null;
 let portPromise = new Promise<RuntimePort>((resolve) => {
   portResolve = resolve;
 });
+/** Latest port (updated on every setRuntimePort); used when reconnecting after restart. */
+let currentPort: RuntimePort | null = null;
+/** Connection version passed from MonacoEditor (survives HMR); used as React key to force remount. */
+let currentConnectionVersion = 0;
+/** Incremented when port changes on restart so ExecutionPanel remounts and requests state. */
+let portKey = 0;
+const portChangeListeners = new Set<(port: RuntimePort) => void>();
 
 const PANE_TYPE_ID = 'baml.executionPanel';
 
@@ -116,12 +123,26 @@ export async function registerExecutionPanelPane(): Promise<void> {
         }, 'Loading playground…'),
       );
 
-      portPromise.then(async (port) => {
-        const { ExecutionPanel } = await import('@b/pkg-playground');
-        this.reactRoot?.render(
-          createElement(ExecutionPanel, { port }),
-        );
-      });
+      const renderWithPort = (port: RuntimePort) => {
+        import('@b/pkg-playground').then(({ ExecutionPanel }) => {
+          this.reactRoot?.render(
+            createElement(ExecutionPanel, {
+              port,
+              key: `playground-${currentConnectionVersion}`,
+              connectionVersion: currentConnectionVersion,
+            }),
+          );
+        });
+      };
+
+      portPromise.then(renderWithPort);
+
+      const onPortChange = (port: RuntimePort) => {
+        renderWithPort(port);
+      };
+      portChangeListeners.add(onPortChange);
+      const removeListener = () => portChangeListeners.delete(onPortChange);
+      (this as any)._portChangeCleanup = removeListener;
 
       return el;
     }
@@ -137,6 +158,8 @@ export async function registerExecutionPanelPane(): Promise<void> {
     }
 
     dispose(): void {
+      const cleanup = (this as any)._portChangeCleanup as (() => void) | undefined;
+      if (typeof cleanup === 'function') cleanup();
       this.reactRoot?.unmount();
       this.reactRoot = null;
       this._el = null;
@@ -151,7 +174,6 @@ export async function registerExecutionPanelPane(): Promise<void> {
     [PlaygroundInput],
   );
 
-  // Register the command palette entry
   vscode.commands.registerCommand('baml.openPlayground', () => {
     openPlaygroundTab();
   });
@@ -161,15 +183,25 @@ export async function registerExecutionPanelPane(): Promise<void> {
 // Public API — called from MonacoEditor.tsx
 // ---------------------------------------------------------------------------
 
+export interface SetRuntimePortOptions {
+  /** Connection version (0, 1, 2, ...) used as React key to force ExecutionPanel remount on restart. */
+  connectionVersion?: number;
+}
+
 /**
  * Provide the RuntimePort and open the Playground tab.
- * Call this once when the WASM worker sends 'ready'.
+ * On first call: resolves the port promise and opens the tab.
+ * On restart: updates the existing pane with the new port (no new tab).
  */
-export function setRuntimePort(port: RuntimePort): void {
+export function setRuntimePort(port: RuntimePort, options?: SetRuntimePortOptions): void {
+  currentPort = port;
+  currentConnectionVersion = options?.connectionVersion ?? currentConnectionVersion;
   if (portResolve) {
     portResolve(port);
     portResolve = null;
+    openPlaygroundTab();
+  } else {
+    portKey += 1;
+    portChangeListeners.forEach((cb) => cb(port));
   }
-  // Auto-open the tab when the runtime becomes available
-  openPlaygroundTab();
 }

@@ -256,7 +256,7 @@ describe('WASM Build Pipeline', () => {
 
     await page.goto(`http://localhost:${devServer.port}`, { timeout: 120_000 })
 
-    // Wait for the WASM worker to initialize and send hotReloadTestString.
+    // Wait for the WASM worker to initialize and send buildTime.
     // This implicitly waits for React mount + worker boot + WASM init.
     console.log('[waiting] Waiting for hot-reload-test element...')
     await waitForHotReloadText(page, KNOWN_GOOD_STRING, 120_000)

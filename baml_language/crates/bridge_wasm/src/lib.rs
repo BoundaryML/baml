@@ -79,12 +79,10 @@ pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-/// Returns a test string for hot-reload testing (see app-vscode-webview hot-reload.hmr.test.ts).
-#[wasm_bindgen(js_name = hotReloadTestString)]
-pub fn hot_reload_test_string() -> String {
-    // BEGIN_VITE_HOT_RELOAD_TEST
-    "injected for hot reload test, see hot-reload.hmr.test.ts".to_string()
-    // END_VITE_HOT_RELOAD_TEST
+/// Returns the build timestamp (unix seconds) for hot-reload / build-identity checks.
+#[wasm_bindgen(js_name = getBuildTime)]
+pub fn get_build_time() -> String {
+    env!("BRIDGE_WASM_BUILD_TS").to_string()
 }
 
 // ============================================================================
