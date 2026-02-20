@@ -690,7 +690,7 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
     }
 
     let project = TestProject {
-        name: "baml_std".to_string(),
+        name: "__baml_std__".to_string(),
         path: builtins_dir,
         files,
     };
