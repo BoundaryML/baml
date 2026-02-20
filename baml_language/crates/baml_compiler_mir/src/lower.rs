@@ -1054,6 +1054,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 };
 
                 // For each arm, create test and body blocks
+                let match_source_line = self.builder.current_source_line;
                 let last_arm_idx = arms.len().saturating_sub(1);
                 for (i, arm) in arms.iter().enumerate() {
                     let is_last_arm = i == last_arm_idx;
@@ -1066,6 +1067,10 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     } else {
                         self.builder.create_block()
                     };
+
+                    // Restore match expression source line for pattern test,
+                    // so it doesn't leak from the previous arm's body.
+                    self.builder.current_source_line = match_source_line;
 
                     // Generate pattern test
                     let arm_source_line = body.source_lines.get(&arm.body).copied().unwrap_or(0);

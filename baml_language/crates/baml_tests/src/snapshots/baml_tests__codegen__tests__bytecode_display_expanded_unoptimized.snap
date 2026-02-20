@@ -128,8 +128,7 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
        2     cmp_op instanceof       
        3     pop_jump_if_false +2    (to 5)
        4     jump +11                (to 15)
-
-  46   5     load_var 1              (input)
+       5     load_var 1              (input)
        6     load_const 1            (<class ErrorInfo>)
        7     cmp_op instanceof       
        8     pop_jump_if_false +12   (to 20)
@@ -152,8 +151,7 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
        22    cmp_op instanceof       
        23    pop_jump_if_false +2    (to 25)
        24    jump +12                (to 36)
-
-  51   25    load_var 1              (input)
+       25    load_var 1              (input)
        26    load_const 1            (<class ErrorInfo>)
        27    cmp_op instanceof       
        28    pop_jump_if_false +13   (to 41)
@@ -177,8 +175,7 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
        43    cmp_op instanceof       
        44    pop_jump_if_false +2    (to 46)
        45    jump +10                (to 55)
-
-  60   46    load_var 1              (input)
+       46    load_var 1              (input)
        47    load_const 1            (<class ErrorInfo>)
        48    cmp_op instanceof       
        49    pop_jump_if_false +23   (to 72)
