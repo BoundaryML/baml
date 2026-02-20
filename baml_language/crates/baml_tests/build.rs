@@ -47,9 +47,10 @@ fn generate_tests(_out_dir: &str, manifest_dir: &str) {
     // diffs in insta snapshot metadata).
     let dest_path = Path::new(&manifest_dir).join("src/generated_tests.rs");
 
+    let exclude_builtins = quote!(|name: &&String| !name.starts_with(BAML_STD_PREFIX));
     let project_modules: TokenStream = projects
         .iter()
-        .map(|project| generate_project_tests(project, manifest_dir))
+        .map(|project| generate_project_tests(project, manifest_dir, exclude_builtins.clone()))
         .collect();
 
     let baml_std_module = generate_baml_std_test(manifest_dir);
@@ -185,7 +186,11 @@ fn discover_baml_files(dir: &Path) -> Vec<BamlFile> {
     files
 }
 
-fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStream {
+fn generate_project_tests(
+    project: &TestProject,
+    manifest_dir: &str,
+    codegen_filter: TokenStream,
+) -> TokenStream {
     let module_name = format_ident!("{}", project.name.replace("-", "_"));
     let snapshot_path = format!(
         "{}/snapshots/{}",
@@ -201,7 +206,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
     let diagnostics_test = generate_diagnostics_test(project);
-    let codegen_test = generate_codegen_test(project);
+    let codegen_test = generate_codegen_test(project, codegen_filter);
 
     let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
 
@@ -674,11 +679,8 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
 
 /// Generate a standalone test module for the BAML standard library (builtins).
 ///
-/// Reuses the same per-phase generators as regular projects. The builtin `.baml`
-/// files are discovered from `../baml_builtins/baml/` and treated as a project.
-///
-/// The only custom test is codegen (06), which filters to `baml.*` functions
-/// since `compile_files` merges everything into one program.
+/// Uses the same `generate_project_tests` as regular projects, just with
+/// the codegen filter flipped to include only `baml.*` functions.
 fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
     let builtins_dir = Path::new(manifest_dir).join("../baml_builtins/baml");
     let files = discover_baml_files(&builtins_dir);
@@ -693,95 +695,8 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
         files,
     };
 
-    let snapshot_path = format!("{}/snapshots/baml_std", manifest_dir.replace('\\', "/"));
-
-    // Reuse standard phase generators for 01-05
-    let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
-    let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
-    let hir_test = generate_hir_test(&project);
-    let tir_test = generate_tir_test(&project);
-    let mir_test = generate_mir_test(&project);
-    let diagnostics_test = generate_diagnostics_test(&project);
-
-    // Custom codegen test: filter to only builtin functions
-    let collect_functions =
-        emit_collect_functions(quote!(|name: &&String| name.starts_with(BAML_STD_PREFIX)));
-
-    let codegen_file_loaders: TokenStream = project
-        .files
-        .iter()
-        .map(|baml_file| {
-            let full_path = baml_file.full_path.display().to_string();
-            let relative_path = baml_file.relative_path.display().to_string();
-            let include_content = make_include_str(&full_path);
-
-            quote! {
-                {
-                    let content = #include_content;
-                    let content = content.replace("\r\n", "\n");
-                    let sf = db.add_file(#relative_path, &content);
-                    source_files.push(sf);
-                }
-            }
-        })
-        .collect();
-
-    quote! {
-        #[cfg(test)]
-        mod baml_std {
-            use baml_db::*;
-            use baml_compiler_hir::{function_body, function_signature, function_signature_source_map};
-            use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
-            use baml_compiler_tir::pretty::short_display;
-            use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
-            use baml_project::ProjectDatabase;
-            use std::collections::HashMap;
-            use insta::{assert_snapshot, with_settings};
-            use std::fmt::Write;
-            use salsa::Setter;
-            #[allow(unused_imports)]
-            use crate::utils::*;
-            const SNAPSHOT_PATH: &str = #snapshot_path;
-
-            #lexer_tests
-            #parser_tests
-            #hir_test
-            #tir_test
-            #mir_test
-            #diagnostics_test
-
-            #[test]
-            fn test_06_codegen() {
-                let mut db = ProjectDatabase::new();
-                let root = db.set_project_root(std::path::Path::new("."));
-                let mut source_files = Vec::new();
-
-                #codegen_file_loaders
-
-                let all_files: Vec<_> = root.files(&db).clone();
-
-                let mut output = String::new();
-
-                match baml_compiler_emit::compile_files(&db, &all_files) {
-                    Ok(program) => {
-                        #collect_functions
-
-                        output = bex_vm::debug::display_program_textual(
-                            &functions,
-                        );
-                    }
-                    Err(err) => {
-                        writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").unwrap();
-                        writeln!(output, "Error: {:?}", err).unwrap();
-                    }
-                }
-
-                with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                    assert_snapshot!("06_codegen", output);
-                });
-            }
-        }
-    }
+    let include_builtins = quote!(|name: &&String| name.starts_with(BAML_STD_PREFIX));
+    generate_project_tests(&project, manifest_dir, include_builtins)
 }
 
 /// Emits a `quote!` fragment that collects sorted functions from a compiled program,
@@ -814,9 +729,8 @@ fn emit_collect_functions(filter_expr: TokenStream) -> TokenStream {
     }
 }
 
-fn generate_codegen_test(project: &TestProject) -> TokenStream {
-    let collect_functions =
-        emit_collect_functions(quote!(|name: &&String| !name.starts_with(BAML_STD_PREFIX)));
+fn generate_codegen_test(project: &TestProject, codegen_filter: TokenStream) -> TokenStream {
+    let collect_functions = emit_collect_functions(codegen_filter);
 
     let file_loaders: TokenStream = project
         .files

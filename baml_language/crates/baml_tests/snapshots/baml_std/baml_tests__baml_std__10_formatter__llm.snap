@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== FORMATTER ERROR ===
+Unexpected additional element at 396..397 in 391..416
