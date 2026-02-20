@@ -672,33 +672,93 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
 
 /// Generate a standalone test module for the BAML standard library (builtins).
 ///
-/// This compiles only the builtin files (no user code) and snapshots the
-/// resulting bytecode once, avoiding duplication across every project snapshot.
+/// Reuses the same per-phase generators as regular projects. The builtin `.baml`
+/// files are discovered from `../baml_builtins/baml/` and treated as a project.
+///
+/// The only custom test is codegen (06), which filters to `baml.*` functions
+/// since `compile_files` merges everything into one program.
 fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
+    let builtins_dir = Path::new(manifest_dir).join("../baml_builtins/baml");
+    let files = discover_baml_files(&builtins_dir);
+
+    if files.is_empty() {
+        return quote! {};
+    }
+
+    let project = TestProject {
+        name: "baml_std".to_string(),
+        path: builtins_dir,
+        files,
+    };
+
     let snapshot_path = format!("{}/snapshots/baml_std", manifest_dir.replace('\\', "/"),);
+
+    // Reuse standard phase generators for 01-05
+    let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
+    let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
+    let hir_test = generate_hir_test(&project);
+    let tir_test = generate_tir_test(&project);
+    let mir_test = generate_mir_test(&project);
+    let diagnostics_test = generate_diagnostics_test(&project);
+
+    // Custom codegen test: filter to only builtin functions
+    let codegen_file_loaders: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let relative_path = baml_file.relative_path.display().to_string();
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    let sf = db.add_file(#relative_path, &content);
+                    source_files.push(sf);
+                }
+            }
+        })
+        .collect();
 
     quote! {
         #[cfg(test)]
         mod baml_std {
             use baml_db::*;
+            use baml_compiler_hir::{function_body, function_signature, function_signature_source_map};
+            use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
+            use baml_compiler_tir::pretty::short_display;
+            use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
             use baml_project::ProjectDatabase;
+            use std::collections::HashMap;
             use insta::{assert_snapshot, with_settings};
             use std::fmt::Write;
+            use salsa::Setter;
+            #[allow(unused_imports)]
+            use crate::utils::*;
             const SNAPSHOT_PATH: &str = #snapshot_path;
+
+            #lexer_tests
+            #parser_tests
+            #hir_test
+            #tir_test
+            #mir_test
+            #diagnostics_test
 
             #[test]
             fn test_06_codegen() {
                 let mut db = ProjectDatabase::new();
                 let root = db.set_project_root(std::path::Path::new("."));
+                let mut source_files = Vec::new();
 
-                // No user files — root.files() contains only builtins
+                #codegen_file_loaders
+
                 let all_files: Vec<_> = root.files(&db).clone();
 
                 let mut output = String::new();
 
                 match baml_compiler_emit::compile_files(&db, &all_files) {
                     Ok(program) => {
-                        // Only include builtin functions (baml.*)
                         let mut func_names: Vec<_> = program.function_indices.keys()
                             .filter(|name| name.starts_with(BAML_STD_PREFIX))
                             .collect();
