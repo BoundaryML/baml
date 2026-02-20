@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class StringTorture {
@@ -14,11 +13,11 @@ class StringTorture {
 }
 
 function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-      return;
+    return;
 }
 
 function DeepExpression() -> int {
-      return 1 + 2 * 3 - 4 / 5 + 6 * 7 - 8 / 9 + 10;
+    return 1 + 2 * 3 - 4 / 5 + 6 * 7 - 8 / 9 + 10;
 }
 
 class Level5 {
@@ -7057,10 +7056,10 @@ type Language = crate
 type Language = crate
 
 function BodyTorture() -> int {
-      let x;
-      while ({
-          x += 1;
-      }) {
-          x += 1;
-      }
+    let x;
+    while ({
+        x += 1;
+    }) {
+        x += 1;
+    }
 }

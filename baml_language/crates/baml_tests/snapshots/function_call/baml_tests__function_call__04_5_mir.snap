@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn array_length() -> int {
@@ -35,7 +34,6 @@ fn array_length() -> int {
     bb3: {
         return;
     }
-
 }
 
 fn param_in_if_statement(b: bool) -> int {
@@ -66,7 +64,6 @@ fn param_in_if_statement(b: bool) -> int {
     bb4: {
         goto -> bb1;
     }
-
 }
 
 fn Bar() -> int {
@@ -90,7 +87,6 @@ fn Bar() -> int {
         _0 = copy _1;
         goto -> bb1;
     }
-
 }
 
 fn Foo(x: int) -> int {
@@ -110,7 +106,6 @@ fn Foo(x: int) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn GreetBaz(n: string) -> string {
@@ -137,7 +132,6 @@ fn GreetBaz(n: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Baz.Greeting(self: Baz) -> string {
@@ -163,5 +157,4 @@ fn Baz.Greeting(self: Baz) -> string {
     bb1: {
         return;
     }
-
 }

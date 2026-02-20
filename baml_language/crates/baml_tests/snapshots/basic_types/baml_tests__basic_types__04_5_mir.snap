@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn GetMixedMap() -> map<string, int | string> {
@@ -24,7 +23,6 @@ fn GetMixedMap() -> map<string, int | string> {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn GetMixedList() -> int | string[] {
@@ -48,7 +46,6 @@ fn GetMixedList() -> int | string[] {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn GetStatus() -> Status {
@@ -72,7 +69,6 @@ fn GetStatus() -> Status {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn GetUser(id: int) -> User {
@@ -101,5 +97,4 @@ fn GetUser(id: int) -> User {
     bb2: {
         goto -> bb1;
     }
-
 }

@@ -1,131 +1,130 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function HeaderOnlyFunction() -> string {
-      //# JustHeaders
-      //## NoCode
-      //### OnlyDocumentation
-      //#### PureAnnotation
-      //##### NoExpressions
-      //###### UntilTheEnd
-      "default"
+    //# JustHeaders
+    //## NoCode
+    //### OnlyDocumentation
+    //#### PureAnnotation
+    //##### NoExpressions
+    //###### UntilTheEnd
+    "default"
 }
 
 function VeryLongHeaderTitle() -> string {
-      //# ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader
-      //## AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':",.<>?AndNumbers1234567890
-      "long headers"
+    //# ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader
+    //## AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':",.<>?AndNumbers1234567890
+    "long headers"
 }
 
 function HeadersAroundExpressions() -> string {
-      //# BeforeLet
-      let x = 5;
-      //## AfterLet
-      //### BeforeIf
-      if (x > 0) {
-          //#### InsideIf
-          x
-      } else {
-          //#### InsideElse
-          0
-      };
-      //### AfterIf
-      //## BeforeFor
-      {
-          let _iter = [1, 2, 3];
-          let _len = _iter.length();
-          let _i = 0;
-          while (_i < _len) {
-              let i = _iter[_i];
-              _i += 1;
-              //### InsideFor
-              i;
-          }
-      };
-      //## AfterFor
-      //# FinalSection
-      x
+    //# BeforeLet
+    let x = 5;
+    //## AfterLet
+    //### BeforeIf
+    if (x > 0) {
+        //#### InsideIf
+        x
+    } else {
+        //#### InsideElse
+        0
+    };
+    //### AfterIf
+    //## BeforeFor
+    {
+        let _iter = [1, 2, 3];
+        let _len = _iter.length();
+        let _i = 0;
+        while (_i < _len) {
+            let i = _iter[_i];
+            _i += 1;
+            //### InsideFor
+            i;
+        }
+    };
+    //## AfterFor
+    //# FinalSection
+    x
 }
 
 function HeadersInComplexNesting() -> string {
-      //# MainFunction
-      let result = {
-          //## InsideBlockExpression
-          let inner = if (true) {
-              //### InsideIfTrue
-              let deep = {
-                  //#### VeryDeepBlock
-                  "deep value"
-              };
-              //### BacktoIfLevel
-              deep
-          } else {
-              //### InsideElse
-              "else value"
-          };
-          //## BacktoBlockLevel
-          inner
-      };
-      //# BacktoFunctionLevel
-      result
+    //# MainFunction
+    let result = {
+        //## InsideBlockExpression
+        let inner = if (true) {
+            //### InsideIfTrue
+            let deep = {
+                //#### VeryDeepBlock
+                "deep value"
+            };
+            //### BacktoIfLevel
+            deep
+        } else {
+            //### InsideElse
+            "else value"
+        };
+        //## BacktoBlockLevel
+        inner
+    };
+    //# BacktoFunctionLevel
+    result
 }
 
 function HeadersAndComments() -> string {
-      //# HeaderBeforeComment
-      let x = "test";
-      //## HeaderAfterComment
-      //### HeaderAfterDocComment
-      x
+    //# HeaderBeforeComment
+    let x = "test";
+    //## HeaderAfterComment
+    //### HeaderAfterDocComment
+    x
 }
 
 function ConsecutiveHeaders() -> string {
-      //# FirstHeader
-      //# SecondHeader
-      //# ThirdHeader
-      //## SubsectionA
-      //## SubsectionB
-      //## SubsectionC
-      "multiple consecutive headers"
+    //# FirstHeader
+    //# SecondHeader
+    //# ThirdHeader
+    //## SubsectionA
+    //## SubsectionB
+    //## SubsectionC
+    "multiple consecutive headers"
 }
 
 function UnicodeHeaders() -> string {
-      //# 你好世界
-      //## Émojis🎉🎊
-      //### Special«Characters»™
-      "test"
+    //# 你好世界
+    //## Émojis🎉🎊
+    //### Special«Characters»™
+    "test"
 }
 
 function HeaderLevels() -> string {
-      //# Level1
-      //## Level2
-      //### Level3
-      //#### Level4
-      //##### Level5
-      //###### Level6
-      //####### Level7-Morethan6levels
-      //######## Level8
-      //######### Level9
-      "deep nesting"
+    //# Level1
+    //## Level2
+    //### Level3
+    //#### Level4
+    //##### Level5
+    //###### Level6
+    //####### Level7-Morethan6levels
+    //######## Level8
+    //######### Level9
+    "deep nesting"
 }
 
 function HeadersWithSpecialChars() -> string {
-      //# Header-With-Dashes
-      //## Header_With_Underscores
-      //### Header.With.Dots
-      //#### HeaderWithSlashes
-      //##### Header\With\Backslashes
-      //###### Header|With|Pipes
-      "special chars"
+    //# Header-With-Dashes
+    //## Header_With_Underscores
+    //### Header.With.Dots
+    //#### HeaderWithSlashes
+    //##### Header\With\Backslashes
+    //###### Header|With|Pipes
+    "special chars"
 }
 
 function HeadersWithWhitespace() -> string {
-      //# ExtraSpacesBeforeTitle
-      //## MixedTabsAndSpaces
-      //### AllTabs
-      let x = "whitespace test";
-      //# TrailingSpaces
-      //## MultipleSpacesBetweenWords
-      x
+    //# ExtraSpacesBeforeTitle
+    //## MixedTabsAndSpaces
+    //### AllTabs
+    let x = "whitespace test";
+    //# TrailingSpaces
+    //## MultipleSpacesBetweenWords
+    x
 }

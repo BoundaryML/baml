@@ -78,9 +78,11 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
     writeln!(f)?;
 
     // Basic blocks
-    for block in &func.blocks {
+    for (i, block) in func.blocks.iter().enumerate() {
         write_block(f, block)?;
-        writeln!(f)?;
+        if i + 1 < func.blocks.len() {
+            writeln!(f)?;
+        }
     }
 
     writeln!(f, "}}")?;

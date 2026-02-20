@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn AnotherLLM(input: string) -> string {
@@ -29,7 +28,6 @@ fn AnotherLLM(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Ambiguous(input: string) -> string {
@@ -58,7 +56,6 @@ fn Ambiguous(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn ProcessData(data: JsonData) -> string {
@@ -115,7 +112,6 @@ fn ProcessData(data: JsonData) -> string {
     bb6: {
         return;
     }
-
 }
 
 fn ExtractData(text: string) -> JsonData {
@@ -144,7 +140,6 @@ fn ExtractData(text: string) -> JsonData {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn SimpleCalc(a: int, b: int) -> int {
@@ -174,7 +169,6 @@ fn SimpleCalc(a: int, b: int) -> int {
     bb2: {
         return;
     }
-
 }
 
 fn ProcessAnalysis(analysis: Analysis) -> string {
@@ -295,7 +289,6 @@ fn ProcessAnalysis(analysis: Analysis) -> string {
     bb14: {
         return;
     }
-
 }
 
 fn LLMAnalyze(text: string) -> Analysis {
@@ -324,7 +317,6 @@ fn LLMAnalyze(text: string) -> Analysis {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn ChainedProcess(input: string) -> string {
@@ -353,5 +345,4 @@ fn ChainedProcess(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }

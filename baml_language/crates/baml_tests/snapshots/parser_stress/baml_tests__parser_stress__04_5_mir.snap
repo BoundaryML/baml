@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn ComplexType() -> map<string, map<string, map<string, int[]?>>> {
@@ -19,7 +18,6 @@ fn ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     bb2: {
         return;
     }
-
 }
 
 fn DeepExpression() -> int {
@@ -75,7 +73,6 @@ fn DeepExpression() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn Process22(input: string) -> string {
@@ -104,7 +101,6 @@ fn Process22(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process54(input: string) -> string {
@@ -133,7 +129,6 @@ fn Process54(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process95(input: string) -> string {
@@ -162,7 +157,6 @@ fn Process95(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process60(input: string) -> string {
@@ -191,7 +185,6 @@ fn Process60(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process68(input: string) -> string {
@@ -220,7 +213,6 @@ fn Process68(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process14(input: string) -> string {
@@ -249,7 +241,6 @@ fn Process14(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process79(input: string) -> string {
@@ -278,7 +269,6 @@ fn Process79(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process84(input: string) -> string {
@@ -307,7 +297,6 @@ fn Process84(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process33(input: string) -> string {
@@ -336,7 +325,6 @@ fn Process33(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process12(input: string) -> string {
@@ -365,7 +353,6 @@ fn Process12(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process74(input: string) -> string {
@@ -394,7 +381,6 @@ fn Process74(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process99(input: string) -> string {
@@ -423,7 +409,6 @@ fn Process99(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process64(input: string) -> string {
@@ -452,7 +437,6 @@ fn Process64(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process52(input: string) -> string {
@@ -481,7 +465,6 @@ fn Process52(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process7(input: string) -> string {
@@ -510,7 +493,6 @@ fn Process7(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process80(input: string) -> string {
@@ -539,7 +521,6 @@ fn Process80(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process58(input: string) -> string {
@@ -568,7 +549,6 @@ fn Process58(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process97(input: string) -> string {
@@ -597,7 +577,6 @@ fn Process97(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process36(input: string) -> string {
@@ -626,7 +605,6 @@ fn Process36(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process63(input: string) -> string {
@@ -655,7 +633,6 @@ fn Process63(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process19(input: string) -> string {
@@ -684,7 +661,6 @@ fn Process19(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process83(input: string) -> string {
@@ -713,7 +689,6 @@ fn Process83(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process18(input: string) -> string {
@@ -742,7 +717,6 @@ fn Process18(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process26(input: string) -> string {
@@ -771,7 +745,6 @@ fn Process26(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process43(input: string) -> string {
@@ -800,7 +773,6 @@ fn Process43(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process46(input: string) -> string {
@@ -829,7 +801,6 @@ fn Process46(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process62(input: string) -> string {
@@ -858,7 +829,6 @@ fn Process62(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process87(input: string) -> string {
@@ -887,7 +857,6 @@ fn Process87(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process44(input: string) -> string {
@@ -916,7 +885,6 @@ fn Process44(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process47(input: string) -> string {
@@ -945,7 +913,6 @@ fn Process47(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process35(input: string) -> string {
@@ -974,7 +941,6 @@ fn Process35(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process38(input: string) -> string {
@@ -1003,7 +969,6 @@ fn Process38(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process41(input: string) -> string {
@@ -1032,7 +997,6 @@ fn Process41(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process28(input: string) -> string {
@@ -1061,7 +1025,6 @@ fn Process28(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process65(input: string) -> string {
@@ -1090,7 +1053,6 @@ fn Process65(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process6(input: string) -> string {
@@ -1119,7 +1081,6 @@ fn Process6(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process32(input: string) -> string {
@@ -1148,7 +1109,6 @@ fn Process32(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process92(input: string) -> string {
@@ -1177,7 +1137,6 @@ fn Process92(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process55(input: string) -> string {
@@ -1206,7 +1165,6 @@ fn Process55(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process66(input: string) -> string {
@@ -1235,7 +1193,6 @@ fn Process66(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process56(input: string) -> string {
@@ -1264,7 +1221,6 @@ fn Process56(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process67(input: string) -> string {
@@ -1293,7 +1249,6 @@ fn Process67(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process3(input: string) -> string {
@@ -1322,7 +1277,6 @@ fn Process3(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process75(input: string) -> string {
@@ -1351,7 +1305,6 @@ fn Process75(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process48(input: string) -> string {
@@ -1380,7 +1333,6 @@ fn Process48(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process49(input: string) -> string {
@@ -1409,7 +1361,6 @@ fn Process49(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process61(input: string) -> string {
@@ -1438,7 +1389,6 @@ fn Process61(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process96(input: string) -> string {
@@ -1467,7 +1417,6 @@ fn Process96(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process34(input: string) -> string {
@@ -1496,7 +1445,6 @@ fn Process34(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process59(input: string) -> string {
@@ -1525,7 +1473,6 @@ fn Process59(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process89(input: string) -> string {
@@ -1554,7 +1501,6 @@ fn Process89(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process45(input: string) -> string {
@@ -1583,7 +1529,6 @@ fn Process45(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process86(input: string) -> string {
@@ -1612,7 +1557,6 @@ fn Process86(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process16(input: string) -> string {
@@ -1641,7 +1585,6 @@ fn Process16(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process39(input: string) -> string {
@@ -1670,7 +1613,6 @@ fn Process39(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process82(input: string) -> string {
@@ -1699,7 +1641,6 @@ fn Process82(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process2(input: string) -> string {
@@ -1728,7 +1669,6 @@ fn Process2(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process27(input: string) -> string {
@@ -1757,7 +1697,6 @@ fn Process27(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process53(input: string) -> string {
@@ -1786,7 +1725,6 @@ fn Process53(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process23(input: string) -> string {
@@ -1815,7 +1753,6 @@ fn Process23(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process9(input: string) -> string {
@@ -1844,7 +1781,6 @@ fn Process9(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process72(input: string) -> string {
@@ -1873,7 +1809,6 @@ fn Process72(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process77(input: string) -> string {
@@ -1902,7 +1837,6 @@ fn Process77(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process40(input: string) -> string {
@@ -1931,7 +1865,6 @@ fn Process40(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process30(input: string) -> string {
@@ -1960,7 +1893,6 @@ fn Process30(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process8(input: string) -> string {
@@ -1989,7 +1921,6 @@ fn Process8(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process11(input: string) -> string {
@@ -2018,7 +1949,6 @@ fn Process11(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process37(input: string) -> string {
@@ -2047,7 +1977,6 @@ fn Process37(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process4(input: string) -> string {
@@ -2076,7 +2005,6 @@ fn Process4(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process91(input: string) -> string {
@@ -2105,7 +2033,6 @@ fn Process91(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process31(input: string) -> string {
@@ -2134,7 +2061,6 @@ fn Process31(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process50(input: string) -> string {
@@ -2163,7 +2089,6 @@ fn Process50(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process20(input: string) -> string {
@@ -2192,7 +2117,6 @@ fn Process20(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process98(input: string) -> string {
@@ -2221,7 +2145,6 @@ fn Process98(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process85(input: string) -> string {
@@ -2250,7 +2173,6 @@ fn Process85(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process78(input: string) -> string {
@@ -2279,7 +2201,6 @@ fn Process78(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process1(input: string) -> string {
@@ -2308,7 +2229,6 @@ fn Process1(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process90(input: string) -> string {
@@ -2337,7 +2257,6 @@ fn Process90(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process17(input: string) -> string {
@@ -2366,7 +2285,6 @@ fn Process17(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process81(input: string) -> string {
@@ -2395,7 +2313,6 @@ fn Process81(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process71(input: string) -> string {
@@ -2424,7 +2341,6 @@ fn Process71(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process15(input: string) -> string {
@@ -2453,7 +2369,6 @@ fn Process15(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process42(input: string) -> string {
@@ -2482,7 +2397,6 @@ fn Process42(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process51(input: string) -> string {
@@ -2511,7 +2425,6 @@ fn Process51(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process5(input: string) -> string {
@@ -2540,7 +2453,6 @@ fn Process5(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process13(input: string) -> string {
@@ -2569,7 +2481,6 @@ fn Process13(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process29(input: string) -> string {
@@ -2598,7 +2509,6 @@ fn Process29(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process93(input: string) -> string {
@@ -2627,7 +2537,6 @@ fn Process93(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process70(input: string) -> string {
@@ -2656,7 +2565,6 @@ fn Process70(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process76(input: string) -> string {
@@ -2685,7 +2593,6 @@ fn Process76(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process10(input: string) -> string {
@@ -2714,7 +2621,6 @@ fn Process10(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process21(input: string) -> string {
@@ -2743,7 +2649,6 @@ fn Process21(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process100(input: string) -> string {
@@ -2772,7 +2677,6 @@ fn Process100(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process94(input: string) -> string {
@@ -2801,7 +2705,6 @@ fn Process94(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process25(input: string) -> string {
@@ -2830,7 +2733,6 @@ fn Process25(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process69(input: string) -> string {
@@ -2859,7 +2761,6 @@ fn Process69(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process24(input: string) -> string {
@@ -2888,7 +2789,6 @@ fn Process24(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process88(input: string) -> string {
@@ -2917,7 +2817,6 @@ fn Process88(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process73(input: string) -> string {
@@ -2946,7 +2845,6 @@ fn Process73(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn Process57(input: string) -> string {
@@ -2975,7 +2873,6 @@ fn Process57(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn BodyTorture() -> int {
@@ -3028,5 +2925,4 @@ fn BodyTorture() -> int {
         _0 = const null;
         goto -> bb1;
     }
-
 }

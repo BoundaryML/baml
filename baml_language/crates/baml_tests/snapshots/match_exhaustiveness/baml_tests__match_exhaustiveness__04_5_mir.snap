@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn NestedLiteralUnions(code: int) -> string {
@@ -34,7 +33,6 @@ fn NestedLiteralUnions(code: int) -> string {
         _0 = const "other";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveEnumWithTypedPattern(s: Status) -> string {
@@ -70,7 +68,6 @@ fn ExhaustiveEnumWithTypedPattern(s: Status) -> string {
         _3 = copy _1;
         goto -> bb4;
     }
-
 }
 
 fn ParenthesizedSingleLiteral(b: bool) -> string {
@@ -111,7 +108,6 @@ fn ParenthesizedSingleLiteral(b: bool) -> string {
         _0 = const "no";
         goto -> bb2;
     }
-
 }
 
 fn DuplicateEnumVariant(s: Status) -> string {
@@ -122,7 +118,7 @@ fn DuplicateEnumVariant(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, 1: bb5, 2: bb6, otherwise: bb7] (exhaustive);
+        switch copy _2 [Status.Active: bb3, Status.Inactive: bb5, Status.Pending: bb6, otherwise: bb7] (exhaustive);
     }
 
     bb1: {
@@ -156,7 +152,6 @@ fn DuplicateEnumVariant(s: Status) -> string {
     bb7: {
         unreachable;
     }
-
 }
 
 fn WrongLiteralTypeBoolWithInt(b: bool) -> string {
@@ -184,7 +179,6 @@ fn WrongLiteralTypeBoolWithInt(b: bool) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn UnreachableMultiple(x: int) -> string {
@@ -246,7 +240,6 @@ fn UnreachableMultiple(x: int) -> string {
         _5 = copy _1;
         goto -> bb9;
     }
-
 }
 
 fn OverlappingWithBindings(r: Success | Failure) -> string {
@@ -301,7 +294,6 @@ fn OverlappingWithBindings(r: Success | Failure) -> string {
         _6 = copy _1;
         goto -> bb7;
     }
-
 }
 
 fn ExhaustiveNullableEnum(s: Status?) -> string {
@@ -364,7 +356,6 @@ fn ExhaustiveNullableEnum(s: Status?) -> string {
         _0 = const "no status";
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveBoolMissingTrue(b: bool) -> string {
@@ -394,7 +385,6 @@ fn NonExhaustiveBoolMissingTrue(b: bool) -> string {
     bb4: {
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveEnumAllVariants(s: Status) -> string {
@@ -405,7 +395,7 @@ fn ExhaustiveEnumAllVariants(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, 1: bb4, 2: bb5, otherwise: bb6] (exhaustive);
+        switch copy _2 [Status.Active: bb3, Status.Inactive: bb4, Status.Pending: bb5, otherwise: bb6] (exhaustive);
     }
 
     bb1: {
@@ -434,7 +424,50 @@ fn ExhaustiveEnumAllVariants(s: Status) -> string {
     bb6: {
         unreachable;
     }
+}
 
+fn JumpTableEnumDiscriminant(state: DispatchState) -> int {
+    // Locals:
+    let _0: int // return
+    let _1: DispatchState // state // param
+    let _2: int
+
+    bb0: {
+        _2 = discriminant(_1);
+        switch copy _2 [DispatchState.Alpha: bb3, DispatchState.Beta: bb4, DispatchState.Gamma: bb5, DispatchState.Delta: bb6, otherwise: bb7] (exhaustive);
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = const 10_i64;
+        goto -> bb2;
+    }
+
+    bb4: {
+        _0 = const 20_i64;
+        goto -> bb2;
+    }
+
+    bb5: {
+        _0 = const 30_i64;
+        goto -> bb2;
+    }
+
+    bb6: {
+        _0 = const 40_i64;
+        goto -> bb2;
+    }
+
+    bb7: {
+        unreachable;
+    }
 }
 
 fn ExhaustiveTypeAlias(r: Success | Failure) -> string {
@@ -491,7 +524,6 @@ fn ExhaustiveTypeAlias(r: Success | Failure) -> string {
         _6 = copy _1;
         goto -> bb7;
     }
-
 }
 
 fn EnumVariantAfterTypedEnum(s: Status) -> string {
@@ -538,7 +570,6 @@ fn EnumVariantAfterTypedEnum(s: Status) -> string {
         _0 = const "unreachable";
         goto -> bb2;
     }
-
 }
 
 fn BoolLiteralAfterTypedBool(b: bool) -> string {
@@ -585,7 +616,6 @@ fn BoolLiteralAfterTypedBool(b: bool) -> string {
         _0 = const "unreachable";
         goto -> bb2;
     }
-
 }
 
 fn LiteralUnionWithCatchAll(code: int) -> string {
@@ -619,7 +649,6 @@ fn LiteralUnionWithCatchAll(code: int) -> string {
         _0 = const "other";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
@@ -657,7 +686,6 @@ fn ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
     bb6: {
         unreachable;
     }
-
 }
 
 fn ExhaustiveStringLiterals(role: "user" | "assistant" | "system") -> string {
@@ -709,7 +737,6 @@ fn ExhaustiveStringLiterals(role: "user" | "assistant" | "system") -> string {
         _0 = const "System";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
@@ -756,7 +783,6 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
         _0 = const "fallback";
         goto -> bb2;
     }
-
 }
 
 fn DuplicateIntLiteral(x: int) -> string {
@@ -790,7 +816,6 @@ fn DuplicateIntLiteral(x: int) -> string {
         _0 = const "other";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
@@ -839,7 +864,6 @@ fn ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
         _0 = const "http ok";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveLiteralWithBaseType(x: int) -> string {
@@ -886,7 +910,6 @@ fn ExhaustiveLiteralWithBaseType(x: int) -> string {
         _4 = copy _1;
         goto -> bb6;
     }
-
 }
 
 fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
@@ -897,7 +920,7 @@ fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, 1: bb4, 2: bb5, otherwise: bb6];
+        switch copy _2 [Status.Active: bb3, Status.Inactive: bb4, Status.Pending: bb5, otherwise: bb6];
     }
 
     bb1: {
@@ -926,7 +949,6 @@ fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     bb6: {
         unreachable;
     }
-
 }
 
 fn NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
@@ -964,7 +986,6 @@ fn NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
         _3 = copy _1;
         goto -> bb3;
     }
-
 }
 
 fn BoolUnionPattern(b: bool) -> string {
@@ -1000,7 +1021,6 @@ fn BoolUnionPattern(b: bool) -> string {
         _3 = copy _1 == const false;
         branch copy _3 -> [bb4, bb3];
     }
-
 }
 
 fn StringLiteralUnionPattern(role: "user" | "assistant" | "system") -> string {
@@ -1047,7 +1067,6 @@ fn StringLiteralUnionPattern(role: "user" | "assistant" | "system") -> string {
         _0 = const "system";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveBool(b: bool) -> string {
@@ -1088,7 +1107,6 @@ fn ExhaustiveBool(b: bool) -> string {
         _0 = const "no";
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
@@ -1145,7 +1163,6 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
         _6 = copy _1;
         goto -> bb6;
     }
-
 }
 
 fn ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
@@ -1213,7 +1230,6 @@ fn ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
         _0 = const "nothing";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveOptionalSingleton(code: 200?) -> string {
@@ -1254,7 +1270,6 @@ fn ExhaustiveOptionalSingleton(code: 200?) -> string {
         _0 = const "no code";
         goto -> bb2;
     }
-
 }
 
 fn BoolWithCatchAll(b: bool) -> string {
@@ -1293,7 +1308,6 @@ fn BoolWithCatchAll(b: bool) -> string {
         _0 = const "no";
         goto -> bb2;
     }
-
 }
 
 fn GuardedOnlyNonExhaustive(x: int) -> int {
@@ -1376,7 +1390,6 @@ fn GuardedOnlyNonExhaustive(x: int) -> int {
         _0 = copy _14 * copy _15;
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveBoolMissingFalse(b: bool) -> string {
@@ -1406,7 +1419,6 @@ fn NonExhaustiveBoolMissingFalse(b: bool) -> string {
     bb4: {
         goto -> bb2;
     }
-
 }
 
 fn IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
@@ -1439,7 +1451,6 @@ fn IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
     bb5: {
         unreachable;
     }
-
 }
 
 fn ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
@@ -1496,7 +1507,6 @@ fn ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
         _0 = const "z nonzero";
         goto -> bb8;
     }
-
 }
 
 fn MultipleUnreachableSpans(s: Status) -> string {
@@ -1507,7 +1517,7 @@ fn MultipleUnreachableSpans(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, 1: bb5, 2: bb7, otherwise: bb8] (exhaustive);
+        switch copy _2 [Status.Active: bb3, Status.Inactive: bb5, Status.Pending: bb7, otherwise: bb8] (exhaustive);
     }
 
     bb1: {
@@ -1546,7 +1556,6 @@ fn MultipleUnreachableSpans(s: Status) -> string {
     bb8: {
         unreachable;
     }
-
 }
 
 fn ExhaustiveCustomBool(b: true | false) -> string {
@@ -1587,7 +1596,6 @@ fn ExhaustiveCustomBool(b: true | false) -> string {
         _0 = const "no";
         goto -> bb2;
     }
-
 }
 
 fn NestedEnumMatch(s1: Status, s2: Status) -> string {
@@ -1600,7 +1608,7 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
 
     bb0: {
         _3 = discriminant(_1);
-        switch copy _3 [0: bb3, 1: bb4, 2: bb5, otherwise: bb6] (exhaustive);
+        switch copy _3 [Status.Active: bb3, Status.Inactive: bb4, Status.Pending: bb5, otherwise: bb6] (exhaustive);
     }
 
     bb1: {
@@ -1613,7 +1621,7 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
 
     bb3: {
         _4 = discriminant(_2);
-        switch copy _4 [0: bb8, 1: bb9, 2: bb10, otherwise: bb11] (exhaustive);
+        switch copy _4 [Status.Active: bb8, Status.Inactive: bb9, Status.Pending: bb10, otherwise: bb11] (exhaustive);
     }
 
     bb4: {
@@ -1652,7 +1660,6 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
     bb11: {
         unreachable;
     }
-
 }
 
 fn ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
@@ -1704,7 +1711,6 @@ fn ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
         _0 = const "boolean true";
         goto -> bb2;
     }
-
 }
 
 fn PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
@@ -1755,7 +1761,6 @@ fn PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     bb8: {
         goto -> bb7;
     }
-
 }
 
 fn ExhaustiveTrueType(t: true) -> string {
@@ -1785,7 +1790,6 @@ fn ExhaustiveTrueType(t: true) -> string {
         _0 = const "always true";
         goto -> bb2;
     }
-
 }
 
 fn NestedMatchSpans(x: int, y: bool) -> string {
@@ -1851,7 +1855,6 @@ fn NestedMatchSpans(x: int, y: bool) -> string {
         _0 = const "unreachable nested";
         goto -> bb5;
     }
-
 }
 
 fn NonExhaustiveOptionalMissingValue(code: 200?) -> string {
@@ -1881,7 +1884,6 @@ fn NonExhaustiveOptionalMissingValue(code: 200?) -> string {
     bb4: {
         goto -> bb2;
     }
-
 }
 
 fn GetStatus() -> Status {
@@ -1896,7 +1898,6 @@ fn GetStatus() -> Status {
     bb1: {
         return;
     }
-
 }
 
 fn EnumVariantUnion(s: Status) -> string {
@@ -1907,7 +1908,7 @@ fn EnumVariantUnion(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, 2: bb3, 1: bb4, otherwise: bb5] (exhaustive);
+        switch copy _2 [Status.Active: bb3, Status.Pending: bb3, Status.Inactive: bb4, otherwise: bb5] (exhaustive);
     }
 
     bb1: {
@@ -1931,7 +1932,6 @@ fn EnumVariantUnion(s: Status) -> string {
     bb5: {
         unreachable;
     }
-
 }
 
 fn NestedTypeAlias(mr: Success | Failure?) -> string {
@@ -1999,7 +1999,6 @@ fn NestedTypeAlias(mr: Success | Failure?) -> string {
         _0 = const "nothing";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveFalseType(f: false) -> string {
@@ -2029,7 +2028,6 @@ fn ExhaustiveFalseType(f: false) -> string {
         _0 = const "always false";
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveOptionalMissingNull(code: 200?) -> string {
@@ -2057,7 +2055,6 @@ fn NonExhaustiveOptionalMissingNull(code: 200?) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
@@ -2087,7 +2084,6 @@ fn NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
     bb4: {
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveWithNamedCatchAll(x: int) -> int {
@@ -2122,7 +2118,58 @@ fn ExhaustiveWithNamedCatchAll(x: int) -> int {
         _0 = copy _3 + copy _4;
         goto -> bb2;
     }
+}
 
+fn JumpTableTypeTag(value: int | string | bool | float) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: int | string | bool | float // value // param
+    let _2: int
+    let _3: int // i
+    let _4: string // s
+    let _5: bool // b
+    let _6: float // f
+
+    bb0: {
+        _2 = type_tag(_1);
+        switch copy _2 [int: bb3, string: bb4, bool: bb5, float: bb6, otherwise: bb7] (exhaustive);
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _3 = copy _1;
+        _0 = const "int";
+        goto -> bb2;
+    }
+
+    bb4: {
+        _4 = copy _1;
+        _0 = const "string";
+        goto -> bb2;
+    }
+
+    bb5: {
+        _5 = copy _1;
+        _0 = const "bool";
+        goto -> bb2;
+    }
+
+    bb6: {
+        _6 = copy _1;
+        _0 = const "float";
+        goto -> bb2;
+    }
+
+    bb7: {
+        unreachable;
+    }
 }
 
 fn NestedTypeBindings(r: Success | Failure) -> int {
@@ -2175,7 +2222,6 @@ fn NestedTypeBindings(r: Success | Failure) -> int {
         _5 = copy _1;
         goto -> bb7;
     }
-
 }
 
 fn NonExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
@@ -2203,7 +2249,6 @@ fn NonExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
@@ -2236,7 +2281,6 @@ fn ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     bb5: {
         unreachable;
     }
-
 }
 
 fn WrongLiteralTypeIntWithString(x: int) -> string {
@@ -2266,7 +2310,6 @@ fn WrongLiteralTypeIntWithString(x: int) -> string {
     bb4: {
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveEnumWithCatchAll(s: Status) -> string {
@@ -2277,7 +2320,7 @@ fn ExhaustiveEnumWithCatchAll(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, otherwise: bb4];
+        switch copy _2 [Status.Active: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2297,7 +2340,6 @@ fn ExhaustiveEnumWithCatchAll(s: Status) -> string {
         _0 = const "other";
         goto -> bb2;
     }
-
 }
 
 fn GuardedWithFallback(x: int) -> int {
@@ -2356,7 +2398,6 @@ fn GuardedWithFallback(x: int) -> int {
         _0 = const 0_i64;
         goto -> bb2;
     }
-
 }
 
 fn MatchArithmeticScrutinee(a: int, b: int) -> string {
@@ -2397,7 +2438,6 @@ fn MatchArithmeticScrutinee(a: int, b: int) -> string {
         _0 = const "other";
         goto -> bb2;
     }
-
 }
 
 fn HighLineNumberNonExhaustive(s: Status) -> string {
@@ -2408,7 +2448,7 @@ fn HighLineNumberNonExhaustive(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, otherwise: bb4];
+        switch copy _2 [Status.Active: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -2427,7 +2467,6 @@ fn HighLineNumberNonExhaustive(s: Status) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
@@ -2479,7 +2518,6 @@ fn NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     bb8: {
         goto -> bb2;
     }
-
 }
 
 fn DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
@@ -2507,7 +2545,6 @@ fn DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
@@ -2564,7 +2601,6 @@ fn NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
         _6 = copy _1;
         goto -> bb6;
     }
-
 }
 
 fn ExhaustiveSingletonInt(code: 200) -> string {
@@ -2592,7 +2628,6 @@ fn ExhaustiveSingletonInt(code: 200) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
@@ -2630,7 +2665,6 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
         _3 = copy _1;
         goto -> bb3;
     }
-
 }
 
 fn ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
@@ -2677,7 +2711,6 @@ fn ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
         _0 = const "no status";
         goto -> bb2;
     }
-
 }
 
 fn DuplicateStringLiteral(role: "user" | "assistant" | "system") -> string {
@@ -2740,7 +2773,6 @@ fn DuplicateStringLiteral(role: "user" | "assistant" | "system") -> string {
         _0 = const "system";
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveEnumMissingOne(s: Status) -> string {
@@ -2751,7 +2783,7 @@ fn NonExhaustiveEnumMissingOne(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, 1: bb4, otherwise: bb5];
+        switch copy _2 [Status.Active: bb3, Status.Inactive: bb4, otherwise: bb5];
     }
 
     bb1: {
@@ -2775,7 +2807,6 @@ fn NonExhaustiveEnumMissingOne(s: Status) -> string {
     bb5: {
         unreachable;
     }
-
 }
 
 fn MatchComplexScrutinee(x: int) -> string {
@@ -2819,7 +2850,6 @@ fn MatchComplexScrutinee(x: int) -> string {
         _0 = const "other";
         goto -> bb2;
     }
-
 }
 
 fn ExhaustiveOptional(x: int?) -> string {
@@ -2866,7 +2896,6 @@ fn ExhaustiveOptional(x: int?) -> string {
         _0 = const "no value";
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveCustomBoolMissing(b: true | false) -> string {
@@ -2896,7 +2925,6 @@ fn NonExhaustiveCustomBoolMissing(b: true | false) -> string {
     bb4: {
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
@@ -2937,7 +2965,6 @@ fn NonExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
     bb6: {
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
@@ -2965,7 +2992,6 @@ fn NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn UnreachableAfterCatchAll(x: int) -> string {
@@ -3010,7 +3036,6 @@ fn UnreachableAfterCatchAll(x: int) -> string {
         _3 = copy _1;
         goto -> bb6;
     }
-
 }
 
 fn OptionalWithCatchAll(x: int?) -> string {
@@ -3049,7 +3074,6 @@ fn OptionalWithCatchAll(x: int?) -> string {
         _0 = const "has value";
         goto -> bb2;
     }
-
 }
 
 fn DuplicateBoolLiteral(b: bool) -> string {
@@ -3101,7 +3125,6 @@ fn DuplicateBoolLiteral(b: bool) -> string {
         _0 = const "false";
         goto -> bb2;
     }
-
 }
 
 fn OverlappingTypedPatterns(r: Success | Failure) -> string {
@@ -3150,7 +3173,6 @@ fn OverlappingTypedPatterns(r: Success | Failure) -> string {
     bb8: {
         goto -> bb7;
     }
-
 }
 
 fn StringLiteralAfterStringType(s: string) -> string {
@@ -3197,7 +3219,6 @@ fn StringLiteralAfterStringType(s: string) -> string {
         _0 = const "unreachable";
         goto -> bb2;
     }
-
 }
 
 fn NestedEnumVariantUnions(s: Status) -> string {
@@ -3208,7 +3229,7 @@ fn NestedEnumVariantUnions(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, 2: bb3, 1: bb3, otherwise: bb4] (exhaustive);
+        switch copy _2 [Status.Active: bb3, Status.Pending: bb3, Status.Inactive: bb3, otherwise: bb4] (exhaustive);
     }
 
     bb1: {
@@ -3227,7 +3248,6 @@ fn NestedEnumVariantUnions(s: Status) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn UnionPatternCoversAll(r: Success | Failure) -> string {
@@ -3263,7 +3283,6 @@ fn UnionPatternCoversAll(r: Success | Failure) -> string {
         _3 = copy _1;
         goto -> bb4;
     }
-
 }
 
 fn ExhaustiveWithUnderscore(x: int) -> int {
@@ -3297,7 +3316,6 @@ fn ExhaustiveWithUnderscore(x: int) -> int {
         _0 = const 0_i64;
         goto -> bb2;
     }
-
 }
 
 fn PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
@@ -3333,7 +3351,6 @@ fn PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
         _3 = copy _1;
         goto -> bb3;
     }
-
 }
 
 fn NonExhaustiveStringLiteral(role: "user" | "assistant" | "system") -> string {
@@ -3374,7 +3391,6 @@ fn NonExhaustiveStringLiteral(role: "user" | "assistant" | "system") -> string {
     bb6: {
         goto -> bb2;
     }
-
 }
 
 fn MatchFunctionCallScrutinee() -> string {
@@ -3395,7 +3411,7 @@ fn MatchFunctionCallScrutinee() -> string {
 
     bb2: {
         _3 = discriminant(_1);
-        switch copy _3 [0: bb4, 1: bb5, 2: bb6, otherwise: bb7] (exhaustive);
+        switch copy _3 [Status.Active: bb4, Status.Inactive: bb5, Status.Pending: bb6, otherwise: bb7] (exhaustive);
     }
 
     bb3: {
@@ -3420,7 +3436,6 @@ fn MatchFunctionCallScrutinee() -> string {
     bb7: {
         unreachable;
     }
-
 }
 
 fn StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> string {
@@ -3470,7 +3485,58 @@ fn StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> string {
         _0 = const "Other";
         goto -> bb2;
     }
+}
 
+fn JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: Cat | Dog | Bird | Fish // pet // param
+    let _2: int
+    let _3: Cat // c
+    let _4: Dog // d
+    let _5: Bird // b
+    let _6: Fish // f
+
+    bb0: {
+        _2 = type_tag(_1);
+        switch copy _2 [Cat: bb3, Dog: bb4, Bird: bb5, Fish: bb6, otherwise: bb7] (exhaustive);
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _3 = copy _1;
+        _0 = const "cat";
+        goto -> bb2;
+    }
+
+    bb4: {
+        _4 = copy _1;
+        _0 = const "dog";
+        goto -> bb2;
+    }
+
+    bb5: {
+        _5 = copy _1;
+        _0 = const "bird";
+        goto -> bb2;
+    }
+
+    bb6: {
+        _6 = copy _1;
+        _0 = const "fish";
+        goto -> bb2;
+    }
+
+    bb7: {
+        unreachable;
+    }
 }
 
 fn NonExhaustiveEnumMissingMultiple(s: Status) -> string {
@@ -3481,7 +3547,7 @@ fn NonExhaustiveEnumMissingMultiple(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, otherwise: bb4];
+        switch copy _2 [Status.Active: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -3500,7 +3566,6 @@ fn NonExhaustiveEnumMissingMultiple(s: Status) -> string {
     bb4: {
         unreachable;
     }
-
 }
 
 fn MixedPatterns(x: int) -> string {
@@ -3577,7 +3642,6 @@ fn MixedPatterns(x: int) -> string {
         _0 = const "negative";
         goto -> bb2;
     }
-
 }
 
 fn NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
@@ -3610,7 +3674,6 @@ fn NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
     bb5: {
         unreachable;
     }
-
 }
 
 fn LiteralAfterTypedPattern(x: int) -> string {
@@ -3657,7 +3720,6 @@ fn LiteralAfterTypedPattern(x: int) -> string {
         _0 = const "unreachable";
         goto -> bb2;
     }
-
 }
 
 fn EnumVariantUnionWithCatchAll(s: Status) -> string {
@@ -3668,7 +3730,7 @@ fn EnumVariantUnionWithCatchAll(s: Status) -> string {
 
     bb0: {
         _2 = discriminant(_1);
-        switch copy _2 [0: bb3, 2: bb3, otherwise: bb4];
+        switch copy _2 [Status.Active: bb3, Status.Pending: bb3, otherwise: bb4];
     }
 
     bb1: {
@@ -3688,5 +3750,4 @@ fn EnumVariantUnionWithCatchAll(s: Status) -> string {
         _0 = const "other";
         goto -> bb2;
     }
-
 }

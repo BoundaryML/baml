@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn ReadAndClose() -> string {
@@ -57,7 +56,6 @@ fn ReadAndClose() -> string {
         _0 = copy _5;
         goto -> bb1;
     }
-
 }
 
 fn ReadMultipleFiles() -> string {
@@ -132,7 +130,6 @@ fn ReadMultipleFiles() -> string {
         _0 = copy _17 + copy _18;
         goto -> bb1;
     }
-
 }
 
 fn ReadFile() -> string {
@@ -173,7 +170,6 @@ fn ReadFile() -> string {
     bb5: {
         goto -> bb1;
     }
-
 }
 
 fn ReadFileInline() -> string {
@@ -212,7 +208,6 @@ fn ReadFileInline() -> string {
     bb5: {
         goto -> bb1;
     }
-
 }
 
 fn MultipleConnections() -> string {
@@ -287,7 +282,6 @@ fn MultipleConnections() -> string {
         _0 = copy _17 + copy _18;
         goto -> bb1;
     }
-
 }
 
 fn ConnectAndReadInline() -> string {
@@ -326,7 +320,6 @@ fn ConnectAndReadInline() -> string {
     bb5: {
         goto -> bb1;
     }
-
 }
 
 fn ConnectAndRead() -> string {
@@ -367,7 +360,6 @@ fn ConnectAndRead() -> string {
     bb5: {
         goto -> bb1;
     }
-
 }
 
 fn ConnectReadAndClose() -> string {
@@ -424,7 +416,6 @@ fn ConnectReadAndClose() -> string {
         _0 = copy _5;
         goto -> bb1;
     }
-
 }
 
 fn ChainCommands() -> string {
@@ -475,7 +466,6 @@ fn ChainCommands() -> string {
         _0 = copy _9 + copy _12;
         goto -> bb1;
     }
-
 }
 
 fn RunCommandWithVar() -> string {
@@ -504,7 +494,6 @@ fn RunCommandWithVar() -> string {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn RunCommand() -> string {
@@ -531,5 +520,4 @@ fn RunCommand() -> string {
     bb3: {
         goto -> bb1;
     }
-
 }

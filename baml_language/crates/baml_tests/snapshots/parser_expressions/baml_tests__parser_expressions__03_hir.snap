@@ -1,22 +1,21 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function Calculate() -> int {
-      let a = 1 + 2;
-      let b = a * 3;
-      let c = b / 2 - 1;
-      let d = a + b * c;
-      return d;
+    let a = 1 + 2;
+    let b = a * 3;
+    let c = b / 2 - 1;
+    let d = a + b * c;
+    return d;
 }
 
 function FieldAccess(user: User) -> string {
-      let name = user.name;
-      let bio = user.profile.bio;
-      let theme = user.profile.settings.theme;
-      let firstTag = user.tags[0];
-      return theme;
+    let name = user.name;
+    let bio = user.profile.bio;
+    let theme = user.profile.settings.theme;
+    let firstTag = user.tags[0];
+    return theme;
 }
 
 class Settings {
@@ -35,12 +34,12 @@ class Profile {
 }
 
 function IndexAccess(users: IndexUser[]) -> string {
-      let first = users[0];
-      let idx = 1;
-      let second = users[idx];
-      let firstName = users[0].name;
-      let tag = users[0].tags[0];
-      return firstName;
+    let first = users[0];
+    let idx = 1;
+    let second = users[idx];
+    let firstName = users[0].name;
+    let tag = users[0].tags[0];
+    return firstName;
 }
 
 class IndexUser {
@@ -50,9 +49,9 @@ class IndexUser {
 }
 
 function TestPrecedence() -> bool {
-      let a = 2 + 3 * 4;
-      let c = 2 * 3 + 4;
-      let b = a > 10 + 2;
-      let d = true || false && false;
-      return d;
+    let a = 2 + 3 * 4;
+    let c = 2 * 3 + 4;
+    let b = a > 10 + 2;
+    let d = true || false && false;
+    return d;
 }

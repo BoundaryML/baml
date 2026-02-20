@@ -1,37 +1,36 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function array_length() -> int {
-      let array = [1, 2, 3];
-      return baml.Array.length(array);
+    let array = [1, 2, 3];
+    return baml.Array.length(array);
 }
 
 function param_in_if_statement(b: bool) -> int {
-      if (b) {
-          1
-      } else {
-          2
-      }
+    if (b) {
+        1
+    } else {
+        2
+    }
 }
 
 function Bar() -> int {
-      let x = Foo(1);
-      x
+    let x = Foo(1);
+    x
 }
 
 function Foo(x: int) -> int {
-      x + 1
+    x + 1
 }
 
 function GreetBaz(n: string) -> string {
-      let baz = Baz { name: n };
-      baz.Greeting()
+    let baz = Baz { name: n };
+    baz.Greeting()
 }
 
 function Baz.Greeting(self: Baz) -> string {
-      "Hello, " + self.name + "!"
+    "Hello, " + self.name + "!"
 }
 
 class Baz {

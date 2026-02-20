@@ -1,18 +1,17 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function Bar() -> foo {
-      true
+    true
 }
 
 function Foo() -> foo {
-      1
+    1
 }
 
 function Baz() -> Json {
-      "hello"
+    "hello"
 }
 
 type bar = int
@@ -22,11 +21,11 @@ type Json = int | float | string | Json[] | map<string, Json>
 type foo = bar
 
 function EchoJSON(i: JSON) -> JSON {
-      NotJSON { inner: "Whoops" }
+    NotJSON { inner: "Whoops" }
 }
 
 function MakeJSON(i: NotJSON) -> JSON {
-      i.inner
+    i.inner
 }
 
 class NotJSON {

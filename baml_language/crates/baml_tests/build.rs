@@ -36,14 +36,16 @@ fn main() {
     generate_benchmarks(&out_dir, &manifest_dir);
 }
 
-fn generate_tests(out_dir: &str, manifest_dir: &str) {
+fn generate_tests(_out_dir: &str, manifest_dir: &str) {
     let projects_dir = Path::new(&manifest_dir).join("projects");
 
     // Discover all projects
     let projects = discover_projects(&projects_dir);
 
-    // Generate test file
-    let dest_path = Path::new(&out_dir).join("generated_tests.rs");
+    // Write to the source directory so that file!() returns a stable path
+    // (OUT_DIR contains a hash that changes between builds, causing noisy
+    // diffs in insta snapshot metadata).
+    let dest_path = Path::new(&manifest_dir).join("src/generated_tests.rs");
 
     let project_modules: TokenStream = projects
         .iter()
@@ -282,7 +284,7 @@ fn generate_lexer_test(baml_file: &BamlFile) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!(#snapshot_name, output);
             });
         }
@@ -330,7 +332,7 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!(#snapshot_name, output);
             });
         }
@@ -379,7 +381,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
                 writeln!(output, "No items found.").unwrap();
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("03_hir", output);
             });
         }
@@ -462,7 +464,7 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_tir", output);
             });
         }
@@ -583,7 +585,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
             });
         }
@@ -663,7 +665,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("05_diagnostics", output);
             });
         }
@@ -786,7 +788,7 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
                     }
                 }
 
-                with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                     assert_snapshot!("06_codegen", output);
                 });
             }
@@ -867,7 +869,7 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("06_codegen", output);
             });
         }
@@ -985,14 +987,14 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                 Ok(formatted) => formatted,
                 Err(e) => {
                     let output = format!("=== FORMATTER ERROR ===\n{}", e);
-                    with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                    with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                         assert_snapshot!(#snapshot_name, output);
                     });
                     return;
                 }
             };
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!(#snapshot_name, first);
             });
 

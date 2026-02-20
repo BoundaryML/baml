@@ -1,7 +1,5 @@
 ---
-source: target/debug/build/baml_tests-cb4594c533e23a52/out/generated_tests.rs
-assertion_line: 3341
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 Class "class"
 Word "User1"

@@ -1,67 +1,66 @@
 ---
-source: target/debug/build/baml_tests-267996652c5f418c/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function ReadAndClose() -> string {
-      let f = baml.fs.open("example.txt");
-      let content = f.read();
-      f.close();
-      content
+    let f = baml.fs.open("example.txt");
+    let content = f.read();
+    f.close();
+    content
 }
 
 function ReadMultipleFiles() -> string {
-      let f1 = baml.fs.open("file1.txt");
-      let f2 = baml.fs.open("file2.txt");
-      let content1 = f1.read();
-      let content2 = f2.read();
-      content1 + content2
+    let f1 = baml.fs.open("file1.txt");
+    let f2 = baml.fs.open("file2.txt");
+    let content1 = f1.read();
+    let content2 = f2.read();
+    content1 + content2
 }
 
 function ReadFile() -> string {
-      let f = baml.fs.open("example.txt");
-      f.read()
+    let f = baml.fs.open("example.txt");
+    f.read()
 }
 
 function ReadFileInline() -> string {
-      baml.fs.open("data.json").read()
+    baml.fs.open("data.json").read()
 }
 
 function MultipleConnections() -> string {
-      let s1 = baml.net.connect("server1:80");
-      let s2 = baml.net.connect("server2:80");
-      let data1 = s1.read();
-      let data2 = s2.read();
-      data1 + data2
+    let s1 = baml.net.connect("server1:80");
+    let s2 = baml.net.connect("server2:80");
+    let data1 = s1.read();
+    let data2 = s2.read();
+    data1 + data2
 }
 
 function ConnectAndReadInline() -> string {
-      baml.net.connect("localhost:3000").read()
+    baml.net.connect("localhost:3000").read()
 }
 
 function ConnectAndRead() -> string {
-      let sock = baml.net.connect("127.0.0.1:8080");
-      sock.read()
+    let sock = baml.net.connect("127.0.0.1:8080");
+    sock.read()
 }
 
 function ConnectReadAndClose() -> string {
-      let sock = baml.net.connect("127.0.0.1:8080");
-      let data = sock.read();
-      sock.close();
-      data
+    let sock = baml.net.connect("127.0.0.1:8080");
+    let data = sock.read();
+    sock.close();
+    data
 }
 
 function ChainCommands() -> string {
-      let result1 = baml.sys.shell("pwd");
-      let result2 = baml.sys.shell("whoami");
-      result1 + " - " + result2
+    let result1 = baml.sys.shell("pwd");
+    let result2 = baml.sys.shell("whoami");
+    result1 + " - " + result2
 }
 
 function RunCommandWithVar() -> string {
-      let cmd = "ls -la";
-      baml.sys.shell(cmd)
+    let cmd = "ls -la";
+    baml.sys.shell(cmd)
 }
 
 function RunCommand() -> string {
-      baml.sys.shell("echo hello")
+    baml.sys.shell("echo hello")
 }

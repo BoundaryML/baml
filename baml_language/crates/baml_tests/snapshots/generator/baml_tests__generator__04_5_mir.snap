@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn GetUser() -> MyClass {
@@ -24,5 +23,4 @@ fn GetUser() -> MyClass {
     bb2: {
         goto -> bb1;
     }
-
 }

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === FORMATTER ERROR ===
 [UnexpectedToken { expected: "expression", found: "error", span: Span { file_id: FileId(0), range: 156..158 } }, UnexpectedToken { expected: "expression", found: "error", span: Span { file_id: FileId(0), range: 171..172 } }]

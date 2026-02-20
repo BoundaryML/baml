@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
@@ -286,7 +285,6 @@ fn build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm
     bb29: {
         goto -> bb25;
     }
-
 }
 
 fn build_plan_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
@@ -558,7 +556,6 @@ fn build_plan_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.Pl
         _64 = const null;
         goto -> bb21;
     }
-
 }
 
 fn render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
@@ -635,7 +632,6 @@ fn render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.
     bb9: {
         return;
     }
-
 }
 
 fn resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
@@ -686,7 +682,6 @@ fn resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
     bb6: {
         goto -> bb1;
     }
-
 }
 
 fn build_attempt(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
@@ -715,7 +710,6 @@ fn build_attempt(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn execute_client(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.ExecutionResult {
@@ -1008,7 +1002,6 @@ fn execute_client(llm_client: baml.llm.Client, context: baml.llm.ExecutionContex
     bb32: {
         return;
     }
-
 }
 
 fn execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.ExecutionResult {
@@ -1498,7 +1491,6 @@ fn execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionC
     bb66: {
         goto -> bb2;
     }
-
 }
 
 fn build_plan(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
@@ -1527,7 +1519,6 @@ fn build_plan(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
@@ -1583,7 +1574,6 @@ fn build_request(function_name: string, args: map<string, unknown>) -> baml.http
     bb6: {
         return;
     }
-
 }
 
 fn call_llm_function(function_name: string, args: map<string, unknown>) -> unknown {
@@ -1730,7 +1720,6 @@ fn call_llm_function(function_name: string, args: map<string, unknown>) -> unkno
         _0 = const null;
         goto -> bb1;
     }
-
 }
 
 fn PlannerState.rr_local_offset(self: PlannerState, client_name: string) -> int {
@@ -1833,7 +1822,6 @@ fn PlannerState.rr_local_offset(self: PlannerState, client_name: string) -> int 
         _15 = const null;
         goto -> bb3;
     }
-
 }
 
 fn PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub_client_count: int) -> int {
@@ -1897,5 +1885,4 @@ fn PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub_clien
         _0 = copy _17 % copy _20;
         goto -> bb1;
     }
-
 }

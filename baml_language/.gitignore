@@ -3,5 +3,8 @@
 # `CARGO_TARGET_DIR=target-llvm-lines RUSTFLAGS="-Csymbol-mangling-version=v0" cargo llvm-lines -p ruff --lib`
 /target*
 
+# Generated test code (build.rs output written to src/ for stable insta paths)
+crates/baml_tests/src/generated_tests.rs
+
 thoughts/
 rpi/
