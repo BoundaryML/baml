@@ -237,6 +237,9 @@ impl BamlWasmRuntime {
 
         // Create cancellation token and register.
         let cancel = CancellationToken::new();
+        if self.active_calls.borrow().contains_key(&id) {
+            return Err(JsError::new("Call ID already in use").into());
+        }
         self.active_calls.borrow_mut().insert(id, cancel.clone());
 
         // Call the function.
