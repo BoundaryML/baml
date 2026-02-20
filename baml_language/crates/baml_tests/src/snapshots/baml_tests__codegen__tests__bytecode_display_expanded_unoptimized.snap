@@ -178,31 +178,37 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
        44    pop_jump_if_false +2    (to 46)
        45    jump +10                (to 55)
 
-  56   46    load_var 1              (input)
+  60   46    load_var 1              (input)
        47    load_const 1            (<class ErrorInfo>)
        48    cmp_op instanceof       
        49    pop_jump_if_false +23   (to 72)
-       50    load_var 1              (input)
+
+  62   50    load_var 1              (input)
        51    store_var 11            (e)
        52    load_const 2            (0)
        53    store_var 9             (role_score)
        54    jump +18                (to 72)
-       55    load_var 1              (input)
+
+  56   55    load_var 1              (input)
        56    store_var 10            (u)
        57    load_var 10             (u)
        58    load_field 2            (role)
        59    discriminant            
        60    jump_table 0, +102      ([to 70, to 67, to 64, to 61], default to 162)
-       61    load_const 3            (1)
+
+  60   61    load_const 3            (1)
        62    store_var 9             (role_score)
        63    jump +9                 (to 72)
-       64    load_const 4            (2)
+
+  59   64    load_const 4            (2)
        65    store_var 9             (role_score)
        66    jump +6                 (to 72)
-       67    load_const 5            (5)
+
+  58   67    load_const 5            (5)
        68    store_var 9             (role_score)
        69    jump +3                 (to 72)
-       70    load_const 6            (10)
+
+  57   70    load_const 6            (10)
        71    store_var 9             (role_score)
 
   65   72    load_var 6              (age)

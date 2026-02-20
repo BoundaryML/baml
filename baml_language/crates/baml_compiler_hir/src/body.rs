@@ -1568,29 +1568,34 @@ impl LoweringContext {
                                             SyntaxKind::KW_IF => continue, // skip the 'if' keyword
                                             SyntaxKind::WORD => {
                                                 let text = t.text();
+                                                let range = t.text_range();
                                                 let expr = match text {
-                                                    "true" => self
-                                                        .exprs
-                                                        .alloc(Expr::Literal(Literal::Bool(true))),
-                                                    "false" => self
-                                                        .exprs
-                                                        .alloc(Expr::Literal(Literal::Bool(false))),
-                                                    "null" => self
-                                                        .exprs
-                                                        .alloc(Expr::Literal(Literal::Null)),
-                                                    _ => self
-                                                        .exprs
-                                                        .alloc(Expr::Path(vec![Name::new(text)])),
+                                                    "true" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Bool(true)),
+                                                        range,
+                                                    ),
+                                                    "false" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Bool(false)),
+                                                        range,
+                                                    ),
+                                                    "null" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Null),
+                                                        range,
+                                                    ),
+                                                    _ => self.alloc_expr(
+                                                        Expr::Path(vec![Name::new(text)]),
+                                                        range,
+                                                    ),
                                                 };
                                                 guard = Some(expr);
                                                 break;
                                             }
                                             SyntaxKind::INTEGER_LITERAL => {
                                                 let value = t.text().parse::<i64>().unwrap_or(0);
-                                                guard = Some(
-                                                    self.exprs
-                                                        .alloc(Expr::Literal(Literal::Int(value))),
-                                                );
+                                                guard = Some(self.alloc_expr(
+                                                    Expr::Literal(Literal::Int(value)),
+                                                    t.text_range(),
+                                                ));
                                                 break;
                                             }
                                             _ => {}
@@ -1621,11 +1626,17 @@ impl LoweringContext {
                         // Handle literal tokens as body (when body is a simple value)
                         SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
-                            body = Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))));
+                            body = Some(self.alloc_expr(
+                                Expr::Literal(Literal::Int(value)),
+                                token.text_range(),
+                            ));
                         }
                         SyntaxKind::FLOAT_LITERAL if seen_fat_arrow && body.is_none() => {
                             let text = token.text().to_string();
-                            body = Some(self.exprs.alloc(Expr::Literal(Literal::Float(text))));
+                            body = Some(self.alloc_expr(
+                                Expr::Literal(Literal::Float(text)),
+                                token.text_range(),
+                            ));
                         }
                         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
                             if seen_fat_arrow && body.is_none() =>
@@ -1638,18 +1649,23 @@ impl LoweringContext {
                             } else {
                                 text
                             };
-                            body = Some(
-                                self.exprs
-                                    .alloc(Expr::Literal(Literal::String(content.to_string()))),
-                            );
+                            body = Some(self.alloc_expr(
+                                Expr::Literal(Literal::String(content.to_string())),
+                                token.text_range(),
+                            ));
                         }
                         SyntaxKind::WORD if seen_fat_arrow && body.is_none() => {
                             let text = token.text();
+                            let range = token.text_range();
                             let expr = match text {
-                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
-                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                "true" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(true)), range)
+                                }
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), range)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), range),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), range),
                             };
                             body = Some(expr);
                         }
