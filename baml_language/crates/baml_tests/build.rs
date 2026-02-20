@@ -707,39 +707,27 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
             // Pass all files (builtins + user) to compile_files
             match baml_compiler_emit::compile_files(&db, &all_files) {
                 Ok(program) => {
-                    writeln!(output, "=== BYTECODE ===").unwrap();
-                    writeln!(output, "Functions: {}", program.function_indices.len()).unwrap();
-                    writeln!(output, "Objects: {}", program.objects.len()).unwrap();
-                    writeln!(output, "Globals: {}", program.globals.len()).unwrap();
-
-                    // Show functions and their bytecode using debug formatting
+                    // Collect sorted functions for textual display.
                     let mut func_names: Vec<_> = program.function_indices.keys().collect();
                     func_names.sort();
-                    for func_name in func_names {
-                        if let Some(&idx) = program.function_indices.get(func_name)
-                            && let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx)
-                        {
-                            writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
-                            // Use empty GlobalPool for compile-time display (no heap available)
-                            // Pass ObjectPool and compile-time globals to resolve names
-                            let empty_globals = bex_vm_types::indexable::GlobalPool::new();
-                            let bytecode_table = bex_vm::debug::display_bytecode(
-                                func,
-                                &bex_vm::EvalStack::new(),
-                                &empty_globals,
-                                Some(&program.objects),
-                                Some(&program.globals),
-                                false,  // no colors
-                            );
-                            if bytecode_table.is_empty() {
-                                writeln!(output, "  (no bytecode)").unwrap();
+
+                    let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
+                        .iter()
+                        .filter_map(|name| {
+                            let &idx = program.function_indices.get(*name)?;
+                            if let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx) {
+                                Some(((*name).clone(), func.as_ref()))
                             } else {
-                                for line in bytecode_table.lines() {
-                                    writeln!(output, "  {}", line).unwrap();
-                                }
+                                None
                             }
-                        }
-                    }
+                        })
+                        .collect();
+
+                    output = bex_vm::debug::display_program_textual(
+                        &functions,
+                        Some(&program.objects),
+                        Some(&program.globals),
+                    );
                 }
                 Err(err) => {
                     writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").unwrap();

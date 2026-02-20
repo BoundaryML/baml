@@ -25,7 +25,7 @@
 //!
 //! ```
 
-use std::io::IsTerminal;
+use std::{fmt::Write, io::IsTerminal};
 
 use bex_vm_types::{
     HeapPtr, StackIndex,
@@ -486,4 +486,374 @@ pub fn disassemble(function: &Function, stack: &EvalStack, globals: &GlobalPool)
     let disassembly = display_bytecode(function, stack, globals, None, None, use_colors);
 
     eprintln!("{disassembly}");
+}
+
+/// Display bytecode in a human-readable textual assembly format.
+///
+/// This format replaces numeric indices with resolved names and uses labels
+/// instead of raw jump offsets, producing output that reads like assembly:
+///
+/// ```text
+/// function add(x, y):
+///     load_var x
+///     load_var y
+///     bin_op +
+///     return
+/// ```
+///
+/// Jump targets are rendered as labels:
+///
+/// ```text
+/// function example(x):
+///     load_var x
+///     pop_jump_if_false L0
+///     load_const 1
+///     return
+/// L0: load_const 0
+///     return
+/// ```
+///
+/// This format is stable across global index changes (adding builtins won't
+/// shift indices) making it suitable for snapshot tests.
+pub fn display_bytecode_textual(
+    function: &Function,
+    objects: Option<&ObjectPool>,
+    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
+) -> String {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let instructions = &function.bytecode.instructions;
+
+    if instructions.is_empty() {
+        return String::new();
+    }
+
+    // --- Pass 1: Collect all jump targets so we can assign labels. ---
+    let mut jump_targets = BTreeSet::new();
+
+    for (ip, instruction) in instructions.iter().enumerate() {
+        match instruction {
+            Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
+                let target = ip.wrapping_add_signed(*offset);
+                jump_targets.insert(target);
+            }
+            Instruction::JumpTable { table_idx, default } => {
+                // Default target.
+                let default_target = ip.wrapping_add_signed(*default);
+                jump_targets.insert(default_target);
+                // Each entry in the jump table.
+                if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
+                    for offset in table.offsets.iter().flatten() {
+                        let target = ip.wrapping_add_signed(*offset);
+                        jump_targets.insert(target);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Assign labels L0, L1, L2, ... in order of target IP.
+    let label_map: BTreeMap<usize, String> = jump_targets
+        .iter()
+        .enumerate()
+        .map(|(i, &ip)| (ip, format!("L{i}")))
+        .collect();
+
+    // --- Pass 2: Render each instruction. ---
+    let mut lines: Vec<String> = Vec::with_capacity(instructions.len());
+
+    for (ip, instruction) in instructions.iter().enumerate() {
+        let text = display_instruction_textual(
+            ip,
+            instruction,
+            function,
+            objects,
+            compile_time_globals,
+            &label_map,
+        );
+
+        if label_map.contains_key(&ip) && ip > 0 {
+            lines.push(String::new());
+        }
+
+        let line = if let Some(label) = label_map.get(&ip) {
+            format!("{label}: {text}")
+        } else {
+            format!("    {text}")
+        };
+
+        lines.push(line);
+    }
+
+    let mut output = lines.join("\n");
+    output.push('\n');
+    output
+}
+
+/// Render a single instruction in textual format.
+///
+/// All indices are resolved to human-readable names. Jump offsets become
+/// label references.
+fn display_instruction_textual(
+    ip: usize,
+    instruction: &Instruction,
+    function: &Function,
+    objects: Option<&ObjectPool>,
+    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
+    label_map: &std::collections::BTreeMap<usize, String>,
+) -> String {
+    match instruction {
+        // --- Constants ---
+        Instruction::LoadConst(index) => {
+            let value = resolve_const(*index, function, objects);
+            format!("load_const {value}")
+        }
+
+        // --- Variables (resolved to names) ---
+        Instruction::LoadVar(index) => {
+            let name = resolve_var_name(*index, ip, function);
+            format!("load_var {name}")
+        }
+        Instruction::StoreVar(index) => {
+            let name = resolve_var_name(*index, ip, function);
+            format!("store_var {name}")
+        }
+
+        // --- Globals (resolved to names) ---
+        Instruction::LoadGlobal(index) => {
+            let name = resolve_global(index.raw(), compile_time_globals, objects);
+            format!("load_global {name}")
+        }
+        Instruction::StoreGlobal(index) => {
+            let name = resolve_global(index.raw(), compile_time_globals, objects);
+            format!("store_global {name}")
+        }
+
+        // --- Fields (numeric index, can't resolve without runtime stack) ---
+        Instruction::LoadField(index) => format!("load_field {index}"),
+        Instruction::StoreField(index) => format!("store_field {index}"),
+
+        // --- Stack ---
+        Instruction::Pop(n) => format!("pop {n}"),
+        Instruction::Copy(i) => format!("copy {i}"),
+
+        // --- Jumps (resolved to labels) ---
+        Instruction::Jump(offset) => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("jump {label}")
+        }
+        Instruction::PopJumpIfFalse(offset) => {
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("pop_jump_if_false {label}")
+        }
+        Instruction::JumpTable { table_idx, default } => {
+            let default_target = ip.wrapping_add_signed(*default);
+            let default_label = label_map
+                .get(&default_target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{default_target}"));
+
+            let mut entries = Vec::new();
+            if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
+                for entry in &table.offsets {
+                    match entry {
+                        Some(offset) => {
+                            let target = ip.wrapping_add_signed(*offset);
+                            let label = label_map
+                                .get(&target)
+                                .cloned()
+                                .unwrap_or_else(|| format!("?{target}"));
+                            entries.push(label);
+                        }
+                        None => entries.push("_".to_string()),
+                    }
+                }
+            }
+
+            if entries.is_empty() {
+                format!("jump_table default {default_label}")
+            } else {
+                format!(
+                    "jump_table [{}], default {default_label}",
+                    entries.join(", ")
+                )
+            }
+        }
+
+        // --- Operators ---
+        Instruction::BinOp(op) => format!("bin_op {op}"),
+        Instruction::CmpOp(op) => format!("cmp_op {op}"),
+        Instruction::UnaryOp(op) => format!("unary_op {op}"),
+
+        // --- Allocation ---
+        Instruction::AllocArray(n) => format!("alloc_array {n}"),
+        Instruction::AllocMap(n) => format!("alloc_map {n}"),
+        Instruction::AllocInstance(index) => {
+            let name = resolve_object_name(index.raw(), objects);
+            format!("alloc_instance {name}")
+        }
+        Instruction::AllocVariant(index) => {
+            let name = resolve_object_name(index.raw(), objects);
+            format!("alloc_variant {name}")
+        }
+
+        // --- Array/Map element access ---
+        Instruction::LoadArrayElement => "load_array_element".to_string(),
+        Instruction::LoadMapElement => "load_map_element".to_string(),
+        Instruction::StoreArrayElement => "store_array_element".to_string(),
+        Instruction::StoreMapElement => "store_map_element".to_string(),
+
+        // --- Calls ---
+        Instruction::Call(index) => {
+            let name = resolve_global(index.raw(), compile_time_globals, objects);
+            format!("call {name}")
+        }
+        Instruction::CallIndirect => "call_indirect".to_string(),
+        Instruction::DispatchFuture(index) => {
+            let name = resolve_global(index.raw(), compile_time_globals, objects);
+            format!("dispatch_future {name}")
+        }
+        Instruction::Await => "await".to_string(),
+
+        // --- Control ---
+        Instruction::Return => "return".to_string(),
+        Instruction::Assert => "assert".to_string(),
+        Instruction::Unreachable => "unreachable".to_string(),
+
+        // --- Watch/Notify ---
+        Instruction::Watch(index) => {
+            let name = resolve_var_name(*index, ip, function);
+            format!("watch {name}")
+        }
+        Instruction::Unwatch(index) => {
+            let name = resolve_var_name(*index, ip, function);
+            format!("unwatch {name}")
+        }
+        Instruction::Notify(index) => {
+            let name = resolve_var_name(*index, ip, function);
+            format!("notify {name}")
+        }
+        Instruction::NotifyBlock(block_index) => {
+            if let Some(notification) = function.block_notifications.get(*block_index) {
+                format!("notify_block {}", notification.block_name)
+            } else {
+                format!("notify_block {block_index}")
+            }
+        }
+
+        // --- Visualization ---
+        Instruction::VizEnter(index) => {
+            if let Some(node) = function.viz_nodes.get(*index) {
+                format!("viz_enter {}", node.label)
+            } else {
+                format!("viz_enter {index}")
+            }
+        }
+        Instruction::VizExit(index) => {
+            if let Some(node) = function.viz_nodes.get(*index) {
+                format!("viz_exit {}", node.label)
+            } else {
+                format!("viz_exit {index}")
+            }
+        }
+
+        // --- Type introspection ---
+        Instruction::Discriminant => "discriminant".to_string(),
+        Instruction::TypeTag => "type_tag".to_string(),
+    }
+}
+
+/// Resolve a constant index to its display string.
+fn resolve_const(index: usize, function: &Function, objects: Option<&ObjectPool>) -> String {
+    // Prefer resolved_constants (runtime), fall back to constants (compile-time).
+    if let Some(value) = function.bytecode.resolved_constants.get(index) {
+        display_value(value)
+    } else if let Some(const_value) = function.bytecode.constants.get(index) {
+        display_const_value(const_value, objects)
+    } else {
+        format!("?{index}")
+    }
+}
+
+/// Resolve a local variable index to its name.
+fn resolve_var_name(var_index: usize, instruction_ptr: usize, function: &Function) -> String {
+    function
+        .locals_in_scope
+        .get(function.bytecode.scopes[instruction_ptr])
+        .and_then(|locals| locals.get(var_index))
+        .cloned()
+        .unwrap_or_else(|| format!("?{var_index}"))
+}
+
+/// Resolve a global index to a readable name.
+fn resolve_global(
+    index: usize,
+    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
+    objects: Option<&ObjectPool>,
+) -> String {
+    if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
+        if let Some(const_val) = ct_globals.get(index) {
+            return display_const_value(const_val, Some(objs));
+        }
+    }
+    format!("?{index}")
+}
+
+/// Resolve an object pool index to a readable name.
+fn resolve_object_name(index: usize, objects: Option<&ObjectPool>) -> String {
+    if let Some(objs) = objects {
+        display_object_from_pool(index, objs)
+    } else {
+        format!("?{index}")
+    }
+}
+
+/// Display a full program in textual format.
+///
+/// Renders all functions with their parameter names:
+///
+/// ```text
+/// function add(x, y):
+///     load_var x
+///     load_var y
+///     bin_op +
+///     return
+///
+/// function main():
+///     load_global <fn add>
+///     load_const 3
+///     load_const 2
+///     call 2
+///     return
+/// ```
+pub fn display_program_textual(
+    functions: &[(String, &Function)],
+    objects: Option<&ObjectPool>,
+    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
+) -> String {
+    let mut output = String::new();
+
+    for (i, (name, func)) in functions.iter().enumerate() {
+        if i > 0 {
+            output.push('\n');
+        }
+
+        // Function header with parameter names.
+        let params = func.param_names.join(", ");
+        let _ = writeln!(output, "function {name}({params}):");
+
+        let body = display_bytecode_textual(func, objects, compile_time_globals);
+        output.push_str(&body);
+    }
+
+    output
 }
