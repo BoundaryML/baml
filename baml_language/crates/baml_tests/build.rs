@@ -45,10 +45,17 @@ fn generate_tests(out_dir: &str, manifest_dir: &str) {
     // Generate test file
     let dest_path = Path::new(&out_dir).join("generated_tests.rs");
 
-    let test_modules: TokenStream = projects
+    let project_modules: TokenStream = projects
         .iter()
         .map(|project| generate_project_tests(project, manifest_dir))
         .collect();
+
+    let baml_std_module = generate_baml_std_test(manifest_dir);
+
+    let test_modules: TokenStream = quote! {
+        #project_modules
+        #baml_std_module
+    };
 
     let header = "\
 // Auto-generated tests from projects/
@@ -663,6 +670,70 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
     }
 }
 
+/// Generate a standalone test module for the BAML standard library (builtins).
+///
+/// This compiles only the builtin files (no user code) and snapshots the
+/// resulting bytecode once, avoiding duplication across every project snapshot.
+fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
+    let snapshot_path = format!("{}/snapshots/baml_std", manifest_dir.replace('\\', "/"),);
+
+    quote! {
+        #[cfg(test)]
+        mod baml_std {
+            use baml_db::*;
+            use baml_project::ProjectDatabase;
+            use insta::{assert_snapshot, with_settings};
+            use std::fmt::Write;
+            const SNAPSHOT_PATH: &str = #snapshot_path;
+
+            #[test]
+            fn test_06_codegen() {
+                let mut db = ProjectDatabase::new();
+                let root = db.set_project_root(std::path::Path::new("."));
+
+                // No user files — root.files() contains only builtins
+                let all_files: Vec<_> = root.files(&db).clone();
+
+                let mut output = String::new();
+
+                match baml_compiler_emit::compile_files(&db, &all_files) {
+                    Ok(program) => {
+                        // Only include builtin functions (baml.*)
+                        let mut func_names: Vec<_> = program.function_indices.keys()
+                            .filter(|name| name.starts_with("baml."))
+                            .collect();
+                        func_names.sort();
+
+                        let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
+                            .iter()
+                            .filter_map(|name| {
+                                let &idx = program.function_indices.get(*name)?;
+                                if let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx) {
+                                    Some(((*name).clone(), func.as_ref()))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        output = bex_vm::debug::display_program_textual(
+                            &functions,
+                        );
+                    }
+                    Err(err) => {
+                        writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").unwrap();
+                        writeln!(output, "Error: {:?}", err).unwrap();
+                    }
+                }
+
+                with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                    assert_snapshot!("06_codegen", output);
+                });
+            }
+        }
+    }
+}
+
 fn generate_codegen_test(project: &TestProject) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
@@ -707,8 +778,11 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
             // Pass all files (builtins + user) to compile_files
             match baml_compiler_emit::compile_files(&db, &all_files) {
                 Ok(program) => {
-                    // Collect sorted functions for textual display.
-                    let mut func_names: Vec<_> = program.function_indices.keys().collect();
+                    // Collect sorted functions, excluding builtins (baml.*)
+                    // which are snapshotted separately in baml_std.
+                    let mut func_names: Vec<_> = program.function_indices.keys()
+                        .filter(|name| !name.starts_with("baml."))
+                        .collect();
                     func_names.sort();
 
                     let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
