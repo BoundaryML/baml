@@ -31,6 +31,7 @@ pub fn get_env<'a>() -> minijinja::Environment<'a> {
     env.set_lstrip_blocks(true);
     env.add_filter("regex_match", regex_match);
     env.add_filter("sum", sum_filter);
+    env.set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
     env
 }
 
@@ -169,6 +170,37 @@ mod tests {
             .unwrap(),
             "true"
         )
+    }
+
+    #[test]
+    fn test_format_number_with_commas() {
+        let ctx = vec![].into_iter().collect();
+        assert_eq!(
+            render_expression(
+                &JinjaExpression(r#""{:,}".format(1234567)"#.to_string()),
+                &ctx
+            )
+            .unwrap(),
+            "1,234,567"
+        );
+        // float formatting
+        assert_eq!(
+            render_expression(
+                &JinjaExpression(r#""{:.2f}".format(3.14159)"#.to_string()),
+                &ctx
+            )
+            .unwrap(),
+            "3.14"
+        );
+        // negative integers
+        assert_eq!(
+            render_expression(
+                &JinjaExpression(r#""{:,}".format(-1234567)"#.to_string()),
+                &ctx
+            )
+            .unwrap(),
+            "-1,234,567"
+        );
     }
 
     #[test]

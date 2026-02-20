@@ -36,6 +36,7 @@ internal-baml-parser-database = { path = "../parser-database" }
 internal-baml-prompt-parser = { path = "../prompt-parser" }
 baml-rpc.workspace = true
 minijinja.workspace = true
+minijinja-contrib.workspace = true
 rayon = "1.8.0"
 regex.workspace = true
 semver.workspace = true

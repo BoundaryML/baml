@@ -92,6 +92,9 @@ fn create_environment() -> Environment<'static> {
     env.add_filter("regex_match", filters::regex_match);
     env.add_filter("sum", filters::sum);
 
+    // Enable Python-compatible methods on primitives (e.g. str.format())
+    env.set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
+
     // Custom formatter: replace 'none' with 'null'
     env.set_formatter(|out, _state, value| {
         if value.is_none() || value.is_undefined() {
@@ -497,6 +500,24 @@ mod tests {
         let result = render_prompt(template, &args, &ctx).unwrap();
 
         assert_eq!(result, "Please respond with: int".to_string().into());
+    }
+
+    #[test]
+    fn test_format_number_with_commas() {
+        let template = r#"{{ "{:,}".format(1234567) }}"#;
+        let args = IndexMap::new();
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+        assert_eq!(result, "1,234,567".to_string().into());
+
+        // float formatting
+        let template = r#"{{ "{:.2f}".format(3.14159) }}"#;
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+        assert_eq!(result, "3.14".to_string().into());
+
+        // negative integers
+        let template = r#"{{ "{:,}".format(-1234567) }}"#;
+        let result = render_prompt(template, &args, &test_ctx()).unwrap();
+        assert_eq!(result, "-1,234,567".to_string().into());
     }
 
     #[test]

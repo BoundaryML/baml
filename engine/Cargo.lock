@@ -2603,7 +2603,7 @@ dependencies = [
  "filetime",
  "indexmap 2.9.0",
  "internal-baml-core",
- "pathdiff 0.1.0",
+ "pathdiff 0.2.3",
  "serde_json",
  "sugar_path",
  "walkdir",
@@ -4128,6 +4128,7 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "minijinja",
+ "minijinja-contrib",
  "once_cell",
  "rayon",
  "regex",
@@ -4790,8 +4791,8 @@ dependencies = [
 
 [[package]]
 name = "minijinja"
-version = "2.11.0"
-source = "git+https://github.com/boundaryml/minijinja.git?branch=main#ee25c021c8bb78d7ca11fa99972918eea4585330"
+version = "2.16.0"
+source = "git+https://github.com/boundaryml/minijinja.git?branch=value-cmp#8cfc770a5dffeda2de5b910d2b9f870d7edeff7c"
 dependencies = [
  "aho-corasick",
  "indexmap 2.9.0",
@@ -4799,6 +4800,15 @@ dependencies = [
  "serde_json",
  "unicase",
  "unicode-ident",
+]
+
+[[package]]
+name = "minijinja-contrib"
+version = "2.16.0"
+source = "git+https://github.com/boundaryml/minijinja.git?branch=value-cmp#8cfc770a5dffeda2de5b910d2b9f870d7edeff7c"
+dependencies = [
+ "minijinja",
+ "serde",
 ]
 
 [[package]]

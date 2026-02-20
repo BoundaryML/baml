@@ -58,15 +58,15 @@ bex_resource_types = { path = "crates/bex_resource_types" }
 bex_factory = { path = "crates/bex_factory" }
 
 # External dependency for sys_llm jinja module
-minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "main", default-features = false, features = [
+minijinja = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", default-features = false, features = [
   "macros",
   "builtins",
   "debug",
   "preserve_order",
   "serde",
   "unstable_machinery",
-  "unstable_machinery_serde",
 ] }
+minijinja-contrib = { git = "https://github.com/boundaryml/minijinja.git", branch = "value-cmp", features = [ "pycompat" ] }
 baml_workspace = { path = "crates/baml_workspace" }
 
 #  External dependencies
