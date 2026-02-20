@@ -108,6 +108,8 @@ pub struct BasicBlock {
     pub terminator: Option<Terminator>,
     /// Source span covering this block.
     pub span: Option<TextRange>,
+    /// Source line number for the terminator (1-indexed, 0 = unknown).
+    pub terminator_source_line: usize,
 }
 
 impl BasicBlock {
@@ -118,6 +120,7 @@ impl BasicBlock {
             statements: Vec::new(),
             terminator: None,
             span: None,
+            terminator_source_line: 0,
         }
     }
 
@@ -136,6 +139,8 @@ impl BasicBlock {
 pub struct Statement {
     pub kind: StatementKind,
     pub span: Option<TextRange>,
+    /// Source line number (1-indexed, 0 = unknown).
+    pub source_line: usize,
 }
 
 /// The kind of a MIR statement.

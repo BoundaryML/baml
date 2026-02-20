@@ -975,19 +975,19 @@ function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     type_tag
     jump_table [L0, L1, L3, L2], default L5
 
-  L0:
+  L0: Fish
     load_const "fish"
     jump L4
 
-  L1:
+  L1: Bird
     load_const "bird"
     jump L4
 
-  L2:
+  L2: Dog
     load_const "dog"
     jump L4
 
-  L3:
+  L3: Cat
     load_const "cat"
 
   L4:
@@ -1002,19 +1002,19 @@ function JumpTableEnumDiscriminant(state: DispatchState) -> int {
     discriminant
     jump_table [L3, L2, L1, L0], default L5
 
-  L0:
+  L0: DispatchState.Delta
     load_const 40
     jump L4
 
-  L1:
+  L1: DispatchState.Gamma
     load_const 30
     jump L4
 
-  L2:
+  L2: DispatchState.Beta
     load_const 20
     jump L4
 
-  L3:
+  L3: DispatchState.Alpha
     load_const 10
 
   L4:
@@ -1029,19 +1029,19 @@ function JumpTableTypeTag(value: int | string | bool | float) -> string {
     type_tag
     jump_table [L3, L2, L1, _, L0], default L5
 
-  L0:
+  L0: float
     load_const "float"
     jump L4
 
-  L1:
+  L1: bool
     load_const "bool"
     jump L4
 
-  L2:
+  L2: string
     load_const "string"
     jump L4
 
-  L3:
+  L3: int
     load_const "int"
 
   L4:

@@ -17,6 +17,9 @@ pub struct JumpTableData {
     /// Jump offsets for each value from min to min+len-1.
     /// None means "hole" - should jump to default.
     pub offsets: Vec<Option<isize>>,
+    /// Symbolic names for each table entry (display only).
+    /// Parallel to `offsets`: `names[i]` is the name for value `min + i`.
+    pub names: Vec<Option<String>>,
 }
 
 impl JumpTableData {
@@ -29,6 +32,7 @@ impl JumpTableData {
         Self {
             min,
             offsets: vec![None; size],
+            names: vec![None; size],
         }
     }
 
@@ -40,6 +44,15 @@ impl JumpTableData {
         let index = (value - self.min) as usize;
         if index < self.offsets.len() {
             self.offsets[index] = Some(offset);
+        }
+    }
+
+    /// Set the symbolic name for a specific value.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn set_name(&mut self, value: i64, name: String) {
+        let index = (value - self.min) as usize;
+        if index < self.names.len() {
+            self.names[index] = Some(name);
         }
     }
 

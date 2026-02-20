@@ -354,6 +354,11 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// This is the core of `TypedIR` lowering. Unlike HIR lowering which needs
     /// separate `lower_expr_to_place` and `lower_stmt`, here we have just one method.
     fn lower_expr(&mut self, expr_id: ExprId, dest: Place, body: &ExprBody) {
+        // Set source line from VIR expression span so MIR statements get tagged.
+        if let Some(&line) = body.source_lines.get(&expr_id) {
+            self.builder.current_source_line = line;
+        }
+
         let expr = body.expr(expr_id);
         let ty = body.ty(expr_id);
 
@@ -751,6 +756,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             } => {
                 // If there are no spreads, use the simple aggregate approach
                 if spreads.is_empty() {
+                    // Save the object's source line; field value lowering may change it.
+                    let object_source_line = self.builder.current_source_line;
+
                     let field_operands: Vec<Operand> = fields
                         .iter()
                         .map(|(_, v)| self.lower_to_operand(*v, body))
@@ -762,6 +770,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         AggregateKind::Class("Anonymous".to_string())
                     };
 
+                    // Restore the object's source line for the aggregate statement.
+                    self.builder.current_source_line = object_source_line;
                     self.builder.assign(
                         dest,
                         Rvalue::Aggregate {
@@ -1058,6 +1068,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     };
 
                     // Generate pattern test
+                    let arm_source_line = body.source_lines.get(&arm.body).copied().unwrap_or(0);
                     self.lower_pattern_test(
                         arm.pattern,
                         scrutinee_local,
@@ -1065,6 +1076,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         arm_block,
                         next_block,
                         body,
+                        arm_source_line,
                     );
 
                     // Arm body
@@ -1447,6 +1459,11 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         for (i, arm) in arms.iter().enumerate() {
             self.builder.set_current_block(arm_blocks[i]);
 
+            // Set source line from the arm body so the binding gets the right line.
+            if let Some(&line) = body.source_lines.get(&arm.body) {
+                self.builder.current_source_line = line;
+            }
+
             // If this is a binding or typed binding arm, bind the variable
             let pat = body.pattern(arm.pattern);
             match pat {
@@ -1493,6 +1510,10 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
     /// Lower a pattern match test, branching to `success_block` if the pattern matches,
     /// or `fail_block` if it doesn't.
+    ///
+    /// `binding_source_line` is set as the source line before emitting any variable
+    /// binding so that the binding statement gets the arm's line, not the match expression's.
+    #[allow(clippy::too_many_arguments)]
     fn lower_pattern_test(
         &mut self,
         pat_id: PatId,
@@ -1501,6 +1522,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         success_block: BlockId,
         fail_block: BlockId,
         body: &ExprBody,
+        binding_source_line: usize,
     ) {
         let pat = body.pattern(pat_id);
         match pat {
@@ -1508,6 +1530,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // Binding always matches. `_` is a discard binding and must not
                 // be materialized as a usable local.
                 if name.as_str() != "_" {
+                    if binding_source_line != 0 {
+                        self.builder.current_source_line = binding_source_line;
+                    }
                     let local = self.builder.declare_local(
                         Some(name.clone()),
                         scrutinee_ty.clone(),
@@ -1548,6 +1573,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // `_` is a discard binding and must not be materialized.
                 self.builder.set_current_block(bind_block);
                 if name.as_str() != "_" {
+                    if binding_source_line != 0 {
+                        self.builder.current_source_line = binding_source_line;
+                    }
                     let local =
                         self.builder
                             .declare_local(Some(name.clone()), pattern_ty, None, false);
@@ -1612,6 +1640,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         success_block,
                         next_try,
                         body,
+                        binding_source_line,
                     );
                     if i + 1 < pats.len() {
                         self.builder.set_current_block(next_try);

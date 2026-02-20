@@ -37,6 +37,18 @@ use colored::{Color, Colorize};
 
 use crate::indexable::EvalStack;
 
+/// Display format for bytecode output.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BytecodeFormat {
+    /// Human-readable assembly-like format with labels and resolved names.
+    /// This is the default used for snapshot tests.
+    #[default]
+    Textual,
+    /// Expanded raw format showing source lines, bytecode addresses,
+    /// raw operand indices, and metadata annotations in a table layout.
+    Expanded,
+}
+
 /// Context aware instruction display.
 ///
 /// Instructions themselves are kinda "bare". For example, `LOAD_VAR 1`
@@ -536,6 +548,9 @@ pub fn display_bytecode_textual(function: &Function) -> String {
 
     // --- Pass 1: Collect all jump targets so we can assign labels. ---
     let mut jump_targets = BTreeSet::new();
+    // Map from target PC → symbolic name (for jump table arms with named variants).
+    let mut target_names: std::collections::HashMap<usize, String> =
+        std::collections::HashMap::new();
 
     for (ip, instruction) in instructions.iter().enumerate() {
         match instruction {
@@ -549,9 +564,14 @@ pub fn display_bytecode_textual(function: &Function) -> String {
                 jump_targets.insert(default_target);
                 // Each entry in the jump table.
                 if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
-                    for offset in table.offsets.iter().flatten() {
-                        let target = ip.wrapping_add_signed(*offset);
-                        jump_targets.insert(target);
+                    for (i, offset) in table.offsets.iter().enumerate() {
+                        if let Some(offset) = offset {
+                            let target = ip.wrapping_add_signed(*offset);
+                            jump_targets.insert(target);
+                            if let Some(name) = table.names.get(i).and_then(|n| n.as_deref()) {
+                                target_names.insert(target, name.to_string());
+                            }
+                        }
                     }
                 }
             }
@@ -578,7 +598,11 @@ pub fn display_bytecode_textual(function: &Function) -> String {
             if ip > 0 {
                 lines.push(String::new());
             }
-            lines.push(format!("  {label}:"));
+            if let Some(name) = target_names.get(&ip) {
+                lines.push(format!("  {label}: {name}"));
+            } else {
+                lines.push(format!("  {label}:"));
+            }
         }
 
         lines.push(format!("    {text}"));
@@ -749,9 +773,10 @@ fn display_instruction_textual(
     }
 }
 
-/// Display a full program in textual format.
+/// Display a full program in the specified format.
 ///
-/// Renders all functions with their parameter names:
+/// [`BytecodeFormat::Textual`] produces human-readable assembly with labels
+/// (the default for snapshots):
 ///
 /// ```text
 /// function add(x: int, y: int) -> int {
@@ -760,16 +785,11 @@ fn display_instruction_textual(
 ///     bin_op +
 ///     return
 /// }
-///
-/// function main() -> int {
-///     load_global <fn add>
-///     load_const 3
-///     load_const 2
-///     call 2
-///     return
-/// }
 /// ```
-pub fn display_program_textual(functions: &[(String, &Function)]) -> String {
+///
+/// [`BytecodeFormat::Expanded`] shows raw bytecode addresses, source lines,
+/// raw operand indices, and metadata annotations.
+pub fn display_program(functions: &[(String, &Function)], format: BytecodeFormat) -> String {
     let mut output = String::new();
 
     for (i, (name, func)) in functions.iter().enumerate() {
@@ -791,10 +811,180 @@ pub fn display_program_textual(functions: &[(String, &Function)]) -> String {
             func.return_type
         );
 
-        let body = display_bytecode_textual(func);
+        let body = match format {
+            BytecodeFormat::Textual => display_bytecode_textual(func),
+            BytecodeFormat::Expanded => display_bytecode_expanded(func),
+        };
         output.push_str(&body);
         output.push_str("}\n");
     }
 
     output
+}
+
+/// Display bytecode in expanded raw format with source lines, addresses,
+/// raw operand indices, and metadata annotations.
+///
+/// Format is `[SOURCE LINE, ADDRESS, RAW INSTRUCTION, METADATA]`:
+///
+/// ```text
+///   1    0    load_const 0          ("HelloWorld")
+///        1    load_var 0            (name)
+///        2    load_const 1          ("name")
+///        3    alloc_map 1
+///        4    call 5                (baml.llm.call_llm_function)
+///        5    return
+/// ```
+///
+/// Source lines are only shown when they change. A blank line separates
+/// groups of instructions from different source lines.
+fn display_bytecode_expanded(function: &Function) -> String {
+    let instructions = &function.bytecode.instructions;
+
+    if instructions.is_empty() {
+        return String::new();
+    }
+
+    // Build all rows: [source_line, address, raw_instruction, metadata].
+    let mut rows = Vec::<[Col; 4]>::with_capacity(instructions.len());
+    let mut widths = [0usize; 4];
+    let mut last_line: usize = 0;
+
+    for (ip, instruction) in instructions.iter().enumerate() {
+        // Source line column (only when it changes).
+        let source_line = match function.bytecode.meta.get(ip).map(|m| m.source_line) {
+            Some(line) if line != last_line => {
+                last_line = line;
+                line.to_string()
+            }
+            _ => String::new(),
+        };
+
+        // Address column.
+        let address = ip.to_string();
+
+        // Raw instruction with numeric operands (lowercase).
+        let raw = instruction.to_string().to_lowercase();
+
+        // Metadata column (resolved names, jump targets, etc).
+        let metadata = display_expanded_metadata(ip, instruction, function);
+
+        let row = [
+            Col::from(source_line),
+            Col::from(address),
+            Col::from(raw),
+            Col::from(metadata),
+        ];
+
+        for (i, col) in row.iter().enumerate() {
+            widths[i] = widths[i].max(col.char_count);
+        }
+
+        rows.push(row);
+    }
+
+    // Render the table with 2-space indent.
+    let mut output = String::new();
+
+    for (i, row) in rows.iter().enumerate() {
+        // Blank line between source line groups.
+        if i > 0 && !rows[i][0].text.is_empty() && rows[i - 1][0].text != rows[i][0].text {
+            output.push('\n');
+        }
+
+        output.push_str("  ");
+        for (j, col) in row.iter().enumerate() {
+            let width = if j < row.len() - 1 {
+                widths[j] + COLUMN_MARGIN
+            } else {
+                0
+            };
+
+            output.push_str(&col.text);
+            for _ in col.char_count..width {
+                output.push(' ');
+            }
+        }
+
+        output.push('\n');
+    }
+
+    output
+}
+
+/// Build the metadata annotation column for expanded format.
+///
+/// Returns resolved operand names in parentheses, or jump target information.
+/// Returns an empty string when no metadata is relevant.
+fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Function) -> String {
+    let meta = function
+        .bytecode
+        .meta
+        .get(ip)
+        .and_then(|m| m.operand.as_ref());
+
+    match instruction {
+        // Instructions with resolved operand names from InstructionMeta.
+        Instruction::LoadConst(_)
+        | Instruction::LoadVar(_)
+        | Instruction::StoreVar(_)
+        | Instruction::LoadGlobal(_)
+        | Instruction::StoreGlobal(_)
+        | Instruction::LoadField(_)
+        | Instruction::StoreField(_)
+        | Instruction::Call(_)
+        | Instruction::DispatchFuture(_)
+        | Instruction::AllocInstance(_)
+        | Instruction::AllocVariant(_)
+        | Instruction::Watch(_)
+        | Instruction::Unwatch(_)
+        | Instruction::Notify(_) => meta
+            .map(|m| format!("({})", m.as_str()))
+            .unwrap_or_default(),
+
+        // Jumps: show absolute target address.
+        Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
+            let target = ip.wrapping_add_signed(*offset);
+            format!("(to {target})")
+        }
+
+        // Jump tables: show all target addresses.
+        Instruction::JumpTable { table_idx, default } => {
+            let default_target = ip.wrapping_add_signed(*default);
+            let mut entries = Vec::new();
+            if let Some(table) = function.bytecode.jump_tables.get(*table_idx) {
+                for entry in &table.offsets {
+                    match entry {
+                        Some(offset) => {
+                            let target = ip.wrapping_add_signed(*offset);
+                            entries.push(format!("to {target}"));
+                        }
+                        None => entries.push("_".to_string()),
+                    }
+                }
+            }
+            if entries.is_empty() {
+                format!("(default to {default_target})")
+            } else {
+                format!("([{}], default to {default_target})", entries.join(", "))
+            }
+        }
+
+        // Block notifications: show block name.
+        Instruction::NotifyBlock(block_index) => function
+            .block_notifications
+            .get(*block_index)
+            .map(|n| format!("({})", n.block_name))
+            .unwrap_or_default(),
+
+        // Visualization: show node label.
+        Instruction::VizEnter(index) | Instruction::VizExit(index) => function
+            .viz_nodes
+            .get(*index)
+            .map(|n| format!("({})", n.label))
+            .unwrap_or_default(),
+
+        // All other instructions: no metadata.
+        _ => String::new(),
+    }
 }

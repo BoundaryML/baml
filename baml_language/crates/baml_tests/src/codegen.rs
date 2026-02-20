@@ -170,12 +170,16 @@ type CompileResult = (Vec<(String, CompiledFunction)>, HashMap<String, usize>);
 /// Uses the production `compile_files` function to ensure tests match real behavior.
 /// Also checks for diagnostic errors.
 fn compile_source(source: &str) -> CompileResult {
+    compile_source_with_opt(source, baml_compiler_emit::OptLevel::One)
+}
+
+fn compile_source_with_opt(source: &str, opt: baml_compiler_emit::OptLevel) -> CompileResult {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
 
     let project = db.get_project().unwrap();
     let all_files = project.files(&db).clone();
-    let program = baml_compiler_emit::compile_files(&db, &all_files)
+    let program = baml_compiler_emit::compile_files(&db, &all_files, opt)
         .expect("compile_files should succeed for valid test source");
 
     // Extract functions from the program
@@ -289,4 +293,50 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use bex_vm::debug::{BytecodeFormat, display_program};
+
+    use super::*;
+
+    fn compile_display_functions(
+        source: &str,
+        opt: baml_compiler_emit::OptLevel,
+    ) -> Vec<(String, bex_vm_types::types::Function)> {
+        let (mut functions, _globals) = compile_source_with_opt(source, opt);
+        functions.retain(|(name, _)| !name.starts_with("baml."));
+        functions.sort_by(|(a, _), (b, _)| a.cmp(b));
+        functions
+            .into_iter()
+            .map(|(name, compiled)| (name, compiled.function))
+            .collect()
+    }
+
+    #[test]
+    fn bytecode_display_formats() {
+        let source = include_str!("../fixtures/bytecode_display.baml");
+
+        // 1. Textual format (optimized)
+        let o1 = compile_display_functions(source, baml_compiler_emit::OptLevel::One);
+        let o1_refs: Vec<(String, &bex_vm_types::types::Function)> =
+            o1.iter().map(|(n, f)| (n.clone(), f)).collect();
+        let textual = display_program(&o1_refs, BytecodeFormat::Textual);
+
+        // 2. Expanded format (optimized)
+        let expanded = display_program(&o1_refs, BytecodeFormat::Expanded);
+
+        // 3. Expanded format (unoptimized)
+        let o0 = compile_display_functions(source, baml_compiler_emit::OptLevel::Zero);
+        let o0_refs: Vec<(String, &bex_vm_types::types::Function)> =
+            o0.iter().map(|(n, f)| (n.clone(), f)).collect();
+        let expanded_unopt = display_program(&o0_refs, BytecodeFormat::Expanded);
+
+        insta::with_settings!({omit_expression => true}, {
+            insta::assert_snapshot!("bytecode_display_textual", textual);
+            insta::assert_snapshot!("bytecode_display_expanded", expanded);
+            insta::assert_snapshot!("bytecode_display_expanded_unoptimized", expanded_unopt);
+        });
+    }
 }

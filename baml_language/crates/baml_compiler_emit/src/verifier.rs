@@ -179,6 +179,7 @@ mod tests {
                 value: Rvalue::Use(Operand::Constant(Constant::Int(value))),
             },
             span: None,
+            source_line: 0,
         }
     }
 
@@ -199,18 +200,21 @@ mod tests {
                         arm_names: vec![],
                     }),
                     span: None,
+                    terminator_source_line: 0,
                 },
                 BasicBlock {
                     id: BlockId(1),
                     statements: vec![stmt_assign(Local(0), 1)],
                     terminator: Some(Terminator::Return),
                     span: None,
+                    terminator_source_line: 0,
                 },
                 BasicBlock {
                     id: BlockId(2),
                     statements: vec![],
                     terminator: Some(Terminator::Unreachable),
                     span: None,
+                    terminator_source_line: 0,
                 },
             ],
             entry: BlockId(0),
@@ -222,7 +226,7 @@ mod tests {
         for (i, block) in mir.blocks.iter_mut().enumerate() {
             block.id = BlockId(i);
         }
-        let analysis = AnalysisResult::analyze(&mir);
+        let analysis = AnalysisResult::analyze(&mir, crate::analysis::OptLevel::One);
         verify_mir_emit_invariants(&mir, &analysis);
     }
 
@@ -244,18 +248,21 @@ mod tests {
                         arm_names: vec![],
                     }),
                     span: None,
+                    terminator_source_line: 0,
                 },
                 BasicBlock {
                     id: BlockId(1),
                     statements: vec![stmt_assign(Local(0), 1)],
                     terminator: Some(Terminator::Return),
                     span: None,
+                    terminator_source_line: 0,
                 },
                 BasicBlock {
                     id: BlockId(2),
                     statements: vec![],
                     terminator: Some(Terminator::Goto { target: BlockId(1) }),
                     span: None,
+                    terminator_source_line: 0,
                 },
             ],
             entry: BlockId(0),
@@ -266,7 +273,7 @@ mod tests {
         for (i, block) in mir.blocks.iter_mut().enumerate() {
             block.id = BlockId(i);
         }
-        let analysis = AnalysisResult::analyze(&mir);
+        let analysis = AnalysisResult::analyze(&mir, crate::analysis::OptLevel::One);
         verify_mir_emit_invariants(&mir, &analysis);
     }
 
@@ -280,6 +287,7 @@ mod tests {
                 statements: vec![],
                 terminator: Some(Terminator::Return),
                 span: None,
+                terminator_source_line: 0,
             }],
             entry: BlockId(0),
             locals: vec![local("ret"), local_watched("x")],
@@ -289,7 +297,7 @@ mod tests {
         for (i, block) in mir.blocks.iter_mut().enumerate() {
             block.id = BlockId(i);
         }
-        let analysis = AnalysisResult::analyze(&mir);
+        let analysis = AnalysisResult::analyze(&mir, crate::analysis::OptLevel::One);
         verify_mir_emit_invariants(&mir, &analysis);
     }
 }

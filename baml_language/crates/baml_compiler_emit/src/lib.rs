@@ -25,6 +25,7 @@ mod pull_semantics;
 mod stack_carry;
 mod verifier;
 
+pub use analysis::OptLevel;
 use bex_vm_types::ObjectPool;
 pub(crate) use emit::compile_mir_function;
 
@@ -71,7 +72,7 @@ pub use bex_vm_types::{
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
 pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Program, LoweringError> {
     let project = db.project();
-    compile_files(db, project.files(db))
+    compile_files(db, project.files(db), OptLevel::One)
 }
 
 /// Generate bytecode for a list of source files.
@@ -82,6 +83,7 @@ pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Progr
 pub fn compile_files(
     db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
+    opt: OptLevel,
 ) -> Result<Program, LoweringError> {
     // Note: Builtin BAML files (like llm.baml) are now loaded at project setup time
     // in ProjectDatabase::set_project_root(), so they're already in the files list.
@@ -372,6 +374,8 @@ pub fn compile_files(
 
     // Compile each user function using MIR
     for file in files {
+        // Build line starts table for span → line number conversion.
+        let line_starts = build_line_starts(file.text(db));
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
@@ -453,6 +457,7 @@ pub fn compile_files(
                             &resolution_ctx,
                             &type_aliases,
                             &recursive_aliases,
+                            &line_starts,
                         )
                         .map_err(|e| e.in_function(signature.name.to_string()))?;
                         let mir = baml_compiler_mir::lower(
@@ -476,7 +481,7 @@ pub fn compile_files(
                             enum_variants: &enum_variants,
                             objects: &mut program.objects,
                         };
-                        compile_mir_function(&mir, ctx)
+                        compile_mir_function(&mir, ctx, opt)
                     }
                 };
 
@@ -753,4 +758,19 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
     // Delegate to the generated function from bex_vm_types, which is
     // derived from the same #[sys_op] definitions in with_builtins!.
     bex_vm_types::sys_op_for_path(path)
+}
+
+/// Build a table of byte offsets where each line starts in the source text.
+///
+/// Returns `[0, offset_of_line_2, offset_of_line_3, ...]`.
+/// Used for converting byte offsets from spans to 1-indexed line numbers.
+#[allow(clippy::cast_possible_truncation)]
+fn build_line_starts(text: &str) -> Vec<u32> {
+    let mut starts = vec![0u32];
+    for (i, byte) in text.bytes().enumerate() {
+        if byte == b'\n' {
+            starts.push((i + 1) as u32);
+        }
+    }
+    starts
 }

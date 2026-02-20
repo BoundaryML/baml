@@ -190,6 +190,11 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Slot index → variable name mapping for debug metadata.
     slot_names: Vec<String>,
+
+    /// MIR local → source line mapping (for virtual local inlining).
+    /// When a virtual local is inlined at a use site, this allows updating
+    /// `current_source_line` so the emitted instructions get the correct line.
+    local_source_lines: HashMap<Local, usize>,
 }
 
 impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
@@ -218,6 +223,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             block_notifications: Vec::new(),
             local_types: HashMap::new(),
             slot_names: Vec::new(),
+            local_source_lines: HashMap::new(),
         }
     }
 
@@ -280,6 +286,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Build slot name mapping for debug metadata.
         self.slot_names = Self::build_local_names(mir, &self.local_slots);
+
+        // Build local → source line mapping for virtual local inlining.
+        // When virtual locals are inlined at use sites, we need to know
+        // each local's source line so emitted instructions get the right line.
+        for block in &mir.blocks {
+            for stmt in &block.statements {
+                if let StatementKind::Assign {
+                    destination: Place::Local(local),
+                    ..
+                } = &stmt.kind
+                {
+                    if stmt.source_line != 0 {
+                        self.local_source_lines.insert(*local, stmt.source_line);
+                    }
+                }
+            }
+        }
 
         // 2. Emit blocks in RPO order.
         //
@@ -540,11 +563,17 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn emit_block(&mut self, block: &BasicBlock, mir: &MirFunction) {
         // Emit all statements
         for stmt in &block.statements {
+            if stmt.source_line != 0 {
+                self.current_source_line = stmt.source_line;
+            }
             self.emit_statement(&stmt.kind, mir);
         }
 
         // Emit terminator
         if let Some(term) = &block.terminator {
+            if block.terminator_source_line != 0 {
+                self.current_source_line = block.terminator_source_line;
+            }
             self.emit_terminator(term, mir);
         }
     }
@@ -837,7 +866,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 match strategy {
                     SwitchStrategy::JumpTable { min, max } => {
-                        self.emit_switch_jump_table(discriminant, arms, *otherwise, min, max);
+                        self.emit_switch_jump_table(
+                            discriminant,
+                            arms,
+                            *otherwise,
+                            min,
+                            max,
+                            &name_map,
+                        );
                     }
                     SwitchStrategy::BinarySearch => {
                         self.emit_switch_binary_search(
@@ -1084,13 +1120,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         otherwise: BlockId,
         min: i64,
         max: i64,
+        name_map: &std::collections::HashMap<i64, &str>,
     ) {
         // 1. Push discriminant onto stack
         self.emit_operand_pull(discriminant);
 
         // 2. Create jump table data structure with placeholder offsets
         let table_idx = self.pending_jump_tables.len();
-        let table = JumpTableData::new(min, max);
+        let mut table = JumpTableData::new(min, max);
+
+        // Populate symbolic names from arm_names
+        for (&value, &name) in name_map {
+            table.set_name(value, name.to_string());
+        }
 
         // Resolve all jump targets through redirect threading so we don't retain
         // references to skipped redirect-source blocks.
@@ -1307,6 +1349,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
         let action = match classification {
             LocalClassification::Virtual => {
+                // Update source line from the defining MIR statement.
+                if let Some(&line) = self.local_source_lines.get(&local) {
+                    if line != 0 {
+                        self.current_source_line = line;
+                    }
+                }
                 // Inline the definition rvalue at use site.
                 let rvalue = self.analysis.def_use[&local]
                     .def
@@ -1553,9 +1601,13 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
 /// Compile a MIR function to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-pub(crate) fn compile_mir_function(mir: &MirFunction, ctx: MirCodegenContext<'_, '_>) -> Function {
+pub(crate) fn compile_mir_function(
+    mir: &MirFunction,
+    ctx: MirCodegenContext<'_, '_>,
+    opt: crate::analysis::OptLevel,
+) -> Function {
     // Run analysis
-    let analysis = AnalysisResult::analyze(mir);
+    let analysis = AnalysisResult::analyze(mir, opt);
     #[cfg(debug_assertions)]
     crate::verifier::verify_mir_emit_invariants(mir, &analysis);
 

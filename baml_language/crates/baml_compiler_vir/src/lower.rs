@@ -164,6 +164,7 @@ pub fn lower_from_hir(
     resolution_ctx: &TypeResolutionContext,
     type_aliases: &std::collections::HashMap<baml_base::Name, baml_compiler_tir::Ty>,
     recursive_aliases: &std::collections::HashSet<baml_base::Name>,
+    line_starts: &[u32],
 ) -> Result<ExprBody, LoweringError> {
     match body {
         FunctionBody::Expr(hir_body, source_map) => {
@@ -173,6 +174,7 @@ pub fn lower_from_hir(
                 source_map,
                 type_aliases,
                 recursive_aliases,
+                line_starts,
             );
             ctx.lower_expr_body(hir_body)
         }
@@ -194,6 +196,7 @@ struct ExprBodyBuilder {
     expr_types: FxHashMap<ExprId, Ty>,
     enum_variant_exprs: FxHashMap<ExprId, (baml_base::Name, baml_base::Name)>,
     resolutions: FxHashMap<ExprId, baml_compiler_tir::ResolvedValue>,
+    source_lines: FxHashMap<ExprId, usize>,
 }
 
 impl ExprBodyBuilder {
@@ -204,6 +207,7 @@ impl ExprBodyBuilder {
             expr_types: FxHashMap::default(),
             enum_variant_exprs: FxHashMap::default(),
             resolutions: FxHashMap::default(),
+            source_lines: FxHashMap::default(),
         }
     }
 
@@ -232,8 +236,13 @@ impl ExprBodyBuilder {
             expr_types: self.expr_types,
             enum_variant_exprs: self.enum_variant_exprs,
             resolutions: self.resolutions,
+            source_lines: self.source_lines,
             root,
         }
+    }
+
+    fn record_source_line(&mut self, id: ExprId, line: usize) {
+        self.source_lines.insert(id, line);
     }
 
     fn record_enum_variant(
@@ -259,6 +268,8 @@ struct LoweringContext<'a> {
     builder: ExprBodyBuilder,
     type_aliases: &'a std::collections::HashMap<baml_base::Name, baml_compiler_tir::Ty>,
     recursive_aliases: &'a std::collections::HashSet<baml_base::Name>,
+    /// Byte offsets of line starts in the source file (for span → line number conversion).
+    line_starts: &'a [u32],
 }
 
 impl<'a> LoweringContext<'a> {
@@ -268,6 +279,7 @@ impl<'a> LoweringContext<'a> {
         source_map: &'a HirSourceMap,
         type_aliases: &'a std::collections::HashMap<baml_base::Name, baml_compiler_tir::Ty>,
         recursive_aliases: &'a std::collections::HashSet<baml_base::Name>,
+        line_starts: &'a [u32],
     ) -> Self {
         Self {
             inference,
@@ -276,6 +288,15 @@ impl<'a> LoweringContext<'a> {
             builder: ExprBodyBuilder::new(),
             type_aliases,
             recursive_aliases,
+            line_starts,
+        }
+    }
+
+    /// Convert a byte offset to a 1-indexed line number.
+    fn offset_to_line(&self, offset: u32) -> usize {
+        match self.line_starts.binary_search(&offset) {
+            Ok(idx) => idx + 1,
+            Err(idx) => idx,
         }
     }
 
@@ -300,7 +321,7 @@ impl<'a> LoweringContext<'a> {
         let tir_ty = self.inference.expr_types.get(&hir_id);
         let ty = tir_ty.map(|ty| self.lower_ty(ty)).unwrap_or(Ty::Null);
 
-        match hir_expr {
+        let result = match hir_expr {
             HirExpr::Missing => {
                 let span = self.source_map.expr_span(hir_id).unwrap_or_default();
                 Err(LoweringError::MissingExpression { span })
@@ -572,7 +593,17 @@ impl<'a> LoweringContext<'a> {
                     ty,
                 ))
             }
+        };
+
+        // Record source line from HIR source map onto VIR expression.
+        if let Ok(vir_id) = &result {
+            if let Some(span) = self.source_map.expr_span(hir_id) {
+                let line = self.offset_to_line(span.range.start().into());
+                self.builder.record_source_line(*vir_id, line);
+            }
         }
+
+        result
     }
 
     /// Weave a block's statements and optional tail expression into Let/Seq chains.
@@ -684,7 +715,7 @@ impl<'a> LoweringContext<'a> {
 
         let stmt = &hir_body.stmts[stmt_id];
 
-        match stmt {
+        let result = match stmt {
             HirStmt::Missing => {
                 let span = self.source_map.stmt_span(stmt_id).unwrap_or_default();
                 Err(LoweringError::MissingStatement { span })
@@ -818,7 +849,25 @@ impl<'a> LoweringContext<'a> {
                 },
                 Ty::Void,
             )),
+        };
+
+        // Record source line from HIR source map onto VIR expression.
+        // Statement spans may include leading trivia (\n from the previous line).
+        // If span.start is immediately before a line start, skip past the newline.
+        if let Ok(vir_id) = &result {
+            if let Some(span) = self.source_map.stmt_span(stmt_id) {
+                let start: u32 = span.range.start().into();
+                let effective = if self.line_starts.binary_search(&(start + 1)).is_ok() {
+                    start + 1
+                } else {
+                    start
+                };
+                let line = self.offset_to_line(effective);
+                self.builder.record_source_line(*vir_id, line);
+            }
         }
+
+        result
     }
 
     /// Lower a TIR type to the unified `baml_type::Ty`.

@@ -44,6 +44,8 @@ pub(crate) struct MirBuilder {
     current_block: Option<BlockId>,
     span: Option<TextRange>,
     viz_nodes: Vec<VizNode>,
+    /// Current source line number (1-indexed) for tagging statements.
+    pub(crate) current_source_line: usize,
 }
 
 #[allow(dead_code)]
@@ -58,6 +60,7 @@ impl MirBuilder {
             current_block: None,
             span: None,
             viz_nodes: Vec::new(),
+            current_source_line: 0,
         }
     }
 
@@ -152,12 +155,17 @@ impl MirBuilder {
 
     /// Push a statement to the current block.
     pub(crate) fn push_statement(&mut self, kind: StatementKind, span: Option<TextRange>) {
+        let source_line = self.current_source_line;
         let block = self.current_block_mut();
         assert!(
             block.terminator.is_none(),
             "cannot add statement to terminated block"
         );
-        block.statements.push(Statement { kind, span });
+        block.statements.push(Statement {
+            kind,
+            span,
+            source_line,
+        });
     }
 
     /// Emit an assignment: `dest = value`
@@ -205,9 +213,11 @@ impl MirBuilder {
     // ========================================================================
 
     fn set_terminator(&mut self, terminator: Terminator) {
+        let source_line = self.current_source_line;
         let block = self.current_block_mut();
         assert!(block.terminator.is_none(), "block already has a terminator");
         block.terminator = Some(terminator);
+        block.terminator_source_line = source_line;
     }
 
     /// Emit an unconditional goto.
