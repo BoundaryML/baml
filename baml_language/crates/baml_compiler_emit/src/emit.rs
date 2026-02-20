@@ -683,6 +683,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             Constant::String(s) => {
                 let escaped = s
+                    .replace('\\', "\\\\")
                     .replace('\n', "\\n")
                     .replace('\r', "\\r")
                     .replace('\t', "\\t");

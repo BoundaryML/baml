@@ -693,7 +693,7 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
         files,
     };
 
-    let snapshot_path = format!("{}/snapshots/baml_std", manifest_dir.replace('\\', "/"),);
+    let snapshot_path = format!("{}/snapshots/baml_std", manifest_dir.replace('\\', "/"));
 
     // Reuse standard phase generators for 01-05
     let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
@@ -704,6 +704,9 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
     let diagnostics_test = generate_diagnostics_test(&project);
 
     // Custom codegen test: filter to only builtin functions
+    let collect_functions =
+        emit_collect_functions(quote!(|name: &&String| name.starts_with(BAML_STD_PREFIX)));
+
     let codegen_file_loaders: TokenStream = project
         .files
         .iter()
@@ -761,22 +764,7 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
 
                 match baml_compiler_emit::compile_files(&db, &all_files) {
                     Ok(program) => {
-                        let mut func_names: Vec<_> = program.function_indices.keys()
-                            .filter(|name| name.starts_with(BAML_STD_PREFIX))
-                            .collect();
-                        func_names.sort();
-
-                        let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
-                            .iter()
-                            .filter_map(|name| {
-                                let &idx = program.function_indices.get(*name)?;
-                                if let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx) {
-                                    Some(((*name).clone(), func.as_ref()))
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
+                        #collect_functions
 
                         output = bex_vm::debug::display_program_textual(
                             &functions,
@@ -796,7 +784,40 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
     }
 }
 
+/// Emits a `quote!` fragment that collects sorted functions from a compiled program,
+/// filtered by a predicate on the function name. The `filter_expr` should be a quoted
+/// expression of type `impl Fn(&&String) -> bool`.
+fn emit_collect_functions(filter_expr: TokenStream) -> TokenStream {
+    quote! {
+        let mut func_names: Vec<_> = program.function_indices.keys()
+            .filter(#filter_expr)
+            .collect();
+        func_names.sort();
+
+        let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
+            .iter()
+            .map(|name| {
+                let idx = *program.function_indices.get(*name).unwrap();
+                match program.objects.get(idx) {
+                    Some(baml_compiler_emit::Object::Function(func)) => {
+                        ((*name).clone(), func.as_ref())
+                    }
+                    other => {
+                        panic!(
+                            "function_indices entry '{}' (idx={}) is not a Function: {:?}",
+                            name, idx, other.map(std::mem::discriminant)
+                        );
+                    }
+                }
+            })
+            .collect();
+    }
+}
+
 fn generate_codegen_test(project: &TestProject) -> TokenStream {
+    let collect_functions =
+        emit_collect_functions(quote!(|name: &&String| !name.starts_with(BAML_STD_PREFIX)));
+
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -842,22 +863,7 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
                 Ok(program) => {
                     // Collect sorted functions, excluding builtins (baml.*)
                     // which are snapshotted separately in baml_std.
-                    let mut func_names: Vec<_> = program.function_indices.keys()
-                        .filter(|name| !name.starts_with(BAML_STD_PREFIX))
-                        .collect();
-                    func_names.sort();
-
-                    let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
-                        .iter()
-                        .filter_map(|name| {
-                            let &idx = program.function_indices.get(*name)?;
-                            if let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx) {
-                                Some(((*name).clone(), func.as_ref()))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
+                    #collect_functions
 
                     output = bex_vm::debug::display_program_textual(
                         &functions,
