@@ -462,8 +462,6 @@ export class BamlRuntime implements BamlRuntimeInterface {
           type: e.type as "error" | "warning",
           message: e.message || String(e),
           filePath: e.file_path,
-          line: e.start_line,
-          column: e.start_column,
           start_ch: e.start_ch,
           end_ch: e.end_ch,
         }));
@@ -487,8 +485,6 @@ export class BamlRuntime implements BamlRuntimeInterface {
             type: err.type as "error" | "warning",
             message: err.message || String(err),
             filePath: err.file_path,
-            line: err.start_line,
-            column: err.start_column,
             start_ch: err.start_ch,
             end_ch: err.end_ch,
           }));
@@ -504,6 +500,8 @@ export class BamlRuntime implements BamlRuntimeInterface {
             id: "diag_unknown",
             type: "error",
             message: e instanceof Error ? e.message : String(e),
+            start_ch: 0,
+            end_ch: 0,
           },
         ];
       }

@@ -5,11 +5,9 @@ import { diagnosticsAtom } from '../atoms';
 export const CodeMirrorDiagnosticsAtom = atom((get) => {
   const diags = get(diagnosticsAtom);
   return diags.map((d): Diagnostic => {
-    const start = d.start_ch ?? 0;
-    const end = d.end_ch ?? 0;
     return {
-      from: start,
-      to: start === end ? end + 1 : end,
+      from: d.start_ch,
+      to: d.start_ch === d.end_ch ? d.end_ch + 1 : d.end_ch,
       message: d.message,
       severity: d.type === 'warning' ? 'warning' : 'error',
       source: 'baml',

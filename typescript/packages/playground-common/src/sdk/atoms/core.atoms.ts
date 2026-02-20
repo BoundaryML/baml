@@ -638,11 +638,8 @@ export interface DiagnosticError {
   type: 'error' | 'warning';
   message: string;
   filePath?: string;
-  line?: number;
-  column?: number;
-  // For compatibility with old code (CodeMirror needs these)
-  start_ch?: number;
-  end_ch?: number;
+  start_ch: number;
+  end_ch: number;
 }
 
 /**
