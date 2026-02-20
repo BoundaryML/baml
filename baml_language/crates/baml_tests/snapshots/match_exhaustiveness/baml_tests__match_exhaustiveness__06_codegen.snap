@@ -2,45 +2,55 @@
 source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
 expression: output
 ---
-function BoolLiteralAfterTypedBool(b):
+function BoolLiteralAfterTypedBool(b: bool) -> string {
     load_var b
     pop 1
     load_const false
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "unreachable"
+  L0:
+    load_const "unreachable"
     jump L2
 
-L1: load_const "any bool"
+  L1:
+    load_const "any bool"
 
-L2: return
+  L2:
+    return
+}
 
-function BoolUnionPattern(b):
+function BoolUnionPattern(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
     jump L0
 
-L0: load_const "covered"
+  L0:
+    load_const "covered"
     return
+}
 
-function BoolWithCatchAll(b):
+function BoolWithCatchAll(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "no"
+  L0:
+    load_const "no"
     jump L2
 
-L1: load_const "yes"
+  L1:
+    load_const "yes"
 
-L2: return
+  L2:
+    return
+}
 
-function DeeplyNestedLiterals(x):
+function DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
     load_var x
     copy 0
     load_const 200
@@ -48,49 +58,60 @@ function DeeplyNestedLiterals(x):
     pop_jump_if_false L0
     pop 1
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
     pop 1
 
-L1: copy 0
+  L1:
+    copy 0
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
     pop 1
 
-L2: pop 1
+  L2:
+    pop 1
     jump L3
     load_const "all success codes"
     return
 
-L3: unreachable
+  L3:
+    unreachable
+}
 
-function DuplicateBoolLiteral(b):
+function DuplicateBoolLiteral(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
     jump L3
 
-L0: load_var b
+  L0:
+    load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L1
     jump L2
 
-L1: load_const "false"
+  L1:
+    load_const "false"
     jump L4
 
-L2: load_const "second true"
+  L2:
+    load_const "second true"
     jump L4
 
-L3: load_const "first true"
+  L3:
+    load_const "first true"
 
-L4: return
+  L4:
+    return
+}
 
-function DuplicateEnumVariant(s):
+function DuplicateEnumVariant(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -100,25 +121,31 @@ function DuplicateEnumVariant(s):
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "pending"
     jump L4
 
-L2: load_const "inactive"
+  L2:
+    load_const "inactive"
     jump L4
 
-L3: load_const "first"
+  L3:
+    load_const "first"
 
-L4: return
+  L4:
+    return
+}
 
-function DuplicateIntLiteral(x):
+function DuplicateIntLiteral(x: int) -> string {
     load_var x
     copy 0
     load_const 1
@@ -127,65 +154,81 @@ function DuplicateIntLiteral(x):
     pop 1
     jump L1
 
-L0: pop 1
+  L0:
+    pop 1
     load_const "other"
     jump L2
 
-L1: load_const "first one"
+  L1:
+    load_const "first one"
 
-L2: return
+  L2:
+    return
+}
 
-function DuplicateStringLiteral(role):
+function DuplicateStringLiteral(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
     pop_jump_if_false L0
     jump L5
 
-L0: load_var role
+  L0:
+    load_var role
     load_const "user"
     cmp_op ==
     pop_jump_if_false L1
     jump L4
 
-L1: load_var role
+  L1:
+    load_var role
     load_const "assistant"
     cmp_op ==
     pop_jump_if_false L2
     jump L3
 
-L2: load_var role
+  L2:
+    load_var role
     load_const "system"
     cmp_op ==
     pop_jump_if_false L6
     load_const "system"
     jump L6
 
-L3: load_const "assistant"
+  L3:
+    load_const "assistant"
     jump L6
 
-L4: load_const "second user"
+  L4:
+    load_const "second user"
     jump L6
 
-L5: load_const "first user"
+  L5:
+    load_const "first user"
 
-L6: return
+  L6:
+    return
+}
 
-function EnumVariantAfterTypedEnum(s):
+function EnumVariantAfterTypedEnum(s: Status) -> string {
     load_var s
     pop 1
     load_const false
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "unreachable"
+  L0:
+    load_const "unreachable"
     jump L2
 
-L1: load_const "any status"
+  L1:
+    load_const "any status"
 
-L2: return
+  L2:
+    return
+}
 
-function EnumVariantUnion(s):
+function EnumVariantUnion(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -195,22 +238,27 @@ function EnumVariantUnion(s):
     pop 1
     jump L2
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "inactive"
     jump L3
 
-L2: load_const "actionable"
+  L2:
+    load_const "actionable"
 
-L3: return
+  L3:
+    return
+}
 
-function EnumVariantUnionWithCatchAll(s):
+function EnumVariantUnionWithCatchAll(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -220,22 +268,27 @@ function EnumVariantUnionWithCatchAll(s):
     pop 1
     jump L2
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "other"
     jump L3
 
-L2: load_const "actionable"
+  L2:
+    load_const "actionable"
 
-L3: return
+  L3:
+    return
+}
 
-function ExhaustiveAliasOfLiterals(code):
+function ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     load_var code
     copy 0
     load_const 200
@@ -244,104 +297,128 @@ function ExhaustiveAliasOfLiterals(code):
     pop 1
     jump L2
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
     pop 1
 
-L1: pop 1
+  L1:
+    pop 1
     jump L4
     load_const "created"
     jump L3
 
-L2: load_const "ok"
+  L2:
+    load_const "ok"
 
-L3: return
+  L3:
+    return
 
-L4: unreachable
+  L4:
+    unreachable
+}
 
-function ExhaustiveBool(b):
+function ExhaustiveBool(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "no"
+  L0:
+    load_const "no"
     jump L2
 
-L1: load_const "yes"
+  L1:
+    load_const "yes"
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveClassPlusLiteral(x):
+function ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
     load_var x
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
-L0: load_var x
+  L0:
+    load_var x
     load_const 200
     cmp_op ==
     pop_jump_if_false L2
     load_const "http ok"
     jump L2
 
-L1: load_var x
+  L1:
+    load_var x
     load_field .data
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveCustomBool(b):
+function ExhaustiveCustomBool(b: true | false) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_var b
+  L0:
+    load_var b
     load_const false
     cmp_op ==
     pop_jump_if_false L2
     load_const "no"
     jump L2
 
-L1: load_const "yes"
+  L1:
+    load_const "yes"
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveDoubleMaybe(dm):
+function ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
     load_var dm
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L3
 
-L0: load_var dm
+  L0:
+    load_var dm
     load_const <class Failure>
     cmp_op instanceof
     pop_jump_if_false L1
     jump L2
 
-L1: load_var dm
+  L1:
+    load_var dm
     load_const null
     cmp_op ==
     pop_jump_if_false L4
     load_const "nothing"
     jump L4
 
-L2: load_var dm
+  L2:
+    load_var dm
     load_field .reason
     jump L4
 
-L3: load_var dm
+  L3:
+    load_var dm
     load_field .data
 
-L4: return
+  L4:
+    return
+}
 
-function ExhaustiveEnumAllVariants(s):
+function ExhaustiveEnumAllVariants(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -351,25 +428,31 @@ function ExhaustiveEnumAllVariants(s):
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "pending"
     jump L4
 
-L2: load_const "inactive"
+  L2:
+    load_const "inactive"
     jump L4
 
-L3: load_const "active"
+  L3:
+    load_const "active"
 
-L4: return
+  L4:
+    return
+}
 
-function ExhaustiveEnumWithCatchAll(s):
+function ExhaustiveEnumWithCatchAll(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -379,28 +462,35 @@ function ExhaustiveEnumWithCatchAll(s):
     pop 1
     jump L1
 
-L0: pop 1
+  L0:
+    pop 1
     load_const "other"
     jump L2
 
-L1: load_const "active"
+  L1:
+    load_const "active"
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveEnumWithTypedPattern(s):
+function ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     load_const "any status"
     return
+}
 
-function ExhaustiveFalseType(f):
+function ExhaustiveFalseType(f: false) -> string {
     load_var f
     load_const false
     cmp_op ==
     pop_jump_if_false L0
 
-L0: load_const "always false"
+  L0:
+    load_const "always false"
     return
+}
 
-function ExhaustiveIntLiterals(code):
+function ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
     load_var code
     copy 0
     load_const 200
@@ -409,75 +499,93 @@ function ExhaustiveIntLiterals(code):
     pop 1
     jump L4
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L3
 
-L1: copy 0
+  L1:
+    copy 0
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
     pop 1
 
-L2: pop 1
+  L2:
+    pop 1
     jump L6
     load_const "No Content"
     jump L5
 
-L3: load_const "Created"
+  L3:
+    load_const "Created"
     jump L5
 
-L4: load_const "OK"
+  L4:
+    load_const "OK"
 
-L5: return
+  L5:
+    return
 
-L6: unreachable
+  L6:
+    unreachable
+}
 
-function ExhaustiveLiteralWithBaseType(x):
+function ExhaustiveLiteralWithBaseType(x: int) -> string {
     load_var x
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "other"
+  L0:
+    load_const "other"
     jump L2
 
-L1: load_const "ok"
+  L1:
+    load_const "ok"
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveMixedLiterals(x):
+function ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
     load_var x
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
     jump L3
 
-L0: load_var x
+  L0:
+    load_var x
     load_const "success"
     cmp_op ==
     pop_jump_if_false L1
     jump L2
 
-L1: load_var x
+  L1:
+    load_var x
     load_const true
     cmp_op ==
     pop_jump_if_false L4
     load_const "boolean true"
     jump L4
 
-L2: load_const "string success"
+  L2:
+    load_const "string success"
     jump L4
 
-L3: load_const "http ok"
+  L3:
+    load_const "http ok"
 
-L4: return
+  L4:
+    return
+}
 
-function ExhaustiveNullableEnum(s):
+function ExhaustiveNullableEnum(s: Status?) -> string {
     load_var s
     load_const 0
     alloc_variant <enum Status>
@@ -485,80 +593,100 @@ function ExhaustiveNullableEnum(s):
     pop_jump_if_false L0
     jump L5
 
-L0: load_var s
+  L0:
+    load_var s
     load_const 1
     alloc_variant <enum Status>
     cmp_op ==
     pop_jump_if_false L1
     jump L4
 
-L1: load_var s
+  L1:
+    load_var s
     load_const 2
     alloc_variant <enum Status>
     cmp_op ==
     pop_jump_if_false L2
     jump L3
 
-L2: load_const "no status"
+  L2:
+    load_const "no status"
     jump L6
 
-L3: load_const "pending"
+  L3:
+    load_const "pending"
     jump L6
 
-L4: load_const "inactive"
+  L4:
+    load_const "inactive"
     jump L6
 
-L5: load_const "active"
+  L5:
+    load_const "active"
 
-L6: return
+  L6:
+    return
+}
 
-function ExhaustiveNullableEnumWithTypedPattern(s):
+function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     load_var s
     pop 1
     load_const false
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "no status"
+  L0:
+    load_const "no status"
     jump L2
 
-L1: load_const "some status"
+  L1:
+    load_const "some status"
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveOptional(x):
+function ExhaustiveOptional(x: int?) -> string {
     load_var x
     pop 1
     load_const false
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "no value"
+  L0:
+    load_const "no value"
     jump L2
 
-L1: load_const "has value"
+  L1:
+    load_const "has value"
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveOptionalSingleton(code):
+function ExhaustiveOptionalSingleton(code: 200?) -> string {
     load_var code
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_var code
+  L0:
+    load_var code
     load_const null
     cmp_op ==
     pop_jump_if_false L2
     load_const "no code"
     jump L2
 
-L1: load_const "OK"
+  L1:
+    load_const "OK"
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveSingletonInt(code):
+function ExhaustiveSingletonInt(code: 200) -> string {
     load_var code
     copy 0
     load_const 200
@@ -566,57 +694,69 @@ function ExhaustiveSingletonInt(code):
     pop_jump_if_false L0
     pop 1
 
-L0: pop 1
+  L0:
+    pop 1
     jump L1
     load_const "OK"
     return
 
-L1: unreachable
+  L1:
+    unreachable
+}
 
-function ExhaustiveStringLiterals(role):
+function ExhaustiveStringLiterals(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
     pop_jump_if_false L0
     jump L3
 
-L0: load_var role
+  L0:
+    load_var role
     load_const "assistant"
     cmp_op ==
     pop_jump_if_false L1
     jump L2
 
-L1: load_var role
+  L1:
+    load_var role
     load_const "system"
     cmp_op ==
     pop_jump_if_false L4
     load_const "System"
     jump L4
 
-L2: load_const "Assistant"
+  L2:
+    load_const "Assistant"
     jump L4
 
-L3: load_const "User"
+  L3:
+    load_const "User"
 
-L4: return
+  L4:
+    return
+}
 
-function ExhaustiveTrueType(t):
+function ExhaustiveTrueType(t: true) -> string {
     load_var t
     load_const true
     cmp_op ==
     pop_jump_if_false L0
 
-L0: load_const "always true"
+  L0:
+    load_const "always true"
     return
+}
 
-function ExhaustiveTypeAlias(r):
+function ExhaustiveTypeAlias(r: Success | Failure) -> string {
     load_var r
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
-L0: load_var r
+  L0:
+    load_var r
     load_const <class Failure>
     cmp_op instanceof
     pop_jump_if_false L2
@@ -624,27 +764,34 @@ L0: load_var r
     load_field .reason
     jump L2
 
-L1: load_var r
+  L1:
+    load_var r
     load_field .data
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveTypeAliasWithCatchAll(r):
+function ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     load_var r
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "fallback"
+  L0:
+    load_const "fallback"
     jump L2
 
-L1: load_var r
+  L1:
+    load_var r
     load_field .data
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveWithNamedCatchAll(x):
+function ExhaustiveWithNamedCatchAll(x: int) -> int {
     load_var x
     copy 0
     load_const 1
@@ -653,17 +800,21 @@ function ExhaustiveWithNamedCatchAll(x):
     pop 1
     jump L1
 
-L0: pop 1
+  L0:
+    pop 1
     load_var x
     load_const 1
     bin_op +
     jump L2
 
-L1: load_const 100
+  L1:
+    load_const 100
 
-L2: return
+  L2:
+    return
+}
 
-function ExhaustiveWithUnderscore(x):
+function ExhaustiveWithUnderscore(x: int) -> int {
     load_var x
     copy 0
     load_const 1
@@ -672,30 +823,37 @@ function ExhaustiveWithUnderscore(x):
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const 0
     jump L4
 
-L2: load_const 200
+  L2:
+    load_const 200
     jump L4
 
-L3: load_const 100
+  L3:
+    load_const 100
 
-L4: return
+  L4:
+    return
+}
 
-function GetStatus():
+function GetStatus() -> Status {
     load_const 0
     alloc_variant <enum Status>
     return
+}
 
-function GuardedOnlyNonExhaustive(x):
+function GuardedOnlyNonExhaustive(x: int) -> int {
     load_var x
     pop 1
     load_const false
@@ -706,7 +864,8 @@ function GuardedOnlyNonExhaustive(x):
     pop_jump_if_false L0
     jump L1
 
-L0: load_var x
+  L0:
+    load_var x
     pop 1
     load_const false
     pop_jump_if_false L2
@@ -720,13 +879,16 @@ L0: load_var x
     bin_op *
     jump L2
 
-L1: load_var x
+  L1:
+    load_var x
     load_const 2
     bin_op *
 
-L2: return
+  L2:
+    return
+}
 
-function GuardedWithFallback(x):
+function GuardedWithFallback(x: int) -> int {
     load_var x
     pop 1
     load_const false
@@ -737,16 +899,20 @@ function GuardedWithFallback(x):
     pop_jump_if_false L0
     jump L1
 
-L0: load_const 0
+  L0:
+    load_const 0
     jump L2
 
-L1: load_var x
+  L1:
+    load_var x
     load_const 2
     bin_op *
 
-L2: return
+  L2:
+    return
+}
 
-function HighLineNumberNonExhaustive(s):
+function HighLineNumberNonExhaustive(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -755,14 +921,17 @@ function HighLineNumberNonExhaustive(s):
     pop_jump_if_false L0
     pop 1
 
-L0: pop 1
+  L0:
+    pop 1
     jump L1
     load_const "active only"
     return
 
-L1: unreachable
+  L1:
+    unreachable
+}
 
-function IntLiteralUnionPattern(code):
+function IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
     load_var code
     copy 0
     load_const 200
@@ -771,45 +940,56 @@ function IntLiteralUnionPattern(code):
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L3
 
-L1: copy 0
+  L1:
+    copy 0
     load_const 204
     cmp_op ==
     pop_jump_if_false L2
     pop 1
 
-L2: pop 1
+  L2:
+    pop 1
     jump L5
     load_const "no content"
     jump L4
 
-L3: load_const "success with body"
+  L3:
+    load_const "success with body"
 
-L4: return
+  L4:
+    return
 
-L5: unreachable
+  L5:
+    unreachable
+}
 
-function LiteralAfterTypedPattern(x):
+function LiteralAfterTypedPattern(x: int) -> string {
     load_var x
     pop 1
     load_const false
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "unreachable"
+  L0:
+    load_const "unreachable"
     jump L2
 
-L1: load_const "int"
+  L1:
+    load_const "int"
 
-L2: return
+  L2:
+    return
+}
 
-function LiteralUnionWithCatchAll(code):
+function LiteralUnionWithCatchAll(code: int) -> string {
     load_var code
     copy 0
     load_const 400
@@ -818,7 +998,8 @@ function LiteralUnionWithCatchAll(code):
     pop 1
     jump L4
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 400
     cmp_op <
     pop_jump_if_false L2
@@ -829,32 +1010,39 @@ L0: copy 0
     pop 1
     jump L5
 
-L1: copy 0
+  L1:
+    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L2
     pop 1
     jump L5
 
-L2: copy 0
+  L2:
+    copy 0
     load_const 404
     cmp_op ==
     pop_jump_if_false L3
     pop 1
     jump L4
 
-L3: pop 1
+  L3:
+    pop 1
     load_const "other"
     jump L6
 
-L4: load_const "client error"
+  L4:
+    load_const "client error"
     jump L6
 
-L5: load_const "success"
+  L5:
+    load_const "success"
 
-L6: return
+  L6:
+    return
+}
 
-function MatchArithmeticScrutinee(a, b):
+function MatchArithmeticScrutinee(a: int, b: int) -> string {
     load_var a
     load_var b
     bin_op +
@@ -865,25 +1053,31 @@ function MatchArithmeticScrutinee(a, b):
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "other"
     jump L4
 
-L2: load_const "one"
+  L2:
+    load_const "one"
     jump L4
 
-L3: load_const "zero"
+  L3:
+    load_const "zero"
 
-L4: return
+  L4:
+    return
+}
 
-function MatchComplexScrutinee(x):
+function MatchComplexScrutinee(x: int) -> string {
     load_var x
     load_const 2
     bin_op *
@@ -896,25 +1090,31 @@ function MatchComplexScrutinee(x):
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 3
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "other"
     jump L4
 
-L2: load_const "x was 1"
+  L2:
+    load_const "x was 1"
     jump L4
 
-L3: load_const "x was 0"
+  L3:
+    load_const "x was 0"
 
-L4: return
+  L4:
+    return
+}
 
-function MatchFunctionCallScrutinee():
+function MatchFunctionCallScrutinee() -> string {
     call GetStatus
     discriminant
     copy 0
@@ -924,38 +1124,46 @@ function MatchFunctionCallScrutinee():
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "pending"
     jump L4
 
-L2: load_const "inactive"
+  L2:
+    load_const "inactive"
     jump L4
 
-L3: load_const "active"
+  L3:
+    load_const "active"
 
-L4: return
+  L4:
+    return
+}
 
-function MixedPatterns(x):
+function MixedPatterns(x: int) -> string {
     load_var x
     load_const 0
     cmp_op ==
     pop_jump_if_false L0
     jump L5
 
-L0: load_var x
+  L0:
+    load_var x
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     jump L4
 
-L1: load_var x
+  L1:
+    load_var x
     pop 1
     load_const false
     pop_jump_if_false L2
@@ -965,20 +1173,26 @@ L1: load_var x
     pop_jump_if_false L2
     jump L3
 
-L2: load_const "negative"
+  L2:
+    load_const "negative"
     jump L6
 
-L3: load_const "positive"
+  L3:
+    load_const "positive"
     jump L6
 
-L4: load_const "one"
+  L4:
+    load_const "one"
     jump L6
 
-L5: load_const "zero"
+  L5:
+    load_const "zero"
 
-L6: return
+  L6:
+    return
+}
 
-function MultipleUnreachableSpans(s):
+function MultipleUnreachableSpans(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -988,25 +1202,31 @@ function MultipleUnreachableSpans(s):
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "pending"
     jump L4
 
-L2: load_const "inactive"
+  L2:
+    load_const "inactive"
     jump L4
 
-L3: load_const "active"
+  L3:
+    load_const "active"
 
-L4: return
+  L4:
+    return
+}
 
-function NestedEnumMatch(s1, s2):
+function NestedEnumMatch(s1: Status, s2: Status) -> string {
     load_var s1
     discriminant
     copy 0
@@ -1016,21 +1236,25 @@ function NestedEnumMatch(s1, s2):
     pop 1
     jump L3
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L2
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "first pending"
     jump L8
 
-L2: load_const "first inactive"
+  L2:
+    load_const "first inactive"
     jump L8
 
-L3: load_var s2
+  L3:
+    load_var s2
     discriminant
     copy 0
     load_const 0
@@ -1039,25 +1263,31 @@ L3: load_var s2
     pop 1
     jump L7
 
-L4: copy 0
+  L4:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L5
     pop 1
     jump L6
 
-L5: pop 1
+  L5:
+    pop 1
     load_const "first active, second pending"
     jump L8
 
-L6: load_const "first active, second inactive"
+  L6:
+    load_const "first active, second inactive"
     jump L8
 
-L7: load_const "both active"
+  L7:
+    load_const "both active"
 
-L8: return
+  L8:
+    return
+}
 
-function NestedEnumVariantUnions(s):
+function NestedEnumVariantUnions(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1066,17 +1296,20 @@ function NestedEnumVariantUnions(s):
     pop_jump_if_false L0
     pop 1
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 2
     cmp_op ==
     pop_jump_if_false L1
     pop 1
 
-L1: pop 1
+  L1:
+    pop 1
     load_const "all statuses"
     return
+}
 
-function NestedLiteralUnions(code):
+function NestedLiteralUnions(code: int) -> string {
     load_var code
     copy 0
     load_const 400
@@ -1085,7 +1318,8 @@ function NestedLiteralUnions(code):
     pop 1
     jump L9
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 400
     cmp_op <
     pop_jump_if_false L4
@@ -1096,7 +1330,8 @@ L0: copy 0
     pop 1
     jump L10
 
-L1: copy 0
+  L1:
+    copy 0
     load_const 202
     cmp_op <
     pop_jump_if_false L3
@@ -1107,28 +1342,32 @@ L1: copy 0
     pop 1
     jump L10
 
-L2: copy 0
+  L2:
+    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L3
     pop 1
     jump L10
 
-L3: copy 0
+  L3:
+    copy 0
     load_const 204
     cmp_op ==
     pop_jump_if_false L4
     pop 1
     jump L10
 
-L4: copy 0
+  L4:
+    copy 0
     load_const 406
     cmp_op ==
     pop_jump_if_false L5
     pop 1
     jump L9
 
-L5: copy 0
+  L5:
+    copy 0
     load_const 406
     cmp_op <
     pop_jump_if_false L7
@@ -1139,32 +1378,39 @@ L5: copy 0
     pop 1
     jump L9
 
-L6: copy 0
+  L6:
+    copy 0
     load_const 405
     cmp_op ==
     pop_jump_if_false L7
     pop 1
     jump L9
 
-L7: copy 0
+  L7:
+    copy 0
     load_const 409
     cmp_op ==
     pop_jump_if_false L8
     pop 1
     jump L9
 
-L8: pop 1
+  L8:
+    pop 1
     load_const "other"
     jump L11
 
-L9: load_const "client error"
+  L9:
+    load_const "client error"
     jump L11
 
-L10: load_const "success"
+  L10:
+    load_const "success"
 
-L11: return
+  L11:
+    return
+}
 
-function NestedMatchSpans(x, y):
+function NestedMatchSpans(x: int, y: bool) -> string {
     load_var x
     copy 0
     load_const 0
@@ -1173,80 +1419,98 @@ function NestedMatchSpans(x, y):
     pop 1
     jump L1
 
-L0: pop 1
+  L0:
+    pop 1
     load_const "other"
     jump L6
 
-L1: load_var y
+  L1:
+    load_var y
     load_const true
     cmp_op ==
     pop_jump_if_false L2
     jump L5
 
-L2: load_var y
+  L2:
+    load_var y
     load_const false
     cmp_op ==
     pop_jump_if_false L3
     jump L4
 
-L3: load_const "unreachable nested"
+  L3:
+    load_const "unreachable nested"
     jump L6
 
-L4: load_const "zero false"
+  L4:
+    load_const "zero false"
     jump L6
 
-L5: load_const "zero true"
+  L5:
+    load_const "zero true"
 
-L6: return
+  L6:
+    return
+}
 
-function NestedTypeAlias(mr):
+function NestedTypeAlias(mr: Success | Failure?) -> string {
     load_var mr
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L3
 
-L0: load_var mr
+  L0:
+    load_var mr
     load_const <class Failure>
     cmp_op instanceof
     pop_jump_if_false L1
     jump L2
 
-L1: load_var mr
+  L1:
+    load_var mr
     load_const null
     cmp_op ==
     pop_jump_if_false L4
     load_const "nothing"
     jump L4
 
-L2: load_var mr
+  L2:
+    load_var mr
     load_field .reason
     jump L4
 
-L3: load_var mr
+  L3:
+    load_var mr
     load_field .data
 
-L4: return
+  L4:
+    return
+}
 
-function NestedTypeBindings(r):
+function NestedTypeBindings(r: Success | Failure) -> int {
     load_var r
     pop 1
     load_const false
     pop_jump_if_false L0
     jump L1
 
-L0: load_var r
+  L0:
+    load_var r
     load_const <class Failure>
     cmp_op instanceof
     pop_jump_if_false L2
     load_const 1
     jump L2
 
-L1: load_const 0
+  L1:
+    load_const 0
 
-L2: return
+  L2:
+    return
+}
 
-function NonExhaustiveAliasOfLiterals(code):
+function NonExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1254,32 +1518,39 @@ function NonExhaustiveAliasOfLiterals(code):
     pop_jump_if_false L0
     pop 1
 
-L0: pop 1
+  L0:
+    pop 1
     jump L1
     load_const "ok"
     return
 
-L1: unreachable
+  L1:
+    unreachable
+}
 
-function NonExhaustiveBoolMissingFalse(b):
+function NonExhaustiveBoolMissingFalse(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
 
-L0: load_const "yes"
+  L0:
+    load_const "yes"
     return
+}
 
-function NonExhaustiveBoolMissingTrue(b):
+function NonExhaustiveBoolMissingTrue(b: bool) -> string {
     load_var b
     load_const false
     cmp_op ==
     pop_jump_if_false L0
 
-L0: load_const "no"
+  L0:
+    load_const "no"
     return
+}
 
-function NonExhaustiveClassPlusLiteralMissingClass(x):
+function NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
     load_var x
     copy 0
     load_const 200
@@ -1287,14 +1558,17 @@ function NonExhaustiveClassPlusLiteralMissingClass(x):
     pop_jump_if_false L0
     pop 1
 
-L0: pop 1
+  L0:
+    pop 1
     jump L1
     load_const "http ok"
     return
 
-L1: unreachable
+  L1:
+    unreachable
+}
 
-function NonExhaustiveClassPlusLiteralMissingLiteral(x):
+function NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
     load_var x
     load_const <class Success>
     cmp_op instanceof
@@ -1302,25 +1576,30 @@ function NonExhaustiveClassPlusLiteralMissingLiteral(x):
     load_var x
     load_field .data
 
-L0: return
+  L0:
+    return
+}
 
-function NonExhaustiveCustomBoolMissing(b):
+function NonExhaustiveCustomBoolMissing(b: true | false) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
 
-L0: load_const "yes"
+  L0:
+    load_const "yes"
     return
+}
 
-function NonExhaustiveDoubleMaybeMissingNull(dm):
+function NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
     load_var dm
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
-L0: load_var dm
+  L0:
+    load_var dm
     load_const <class Failure>
     cmp_op instanceof
     pop_jump_if_false L2
@@ -1328,12 +1607,15 @@ L0: load_var dm
     load_field .reason
     jump L2
 
-L1: load_var dm
+  L1:
+    load_var dm
     load_field .data
 
-L2: return
+  L2:
+    return
+}
 
-function NonExhaustiveEnumMissingMultiple(s):
+function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1342,14 +1624,17 @@ function NonExhaustiveEnumMissingMultiple(s):
     pop_jump_if_false L0
     pop 1
 
-L0: pop 1
+  L0:
+    pop 1
     jump L1
     load_const "active"
     return
 
-L1: unreachable
+  L1:
+    unreachable
+}
 
-function NonExhaustiveEnumMissingOne(s):
+function NonExhaustiveEnumMissingOne(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1359,31 +1644,38 @@ function NonExhaustiveEnumMissingOne(s):
     pop 1
     jump L2
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
 
-L1: pop 1
+  L1:
+    pop 1
     jump L4
     load_const "inactive"
     jump L3
 
-L2: load_const "active"
+  L2:
+    load_const "active"
 
-L3: return
+  L3:
+    return
 
-L4: unreachable
+  L4:
+    unreachable
+}
 
-function NonExhaustiveFullResultMissingOne(r):
+function NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
     load_var r
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
-L0: load_var r
+  L0:
+    load_var r
     load_const <class Failure>
     cmp_op instanceof
     pop_jump_if_false L2
@@ -1391,12 +1683,15 @@ L0: load_var r
     load_field .reason
     jump L2
 
-L1: load_var r
+  L1:
+    load_var r
     load_field .data
 
-L2: return
+  L2:
+    return
+}
 
-function NonExhaustiveIntLiteral(code):
+function NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1405,42 +1700,52 @@ function NonExhaustiveIntLiteral(code):
     pop 1
     jump L2
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 201
     cmp_op ==
     pop_jump_if_false L1
     pop 1
 
-L1: pop 1
+  L1:
+    pop 1
     jump L4
     load_const "Created"
     jump L3
 
-L2: load_const "OK"
+  L2:
+    load_const "OK"
 
-L3: return
+  L3:
+    return
 
-L4: unreachable
+  L4:
+    unreachable
+}
 
-function NonExhaustiveMixedLiterals(x):
+function NonExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
     load_var x
     load_const 200
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_var x
+  L0:
+    load_var x
     load_const "success"
     cmp_op ==
     pop_jump_if_false L2
     load_const "string success"
     jump L2
 
-L1: load_const "http ok"
+  L1:
+    load_const "http ok"
 
-L2: return
+  L2:
+    return
+}
 
-function NonExhaustiveNullableEnumMissingNull(s):
+function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     load_var s
     discriminant
     copy 0
@@ -1450,34 +1755,42 @@ function NonExhaustiveNullableEnumMissingNull(s):
     pop 1
     jump L4
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L3
 
-L1: copy 0
+  L1:
+    copy 0
     load_const 2
     cmp_op ==
     pop_jump_if_false L2
     pop 1
 
-L2: pop 1
+  L2:
+    pop 1
     jump L6
     load_const "pending"
     jump L5
 
-L3: load_const "inactive"
+  L3:
+    load_const "inactive"
     jump L5
 
-L4: load_const "active"
+  L4:
+    load_const "active"
 
-L5: return
+  L5:
+    return
 
-L6: unreachable
+  L6:
+    unreachable
+}
 
-function NonExhaustiveNullableEnumMissingVariant(s):
+function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     load_var s
     load_const 0
     alloc_variant <enum Status>
@@ -1485,28 +1798,34 @@ function NonExhaustiveNullableEnumMissingVariant(s):
     pop_jump_if_false L0
     jump L3
 
-L0: load_var s
+  L0:
+    load_var s
     load_const 1
     alloc_variant <enum Status>
     cmp_op ==
     pop_jump_if_false L1
     jump L2
 
-L1: load_var s
+  L1:
+    load_var s
     load_const null
     cmp_op ==
     pop_jump_if_false L4
     load_const "no status"
     jump L4
 
-L2: load_const "inactive"
+  L2:
+    load_const "inactive"
     jump L4
 
-L3: load_const "active"
+  L3:
+    load_const "active"
 
-L4: return
+  L4:
+    return
+}
 
-function NonExhaustiveOptionalMissingNull(code):
+function NonExhaustiveOptionalMissingNull(code: 200?) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1514,50 +1833,61 @@ function NonExhaustiveOptionalMissingNull(code):
     pop_jump_if_false L0
     pop 1
 
-L0: pop 1
+  L0:
+    pop 1
     jump L1
     load_const "OK"
     return
 
-L1: unreachable
+  L1:
+    unreachable
+}
 
-function NonExhaustiveOptionalMissingValue(code):
+function NonExhaustiveOptionalMissingValue(code: 200?) -> string {
     load_var code
     load_const null
     cmp_op ==
     pop_jump_if_false L0
 
-L0: load_const "no code"
+  L0:
+    load_const "no code"
     return
+}
 
-function NonExhaustiveStringLiteral(role):
+function NonExhaustiveStringLiteral(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_var role
+  L0:
+    load_var role
     load_const "assistant"
     cmp_op ==
     pop_jump_if_false L2
     load_const "Assistant"
     jump L2
 
-L1: load_const "User"
+  L1:
+    load_const "User"
 
-L2: return
+  L2:
+    return
+}
 
-function NonExhaustiveTrueTypeWrongLiteral(t):
+function NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
     load_var t
     load_const false
     cmp_op ==
     pop_jump_if_false L0
 
-L0: load_const "wrong!"
+  L0:
+    load_const "wrong!"
     return
+}
 
-function NonExhaustiveTypeAliasMissingOne(r):
+function NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
     load_var r
     load_const <class Success>
     cmp_op instanceof
@@ -1565,162 +1895,201 @@ function NonExhaustiveTypeAliasMissingOne(r):
     load_var r
     load_field .data
 
-L0: return
+  L0:
+    return
+}
 
-function OptionalWithCatchAll(x):
+function OptionalWithCatchAll(x: int?) -> string {
     load_var x
     load_const null
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "has value"
+  L0:
+    load_const "has value"
     jump L2
 
-L1: load_const "no value"
+  L1:
+    load_const "no value"
 
-L2: return
+  L2:
+    return
+}
 
-function OverlappingTypedPatterns(r):
+function OverlappingTypedPatterns(r: Success | Failure) -> string {
     load_var r
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
-L0: load_var r
+  L0:
+    load_var r
     pop 1
     load_const false
     pop_jump_if_false L2
     load_const "covers failure only (success already handled)"
     jump L2
 
-L1: load_const "success"
+  L1:
+    load_const "success"
 
-L2: return
+  L2:
+    return
+}
 
-function OverlappingWithBindings(r):
+function OverlappingWithBindings(r: Success | Failure) -> string {
     load_var r
     load_const <class Success>
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
-L0: load_var r
+  L0:
+    load_var r
     pop 1
     load_const false
     pop_jump_if_false L2
     load_const "remaining"
     jump L2
 
-L1: load_var r
+  L1:
+    load_var r
     load_field .data
 
-L2: return
+  L2:
+    return
+}
 
-function ParenthesizedSingleLiteral(b):
+function ParenthesizedSingleLiteral(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "no"
+  L0:
+    load_const "no"
     jump L2
 
-L1: load_const "yes"
+  L1:
+    load_const "yes"
 
-L2: return
+  L2:
+    return
+}
 
-function PartialUnionPatternCoverage(r):
+function PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
     load_var r
     pop 1
     load_const false
     pop_jump_if_false L0
 
-L0: load_const "not pending"
+  L0:
+    load_const "not pending"
     return
+}
 
-function PartialUnionPlusCatchAll(r):
+function PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     load_var r
     pop 1
     load_const false
     pop_jump_if_false L0
     jump L1
 
-L0: load_var r
+  L0:
+    load_var r
     load_const <class Pending>
     cmp_op instanceof
     pop_jump_if_false L2
     load_const "pending"
     jump L2
 
-L1: load_const "success or failure"
+  L1:
+    load_const "success or failure"
 
-L2: return
+  L2:
+    return
+}
 
-function StringLiteralAfterStringType(s):
+function StringLiteralAfterStringType(s: string) -> string {
     load_var s
     pop 1
     load_const false
     pop_jump_if_false L0
     jump L1
 
-L0: load_const "unreachable"
+  L0:
+    load_const "unreachable"
     jump L2
 
-L1: load_const "any string"
+  L1:
+    load_const "any string"
 
-L2: return
+  L2:
+    return
+}
 
-function StringLiteralUnionPattern(role):
+function StringLiteralUnionPattern(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
     pop_jump_if_false L0
     jump L2
 
-L0: load_var role
+  L0:
+    load_var role
     load_const "assistant"
     cmp_op ==
     pop_jump_if_false L1
     jump L2
 
-L1: load_var role
+  L1:
+    load_var role
     load_const "system"
     cmp_op ==
     pop_jump_if_false L3
     load_const "system"
     jump L3
 
-L2: load_const "chat participant"
+  L2:
+    load_const "chat participant"
 
-L3: return
+  L3:
+    return
+}
 
-function StringLiteralWithCatchAll(role):
+function StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
     pop_jump_if_false L0
     jump L3
 
-L0: load_var role
+  L0:
+    load_var role
     load_const "assistant"
     cmp_op ==
     pop_jump_if_false L1
     jump L2
 
-L1: load_const "Other"
+  L1:
+    load_const "Other"
     jump L4
 
-L2: load_const "Assistant message"
+  L2:
+    load_const "Assistant message"
     jump L4
 
-L3: load_const "User message"
+  L3:
+    load_const "User message"
 
-L4: return
+  L4:
+    return
+}
 
-function ThreeLevelNestedMatch(x, y, z):
+function ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     load_var x
     copy 0
     load_const 0
@@ -1729,11 +2098,13 @@ function ThreeLevelNestedMatch(x, y, z):
     pop 1
     jump L1
 
-L0: pop 1
+  L0:
+    pop 1
     load_const "x nonzero"
     jump L6
 
-L1: load_var y
+  L1:
+    load_var y
     copy 0
     load_const 0
     cmp_op ==
@@ -1741,11 +2112,13 @@ L1: load_var y
     pop 1
     jump L3
 
-L2: pop 1
+  L2:
+    pop 1
     load_const "y nonzero"
     jump L6
 
-L3: load_var z
+  L3:
+    load_var z
     copy 0
     load_const 0
     cmp_op ==
@@ -1753,32 +2126,40 @@ L3: load_var z
     pop 1
     jump L5
 
-L4: pop 1
+  L4:
+    pop 1
     load_const "z nonzero"
     jump L6
 
-L5: load_const "all zero"
+  L5:
+    load_const "all zero"
 
-L6: return
+  L6:
+    return
+}
 
-function UnionPatternCoversAll(r):
+function UnionPatternCoversAll(r: Success | Failure) -> string {
     load_var r
     pop 1
     load_const false
     pop_jump_if_false L0
 
-L0: load_const "covered"
+  L0:
+    load_const "covered"
     return
+}
 
-function UnreachableAfterCatchAll(x):
+function UnreachableAfterCatchAll(x: int) -> string {
     load_const "catch all"
     return
+}
 
-function UnreachableMultiple(x):
+function UnreachableMultiple(x: int) -> string {
     load_const "catch all"
     return
+}
 
-function WrongLiteralTypeBoolWithInt(b):
+function WrongLiteralTypeBoolWithInt(b: bool) -> string {
     load_var b
     copy 0
     load_const 42
@@ -1786,23 +2167,28 @@ function WrongLiteralTypeBoolWithInt(b):
     pop_jump_if_false L0
     pop 1
 
-L0: pop 1
+  L0:
+    pop 1
     jump L1
     load_const "wrong type"
     return
 
-L1: unreachable
+  L1:
+    unreachable
+}
 
-function WrongLiteralTypeIntWithString(x):
+function WrongLiteralTypeIntWithString(x: int) -> string {
     load_var x
     load_const "hello"
     cmp_op ==
     pop_jump_if_false L0
 
-L0: load_const "wrong type"
+  L0:
+    load_const "wrong type"
     return
+}
 
-function baml.llm.PlannerState.rr_local_offset(self, client_name):
+function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
     load_const 0
     store_var offset
     load_var self
@@ -1814,16 +2200,19 @@ function baml.llm.PlannerState.rr_local_offset(self, client_name):
     load_const 0
     store_var _i
 
-L0: load_var _i
+  L0:
+    load_var _i
     load_var _len
     cmp_op <
     pop_jump_if_false L1
     jump L2
 
-L1: load_var offset
+  L1:
+    load_var offset
     return
 
-L2: load_var _iter
+  L2:
+    load_var _iter
     load_var _i
     load_array_element
     store_var seen_name
@@ -1840,8 +2229,9 @@ L2: load_var _iter
     bin_op +
     store_var offset
     jump L0
+}
 
-function baml.llm.PlannerState.rr_pick_index(self, client_name, sub_client_count):
+function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int {
     load_var self
     load_var client_name
     call baml.llm.PlannerState.rr_local_offset
@@ -1859,8 +2249,9 @@ function baml.llm.PlannerState.rr_pick_index(self, client_name, sub_client_count
     load_var sub_client_count
     bin_op %
     return
+}
 
-function baml.llm.build_attempt(llm_client):
+function baml.llm.build_attempt(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
     alloc_instance <class baml.llm.PlannerState>
     copy 0
@@ -1868,8 +2259,9 @@ function baml.llm.build_attempt(llm_client):
     store_field .rr_client_names
     call baml.llm.build_attempt_with_state
     return
+}
 
-function baml.llm.build_attempt_with_state(llm_client, planner_state):
+function baml.llm.build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
     load_field .client_type
     discriminant
@@ -1880,14 +2272,16 @@ function baml.llm.build_attempt_with_state(llm_client, planner_state):
     pop 1
     jump L9
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L4
 
-L1: pop 1
+  L1:
+    pop 1
     load_var llm_client
     load_field .sub_clients
     call baml.Array.length
@@ -1896,7 +2290,8 @@ L1: pop 1
     pop_jump_if_false L2
     jump L3
 
-L2: load_var llm_client
+  L2:
+    load_var llm_client
     load_field .name
     store_var _69
     load_var llm_client
@@ -1916,10 +2311,12 @@ L2: load_var llm_client
     call baml.llm.build_plan_with_state
     jump L10
 
-L3: alloc_array 0
+  L3:
+    alloc_array 0
     jump L10
 
-L4: alloc_array 0
+  L4:
+    alloc_array 0
     store_var steps
     load_var llm_client
     load_field .sub_clients
@@ -1930,16 +2327,19 @@ L4: alloc_array 0
     load_const 0
     store_var _i
 
-L5: load_var _i
+  L5:
+    load_var _i
     load_var _len
     cmp_op <
     pop_jump_if_false L6
     jump L7
 
-L6: load_var steps
+  L6:
+    load_var steps
     jump L10
 
-L7: load_var _iter
+  L7:
+    load_var _iter
     load_var _i
     load_array_element
     store_var sub
@@ -1957,7 +2357,8 @@ L7: load_var _iter
     load_const 0
     store_var _i1
 
-L8: load_var _i1
+  L8:
+    load_var _i1
     load_var _len1
     cmp_op <
     pop_jump_if_false L5
@@ -1975,7 +2376,8 @@ L8: load_var _i1
     pop 1
     jump L8
 
-L9: load_var llm_client
+  L9:
+    load_var llm_client
     load_field .name
     dispatch_future baml.llm.resolve_client
     await
@@ -1990,9 +2392,11 @@ L9: load_var llm_client
     store_field .delay_ms
     alloc_array 1
 
-L10: return
+  L10:
+    return
+}
 
-function baml.llm.build_plan(llm_client):
+function baml.llm.build_plan(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
     alloc_instance <class baml.llm.PlannerState>
     copy 0
@@ -2000,8 +2404,9 @@ function baml.llm.build_plan(llm_client):
     store_field .rr_client_names
     call baml.llm.build_plan_with_state
     return
+}
 
-function baml.llm.build_plan_with_state(llm_client, planner_state):
+function baml.llm.build_plan_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
     load_field .retry
     store_var _3
@@ -2011,7 +2416,8 @@ function baml.llm.build_plan_with_state(llm_client, planner_state):
     pop_jump_if_false L0
     jump L10
 
-L0: load_var _3
+  L0:
+    load_var _3
     store_var r
     alloc_array 0
     store_var result
@@ -2023,17 +2429,20 @@ L0: load_var _3
     load_const 0
     store_var attempt
 
-L1: load_var attempt
+  L1:
+    load_var attempt
     load_var r
     load_field .max_retries
     cmp_op <=
     pop_jump_if_false L2
     jump L3
 
-L2: load_var result
+  L2:
+    load_var result
     jump L11
 
-L3: load_const 0
+  L3:
+    load_const 0
     store_var delay
     load_var attempt
     load_const 0
@@ -2056,17 +2465,20 @@ L3: load_const 0
     pop_jump_if_false L4
     jump L5
 
-L4: load_var next
+  L4:
+    load_var next
     store_var current_delay
     jump L6
 
-L5: load_var r
+  L5:
+    load_var r
     load_field .max_delay_ms
     load_const 0
     bin_op +
     store_var current_delay
 
-L6: load_var llm_client
+  L6:
+    load_var llm_client
     load_var planner_state
     call baml.llm.build_attempt_with_state
     store_var _iter
@@ -2076,19 +2488,22 @@ L6: load_var llm_client
     load_const 0
     store_var _i
 
-L7: load_var _i
+  L7:
+    load_var _i
     load_var _len
     cmp_op <
     pop_jump_if_false L8
     jump L9
 
-L8: load_var attempt
+  L8:
+    load_var attempt
     load_const 1
     bin_op +
     store_var attempt
     jump L1
 
-L9: load_var _iter
+  L9:
+    load_var _iter
     load_var _i
     load_array_element
     store_var step
@@ -2109,13 +2524,16 @@ L9: load_var _iter
     pop 1
     jump L7
 
-L10: load_var llm_client
+  L10:
+    load_var llm_client
     load_var planner_state
     call baml.llm.build_attempt_with_state
 
-L11: return
+  L11:
+    return
+}
 
-function baml.llm.build_request(function_name, args):
+function baml.llm.build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
     load_var function_name
     call baml.llm.resolve_primitive
     store_var primitive_client
@@ -2128,8 +2546,9 @@ function baml.llm.build_request(function_name, args):
     dispatch_future baml.llm.PrimitiveClient.build_request
     await
     return
+}
 
-function baml.llm.call_llm_function(function_name, args):
+function baml.llm.call_llm_function(function_name: string, args: map<string, unknown>) -> unknown {
     load_var function_name
     dispatch_future baml.llm.get_jinja_template
     await
@@ -2155,7 +2574,8 @@ function baml.llm.call_llm_function(function_name, args):
     pop_jump_if_false L0
     jump L2
 
-L0: dispatch_future baml.sys.cancellation_requested
+  L0:
+    dispatch_future baml.sys.cancellation_requested
     await
     pop_jump_if_false L1
     load_const "Operation cancelled"
@@ -2163,18 +2583,21 @@ L0: dispatch_future baml.sys.cancellation_requested
     await
     pop 1
 
-L1: load_const "All orchestration steps failed"
+  L1:
+    load_const "All orchestration steps failed"
     dispatch_future baml.sys.panic
     await
     pop 1
     load_const null
     return
 
-L2: load_var result
+  L2:
+    load_var result
     load_field .value
     return
+}
 
-function baml.llm.execute_client(llm_client, context, inherited_delay_ms):
+function baml.llm.execute_client(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.ExecutionResult {
     load_var llm_client
     load_field .retry
     store_var _4
@@ -2184,7 +2607,8 @@ function baml.llm.execute_client(llm_client, context, inherited_delay_ms):
     pop_jump_if_false L0
     jump L12
 
-L0: load_var _4
+  L0:
+    load_var _4
     store_var r
     load_var r
     load_field .initial_delay_ms
@@ -2194,14 +2618,16 @@ L0: load_var _4
     load_const 0
     store_var attempt
 
-L1: load_var attempt
+  L1:
+    load_var attempt
     load_var r
     load_field .max_retries
     cmp_op <=
     pop_jump_if_false L2
     jump L3
 
-L2: alloc_instance <class baml.llm.ExecutionResult>
+  L2:
+    alloc_instance <class baml.llm.ExecutionResult>
     copy 0
     load_const false
     store_field .ok
@@ -2210,12 +2636,14 @@ L2: alloc_instance <class baml.llm.ExecutionResult>
     store_field .value
     jump L13
 
-L3: dispatch_future baml.sys.cancellation_requested
+  L3:
+    dispatch_future baml.sys.cancellation_requested
     await
     pop_jump_if_false L4
     jump L11
 
-L4: load_var inherited_delay_ms
+  L4:
+    load_var inherited_delay_ms
     store_var attempt_delay
     load_var attempt
     load_const 0
@@ -2238,17 +2666,20 @@ L4: load_var inherited_delay_ms
     pop_jump_if_false L5
     jump L6
 
-L5: load_var next
+  L5:
+    load_var next
     store_var current_delay
     jump L7
 
-L6: load_var r
+  L6:
+    load_var r
     load_field .max_delay_ms
     load_const 0
     bin_op +
     store_var current_delay
 
-L7: load_var attempt
+  L7:
+    load_var attempt
     load_var r
     load_field .max_retries
     cmp_op ==
@@ -2256,7 +2687,8 @@ L7: load_var attempt
     load_var inherited_delay_ms
     store_var attempt_delay
 
-L8: load_var llm_client
+  L8:
+    load_var llm_client
     load_var context
     load_var attempt_delay
     call baml.llm.execute_client_once
@@ -2266,25 +2698,31 @@ L8: load_var llm_client
     pop_jump_if_false L9
     jump L10
 
-L9: load_var attempt
+  L9:
+    load_var attempt
     load_const 1
     bin_op +
     store_var attempt
     jump L1
 
-L10: load_var result
+  L10:
+    load_var result
     return
 
-L11: return
+  L11:
+    return
 
-L12: load_var llm_client
+  L12:
+    load_var llm_client
     load_var context
     load_var inherited_delay_ms
     call baml.llm.execute_client_once
 
-L13: return
+  L13:
+    return
+}
 
-function baml.llm.execute_client_once(llm_client, context, active_delay_ms):
+function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.ExecutionResult {
     load_var llm_client
     load_field .client_type
     discriminant
@@ -2295,20 +2733,23 @@ function baml.llm.execute_client_once(llm_client, context, active_delay_ms):
     pop 1
     jump L10
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L4
 
-L1: pop 1
+  L1:
+    pop 1
     dispatch_future baml.sys.cancellation_requested
     await
     pop_jump_if_false L2
     jump L3
 
-L2: load_var llm_client
+  L2:
+    load_var llm_client
     load_field .name
     dispatch_future baml.llm.round_robin_next
     await
@@ -2328,9 +2769,11 @@ L2: load_var llm_client
     call baml.llm.execute_client
     jump L14
 
-L3: return
+  L3:
+    return
 
-L4: load_var llm_client
+  L4:
+    load_var llm_client
     load_field .sub_clients
     store_var _iter
     load_var _iter
@@ -2339,13 +2782,15 @@ L4: load_var llm_client
     load_const 0
     store_var _i
 
-L5: load_var _i
+  L5:
+    load_var _i
     load_var _len
     cmp_op <
     pop_jump_if_false L6
     jump L7
 
-L6: alloc_instance <class baml.llm.ExecutionResult>
+  L6:
+    alloc_instance <class baml.llm.ExecutionResult>
     copy 0
     load_const false
     store_field .ok
@@ -2354,7 +2799,8 @@ L6: alloc_instance <class baml.llm.ExecutionResult>
     store_field .value
     jump L14
 
-L7: load_var _iter
+  L7:
+    load_var _iter
     load_var _i
     load_array_element
     store_var sub
@@ -2367,7 +2813,8 @@ L7: load_var _iter
     pop_jump_if_false L8
     jump L9
 
-L8: load_var sub
+  L8:
+    load_var sub
     load_var context
     load_var active_delay_ms
     call baml.llm.execute_client
@@ -2378,14 +2825,17 @@ L8: load_var sub
     load_var result
     return
 
-L9: return
+  L9:
+    return
 
-L10: dispatch_future baml.sys.cancellation_requested
+  L10:
+    dispatch_future baml.sys.cancellation_requested
     await
     pop_jump_if_false L11
     jump L16
 
-L11: load_var llm_client
+  L11:
+    load_var llm_client
     load_field .name
     dispatch_future baml.llm.resolve_client
     await
@@ -2417,7 +2867,8 @@ L11: load_var llm_client
     pop_jump_if_false L12
     jump L15
 
-L12: load_var active_delay_ms
+  L12:
+    load_var active_delay_ms
     load_const 0
     cmp_op >
     pop_jump_if_false L13
@@ -2426,7 +2877,8 @@ L12: load_var active_delay_ms
     await
     pop 1
 
-L13: alloc_instance <class baml.llm.ExecutionResult>
+  L13:
+    alloc_instance <class baml.llm.ExecutionResult>
     copy 0
     load_const false
     store_field .ok
@@ -2434,9 +2886,11 @@ L13: alloc_instance <class baml.llm.ExecutionResult>
     load_const null
     store_field .value
 
-L14: return
+  L14:
+    return
 
-L15: load_var http_response
+  L15:
+    load_var http_response
     dispatch_future baml.http.Response.text
     await
     store_var body
@@ -2447,9 +2901,11 @@ L15: load_var http_response
     store_var return_type
     return
 
-L16: return
+  L16:
+    return
+}
 
-function baml.llm.render_prompt(function_name, args):
+function baml.llm.render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     load_var function_name
     dispatch_future baml.llm.get_jinja_template
     await
@@ -2468,8 +2924,9 @@ function baml.llm.render_prompt(function_name, args):
     dispatch_future baml.llm.PrimitiveClient.specialize_prompt
     await
     return
+}
 
-function baml.llm.resolve_primitive(function_name):
+function baml.llm.resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
     load_var function_name
     dispatch_future baml.llm.get_client
     await
@@ -2478,3 +2935,4 @@ function baml.llm.resolve_primitive(function_name):
     await
     call_indirect
     return
+}

@@ -2,11 +2,12 @@
 source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
 expression: output
 ---
-function BodyTorture():
+function BodyTorture() -> int {
     load_const null
     store_var x
 
-L0: load_var x
+  L0:
+    load_var x
     load_const 1
     bin_op +
     store_var x
@@ -14,20 +15,24 @@ L0: load_var x
     pop_jump_if_false L1
     jump L2
 
-L1: load_const null
+  L1:
+    load_const null
     return
 
-L2: load_var x
+  L2:
+    load_var x
     load_const 1
     bin_op +
     store_var x
     jump L0
+}
 
-function ComplexType():
+function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     load_var _0
     return
+}
 
-function DeepExpression():
+function DeepExpression() -> int {
     load_const 1
     load_const 2
     bin_op +
@@ -48,808 +53,909 @@ function DeepExpression():
     load_const 10
     bin_op +
     return
+}
 
-function Process1(input):
+function Process1(input: string) -> string {
     load_const "Process1"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process10(input):
+function Process10(input: string) -> string {
     load_const "Process10"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process100(input):
+function Process100(input: string) -> string {
     load_const "Process100"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process11(input):
+function Process11(input: string) -> string {
     load_const "Process11"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process12(input):
+function Process12(input: string) -> string {
     load_const "Process12"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process13(input):
+function Process13(input: string) -> string {
     load_const "Process13"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process14(input):
+function Process14(input: string) -> string {
     load_const "Process14"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process15(input):
+function Process15(input: string) -> string {
     load_const "Process15"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process16(input):
+function Process16(input: string) -> string {
     load_const "Process16"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process17(input):
+function Process17(input: string) -> string {
     load_const "Process17"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process18(input):
+function Process18(input: string) -> string {
     load_const "Process18"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process19(input):
+function Process19(input: string) -> string {
     load_const "Process19"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process2(input):
+function Process2(input: string) -> string {
     load_const "Process2"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process20(input):
+function Process20(input: string) -> string {
     load_const "Process20"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process21(input):
+function Process21(input: string) -> string {
     load_const "Process21"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process22(input):
+function Process22(input: string) -> string {
     load_const "Process22"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process23(input):
+function Process23(input: string) -> string {
     load_const "Process23"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process24(input):
+function Process24(input: string) -> string {
     load_const "Process24"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process25(input):
+function Process25(input: string) -> string {
     load_const "Process25"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process26(input):
+function Process26(input: string) -> string {
     load_const "Process26"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process27(input):
+function Process27(input: string) -> string {
     load_const "Process27"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process28(input):
+function Process28(input: string) -> string {
     load_const "Process28"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process29(input):
+function Process29(input: string) -> string {
     load_const "Process29"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process3(input):
+function Process3(input: string) -> string {
     load_const "Process3"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process30(input):
+function Process30(input: string) -> string {
     load_const "Process30"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process31(input):
+function Process31(input: string) -> string {
     load_const "Process31"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process32(input):
+function Process32(input: string) -> string {
     load_const "Process32"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process33(input):
+function Process33(input: string) -> string {
     load_const "Process33"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process34(input):
+function Process34(input: string) -> string {
     load_const "Process34"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process35(input):
+function Process35(input: string) -> string {
     load_const "Process35"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process36(input):
+function Process36(input: string) -> string {
     load_const "Process36"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process37(input):
+function Process37(input: string) -> string {
     load_const "Process37"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process38(input):
+function Process38(input: string) -> string {
     load_const "Process38"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process39(input):
+function Process39(input: string) -> string {
     load_const "Process39"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process4(input):
+function Process4(input: string) -> string {
     load_const "Process4"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process40(input):
+function Process40(input: string) -> string {
     load_const "Process40"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process41(input):
+function Process41(input: string) -> string {
     load_const "Process41"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process42(input):
+function Process42(input: string) -> string {
     load_const "Process42"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process43(input):
+function Process43(input: string) -> string {
     load_const "Process43"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process44(input):
+function Process44(input: string) -> string {
     load_const "Process44"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process45(input):
+function Process45(input: string) -> string {
     load_const "Process45"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process46(input):
+function Process46(input: string) -> string {
     load_const "Process46"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process47(input):
+function Process47(input: string) -> string {
     load_const "Process47"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process48(input):
+function Process48(input: string) -> string {
     load_const "Process48"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process49(input):
+function Process49(input: string) -> string {
     load_const "Process49"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process5(input):
+function Process5(input: string) -> string {
     load_const "Process5"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process50(input):
+function Process50(input: string) -> string {
     load_const "Process50"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process51(input):
+function Process51(input: string) -> string {
     load_const "Process51"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process52(input):
+function Process52(input: string) -> string {
     load_const "Process52"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process53(input):
+function Process53(input: string) -> string {
     load_const "Process53"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process54(input):
+function Process54(input: string) -> string {
     load_const "Process54"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process55(input):
+function Process55(input: string) -> string {
     load_const "Process55"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process56(input):
+function Process56(input: string) -> string {
     load_const "Process56"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process57(input):
+function Process57(input: string) -> string {
     load_const "Process57"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process58(input):
+function Process58(input: string) -> string {
     load_const "Process58"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process59(input):
+function Process59(input: string) -> string {
     load_const "Process59"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process6(input):
+function Process6(input: string) -> string {
     load_const "Process6"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process60(input):
+function Process60(input: string) -> string {
     load_const "Process60"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process61(input):
+function Process61(input: string) -> string {
     load_const "Process61"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process62(input):
+function Process62(input: string) -> string {
     load_const "Process62"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process63(input):
+function Process63(input: string) -> string {
     load_const "Process63"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process64(input):
+function Process64(input: string) -> string {
     load_const "Process64"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process65(input):
+function Process65(input: string) -> string {
     load_const "Process65"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process66(input):
+function Process66(input: string) -> string {
     load_const "Process66"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process67(input):
+function Process67(input: string) -> string {
     load_const "Process67"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process68(input):
+function Process68(input: string) -> string {
     load_const "Process68"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process69(input):
+function Process69(input: string) -> string {
     load_const "Process69"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process7(input):
+function Process7(input: string) -> string {
     load_const "Process7"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process70(input):
+function Process70(input: string) -> string {
     load_const "Process70"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process71(input):
+function Process71(input: string) -> string {
     load_const "Process71"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process72(input):
+function Process72(input: string) -> string {
     load_const "Process72"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process73(input):
+function Process73(input: string) -> string {
     load_const "Process73"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process74(input):
+function Process74(input: string) -> string {
     load_const "Process74"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process75(input):
+function Process75(input: string) -> string {
     load_const "Process75"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process76(input):
+function Process76(input: string) -> string {
     load_const "Process76"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process77(input):
+function Process77(input: string) -> string {
     load_const "Process77"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process78(input):
+function Process78(input: string) -> string {
     load_const "Process78"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process79(input):
+function Process79(input: string) -> string {
     load_const "Process79"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process8(input):
+function Process8(input: string) -> string {
     load_const "Process8"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process80(input):
+function Process80(input: string) -> string {
     load_const "Process80"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process81(input):
+function Process81(input: string) -> string {
     load_const "Process81"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process82(input):
+function Process82(input: string) -> string {
     load_const "Process82"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process83(input):
+function Process83(input: string) -> string {
     load_const "Process83"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process84(input):
+function Process84(input: string) -> string {
     load_const "Process84"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process85(input):
+function Process85(input: string) -> string {
     load_const "Process85"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process86(input):
+function Process86(input: string) -> string {
     load_const "Process86"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process87(input):
+function Process87(input: string) -> string {
     load_const "Process87"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process88(input):
+function Process88(input: string) -> string {
     load_const "Process88"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process89(input):
+function Process89(input: string) -> string {
     load_const "Process89"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process9(input):
+function Process9(input: string) -> string {
     load_const "Process9"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process90(input):
+function Process90(input: string) -> string {
     load_const "Process90"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process91(input):
+function Process91(input: string) -> string {
     load_const "Process91"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process92(input):
+function Process92(input: string) -> string {
     load_const "Process92"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process93(input):
+function Process93(input: string) -> string {
     load_const "Process93"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process94(input):
+function Process94(input: string) -> string {
     load_const "Process94"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process95(input):
+function Process95(input: string) -> string {
     load_const "Process95"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process96(input):
+function Process96(input: string) -> string {
     load_const "Process96"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process97(input):
+function Process97(input: string) -> string {
     load_const "Process97"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process98(input):
+function Process98(input: string) -> string {
     load_const "Process98"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function Process99(input):
+function Process99(input: string) -> string {
     load_const "Process99"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
     return
+}
 
-function baml.llm.PlannerState.rr_local_offset(self, client_name):
+function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
     load_const 0
     store_var offset
     load_var self
@@ -861,16 +967,19 @@ function baml.llm.PlannerState.rr_local_offset(self, client_name):
     load_const 0
     store_var _i
 
-L0: load_var _i
+  L0:
+    load_var _i
     load_var _len
     cmp_op <
     pop_jump_if_false L1
     jump L2
 
-L1: load_var offset
+  L1:
+    load_var offset
     return
 
-L2: load_var _iter
+  L2:
+    load_var _iter
     load_var _i
     load_array_element
     store_var seen_name
@@ -887,8 +996,9 @@ L2: load_var _iter
     bin_op +
     store_var offset
     jump L0
+}
 
-function baml.llm.PlannerState.rr_pick_index(self, client_name, sub_client_count):
+function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int {
     load_var self
     load_var client_name
     call baml.llm.PlannerState.rr_local_offset
@@ -906,8 +1016,9 @@ function baml.llm.PlannerState.rr_pick_index(self, client_name, sub_client_count
     load_var sub_client_count
     bin_op %
     return
+}
 
-function baml.llm.build_attempt(llm_client):
+function baml.llm.build_attempt(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
     alloc_instance <class baml.llm.PlannerState>
     copy 0
@@ -915,8 +1026,9 @@ function baml.llm.build_attempt(llm_client):
     store_field .rr_client_names
     call baml.llm.build_attempt_with_state
     return
+}
 
-function baml.llm.build_attempt_with_state(llm_client, planner_state):
+function baml.llm.build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
     load_field .client_type
     discriminant
@@ -927,14 +1039,16 @@ function baml.llm.build_attempt_with_state(llm_client, planner_state):
     pop 1
     jump L9
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L4
 
-L1: pop 1
+  L1:
+    pop 1
     load_var llm_client
     load_field .sub_clients
     call baml.Array.length
@@ -943,7 +1057,8 @@ L1: pop 1
     pop_jump_if_false L2
     jump L3
 
-L2: load_var llm_client
+  L2:
+    load_var llm_client
     load_field .name
     store_var _69
     load_var llm_client
@@ -963,10 +1078,12 @@ L2: load_var llm_client
     call baml.llm.build_plan_with_state
     jump L10
 
-L3: alloc_array 0
+  L3:
+    alloc_array 0
     jump L10
 
-L4: alloc_array 0
+  L4:
+    alloc_array 0
     store_var steps
     load_var llm_client
     load_field .sub_clients
@@ -977,16 +1094,19 @@ L4: alloc_array 0
     load_const 0
     store_var _i
 
-L5: load_var _i
+  L5:
+    load_var _i
     load_var _len
     cmp_op <
     pop_jump_if_false L6
     jump L7
 
-L6: load_var steps
+  L6:
+    load_var steps
     jump L10
 
-L7: load_var _iter
+  L7:
+    load_var _iter
     load_var _i
     load_array_element
     store_var sub
@@ -1004,7 +1124,8 @@ L7: load_var _iter
     load_const 0
     store_var _i1
 
-L8: load_var _i1
+  L8:
+    load_var _i1
     load_var _len1
     cmp_op <
     pop_jump_if_false L5
@@ -1022,7 +1143,8 @@ L8: load_var _i1
     pop 1
     jump L8
 
-L9: load_var llm_client
+  L9:
+    load_var llm_client
     load_field .name
     dispatch_future baml.llm.resolve_client
     await
@@ -1037,9 +1159,11 @@ L9: load_var llm_client
     store_field .delay_ms
     alloc_array 1
 
-L10: return
+  L10:
+    return
+}
 
-function baml.llm.build_plan(llm_client):
+function baml.llm.build_plan(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
     alloc_instance <class baml.llm.PlannerState>
     copy 0
@@ -1047,8 +1171,9 @@ function baml.llm.build_plan(llm_client):
     store_field .rr_client_names
     call baml.llm.build_plan_with_state
     return
+}
 
-function baml.llm.build_plan_with_state(llm_client, planner_state):
+function baml.llm.build_plan_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     load_var llm_client
     load_field .retry
     store_var _3
@@ -1058,7 +1183,8 @@ function baml.llm.build_plan_with_state(llm_client, planner_state):
     pop_jump_if_false L0
     jump L10
 
-L0: load_var _3
+  L0:
+    load_var _3
     store_var r
     alloc_array 0
     store_var result
@@ -1070,17 +1196,20 @@ L0: load_var _3
     load_const 0
     store_var attempt
 
-L1: load_var attempt
+  L1:
+    load_var attempt
     load_var r
     load_field .max_retries
     cmp_op <=
     pop_jump_if_false L2
     jump L3
 
-L2: load_var result
+  L2:
+    load_var result
     jump L11
 
-L3: load_const 0
+  L3:
+    load_const 0
     store_var delay
     load_var attempt
     load_const 0
@@ -1103,17 +1232,20 @@ L3: load_const 0
     pop_jump_if_false L4
     jump L5
 
-L4: load_var next
+  L4:
+    load_var next
     store_var current_delay
     jump L6
 
-L5: load_var r
+  L5:
+    load_var r
     load_field .max_delay_ms
     load_const 0
     bin_op +
     store_var current_delay
 
-L6: load_var llm_client
+  L6:
+    load_var llm_client
     load_var planner_state
     call baml.llm.build_attempt_with_state
     store_var _iter
@@ -1123,19 +1255,22 @@ L6: load_var llm_client
     load_const 0
     store_var _i
 
-L7: load_var _i
+  L7:
+    load_var _i
     load_var _len
     cmp_op <
     pop_jump_if_false L8
     jump L9
 
-L8: load_var attempt
+  L8:
+    load_var attempt
     load_const 1
     bin_op +
     store_var attempt
     jump L1
 
-L9: load_var _iter
+  L9:
+    load_var _iter
     load_var _i
     load_array_element
     store_var step
@@ -1156,13 +1291,16 @@ L9: load_var _iter
     pop 1
     jump L7
 
-L10: load_var llm_client
+  L10:
+    load_var llm_client
     load_var planner_state
     call baml.llm.build_attempt_with_state
 
-L11: return
+  L11:
+    return
+}
 
-function baml.llm.build_request(function_name, args):
+function baml.llm.build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
     load_var function_name
     call baml.llm.resolve_primitive
     store_var primitive_client
@@ -1175,8 +1313,9 @@ function baml.llm.build_request(function_name, args):
     dispatch_future baml.llm.PrimitiveClient.build_request
     await
     return
+}
 
-function baml.llm.call_llm_function(function_name, args):
+function baml.llm.call_llm_function(function_name: string, args: map<string, unknown>) -> unknown {
     load_var function_name
     dispatch_future baml.llm.get_jinja_template
     await
@@ -1202,7 +1341,8 @@ function baml.llm.call_llm_function(function_name, args):
     pop_jump_if_false L0
     jump L2
 
-L0: dispatch_future baml.sys.cancellation_requested
+  L0:
+    dispatch_future baml.sys.cancellation_requested
     await
     pop_jump_if_false L1
     load_const "Operation cancelled"
@@ -1210,18 +1350,21 @@ L0: dispatch_future baml.sys.cancellation_requested
     await
     pop 1
 
-L1: load_const "All orchestration steps failed"
+  L1:
+    load_const "All orchestration steps failed"
     dispatch_future baml.sys.panic
     await
     pop 1
     load_const null
     return
 
-L2: load_var result
+  L2:
+    load_var result
     load_field .value
     return
+}
 
-function baml.llm.execute_client(llm_client, context, inherited_delay_ms):
+function baml.llm.execute_client(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.ExecutionResult {
     load_var llm_client
     load_field .retry
     store_var _4
@@ -1231,7 +1374,8 @@ function baml.llm.execute_client(llm_client, context, inherited_delay_ms):
     pop_jump_if_false L0
     jump L12
 
-L0: load_var _4
+  L0:
+    load_var _4
     store_var r
     load_var r
     load_field .initial_delay_ms
@@ -1241,14 +1385,16 @@ L0: load_var _4
     load_const 0
     store_var attempt
 
-L1: load_var attempt
+  L1:
+    load_var attempt
     load_var r
     load_field .max_retries
     cmp_op <=
     pop_jump_if_false L2
     jump L3
 
-L2: alloc_instance <class baml.llm.ExecutionResult>
+  L2:
+    alloc_instance <class baml.llm.ExecutionResult>
     copy 0
     load_const false
     store_field .ok
@@ -1257,12 +1403,14 @@ L2: alloc_instance <class baml.llm.ExecutionResult>
     store_field .value
     jump L13
 
-L3: dispatch_future baml.sys.cancellation_requested
+  L3:
+    dispatch_future baml.sys.cancellation_requested
     await
     pop_jump_if_false L4
     jump L11
 
-L4: load_var inherited_delay_ms
+  L4:
+    load_var inherited_delay_ms
     store_var attempt_delay
     load_var attempt
     load_const 0
@@ -1285,17 +1433,20 @@ L4: load_var inherited_delay_ms
     pop_jump_if_false L5
     jump L6
 
-L5: load_var next
+  L5:
+    load_var next
     store_var current_delay
     jump L7
 
-L6: load_var r
+  L6:
+    load_var r
     load_field .max_delay_ms
     load_const 0
     bin_op +
     store_var current_delay
 
-L7: load_var attempt
+  L7:
+    load_var attempt
     load_var r
     load_field .max_retries
     cmp_op ==
@@ -1303,7 +1454,8 @@ L7: load_var attempt
     load_var inherited_delay_ms
     store_var attempt_delay
 
-L8: load_var llm_client
+  L8:
+    load_var llm_client
     load_var context
     load_var attempt_delay
     call baml.llm.execute_client_once
@@ -1313,25 +1465,31 @@ L8: load_var llm_client
     pop_jump_if_false L9
     jump L10
 
-L9: load_var attempt
+  L9:
+    load_var attempt
     load_const 1
     bin_op +
     store_var attempt
     jump L1
 
-L10: load_var result
+  L10:
+    load_var result
     return
 
-L11: return
+  L11:
+    return
 
-L12: load_var llm_client
+  L12:
+    load_var llm_client
     load_var context
     load_var inherited_delay_ms
     call baml.llm.execute_client_once
 
-L13: return
+  L13:
+    return
+}
 
-function baml.llm.execute_client_once(llm_client, context, active_delay_ms):
+function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.ExecutionResult {
     load_var llm_client
     load_field .client_type
     discriminant
@@ -1342,20 +1500,23 @@ function baml.llm.execute_client_once(llm_client, context, active_delay_ms):
     pop 1
     jump L10
 
-L0: copy 0
+  L0:
+    copy 0
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
     pop 1
     jump L4
 
-L1: pop 1
+  L1:
+    pop 1
     dispatch_future baml.sys.cancellation_requested
     await
     pop_jump_if_false L2
     jump L3
 
-L2: load_var llm_client
+  L2:
+    load_var llm_client
     load_field .name
     dispatch_future baml.llm.round_robin_next
     await
@@ -1375,9 +1536,11 @@ L2: load_var llm_client
     call baml.llm.execute_client
     jump L14
 
-L3: return
+  L3:
+    return
 
-L4: load_var llm_client
+  L4:
+    load_var llm_client
     load_field .sub_clients
     store_var _iter
     load_var _iter
@@ -1386,13 +1549,15 @@ L4: load_var llm_client
     load_const 0
     store_var _i
 
-L5: load_var _i
+  L5:
+    load_var _i
     load_var _len
     cmp_op <
     pop_jump_if_false L6
     jump L7
 
-L6: alloc_instance <class baml.llm.ExecutionResult>
+  L6:
+    alloc_instance <class baml.llm.ExecutionResult>
     copy 0
     load_const false
     store_field .ok
@@ -1401,7 +1566,8 @@ L6: alloc_instance <class baml.llm.ExecutionResult>
     store_field .value
     jump L14
 
-L7: load_var _iter
+  L7:
+    load_var _iter
     load_var _i
     load_array_element
     store_var sub
@@ -1414,7 +1580,8 @@ L7: load_var _iter
     pop_jump_if_false L8
     jump L9
 
-L8: load_var sub
+  L8:
+    load_var sub
     load_var context
     load_var active_delay_ms
     call baml.llm.execute_client
@@ -1425,14 +1592,17 @@ L8: load_var sub
     load_var result
     return
 
-L9: return
+  L9:
+    return
 
-L10: dispatch_future baml.sys.cancellation_requested
+  L10:
+    dispatch_future baml.sys.cancellation_requested
     await
     pop_jump_if_false L11
     jump L16
 
-L11: load_var llm_client
+  L11:
+    load_var llm_client
     load_field .name
     dispatch_future baml.llm.resolve_client
     await
@@ -1464,7 +1634,8 @@ L11: load_var llm_client
     pop_jump_if_false L12
     jump L15
 
-L12: load_var active_delay_ms
+  L12:
+    load_var active_delay_ms
     load_const 0
     cmp_op >
     pop_jump_if_false L13
@@ -1473,7 +1644,8 @@ L12: load_var active_delay_ms
     await
     pop 1
 
-L13: alloc_instance <class baml.llm.ExecutionResult>
+  L13:
+    alloc_instance <class baml.llm.ExecutionResult>
     copy 0
     load_const false
     store_field .ok
@@ -1481,9 +1653,11 @@ L13: alloc_instance <class baml.llm.ExecutionResult>
     load_const null
     store_field .value
 
-L14: return
+  L14:
+    return
 
-L15: load_var http_response
+  L15:
+    load_var http_response
     dispatch_future baml.http.Response.text
     await
     store_var body
@@ -1494,9 +1668,11 @@ L15: load_var http_response
     store_var return_type
     return
 
-L16: return
+  L16:
+    return
+}
 
-function baml.llm.render_prompt(function_name, args):
+function baml.llm.render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     load_var function_name
     dispatch_future baml.llm.get_jinja_template
     await
@@ -1515,8 +1691,9 @@ function baml.llm.render_prompt(function_name, args):
     dispatch_future baml.llm.PrimitiveClient.specialize_prompt
     await
     return
+}
 
-function baml.llm.resolve_primitive(function_name):
+function baml.llm.resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
     load_var function_name
     dispatch_future baml.llm.get_client
     await
@@ -1525,3 +1702,4 @@ function baml.llm.resolve_primitive(function_name):
     await
     call_indirect
     return
+}

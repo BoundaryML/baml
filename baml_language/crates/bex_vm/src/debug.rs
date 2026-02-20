@@ -510,23 +510,26 @@ pub fn disassemble(function: &Function, stack: &EvalStack, globals: &GlobalPool)
 /// instead of raw jump offsets, producing output that reads like assembly:
 ///
 /// ```text
-/// function add(x, y):
+/// function add(x: int, y: int) -> int {
 ///     load_var x
 ///     load_var y
 ///     bin_op +
 ///     return
+/// }
 /// ```
 ///
-/// Jump targets are rendered as labels:
+/// Labels create new indent blocks (label at 4, code under label at 8):
 ///
 /// ```text
-/// function example(x):
+/// function example(x: bool) -> int {
 ///     load_var x
 ///     pop_jump_if_false L0
 ///     load_const 1
 ///     return
-/// L0: load_const 0
-///     return
+///     L0:
+///         load_const 0
+///         return
+/// }
 /// ```
 ///
 /// This format is stable across global index changes (adding builtins won't
@@ -577,6 +580,8 @@ pub fn display_bytecode_textual(
         .collect();
 
     // --- Pass 2: Render each instruction. ---
+    // If labels exist: labels at 2-space indent, code at 4-space indent.
+    // If no labels: all code at 4-space indent.
     let mut lines: Vec<String> = Vec::with_capacity(instructions.len());
 
     for (ip, instruction) in instructions.iter().enumerate() {
@@ -589,17 +594,14 @@ pub fn display_bytecode_textual(
             &label_map,
         );
 
-        if label_map.contains_key(&ip) && ip > 0 {
-            lines.push(String::new());
+        if let Some(label) = label_map.get(&ip) {
+            if ip > 0 {
+                lines.push(String::new());
+            }
+            lines.push(format!("  {label}:"));
         }
 
-        let line = if let Some(label) = label_map.get(&ip) {
-            format!("{label}: {text}")
-        } else {
-            format!("    {text}")
-        };
-
-        lines.push(line);
+        lines.push(format!("    {text}"));
     }
 
     let mut output = lines.join("\n");
@@ -858,18 +860,20 @@ fn resolve_object_name(index: usize, objects: Option<&ObjectPool>) -> String {
 /// Renders all functions with their parameter names:
 ///
 /// ```text
-/// function add(x, y):
+/// function add(x: int, y: int) -> int {
 ///     load_var x
 ///     load_var y
 ///     bin_op +
 ///     return
+/// }
 ///
-/// function main():
+/// function main() -> int {
 ///     load_global <fn add>
 ///     load_const 3
 ///     load_const 2
 ///     call 2
 ///     return
+/// }
 /// ```
 pub fn display_program_textual(
     functions: &[(String, &Function)],
@@ -883,12 +887,23 @@ pub fn display_program_textual(
             output.push('\n');
         }
 
-        // Function header with parameter names.
-        let params = func.param_names.join(", ");
-        let _ = writeln!(output, "function {name}({params}):");
+        // Function header with typed parameter names and return type.
+        let params: String = func
+            .param_names
+            .iter()
+            .zip(func.param_types.iter())
+            .map(|(name, ty)| format!("{name}: {ty}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let _ = writeln!(
+            output,
+            "function {name}({params}) -> {} {{",
+            func.return_type
+        );
 
         let body = display_bytecode_textual(func, objects, compile_time_globals);
         output.push_str(&body);
+        output.push_str("}\n");
     }
 
     output
