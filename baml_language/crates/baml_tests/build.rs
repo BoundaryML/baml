@@ -700,7 +700,7 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
                     Ok(program) => {
                         // Only include builtin functions (baml.*)
                         let mut func_names: Vec<_> = program.function_indices.keys()
-                            .filter(|name| name.starts_with("baml."))
+                            .filter(|name| name.starts_with(BAML_STD_PREFIX))
                             .collect();
                         func_names.sort();
 
@@ -781,7 +781,7 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
                     // Collect sorted functions, excluding builtins (baml.*)
                     // which are snapshotted separately in baml_std.
                     let mut func_names: Vec<_> = program.function_indices.keys()
-                        .filter(|name| !name.starts_with("baml."))
+                        .filter(|name| !name.starts_with(BAML_STD_PREFIX))
                         .collect();
                     func_names.sort();
 

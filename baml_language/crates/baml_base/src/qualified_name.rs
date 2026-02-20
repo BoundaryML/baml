@@ -9,6 +9,12 @@
 
 use crate::Name;
 
+/// Prefix used for standard library items in qualified names.
+///
+/// All `Namespace::BamlStd` and standard `Namespace::Builtin` items
+/// are displayed with this prefix (e.g., `baml.llm.call_llm_function`).
+pub const BAML_STD_PREFIX: &str = "baml.";
+
 /// Non-baml-prefixed builtin module names.
 ///
 /// These are builtins that don't use the `baml.*` prefix convention.
