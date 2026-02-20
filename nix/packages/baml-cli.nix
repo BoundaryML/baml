@@ -3,6 +3,7 @@
   craneLib,
   commonArgs,
   cargoArtifacts,
+  cargoArtifactsDebug,
   nativeBuildInputs,
   pythonEnv,
   pkgs,
@@ -30,7 +31,8 @@ let
     in
     buildFn (
       {
-        inherit pname cargoArtifacts;
+        inherit pname;
+        cargoArtifacts = if buildType == "release" then cargoArtifacts else cargoArtifactsDebug;
         inherit (commonArgs) src version buildInputs;
         inherit (commonArgs) LIBCLANG_PATH BINDGEN_EXTRA_CLANG_ARGS RUSTFLAGS;
         inherit (commonArgs)

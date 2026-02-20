@@ -73,7 +73,8 @@
         craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
 
         # Native cargo artifacts (cached separately — ~15min cold build)
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        cargoArtifacts = craneLib.buildDepsOnly (commonArgs // { CARGO_PROFILE = "release"; });
+        cargoArtifactsDebug = craneLib.buildDepsOnly (commonArgs // { CARGO_PROFILE = "dev"; });
 
         # --- Import package modules ---
 
@@ -82,6 +83,7 @@
             craneLib
             commonArgs
             cargoArtifacts
+            cargoArtifactsDebug
             nativeBuildInputs
             pythonEnv
             pkgs
@@ -103,6 +105,9 @@
           bamlRustPackage = cliPkgs.bamlRustPackage;
         };
 
+        # wasm-bindgen-cli pinned to match Cargo.lock (nixpkgs has 0.2.100, we need 0.2.105)
+        wasm-bindgen-cli = import ./nix/lib/wasm-bindgen-cli.nix { inherit pkgs; };
+
         wasmPkgs = import ./nix/packages/baml-wasm.nix {
           inherit
             crane
@@ -110,7 +115,67 @@
             toolchain
             src
             version
+            wasm-bindgen-cli
             ;
+        };
+
+        # --- Shared pnpm workspace source + deps (used by JS/TS packages) ---
+
+        pnpmSrc = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter =
+            path: type:
+            let
+              baseName = baseNameOf path;
+            in
+            baseName != "node_modules"
+            && baseName != "result"
+            && baseName != ".jj"
+            && baseName != ".git"
+            && baseName != ".claude"
+            && !pkgs.lib.hasInfix "/target/" path
+            && !pkgs.lib.hasSuffix ".so" baseName
+            && !pkgs.lib.hasSuffix ".node" baseName
+            && !pkgs.lib.hasSuffix ".vsix" baseName;
+        };
+
+        # Single pnpm dependency fetch shared by all JS/TS packages
+        pnpmDeps = pkgs.pnpm_9.fetchDeps {
+          pname = "baml-workspace";
+          inherit version;
+          src = pnpmSrc;
+          hash = "sha256-PjYsVup7GLEHMvUN47OYcurkAYR0xUQPAr1NNyX+oe8=";
+          fetcherVersion = 2;
+        };
+
+        codemirrorLangBaml = import ./nix/packages/codemirror-lang-baml.nix {
+          inherit pkgs pkgs-unstable version pnpmDeps;
+          src = pnpmSrc;
+        };
+
+        fiddleFrontend = import ./nix/packages/fiddle-frontend.nix {
+          inherit
+            pkgs
+            pkgs-unstable
+            version
+            pnpmDeps
+            ;
+          src = pnpmSrc;
+          baml-schema-wasm = wasmPkgs.baml-schema-wasm;
+          codemirror-lang-baml = codemirrorLangBaml;
+        };
+
+        bamlVsix = import ./nix/packages/baml-vsix.nix {
+          inherit
+            pkgs
+            pkgs-unstable
+            version
+            pnpmDeps
+            ;
+          src = pnpmSrc;
+          baml-schema-wasm = wasmPkgs.baml-schema-wasm;
+          baml-cli = cliPkgs.release;
+          codemirror-lang-baml = codemirrorLangBaml;
         };
 
       in
@@ -189,12 +254,17 @@
 
           # WASM package
           baml-schema-wasm = wasmPkgs.baml-schema-wasm;
+
+          # Frontend / extension packages
+          codemirror-lang-baml = codemirrorLangBaml;
+          fiddle-frontend = fiddleFrontend;
+          baml-vsix = bamlVsix;
         };
 
         # --- Checks (intermediates exposed for Cachix caching) ---
 
         checks = {
-          inherit cargoArtifacts;
+          inherit cargoArtifacts cargoArtifactsDebug;
           cargoArtifacts-wasm = wasmPkgs.cargoArtifacts;
         };
 

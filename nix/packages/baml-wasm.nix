@@ -5,6 +5,7 @@
   toolchain,
   src,
   version,
+  wasm-bindgen-cli,
 }:
 
 let
@@ -29,8 +30,7 @@ let
     cargoExtraArgs = "-p baml-schema-build";
 
     nativeBuildInputs = [
-      pkgs.wasm-pack
-      pkgs.wasm-bindgen-cli
+      wasm-bindgen-cli
     ];
 
     # Skip default install (cargo install doesn't work for cdylib wasm targets)

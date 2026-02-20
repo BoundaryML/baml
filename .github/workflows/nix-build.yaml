@@ -2,7 +2,7 @@ name: Nix Build (experimental)
 
 on:
   push:
-    branches: [canary]
+    branches: [canary, greg/new-flake]
   pull_request:
 
 concurrency:
@@ -21,11 +21,11 @@ jobs:
 
       - uses: cachix/cachix-action@v15
         with:
-          name: baml
+          name: boundaryml
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: Build CLI
-        run: nix build .#baml-cli -L
+      - name: Build CLI (debug)
+        run: nix build .#baml-cli-debug -L
 
       - name: Build WASM
         run: nix build .#baml-schema-wasm -L
@@ -41,11 +41,11 @@ jobs:
 
       - uses: cachix/cachix-action@v15
         with:
-          name: baml
+          name: boundaryml
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: Build CLI
-        run: nix build .#baml-cli -L
+      - name: Build CLI (debug)
+        run: nix build .#baml-cli-debug -L
 
       - name: Build WASM
         run: nix build .#baml-schema-wasm -L

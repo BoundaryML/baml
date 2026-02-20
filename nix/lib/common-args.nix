@@ -84,16 +84,19 @@ let
     strictDeps = true;
 
     LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
+    # LLVM 16+ uses just the major version for the resource directory
+    # (e.g. lib/clang/19/include, not lib/clang/19.1.7/include).
     BINDGEN_EXTRA_CLANG_ARGS =
+      let clangMajor = pkgs.lib.versions.major pkgs.llvmPackages.libclang.version; in
       if pkgs.stdenv.isDarwin then
-        "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.libclang.version}/headers "
+        "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/${clangMajor}/include "
       else
-        "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.libclang.version}/include -isystem ${pkgs.llvmPackages.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
-    RUSTFLAGS =
-      if pkgs.stdenv.isDarwin then
-        "--cfg tracing_unstable"
-      else
-        "--cfg tracing_unstable -C target-feature=+crt-static";
+        "-isystem ${pkgs.llvmPackages.libclang.lib}/lib/clang/${clangMajor}/include -isystem ${pkgs.glibc.dev}/include";
+    # Note: +crt-static is NOT set here — it breaks proc-macro builds
+    # (e.g. askama_derive) on Linux because proc-macros are dylibs.
+    # The musl build in flake.nix sets its own CARGO_BUILD_RUSTFLAGS
+    # with +crt-static where it's actually needed.
+    RUSTFLAGS = "--cfg tracing_unstable";
     OPENSSL_STATIC = "1";
     OPENSSL_DIR = "${pkgs.openssl.dev}";
     OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";

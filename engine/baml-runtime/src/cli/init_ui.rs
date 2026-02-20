@@ -107,7 +107,7 @@ impl InitUI {
                 Line::from(vec![
                     Span::raw("  "),
                     Span::styled(
-                        "🚀 Setting up BAML for you!",
+                        "🚀 Setting up BAML for you!!!",
                         Style::default()
                             .fg(PURPLE_COLOR)
                             .add_modifier(Modifier::BOLD),
