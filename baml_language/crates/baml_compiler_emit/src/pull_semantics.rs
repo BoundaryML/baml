@@ -30,7 +30,7 @@ pub(crate) trait PullSink {
     fn pull_constant(&mut self, constant: &Constant) -> Result<(), Self::Error>;
     fn pull_local(&mut self, local: Local) -> Result<LocalPullAction, Self::Error>;
 
-    fn load_field(&mut self, field: usize) -> Result<(), Self::Error>;
+    fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
 
     fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error>;
@@ -41,7 +41,7 @@ pub(crate) trait PullSink {
 
     fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error>;
     fn copy_top(&mut self, offset: usize) -> Result<(), Self::Error>;
-    fn store_field(&mut self, field_idx: usize) -> Result<(), Self::Error>;
+    fn store_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error>;
 
     fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error>;
 
@@ -50,11 +50,17 @@ pub(crate) trait PullSink {
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
+
+    /// Resolve the field name for a `Place::Field { base, field }` access.
+    fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String;
+
+    /// Resolve a field name given the class name directly (used for `Aggregate::Class`).
+    fn class_field_name(&self, class_name: &str, field_idx: usize) -> String;
 }
 
 /// Stack-effect callbacks for statement/terminator helpers.
 pub(crate) trait StackEffectSink: PullSink {
-    fn store_field_value(&mut self, field: usize) -> Result<(), Self::Error>;
+    fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
 
@@ -128,9 +134,10 @@ pub(crate) fn walk_projection_store<S: StackEffectSink>(
 ) -> Result<bool, S::Error> {
     match destination {
         Place::Field { base, field } => {
+            let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;
             walk_rvalue_pull(sink, value)?;
-            sink.store_field_value(*field)?;
+            sink.store_field_value(*field, &name)?;
             Ok(true)
         }
         Place::Index { base, index, kind } => {
@@ -287,8 +294,9 @@ pub(crate) fn walk_place_pull<S: PullSink>(sink: &mut S, place: &Place) -> Resul
             LocalPullAction::Inline(rvalue) => walk_rvalue_pull(sink, &rvalue),
         },
         Place::Field { base, field } => {
+            let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;
-            sink.load_field(*field)
+            sink.load_field(*field, &name)
         }
         Place::Index { base, index, kind } => {
             walk_place_pull(sink, base)?;
@@ -338,9 +346,10 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             AggregateKind::Class(class_name) => {
                 sink.alloc_class_instance(class_name)?;
                 for (field_idx, field_operand) in fields.iter().enumerate() {
+                    let name = sink.class_field_name(class_name, field_idx);
                     sink.copy_top(0)?;
                     walk_operand_pull(sink, field_operand)?;
-                    sink.store_field(field_idx)?;
+                    sink.store_field(field_idx, &name)?;
                 }
                 Ok(())
             }

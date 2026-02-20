@@ -285,13 +285,17 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         name: "test_fn".to_string(),
         arity: input.arity,
         real_local_count: input.real_local_count,
-        bytecode: bex_vm_types::Bytecode {
-            source_lines: vec![1; input.instructions.len()],
-            scopes: vec![0; input.instructions.len()],
-            instructions: input.instructions,
-            constants: input.constants,
-            resolved_constants: Vec::new(), // Populated by BexHeap at load time
-            jump_tables: Vec::new(),
+        bytecode: {
+            let num_instructions = input.instructions.len();
+            bex_vm_types::Bytecode {
+                source_lines: vec![1; num_instructions],
+                scopes: vec![0; num_instructions],
+                field_names: vec![None; num_instructions],
+                instructions: input.instructions,
+                constants: input.constants,
+                resolved_constants: Vec::new(), // Populated by BexHeap at load time
+                jump_tables: Vec::new(),
+            }
         },
         kind: bex_vm_types::FunctionKind::Bytecode,
         locals_in_scope: {

@@ -577,6 +577,13 @@ pub struct Bytecode {
     pub source_lines: Vec<usize>,
 
     pub scopes: Vec<usize>,
+
+    /// Debug info: field name annotations per instruction.
+    ///
+    /// Parallel to `instructions`. `Some(name)` for `LoadField`/`StoreField`
+    /// instructions, `None` for everything else. Populated by the compiler,
+    /// used only for debug display.
+    pub field_names: Vec<Option<String>>,
 }
 
 impl Default for Bytecode {
@@ -594,6 +601,7 @@ impl Bytecode {
             jump_tables: Vec::new(),
             source_lines: Vec::new(),
             scopes: Vec::new(),
+            field_names: Vec::new(),
         }
     }
 

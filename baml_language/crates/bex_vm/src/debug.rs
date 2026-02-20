@@ -230,6 +230,22 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
     }
 }
 
+/// Resolve a global index to a plain function name (no angle brackets).
+fn resolve_callable_name(
+    index: usize,
+    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
+    objects: Option<&ObjectPool>,
+) -> String {
+    if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
+        if let Some(bex_vm_types::ConstValue::Object(obj_idx)) = ct_globals.get(index) {
+            if let Some(Object::Function(f)) = objs.get(obj_idx.raw()) {
+                return f.name.clone();
+            }
+        }
+    }
+    format!("?{index}")
+}
+
 /// Display an object from the compile-time `ObjectPool`.
 fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
@@ -630,9 +646,29 @@ fn display_instruction_textual(
             format!("store_global {name}")
         }
 
-        // --- Fields (numeric index, can't resolve without runtime stack) ---
-        Instruction::LoadField(index) => format!("load_field {index}"),
-        Instruction::StoreField(index) => format!("store_field {index}"),
+        // --- Fields (resolved from compile-time annotations when available) ---
+        Instruction::LoadField(index) => {
+            match function
+                .bytecode
+                .field_names
+                .get(ip)
+                .and_then(|n| n.as_deref())
+            {
+                Some(name) => format!("load_field .{name}"),
+                None => format!("load_field {index}"),
+            }
+        }
+        Instruction::StoreField(index) => {
+            match function
+                .bytecode
+                .field_names
+                .get(ip)
+                .and_then(|n| n.as_deref())
+            {
+                Some(name) => format!("store_field .{name}"),
+                None => format!("store_field {index}"),
+            }
+        }
 
         // --- Stack ---
         Instruction::Pop(n) => format!("pop {n}"),
@@ -714,12 +750,12 @@ fn display_instruction_textual(
 
         // --- Calls ---
         Instruction::Call(index) => {
-            let name = resolve_global(index.raw(), compile_time_globals, objects);
+            let name = resolve_callable_name(index.raw(), compile_time_globals, objects);
             format!("call {name}")
         }
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::DispatchFuture(index) => {
-            let name = resolve_global(index.raw(), compile_time_globals, objects);
+            let name = resolve_callable_name(index.raw(), compile_time_globals, objects);
             format!("dispatch_future {name}")
         }
         Instruction::Await => "await".to_string(),

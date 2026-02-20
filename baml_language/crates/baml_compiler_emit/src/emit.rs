@@ -182,6 +182,9 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Block notifications to be attached to the compiled function.
     block_notifications: Vec<BlockNotification>,
+
+    /// MIR local types for field name resolution (debug info).
+    local_types: HashMap<Local, Ty>,
 }
 
 impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
@@ -208,6 +211,48 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             next_block: None,
             watched_locals_initialized: HashSet::new(),
             block_notifications: Vec::new(),
+            local_types: HashMap::new(),
+        }
+    }
+
+    /// Look up a field name from the `ObjectPool` given a class name and field index.
+    fn lookup_class_field_name(&self, class_name: &str, field_idx: usize) -> Option<String> {
+        let &obj_idx = self.class_object_indices.get(class_name)?;
+        match self.objects.get(obj_idx)? {
+            Object::Class(class) => class.fields.get(field_idx).map(|f| f.name.clone()),
+            _ => None,
+        }
+    }
+
+    /// Resolve the type of a MIR Place by walking from the root local through projections.
+    fn resolve_place_type(&self, place: &Place) -> Option<Ty> {
+        match place {
+            Place::Local(local) => self.local_types.get(local).cloned(),
+            Place::Field { base, field } => {
+                let base_ty = self.resolve_place_type(base)?;
+                match &base_ty {
+                    Ty::Class(type_name) => {
+                        let &obj_idx = self
+                            .class_object_indices
+                            .get(type_name.display_name.as_str())?;
+                        match self.objects.get(obj_idx)? {
+                            Object::Class(class) => {
+                                class.fields.get(*field).map(|f| f.field_type.clone())
+                            }
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                }
+            }
+            Place::Index { base, .. } => {
+                let base_ty = self.resolve_place_type(base)?;
+                match base_ty {
+                    Ty::List(inner) => Some(*inner),
+                    Ty::Map { value, .. } => Some(*value),
+                    _ => None,
+                }
+            }
         }
     }
 
@@ -221,6 +266,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn compile(mut self, mir: &MirFunction) -> Function {
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
+
+        // Build local type map for field name resolution (debug info).
+        for (i, local_decl) in mir.locals.iter().enumerate() {
+            self.local_types.insert(Local(i), local_decl.ty.clone());
+        }
 
         // 2. Emit blocks in RPO order.
         //
@@ -387,6 +437,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.bytecode.instructions.push(instruction);
         self.bytecode.source_lines.push(self.current_source_line);
         self.bytecode.scopes.push(0);
+        self.bytecode.field_names.push(None);
         index
     }
 
@@ -1204,8 +1255,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(action)
     }
 
-    fn load_field(&mut self, field: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::LoadField(field));
+    fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
+        let idx = self.emit(Instruction::LoadField(field));
+        self.bytecode.field_names[idx] = Some(name.to_string());
         Ok(())
     }
 
@@ -1258,8 +1310,9 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
-    fn store_field(&mut self, field_idx: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::StoreField(field_idx));
+    fn store_field(&mut self, field_idx: usize, name: &str) -> Result<(), Self::Error> {
+        let idx = self.emit(Instruction::StoreField(field_idx));
+        self.bytecode.field_names[idx] = Some(name.to_string());
         Ok(())
     }
 
@@ -1329,11 +1382,26 @@ impl PullSink for StackifyCodegen<'_, '_> {
         }
         Ok(())
     }
+
+    fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
+        let class_name = match self.resolve_place_type(base) {
+            Some(Ty::Class(tn)) => tn.display_name.to_string(),
+            _ => return format!("{field_idx}"),
+        };
+        self.lookup_class_field_name(&class_name, field_idx)
+            .unwrap_or_else(|| format!("{field_idx}"))
+    }
+
+    fn class_field_name(&self, class_name: &str, field_idx: usize) -> String {
+        self.lookup_class_field_name(class_name, field_idx)
+            .unwrap_or_else(|| format!("{field_idx}"))
+    }
 }
 
 impl StackEffectSink for StackifyCodegen<'_, '_> {
-    fn store_field_value(&mut self, field: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::StoreField(field));
+    fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
+        let idx = self.emit(Instruction::StoreField(field));
+        self.bytecode.field_names[idx] = Some(name.to_string());
         Ok(())
     }
 
