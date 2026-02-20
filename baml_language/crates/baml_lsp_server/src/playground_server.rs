@@ -236,7 +236,13 @@ async fn handle_ws_in_message(
 
             tokio::spawn(async move {
                 let out = match bex
-                    .call_function_for_project(&fs_path, &name, kwargs.into(), call_id)
+                    .call_function_for_project(
+                        &fs_path,
+                        &name,
+                        kwargs.into(),
+                        call_id,
+                        sys_types::CancellationToken::new(),
+                    )
                     .await
                 {
                     Ok(result) => match bridge_ctypes::external_to_cffi_value(&result) {

@@ -215,6 +215,7 @@ beps-app/
 │   │   ├── layout.tsx                # Root layout with providers
 │   │   ├── page.tsx                  # Home (BEP list)
 │   │   ├── login/page.tsx            # Login page
+│   │   ├── api/agent/beps/route.ts   # Public read-only BEP context API
 │   │   └── beps/
 │   │       ├── new/page.tsx          # Create BEP
 │   │       └── [number]/
@@ -427,9 +428,151 @@ Both can be created from comments to maintain traceability.
 
 ### HTTP Endpoints
 
-| Endpoint                   | Method | Description                 |
-| -------------------------- | ------ | --------------------------- |
-| `/api/ai/stream-assistant` | POST   | Stream AI responses for Q&A |
+| Endpoint                   | Method | Description                                   |
+| -------------------------- | ------ | --------------------------------------------- |
+| `/api/ai/stream-assistant` | POST   | Stream AI responses for Q&A                   |
+| `/api/agent/beps`          | GET    | Public read-only BEP listing/fetch for agents |
+
+### Public Agent Endpoint
+
+`GET /api/agent/beps`
+
+- Without query params: lists all BEPs.
+- With `name=<bep-name-or-id>` (also accepts `query` or `q`): fuzzy-matches and returns a BEP bundle.
+- Defaults to including all versions/history.
+- Add `omitOtherVersions=true` to omit historical versions from the returned bundle.
+- Add `format=markdown` to get raw markdown output instead of JSON.
+
+#### Query Parameters
+
+| Param | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | No | Fuzzy BEP matcher (preferred key). |
+| `query` | string | No | Alias for `name`. |
+| `q` | string | No | Alias for `name`. |
+| `omitOtherVersions` | boolean-ish | No | Truthy values (`1`, `true`, `yes`, `y`, `on`) omit `history/*` files. |
+| `format` | string | No | `json` (default) or `markdown`. |
+
+#### Success Responses
+
+`200` list mode (`GET /api/agent/beps` with no query):
+
+```json
+{
+  "mode": "list",
+  "total": 2,
+  "beps": [
+    {
+      "id": "BEP-001",
+      "number": 1,
+      "title": "Structured Error Payloads",
+      "status": "accepted",
+      "updatedAt": "2026-02-18T20:13:34.000Z"
+    }
+  ],
+  "usage": {
+    "list": "/api/agent/beps",
+    "fetch": "/api/agent/beps?name=<bep-name-or-id>",
+    "omitOtherVersions": "/api/agent/beps?name=<bep-name-or-id>&omitOtherVersions=true"
+  }
+}
+```
+
+`200` matched BEP JSON mode (`GET /api/agent/beps?name=<...>`):
+
+```json
+{
+  "mode": "bep",
+  "query": "structured error payloads",
+  "matched": {
+    "id": "BEP-001",
+    "number": 1,
+    "title": "Structured Error Payloads",
+    "status": "accepted",
+    "score": 1.732
+  },
+  "currentVersion": 5,
+  "omitOtherVersions": false,
+  "markdown": "<!-- FILE: README.md -->\n# BEP-001 ...",
+  "files": [
+    {
+      "path": "README.md",
+      "content": "# BEP-001 ..."
+    }
+  ]
+}
+```
+
+Schema for `mode: "bep"` JSON responses:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `mode` | string | Always `"bep"` in this response shape. |
+| `query` | string | Normalized user query used for fuzzy matching. |
+| `matched` | object | Matched BEP metadata: `id`, `number`, `title`, `status`, `score`. |
+| `currentVersion` | number | Current BEP version number. |
+| `omitOtherVersions` | boolean | Echoes resolved filter flag from query params. |
+| `markdown` | string | Flattened markdown bundle content (all selected `.md` files). |
+| `files` | array | Per-file markdown entries: `{ path, content }`. |
+
+`200` matched BEP markdown mode (`GET /api/agent/beps?name=<...>&format=markdown`):
+
+```markdown
+<!-- FILE: README.md -->
+# BEP-001 Structured Error Payloads
+...
+```
+
+#### Error Responses
+
+`404` (no fuzzy match found):
+
+```json
+{
+  "error": "Could not find a BEP that matches \"<query>\".",
+  "suggestions": [
+    { "id": "BEP-003", "title": "..." },
+    { "id": "BEP-010", "title": "..." }
+  ]
+}
+```
+
+`500` (server misconfiguration, missing Convex URL):
+
+```json
+{
+  "error": "Missing NEXT_PUBLIC_CONVEX_URL environment variable."
+}
+```
+
+`502` (upstream Convex failure, or unrecognized export payload shape):
+
+```json
+{
+  "error": "Failed to fetch BEP list.",
+  "detail": "<error message>"
+}
+```
+
+```json
+{
+  "error": "Failed to fetch BEP export data.",
+  "detail": "<error message>"
+}
+```
+
+```json
+{
+  "error": "Invalid BEP export payload shape."
+}
+```
+
+#### CORS / Preflight
+
+- `OPTIONS /api/agent/beps` is supported for browser preflight and returns `204`.
+- CORS headers: `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET, OPTIONS`, `Access-Control-Allow-Headers: Content-Type`.
+
+You should install the `beps` skill through our [skills](https://github.com/BoundaryML/skills) repository.
 
 ---
 

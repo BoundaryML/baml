@@ -4,11 +4,14 @@
 //! results to emit optimized bytecode. Virtual locals are inlined at their
 //! use sites instead of being stored to stack slots.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::Infallible,
+};
 
 use baml_compiler_mir::{
-    AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand,
-    Place, Rvalue, StatementKind, Terminator, UnaryOp,
+    BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand, Place, Rvalue,
+    StatementKind, Terminator, UnaryOp,
 };
 use baml_type::Ty;
 use bex_vm_types::{
@@ -37,6 +40,15 @@ const JUMP_TABLE_MIN_ARMS: usize = 4; // Minimum arms to consider jump table
 const JUMP_TABLE_MIN_DENSITY: f64 = 0.5; // Minimum density for jump table
 const JUMP_TABLE_MAX_SIZE: usize = 256; // Maximum jump table size
 const BINARY_SEARCH_MIN_ARMS: usize = 4; // Minimum arms for binary search
+
+/// Unwrap a `Result` whose error type is `Infallible`.
+#[inline]
+fn unwrap_infallible<T>(result: Result<T, Infallible>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(never) => match never {},
+    }
+}
 
 /// Analyze a switch's arms to determine the best emission strategy.
 ///
@@ -83,6 +95,9 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
 use crate::{
     MirCodegenContext,
     analysis::{AnalysisResult, LocalClassification},
+    pull_semantics::{
+        self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink, StackEffectSink,
+    },
 };
 
 // ============================================================================
@@ -96,11 +111,20 @@ struct PendingJumpTable {
     /// Instruction index where the `JumpTable` instruction is.
     jump_table_pc: usize,
     /// Arms with their target blocks (values will be patched to offsets).
-    arms: Vec<(i64, BlockId)>,
+    arms: Vec<(i64, PendingJumpTarget)>,
     /// Default target block.
-    otherwise: BlockId,
+    otherwise: PendingJumpTarget,
     /// The jump table data being built.
     table: JumpTableData,
+}
+
+/// Target kind for a pending jump patch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PendingJumpTarget {
+    /// A normal emitted MIR block target.
+    Block(BlockId),
+    /// Shared trap target for dead-unreachable MIR targets.
+    Trap,
 }
 
 /// MIR to bytecode compiler with stackification.
@@ -125,14 +149,23 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Maps MIR Local -> stack slot index (only for Real locals).
     local_slots: HashMap<Local, usize>,
 
+    /// Number of extra local slots required for this function frame.
+    real_local_count: usize,
+
     /// Maps `BlockId` -> bytecode instruction index (for jump patching).
     block_addresses: HashMap<BlockId, usize>,
 
     /// Pending jumps that need patching: (`instruction_index`, `target_block`).
-    pending_jumps: Vec<(usize, BlockId)>,
+    pending_jumps: Vec<(usize, PendingJumpTarget)>,
 
     /// Pending jump tables that need patching after all blocks are emitted.
     pending_jump_tables: Vec<PendingJumpTable>,
+
+    /// Dead-unreachable MIR blocks for this function.
+    dead_unreachable_blocks: HashSet<BlockId>,
+
+    /// Shared trap PC used when pending jumps target dead-unreachable MIR blocks.
+    trap_pc: Option<usize>,
 
     /// Bytecode being generated.
     bytecode: Bytecode,
@@ -164,9 +197,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             objects: ctx.objects,
             analysis,
             local_slots: HashMap::new(),
+            real_local_count: 0,
             block_addresses: HashMap::new(),
             pending_jumps: Vec::new(),
             pending_jump_tables: Vec::new(),
+            dead_unreachable_blocks: HashSet::new(),
+            trap_pc: None,
             bytecode: Bytecode::new(),
             current_source_line: 0,
             next_block: None,
@@ -175,30 +211,75 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         }
     }
 
+    fn local_slot_or_panic(&self, local: Local, context: &str) -> usize {
+        *self.local_slots.get(&local).unwrap_or_else(|| {
+            panic!("local {local} has no allocated slot while emitting {context}")
+        })
+    }
+
     /// Compile a MIR function to bytecode.
     fn compile(mut self, mir: &MirFunction) -> Function {
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
 
-        // 2. Emit blocks in RPO order
+        // 2. Emit blocks in RPO order.
+        //
+        // We skip:
+        // - dead unreachable blocks, and
+        // - non-entry redirect-source blocks (threaded through by analysis).
+        //
+        // Redirect-source blocks are effectively empty at bytecode level and keeping
+        // them would emit dead jumps. We intentionally do not assign those blocks
+        // bytecode addresses so unresolved references fail loudly during patching.
         let rpo = self.analysis.rpo.clone();
-        for (i, &block_id) in rpo.iter().enumerate() {
-            self.block_addresses.insert(block_id, self.current_pc());
-            // Track the next block for fall-through optimization
-            self.next_block = rpo.get(i + 1).copied();
+        let is_dead_unreachable: Vec<bool> = rpo
+            .iter()
+            .map(|&block_id| crate::analysis::is_dead_unreachable_block(mir.block(block_id)))
+            .collect();
+        self.dead_unreachable_blocks = rpo
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &block_id)| is_dead_unreachable[i].then_some(block_id))
+            .collect();
+        let should_emit: Vec<bool> = rpo
+            .iter()
+            .enumerate()
+            .map(|(i, &block_id)| {
+                !is_dead_unreachable[i]
+                    && (block_id == mir.entry
+                        || !self.analysis.redirect_targets.contains_key(&block_id))
+            })
+            .collect();
 
-            // Skip emitting dead unreachable blocks - they're targets for impossible
-            // control flow paths (e.g., exhaustive match fallthrough). We record
-            // their address (current PC) so jumps to them resolve, but don't emit
-            // any instructions. If somehow reached, execution falls through to
-            // whatever comes next.
-            let block = mir.block(block_id);
-            if crate::analysis::is_dead_unreachable_block(block) {
+        let mut next_emitted_after: Vec<Option<BlockId>> = vec![None; rpo.len()];
+        let mut next_emitted = None;
+        for i in (0..rpo.len()).rev() {
+            next_emitted_after[i] = next_emitted;
+            if should_emit[i] {
+                next_emitted = Some(rpo[i]);
+            }
+        }
+
+        for (i, &block_id) in rpo.iter().enumerate() {
+            // Track the next *emitted* block for fall-through optimization.
+            self.next_block = next_emitted_after[i];
+
+            if is_dead_unreachable[i] {
                 continue;
             }
 
+            if !should_emit[i] {
+                continue;
+            }
+
+            self.block_addresses.insert(block_id, self.current_pc());
+            let block = mir.block(block_id);
             self.emit_block(block, mir);
         }
+
+        // If any pending edges target dead-unreachable MIR blocks, patch them
+        // through a shared trap target instead of assigning fake block addresses.
+        self.ensure_trap_pc_if_needed();
 
         // 3. Patch all jump targets and jump tables
         self.patch_jumps();
@@ -222,6 +303,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         Function {
             name: mir.name.to_string(),
             arity: mir.arity,
+            real_local_count: self.real_local_count,
             bytecode: self.bytecode,
             kind: FunctionKind::Bytecode,
             locals_in_scope: Self::build_locals_in_scope(mir, &self.local_slots),
@@ -257,6 +339,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Virtual locals don't get slots - they're inlined at use sites.
     fn allocate_real_locals(&mut self, mir: &MirFunction) {
         self.local_slots.clear();
+        self.real_local_count = 0;
         let arity = mir.arity;
 
         // Count how many real locals we need to pre-allocate
@@ -289,10 +372,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
         }
 
-        // Pre-allocate only the real locals (not virtuals)
-        if slots_to_allocate > 0 {
-            self.emit(Instruction::InitLocals(slots_to_allocate));
-        }
+        // VM pre-allocates these slots when entering the frame.
+        self.real_local_count = slots_to_allocate;
     }
 
     /// Get current program counter (next instruction index).
@@ -328,25 +409,53 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     ///
     /// Returns true if a jump was emitted, false if it was elided.
     fn emit_jump_unless_fallthrough(&mut self, target: BlockId) -> bool {
-        // Apply jump threading: resolve through redirect map
-        let resolved_target = self.analysis.resolve_jump_target(target);
-
-        // Check if we can fall through:
-        // 1. Next block IS the resolved target, OR
-        // 2. Next block is an empty block that resolves to our target
-        //    (fall through to it, and it will take us there)
-        let can_fall_through = self.next_block.is_some_and(|next| {
-            let resolved_next = self.analysis.resolve_jump_target(next);
-            resolved_target == next || resolved_target == resolved_next
-        });
+        let target = self.resolve_pending_target(target);
+        // Check if we can fall through to the next emitted block directly.
+        let can_fall_through = match target {
+            PendingJumpTarget::Block(block_id) => {
+                self.next_block.is_some_and(|next| block_id == next)
+            }
+            PendingJumpTarget::Trap => false,
+        };
 
         if can_fall_through {
             // No jump needed - fall through will get us there
             false
         } else {
             let jump_idx = self.emit(Instruction::Jump(0));
-            self.pending_jumps.push((jump_idx, resolved_target));
+            self.pending_jumps.push((jump_idx, target));
             true
+        }
+    }
+
+    /// Resolve a MIR block target into an emitted patch target.
+    fn resolve_pending_target(&self, target: BlockId) -> PendingJumpTarget {
+        let resolved = self.analysis.resolve_jump_target(target);
+        if self.dead_unreachable_blocks.contains(&resolved) {
+            PendingJumpTarget::Trap
+        } else {
+            PendingJumpTarget::Block(resolved)
+        }
+    }
+
+    /// Ensure a shared trap PC exists if any pending targets require it.
+    fn ensure_trap_pc_if_needed(&mut self) {
+        if self.trap_pc.is_some() {
+            return;
+        }
+        let needs_trap = self
+            .pending_jumps
+            .iter()
+            .any(|(_, target)| matches!(target, PendingJumpTarget::Trap))
+            || self.pending_jump_tables.iter().any(|pending| {
+                matches!(pending.otherwise, PendingJumpTarget::Trap)
+                    || pending
+                        .arms
+                        .iter()
+                        .any(|(_, target)| matches!(target, PendingJumpTarget::Trap))
+            });
+        if needs_trap {
+            self.trap_pc = Some(self.emit(Instruction::Unreachable));
         }
     }
 
@@ -373,86 +482,59 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             StatementKind::Assign { destination, value } => {
                 // Check if this is an assignment to a Virtual, PhiLike, or Dead local
                 if let Place::Local(local) = destination {
-                    match self.analysis.classifications[local] {
-                        LocalClassification::Virtual => {
-                            // Skip! This will be inlined at use site
+                    let class = self.analysis.classifications[local];
+                    match pull_semantics::local_assign_behavior(class) {
+                        LocalAssignBehavior::Skip => {
+                            // Skip! Value will be inlined (Virtual/CopyOf) or discarded (Dead).
                             return;
                         }
-                        LocalClassification::PhiLike | LocalClassification::ReturnPhi => {
-                            // Emit rvalue (leaves value on stack) but NOT the store.
-                            // PhiLike: value stays on stack until the join point uses it.
-                            // ReturnPhi: value stays on stack until Return.
-                            self.emit_rvalue_pull(value, mir);
+                        LocalAssignBehavior::EvalNoStore => {
+                            // PhiLike/ReturnPhi: evaluate value and keep it on stack.
+                            self.emit_rvalue_pull(value);
                             return;
                         }
-                        LocalClassification::CopyOf => {
-                            // Copy propagation - skip the copy entirely.
-                            // Uses of this local will load from the source instead.
-                            return;
-                        }
-                        LocalClassification::Dead => {
-                            // Dead store elimination - skip entirely
-                            return;
-                        }
-                        _ => {}
+                        LocalAssignBehavior::EvalAndStore => {}
                     }
                 }
 
                 // For field/index stores, push the base object first, then emit the value
                 // This sets up the stack correctly for StoreField/StoreArrayElement
+                if unwrap_infallible(pull_semantics::walk_projection_store(
+                    self,
+                    destination,
+                    value,
+                )) {
+                    return;
+                }
+
                 match destination {
-                    Place::Field { base, field } => {
-                        // For field store: push object, then value, then StoreField
-                        self.emit_place_value_pull(base, mir); // push object
-                        self.emit_rvalue_pull(value, mir); // push value
-                        self.emit(Instruction::StoreField(*field));
-                    }
-                    Place::Index { base, index, kind } => {
-                        // For index store: push array/map, then index/key, then value, then Store*Element
-                        self.emit_place_value_pull(base, mir); // push array/map
-                        self.emit_place_value_pull(&Place::Local(*index), mir); // push index/key
-                        self.emit_rvalue_pull(value, mir); // push value
-                        match kind {
-                            IndexKind::Array => self.emit(Instruction::StoreArrayElement),
-                            IndexKind::Map => self.emit(Instruction::StoreMapElement),
-                        };
-                    }
                     Place::Local(local) => {
                         // Local assignment: emit rvalue then store
-                        self.emit_rvalue_pull(value, mir);
-                        self.emit_store_place(destination, mir);
+                        self.emit_rvalue_pull(value);
+                        self.emit_store_place(destination);
                         // Emit Watch only once for watched locals (at initialization)
                         let local_decl = mir.local(*local);
                         if local_decl.is_watched && !self.watched_locals_initialized.contains(local)
                         {
                             self.watched_locals_initialized.insert(*local);
-                            if let Some(&slot) = self.local_slots.get(local) {
-                                // Push channel name (variable name) and filter (null for default)
-                                let channel =
-                                    local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
-                                let channel_obj_idx = self.objects.len();
-                                self.objects.push(Object::String(channel.to_string()));
-                                let channel_const_idx = self.add_constant(ConstValue::Object(
-                                    ObjectIndex::from_raw(channel_obj_idx),
-                                ));
-                                self.emit(Instruction::LoadConst(channel_const_idx));
-                                let null_const_idx = self.add_constant(ConstValue::Null);
-                                self.emit(Instruction::LoadConst(null_const_idx));
-                                self.emit(Instruction::Watch(slot));
-                            }
+                            unwrap_infallible(
+                                self.push_watch_channel(*local, local_decl.name.as_deref()),
+                            );
+                            let null_const_idx = self.add_constant(ConstValue::Null);
+                            self.emit(Instruction::LoadConst(null_const_idx));
+                            unwrap_infallible(self.watch_local(*local));
                         }
                     }
+                    Place::Field { .. } | Place::Index { .. } => unreachable!(),
                 }
             }
             StatementKind::Drop(place) => {
-                self.emit_place_value_pull(place, mir);
-                self.emit(Instruction::Pop(1));
+                unwrap_infallible(pull_semantics::walk_drop_statement(self, place));
             }
             StatementKind::Unwatch(local) => {
                 // Emit unwatch for a watched local going out of scope
-                if let Some(&slot) = self.local_slots.get(local) {
-                    self.emit(Instruction::Unwatch(slot));
-                }
+                let slot = self.local_slot_or_panic(*local, "Unwatch");
+                self.emit(Instruction::Unwatch(slot));
             }
             StatementKind::NotifyBlock { name, level } => {
                 // Add block notification to the function's metadata
@@ -467,28 +549,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::NotifyBlock(block_index));
             }
             StatementKind::WatchOptions { local, filter } => {
-                // Emit Watch instruction with new filter
-                // This updates the watch settings for an already-watched variable
-                if let Some(&slot) = self.local_slots.get(local) {
-                    let local_decl = mir.local(*local);
-                    // Push channel name
-                    let channel = local_decl.name.as_ref().map_or("_watch", |n| n.as_str());
-                    let channel_obj_idx = self.objects.len();
-                    self.objects.push(Object::String(channel.to_string()));
-                    let channel_const_idx = self
-                        .add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
-                    self.emit(Instruction::LoadConst(channel_const_idx));
-                    // Push filter value
-                    self.emit_operand_pull(filter, mir);
-                    // Re-emit Watch with new filter
-                    self.emit(Instruction::Watch(slot));
-                }
+                let channel_name = mir.local(*local).name.as_deref();
+                unwrap_infallible(pull_semantics::walk_watch_options_statement(
+                    self,
+                    *local,
+                    channel_name,
+                    filter,
+                ));
             }
             StatementKind::WatchNotify(local) => {
                 // Emit manual notify for a watched variable
-                if let Some(&slot) = self.local_slots.get(local) {
-                    self.emit(Instruction::Notify(slot));
-                }
+                let slot = self.local_slot_or_panic(*local, "WatchNotify");
+                self.emit(Instruction::Notify(slot));
             }
             StatementKind::VizEnter(node_idx) => {
                 self.emit(Instruction::VizEnter(*node_idx));
@@ -498,8 +570,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             }
             StatementKind::Nop => {}
             StatementKind::Assert(operand) => {
-                self.emit_operand_pull(operand, mir);
-                self.emit(Instruction::Assert);
+                unwrap_infallible(pull_semantics::walk_assert_statement(self, operand));
             }
         }
     }
@@ -512,210 +583,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     ///
     /// For Virtual locals, this recursively emits the definition's rvalue inline.
     /// For Real locals, this emits a `LoadVar` instruction.
-    fn emit_operand_pull(&mut self, operand: &Operand, mir: &MirFunction) {
-        match operand {
-            Operand::Copy(place) | Operand::Move(place) => {
-                self.emit_place_value_pull(place, mir);
-            }
-            Operand::Constant(constant) => {
-                self.emit_constant(constant);
-            }
-        }
-    }
-
-    /// Emit a place's value using the pull model.
-    fn emit_place_value_pull(&mut self, place: &Place, mir: &MirFunction) {
-        match place {
-            Place::Local(local) => {
-                let classification = self.analysis.classifications[local];
-
-                match classification {
-                    LocalClassification::Virtual => {
-                        // PULL: emit the definition's rvalue inline
-                        // Clone the rvalue to avoid borrow checker issues
-                        let rvalue = self.analysis.def_use[local]
-                            .def
-                            .as_ref()
-                            .map(|def| def.rvalue.clone())
-                            .unwrap_or_else(|| panic!("virtual local {local} without definition"));
-                        self.emit_rvalue_pull(&rvalue, mir);
-                    }
-                    LocalClassification::PhiLike
-                    | LocalClassification::ReturnPhi
-                    | LocalClassification::CallResultImmediate => {
-                        // PhiLike: value is already on the stack from the predecessor block.
-                        // ReturnPhi: value is already on the stack from the assignment.
-                        // CallResultImmediate: value is already on the stack from the Call.
-                        // Don't emit any instruction - the value is there waiting for us.
-                    }
-                    LocalClassification::CopyOf => {
-                        // Copy propagation: load from the source local instead.
-                        let source = self.analysis.resolve_copy_source(*local);
-                        let slot = self.local_slots[&source];
-                        self.emit(Instruction::LoadVar(slot));
-                    }
-                    _ => {
-                        // Real/Parameter local: emit LoadVar
-                        let slot = self.local_slots[local];
-                        self.emit(Instruction::LoadVar(slot));
-                    }
-                }
-            }
-            Place::Field { base, field } => {
-                // Load base then field
-                self.emit_place_value_pull(base, mir);
-                self.emit(Instruction::LoadField(*field));
-            }
-            Place::Index { base, index, kind } => {
-                // Load base, load index, then LoadArrayElement or LoadMapElement
-                self.emit_place_value_pull(base, mir);
-                // Index may be virtual or real
-                self.emit_place_value_pull(&Place::Local(*index), mir);
-                match kind {
-                    IndexKind::Array => self.emit(Instruction::LoadArrayElement),
-                    IndexKind::Map => self.emit(Instruction::LoadMapElement),
-                };
-            }
-        }
+    fn emit_operand_pull(&mut self, operand: &Operand) {
+        unwrap_infallible(pull_semantics::walk_operand_pull(self, operand));
     }
 
     /// Emit an rvalue using the pull model.
-    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue, mir: &MirFunction) {
-        match rvalue {
-            Rvalue::Use(operand) => {
-                self.emit_operand_pull(operand, mir);
-            }
-
-            Rvalue::BinaryOp { op, left, right } => {
-                self.emit_operand_pull(left, mir);
-                self.emit_operand_pull(right, mir);
-                self.emit(Self::binop_instruction(*op));
-            }
-
-            Rvalue::UnaryOp { op, operand } => {
-                self.emit_operand_pull(operand, mir);
-                self.emit(Self::unaryop_instruction(*op));
-            }
-
-            Rvalue::Array(elements) => {
-                for elem in elements {
-                    self.emit_operand_pull(elem, mir);
-                }
-                self.emit(Instruction::AllocArray(elements.len()));
-            }
-
-            Rvalue::Map(entries) => {
-                // For maps, VM expects stack layout: [value1, value2, ..., valueN, key1, key2, ..., keyN]
-                // Push all values first
-                for (_key, value) in entries {
-                    self.emit_operand_pull(value, mir);
-                }
-                // Then push all keys
-                for (key, _value) in entries {
-                    self.emit_operand_pull(key, mir);
-                }
-                self.emit(Instruction::AllocMap(entries.len()));
-            }
-
-            Rvalue::Aggregate { kind, fields } => {
-                match kind {
-                    AggregateKind::Array => {
-                        for field in fields {
-                            self.emit_operand_pull(field, mir);
-                        }
-                        self.emit(Instruction::AllocArray(fields.len()));
-                    }
-                    AggregateKind::Class(class_name) => {
-                        // Look up pre-allocated Class object index
-                        let class_obj_idx = self
-                            .class_object_indices
-                            .get(class_name)
-                            .copied()
-                            .unwrap_or_else(|| panic!("undefined class: {class_name}"));
-
-                        // Emit AllocInstance
-                        self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
-                            class_obj_idx,
-                        )));
-
-                        // For each field: Copy instance, emit field value, StoreField
-                        for (field_idx, field_operand) in fields.iter().enumerate() {
-                            self.emit(Instruction::Copy(0));
-                            self.emit_operand_pull(field_operand, mir);
-                            self.emit(Instruction::StoreField(field_idx));
-                        }
-                    }
-                    AggregateKind::EnumVariant { enum_name, variant } => {
-                        // Look up the enum object index
-                        let enum_obj_idx = self
-                            .enum_object_indices
-                            .get(enum_name)
-                            .copied()
-                            .unwrap_or_else(|| panic!("undefined enum: {enum_name}"));
-
-                        // Look up the variant index
-                        let variant_idx = self
-                            .enum_variants
-                            .get(enum_name)
-                            .and_then(|variants| variants.get(variant))
-                            .copied()
-                            .unwrap_or_else(|| panic!("undefined variant: {enum_name}.{variant}"));
-
-                        // Load variant index onto stack, then allocate variant
-                        #[allow(clippy::cast_possible_wrap)]
-                        let idx = self.add_constant(ConstValue::Int(variant_idx as i64));
-                        self.emit(Instruction::LoadConst(idx));
-                        self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
-                            enum_obj_idx,
-                        )));
-                    }
-                }
-            }
-
-            Rvalue::Discriminant(place) => {
-                self.emit_place_value_pull(place, mir);
-                self.emit(Instruction::Discriminant);
-            }
-
-            Rvalue::TypeTag(place) => {
-                self.emit_place_value_pull(place, mir);
-                self.emit(Instruction::TypeTag);
-            }
-
-            Rvalue::Len(place) => {
-                self.emit_place_value_pull(place, mir);
-                // TODO: Proper length builtin call
-                if let Some(&global_idx) = self.globals.get("baml.Array.length") {
-                    self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
-                    // Stack ordering issue - same as original codegen
-                }
-            }
-
-            Rvalue::IsType { operand, ty } => {
-                self.emit_operand_pull(operand, mir);
-                // Emit instanceof check using CmpOp::InstanceOf
-                // The type should be a class name - look up the class object
-                if let Ty::Class(tn) | Ty::TypeAlias(tn) = ty {
-                    let class_name_str = tn.display_name.as_str();
-                    if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
-                        // Load the Class object for the type check
-                        let class_const = self
-                            .add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
-                        self.emit(Instruction::LoadConst(class_const));
-                        // Emit instanceof comparison
-                        self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
-                    } else {
-                        // Unknown class - treat as always false
-                        let idx = self.add_constant(ConstValue::Bool(false));
-                        self.emit(Instruction::LoadConst(idx));
-                    }
-                } else {
-                    // Non-class type - not supported yet, return false
-                    let idx = self.add_constant(ConstValue::Bool(false));
-                    self.emit(Instruction::LoadConst(idx));
-                }
-            }
-        }
+    fn emit_rvalue_pull(&mut self, rvalue: &Rvalue) {
+        unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
     /// Emit a constant value.
@@ -793,25 +667,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Note: Field and Index stores from statements are handled directly in
     /// `emit_statement` to emit base/index before the value. This function
     /// is primarily used for Call/Await destinations which are always locals.
-    fn emit_store_place(&mut self, place: &Place, _mir: &MirFunction) {
+    fn emit_store_place(&mut self, place: &Place) {
         match place {
             Place::Local(local) => {
                 let classification = self.analysis.classifications[local];
-                match classification {
-                    LocalClassification::Parameter | LocalClassification::Real => {
+                match pull_semantics::local_store_behavior(classification) {
+                    LocalStoreBehavior::StoreSlot => {
                         // Real locals get stored to their slot
                         let slot = self.local_slots[local];
                         self.emit(Instruction::StoreVar(slot));
                     }
-                    LocalClassification::PhiLike
-                    | LocalClassification::ReturnPhi
-                    | LocalClassification::CallResultImmediate => {
+                    LocalStoreBehavior::KeepOnStack => {
                         // PhiLike/ReturnPhi: keep value on stack (no-op) - value goes to join/return.
                         // CallResultImmediate: keep value on stack (no-op) - value used immediately.
                     }
-                    LocalClassification::Virtual
-                    | LocalClassification::CopyOf
-                    | LocalClassification::Dead => {
+                    LocalStoreBehavior::PopValue => {
                         // Virtual, CopyOf, or Dead local - just pop the value
                         self.emit(Instruction::Pop(1));
                     }
@@ -848,10 +718,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     // Don't evaluate condition - just go directly to then_block
                     self.emit_jump_unless_fallthrough(*then_block);
                 } else {
-                    self.emit_operand_pull(condition, mir);
+                    self.emit_operand_pull(condition);
                     // PopJumpIfFalse to else_block (pops condition from stack)
                     // Apply jump threading to resolve through empty blocks
-                    let resolved_else = self.analysis.resolve_jump_target(*else_block);
+                    let resolved_else = self.resolve_pending_target(*else_block);
                     let else_jump = self.emit(Instruction::PopJumpIfFalse(0));
                     self.pending_jumps.push((else_jump, resolved_else));
                     // Jump to then_block (may be elided if it's next)
@@ -870,26 +740,20 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
                 match strategy {
                     SwitchStrategy::JumpTable { min, max } => {
-                        self.emit_switch_jump_table(discriminant, arms, *otherwise, min, max, mir);
+                        self.emit_switch_jump_table(discriminant, arms, *otherwise, min, max);
                     }
                     SwitchStrategy::BinarySearch => {
-                        self.emit_switch_binary_search(
-                            discriminant,
-                            arms,
-                            *otherwise,
-                            *exhaustive,
-                            mir,
-                        );
+                        self.emit_switch_binary_search(discriminant, arms, *otherwise, *exhaustive);
                     }
                     SwitchStrategy::IfElseChain => {
-                        self.emit_switch_if_else(discriminant, arms, *otherwise, *exhaustive, mir);
+                        self.emit_switch_if_else(discriminant, arms, *otherwise, *exhaustive);
                     }
                 }
             }
 
             Terminator::Return => {
                 // Use pull model for return value - if _0 is Virtual, inline it
-                self.emit_place_value_pull(&Place::Local(Local(0)), mir);
+                unwrap_infallible(pull_semantics::walk_return_value(self));
                 self.emit(Instruction::Return);
             }
 
@@ -900,12 +764,24 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
-                self.emit_operand_pull(callee, mir);
-                for arg in args {
-                    self.emit_operand_pull(arg, mir);
+                let global_callee = pull_semantics::resolve_constant_function_name(
+                    callee,
+                    &self.analysis.classifications,
+                    &self.analysis.def_use,
+                )
+                .and_then(|name| self.globals.get(&name).copied())
+                .map(GlobalIndex::from_raw);
+
+                if let Some(global_callee) = global_callee {
+                    unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                    self.emit(Instruction::Call(global_callee));
+                } else {
+                    unwrap_infallible(pull_semantics::walk_call_indirect_operands(
+                        self, callee, args,
+                    ));
+                    self.emit(Instruction::CallIndirect);
                 }
-                self.emit(Instruction::Call(args.len()));
-                self.emit_store_place(destination, mir);
+                self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
             }
 
@@ -923,12 +799,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 future,
                 resume,
             } => {
-                self.emit_operand_pull(callee, mir);
-                for arg in args {
-                    self.emit_operand_pull(arg, mir);
-                }
+                unwrap_infallible(pull_semantics::walk_invoke_operands(self, callee, args));
                 self.emit(Instruction::DispatchFuture(args.len()));
-                self.emit_store_place(future, mir);
+                self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
             }
 
@@ -938,9 +811,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 target,
                 unwind: _,
             } => {
-                self.emit_place_value_pull(future, mir);
+                unwrap_infallible(pull_semantics::walk_await_future(self, future));
                 self.emit(Instruction::Await);
-                self.emit_store_place(destination, mir);
+                self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
             }
         }
@@ -952,9 +825,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Patch all pending jumps with actual addresses.
     fn patch_jumps(&mut self) {
-        for (instruction_idx, target_block) in self.pending_jumps.clone() {
-            let target_pc = self.block_addresses[&target_block];
+        for (instruction_idx, target) in self.pending_jumps.clone() {
+            let target_pc = self.resolve_pending_target_pc(target);
             self.patch_jump_to(instruction_idx, target_pc);
+        }
+    }
+
+    /// Resolve a pending jump target to a concrete bytecode PC.
+    fn resolve_pending_target_pc(&self, target: PendingJumpTarget) -> usize {
+        match target {
+            PendingJumpTarget::Block(target_block) => {
+                *self.block_addresses.get(&target_block).unwrap_or_else(|| {
+                    panic!(
+                        "missing block address for jump target {target_block:?}; target may have been skipped without redirect resolution"
+                    )
+                })
+            }
+            PendingJumpTarget::Trap => self.trap_pc.unwrap_or_else(|| {
+                panic!("missing trap PC for dead-unreachable jump target")
+            }),
         }
     }
 
@@ -982,13 +871,13 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
             // Patch each arm's offset
             for (value, target) in &pending.arms {
-                let target_pc = self.block_addresses[target];
+                let target_pc = self.resolve_pending_target_pc(*target);
                 let offset = target_pc as isize - jump_table_pc as isize;
                 table.set(*value, offset);
             }
 
             // Patch default offset
-            let otherwise_pc = self.block_addresses[&pending.otherwise];
+            let otherwise_pc = self.resolve_pending_target_pc(pending.otherwise);
             let default_offset = otherwise_pc as isize - jump_table_pc as isize;
 
             // Update the instruction with the correct default offset
@@ -1018,9 +907,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         exhaustive: bool,
-        mir: &MirFunction,
     ) {
-        self.emit_operand_pull(discriminant, mir);
+        self.emit_operand_pull(discriminant);
 
         let num_arms = arms.len();
         for (i, (value, target)) in arms.iter().enumerate() {
@@ -1058,14 +946,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         otherwise: BlockId,
         min: i64,
         max: i64,
-        mir: &MirFunction,
     ) {
         // 1. Push discriminant onto stack
-        self.emit_operand_pull(discriminant, mir);
+        self.emit_operand_pull(discriminant);
 
         // 2. Create jump table data structure with placeholder offsets
         let table_idx = self.pending_jump_tables.len();
         let table = JumpTableData::new(min, max);
+
+        // Resolve all jump targets through redirect threading so we don't retain
+        // references to skipped redirect-source blocks.
+        let resolved_arms: Vec<(i64, PendingJumpTarget)> = arms
+            .iter()
+            .map(|(value, target)| (*value, self.resolve_pending_target(*target)))
+            .collect();
+        let resolved_otherwise = self.resolve_pending_target(otherwise);
 
         // 3. Emit JumpTable instruction with placeholder default offset
         let jump_table_pc = self.emit(Instruction::JumpTable {
@@ -1077,8 +972,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.pending_jump_tables.push(PendingJumpTable {
             table_idx,
             jump_table_pc,
-            arms: arms.to_vec(),
-            otherwise,
+            arms: resolved_arms,
+            otherwise: resolved_otherwise,
             table,
         });
     }
@@ -1096,10 +991,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         _exhaustive: bool,
-        mir: &MirFunction,
     ) {
         // Push discriminant onto stack (will be popped by comparisons)
-        self.emit_operand_pull(discriminant, mir);
+        self.emit_operand_pull(discriminant);
 
         // Sort arms by value for binary search
         let mut sorted_arms: Vec<_> = arms.to_vec();
@@ -1254,6 +1148,225 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     }
 }
 
+impl PullSink for StackifyCodegen<'_, '_> {
+    type Error = Infallible;
+
+    fn pull_constant(&mut self, constant: &Constant) -> Result<(), Self::Error> {
+        self.emit_constant(constant);
+        Ok(())
+    }
+
+    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction, Self::Error> {
+        let classification = self.analysis.classifications[&local];
+
+        let action = match classification {
+            LocalClassification::Virtual => {
+                // Inline the definition rvalue at use site.
+                let rvalue = self.analysis.def_use[&local]
+                    .def
+                    .as_ref()
+                    .map(|def| def.rvalue.clone())
+                    .unwrap_or_else(|| panic!("virtual local {local} without definition"));
+                LocalPullAction::Inline(rvalue)
+            }
+            LocalClassification::PhiLike
+            | LocalClassification::ReturnPhi
+            | LocalClassification::CallResultImmediate => LocalPullAction::Done,
+            LocalClassification::CopyOf => {
+                // Copy propagation: load from source slot directly.
+                let source = self.analysis.resolve_copy_source(local);
+                let slot = self.local_slots[&source];
+                self.emit(Instruction::LoadVar(slot));
+                LocalPullAction::Done
+            }
+            LocalClassification::Parameter
+            | LocalClassification::Real
+            | LocalClassification::Dead => {
+                let slot = self.local_slots[&local];
+                self.emit(Instruction::LoadVar(slot));
+                LocalPullAction::Done
+            }
+        };
+
+        Ok(action)
+    }
+
+    fn load_field(&mut self, field: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::LoadField(field));
+        Ok(())
+    }
+
+    fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error> {
+        match kind {
+            IndexKind::Array => {
+                self.emit(Instruction::LoadArrayElement);
+            }
+            IndexKind::Map => {
+                self.emit(Instruction::LoadMapElement);
+            }
+        }
+        Ok(())
+    }
+
+    fn binary_op(&mut self, op: BinOp) -> Result<(), Self::Error> {
+        self.emit(Self::binop_instruction(op));
+        Ok(())
+    }
+
+    fn unary_op(&mut self, op: UnaryOp) -> Result<(), Self::Error> {
+        self.emit(Self::unaryop_instruction(op));
+        Ok(())
+    }
+
+    fn alloc_array(&mut self, len: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::AllocArray(len));
+        Ok(())
+    }
+
+    fn alloc_map(&mut self, len: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::AllocMap(len));
+        Ok(())
+    }
+
+    fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error> {
+        let class_obj_idx = self
+            .class_object_indices
+            .get(class_name)
+            .copied()
+            .unwrap_or_else(|| panic!("undefined class: {class_name}"));
+        self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
+            class_obj_idx,
+        )));
+        Ok(())
+    }
+
+    fn copy_top(&mut self, offset: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::Copy(offset));
+        Ok(())
+    }
+
+    fn store_field(&mut self, field_idx: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::StoreField(field_idx));
+        Ok(())
+    }
+
+    fn alloc_enum_variant(&mut self, enum_name: &str, variant: &str) -> Result<(), Self::Error> {
+        let enum_obj_idx = self
+            .enum_object_indices
+            .get(enum_name)
+            .copied()
+            .unwrap_or_else(|| panic!("undefined enum: {enum_name}"));
+
+        let variant_idx = self
+            .enum_variants
+            .get(enum_name)
+            .and_then(|variants| variants.get(variant))
+            .copied()
+            .unwrap_or_else(|| panic!("undefined variant: {enum_name}.{variant}"));
+
+        #[allow(clippy::cast_possible_wrap)]
+        let idx = self.add_constant(ConstValue::Int(variant_idx as i64));
+        self.emit(Instruction::LoadConst(idx));
+        self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
+            enum_obj_idx,
+        )));
+        Ok(())
+    }
+
+    fn discriminant(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::Discriminant);
+        Ok(())
+    }
+
+    fn type_tag(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::TypeTag);
+        Ok(())
+    }
+
+    fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error> {
+        // MIR `Rvalue::Len` is array length.
+        let global_idx = self
+            .globals
+            .get("baml.Array.length")
+            .copied()
+            .unwrap_or_else(|| panic!("undefined function: baml.Array.length"));
+        pull_semantics::walk_place_pull(self, place)?;
+        self.emit(Instruction::Call(GlobalIndex::from_raw(global_idx)));
+        Ok(())
+    }
+
+    fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
+        // Emit instanceof check using CmpOp::InstanceOf for class aliases.
+        if let Ty::Class(tn) | Ty::TypeAlias(tn) = ty {
+            let class_name_str = tn.display_name.as_str();
+            if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
+                let class_const =
+                    self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
+                self.emit(Instruction::LoadConst(class_const));
+                self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
+            } else {
+                self.emit(Instruction::Pop(1));
+                let idx = self.add_constant(ConstValue::Bool(false));
+                self.emit(Instruction::LoadConst(idx));
+            }
+        } else {
+            self.emit(Instruction::Pop(1));
+            let idx = self.add_constant(ConstValue::Bool(false));
+            self.emit(Instruction::LoadConst(idx));
+        }
+        Ok(())
+    }
+}
+
+impl StackEffectSink for StackifyCodegen<'_, '_> {
+    fn store_field_value(&mut self, field: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::StoreField(field));
+        Ok(())
+    }
+
+    fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error> {
+        match kind {
+            IndexKind::Array => self.emit(Instruction::StoreArrayElement),
+            IndexKind::Map => self.emit(Instruction::StoreMapElement),
+        };
+        Ok(())
+    }
+
+    fn pop_values(&mut self, n: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::Pop(n));
+        Ok(())
+    }
+
+    fn push_watch_channel(
+        &mut self,
+        local: Local,
+        channel_name: Option<&str>,
+    ) -> Result<(), Self::Error> {
+        // Watched locals must be `Real` and therefore must have slots.
+        let _slot = self.local_slot_or_panic(local, "WatchOptions/watch initialization");
+        let channel = channel_name
+            .unwrap_or_else(|| panic!("watched local {local} must have a user-visible name"))
+            .to_string();
+        let channel_obj_idx = self.objects.len();
+        self.objects.push(Object::String(channel));
+        let channel_const_idx =
+            self.add_constant(ConstValue::Object(ObjectIndex::from_raw(channel_obj_idx)));
+        self.emit(Instruction::LoadConst(channel_const_idx));
+        Ok(())
+    }
+
+    fn watch_local(&mut self, local: Local) -> Result<(), Self::Error> {
+        let slot = self.local_slot_or_panic(local, "Watch");
+        self.emit(Instruction::Watch(slot));
+        Ok(())
+    }
+
+    fn assert_top(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::Assert);
+        Ok(())
+    }
+}
+
 // ============================================================================
 // Public Entry Point
 // ============================================================================
@@ -1264,6 +1377,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 pub(crate) fn compile_mir_function(mir: &MirFunction, ctx: MirCodegenContext<'_, '_>) -> Function {
     // Run analysis
     let analysis = AnalysisResult::analyze(mir);
+    #[cfg(debug_assertions)]
+    crate::verifier::verify_mir_emit_invariants(mir, &analysis);
 
     // Compile with stackification
     let codegen = StackifyCodegen::new(ctx, analysis);

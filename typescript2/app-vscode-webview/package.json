@@ -14,9 +14,7 @@
     "test:unit": "vitest --project unit",
     "test:unit:run": "vitest run --project unit",
     "test:browser": "vitest --project browser",
-    "test:browser:run": "vitest run --project browser",
-    "test:hmr": "vitest --project hmr",
-    "test:hmr:run": "vitest run --project hmr"
+    "test:browser:run": "vitest run --project browser"
   },
   "dependencies": {
     "@b/pkg-playground": "workspace:*",

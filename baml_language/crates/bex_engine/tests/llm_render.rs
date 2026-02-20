@@ -6,7 +6,7 @@
 //! 3. `render_prompt` correctly renders templates with arguments
 
 use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
-use bex_engine::Ty;
+use bex_engine::{CancellationToken, Ty};
 use bex_external_types::BexExternalAdt;
 use bex_heap::{BexExternalValue, builtin_types::owned::LlmPrimitiveClient};
 
@@ -242,6 +242,7 @@ function test_render() -> int {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await;
 
@@ -298,6 +299,7 @@ function get_prompt() -> baml.llm.PromptAst {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await;
 
@@ -370,6 +372,7 @@ function test_build_request() -> int {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await;
     assert!(result.is_ok(), "build_request should succeed: {result:?}");
@@ -414,6 +417,7 @@ function test_call_llm() -> unknown {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await;
 
@@ -462,6 +466,7 @@ function test_call_llm() -> string {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await;
 
@@ -511,6 +516,7 @@ function test_call_llm() -> unknown {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await;
 
@@ -572,6 +578,7 @@ function get_prompt() -> baml.llm.PromptAst {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .expect("failed to render prompt that calls template_string Greet(name)");
@@ -617,6 +624,7 @@ function get_prompt() -> baml.llm.PromptAst {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .expect("failed to render prompt with nested template_strings Outer() -> Inner()");
@@ -668,6 +676,7 @@ function get_prompt() -> baml.llm.PromptAst {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .expect("failed to render prompt with 2-arg template_string Describe(label, person)");
@@ -713,6 +722,7 @@ function get_prompt() -> baml.llm.PromptAst {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .expect("failed to render prompt that calls parameterless template_string Header()");

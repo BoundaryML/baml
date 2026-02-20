@@ -267,6 +267,18 @@ macro_rules! with_builtins {
                     /// Abort execution with an error message.
                     #[sys_op]
                     fn panic(message: String);
+
+                    /// Check if the current function call has been cancelled.
+                    ///
+                    /// This is a sync sys_op (Ready path), so it bypasses the
+                    /// VM's biased `tokio::select!` and returns directly to
+                    /// BAML code. In practice, `true` is only observable if
+                    /// all preceding sys_ops in the current execution were also
+                    /// sync — any async op (sleep, HTTP, etc.) would have
+                    /// triggered VM-level cancellation at its Await first.
+                    #[sys_op]
+                    #[uses(engine_ctx)]
+                    fn cancellation_requested() -> bool;
                 }
 
                 // =====================================================================

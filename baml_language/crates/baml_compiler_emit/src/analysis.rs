@@ -15,9 +15,10 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_compiler_mir::{
-    AggregateKind, BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind,
-    Terminator,
+    BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator,
 };
+
+use crate::stack_carry;
 
 // ============================================================================
 // Data Structures
@@ -158,12 +159,39 @@ impl AnalysisResult {
         // Step 4: Collect def-use information
         let def_use = collect_def_use(mir);
 
-        // Step 5: Build jump threading redirect map
-        let redirect_targets = build_redirect_targets(mir);
+        // Step 5: Conservative jump threading (truly empty goto-only blocks).
+        let initial_redirect_targets = build_redirect_targets(mir);
 
-        // Step 6: Classify each local (including phi-like detection and copy propagation)
-        let (classifications, copy_sources) =
-            classify_locals(mir, &def_use, &dominators, &predecessors, &redirect_targets);
+        // Step 6: First classification pass.
+        let (mut classifications, mut copy_sources) = classify_locals(
+            mir,
+            &def_use,
+            &dominators,
+            &predecessors,
+            &initial_redirect_targets,
+        );
+
+        // Step 7: Enhanced jump threading using classification info.
+        // Some blocks have statements that produce no bytecode (Virtual, Dead,
+        // CopyOf assignments). These are effectively empty and can be threaded.
+        let redirect_targets = build_redirect_targets_with_classifications(mir, &classifications);
+
+        // Step 8: Re-run classification once if redirects changed.
+        // `ReturnPhi` checks walk through redirects, so this lets classification
+        // observe the final threaded CFG without requiring a general fixpoint loop.
+        //
+        // NOTE: This bounded refinement is sufficient for the current pipeline because
+        // redirect construction only depends on `Virtual | Dead | CopyOf`, which are
+        // not redirect-sensitive today. If future MIR optimizations introduce feedback
+        // where redirect-sensitive classifications can make blocks newly threadable
+        // (or iterative transforms like branch folding/DCE rewrite CFG edges between
+        // rounds), upgrade this to a true fixed-point convergence loop.
+        if redirect_targets != initial_redirect_targets {
+            let (reclassified, recopy_sources) =
+                classify_locals(mir, &def_use, &dominators, &predecessors, &redirect_targets);
+            classifications = reclassified;
+            copy_sources = recopy_sources;
+        }
 
         Self {
             classifications,
@@ -263,10 +291,14 @@ fn compute_rpo(mir: &MirFunction) -> Vec<BlockId> {
     postorder
 }
 
-/// Check if a block is a "dead" unreachable block that can be skipped during emission.
+// ============================================================================
+// Emission Helpers
+// ============================================================================
+
+/// Check if a block is a "dead" unreachable block that may be skipped during
+/// emission without changing observable behavior.
 ///
 /// A block is dead if it has no statements and terminates with `Unreachable`.
-/// Such blocks exist only as targets for impossible control flow paths.
 pub(crate) fn is_dead_unreachable_block(block: &baml_compiler_mir::BasicBlock) -> bool {
     block.statements.is_empty() && matches!(block.terminator, Some(Terminator::Unreachable))
 }
@@ -319,6 +351,68 @@ fn resolve_redirect_chain(start: BlockId, goto_targets: &HashMap<BlockId, BlockI
     }
 
     current
+}
+
+/// Build redirect targets using local classification info.
+///
+/// Like [`build_redirect_targets`] but also threads through blocks whose
+/// statements all target locals classified as [`LocalClassification::Virtual`],
+/// [`LocalClassification::Dead`], or [`LocalClassification::CopyOf`]. These
+/// assignments produce no bytecode during emission, making the block
+/// effectively empty.
+fn build_redirect_targets_with_classifications(
+    mir: &MirFunction,
+    classifications: &HashMap<Local, LocalClassification>,
+) -> HashMap<BlockId, BlockId> {
+    let mut goto_targets: HashMap<BlockId, BlockId> = HashMap::new();
+
+    for block in &mir.blocks {
+        if let Some(target) = threadable_goto_target(block, classifications) {
+            goto_targets.insert(block.id, target);
+        }
+    }
+
+    // Resolve chains (A -> B -> C becomes A -> C).
+    let mut resolved: HashMap<BlockId, BlockId> = HashMap::new();
+
+    for &block_id in goto_targets.keys() {
+        let final_target = resolve_redirect_chain(block_id, &goto_targets);
+        if final_target != block_id {
+            resolved.insert(block_id, final_target);
+        }
+    }
+
+    resolved
+}
+
+/// Return the goto target if this block is threadable as an effectively-empty
+/// redirect source under the given local classifications.
+pub(crate) fn threadable_goto_target(
+    block: &baml_compiler_mir::BasicBlock,
+    classifications: &HashMap<Local, LocalClassification>,
+) -> Option<BlockId> {
+    let Some(Terminator::Goto { target }) = &block.terminator else {
+        return None;
+    };
+
+    let effectively_empty = block.statements.iter().all(|stmt| {
+        matches!(
+            &stmt.kind,
+            StatementKind::Assign {
+                destination: Place::Local(local),
+                ..
+            } if matches!(
+                classifications.get(local),
+                Some(
+                    LocalClassification::Virtual
+                    | LocalClassification::Dead
+                    | LocalClassification::CopyOf
+                )
+            )
+        )
+    });
+
+    effectively_empty.then_some(*target)
 }
 
 // ============================================================================
@@ -722,6 +816,7 @@ fn classify_locals(
 ) -> (HashMap<Local, LocalClassification>, HashMap<Local, Local>) {
     let mut classifications = HashMap::new();
     let mut copy_sources: HashMap<Local, Local> = HashMap::new();
+    let mut stack_carry_candidates: HashMap<Local, stack_carry::StackCarryKind> = HashMap::new();
 
     for (idx, _local_decl) in mir.locals.iter().enumerate() {
         let local = Local(idx);
@@ -750,7 +845,9 @@ fn classify_locals(
             // Dead local: either an unused compiler temp, or an unused wildcard binding.
             // Skip _0 which is implicitly used by return.
             LocalClassification::Dead
-        } else if let Some(source) = get_copy_source(du, mir, def_use) {
+        } else if idx != 0
+            && let Some(source) = get_copy_source(du, mir, def_use)
+        {
             // Copy propagation: this local is just `_X = copy _Y` where _Y is suitable.
             // We can eliminate _X and use _Y directly at all use sites.
             copy_sources.insert(local, source);
@@ -758,26 +855,30 @@ fn classify_locals(
         } else if can_be_virtual(du, dominators, mir, def_use, predecessors) {
             LocalClassification::Virtual
         } else if is_phi_like(local, du, mir, predecessors, def_use) {
-            // Phi-like: assigned in each predecessor, used once at join point.
-            // At def sites: emit rvalue but NOT StoreVar (leave on stack).
-            // At use site: don't emit LoadVar (value already on stack).
-            LocalClassification::PhiLike
+            // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);
+            LocalClassification::Real
         } else if is_return_phi(local, mir, def_use, redirect_targets) {
-            // Return-phi: _0 is assigned immediately before Return in each defining block.
-            // At def sites: emit rvalue but NOT StoreVar (leave on stack).
-            // At Return: don't emit LoadVar for _0 (value already on stack).
-            LocalClassification::ReturnPhi
+            // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::ReturnPhi);
+            LocalClassification::Real
         } else if is_call_result_immediate(local, du, mir) {
-            // Call result used immediately in continuation block.
-            // At def site (after Call): don't emit StoreVar (leave on stack).
-            // At use site: don't emit LoadVar (value already on stack from Call).
-            LocalClassification::CallResultImmediate
+            // Stack-carry candidate validated in a later stack simulation pass.
+            stack_carry_candidates.insert(local, stack_carry::StackCarryKind::CallResultImmediate);
+            LocalClassification::Real
         } else {
             LocalClassification::Real
         };
 
         classifications.insert(local, classification);
     }
+
+    stack_carry::refine_stack_carry_classifications(
+        mir,
+        def_use,
+        &stack_carry_candidates,
+        &mut classifications,
+    );
 
     (classifications, copy_sources)
 }
@@ -1033,6 +1134,12 @@ fn can_be_virtual(
         return !du.uses.is_empty();
     }
 
+    // For non-constant rvalues, require exactly one definition site.
+    // Virtual emission inlines `du.def` directly; multiple defs would be ambiguous.
+    if !has_single_def {
+        return false;
+    }
+
     // For non-constant rvalues, must have exactly one use
     if du.uses.len() != 1 {
         return false;
@@ -1059,7 +1166,7 @@ fn can_be_virtual(
                 if has_side_effects_between(
                     mir,
                     def.block,
-                    def_idx,
+                    def_idx + 1,
                     mir.block(def.block).statements.len(),
                     &def.rvalue,
                     def_use,
@@ -1072,8 +1179,14 @@ fn can_be_virtual(
                     return false;
                 }
                 // Check for intervening side effects
-                if has_side_effects_between(mir, def.block, def_idx, use_idx, &def.rvalue, def_use)
-                {
+                if has_side_effects_between(
+                    mir,
+                    def.block,
+                    def_idx + 1,
+                    use_idx,
+                    &def.rvalue,
+                    def_use,
+                ) {
                     return false;
                 }
             }
@@ -1081,6 +1194,13 @@ fn can_be_virtual(
     } else {
         // Cross-block def-use: the rvalue will be re-evaluated at the use site,
         // so we must ensure no path from def to use modifies any dependency.
+        //
+        // Reads through projections (field/index) are especially hard to reason about
+        // with this local-only analysis because writes to `x.field` don't appear as
+        // defs of `x`. Be conservative and avoid cross-block inlining for those.
+        if rvalue_has_projection_reads(&def.rvalue) {
+            return false;
+        }
         //
         // Rather than walking all intermediate blocks (which requires full path
         // enumeration), we use a sound conservative check: if any local read by
@@ -1124,7 +1244,7 @@ fn can_be_virtual(
         if has_side_effects_between(
             mir,
             def.block,
-            def_idx,
+            def_idx + 1,
             mir.block(def.block).statements.len(),
             &def.rvalue,
             def_use,
@@ -1144,11 +1264,51 @@ fn can_be_virtual(
     true
 }
 
+/// Whether evaluating this rvalue reads through any field/index projection.
+///
+/// Cross-block virtual inlining re-evaluates the rvalue at use site. Projection
+/// reads are difficult to prove safe with local-only def-use, so we conservatively
+/// block cross-block virtualization when they appear.
+fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
+    fn place_has_projection(place: &Place) -> bool {
+        match place {
+            Place::Local(_) => false,
+            Place::Field { .. } | Place::Index { .. } => true,
+        }
+    }
+
+    fn operand_has_projection(operand: &Operand) -> bool {
+        match operand {
+            Operand::Copy(place) | Operand::Move(place) => place_has_projection(place),
+            Operand::Constant(_) => false,
+        }
+    }
+
+    match rvalue {
+        Rvalue::Use(operand) => operand_has_projection(operand),
+        Rvalue::BinaryOp { left, right, .. } => {
+            operand_has_projection(left) || operand_has_projection(right)
+        }
+        Rvalue::UnaryOp { operand, .. } => operand_has_projection(operand),
+        Rvalue::Array(elements) => elements.iter().any(operand_has_projection),
+        Rvalue::Map(entries) => entries
+            .iter()
+            .any(|(key, value)| operand_has_projection(key) || operand_has_projection(value)),
+        Rvalue::Aggregate { fields, .. } => fields.iter().any(operand_has_projection),
+        Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+            place_has_projection(place)
+        }
+        Rvalue::IsType { operand, .. } => operand_has_projection(operand),
+    }
+}
+
 /// Check for side effects between two statement indices in a block.
 ///
 /// A side effect is anything that could change the value of the rvalue when re-evaluated:
 /// - Function calls (may have side effects)
 /// - Assignments to variables that the rvalue reads from (transitively)
+///
+/// Checks the half-open range `[start, end)`.
 fn has_side_effects_between(
     mir: &MirFunction,
     block_id: BlockId,
@@ -1163,7 +1323,7 @@ fn has_side_effects_between(
     // Only follow definitions that happen BEFORE start (the current statement).
     let rvalue_reads = collect_transitive_reads(rvalue, def_use, block_id, start);
 
-    for stmt_idx in (start + 1)..end {
+    for stmt_idx in start..end {
         let stmt = &block.statements[stmt_idx];
         if has_side_effect(&stmt.kind, &rvalue_reads) {
             return true;
@@ -1258,13 +1418,12 @@ fn is_pure_constant(rvalue: &Rvalue) -> bool {
 }
 
 /// Check if a local is a "call result immediate": defined by Call/Await/DispatchFuture,
-/// used exactly once at the start of the continuation block.
+/// used exactly once in the continuation block.
 ///
 /// Call result immediate applies when:
 /// 1. The local is defined by a Call/Await/DispatchFuture terminator
 /// 2. It has exactly one use
 /// 3. The use is in the continuation block (target of the Call)
-/// 4. The use is at statement index 0 (first thing in the continuation block)
 ///
 /// This allows us to:
 /// - After Call: don't emit `StoreVar` (leave result on stack)
@@ -1287,101 +1446,21 @@ fn is_call_result_immediate(local: Local, du: &LocalDefUse, mir: &MirFunction) -
         return false;
     }
 
-    let use_loc = &du.uses[0];
-
-    // The use must be at the very start of the continuation block:
-    // - statement index 0 (first statement), OR
-    // - Terminator if the block has no statements (use is directly in terminator)
-    let use_block = mir.block(use_loc.block);
-    let is_first_use = use_loc.statement_ref == StatementRef::Statement(0)
-        || (use_loc.statement_ref == StatementRef::Terminator && use_block.statements.is_empty());
-    if !is_first_use {
-        return false;
-    }
-
     // Get the defining block and check that its terminator is Call/Await/DispatchFuture
-    // with the continuation block being the use block
+    // that defines this local.
     let def_block = mir.block(def.block);
-    let continuation_target = match &def_block.terminator {
-        Some(Terminator::Call {
-            destination,
-            target,
-            ..
-        }) => {
-            // Verify this Call defines our local
-            if matches!(destination, Place::Local(l) if *l == local) {
-                Some(*target)
-            } else {
-                None
-            }
+    match &def_block.terminator {
+        Some(Terminator::Call { destination, .. }) => {
+            matches!(destination, Place::Local(l) if *l == local)
         }
-        Some(Terminator::Await {
-            destination,
-            target,
-            ..
-        }) => {
-            // Verify this Await defines our local
-            if matches!(destination, Place::Local(l) if *l == local) {
-                Some(*target)
-            } else {
-                None
-            }
+        Some(Terminator::Await { destination, .. }) => {
+            matches!(destination, Place::Local(l) if *l == local)
         }
-        Some(Terminator::DispatchFuture { future, resume, .. }) => {
-            // Verify this DispatchFuture defines our local
-            if matches!(future, Place::Local(l) if *l == local) {
-                Some(*resume)
-            } else {
-                None
-            }
+        Some(Terminator::DispatchFuture { future, .. }) => {
+            matches!(future, Place::Local(l) if *l == local)
         }
-        _ => None,
-    };
-
-    // Check that the continuation block is the use block
-    if continuation_target != Some(use_loc.block) {
-        return false;
+        _ => false,
     }
-
-    // Critical check 1: if the continuation block ends with a Call or DispatchFuture,
-    // we cannot use CallResultImmediate. The reason is stack ordering:
-    // - Call/DispatchFuture expects stack layout: [callee, arg0, arg1, ...]
-    // - If we leave the call result on the stack and then emit the callee, we get
-    //   [result, callee] instead of [callee, result]
-    //
-    // This happens even if the local is used indirectly (e.g., through a copy that
-    // gets Virtual classification), because the intermediate copy's emit_operand_pull
-    // will emit nothing for the CallResultImmediate source.
-    let use_block = mir.block(use_loc.block);
-    if matches!(
-        &use_block.terminator,
-        Some(Terminator::DispatchFuture { .. } | Terminator::Call { .. })
-    ) {
-        return false;
-    }
-
-    // Critical check 2: if ANY statement in the continuation block is a class constructor
-    // (Aggregate::Class), we cannot use CallResultImmediate. The emit code for class
-    // constructors pushes AllocInstance onto the stack BEFORE consuming field operands.
-    // If the call result feeds into a class field (directly or through a Virtual/copy
-    // chain), the AllocInstance will bury the call result on the stack and the field
-    // emit will find the wrong value.
-    for stmt in &use_block.statements {
-        if matches!(
-            &stmt.kind,
-            StatementKind::Assign {
-                value: Rvalue::Aggregate {
-                    kind: AggregateKind::Class(_),
-                    ..
-                },
-                ..
-            }
-        ) {
-            return false;
-        }
-    }
-
-    true
 }
 
 /// Check if a local is a simple copy of another local (for copy propagation).

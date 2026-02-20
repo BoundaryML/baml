@@ -71,7 +71,8 @@ export type WorkerOutMessage =
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'vfsFileChanged'; path: string; content: string }
-  | { type: 'vfsFileDeleted'; path: string };
+  | { type: 'vfsFileDeleted'; path: string }
+  | { type: 'hotReloadTestString'; value: string };
 
 // ---------------------------------------------------------------------------
 // Main thread → Worker messages

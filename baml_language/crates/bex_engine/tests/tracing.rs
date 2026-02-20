@@ -9,7 +9,9 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue, HostSpanContext, RuntimeEvent, SpanId};
+use bex_engine::{
+    BexEngine, BexExternalValue, CancellationToken, HostSpanContext, RuntimeEvent, SpanId,
+};
 use bex_events::{EventKind, FunctionEvent};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -81,6 +83,7 @@ async fn trace_single_function() {
             sys_types::CallId::default(),
             Some(host_ctx),
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -127,6 +130,7 @@ async fn trace_nested_expression_calls_no_child_spans() {
             sys_types::CallId::default(),
             Some(host_ctx),
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -173,6 +177,7 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
             sys_types::CallId::default(),
             Some(host_ctx),
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -213,6 +218,7 @@ async fn trace_sibling_expression_calls_no_child_spans() {
             sys_types::CallId::default(),
             Some(host_ctx),
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -245,6 +251,7 @@ async fn trace_captures_root_args() {
             sys_types::CallId::default(),
             Some(host_ctx),
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -286,6 +293,7 @@ async fn trace_captures_root_result() {
             sys_types::CallId::default(),
             Some(host_ctx),
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();

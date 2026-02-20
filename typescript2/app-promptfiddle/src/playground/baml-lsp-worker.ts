@@ -29,6 +29,7 @@ import initWasm, {
   LspResponse,
   type PlaygroundNotification,
   start as setupLogger,
+  hotReloadTestString,
 } from "@b/bridge_wasm";
 
 import type {
@@ -391,6 +392,7 @@ self.onmessage = async (event: MessageEvent) => {
 
     // 7. Notify main thread and push initial state
     postOut({ type: "ready" });
+    postOut({ type: "hotReloadTestString", value: hotReloadTestString() });
     // notifySourceChanged();
 
     return;
@@ -461,6 +463,7 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "requestState":
       runtime?.requestPlaygroundState();
+      postOut({ type: "hotReloadTestString", value: hotReloadTestString() });
       return;
   }
   msg satisfies never;

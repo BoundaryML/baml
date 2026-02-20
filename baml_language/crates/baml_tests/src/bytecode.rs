@@ -264,6 +264,8 @@ fn setup_and_exec_program(
 /// Helper struct for testing VM execution with direct bytecode.
 pub struct BytecodeProgram {
     pub arity: usize,
+    /// Number of additional frame-local slots to preallocate.
+    pub real_local_count: usize,
     pub instructions: Vec<bex_vm_types::Instruction>,
     pub constants: Vec<ConstValue>,
     pub expected: VmExecState,
@@ -282,6 +284,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
     let function = bex_vm_types::Function {
         name: "test_fn".to_string(),
         arity: input.arity,
+        real_local_count: input.real_local_count,
         bytecode: bex_vm_types::Bytecode {
             source_lines: vec![1; input.instructions.len()],
             scopes: vec![0; input.instructions.len()],
@@ -292,7 +295,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         },
         kind: bex_vm_types::FunctionKind::Bytecode,
         locals_in_scope: {
-            let mut names = Vec::with_capacity(input.arity + 1);
+            let mut names = Vec::with_capacity(input.arity + input.real_local_count + 1);
             names.push("<fn test_fn>".to_string());
             names.resize_with(names.capacity(), String::new);
             vec![names]

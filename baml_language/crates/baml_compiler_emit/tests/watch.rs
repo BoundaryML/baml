@@ -22,7 +22,6 @@ fn watch_primitive() -> anyhow::Result<()> {
             "primitive",
             vec![
                 // Initialize locals with null (only "value" needs a slot now, _0 is ReturnPhi)
-                Instruction::InitLocals(1),
                 // Initialize watched variable
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("value".to_string()),
@@ -96,7 +95,6 @@ fn viz_header_before_while_emits_viz_enter_exit() -> anyhow::Result<()> {
         expected: vec![(
             "header_before_while",
             vec![
-                Instruction::InitLocals(1),            // local x init
                 Instruction::LoadConst(Value::Int(0)), // x = 0
                 Instruction::StoreVar("x".to_string()),
                 Instruction::NotifyBlock(0), // //# LoopHeader

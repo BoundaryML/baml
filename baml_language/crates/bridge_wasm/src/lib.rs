@@ -35,6 +35,12 @@
 //!
 //! // Call a function (protobuf in/out)
 //! const result = await runtime.callFunction('Greet', argsProtoBytes);
+//!
+//! // Call a function with cancellation support
+//! const callId = 42; // caller-provided unique ID
+//! const resultPromise = runtime.callFunction('Greet', argsProtoBytes, callId);
+//! // Cancel from another microtask:
+//! runtime.cancelCall(callId);
 //! ```
 
 mod error;
@@ -46,10 +52,13 @@ mod wasm_http;
 mod wasm_lsp;
 mod wasm_playground;
 
+use std::{cell::RefCell, collections::HashMap};
+
 pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
+use sys_types::CancellationToken;
 use wasm_bindgen::prelude::*;
 
 static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
@@ -141,6 +150,8 @@ extern "C" {
 #[wasm_bindgen]
 pub struct BamlWasmRuntime {
     bex: Box<dyn bex_project::BexLsp>,
+    /// Active calls keyed by caller-provided ID. WASM is single-threaded so `RefCell` suffices.
+    active_calls: RefCell<HashMap<u32, CancellationToken>>,
 }
 
 // SAFETY: wasm32-unknown-unknown is single-threaded, so unwind safety is
@@ -190,7 +201,10 @@ impl BamlWasmRuntime {
             bex_project::BamlVFS::new(vfs),
         );
 
-        Ok(BamlWasmRuntime { bex: Box::new(bex) })
+        Ok(BamlWasmRuntime {
+            bex: Box::new(bex),
+            active_calls: RefCell::new(HashMap::new()),
+        })
     }
 
     /// Call a BAML function for a specific project.
@@ -212,7 +226,8 @@ impl BamlWasmRuntime {
         project: String,
         name: &str,
         args_proto: &[u8],
-    ) -> Result<Vec<u8>, JsError> {
+    ) -> Result<Vec<u8>, JsValue> {
+        // Decode protobuf arguments
         let args = baml::cffi::HostFunctionArguments::decode(args_proto)
             .map_err(|e| JsError::new(&format!("Failed to decode arguments: {e}")))?;
 
@@ -221,11 +236,33 @@ impl BamlWasmRuntime {
 
         let call_id = sys_types::CallId(u64::from(id));
         let fs_path = bex_project::FsPath::from_str(project);
-        let result: bex_project::BexExternalValue = self
+
+        // Create cancellation token and register.
+        let cancel = CancellationToken::new();
+        self.active_calls.borrow_mut().insert(id, cancel.clone());
+
+        // Call the function.
+        let result = self
             .bex
-            .call_function_for_project(&fs_path, name, kwargs.into(), call_id)
-            .await
-            .map_err(|e| JsError::new(&format!("Function call failed: {e}")))?;
+            .call_function_for_project(&fs_path, name, kwargs.into(), call_id, cancel)
+            .await;
+
+        // Unregister from active calls.
+        self.active_calls.borrow_mut().remove(&id);
+
+        // Handle cancellation error.
+        let result = result.map_err(|e| -> JsValue {
+            if matches!(
+                e,
+                bex_project::RuntimeError::Engine(bex_engine::EngineError::Cancelled)
+            ) {
+                let err = js_sys::Error::new("Operation cancelled");
+                err.set_name("BamlCancelledError");
+                err.into()
+            } else {
+                JsError::new(&format!("Function call failed: {e}")).into()
+            }
+        })?;
 
         let cffi_value = external_to_cffi_value(&result)
             .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
@@ -237,6 +274,18 @@ impl BamlWasmRuntime {
     #[wasm_bindgen(js_name = handleLspNotification)]
     pub fn handle_notification(&self, notification: wasm_lsp::LspNotification) {
         self.bex.handle_notification(notification.into());
+    }
+
+    /// Cancel an in-flight function call by its ID.
+    ///
+    /// If the call is still running, it will be interrupted at the next
+    /// cancellation check point. If the call has already completed or the ID
+    /// is unknown, this is a no-op.
+    #[wasm_bindgen(js_name = cancelCall)]
+    pub fn cancel_call(&self, call_id: u32) {
+        if let Some(token) = self.active_calls.borrow_mut().remove(&call_id) {
+            token.cancel();
+        }
     }
 
     /// Handle an LSP request.

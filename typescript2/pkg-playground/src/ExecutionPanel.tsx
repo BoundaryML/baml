@@ -60,6 +60,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
+  const [hotReloadValue, setHotReloadValue] = useState<string | null>(null);
   const [envRequests, setEnvRequests] = useState<EnvVarRequest[]>([]);
   const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
   const [envInputs, setEnvInputs] = useState<Record<number, string>>({});
@@ -152,6 +153,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
         }
 
         case "ready": 
+          break;
+
+        case 'hotReloadTestString':
+          setHotReloadValue(data.value);
           break;
 
         case "vfsFileChanged":
@@ -273,6 +278,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port }) => {
 
   return (
     <>
+      {hotReloadValue != null && (
+        <span data-testid="hot-reload-test" style={{ display: 'none' }}>{hotReloadValue}</span>
+      )}
       {/* ──── Env vars ──── */}
       <div className="flex items-center gap-1.5 px-2.5 py-1 flex-wrap shrink-0 border-b border-vsc-border bg-vsc-surface">
         <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">ENV</span>

@@ -529,6 +529,7 @@ impl super::BexLsp for BexMulitProject {
         function_name: &str,
         args: crate::BexArgs,
         call_id: crate::CallId,
+        cancel: sys_types::CancellationToken,
     ) -> Result<crate::BexExternalValue, crate::RuntimeError> {
         use crate::bex::Bex;
         let project_root = self
@@ -538,7 +539,8 @@ impl super::BexLsp for BexMulitProject {
                 RuntimeError::Other(format!("Failed to convert FsPath to VfsPath: {e}"))
             })?;
         let bex = self.get_bex_for_project(&project_root)?;
-        bex.call_function(function_name, args, call_id).await
+        bex.call_function(function_name, args, call_id, cancel)
+            .await
     }
 
     fn request_playground_state(&self) {
@@ -564,6 +566,7 @@ impl crate::bex::Bex for BexMulitProject {
         function_name: &str,
         args: crate::BexArgs,
         call_id: crate::CallId,
+        cancel: sys_types::CancellationToken,
     ) -> Result<crate::BexExternalValue, crate::RuntimeError> {
         let project_root = match self.get_default_project() {
             Ok(project_root) => project_root,
@@ -574,7 +577,8 @@ impl crate::bex::Bex for BexMulitProject {
             }
         };
         let bex = self.get_bex_for_project(&project_root)?;
-        bex.call_function(function_name, args, call_id).await
+        bex.call_function(function_name, args, call_id, cancel)
+            .await
     }
 }
 

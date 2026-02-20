@@ -11,7 +11,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use bex_engine::{BexEngine, BexExternalValue, Ty};
+use bex_engine::{BexEngine, BexExternalValue, CancellationToken, Ty};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -47,6 +47,7 @@ async fn test_concurrent_calls_no_race() {
                     sys_types::CallId::default(),
                     None,
                     &[],
+                    CancellationToken::new(),
                 )
                 .await
         }));
@@ -96,6 +97,7 @@ async fn test_concurrent_allocations_no_overlap() {
                     sys_types::CallId::default(),
                     None,
                     &[],
+                    CancellationToken::new(),
                 )
                 .await?;
             count.fetch_add(1, Ordering::SeqCst);
@@ -154,6 +156,7 @@ async fn test_heap_stats_during_concurrent_execution() {
                     sys_types::CallId::default(),
                     None,
                     &[],
+                    CancellationToken::new(),
                 )
                 .await
         }));
@@ -210,8 +213,16 @@ async fn test_concurrent_string_allocations() {
         let func = (*func_name).to_string();
         handles.push(tokio::spawn(async move {
             let result = engine
-                .call_function(&func, vec![], sys_types::CallId::default(), None, &[])
+                .call_function(
+                    &func,
+                    vec![],
+                    sys_types::CallId::default(),
+                    None,
+                    &[],
+                    CancellationToken::new(),
+                )
                 .await?;
+
             Ok::<_, bex_engine::EngineError>((func, result))
         }));
     }
@@ -261,8 +272,16 @@ async fn test_concurrent_array_allocations() {
         let engine = Arc::clone(&engine);
         handles.push(tokio::spawn(async move {
             let result = engine
-                .call_function(func_name, vec![], sys_types::CallId::default(), None, &[])
+                .call_function(
+                    func_name,
+                    vec![],
+                    sys_types::CallId::default(),
+                    None,
+                    &[],
+                    CancellationToken::new(),
+                )
                 .await?;
+
             Ok::<_, bex_engine::EngineError>((size, result))
         }));
     }
@@ -315,6 +334,7 @@ async fn test_call_function_with_external_args() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .expect("call_function failed");
@@ -338,6 +358,7 @@ async fn test_call_function_with_external_args() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .expect("call_function failed");
@@ -352,6 +373,7 @@ async fn test_call_function_with_external_args() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .expect("call_function failed");

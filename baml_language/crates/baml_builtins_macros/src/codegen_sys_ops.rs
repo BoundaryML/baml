@@ -54,13 +54,23 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                     let extraction = sys_op_extraction(d, &collected.builtin_types);
 
                     let uses_ctx = d.uses_engine_ctx;
+                    let has_regular_params = d.receiver.is_some() || !d.params.is_empty();
+
                     let ctx_param = if uses_ctx {
-                        quote!(, ctx: &SysOpContext)
+                        if has_regular_params {
+                            quote!(, ctx: &SysOpContext)
+                        } else {
+                            quote!(ctx: &SysOpContext)
+                        }
                     } else {
                         quote!()
                     };
                     let ctx_arg = if uses_ctx {
-                        quote!(, ctx)
+                        if has_regular_params {
+                            quote!(, ctx)
+                        } else {
+                            quote!(ctx)
+                        }
                     } else {
                         quote!()
                     };

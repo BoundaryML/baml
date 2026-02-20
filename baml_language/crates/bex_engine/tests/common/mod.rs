@@ -9,7 +9,7 @@
 use std::{io::Write, sync::Arc};
 
 use baml_tests::bytecode::compile_source;
-use bex_engine::{BexEngine, BexExternalValue};
+use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
 use bex_vm_types::Program;
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
@@ -80,6 +80,7 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await;
 

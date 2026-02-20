@@ -5,7 +5,7 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue};
+use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -30,6 +30,7 @@ async fn test_handle_prevents_gc_collection() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -67,6 +68,7 @@ async fn test_array_preserved_through_gc() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -119,6 +121,7 @@ async fn test_gc_updates_forwarding_pointers() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -163,6 +166,7 @@ async fn test_multiple_handles_survive_gc() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -173,6 +177,7 @@ async fn test_multiple_handles_survive_gc() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -183,6 +188,7 @@ async fn test_multiple_handles_survive_gc() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -223,6 +229,7 @@ async fn test_primitive_returns_are_external_values() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -236,6 +243,7 @@ async fn test_primitive_returns_are_external_values() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -249,6 +257,7 @@ async fn test_primitive_returns_are_external_values() {
             sys_types::CallId::default(),
             None,
             &[],
+            CancellationToken::new(),
         )
         .await
         .unwrap();

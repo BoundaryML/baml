@@ -631,7 +631,6 @@ impl BexVm {
             self.get_object(function)
         );
 
-        self.stack.push(Value::Object(function));
         self.stack.extend(args.iter().copied());
 
         self.frames.push(Frame {
@@ -639,6 +638,11 @@ impl BexVm {
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
         });
+
+        // Entry functions need the same frame-local pre-allocation as normal
+        // bytecode calls now that INIT_LOCALS is gone from bytecode.
+        self.allocate_real_locals_for_frame(function)
+            .expect("entry point must be a valid function frame");
     }
 
     /// Restores the VM state and prepares it for the next execution.
@@ -852,7 +856,6 @@ impl BexVm {
         let locals_offset = self.stack.len();
 
         // Params.
-        self.stack.push(Value::Object(function_ptr));
         self.stack.extend(args.iter().copied());
 
         // Push the new frame.
@@ -861,9 +864,156 @@ impl BexVm {
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(locals_offset),
         });
+        self.allocate_real_locals_for_frame(function_ptr)?;
 
         // Execute the interrupt code and return the result.
         self.exec()
+    }
+
+    fn allocate_real_locals_for_frame(&mut self, function_ptr: HeapPtr) -> Result<(), VmError> {
+        let Object::Function(function) = self.get_object(function_ptr) else {
+            return Err(RuntimeError::Other("Invalid frame function".to_string()).into());
+        };
+
+        let new_len = self.stack.len() + function.real_local_count;
+        self.stack.resize(new_len, Value::Null);
+        Ok(())
+    }
+
+    #[inline]
+    fn local_slot_stack_index(locals_offset: StackIndex, slot: usize) -> StackIndex {
+        assert!(
+            slot > 0,
+            "local slot 0 is reserved and should never be materialized on stack"
+        );
+        StackIndex::from_raw(locals_offset.raw() + slot - 1)
+    }
+
+    fn resolve_callable_target(&self, callee_value: Value) -> Result<(HeapPtr, usize), VmError> {
+        let expected_type = FunctionType::Callable;
+        let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
+        let Object::Function(callee_fn) = self.get_object(callee_ptr) else {
+            return Err(InternalError::TypeError {
+                expected: expected_type.into(),
+                got: ObjectType::of(self.get_object(callee_ptr)).into(),
+            }
+            .into());
+        };
+        Ok((callee_ptr, callee_fn.arity))
+    }
+
+    fn execute_call_from_locals_offset(
+        &mut self,
+        callee_ptr: HeapPtr,
+        locals_offset: StackIndex,
+        arg_count: usize,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        // Can't call a function if it's not a function ¯\_(ツ)_/¯
+        let Object::Function(callee) = self.get_object(callee_ptr) else {
+            return Err(InternalError::TypeError {
+                expected: FunctionType::Callable.into(),
+                got: ObjectType::of(self.get_object(callee_ptr)).into(),
+            }
+            .into());
+        };
+
+        // Compiler should have already checked this so we could
+        // skip it but it's an easy and fast check.
+        if arg_count != callee.arity {
+            return Err(VmError::from(InternalError::InvalidArgumentCount {
+                expected: callee.arity,
+                got: arg_count,
+            }));
+        }
+
+        // Check if we've reached the max call stack size.
+        if self.frames.len() >= MAX_FRAMES {
+            return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
+        }
+
+        let is_traced = callee.trace;
+
+        match callee.kind {
+            FunctionKind::Native(func_ptr) => {
+                // Cast the type-erased pointer back to NativeFunction.
+                //
+                // SAFETY: The pointer was created by casting a NativeFunction to *const ()
+                // in attach_builtins, so it's safe to cast it back. We use transmute
+                // because Rust doesn't allow `as` casts from *const () to fn pointers.
+                // The explicit type parameters document exactly what we're doing.
+                let func = unsafe { std::mem::transmute::<*const (), NativeFunction>(func_ptr) };
+
+                // NOTE: (perf) could use drain(..) instead, or even maintain the arguments
+                // reference in the stack, using `swap` to insert the result.
+                let args = self.stack[locals_offset..].to_owned();
+
+                // Run Rust native function.
+                let result = func(self, &args)?;
+
+                // Drop function call and place result on top.
+                self.stack.drain(locals_offset..);
+                self.stack.push(result);
+            }
+
+            FunctionKind::Bytecode => {
+                // For traced functions, snapshot args before pushing the frame.
+                let trace_data = if is_traced {
+                    let args: Vec<Value> = self.stack[locals_offset..].to_owned();
+                    let callee_name = callee.name.clone();
+                    Some((callee_name, args))
+                } else {
+                    None
+                };
+
+                // Push the new frame.
+                self.frames.push(Frame {
+                    function: callee_ptr,
+                    instruction_ptr: 0,
+                    locals_offset,
+                });
+                self.allocate_real_locals_for_frame(callee_ptr)?;
+
+                // Update frame_idx to point to the new frame.
+                *frame_idx = self.frames.len() - 1;
+
+                // If traced, record the frame and yield a span notification.
+                if let Some((callee_name, args)) = trace_data {
+                    self.traced_frames.push(*frame_idx);
+
+                    return Ok(Some(VmExecState::SpanNotify(
+                        SpanNotification::FunctionEnter {
+                            function_name: callee_name,
+                            frame_depth: *frame_idx,
+                            args,
+                        },
+                    )));
+                }
+
+                // SAFETY: See `load_function` doc comment.
+                *function = unsafe { self.load_function(*frame_idx)? };
+            }
+
+            FunctionKind::SysOp(_) => {
+                return Err(InternalError::TypeError {
+                    expected: FunctionType::Callable.into(),
+                    got: FunctionType::from(&callee.kind).into(),
+                }
+                .into());
+            }
+
+            FunctionKind::NativeUnresolved => {
+                // This should never happen - native functions should be resolved
+                // by attach_builtins() before the VM runs.
+                panic!(
+                    "Unresolved native function '{}' - did you forget to call attach_builtins()?",
+                    callee.name
+                );
+            }
+        }
+
+        Ok(None)
     }
 
     // Runs filters and returns remaining notifications for the watched node.
@@ -1119,19 +1269,17 @@ impl BexVm {
                     self.stack.push(value);
                 }
 
-                Instruction::InitLocals(count) => {
-                    let new_len = self.stack.len() + count;
-                    self.stack.resize(new_len, Value::Null);
-                }
-
                 Instruction::LoadVar(index) => {
-                    let value = self.stack[self.frames[frame_idx].locals_offset + index];
+                    let slot =
+                        Self::local_slot_stack_index(self.frames[frame_idx].locals_offset, index);
+                    let value = self.stack[slot];
                     self.stack.push(value);
                 }
 
                 Instruction::StoreVar(index) => {
                     // Absolute index of the local variable.
-                    let local_var_index = self.frames[frame_idx].locals_offset + index;
+                    let local_var_index =
+                        Self::local_slot_stack_index(self.frames[frame_idx].locals_offset, index);
 
                     // New value.
                     let value = self.stack.ensure_pop()?;
@@ -2066,7 +2214,7 @@ impl BexVm {
                     let channel = self.as_string(&channel_value)?.to_owned();
 
                     let local_var_index =
-                        StackIndex::from_raw(self.frames[frame_idx].locals_offset.raw() + index);
+                        Self::local_slot_stack_index(self.frames[frame_idx].locals_offset, index);
                     let value = self.stack[local_var_index];
 
                     // The variable index should be the same as where the value is stored
@@ -2105,7 +2253,7 @@ impl BexVm {
 
                 Instruction::Unwatch(index) => {
                     let local_var_index =
-                        StackIndex::from_raw(self.frames[frame_idx].locals_offset.raw() + index);
+                        Self::local_slot_stack_index(self.frames[frame_idx].locals_offset, index);
 
                     // Remove from watched_vars tracking
                     if self.watched_vars.remove(&local_var_index).is_some() {
@@ -2127,7 +2275,7 @@ impl BexVm {
 
                 Instruction::Notify(index) => {
                     let local_var_index =
-                        StackIndex::from_raw(self.frames[frame_idx].locals_offset.raw() + index);
+                        Self::local_slot_stack_index(self.frames[frame_idx].locals_offset, index);
                     let var_node = NodeId::LocalVar(local_var_index);
 
                     let notifications = self.watch.copy_roots_reaching(var_node);
@@ -2141,132 +2289,48 @@ impl BexVm {
                     )));
                 }
 
-                Instruction::Call(arg_count) => {
-                    // Function calls are pushed onto the stack like this:
-                    //
-                    // [callee, arg1, arg2, ..., argN]
-                    //
-                    // The callee is a ref to the function object, and after
-                    // that we have all the function arguments. `arg_count` is
-                    // the number of arguments pushed after the callee.
-                    //
-                    // That's how we compute the relative offset of the callee
-                    // and it's local args in the stack.
-                    let locals_offset = self.stack.ensure_slot_from_top(arg_count)?;
+                Instruction::Call(callee) => {
+                    let callee_value = self.globals[callee];
+                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(arg_count)
+                        .ok_or(InternalError::NotEnoughItemsOnStack(arg_count))?;
+                    let locals_offset = StackIndex::from_raw(args_offset);
 
-                    // Get the function object from the stack.
-                    let local = &self.stack[locals_offset];
-
-                    let function_type = FunctionType::Callable;
-
-                    let index = self.as_object_ptr(local, function_type.into())?;
-
-                    // Can't call a function if it's not a function ¯\_(ツ)_/¯
-                    let Object::Function(callee) = self.get_object(index) else {
-                        return Err(InternalError::TypeError {
-                            expected: function_type.into(),
-                            got: ObjectType::of(self.get_object(index)).into(),
-                        }
-                        .into());
-                    };
-
-                    // Compiler should have already checked this so we could
-                    // skip it but it's an easy and fast check.
-                    if arg_count != callee.arity {
-                        return Err(VmError::from(InternalError::InvalidArgumentCount {
-                            expected: callee.arity,
-                            got: arg_count,
-                        }));
+                    if let Some(state) = self.execute_call_from_locals_offset(
+                        callee_ptr,
+                        locals_offset,
+                        arg_count,
+                        &mut frame_idx,
+                        &mut function,
+                    )? {
+                        return Ok(state);
                     }
+                }
 
-                    // Check if we've reached the max call stack size.
-                    if self.frames.len() >= MAX_FRAMES {
-                        return Err(VmError::RuntimeError(RuntimeError::StackOverflow));
-                    }
+                Instruction::CallIndirect => {
+                    // Stack layout: [arg1, arg2, ..., argN, callee]
+                    let callee_slot = self.stack.ensure_stack_top()?;
+                    let callee_value = self.stack[callee_slot];
+                    let (callee_ptr, arg_count) = self.resolve_callable_target(callee_value)?;
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(arg_count + 1)
+                        .ok_or(InternalError::NotEnoughItemsOnStack(arg_count + 1))?;
+                    let _popped_callee = self.stack.ensure_pop()?;
+                    let locals_offset = StackIndex::from_raw(args_offset);
 
-                    let is_traced = callee.trace;
-
-                    match callee.kind {
-                        FunctionKind::Native(func_ptr) => {
-                            // Cast the type-erased pointer back to NativeFunction.
-                            //
-                            // SAFETY: The pointer was created by casting a NativeFunction to *const ()
-                            // in attach_builtins, so it's safe to cast it back. We use transmute
-                            // because Rust doesn't allow `as` casts from *const () to fn pointers.
-                            // The explicit type parameters document exactly what we're doing.
-                            let func = unsafe {
-                                std::mem::transmute::<*const (), NativeFunction>(func_ptr)
-                            };
-
-                            // NOTE: (perf) could use drain(..) instead, or even maintain the arguments
-                            // reference in the stack, using `swap` to insert the result.
-                            let args = self.stack
-                                [StackIndex::from_raw(locals_offset.into_raw() + 1)..]
-                                .to_owned();
-
-                            // Run Rust native function.
-                            let result = func(self, &args)?;
-
-                            // Drop function call and place result on top.
-                            self.stack.drain(locals_offset..);
-                            self.stack.push(result);
-                        }
-
-                        FunctionKind::Bytecode => {
-                            // For traced functions, snapshot args before pushing the frame.
-                            let trace_data = if is_traced {
-                                let args_start = locals_offset.into_raw() + 1;
-                                let args: Vec<Value> =
-                                    self.stack[StackIndex::from_raw(args_start)..].to_owned();
-                                let callee_name = callee.name.clone();
-                                Some((callee_name, args))
-                            } else {
-                                None
-                            };
-
-                            // Push the new frame.
-                            self.frames.push(Frame {
-                                function: index,
-                                instruction_ptr: 0,
-                                locals_offset,
-                            });
-
-                            // Update frame_idx to point to the new frame.
-                            frame_idx = self.frames.len() - 1;
-
-                            // If traced, record the frame and yield a span notification.
-                            if let Some((callee_name, args)) = trace_data {
-                                self.traced_frames.push(frame_idx);
-
-                                return Ok(VmExecState::SpanNotify(
-                                    SpanNotification::FunctionEnter {
-                                        function_name: callee_name,
-                                        frame_depth: frame_idx,
-                                        args,
-                                    },
-                                ));
-                            }
-
-                            // SAFETY: See `load_function` doc comment.
-                            function = unsafe { self.load_function(frame_idx)? };
-                        }
-
-                        FunctionKind::SysOp(_) => {
-                            return Err(InternalError::TypeError {
-                                expected: FunctionType::Callable.into(),
-                                got: FunctionType::from(&callee.kind).into(),
-                            }
-                            .into());
-                        }
-
-                        FunctionKind::NativeUnresolved => {
-                            // This should never happen - native functions should be resolved
-                            // by attach_builtins() before the VM runs.
-                            panic!(
-                                "Unresolved native function '{}' - did you forget to call attach_builtins()?",
-                                callee.name
-                            );
-                        }
+                    if let Some(state) = self.execute_call_from_locals_offset(
+                        callee_ptr,
+                        locals_offset,
+                        arg_count,
+                        &mut frame_idx,
+                        &mut function,
+                    )? {
+                        return Ok(state);
                     }
                 }
 

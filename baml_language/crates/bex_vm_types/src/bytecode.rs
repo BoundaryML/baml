@@ -262,14 +262,22 @@ pub enum Instruction {
     /// Manually triggers notifications for a watched variable.
     Notify(usize),
 
-    /// Call a function.
+    /// Call a statically-known global function.
     ///
-    /// Format: `CALL n` where `n` is the number of arguments passed to the
-    /// function.
+    /// Format: `CALL g` where `g` is the global index of the callee function.
     ///
-    /// Arguments are pushed onto the eval stack and the name of the function
-    /// is right below them.
-    Call(usize),
+    /// Arguments are pushed onto the eval stack. The callee is read from
+    /// `Vm::globals[g]`, and arity is read from function metadata.
+    Call(GlobalIndex),
+
+    /// Call a function value from the eval stack.
+    ///
+    /// Format: `CALL_INDIRECT`.
+    ///
+    /// Stack layout: `[arg1, ..., argN, callee]`.
+    ///
+    /// Arity is read from the runtime callee function object.
+    CallIndirect,
 
     /// Return from a function.
     ///
@@ -336,17 +344,6 @@ pub enum Instruction {
     /// - Primitives: `int=0`, `string=1`, `bool=2`, `null=3`, `float=4`
     /// - Classes: assigned unique IDs starting at 100
     TypeTag,
-
-    /// Initialize local variable slots by pushing `n` null values onto the stack.
-    ///
-    /// Format: `INIT_LOCALS n` where `n` is the number of local variable slots
-    /// to allocate. Each slot is initialized to null.
-    ///
-    /// This is emitted once at the start of a function's bytecode to reserve
-    /// stack space for all "Real" local variables (i.e., those that aren't
-    /// virtual, phi-like, or dead). Parameters are not included since they
-    /// are already on the stack after [`Instruction::Call`].
-    InitLocals(usize),
 
     /// Halt execution with an unreachable code error.
     ///
@@ -535,7 +532,8 @@ impl std::fmt::Display for Instruction {
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
             Instruction::Await => f.write_str("AWAIT"),
-            Instruction::Call(n) => write!(f, "CALL {n}"),
+            Instruction::Call(callee) => write!(f, "CALL {callee}"),
+            Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),
@@ -553,7 +551,6 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
-            Instruction::InitLocals(n) => write!(f, "INIT_LOCALS {n}"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
         }
     }

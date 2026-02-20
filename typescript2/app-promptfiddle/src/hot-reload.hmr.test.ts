@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { chromium, Browser, Page } from 'playwright'
 import { spawn, ChildProcess, execSync } from 'child_process'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync, rmSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'node:url'
 
@@ -63,16 +63,16 @@ function waitForOutput(
 }
 
 /**
- * Start the Vite dev server and wait for it to be ready.
+ * Start the Next.js dev server and wait for it to be ready.
  * Uses a random port between 4900 and 4999.
  */
 async function startDevServer(): Promise<DevServer> {
-  // Use --force to re-optimize deps and avoid 504 "Outdated Optimize Dep" errors
-  // Use a random port between 4900 and 4999 to avoid conflicts
-  // Disable strictPort so Vite will try next available port if chosen port is in use
+  // Clear Next.js cache so it picks up fresh WASM binaries
+  rmSync(resolve(projectRoot, '.next'), { recursive: true, force: true })
+
   const randomPort = Math.floor(Math.random() * 100) + 4900
-  console.log(`[vite] Starting dev server in ${projectRoot} on port ${randomPort}`)
-  const proc = spawn('pnpm', ['dev', '--force', '--port', String(randomPort), '--strictPort', 'false'], {
+  console.log(`[next] Starting dev server in ${projectRoot} on port ${randomPort}`)
+  const proc = spawn('pnpm', ['dev', '--port', String(randomPort)], {
     cwd: projectRoot,
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: true,
@@ -85,23 +85,22 @@ async function startDevServer(): Promise<DevServer> {
 
   const portPromise = new Promise<number>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error(`Timeout waiting for Vite to start.\nOutput: ${output}`))
-    }, 30_000)
+      reject(new Error(`Timeout waiting for Next.js to start.\nOutput: ${output}`))
+    }, 60_000)
 
     const handler = (data: Buffer) => {
       const text = data.toString()
       output += text
       if (process.env.DEBUG_HMR) {
-        process.stdout.write(`[vite] ${text}`)
+        process.stdout.write(`[next] ${text}`)
       }
 
-      // Parse port from Vite output: "Local: http://localhost:XXXX/"
-      // Match against accumulated output in case the line arrives in multiple chunks
+      // Parse port from Next.js output: "- Local: http://localhost:XXXX"
       if (!port) {
         const match = output.match(/Local:\s*http:\/\/localhost:(\d+)/)
         if (match) {
           port = parseInt(match[1], 10)
-          console.log(`[vite] Dev server running on port ${port}`)
+          console.log(`[next] Dev server running on port ${port}`)
           clearTimeout(timeout)
           resolve(port)
         }
@@ -119,7 +118,7 @@ async function startDevServer(): Promise<DevServer> {
     proc.on('exit', (code) => {
       clearTimeout(timeout)
       if (code !== 0 && !port) {
-        reject(new Error(`Vite exited with code ${code}\nOutput: ${output}`))
+        reject(new Error(`Next.js exited with code ${code}\nOutput: ${output}`))
       }
     })
   })
@@ -255,23 +254,12 @@ describe('WASM Build Pipeline', () => {
       console.log(`[browser error] ${err.message}`)
     })
 
-    await page.goto(`http://localhost:${devServer.port}`)
+    await page.goto(`http://localhost:${devServer.port}`, { timeout: 120_000 })
 
-    const pageContent = await page.content()
-    console.log('[initial load] Page content:\n', pageContent)
-
-    // Wait for React to render (root div should have children)
-    console.log('[waiting] Waiting for React to mount...')
-    await page.waitForFunction(
-      () => {
-        const root = document.getElementById('root')
-        return root && root.children.length > 0
-      },
-      { timeout: 30_000 }
-    )
-    console.log('[ready] React has mounted')
-
-    await waitForHotReloadText(page, KNOWN_GOOD_STRING)
+    // Wait for the WASM worker to initialize and send hotReloadTestString.
+    // This implicitly waits for React mount + worker boot + WASM init.
+    console.log('[waiting] Waiting for hot-reload-test element...')
+    await waitForHotReloadText(page, KNOWN_GOOD_STRING, 120_000)
     const initialText = await getHotReloadText(page)
     expect(initialText).toBe(KNOWN_GOOD_STRING)
 
@@ -283,8 +271,12 @@ describe('WASM Build Pipeline', () => {
     // Rebuild WASM directly (blocks until complete)
     rebuildWasm()
 
-    // Verify the modified text appears via HMR (no page reload)
-    await waitForHotReloadText(page, MODIFIED_STRING)
+    // Next.js doesn't auto-detect changes to linked .wasm binaries the way
+    // Vite does, so we reload the page to pick up the rebuilt WASM module.
+    await page.reload({ timeout: 120_000 })
+
+    // Verify the modified text appears after the WASM rebuild
+    await waitForHotReloadText(page, MODIFIED_STRING, 120_000)
     const modifiedText = await getHotReloadText(page)
     expect(modifiedText).toBe(MODIFIED_STRING)
 

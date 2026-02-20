@@ -87,13 +87,12 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
             // Stackification with dead store elimination:
             // a is user variable, dead compiler temps (_5 for if result) are eliminated
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::PopJumpIfFalse(11),
+                Instruction::PopJumpIfFalse(9),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
@@ -101,9 +100,7 @@ fn while_loop_with_ending_if() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(-13),
+                Instruction::PopJumpIfFalse(-11),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
@@ -134,13 +131,12 @@ fn while_loop_with_break() -> anyhow::Result<()> {
             // Stackification with dead store elimination:
             // a is user variable, dead compiler temps (_5 for if result) are eliminated
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::CmpOp(CmpOp::Lt),
-                Instruction::PopJumpIfFalse(11),
+                Instruction::PopJumpIfFalse(9),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::BinOp(BinOp::Add),
@@ -148,9 +144,7 @@ fn while_loop_with_break() -> anyhow::Result<()> {
                 Instruction::LoadVar("a".to_string()),
                 Instruction::LoadConst(Value::Int(2)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(2),
-                Instruction::Jump(-13),
+                Instruction::PopJumpIfFalse(-11),
                 Instruction::LoadVar("a".to_string()),
                 Instruction::Return,
             ],
@@ -181,7 +175,6 @@ fn break_factorial() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate result local
-                Instruction::InitLocals(1),
                 // Initialize result = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("result".to_string()),
@@ -242,7 +235,6 @@ fn continue_factorial() -> anyhow::Result<()> {
             // MIR-based codegen with local pre-allocation
             vec![
                 // Pre-allocate locals
-                Instruction::InitLocals(2),
                 // Initialize result = 1
                 Instruction::LoadConst(Value::Int(1)),
                 Instruction::StoreVar("result".to_string()),
@@ -302,8 +294,9 @@ fn continue_nested() -> anyhow::Result<()> {
         "#,
         expected: vec![(
             "Nested",
-            // Jump threading eliminates intermediate jumps:
+            // Enhanced jump threading eliminates intermediate jumps:
             // - Inner continue jumps directly to inner condition
+            // - If-without-else else block threaded to outer condition
             // - Outer continue jumps directly to outer condition
             vec![
                 Instruction::LoadConst(Value::Bool(true)),
@@ -315,10 +308,8 @@ fn continue_nested() -> anyhow::Result<()> {
                 Instruction::PopJumpIfFalse(2),
                 Instruction::Jump(-2), // inner continue: direct to inner condition
                 Instruction::LoadConst(Value::Bool(false)),
-                Instruction::PopJumpIfFalse(2),
-                Instruction::Jump(-10), // outer continue: direct to outer condition
-                Instruction::Jump(-11), // outer loop back
-                Instruction::Jump(-7),  // inner loop back
+                Instruction::PopJumpIfFalse(-9), // threaded: else → outer condition
+                Instruction::Jump(-10),          // outer continue: direct to outer condition
             ],
         )],
     })
@@ -346,7 +337,6 @@ fn break_nested() -> anyhow::Result<()> {
             // Stackification with dead store elimination:
             // a is user variable, dead compiler temps are eliminated
             vec![
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("a".to_string()),
                 Instruction::LoadConst(Value::Bool(true)),
@@ -397,7 +387,6 @@ fn break_nested_with_variable_conditions() -> anyhow::Result<()> {
             "Nested",
             vec![
                 // let a = 5
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(5)),
                 Instruction::StoreVar("a".to_string()),
                 // outer while (x) - condition check
@@ -450,12 +439,11 @@ fn while_loop_with_conditional_break() -> anyhow::Result<()> {
             "CountDown",
             vec![
                 // let result = 0
-                Instruction::InitLocals(1),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::StoreVar("result".to_string()),
                 // while (true) - condition
                 Instruction::LoadConst(Value::Bool(true)),
-                Instruction::PopJumpIfFalse(15), // if false, jump to return (idx 19)
+                Instruction::PopJumpIfFalse(13), // if false, jump to return
                 // loop body: result = result + n
                 Instruction::LoadVar("result".to_string()),
                 Instruction::LoadVar("n".to_string()),
@@ -470,10 +458,7 @@ fn while_loop_with_conditional_break() -> anyhow::Result<()> {
                 Instruction::LoadVar("n".to_string()),
                 Instruction::LoadConst(Value::Int(0)),
                 Instruction::CmpOp(CmpOp::Eq),
-                Instruction::PopJumpIfFalse(2), // if false (n != 0), jump to loop-back
-                Instruction::Jump(2),           // if true (n == 0), jump to break/exit
-                // else path: LOOP-BACK JUMP (this is the key difference!)
-                Instruction::Jump(-15), // back to while condition (idx 3)
+                Instruction::PopJumpIfFalse(-13), // threaded: else → while condition (idx 3)
                 // after loop: return result
                 Instruction::LoadVar("result".to_string()),
                 Instruction::Return,

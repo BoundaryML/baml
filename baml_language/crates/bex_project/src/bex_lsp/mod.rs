@@ -98,11 +98,7 @@ pub trait PlaygroundSender: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait BexLsp:
-    Send
-    + Sync
-    + notification::BexLspNotification
-    + request::BexLspRequest
-    + crate::bex::Bex
+    Send + Sync + notification::BexLspNotification + request::BexLspRequest + crate::bex::Bex
 {
     async fn call_function_for_project(
         &self,
@@ -110,6 +106,7 @@ pub trait BexLsp:
         function_name: &str,
         args: crate::BexArgs,
         call_id: crate::CallId,
+        cancel: sys_types::CancellationToken,
     ) -> Result<crate::BexExternalValue, crate::RuntimeError>;
 
     fn request_playground_state(&self);

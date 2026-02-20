@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bex_engine::BexEngine;
 use bex_heap::{BexExternalValue, BexValue};
-use sys_types::CallId;
+use sys_types::{CallId, CancellationToken};
 
 use crate::{BexArgs, RuntimeError, project::BexProject};
 
@@ -14,6 +14,7 @@ pub trait Bex: Send + Sync {
         function_name: &str,
         args: BexArgs,
         call_id: CallId,
+        cancel: CancellationToken,
     ) -> Result<BexExternalValue, RuntimeError>;
 }
 
@@ -24,9 +25,10 @@ impl Bex for BexProject {
         function_name: &str,
         args: BexArgs,
         call_id: CallId,
+        cancel: CancellationToken,
     ) -> Result<BexExternalValue, RuntimeError> {
         let bex = self.get_bex()?;
-        Bex::call_function(&*bex, function_name, args, call_id).await
+        Bex::call_function(&*bex, function_name, args, call_id, cancel).await
     }
 }
 
@@ -37,6 +39,7 @@ async fn call_engine(
     function_name: &str,
     BexArgs(mut args): BexArgs,
     call_id: CallId,
+    cancel: CancellationToken,
 ) -> Result<BexExternalValue, RuntimeError> {
     let params = engine
         .function_params(function_name)
@@ -59,8 +62,16 @@ async fn call_engine(
         });
     }
 
-    let result =
-        BexEngine::call_function(engine, function_name, ordered_args, call_id, None, &[]).await?;
+    let result = BexEngine::call_function(
+        engine,
+        function_name,
+        ordered_args,
+        call_id,
+        None,
+        &[],
+        cancel,
+    )
+    .await?;
 
     let owned_result = engine
         .heap()
@@ -76,8 +87,9 @@ impl Bex for BexEngine {
         function_name: &str,
         args: BexArgs,
         call_id: CallId,
+        cancel: CancellationToken,
     ) -> Result<BexExternalValue, RuntimeError> {
-        call_engine(self, function_name, args, call_id).await
+        call_engine(self, function_name, args, call_id, cancel).await
     }
 }
 
@@ -88,7 +100,8 @@ impl Bex for std::sync::Arc<BexEngine> {
         function_name: &str,
         args: BexArgs,
         call_id: CallId,
+        cancel: CancellationToken,
     ) -> Result<BexExternalValue, RuntimeError> {
-        Bex::call_function(self.as_ref(), function_name, args, call_id).await
+        Bex::call_function(self.as_ref(), function_name, args, call_id, cancel).await
     }
 }

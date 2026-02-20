@@ -33,4 +33,7 @@ pub enum BridgeError {
 
     #[error("Not implemented: {0}")]
     NotImplemented(String),
+
+    #[error("call_id {0} is already in use by an active call")]
+    DuplicateCallId(u32),
 }

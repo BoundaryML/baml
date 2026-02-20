@@ -11,7 +11,7 @@ use std::{collections::HashMap, sync::Arc};
 
 pub use bex::Bex;
 pub use bex_external_types::{BexExternalValue, Ty};
-pub use sys_types::{CallId, SysOps};
+pub use sys_types::{CallId, CancellationToken, SysOps};
 use thiserror::Error;
 
 mod bex;
