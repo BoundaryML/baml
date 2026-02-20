@@ -799,8 +799,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 future,
                 resume,
             } => {
-                unwrap_infallible(pull_semantics::walk_invoke_operands(self, callee, args));
-                self.emit(Instruction::DispatchFuture(args.len()));
+                let global_callee = pull_semantics::resolve_constant_function_name(
+                    callee,
+                    &self.analysis.classifications,
+                    &self.analysis.def_use,
+                )
+                .and_then(|name| self.globals.get(&name).copied())
+                .map(GlobalIndex::from_raw)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "dispatch_future callee must resolve to a statically-known global function: {callee:?}"
+                    )
+                });
+
+                unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                self.emit(Instruction::DispatchFuture(global_callee));
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
             }

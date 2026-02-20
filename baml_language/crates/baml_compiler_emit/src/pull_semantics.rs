@@ -174,21 +174,6 @@ pub(crate) fn walk_assert_statement<S: StackEffectSink>(
     sink.assert_top()
 }
 
-/// Shared pull order for call-like terminators that consume `[callee, args...]`.
-///
-/// This remains the order used by `DispatchFuture`.
-pub(crate) fn walk_invoke_operands<S: PullSink>(
-    sink: &mut S,
-    callee: &Operand,
-    args: &[Operand],
-) -> Result<(), S::Error> {
-    walk_operand_pull(sink, callee)?;
-    for arg in args {
-        walk_operand_pull(sink, arg)?;
-    }
-    Ok(())
-}
-
 /// Shared pull order for direct calls: each arg only.
 pub(crate) fn walk_call_direct_args<S: PullSink>(
     sink: &mut S,

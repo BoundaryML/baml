@@ -94,7 +94,7 @@ pub fn display_instruction(
                 format!("(global {})", index.raw())
             }
         }
-        Instruction::Call(callee) => {
+        Instruction::Call(callee) | Instruction::DispatchFuture(callee) => {
             if callee.raw() < globals.len() {
                 format!("({})", display_value(&globals[*callee]))
             } else if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
@@ -186,7 +186,6 @@ pub fn display_instruction(
         | Instruction::LoadMapElement
         | Instruction::StoreArrayElement
         | Instruction::StoreMapElement
-        | Instruction::DispatchFuture(_)
         | Instruction::Await
         | Instruction::CallIndirect
         | Instruction::Assert

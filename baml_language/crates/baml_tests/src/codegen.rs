@@ -126,7 +126,6 @@ fn convert_instruction(
                 _ => anyhow::bail!("Expected Enum object for AllocVariant, got {obj:?}"),
             }
         }
-        bex_vm_types::Instruction::DispatchFuture(n) => Instruction::DispatchFuture(*n),
         bex_vm_types::Instruction::Await => Instruction::Await,
         bex_vm_types::Instruction::Watch(idx) => Instruction::Watch(*idx),
         bex_vm_types::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
@@ -143,8 +142,10 @@ fn convert_instruction(
         bex_vm_types::Instruction::Discriminant => Instruction::Discriminant,
         bex_vm_types::Instruction::TypeTag => Instruction::TypeTag,
         bex_vm_types::Instruction::Unreachable => Instruction::Unreachable,
-        bex_vm_types::Instruction::Call(_) | bex_vm_types::Instruction::CallIndirect => {
-            anyhow::bail!("CALL instructions are handled by the caller")
+        bex_vm_types::Instruction::Call(_)
+        | bex_vm_types::Instruction::CallIndirect
+        | bex_vm_types::Instruction::DispatchFuture(_) => {
+            anyhow::bail!("Call-like instructions are handled by the caller")
         }
     })
 }
@@ -284,6 +285,14 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
                         .unwrap_or_else(|| format!("global_{callee}")),
                 )),
                 bex_vm_types::Instruction::CallIndirect => Ok(Instruction::CallIndirect),
+                bex_vm_types::Instruction::DispatchFuture(callee) => {
+                    Ok(Instruction::DispatchFuture(
+                        globals_by_index
+                            .get(&callee.raw())
+                            .map(|s| (*s).to_string())
+                            .unwrap_or_else(|| format!("global_{callee}")),
+                    ))
+                }
                 _ => convert_instruction(
                     inst,
                     inst_idx,

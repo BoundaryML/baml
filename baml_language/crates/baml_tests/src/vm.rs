@@ -351,7 +351,8 @@ pub enum Instruction {
     StoreMapElement,
     AllocInstance(Value),
     AllocVariant(Value),
-    DispatchFuture(usize),
+    /// Direct dispatch to a statically-known sys_op by name.
+    DispatchFuture(String),
     Await,
     Watch(usize),
     Unwatch(usize),
