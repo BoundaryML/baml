@@ -1390,12 +1390,57 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         // This allows codegen to skip the last arm's comparison.
         let exhaustive = wildcard_arm_idx.is_none() && is_exhaustive;
 
+        // Build symbolic names for switch arm values (for debug/display output)
+        let arm_names = match &switch_kind {
+            SwitchKind::Integer => vec![],
+            SwitchKind::EnumDiscriminant(enum_name) => {
+                // Reverse the enum_variants map: variant_index → variant_name
+                if let Some(variants) = self.enum_variants.get(enum_name.as_str()) {
+                    #[allow(clippy::cast_possible_wrap)]
+                    let reverse: std::collections::HashMap<i64, &str> = variants
+                        .iter()
+                        .map(|(name, idx)| (*idx as i64, name.as_str()))
+                        .collect();
+                    switch_values
+                        .iter()
+                        .filter_map(|(value, _)| {
+                            reverse
+                                .get(value)
+                                .map(|variant| (*value, format!("{enum_name}.{variant}")))
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                }
+            }
+            SwitchKind::TypeTag => {
+                // Build reverse map from type tag → display name
+                let mut tag_names: std::collections::HashMap<i64, String> =
+                    std::collections::HashMap::new();
+                tag_names.insert(baml_type::typetag::INT, "int".to_string());
+                tag_names.insert(baml_type::typetag::STRING, "string".to_string());
+                tag_names.insert(baml_type::typetag::BOOL, "bool".to_string());
+                tag_names.insert(baml_type::typetag::NULL, "null".to_string());
+                tag_names.insert(baml_type::typetag::FLOAT, "float".to_string());
+                for (class_name, tag) in self.class_type_tags {
+                    tag_names.insert(*tag, class_name.clone());
+                }
+                switch_values
+                    .iter()
+                    .filter_map(|(value, _)| {
+                        tag_names.get(value).map(|name| (*value, name.clone()))
+                    })
+                    .collect()
+            }
+        };
+
         // Emit the switch terminator
         self.builder.switch(
             switch_discriminant,
             switch_arms,
             otherwise_block,
             exhaustive,
+            arm_names,
         );
 
         // Lower each arm's body

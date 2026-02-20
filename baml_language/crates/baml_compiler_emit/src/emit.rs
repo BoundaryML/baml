@@ -825,7 +825,12 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 arms,
                 otherwise,
                 exhaustive,
+                arm_names,
             } => {
+                // Build name lookup for symbolic display of discriminant values
+                let name_map: std::collections::HashMap<i64, &str> =
+                    arm_names.iter().map(|(v, n)| (*v, n.as_str())).collect();
+
                 // Analyze the switch to determine the best emission strategy
                 let strategy = analyze_switch(arms);
 
@@ -834,10 +839,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         self.emit_switch_jump_table(discriminant, arms, *otherwise, min, max);
                     }
                     SwitchStrategy::BinarySearch => {
-                        self.emit_switch_binary_search(discriminant, arms, *otherwise, *exhaustive);
+                        self.emit_switch_binary_search(
+                            discriminant,
+                            arms,
+                            *otherwise,
+                            *exhaustive,
+                            &name_map,
+                        );
                     }
                     SwitchStrategy::IfElseChain => {
-                        self.emit_switch_if_else(discriminant, arms, *otherwise, *exhaustive);
+                        self.emit_switch_if_else(
+                            discriminant,
+                            arms,
+                            *otherwise,
+                            *exhaustive,
+                            &name_map,
+                        );
                     }
                 }
             }
@@ -1021,6 +1038,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         exhaustive: bool,
+        name_map: &std::collections::HashMap<i64, &str>,
     ) {
         self.emit_operand_pull(discriminant);
 
@@ -1038,7 +1056,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             self.emit(Instruction::Copy(0));
             let idx = self.add_constant(ConstValue::Int(*value));
             let inst = self.emit(Instruction::LoadConst(idx));
-            self.set_operand(inst, OperandMeta::Const(value.to_string()));
+            let label = name_map
+                .get(value)
+                .map(|n| (*n).to_string())
+                .unwrap_or_else(|| value.to_string());
+            self.set_operand(inst, OperandMeta::Const(label));
             self.emit(Instruction::CmpOp(CmpOp::Eq));
             let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
             self.emit(Instruction::Pop(1));
@@ -1106,6 +1128,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         arms: &[(i64, BlockId)],
         otherwise: BlockId,
         _exhaustive: bool,
+        name_map: &std::collections::HashMap<i64, &str>,
     ) {
         // Push discriminant onto stack (will be popped by comparisons)
         self.emit_operand_pull(discriminant);
@@ -1115,7 +1138,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         sorted_arms.sort_by_key(|(v, _)| *v);
 
         // Emit binary search tree
-        self.emit_binary_search_node(&sorted_arms, otherwise);
+        self.emit_binary_search_node(&sorted_arms, otherwise, name_map);
 
         // Pop the discriminant if we fall through (shouldn't happen with well-formed switches)
         self.emit(Instruction::Pop(1));
@@ -1127,7 +1150,19 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// The discriminant is already on the stack. We emit comparisons to split
     /// the search space in half at each level.
     #[allow(clippy::only_used_in_recursion)]
-    fn emit_binary_search_node(&mut self, arms: &[(i64, BlockId)], otherwise: BlockId) {
+    fn emit_binary_search_node(
+        &mut self,
+        arms: &[(i64, BlockId)],
+        otherwise: BlockId,
+        name_map: &std::collections::HashMap<i64, &str>,
+    ) {
+        let label_for = |value: &i64| -> String {
+            name_map
+                .get(value)
+                .map(|n| (*n).to_string())
+                .unwrap_or_else(|| value.to_string())
+        };
+
         match arms.len() {
             0 => {
                 // No arms left - just fall through to otherwise
@@ -1139,7 +1174,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::Copy(0));
                 let idx = self.add_constant(ConstValue::Int(*value));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(value.to_string()));
+                self.set_operand(inst, OperandMeta::Const(label_for(value)));
                 self.emit(Instruction::CmpOp(CmpOp::Eq));
                 let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
                 self.emit(Instruction::Pop(1));
@@ -1153,7 +1188,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     self.emit(Instruction::Copy(0));
                     let idx = self.add_constant(ConstValue::Int(*value));
                     let inst = self.emit(Instruction::LoadConst(idx));
-                    self.set_operand(inst, OperandMeta::Const(value.to_string()));
+                    self.set_operand(inst, OperandMeta::Const(label_for(value)));
                     self.emit(Instruction::CmpOp(CmpOp::Eq));
                     let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
                     self.emit(Instruction::Pop(1));
@@ -1173,7 +1208,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::Copy(0));
                 let idx = self.add_constant(ConstValue::Int(*value));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(value.to_string()));
+                self.set_operand(inst, OperandMeta::Const(label_for(value)));
                 self.emit(Instruction::CmpOp(CmpOp::Eq));
                 let eq_jump = self.emit(Instruction::PopJumpIfFalse(0));
 
@@ -1186,18 +1221,18 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 // Compare < pivot for left subtree
                 self.emit(Instruction::Copy(0));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(value.to_string()));
+                self.set_operand(inst, OperandMeta::Const(label_for(value)));
                 self.emit(Instruction::CmpOp(CmpOp::Lt));
                 let lt_jump = self.emit(Instruction::PopJumpIfFalse(0));
 
                 // Left subtree (values < pivot)
-                self.emit_binary_search_node(left, otherwise);
+                self.emit_binary_search_node(left, otherwise, name_map);
 
                 let after_left = self.current_pc();
                 self.patch_jump_to(lt_jump, after_left);
 
                 // Right subtree (values > pivot)
-                self.emit_binary_search_node(right, otherwise);
+                self.emit_binary_search_node(right, otherwise, name_map);
             }
         }
     }

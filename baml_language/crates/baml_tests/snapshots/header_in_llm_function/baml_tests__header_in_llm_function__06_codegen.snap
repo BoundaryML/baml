@@ -105,7 +105,7 @@ function baml.llm.build_attempt_with_state(llm_client: baml.llm.Client, planner_
     load_field .client_type
     discriminant
     copy 0
-    load_const 0
+    load_const baml.llm.ClientType.Primitive
     cmp_op ==
     pop_jump_if_false L0
     pop 1
@@ -113,7 +113,7 @@ function baml.llm.build_attempt_with_state(llm_client: baml.llm.Client, planner_
 
   L0:
     copy 0
-    load_const 1
+    load_const baml.llm.ClientType.Fallback
     cmp_op ==
     pop_jump_if_false L1
     pop 1
@@ -566,7 +566,7 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
     load_field .client_type
     discriminant
     copy 0
-    load_const 0
+    load_const baml.llm.ClientType.Primitive
     cmp_op ==
     pop_jump_if_false L0
     pop 1
@@ -574,7 +574,7 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
 
   L0:
     copy 0
-    load_const 1
+    load_const baml.llm.ClientType.Fallback
     cmp_op ==
     pop_jump_if_false L1
     pop 1

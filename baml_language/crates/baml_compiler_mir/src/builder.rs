@@ -234,12 +234,14 @@ impl MirBuilder {
         arms: Vec<(i64, BlockId)>,
         otherwise: BlockId,
         exhaustive: bool,
+        arm_names: Vec<(i64, String)>,
     ) {
         self.set_terminator(Terminator::Switch {
             discriminant,
             arms,
             otherwise,
             exhaustive,
+            arm_names,
         });
     }
 

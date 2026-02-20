@@ -220,6 +220,10 @@ pub enum Terminator {
         /// When true, the last arm's comparison can be skipped since if all
         /// other arms failed, the discriminant must match the last one.
         exhaustive: bool,
+        /// Symbolic names for arm values (debug metadata only).
+        /// Maps integer discriminant values to human-readable names like
+        /// `"DispatchState.Alpha"` or `"int"`.
+        arm_names: Vec<(i64, String)>,
     },
 
     /// Return from function.

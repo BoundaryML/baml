@@ -176,7 +176,12 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             arms,
             otherwise,
             exhaustive,
+            arm_names,
         } => {
+            // Build name lookup for symbolic display
+            let name_map: std::collections::HashMap<i64, &str> =
+                arm_names.iter().map(|(v, n)| (*v, n.as_str())).collect();
+
             write!(f, "switch ")?;
             write_operand(f, discriminant)?;
             write!(f, " [")?;
@@ -184,7 +189,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{val}: {target}")?;
+                if let Some(name) = name_map.get(val) {
+                    write!(f, "{name}: {target}")?;
+                } else {
+                    write!(f, "{val}: {target}")?;
+                }
             }
             if *exhaustive {
                 write!(f, ", otherwise: {otherwise}] (exhaustive);")
