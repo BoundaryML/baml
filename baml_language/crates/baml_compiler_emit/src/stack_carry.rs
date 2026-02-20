@@ -474,17 +474,23 @@ fn simulate_terminator_stack(
             future,
             ..
         } => {
+            if pull_semantics::resolve_constant_function_name(callee, classifications, def_use)
+                .is_none()
+            {
+                return false;
+            }
+
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_invoke_operands(&mut sink, callee, args).is_err() {
+            if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
                 return false;
             }
 
-            if !sim.pop_n(args.len() + 1) {
+            if !sim.pop_n(args.len()) {
                 return false;
             }
             sim.push();

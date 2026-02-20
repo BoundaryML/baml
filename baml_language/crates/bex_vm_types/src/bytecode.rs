@@ -226,19 +226,14 @@ pub enum Instruction {
     /// `Vm::objects` array.
     AllocVariant(ObjectIndex),
 
-    /// Creates a pending future, pushes it on the stack and notifies embedder.
+    /// Dispatch a statically-known global `sys_op` and create a pending future.
     ///
-    /// Format: `DISPATCH_FUTURE n` where `n` is the number of arguments passed
-    /// to the _callable_ future.
+    /// Format: `DISPATCH_FUTURE g` where `g` is the global index of the
+    /// `sys_op` function.
     ///
-    /// [`Instruction::DispatchFuture`] behaves like a function call
-    /// ([`Instruction::Call`]). That is due to the fact that as of right now
-    /// the only "futures" we can really run are LLM calls, and the VM doesn't
-    /// even run those, that's up to the embedder. So, just like a function
-    /// call, the stack should contain the future followed by the arguments, and
-    /// this instruction takes care of emmiting a notification to the embedder
-    /// so that it can schedule the future.
-    DispatchFuture(usize),
+    /// Arguments are pushed onto the eval stack. The callee is read from
+    /// `Vm::globals[g]`, and arity is read from function metadata.
+    DispatchFuture(GlobalIndex),
 
     /// Awaits the future on top of the stack.
     ///
@@ -530,7 +525,7 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreMapElement => f.write_str("STORE_MAP_ELEMENT"),
             Instruction::AllocInstance(i) => write!(f, "ALLOC_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
-            Instruction::DispatchFuture(i) => write!(f, "DISPATCH_FUTURE {i}"),
+            Instruction::DispatchFuture(callee) => write!(f, "DISPATCH_FUTURE {callee}"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(callee) => write!(f, "CALL {callee}"),
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
