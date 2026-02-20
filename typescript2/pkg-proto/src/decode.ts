@@ -64,8 +64,11 @@ function deserializeValue(holder: CFFIValueHolderType): BamlJsValue {
           return lit.literal.intLiteral.value;
         case 'boolLiteral':
           return lit.literal.boolLiteral.value;
+        default: {
+          const _exhaustive: never = lit.literal;
+          return null;
+        }
       }
-      return null;
     }
 
     case 'unionVariantValue':

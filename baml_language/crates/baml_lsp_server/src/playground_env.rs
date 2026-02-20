@@ -16,6 +16,10 @@ use tokio::sync::{broadcast, oneshot};
 
 use crate::playground_ws::WsOutMessage;
 
+const ENV_REQUEST_TIMEOUT_SECS: u64 = 120;
+const ENV_REQUEST_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(ENV_REQUEST_TIMEOUT_SECS);
+
 /// Shared state for resolving env var requests from the webview.
 pub struct PlaygroundEnvState {
     pending: std::sync::Mutex<HashMap<u64, oneshot::Sender<Option<String>>>>,
@@ -58,9 +62,12 @@ impl sys_types::SysOpEnv for PlaygroundEnv {
             let _ = state
                 .broadcast_tx
                 .send(WsOutMessage::EnvVarRequest { id, variable: key });
-            match rx.await {
-                Ok(value) => Ok(value),
-                Err(_) => Ok(None),
+            match tokio::time::timeout(ENV_REQUEST_TIMEOUT, rx).await {
+                Ok(Ok(value)) => Ok(value),
+                Ok(Err(_)) | Err(_) => {
+                    state.pending.lock().unwrap().remove(&id);
+                    Ok(None)
+                }
             }
         })
     }
@@ -79,16 +86,29 @@ impl sys_types::SysOpEnv for PlaygroundEnv {
             let _ = state
                 .broadcast_tx
                 .send(WsOutMessage::EnvVarRequest { id, variable: key });
-            match rx.await {
-                Ok(Some(val)) => Ok(val),
-                Ok(None) => Err(sys_types::OpErrorKind::Other(format!(
+            match tokio::time::timeout(ENV_REQUEST_TIMEOUT, rx).await {
+                Ok(Ok(Some(val))) => Ok(val),
+                Ok(Ok(None)) => Err(sys_types::OpErrorKind::Other(format!(
                     "Environment variable '{}' not found",
                     key_for_err
                 ))),
-                Err(_) => Err(sys_types::OpErrorKind::Other(format!(
-                    "Environment variable '{}' request cancelled",
-                    key_for_err
-                ))),
+                Ok(Err(_)) => {
+                    state.pending.lock().unwrap().remove(&id);
+                    Err(sys_types::OpErrorKind::Other(format!(
+                        "Environment variable '{}' request cancelled",
+                        key_for_err
+                    )))
+                }
+                Err(_) => {
+                    state.pending.lock().unwrap().remove(&id);
+                    Err(sys_types::OpErrorKind::Timeout {
+                        message: format!(
+                            "Environment variable '{}' request timed out",
+                            key_for_err
+                        ),
+                        duration: ENV_REQUEST_TIMEOUT,
+                    })
+                }
             }
         })
     }

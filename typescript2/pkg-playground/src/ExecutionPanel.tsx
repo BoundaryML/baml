@@ -27,7 +27,12 @@ import type {
 // ---------------------------------------------------------------------------
 
 function tryFormatJson(str: string): string {
-  try { return JSON.stringify(JSON.parse(str), null, 2); } catch { return str; }
+  try {
+    return JSON.stringify(JSON.parse(str), null, 2);
+  } catch {
+    /* not valid JSON */
+    return str;
+  }
 }
 
 function formatBuildTime(epochSecs: number): { absolute: string; relative: string } {
@@ -222,6 +227,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     port.postMessage({ type: 'deleteEnvVar', key });
   }, [port]);
 
+  const onArgsJsonChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    setArgsJson(e.target.value);
+  }, []);
+
   // ── Run function ───────────────────────────────────────────────────────
 
   const isRunning = runs.length > 0 && runs[runs.length - 1].status === 'running';
@@ -288,6 +297,55 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const warnings = diags.filter((d) => d.severity === 'warning');
   const hasErrors = errors.length > 0;
 
+  const envInputRow = (
+    <form
+      onSubmit={(e) => e.preventDefault()}
+      className="contents"
+    >
+      <input
+        placeholder="KEY"
+        value={newEnvKey}
+        onChange={(e) => setNewEnvKey(e.target.value)}
+        className="w-[60px] px-1.5 py-px rounded-sm border border-vsc-input-border bg-vsc-input-bg text-vsc-input-fg font-vsc-mono text-[10px] outline-none"
+      />
+      <input
+        type="password"
+        autoComplete="off"
+        data-1p-ignore
+        data-lpignore="true"
+        placeholder="value"
+        value={newEnvValue}
+        onChange={(e) => setNewEnvValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && newEnvKey.trim()) {
+            addEnvVar(newEnvKey.trim(), newEnvValue);
+            setNewEnvKey('');
+            setNewEnvValue('');
+          }
+        }}
+        className="w-[90px] px-1.5 py-px rounded-sm border border-vsc-input-border bg-vsc-input-bg text-vsc-input-fg font-vsc-mono text-[10px] outline-none"
+      />
+      <button
+        type="button"
+        disabled={!newEnvKey.trim()}
+        onClick={() => {
+          if (newEnvKey.trim()) {
+            addEnvVar(newEnvKey.trim(), newEnvValue);
+            setNewEnvKey('');
+            setNewEnvValue('');
+          }
+        }}
+        className={`px-1.5 py-px rounded-sm border-none text-[10px] font-semibold ${
+          newEnvKey.trim()
+            ? 'bg-vsc-accent text-vsc-accent-fg cursor-pointer'
+            : 'bg-vsc-text-faint text-vsc-text-muted cursor-default'
+        }`}
+      >
+        +
+      </button>
+    </form>
+  );
+
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
@@ -325,42 +383,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             <span onClick={() => removeEnvVar(key)} className="cursor-pointer text-vsc-text-faint leading-none">&times;</span>
           </span>
         ))}
-        <input
-          placeholder="KEY"
-          value={newEnvKey}
-          onChange={(e) => setNewEnvKey(e.target.value)}
-          className="w-[60px] px-1.5 py-px rounded-sm border border-vsc-input-border bg-vsc-input-bg text-vsc-input-fg font-vsc-mono text-[10px] outline-none"
-        />
-        <input
-          type="password"
-          placeholder="value"
-          value={newEnvValue}
-          onChange={(e) => setNewEnvValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && newEnvKey.trim()) { addEnvVar(newEnvKey.trim(), newEnvValue); setNewEnvKey(''); setNewEnvValue(''); } }}
-          className="w-[90px] px-1.5 py-px rounded-sm border border-vsc-input-border bg-vsc-input-bg text-vsc-input-fg font-vsc-mono text-[10px] outline-none"
-        />
-        <button
-          disabled={!newEnvKey.trim()}
-          onClick={() => { if (newEnvKey.trim()) { addEnvVar(newEnvKey.trim(), newEnvValue); setNewEnvKey(''); setNewEnvValue(''); } }}
-          className={`px-1.5 py-px rounded-sm border-none text-[10px] font-semibold ${
-            newEnvKey.trim()
-              ? 'bg-vsc-accent text-vsc-accent-fg cursor-pointer'
-              : 'bg-vsc-text-faint text-vsc-text-muted cursor-default'
-          }`}
-        >
-          +
-        </button>
+        {envInputRow}
       </div>
 
       {/* Env var request banner */}
       {envRequests.length > 0 && (
         <div className="bg-vsc-yellow-subtle border-b border-vsc-border shrink-0">
           {envRequests.map((req) => (
-            <div key={req.id} className="flex items-center gap-1.5 px-2.5 py-1.5">
+            <form
+              key={req.id}
+              onSubmit={(e) => e.preventDefault()}
+              className="flex items-center gap-1.5 px-2.5 py-1.5"
+            >
               <span className="text-[10px] text-vsc-yellow font-semibold">ENV</span>
               <code className="font-vsc-mono text-[11px] text-vsc-yellow">{req.variable}</code>
               <input
                 type="password"
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
                 autoFocus
                 placeholder="paste value..."
                 value={envInputs[req.id] ?? ''}
@@ -374,18 +415,20 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 className="flex-1 px-1.5 py-0.5 rounded-sm border border-vsc-input-border bg-vsc-input-bg font-vsc-mono text-[11px] text-vsc-input-fg outline-none"
               />
               <button
+                type="button"
                 onClick={() => { resolveEnvRequest(req.id, envInputs[req.id] ?? ''); setEnvInputs((prev) => { const { [req.id]: _, ...rest } = prev; return rest; }); }}
                 className="px-2 py-0.5 rounded-sm border-none bg-vsc-accent text-vsc-accent-fg font-semibold text-[10px] cursor-pointer"
               >
                 Set
               </button>
               <button
+                type="button"
                 onClick={() => { resolveEnvRequest(req.id, undefined); setEnvInputs((prev) => { const { [req.id]: _, ...rest } = prev; return rest; }); }}
                 className="px-1.5 py-0.5 rounded-sm border border-vsc-border bg-transparent text-vsc-text-muted text-[10px] cursor-pointer"
               >
                 Skip
               </button>
-            </div>
+            </form>
           ))}
         </div>
       )}
@@ -495,7 +538,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             <input
               spellCheck={false}
               value={argsJson}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setArgsJson(e.target.value)}
+              onChange={onArgsJsonChange}
               className="flex-1 px-2 py-1 font-vsc-mono text-xs bg-vsc-input-bg text-vsc-input-fg border-none outline-none"
               placeholder='{"key": "value"}'
             />

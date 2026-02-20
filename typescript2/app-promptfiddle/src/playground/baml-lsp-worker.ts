@@ -51,6 +51,11 @@ let disposed = false;
 function dispose(): void {
   if (disposed) return;
   disposed = true;
+  // Resolve any pending env requests so awaiting callers don't hang
+  for (const resolve of pendingEnvResolvers.values()) {
+    resolve(undefined);
+  }
+  pendingEnvResolvers.clear();
   if (connection) {
     connection.dispose();
     connection = null;

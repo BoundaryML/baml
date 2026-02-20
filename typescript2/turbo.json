@@ -15,6 +15,15 @@
     "test:run": {
       "dependsOn": ["^build"]
     },
+    "test:unit:run": {
+      "dependsOn": ["^build"]
+    },
+    "test:browser": {
+      "dependsOn": ["^build"]
+    },
+    "test:browser:run": {
+      "dependsOn": ["^build"]
+    },
     "lint": {
       "dependsOn": ["^build"]
     },

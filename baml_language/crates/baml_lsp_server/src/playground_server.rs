@@ -32,6 +32,16 @@ use crate::{
     playground_ws::{WsInMessage, WsOutMessage},
 };
 
+fn to_ws_text(msg: &WsOutMessage) -> Option<AxumWsMsg> {
+    match serde_json::to_string(msg) {
+        Ok(json) => Some(AxumWsMsg::Text(json.into())),
+        Err(e) => {
+            tracing::error!("Playground WS: failed to serialize message: {e}");
+            None
+        }
+    }
+}
+
 /// Find an available TCP port starting from `base_port`.
 pub async fn pick_port(base_port: u16, max_attempts: u16) -> anyhow::Result<(TcpListener, u16)> {
     for offset in 0..max_attempts {
@@ -127,8 +137,11 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
     tracing::info!("Playground: WS session started");
     let (mut sink, mut stream) = socket.split();
 
-    let ready = serde_json::to_string(&WsOutMessage::Ready).unwrap();
-    if sink.send(AxumWsMsg::Text(ready.into())).await.is_err() {
+    if let Some(ready) = to_ws_text(&WsOutMessage::Ready) {
+        if sink.send(ready).await.is_err() {
+            return;
+        }
+    } else {
         return;
     }
 
@@ -159,9 +172,10 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
             broadcast_msg = broadcast_rx.recv() => {
                 match broadcast_msg {
                     Ok(msg) => {
-                        let json = serde_json::to_string(&msg).unwrap();
-                        if sink.send(AxumWsMsg::Text(json.into())).await.is_err() {
-                            break;
+                        if let Some(ws_msg) = to_ws_text(&msg) {
+                            if sink.send(ws_msg).await.is_err() {
+                                break;
+                            }
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -195,8 +209,9 @@ async fn handle_ws_in_message(
                         id,
                         error: format!("Invalid base64: {e}"),
                     };
-                    let json = serde_json::to_string(&err_msg).unwrap();
-                    let _ = sink.send(AxumWsMsg::Text(json.into())).await;
+                    if let Some(ws_msg) = to_ws_text(&err_msg) {
+                        let _ = sink.send(ws_msg).await;
+                    }
                     return;
                 }
             };
@@ -210,8 +225,9 @@ async fn handle_ws_in_message(
                         id,
                         error: format!("Failed to decode arguments: {e}"),
                     };
-                    let json = serde_json::to_string(&err_msg).unwrap();
-                    let _ = sink.send(AxumWsMsg::Text(json.into())).await;
+                    if let Some(ws_msg) = to_ws_text(&err_msg) {
+                        let _ = sink.send(ws_msg).await;
+                    }
                     return;
                 }
             };
@@ -223,8 +239,9 @@ async fn handle_ws_in_message(
                         id,
                         error: format!("Failed to convert arguments: {e}"),
                     };
-                    let json = serde_json::to_string(&err_msg).unwrap();
-                    let _ = sink.send(AxumWsMsg::Text(json.into())).await;
+                    if let Some(ws_msg) = to_ws_text(&err_msg) {
+                        let _ = sink.send(ws_msg).await;
+                    }
                     return;
                 }
             };

@@ -39,6 +39,10 @@ prek = "latest"
 "bep:check" = "./beps/scripts/update_bep_readme.py --check"
 "bep:serve" = "cd beps && uv run --with mkdocs-material --with mkdocs-awesome-pages-plugin --with click==8.2.1 --with mkdocs-git-revision-date-localized-plugin --with mkdocs-git-committers-plugin-2 mkdocs serve"
 
+[tasks.pr-unresolved]
+run = "./scripts/pr-unresolved"
+description = "Show unresolved PR review threads for the current branch PR"
+
 [settings]
 experimental = true
 # idiomatic_version_file_enable_tools = ["node", "python", "ruby", "go"]

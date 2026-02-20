@@ -877,3 +877,20 @@ pub mod baml_sources {
 pub fn baml_sources() -> impl Iterator<Item = &'static baml_sources::BuiltinSource> {
     baml_sources::ALL.iter()
 }
+
+#[cfg(test)]
+mod builtin_path_tests {
+    use super::{BUILTIN_PATH_PREFIX, baml_sources};
+
+    #[test]
+    fn test_builtin_path_prefix_consistent_with_all() {
+        for source in baml_sources::ALL {
+            assert!(
+                source.path.starts_with(BUILTIN_PATH_PREFIX),
+                "BuiltinSource path {:?} does not start with BUILTIN_PATH_PREFIX ({:?})",
+                source.path,
+                BUILTIN_PATH_PREFIX,
+            );
+        }
+    }
+}

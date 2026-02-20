@@ -14,7 +14,9 @@
     "test:unit": "vitest --project unit",
     "test:unit:run": "vitest run --project unit",
     "test:browser": "vitest --project browser",
-    "test:browser:run": "vitest run --project browser"
+    "test:browser:run": "vitest run --project browser",
+    "pretest:browser:run": "pnpm --filter @b/pkg-proto generate",
+    "pretest:unit:run": "pnpm --filter @b/pkg-proto generate"
   },
   "dependencies": {
     "@b/pkg-playground": "workspace:*",

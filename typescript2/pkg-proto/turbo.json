@@ -3,6 +3,9 @@
   "tasks": {
     "generate": {
       "outputs": ["src/generated/**"]
+    },
+    "build": {
+      "outputs": ["src/generated/**"]
     }
   }
 }

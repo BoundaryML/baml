@@ -25,7 +25,19 @@ function serializeValue(val: unknown): HostValue {
     return { value: { $case: 'stringValue', stringValue: val } };
   }
   if (typeof val === 'number') {
+    if (!Number.isFinite(val)) {
+      throw new Error(`Cannot serialize non-finite number: ${val}`);
+    }
     if (Number.isInteger(val)) {
+      if (
+        val > Number.MAX_SAFE_INTEGER ||
+        val < Number.MIN_SAFE_INTEGER
+      ) {
+        console.warn(
+          'Integer exceeds safe JS range; precision may be lost:',
+          val,
+        );
+      }
       return { value: { $case: 'intValue', intValue: val } };
     }
     return { value: { $case: 'floatValue', floatValue: val } };

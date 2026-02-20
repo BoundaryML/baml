@@ -10,7 +10,7 @@ export type BamlJsValue =
   | BamlJsClass;
 
 export type BamlJsMap = { [key: string]: BamlJsValue };
-export type BamlJsClass = { $baml: { type: string }; [key: string]: BamlJsValue };
+export type BamlJsClass = { $baml: { type: string } } & BamlJsMap;
 
 /** Implemented by objects that need custom BAML serialization. */
 export interface BamlSerializable {

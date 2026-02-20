@@ -32,9 +32,9 @@ pub(super) fn from_file_path(path: &std::path::Path) -> Result<lsp_types::Url, (
     let path_str = path.to_str().ok_or(())?;
     // Ensure the path starts with '/' so we get a valid file:// URL.
     let url_string = if path_str.starts_with('/') {
-        format!("file://{}", path_str)
+        format!("file://{path_str}")
     } else {
-        format!("file:///{}", path_str)
+        format!("file:///{path_str}")
     };
     lsp_types::Url::parse(&url_string).map_err(|_| ())
 }

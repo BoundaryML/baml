@@ -29,6 +29,9 @@
 //! - Native implementations of `SysOps` (with playground interception)
 //! - `LspClientSenderTrait` and `PlaygroundSender` implementations
 
+#[cfg(all(feature = "native-tls", feature = "rustls"))]
+compile_error!("features `native-tls` and `rustls` cannot be enabled simultaneously");
+
 mod native_lsp_sender;
 mod native_vfs;
 pub mod playground_env;

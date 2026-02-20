@@ -104,6 +104,12 @@ pub enum OpErrorKind {
     #[error("Operation cancelled")]
     Cancelled,
 
+    #[error("Operation cancelled after {duration:?}: {message}")]
+    Timeout {
+        message: String,
+        duration: std::time::Duration,
+    },
+
     #[error("Not implemented: {message}")]
     NotImplemented { message: String },
 
