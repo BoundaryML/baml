@@ -147,6 +147,25 @@ impl GEPAOrchestrator {
         })
     }
 
+    /// Count the number of tests that will be evaluated per candidate.
+    pub fn num_tests(&self) -> usize {
+        let ir = self.user_runtime.ir();
+        ir.walk_functions()
+            .find(|f| f.name() == self.function_name)
+            .map(|f| {
+                f.elem()
+                    .tests
+                    .iter()
+                    .filter(|t| {
+                        self.config
+                            .test_filter
+                            .includes(&self.function_name, &t.elem.name)
+                    })
+                    .count()
+            })
+            .unwrap_or(0)
+    }
+
     /// Run the optimization loop
     pub async fn run(&mut self) -> Result<OptimizationRunResult> {
         qprint!(
