@@ -1183,7 +1183,11 @@ impl<T: Printable> Printable for ConstrainedType<T> {
         self.ty.leftmost_token()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.ty.rightmost_token()
+        if let Some(attr) = self.attrs.last() {
+            attr.rightmost_token()
+        } else {
+            self.ty.rightmost_token()
+        }
     }
 }
 

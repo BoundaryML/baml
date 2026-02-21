@@ -685,6 +685,7 @@ impl PrintMultiLine for ForIteratorArgs {
 
         let (close_paren_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
         printer.print_trivia_with_newline(close_paren_leading, inner_shape.indent);
+        printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_paren);
         PrintInfo::default_multi_lined()
     }

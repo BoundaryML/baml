@@ -2246,7 +2246,7 @@ impl ArrayInitializer {
             {
                 return None;
             }
-            printer.try_print_trivia_single_line_squished(el_trailing)?;
+
             let is_last = i + 1 >= self.elements.len();
             if let Some(comma) = comma {
                 let (comma_leading, comma_trailing) =
@@ -2254,15 +2254,13 @@ impl ArrayInitializer {
                 printer.print_trivia_squished(el_trailing); // always squished before the comma
                 printer.print_trivia_squished(comma_leading); // always squished before the comma
                 if !is_last {
-                    printer.print_raw_token(comma);
-                    printer.print_spaces(1);
+                    printer.print_str(", ");
                 }
                 printer.try_print_trivia_single_line_squished(comma_trailing)?;
             } else {
                 printer.try_print_trivia_single_line_squished(el_trailing)?; // if multilined would go after the added comma and thus would not be squished
                 if !is_last {
-                    printer.print_str(",");
-                    printer.print_spaces(1);
+                    printer.print_str(", ");
                 }
             }
         }

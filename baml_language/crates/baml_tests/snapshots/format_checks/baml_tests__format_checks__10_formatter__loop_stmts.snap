@@ -141,7 +141,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
         // 5 let leading
         let item in items // 12 iterator trailing
         // 13 close paren leading
-) { // 16 body open trailing
+    ) { // 16 body open trailing
         result += item;
         // 17 body close leading
     } // 18 body close trailing
@@ -153,7 +153,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
         /* 5 let leading */
         let item in /* 10 in trailing *//* 11 iterator leading */items /* 12 iterator trailing */
         /* 13 close paren leading */
-) { /* 16 body open trailing */
+    ) { /* 16 body open trailing */
         result += item;
         /* 17 body close leading */
     } /* 18 body close trailing */
@@ -218,7 +218,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
             "very long string three",
             "very long string four",
         ]
-) {
+    ) {
         result += 1;
     }
     ;
@@ -233,7 +233,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
             "mike november oscar",
             "papa quebec romeo",
         ]
-) {
+    ) {
         result += 1;
     }
     ;
@@ -327,7 +327,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
             "papa quebec romeo",
         ] // 12 iterator trailing
         // 13 close paren leading
-) { // 16 body open trailing
+    ) { // 16 body open trailing
         result += 1;
         // 17 close leading
     } // 18 close trailing
@@ -348,7 +348,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
             "papa quebec romeo",
         ] /* 12 iterator trailing */
         /* 13 close paren leading */
-) { /* 16 body open trailing */
+    ) { /* 16 body open trailing */
         result += 1;
         /* 17 close leading */
     } /* 18 close trailing */
