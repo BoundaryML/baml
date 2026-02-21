@@ -30,7 +30,6 @@ java = "temurin-23"
 # Node tools
 "npm:pnpm" = "10.14.0"
 "npm:@infisical/cli" = "latest"
-prek = "latest"
 
 [tasks]
 "bep:readme" = "./beps/scripts/update_bep_readme.py"
