@@ -468,10 +468,11 @@ impl BexMulitProject {
     }
 
     fn get_default_project(&self) -> Result<vfs::VfsPath, LspError> {
-        let playgound_state = self.playground_state.lock().unwrap();
-        let last_selected_project = playgound_state.last_selected_project.value.clone();
-        if let Some(project_root) = last_selected_project {
-            return Ok(project_root);
+        {
+            let playground_state = self.playground_state.lock().unwrap();
+            if let Some(project_root) = playground_state.last_selected_project.value.clone() {
+                return Ok(project_root);
+            }
         }
         let projects = self.projects.lock().unwrap();
         let Some(project) = projects.iter().next() else {
