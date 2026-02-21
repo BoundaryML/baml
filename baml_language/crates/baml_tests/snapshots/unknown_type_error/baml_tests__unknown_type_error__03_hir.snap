@@ -1,16 +1,15 @@
 ---
-source: target/debug/build/baml_tests-ddc6647912a5d7c4/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function Bar(x: unknown_param_type) -> int {
-      1
+    1
 }
 
 function Foo() -> blah {
-      1
+    1
 }
 
 function Baz() -> unknown_optional? {
-      null
+    null
 }

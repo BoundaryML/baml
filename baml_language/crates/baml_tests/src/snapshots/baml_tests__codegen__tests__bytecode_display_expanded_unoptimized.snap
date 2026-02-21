@@ -1,0 +1,322 @@
+---
+source: crates/baml_tests/src/codegen.rs
+---
+function User.promote(self: User, bonus: int) -> Report {
+  9    0    load_var 1          (self)
+       1    load_var 1          (self)
+       2    load_field 1        (age)
+       3    load_const 0        (1)
+       4    bin_op +            
+       5    store_field 1       (age)
+
+  10   6    load_var 1          (self)
+       7    load_var 2          (bonus)
+       8    call 63             (score)
+       9    store_var 3         (base)
+
+  11   10   load_var 3          (base)
+       11   load_field 0        (score)
+       12   load_var 2          (bonus)
+       13   bin_op +            
+       14   store_var 4         (new_score)
+
+  12   15   alloc_instance 12   (Report)
+       16   copy 0              
+
+  13   17   load_var 4          (new_score)
+       18   store_field 0       (score)
+       19   copy 0              
+
+  14   20   load_var 3          (base)
+       21   load_field 1        (label)
+       22   store_field 1       (label)
+       23   copy 0              
+
+  15   24   load_var 3          (base)
+       25   load_field 2        (breakdown)
+       26   store_field 2       (breakdown)
+       27   return              
+}
+
+function http_status(code: int) -> string {
+  98    0    load_const 0            ("HTTP ")
+        1    store_var 2             (prefix)
+
+  99    2    load_var 1              (code)
+        3    copy 0                  
+        4    load_const 1            (400)
+        5    cmp_op ==               
+        6    pop_jump_if_false +3    (to 9)
+        7    pop 1                   
+        8    jump +49                (to 57)
+        9    copy 0                  
+        10   load_const 1            (400)
+        11   cmp_op <                
+        12   pop_jump_if_false +23   (to 35)
+        13   copy 0                  
+        14   load_const 2            (201)
+        15   cmp_op ==               
+        16   pop_jump_if_false +3    (to 19)
+        17   pop 1                   
+        18   jump +45                (to 63)
+        19   copy 0                  
+        20   load_const 2            (201)
+        21   cmp_op <                
+        22   pop_jump_if_false +7    (to 29)
+        23   copy 0                  
+        24   load_const 3            (200)
+        25   cmp_op ==               
+        26   pop_jump_if_false +3    (to 29)
+        27   pop 1                   
+        28   jump +38                (to 66)
+        29   copy 0                  
+        30   load_const 4            (204)
+        31   cmp_op ==               
+        32   pop_jump_if_false +3    (to 35)
+        33   pop 1                   
+        34   jump +26                (to 60)
+        35   copy 0                  
+        36   load_const 5            (404)
+        37   cmp_op ==               
+        38   pop_jump_if_false +3    (to 41)
+        39   pop 1                   
+        40   jump +14                (to 54)
+        41   copy 0                  
+        42   load_const 6            (500)
+        43   cmp_op ==               
+        44   pop_jump_if_false +3    (to 47)
+        45   pop 1                   
+        46   jump +5                 (to 51)
+        47   pop 1                   
+
+  106   48   load_const 7            ("Unknown")
+        49   store_var 3             (label)
+        50   jump +18                (to 68)
+
+  105   51   load_const 8            ("Internal Server Error")
+        52   store_var 3             (label)
+        53   jump +15                (to 68)
+
+  104   54   load_const 9            ("Not Found")
+        55   store_var 3             (label)
+        56   jump +12                (to 68)
+
+  103   57   load_const 10           ("Bad Request")
+        58   store_var 3             (label)
+        59   jump +9                 (to 68)
+
+  102   60   load_const 11           ("No Content")
+        61   store_var 3             (label)
+        62   jump +6                 (to 68)
+
+  101   63   load_const 12           ("Created")
+        64   store_var 3             (label)
+        65   jump +3                 (to 68)
+
+  100   66   load_const 13           ("OK")
+        67   store_var 3             (label)
+
+  108   68   load_var 2              (prefix)
+        69   load_var 3              (label)
+        70   bin_op +                
+        71   return                  
+}
+
+function score(input: User | ErrorInfo, threshold: int) -> Report {
+  45   0     load_var 1              (input)
+       1     load_const 0            (<class User>)
+       2     cmp_op instanceof       
+       3     pop_jump_if_false +2    (to 5)
+       4     jump +11                (to 15)
+       5     load_var 1              (input)
+       6     load_const 1            (<class ErrorInfo>)
+       7     cmp_op instanceof       
+       8     pop_jump_if_false +12   (to 20)
+
+  47   9     load_var 1              (input)
+       10    store_var 5             (e)
+       11    load_var 5              (e)
+       12    load_field 1            (message)
+       13    store_var 3             (name)
+       14    jump +6                 (to 20)
+
+  46   15    load_var 1              (input)
+       16    store_var 4             (u)
+       17    load_var 4              (u)
+       18    load_field 0            (name)
+       19    store_var 3             (name)
+
+  50   20    load_var 1              (input)
+       21    load_const 0            (<class User>)
+       22    cmp_op instanceof       
+       23    pop_jump_if_false +2    (to 25)
+       24    jump +12                (to 36)
+       25    load_var 1              (input)
+       26    load_const 1            (<class ErrorInfo>)
+       27    cmp_op instanceof       
+       28    pop_jump_if_false +13   (to 41)
+
+  52   29    load_var 1              (input)
+       30    store_var 8             (e)
+       31    load_var 8              (e)
+       32    load_field 0            (code)
+       33    unary_op -              
+       34    store_var 6             (age)
+       35    jump +6                 (to 41)
+
+  51   36    load_var 1              (input)
+       37    store_var 7             (u)
+       38    load_var 7              (u)
+       39    load_field 1            (age)
+       40    store_var 6             (age)
+
+  55   41    load_var 1              (input)
+       42    load_const 0            (<class User>)
+       43    cmp_op instanceof       
+       44    pop_jump_if_false +2    (to 46)
+       45    jump +10                (to 55)
+       46    load_var 1              (input)
+       47    load_const 1            (<class ErrorInfo>)
+       48    cmp_op instanceof       
+       49    pop_jump_if_false +23   (to 72)
+
+  62   50    load_var 1              (input)
+       51    store_var 11            (e)
+       52    load_const 2            (0)
+       53    store_var 9             (role_score)
+       54    jump +18                (to 72)
+
+  56   55    load_var 1              (input)
+       56    store_var 10            (u)
+       57    load_var 10             (u)
+       58    load_field 2            (role)
+       59    discriminant            
+       60    jump_table 0, +102      ([to 70, to 67, to 64, to 61], default to 162)
+
+  60   61    load_const 3            (1)
+       62    store_var 9             (role_score)
+       63    jump +9                 (to 72)
+
+  59   64    load_const 4            (2)
+       65    store_var 9             (role_score)
+       66    jump +6                 (to 72)
+
+  58   67    load_const 5            (5)
+       68    store_var 9             (role_score)
+       69    jump +3                 (to 72)
+
+  57   70    load_const 6            (10)
+       71    store_var 9             (role_score)
+
+  65   72    load_var 6              (age)
+       73    load_const 4            (2)
+       74    bin_op *                
+       75    load_const 6            (10)
+       76    bin_op +                
+       77    store_var 12            (base)
+
+  66   78    load_var 12             (base)
+       79    load_const 7            (100)
+       80    cmp_op >                
+       81    pop_jump_if_false +2    (to 83)
+       82    jump +12                (to 94)
+
+  68   83    load_var 12             (base)
+       84    load_const 2            (0)
+       85    cmp_op <                
+       86    pop_jump_if_false +2    (to 88)
+       87    jump +4                 (to 91)
+
+  70   88    load_var 12             (base)
+       89    store_var 13            (capped)
+       90    jump +6                 (to 96)
+
+  68   91    load_const 2            (0)
+       92    store_var 13            (capped)
+       93    jump +3                 (to 96)
+
+  66   94    load_const 7            (100)
+       95    store_var 13            (capped)
+
+  73   96    load_var 13             (capped)
+       97    load_const 4            (2)
+       98    bin_op %                
+       99    load_const 2            (0)
+       100   cmp_op ==               
+       101   pop_jump_if_false +2    (to 103)
+       102   jump +4                 (to 106)
+       103   load_const 2            (0)
+       104   store_var 14            (bonus)
+       105   jump +3                 (to 108)
+       106   load_const 5            (5)
+       107   store_var 14            (bonus)
+
+  74   108   load_var 13             (capped)
+       109   load_var 9              (role_score)
+       110   bin_op *                
+       111   load_var 14             (bonus)
+       112   bin_op +                
+       113   store_var 15            (total)
+
+  76   114   load_var 15             (total)
+       115   load_var 2              (threshold)
+       116   cmp_op >                
+       117   store_var 17            (_50)
+       118   load_var 17             (_50)
+       119   load_const 8            (true)
+       120   cmp_op ==               
+       121   pop_jump_if_false +2    (to 123)
+       122   jump +4                 (to 126)
+
+  78   123   load_const 9            (" [LOW]")
+       124   store_var 16            (suffix)
+       125   jump +3                 (to 128)
+
+  77   126   load_const 10           (" [HIGH]")
+       127   store_var 16            (suffix)
+
+  80   128   load_var 3              (name)
+       129   load_var 16             (suffix)
+       130   bin_op +                
+       131   store_var 18            (label)
+
+  82   132   load_var 12             (base)
+       133   load_var 13             (capped)
+       134   load_var 15             (total)
+       135   alloc_array 3           
+       136   store_var 19            (scores)
+
+  83   137   load_var 19             (scores)
+       138   load_const 2            (0)
+       139   load_var 15             (total)
+       140   store_array_element     
+
+  84   141   load_var 19             (scores)
+       142   load_const 2            (0)
+       143   load_array_element      
+       144   store_var 20            (top)
+
+  86   145   load_var 12             (base)
+       146   load_var 9              (role_score)
+       147   load_const 11           ("base")
+       148   load_const 12           ("role")
+       149   alloc_map 2             
+       150   store_var 21            (breakdown)
+
+  88   151   alloc_instance 12       (Report)
+       152   copy 0                  
+
+  89   153   load_var 20             (top)
+       154   store_field 0           (score)
+       155   copy 0                  
+
+  90   156   load_var 18             (label)
+       157   store_field 1           (label)
+       158   copy 0                  
+
+  91   159   load_var 21             (breakdown)
+       160   store_field 2           (breakdown)
+
+  88   161   return                  
+       162   unreachable             
+}

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn HeaderOnlyFunction() -> string {
@@ -33,7 +32,6 @@ fn HeaderOnlyFunction() -> string {
     bb1: {
         return;
     }
-
 }
 
 fn VeryLongHeaderTitle() -> string {
@@ -54,7 +52,6 @@ fn VeryLongHeaderTitle() -> string {
     bb1: {
         return;
     }
-
 }
 
 fn HeadersAroundExpressions() -> string {
@@ -186,7 +183,6 @@ fn HeadersAroundExpressions() -> string {
         _0 = copy _2;
         goto -> bb1;
     }
-
 }
 
 fn HeadersInComplexNesting() -> string {
@@ -248,7 +244,6 @@ fn HeadersInComplexNesting() -> string {
         _0 = copy _2;
         goto -> bb1;
     }
-
 }
 
 fn HeadersAndComments() -> string {
@@ -274,7 +269,6 @@ fn HeadersAndComments() -> string {
     bb1: {
         return;
     }
-
 }
 
 fn ConsecutiveHeaders() -> string {
@@ -307,7 +301,6 @@ fn ConsecutiveHeaders() -> string {
     bb1: {
         return;
     }
-
 }
 
 fn UnicodeHeaders() -> string {
@@ -331,7 +324,6 @@ fn UnicodeHeaders() -> string {
     bb1: {
         return;
     }
-
 }
 
 fn HeaderLevels() -> string {
@@ -373,7 +365,6 @@ fn HeaderLevels() -> string {
     bb1: {
         return;
     }
-
 }
 
 fn HeadersWithSpecialChars() -> string {
@@ -406,7 +397,6 @@ fn HeadersWithSpecialChars() -> string {
     bb1: {
         return;
     }
-
 }
 
 fn HeadersWithWhitespace() -> string {
@@ -438,5 +428,4 @@ fn HeadersWithWhitespace() -> string {
     bb1: {
         return;
     }
-
 }

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function AnotherLLM(input: string) -> string {
@@ -12,11 +11,11 @@ function Ambiguous(input: string) -> string {
 }
 
 function ProcessData(data: JsonData) -> string {
-      let result = data.field1 + data.field2;
-      if (result > 100) {
-          return "high";
-      };
-      return "low";
+    let result = data.field1 + data.field2;
+    if (result > 100) {
+        return "high";
+    };
+    return "low";
 }
 
 class JsonData {
@@ -29,20 +28,20 @@ function ExtractData(text: string) -> JsonData {
 }
 
 function SimpleCalc(a: int, b: int) -> int {
-      return a + b * 2;
+    return a + b * 2;
 }
 
 function ProcessAnalysis(analysis: Analysis) -> string {
-      let score = analysis.score;
-      if (score > 0.8) {
-          return "Very positive: " + analysis.sentiment;
-      } else if (score > 0.5) {
-          return "Positive: " + analysis.sentiment;
-      } else if (score > 0.2) {
-          return "Neutral: " + analysis.sentiment;
-      } else {
-          return "Negative: " + analysis.sentiment;
-      }
+    let score = analysis.score;
+    if (score > 0.8) {
+        return "Very positive: " + analysis.sentiment;
+    } else if (score > 0.5) {
+        return "Positive: " + analysis.sentiment;
+    } else if (score > 0.2) {
+        return "Neutral: " + analysis.sentiment;
+    } else {
+        return "Negative: " + analysis.sentiment;
+    }
 }
 
 function LLMAnalyze(text: string) -> Analysis {

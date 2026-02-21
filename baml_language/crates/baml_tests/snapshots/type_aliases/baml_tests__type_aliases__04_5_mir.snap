@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn Bar() -> int {
@@ -15,7 +14,6 @@ fn Bar() -> int {
     bb1: {
         return;
     }
-
 }
 
 fn Foo() -> int {
@@ -30,7 +28,6 @@ fn Foo() -> int {
     bb1: {
         return;
     }
-
 }
 
 fn Baz() -> Json {
@@ -45,7 +42,6 @@ fn Baz() -> Json {
     bb1: {
         return;
     }
-
 }
 
 fn EchoJSON(i: JSON) -> JSON {
@@ -63,7 +59,6 @@ fn EchoJSON(i: JSON) -> JSON {
     bb1: {
         return;
     }
-
 }
 
 fn MakeJSON(i: NotJSON) -> JSON {
@@ -81,5 +76,4 @@ fn MakeJSON(i: NotJSON) -> JSON {
     bb1: {
         return;
     }
-
 }

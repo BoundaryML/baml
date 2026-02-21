@@ -202,6 +202,7 @@ struct ExprBodyBuilder {
     expr_types: FxHashMap<ExprId, Ty>,
     enum_variant_exprs: FxHashMap<ExprId, (baml_base::Name, baml_base::Name)>,
     resolutions: FxHashMap<ExprId, baml_compiler_tir::ResolvedValue>,
+    source_spans: FxHashMap<ExprId, Span>,
 }
 
 impl ExprBodyBuilder {
@@ -212,6 +213,7 @@ impl ExprBodyBuilder {
             expr_types: FxHashMap::default(),
             enum_variant_exprs: FxHashMap::default(),
             resolutions: FxHashMap::default(),
+            source_spans: FxHashMap::default(),
         }
     }
 
@@ -240,8 +242,13 @@ impl ExprBodyBuilder {
             expr_types: self.expr_types,
             enum_variant_exprs: self.enum_variant_exprs,
             resolutions: self.resolutions,
+            source_spans: self.source_spans,
             root,
         }
+    }
+
+    fn record_source_span(&mut self, id: ExprId, span: Span) {
+        self.source_spans.insert(id, span);
     }
 
     fn record_enum_variant(
@@ -308,7 +315,7 @@ impl<'a> LoweringContext<'a> {
         let tir_ty = self.inference.expr_types.get(&hir_id);
         let ty = tir_ty.map(|ty| self.lower_ty(ty)).unwrap_or(Ty::Null);
 
-        match hir_expr {
+        let result = match hir_expr {
             HirExpr::Missing => {
                 let span = self.source_map.expr_span(hir_id).unwrap_or_default();
                 Err(LoweringError::MissingExpression { span })
@@ -580,7 +587,16 @@ impl<'a> LoweringContext<'a> {
                     ty,
                 ))
             }
+        };
+
+        // Record source span from HIR source map onto VIR expression.
+        if let Ok(vir_id) = &result {
+            if let Some(span) = self.source_map.expr_span(hir_id) {
+                self.builder.record_source_span(*vir_id, span);
+            }
         }
+
+        result
     }
 
     /// Weave a block's statements and optional tail expression into Let/Seq chains.
@@ -692,7 +708,7 @@ impl<'a> LoweringContext<'a> {
 
         let stmt = &hir_body.stmts[stmt_id];
 
-        match stmt {
+        let result = match stmt {
             HirStmt::Missing => {
                 let span = self.source_map.stmt_span(stmt_id).unwrap_or_default();
                 Err(LoweringError::MissingStatement { span })
@@ -826,7 +842,16 @@ impl<'a> LoweringContext<'a> {
                 },
                 Ty::Void,
             )),
+        };
+
+        // Record source span from HIR source map onto VIR expression.
+        if let Ok(vir_id) = &result {
+            if let Some(span) = self.source_map.stmt_span(stmt_id) {
+                self.builder.record_source_span(*vir_id, span);
+            }
         }
+
+        result
     }
 
     /// Lower a TIR type to the unified `baml_type::Ty`.

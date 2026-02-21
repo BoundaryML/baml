@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === FORMATTER ERROR ===
 [UnexpectedToken { expected: "LLM function missing 'prompt' field", found: "'}'", span: Span { file_id: FileId(0), range: 218..219 } }, UnexpectedToken { expected: "Only 'client' and 'prompt' allowed in LLM function, found 'clent'", found: "identifier", span: Span { file_id: FileId(0), range: 312..317 } }, UnexpectedToken { expected: "Only 'client' and 'prompt' allowed in LLM function, found 'GPT4'", found: "identifier", span: Span { file_id: FileId(0), range: 318..322 } }, UnexpectedToken { expected: "LLM function missing 'client' field", found: "'}'", span: Span { file_id: FileId(0), range: 418..419 } }]

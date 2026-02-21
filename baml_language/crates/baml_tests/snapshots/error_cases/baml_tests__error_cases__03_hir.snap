@@ -1,22 +1,21 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function Broken.MixedLiteralAndTyped(x: int) -> string {
-      match (x) {
-          42 | n: int => "mixed",
-      }
+    match (x) {
+        42 | n: int => "mixed",
+    }
 }
 
 function Broken.Invalid() -> <unknown> {
 }
 
 function Broken.BadUnionPattern(x: int | bool) -> string {
-      match (x) {
-          a: int | b => <missing>,
-          bool => "bad",
-      }
+    match (x) {
+        a: int | b => <missing>,
+        bool => "bad",
+    }
 }
 
 class Broken {

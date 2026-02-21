@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === FORMATTER ERROR ===
 [UnexpectedToken { expected: "function name", found: "integer", span: Span { file_id: FileId(0), range: 82..85 } }, UnexpectedToken { expected: "return type (->)", found: "'{'", span: Span { file_id: FileId(0), range: 95..96 } }, UnexpectedToken { expected: "'=>' after pattern", found: "':'", span: Span { file_id: FileId(0), range: 654..655 } }, UnexpectedToken { expected: "expression", found: "':'", span: Span { file_id: FileId(0), range: 654..655 } }, UnexpectedToken { expected: "'}'", found: "EOF", span: Span { file_id: FileId(0), range: 831..832 } }]

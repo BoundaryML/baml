@@ -36,19 +36,31 @@ fn main() {
     generate_benchmarks(&out_dir, &manifest_dir);
 }
 
-fn generate_tests(out_dir: &str, manifest_dir: &str) {
+fn generate_tests(_out_dir: &str, manifest_dir: &str) {
     let projects_dir = Path::new(&manifest_dir).join("projects");
 
     // Discover all projects
     let projects = discover_projects(&projects_dir);
 
-    // Generate test file
-    let dest_path = Path::new(&out_dir).join("generated_tests.rs");
+    // Write to the source directory so that file!() returns a stable path
+    // (OUT_DIR contains a hash that changes between builds, causing noisy
+    // diffs in insta snapshot metadata).
+    let dest_path = Path::new(&manifest_dir).join("src/generated_tests.rs");
 
-    let test_modules: TokenStream = projects
+    let exclude_builtins = quote!(|name: &&String| !name.starts_with(BAML_STD_PREFIX));
+    let project_modules: TokenStream = projects
         .iter()
-        .map(|project| generate_project_tests(project, manifest_dir))
+        .map(|project| {
+            generate_project_tests(project, manifest_dir, exclude_builtins.clone(), false)
+        })
         .collect();
+
+    let baml_std_module = generate_baml_std_test(manifest_dir);
+
+    let test_modules: TokenStream = quote! {
+        #project_modules
+        #baml_std_module
+    };
 
     let header = "\
 // Auto-generated tests from projects/
@@ -176,7 +188,12 @@ fn discover_baml_files(dir: &Path) -> Vec<BamlFile> {
     files
 }
 
-fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStream {
+fn generate_project_tests(
+    project: &TestProject,
+    manifest_dir: &str,
+    codegen_filter: TokenStream,
+    require_codegen_functions: bool,
+) -> TokenStream {
     let module_name = format_ident!("{}", project.name.replace("-", "_"));
     let snapshot_path = format!(
         "{}/snapshots/{}",
@@ -192,7 +209,7 @@ fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStr
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
     let diagnostics_test = generate_diagnostics_test(project);
-    let codegen_test = generate_codegen_test(project);
+    let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
 
     let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
 
@@ -275,7 +292,7 @@ fn generate_lexer_test(baml_file: &BamlFile) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!(#snapshot_name, output);
             });
         }
@@ -323,7 +340,7 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!(#snapshot_name, output);
             });
         }
@@ -372,7 +389,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
                 writeln!(output, "No items found.").unwrap();
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("03_hir", output);
             });
         }
@@ -455,7 +472,7 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_tir", output);
             });
         }
@@ -576,7 +593,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
             });
         }
@@ -656,14 +673,85 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("05_diagnostics", output);
             });
         }
     }
 }
 
-fn generate_codegen_test(project: &TestProject) -> TokenStream {
+/// Generate a standalone test module for the BAML standard library (builtins).
+///
+/// Uses the same `generate_project_tests` as regular projects, just with
+/// the codegen filter flipped to include only `baml.*` functions.
+fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
+    let builtins_dir = Path::new(manifest_dir).join("../baml_builtins/baml");
+    let files = discover_baml_files(&builtins_dir);
+
+    if files.is_empty() {
+        return quote! {};
+    }
+
+    let project = TestProject {
+        name: "__baml_std__".to_string(),
+        path: builtins_dir,
+        files,
+    };
+
+    let include_builtins = quote!(|name: &&String| name.starts_with(BAML_STD_PREFIX));
+    generate_project_tests(&project, manifest_dir, include_builtins, true)
+}
+
+/// Emits a `quote!` fragment that collects sorted functions from a compiled program,
+/// filtered by a predicate on the function name. The `filter_expr` should be a quoted
+/// expression of type `impl Fn(&&String) -> bool`.
+fn emit_collect_functions(filter_expr: TokenStream) -> TokenStream {
+    quote! {
+        let mut func_names: Vec<_> = program.function_indices.keys()
+            .filter(#filter_expr)
+            .collect();
+        func_names.sort();
+
+        let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
+            .iter()
+            .map(|name| {
+                let idx = *program.function_indices.get(*name).unwrap();
+                match program.objects.get(idx) {
+                    Some(baml_compiler_emit::Object::Function(func)) => {
+                        ((*name).clone(), func.as_ref())
+                    }
+                    other => {
+                        panic!(
+                            "function_indices entry '{}' (idx={}) is not a Function: {:?}",
+                            name, idx, other.map(std::mem::discriminant)
+                        );
+                    }
+                }
+            })
+            .collect();
+    }
+}
+
+fn generate_codegen_test(
+    project: &TestProject,
+    codegen_filter: TokenStream,
+    require_non_empty: bool,
+) -> TokenStream {
+    let collect_functions = emit_collect_functions(codegen_filter);
+    let project_name = project.name.clone();
+    let require_functions_guard = if require_non_empty {
+        quote! {
+            if functions.is_empty() {
+                panic!(
+                    "No functions matched codegen filter in project '{}'",
+                    #project_name
+                );
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -705,41 +793,18 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
             let mut output = String::new();
 
             // Pass all files (builtins + user) to compile_files
-            match baml_compiler_emit::compile_files(&db, &all_files) {
+            match baml_compiler_emit::compile_files(&db, &all_files, baml_compiler_emit::OptLevel::One) {
                 Ok(program) => {
-                    writeln!(output, "=== BYTECODE ===").unwrap();
-                    writeln!(output, "Functions: {}", program.function_indices.len()).unwrap();
-                    writeln!(output, "Objects: {}", program.objects.len()).unwrap();
-                    writeln!(output, "Globals: {}", program.globals.len()).unwrap();
+                    // Collect sorted functions, excluding builtins (baml.*)
+                    // which are snapshotted separately in baml_std.
+                    #collect_functions
 
-                    // Show functions and their bytecode using debug formatting
-                    let mut func_names: Vec<_> = program.function_indices.keys().collect();
-                    func_names.sort();
-                    for func_name in func_names {
-                        if let Some(&idx) = program.function_indices.get(func_name)
-                            && let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx)
-                        {
-                            writeln!(output, "\nFunction {} (arity: {}, kind: {:?}):", func_name, func.arity, func.kind).unwrap();
-                            // Use empty GlobalPool for compile-time display (no heap available)
-                            // Pass ObjectPool and compile-time globals to resolve names
-                            let empty_globals = bex_vm_types::indexable::GlobalPool::new();
-                            let bytecode_table = bex_vm::debug::display_bytecode(
-                                func,
-                                &bex_vm::EvalStack::new(),
-                                &empty_globals,
-                                Some(&program.objects),
-                                Some(&program.globals),
-                                false,  // no colors
-                            );
-                            if bytecode_table.is_empty() {
-                                writeln!(output, "  (no bytecode)").unwrap();
-                            } else {
-                                for line in bytecode_table.lines() {
-                                    writeln!(output, "  {}", line).unwrap();
-                                }
-                            }
-                        }
-                    }
+                    #require_functions_guard
+
+                    output = bex_vm::debug::display_program(
+                        &functions,
+                        bex_vm::debug::BytecodeFormat::Textual,
+                    );
                 }
                 Err(err) => {
                     writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").unwrap();
@@ -747,7 +812,7 @@ fn generate_codegen_test(project: &TestProject) -> TokenStream {
                 }
             }
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("06_codegen", output);
             });
         }
@@ -865,14 +930,14 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                 Ok(formatted) => formatted,
                 Err(e) => {
                     let output = format!("=== FORMATTER ERROR ===\n{}", e);
-                    with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+                    with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                         assert_snapshot!(#snapshot_name, output);
                     });
                     return;
                 }
             };
 
-            with_settings!({snapshot_path => SNAPSHOT_PATH}, {
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!(#snapshot_name, first);
             });
 

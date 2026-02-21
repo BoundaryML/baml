@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === DIAGNOSTICS ===
   [hir] Error: Attribute `@@description` can only be defined once on class `HasDuplicateDescription`

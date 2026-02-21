@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn FormatMessage(name: string) -> string {
@@ -29,7 +28,6 @@ fn FormatMessage(name: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn ProcessText(input: string) -> string {
@@ -58,7 +56,6 @@ fn ProcessText(input: string) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn GetRole() -> "admin" | "user" | "guest" {
@@ -78,7 +75,6 @@ fn GetRole() -> "admin" | "user" | "guest" {
     bb2: {
         return;
     }
-
 }
 
 fn GPT4.resolve() -> baml.llm.PrimitiveClient {
@@ -119,5 +115,4 @@ fn GPT4.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }

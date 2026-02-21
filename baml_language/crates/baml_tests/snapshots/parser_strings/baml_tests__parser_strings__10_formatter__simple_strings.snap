@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === FORMATTER ERROR ===
 [UnexpectedToken { expected: "')'", found: "identifier", span: Span { file_id: FileId(0), range: 275..280 } }, InvalidSyntax { message: "field 'hello' is missing a type annotation", span: Span { file_id: FileId(0), range: 275..280 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "error", span: Span { file_id: FileId(0), range: 280..281 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 281..282 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 282..283 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "')'", span: Span { file_id: FileId(0), range: 283..284 } }]

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn Foo() -> null {
@@ -15,7 +14,6 @@ fn Foo() -> null {
     bb1: {
         return;
     }
-
 }
 
 fn GPT4.resolve() -> baml.llm.PrimitiveClient {
@@ -56,7 +54,6 @@ fn GPT4.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }
 
 fn Incomplete:
@@ -79,5 +76,4 @@ fn NextFunction() -> string {
     bb2: {
         return;
     }
-
 }

@@ -1,30 +1,29 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function floatArray() -> float[] {
-      [1.0, 2.0, 3.0]
+    [1.0, 2.0, 3.0]
 }
 
 function stringArray() -> string[] {
-      ["hello", "world", "test"]
+    ["hello", "world", "test"]
 }
 
 function pointArray() -> Point[] {
-      [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }]
+    [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }]
 }
 
 function boolArray() -> bool[] {
-      [true, false, true]
+    [true, false, true]
 }
 
 function mixedArray() -> (int | string)[] {
-      [1, "two", 3]
+    [1, "two", 3]
 }
 
 function intArray() -> int[] {
-      [1, 2, 3]
+    [1, 2, 3]
 }
 
 class Point {
@@ -33,11 +32,11 @@ class Point {
 }
 
 function point() -> Point {
-      Point { x: 1, y: 2 }
+    Point { x: 1, y: 2 }
 }
 
 function vec2d() -> Vec2D {
-      Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } }
+    Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } }
 }
 
 class Vec2D {
@@ -51,17 +50,17 @@ class Point {
 }
 
 function boolValues() -> map<string, bool> {
-      { "hello": true, "test": false }
+    { "hello": true, "test": false }
 }
 
 function intValues() -> map<string, int> {
-      { "hello": 1, "test": 2 }
+    { "hello": 1, "test": 2 }
 }
 
 function stringValues() -> map<string, string> {
-      { "hello": "world", "test": "test" }
+    { "hello": "world", "test": "test" }
 }
 
 function floatValues() -> map<string, float> {
-      { "hello": 1.0, "test": 2.0 }
+    { "hello": 1.0, "test": 2.0 }
 }

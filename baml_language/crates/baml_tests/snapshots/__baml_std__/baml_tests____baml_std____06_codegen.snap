@@ -1,0 +1,751 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
+    load_const 0
+    store_var offset
+    load_var self
+    load_field .rr_client_names
+    store_var _iter
+    load_var _iter
+    call baml.Array.length
+    store_var _len
+    load_const 0
+    store_var _i
+
+  L0:
+    load_var _i
+    load_var _len
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var offset
+    return
+
+  L2:
+    load_var _iter
+    load_var _i
+    load_array_element
+    store_var seen_name
+    load_var _i
+    load_const 1
+    bin_op +
+    store_var _i
+    load_var seen_name
+    load_var client_name
+    cmp_op ==
+    pop_jump_if_false L0
+    load_var offset
+    load_const 1
+    bin_op +
+    store_var offset
+    jump L0
+}
+
+function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int {
+    load_var self
+    load_var client_name
+    call baml.llm.PlannerState.rr_local_offset
+    store_var local_offset
+    load_var self
+    load_field .rr_client_names
+    load_var client_name
+    call baml.Array.push
+    pop 1
+    load_var client_name
+    dispatch_future baml.llm.round_robin_peek
+    await
+    load_var local_offset
+    bin_op +
+    load_var sub_client_count
+    bin_op %
+    return
+}
+
+function baml.llm.build_attempt(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
+    load_var llm_client
+    alloc_instance baml.llm.PlannerState
+    copy 0
+    alloc_array 0
+    store_field .rr_client_names
+    call baml.llm.build_attempt_with_state
+    return
+}
+
+function baml.llm.build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
+    load_var llm_client
+    load_field .client_type
+    discriminant
+    copy 0
+    load_const baml.llm.ClientType.Primitive
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L9
+
+  L0:
+    copy 0
+    load_const baml.llm.ClientType.Fallback
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L4
+
+  L1:
+    pop 1
+    load_var llm_client
+    load_field .sub_clients
+    call baml.Array.length
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var llm_client
+    load_field .name
+    store_var _69
+    load_var llm_client
+    load_field .sub_clients
+    call baml.Array.length
+    store_var _71
+    load_var planner_state
+    load_var _69
+    load_var _71
+    call baml.llm.PlannerState.rr_pick_index
+    store_var idx
+    load_var llm_client
+    load_field .sub_clients
+    load_var idx
+    call baml.Array.at
+    load_var planner_state
+    call baml.llm.build_plan_with_state
+    jump L10
+
+  L3:
+    alloc_array 0
+    jump L10
+
+  L4:
+    alloc_array 0
+    store_var steps
+    load_var llm_client
+    load_field .sub_clients
+    store_var _iter
+    load_var _iter
+    call baml.Array.length
+    store_var _len
+    load_const 0
+    store_var _i
+
+  L5:
+    load_var _i
+    load_var _len
+    cmp_op <
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var steps
+    jump L10
+
+  L7:
+    load_var _iter
+    load_var _i
+    load_array_element
+    store_var sub
+    load_var _i
+    load_const 1
+    bin_op +
+    store_var _i
+    load_var sub
+    load_var planner_state
+    call baml.llm.build_plan_with_state
+    store_var _iter1
+    load_var _iter1
+    call baml.Array.length
+    store_var _len1
+    load_const 0
+    store_var _i1
+
+  L8:
+    load_var _i1
+    load_var _len1
+    cmp_op <
+    pop_jump_if_false L5
+    load_var _iter1
+    load_var _i1
+    load_array_element
+    store_var step
+    load_var _i1
+    load_const 1
+    bin_op +
+    store_var _i1
+    load_var steps
+    load_var step
+    call baml.Array.push
+    pop 1
+    jump L8
+
+  L9:
+    load_var llm_client
+    load_field .name
+    dispatch_future baml.llm.resolve_client
+    await
+    call_indirect
+    store_var primitive
+    alloc_instance baml.llm.OrchestrationStep
+    copy 0
+    load_var primitive
+    store_field .primitive_client
+    copy 0
+    load_const 0
+    store_field .delay_ms
+    alloc_array 1
+
+  L10:
+    return
+}
+
+function baml.llm.build_plan(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
+    load_var llm_client
+    alloc_instance baml.llm.PlannerState
+    copy 0
+    alloc_array 0
+    store_field .rr_client_names
+    call baml.llm.build_plan_with_state
+    return
+}
+
+function baml.llm.build_plan_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
+    load_var llm_client
+    load_field .retry
+    store_var _3
+    load_var _3
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L10
+
+  L0:
+    load_var _3
+    store_var r
+    alloc_array 0
+    store_var result
+    load_var r
+    load_field .initial_delay_ms
+    load_const 0
+    bin_op +
+    store_var current_delay
+    load_const 0
+    store_var attempt
+
+  L1:
+    load_var attempt
+    load_var r
+    load_field .max_retries
+    cmp_op <=
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var result
+    jump L11
+
+  L3:
+    load_const 0
+    store_var delay
+    load_var attempt
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L6
+    load_var current_delay
+    call baml.math.trunc
+    store_var delay
+    load_var current_delay
+    load_var r
+    load_field .multiplier
+    bin_op *
+    store_var next
+    load_var next
+    load_var r
+    load_field .max_delay_ms
+    load_const 0
+    bin_op +
+    cmp_op >
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var next
+    store_var current_delay
+    jump L6
+
+  L5:
+    load_var r
+    load_field .max_delay_ms
+    load_const 0
+    bin_op +
+    store_var current_delay
+
+  L6:
+    load_var llm_client
+    load_var planner_state
+    call baml.llm.build_attempt_with_state
+    store_var _iter
+    load_var _iter
+    call baml.Array.length
+    store_var _len
+    load_const 0
+    store_var _i
+
+  L7:
+    load_var _i
+    load_var _len
+    cmp_op <
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_var attempt
+    load_const 1
+    bin_op +
+    store_var attempt
+    jump L1
+
+  L9:
+    load_var _iter
+    load_var _i
+    load_array_element
+    store_var step
+    load_var _i
+    load_const 1
+    bin_op +
+    store_var _i
+    load_var result
+    alloc_instance baml.llm.OrchestrationStep
+    copy 0
+    load_var step
+    load_field .primitive_client
+    store_field .primitive_client
+    copy 0
+    load_var delay
+    store_field .delay_ms
+    call baml.Array.push
+    pop 1
+    jump L7
+
+  L10:
+    load_var llm_client
+    load_var planner_state
+    call baml.llm.build_attempt_with_state
+
+  L11:
+    return
+}
+
+function baml.llm.build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
+    load_var function_name
+    call baml.llm.resolve_primitive
+    store_var primitive_client
+    load_var function_name
+    load_var args
+    call baml.llm.render_prompt
+    store_var specialized_prompt
+    load_var primitive_client
+    load_var specialized_prompt
+    dispatch_future baml.llm.PrimitiveClient.build_request
+    await
+    return
+}
+
+function baml.llm.call_llm_function(function_name: string, args: map<string, unknown>) -> unknown {
+    load_var function_name
+    dispatch_future baml.llm.get_jinja_template
+    await
+    store_var jinja_string
+    load_var function_name
+    dispatch_future baml.llm.get_client
+    await
+    alloc_instance baml.llm.ExecutionContext
+    copy 0
+    load_var jinja_string
+    store_field .jinja_string
+    copy 0
+    load_var args
+    store_field .args
+    copy 0
+    load_var function_name
+    store_field .function_name
+    load_const 0
+    call baml.llm.execute_client
+    store_var result
+    load_var result
+    load_field .ok
+    pop_jump_if_false L0
+    jump L2
+
+  L0:
+    dispatch_future baml.sys.cancellation_requested
+    await
+    pop_jump_if_false L1
+    load_const "Operation cancelled"
+    dispatch_future baml.sys.panic
+    await
+    pop 1
+
+  L1:
+    load_const "All orchestration steps failed"
+    dispatch_future baml.sys.panic
+    await
+    pop 1
+    load_const null
+    return
+
+  L2:
+    load_var result
+    load_field .value
+    return
+}
+
+function baml.llm.execute_client(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.ExecutionResult {
+    load_var llm_client
+    load_field .retry
+    store_var _4
+    load_var _4
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L12
+
+  L0:
+    load_var _4
+    store_var r
+    load_var r
+    load_field .initial_delay_ms
+    load_const 0
+    bin_op +
+    store_var current_delay
+    load_const 0
+    store_var attempt
+
+  L1:
+    load_var attempt
+    load_var r
+    load_field .max_retries
+    cmp_op <=
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    alloc_instance baml.llm.ExecutionResult
+    copy 0
+    load_const false
+    store_field .ok
+    copy 0
+    load_const null
+    store_field .value
+    jump L13
+
+  L3:
+    dispatch_future baml.sys.cancellation_requested
+    await
+    pop_jump_if_false L4
+    jump L11
+
+  L4:
+    load_var inherited_delay_ms
+    store_var attempt_delay
+    load_var attempt
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L7
+    load_var current_delay
+    call baml.math.trunc
+    store_var attempt_delay
+    load_var current_delay
+    load_var r
+    load_field .multiplier
+    bin_op *
+    store_var next
+    load_var next
+    load_var r
+    load_field .max_delay_ms
+    load_const 0
+    bin_op +
+    cmp_op >
+    pop_jump_if_false L5
+    jump L6
+
+  L5:
+    load_var next
+    store_var current_delay
+    jump L7
+
+  L6:
+    load_var r
+    load_field .max_delay_ms
+    load_const 0
+    bin_op +
+    store_var current_delay
+
+  L7:
+    load_var attempt
+    load_var r
+    load_field .max_retries
+    cmp_op ==
+    pop_jump_if_false L8
+    load_var inherited_delay_ms
+    store_var attempt_delay
+
+  L8:
+    load_var llm_client
+    load_var context
+    load_var attempt_delay
+    call baml.llm.execute_client_once
+    store_var result
+    load_var result
+    load_field .ok
+    pop_jump_if_false L9
+    jump L10
+
+  L9:
+    load_var attempt
+    load_const 1
+    bin_op +
+    store_var attempt
+    jump L1
+
+  L10:
+    load_var result
+    return
+
+  L11:
+    return
+
+  L12:
+    load_var llm_client
+    load_var context
+    load_var inherited_delay_ms
+    call baml.llm.execute_client_once
+
+  L13:
+    return
+}
+
+function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.ExecutionResult {
+    load_var llm_client
+    load_field .client_type
+    discriminant
+    copy 0
+    load_const baml.llm.ClientType.Primitive
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L10
+
+  L0:
+    copy 0
+    load_const baml.llm.ClientType.Fallback
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L4
+
+  L1:
+    pop 1
+    dispatch_future baml.sys.cancellation_requested
+    await
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var llm_client
+    load_field .name
+    dispatch_future baml.llm.round_robin_next
+    await
+    store_var _107
+    load_var llm_client
+    load_field .sub_clients
+    call baml.Array.length
+    store_var _112
+    load_var llm_client
+    load_field .sub_clients
+    load_var _107
+    load_var _112
+    bin_op %
+    call baml.Array.at
+    load_var context
+    load_var active_delay_ms
+    call baml.llm.execute_client
+    jump L14
+
+  L3:
+    return
+
+  L4:
+    load_var llm_client
+    load_field .sub_clients
+    store_var _iter
+    load_var _iter
+    call baml.Array.length
+    store_var _len
+    load_const 0
+    store_var _i
+
+  L5:
+    load_var _i
+    load_var _len
+    cmp_op <
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    alloc_instance baml.llm.ExecutionResult
+    copy 0
+    load_const false
+    store_field .ok
+    copy 0
+    load_const null
+    store_field .value
+    jump L14
+
+  L7:
+    load_var _iter
+    load_var _i
+    load_array_element
+    store_var sub
+    load_var _i
+    load_const 1
+    bin_op +
+    store_var _i
+    dispatch_future baml.sys.cancellation_requested
+    await
+    pop_jump_if_false L8
+    jump L9
+
+  L8:
+    load_var sub
+    load_var context
+    load_var active_delay_ms
+    call baml.llm.execute_client
+    store_var result
+    load_var result
+    load_field .ok
+    pop_jump_if_false L5
+    load_var result
+    return
+
+  L9:
+    return
+
+  L10:
+    dispatch_future baml.sys.cancellation_requested
+    await
+    pop_jump_if_false L11
+    jump L16
+
+  L11:
+    load_var llm_client
+    load_field .name
+    dispatch_future baml.llm.resolve_client
+    await
+    call_indirect
+    store_var primitive
+    load_var primitive
+    load_var context
+    load_field .jinja_string
+    load_var context
+    load_field .args
+    dispatch_future baml.llm.PrimitiveClient.render_prompt
+    await
+    store_var prompt
+    load_var primitive
+    load_var prompt
+    dispatch_future baml.llm.PrimitiveClient.specialize_prompt
+    await
+    store_var specialized
+    load_var primitive
+    load_var specialized
+    dispatch_future baml.llm.PrimitiveClient.build_request
+    await
+    dispatch_future baml.http.send
+    await
+    store_var http_response
+    load_var http_response
+    dispatch_future baml.http.Response.ok
+    await
+    pop_jump_if_false L12
+    jump L15
+
+  L12:
+    load_var active_delay_ms
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L13
+    load_var active_delay_ms
+    dispatch_future baml.sys.sleep
+    await
+    pop 1
+
+  L13:
+    alloc_instance baml.llm.ExecutionResult
+    copy 0
+    load_const false
+    store_field .ok
+    copy 0
+    load_const null
+    store_field .value
+
+  L14:
+    return
+
+  L15:
+    load_var http_response
+    dispatch_future baml.http.Response.text
+    await
+    store_var body
+    load_var context
+    load_field .function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    store_var return_type
+    return
+
+  L16:
+    return
+}
+
+function baml.llm.render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
+    load_var function_name
+    dispatch_future baml.llm.get_jinja_template
+    await
+    store_var jinja_string
+    load_var function_name
+    call baml.llm.resolve_primitive
+    store_var primitive_client
+    load_var primitive_client
+    load_var jinja_string
+    load_var args
+    dispatch_future baml.llm.PrimitiveClient.render_prompt
+    await
+    store_var prompt
+    load_var primitive_client
+    load_var prompt
+    dispatch_future baml.llm.PrimitiveClient.specialize_prompt
+    await
+    return
+}
+
+function baml.llm.resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
+    load_var function_name
+    dispatch_future baml.llm.get_client
+    await
+    load_field .name
+    dispatch_future baml.llm.resolve_client
+    await
+    call_indirect
+    return
+}

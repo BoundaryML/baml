@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn CommentAfterArrow() -> string {
@@ -24,7 +23,6 @@ fn CommentAfterArrow() -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn FunctionWithComments(a: string, b: int) -> string {
@@ -58,7 +56,6 @@ fn FunctionWithComments(a: string, b: int) -> string {
     bb2: {
         goto -> bb1;
     }
-
 }
 
 fn TestClient.resolve() -> baml.llm.PrimitiveClient {
@@ -99,5 +96,4 @@ fn TestClient.resolve() -> baml.llm.PrimitiveClient {
     bb3: {
         goto -> bb1;
     }
-
 }

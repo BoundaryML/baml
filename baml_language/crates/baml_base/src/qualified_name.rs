@@ -9,6 +9,12 @@
 
 use crate::Name;
 
+/// Prefix used for standard library items in qualified names.
+///
+/// All `Namespace::BamlStd` and standard `Namespace::Builtin` items
+/// are displayed with this prefix (e.g., `baml.llm.call_llm_function`).
+pub const BAML_STD_PREFIX: &str = "baml.";
+
 /// Non-baml-prefixed builtin module names.
 ///
 /// These are builtins that don't use the `baml.*` prefix convention.
@@ -543,6 +549,20 @@ mod tests {
         let qn = QualifiedName::baml_std(vec![Name::new("http")], Name::new("get"));
         assert!(qn.is_baml_std());
         assert_eq!(qn.display(), "baml.http.get");
+    }
+
+    #[test]
+    fn test_baml_std_prefix_matches_display() {
+        assert_eq!(BAML_STD_PREFIX, "baml.");
+
+        let builtin = QualifiedName::builtin(vec![Name::new("Array")], Name::new("length"));
+        assert!(builtin.display().starts_with(BAML_STD_PREFIX));
+
+        let std_item = QualifiedName::baml_std(vec![Name::new("http")], Name::new("get"));
+        assert!(std_item.display().starts_with(BAML_STD_PREFIX));
+
+        let env = QualifiedName::from_builtin_path("env.get");
+        assert!(!env.display().starts_with(BAML_STD_PREFIX));
     }
 
     #[test]

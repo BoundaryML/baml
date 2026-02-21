@@ -86,7 +86,7 @@ pub fn compile_source(source: &str) -> VmProgram {
 
     let project = db.get_project().unwrap();
     let all_files = project.files(&db).clone();
-    baml_compiler_emit::compile_files(&db, &all_files)
+    baml_compiler_emit::compile_files(&db, &all_files, baml_compiler_emit::OptLevel::One)
         .expect("compile_files should succeed for valid test source")
 }
 
@@ -285,21 +285,37 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         name: "test_fn".to_string(),
         arity: input.arity,
         real_local_count: input.real_local_count,
-        bytecode: bex_vm_types::Bytecode {
-            source_lines: vec![1; input.instructions.len()],
-            scopes: vec![0; input.instructions.len()],
-            instructions: input.instructions,
-            constants: input.constants,
-            resolved_constants: Vec::new(), // Populated by BexHeap at load time
-            jump_tables: Vec::new(),
+        bytecode: {
+            let num_instructions = input.instructions.len();
+            bex_vm_types::Bytecode {
+                meta: vec![
+                    bex_vm_types::bytecode::InstructionMeta { operand: None };
+                    num_instructions
+                ],
+                instructions: input.instructions,
+                constants: input.constants,
+                resolved_constants: Vec::new(),
+                jump_tables: Vec::new(),
+                line_table: if num_instructions == 0 {
+                    Vec::new()
+                } else {
+                    vec![bex_vm_types::bytecode::LineTableEntry {
+                        pc: 0,
+                        span: baml_base::Span::fake(),
+                        line: 1,
+                        sequence_point: true,
+                        discriminator: 0,
+                    }]
+                },
+            }
         },
         kind: bex_vm_types::FunctionKind::Bytecode,
-        locals_in_scope: {
-            let mut names = Vec::with_capacity(input.arity + input.real_local_count + 1);
-            names.push("<fn test_fn>".to_string());
+        local_names: {
+            let mut names = Vec::with_capacity(input.arity + input.real_local_count);
             names.resize_with(names.capacity(), String::new);
-            vec![names]
+            names
         },
+        debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
         block_notifications: Vec::new(),
         viz_nodes: Vec::new(),
