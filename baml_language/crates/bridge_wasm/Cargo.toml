@@ -28,10 +28,10 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tsify = { workspace = true }
 vfs = { workspace = true }
-web-time = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 wasm-logger = { workspace = true }
+web-time = { workspace = true }
 
 [dev-dependencies]
 wasm-bindgen-test = { workspace = true }
