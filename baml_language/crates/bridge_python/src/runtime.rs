@@ -136,7 +136,7 @@ impl BamlRuntime {
             call_ctx = call_ctx.with_host_ctx(host_ctx);
         }
 
-        let rt = bridge_cffi::engine::get_tokio_runtime();
+        let rt = bridge_cffi::engine::get_tokio_runtime().map_err(bridge_error_to_py)?;
 
         let result = py
             .allow_threads(|| {
