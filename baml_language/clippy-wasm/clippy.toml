@@ -2,6 +2,6 @@
 # On wasm32, web_time types are distinct from std::time so clippy correctly
 # flags only direct std::time usage without false-positiving on web_time.
 disallowed-types = [
-    { path = "std::time::SystemTime", reason = "use web_time::SystemTime for WASM compatibility" },
-    { path = "std::time::Instant", reason = "use web_time::Instant for WASM compatibility" },
+    { path = "std::time::SystemTime", reason = "use web_time::SystemTime for WASM compatibility", replacement = "web_time::SystemTime" },
+    { path = "std::time::Instant", reason = "use web_time::Instant for WASM compatibility", replacement = "web_time::Instant" },
 ]

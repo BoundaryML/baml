@@ -37,7 +37,8 @@ if [ -z "$WASM_PKGS" ]; then
   echo "No WASM-enabled packages found; nothing to check." >&2
   exit 0
 fi
-CLIPPY_CONF_DIR="$(pwd)/clippy-wasm" cargo clippy $WASM_PKGS --target wasm32-unknown-unknown --all-features --locked -- -D warnings -W clippy::disallowed-types
+CLIPPY_CONF_DIR="$MISE_CONFIG_ROOT/clippy-wasm" cargo clippy $WASM_PKGS --target wasm32-unknown-unknown --all-features --locked -- -D warnings -W clippy::disallowed-types
+
 """
 sources = ["**/*.rs", "**/Cargo.toml", "clippy-wasm/clippy.toml"]
 
