@@ -1,4 +1,4 @@
-//! `bridge_wasm` - WASM bindings for BAML using `bex_engine`.
+//! `bridge_wasm` - WASM bindings for BAML using `bex_project`.
 //!
 //! This crate only supports the `wasm32-unknown-unknown` target. Use
 //! `--target wasm32-unknown-unknown` when building.
@@ -52,13 +52,10 @@ mod wasm_http;
 mod wasm_lsp;
 mod wasm_playground;
 
-use std::{cell::RefCell, collections::HashMap};
-
 pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
-use sys_types::CancellationToken;
 use wasm_bindgen::prelude::*;
 
 static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
@@ -148,8 +145,6 @@ extern "C" {
 #[wasm_bindgen]
 pub struct BamlWasmRuntime {
     bex: Box<dyn bex_project::BexLsp>,
-    /// Active calls keyed by caller-provided ID. WASM is single-threaded so `RefCell` suffices.
-    active_calls: RefCell<HashMap<u32, CancellationToken>>,
 }
 
 // SAFETY: wasm32-unknown-unknown is single-threaded, so unwind safety is
@@ -199,10 +194,7 @@ impl BamlWasmRuntime {
             bex_project::BamlVFS::new(vfs),
         );
 
-        Ok(BamlWasmRuntime {
-            bex: Box::new(bex),
-            active_calls: RefCell::new(HashMap::new()),
-        })
+        Ok(BamlWasmRuntime { bex: Box::new(bex) })
     }
 
     /// Call a BAML function for a specific project.
@@ -235,27 +227,22 @@ impl BamlWasmRuntime {
         let call_id = sys_types::CallId(u64::from(id));
         let fs_path = bex_project::FsPath::from_str(project);
 
-        // Create cancellation token and register.
-        let cancel = CancellationToken::new();
-        if self.active_calls.borrow().contains_key(&id) {
-            return Err(JsError::new("Call ID already in use").into());
-        }
-        self.active_calls.borrow_mut().insert(id, cancel.clone());
+        let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
 
         // Call the function.
-        let result = self
+        let bex = self
             .bex
-            .call_function_for_project(&fs_path, name, kwargs.into(), call_id, cancel)
+            .get_bex_for_project(&fs_path)
+            .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
+        let result = bex
+            .call_function(name, kwargs.into(), function_call_ctx.build())
             .await;
-
-        // Unregister from active calls.
-        self.active_calls.borrow_mut().remove(&id);
 
         // Handle cancellation error.
         let result = result.map_err(|e| -> JsValue {
             if matches!(
                 e,
-                bex_project::RuntimeError::Engine(bex_engine::EngineError::Cancelled)
+                bex_project::RuntimeError::Engine(bex_project::EngineError::Cancelled)
             ) {
                 let err = js_sys::Error::new("Operation cancelled");
                 err.set_name("BamlCancelledError");
@@ -283,10 +270,15 @@ impl BamlWasmRuntime {
     /// cancellation check point. If the call has already completed or the ID
     /// is unknown, this is a no-op.
     #[wasm_bindgen(js_name = cancelCall)]
-    pub fn cancel_call(&self, call_id: u32) {
-        if let Some(token) = self.active_calls.borrow_mut().remove(&call_id) {
-            token.cancel();
-        }
+    pub fn cancel_call(&self, project: String, call_id: u32) -> Result<(), JsError> {
+        let fs_path = bex_project::FsPath::from_str(project);
+        let bex = self
+            .bex
+            .get_bex_for_project(&fs_path)
+            .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
+        bex.cancel_function_call(sys_types::CallId(u64::from(call_id)))
+            .map_err(|e| JsError::new(&format!("Failed to cancel function call: {e}")))?;
+        Ok(())
     }
 
     /// Handle an LSP request.

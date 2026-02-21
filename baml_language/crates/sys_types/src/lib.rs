@@ -27,6 +27,12 @@ pub struct CallId(pub u64);
 // Operation Errors
 // ============================================================================
 
+impl std::fmt::Display for CallId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FnId({})", self.0)
+    }
+}
+
 /// Errors that can occur during external operation execution.
 /// Every error is tied to the operation (`fn_name`) that was being called.
 #[derive(Debug)]

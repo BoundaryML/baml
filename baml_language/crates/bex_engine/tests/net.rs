@@ -2,7 +2,7 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 use tokio::{io::AsyncWriteExt, net::TcpListener};
@@ -36,10 +36,7 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
         .call_function(
             "main",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await?;
 
@@ -73,10 +70,7 @@ async fn net_connect_failure() -> anyhow::Result<()> {
         .call_function(
             "main",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await;
 
@@ -123,10 +117,7 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
         .call_function(
             "main",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await?;
 

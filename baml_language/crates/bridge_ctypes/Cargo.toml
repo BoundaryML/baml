@@ -9,7 +9,6 @@ license.workspace = true
 doctest = false
 
 [dependencies]
-bex_external_types = { workspace = true }
 bex_project = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }

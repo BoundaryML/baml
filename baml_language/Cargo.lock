@@ -798,6 +798,7 @@ dependencies = [
  "baml_project",
  "baml_workspace",
  "bex_engine",
+ "bex_events",
  "bex_external_types",
  "bex_heap",
  "bex_vm_types",
@@ -912,7 +913,6 @@ name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
  "bex_events",
- "bex_external_types",
  "bex_project",
  "bridge_ctypes",
  "cbindgen",
@@ -934,7 +934,6 @@ dependencies = [
 name = "bridge_ctypes"
 version = "0.1.0"
 dependencies = [
- "bex_external_types",
  "bex_project",
  "indexmap",
  "prost",
@@ -947,25 +946,18 @@ dependencies = [
 name = "bridge_python"
 version = "0.0.0-beta"
 dependencies = [
- "baml_compiler_emit",
- "baml_project",
- "baml_type",
- "bex_engine",
  "bex_events",
- "bex_external_types",
+ "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
- "indexmap",
  "prost",
  "pyo3",
  "pyo3-async-runtimes",
  "pyo3-build-config",
  "serde_json",
  "sys_native",
- "sys_types",
- "thiserror 2.0.18",
  "tokio",
- "uuid",
+ "vfs",
 ]
 
 [[package]]
@@ -973,8 +965,6 @@ name = "bridge_wasm"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bex_engine",
- "bex_external_types",
  "bex_heap",
  "bex_project",
  "bex_resource_types",

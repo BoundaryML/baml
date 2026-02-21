@@ -6,7 +6,7 @@
 //! 3. `render_prompt` correctly renders templates with arguments
 
 use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
-use bex_engine::{CancellationToken, Ty};
+use bex_engine::{FunctionCallContextBuilder, Ty};
 use bex_external_types::BexExternalAdt;
 use bex_heap::{BexExternalValue, builtin_types::owned::LlmPrimitiveClient};
 
@@ -239,10 +239,7 @@ function test_render() -> int {
         .call_function(
             "test_render",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await;
 
@@ -296,10 +293,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await;
 
@@ -369,10 +363,7 @@ function test_build_request() -> int {
         .call_function(
             "test_build_request",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await;
     assert!(result.is_ok(), "build_request should succeed: {result:?}");
@@ -414,10 +405,7 @@ function test_call_llm() -> unknown {
         .call_function(
             "test_call_llm",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await;
 
@@ -463,10 +451,7 @@ function test_call_llm() -> string {
         .call_function(
             "test_call_llm",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await;
 
@@ -513,10 +498,7 @@ function test_call_llm() -> unknown {
         .call_function(
             "test_call_llm",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await;
 
@@ -575,10 +557,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .expect("failed to render prompt that calls template_string Greet(name)");
@@ -621,10 +600,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .expect("failed to render prompt with nested template_strings Outer() -> Inner()");
@@ -673,10 +649,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .expect("failed to render prompt with 2-arg template_string Describe(label, person)");
@@ -719,10 +692,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .expect("failed to render prompt that calls parameterless template_string Header()");

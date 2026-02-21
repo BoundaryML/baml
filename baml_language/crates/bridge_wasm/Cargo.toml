@@ -11,8 +11,6 @@ license.workspace = true
 crate-type = [ "cdylib", "rlib" ]
 
 [dependencies]
-bex_engine = { workspace = true }
-bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bex_resource_types = { workspace = true }

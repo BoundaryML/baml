@@ -7,7 +7,7 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use sys_native::SysOpsExt;
 
 /// Helper: compile source, create engine, call function, return result.
@@ -19,10 +19,7 @@ async fn run(source: &str, entry: &str) -> Result<BexExternalValue, bex_engine::
         .call_function(
             entry,
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
 }

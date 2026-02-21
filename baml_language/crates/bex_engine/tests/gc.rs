@@ -5,7 +5,7 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -27,10 +27,7 @@ async fn test_handle_prevents_gc_collection() {
         .call_function(
             "return_string",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();
@@ -65,10 +62,7 @@ async fn test_array_preserved_through_gc() {
         .call_function(
             "return_array",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();
@@ -118,10 +112,7 @@ async fn test_gc_updates_forwarding_pointers() {
         .call_function(
             "create_objects",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();
@@ -163,10 +154,7 @@ async fn test_multiple_handles_survive_gc() {
         .call_function(
             "make_string",
             vec!["hello".into()],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();
@@ -174,10 +162,7 @@ async fn test_multiple_handles_survive_gc() {
         .call_function(
             "make_string",
             vec!["world".into()],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();
@@ -185,10 +170,7 @@ async fn test_multiple_handles_survive_gc() {
         .call_function(
             "make_string",
             vec!["test".into()],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();
@@ -226,10 +208,7 @@ async fn test_primitive_returns_are_external_values() {
         .call_function(
             "return_int",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();
@@ -240,10 +219,7 @@ async fn test_primitive_returns_are_external_values() {
         .call_function(
             "return_null",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();
@@ -254,10 +230,7 @@ async fn test_primitive_returns_are_external_values() {
         .call_function(
             "return_bool",
             vec![],
-            sys_types::CallId::default(),
-            None,
-            &[],
-            CancellationToken::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
         )
         .await
         .unwrap();

@@ -34,6 +34,7 @@ struct BexMulitProject {
     projects:
         std::sync::Arc<std::sync::Mutex<HashMap<crate::fs::FsPath, std::sync::Arc<LiveProject>>>>,
     sys_op_factory: SysOpFactory,
+    #[allow(dead_code)]
     playground_state: std::sync::Arc<std::sync::Mutex<PlaygroundState>>,
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
@@ -219,15 +220,16 @@ impl BexMulitProject {
 
     fn get_bex_for_project(
         &self,
-        project_root: &vfs::VfsPath,
-    ) -> Result<impl crate::bex::Bex, RuntimeError> {
+        project_root: &crate::fs::FsPath,
+    ) -> Result<Box<dyn crate::bex::Bex>, RuntimeError> {
         let projects = self.projects.lock().unwrap();
         let project = projects
-            .get(&crate::fs::FsPath::from_vfs(project_root))
+            .get(project_root)
             .ok_or(RuntimeError::Compilation {
                 message: "Project not found".to_string(),
             })?;
-        project.project.get_bex()
+        let bex = project.project.get_bex()?;
+        Ok(Box::new(bex))
     }
 
     fn get_baml_project_root(path: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
@@ -467,20 +469,6 @@ impl BexMulitProject {
         tracing::debug!("refresh_project done");
     }
 
-    fn get_default_project(&self) -> Result<vfs::VfsPath, LspError> {
-        {
-            let playground_state = self.playground_state.lock().unwrap();
-            if let Some(project_root) = playground_state.last_selected_project.value.clone() {
-                return Ok(project_root);
-            }
-        }
-        let projects = self.projects.lock().unwrap();
-        let Some(project) = projects.iter().next() else {
-            return Err(LspError::NoProjectsFound);
-        };
-        self.fs.get_path_from_str(project.0, "get_default_project")
-    }
-
     fn build_project_update(project: &LiveProject) -> crate::bex_lsp::ProjectUpdate {
         let is_bex_current = project.project.is_bex_current();
 
@@ -522,26 +510,12 @@ impl BexMulitProject {
     }
 }
 
-#[async_trait::async_trait]
 impl super::BexLsp for BexMulitProject {
-    async fn call_function_for_project(
+    fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
-        function_name: &str,
-        args: crate::BexArgs,
-        call_id: crate::CallId,
-        cancel: sys_types::CancellationToken,
-    ) -> Result<crate::BexExternalValue, crate::RuntimeError> {
-        use crate::bex::Bex;
-        let project_root = self
-            .fs
-            .get_path_from_str(project_root, "call_function_for_project")
-            .map_err(|e| {
-                RuntimeError::Other(format!("Failed to convert FsPath to VfsPath: {e}"))
-            })?;
-        let bex = self.get_bex_for_project(&project_root)?;
-        bex.call_function(function_name, args, call_id, cancel)
-            .await
+    ) -> Result<Box<dyn crate::Bex>, crate::RuntimeError> {
+        self.get_bex_for_project(project_root)
     }
 
     fn request_playground_state(&self) {
@@ -557,29 +531,6 @@ impl super::BexLsp for BexMulitProject {
                 },
             );
         }
-    }
-}
-
-#[async_trait::async_trait]
-impl crate::bex::Bex for BexMulitProject {
-    async fn call_function(
-        &self,
-        function_name: &str,
-        args: crate::BexArgs,
-        call_id: crate::CallId,
-        cancel: sys_types::CancellationToken,
-    ) -> Result<crate::BexExternalValue, crate::RuntimeError> {
-        let project_root = match self.get_default_project() {
-            Ok(project_root) => project_root,
-            Err(e) => {
-                return Err(RuntimeError::Other(format!(
-                    "Lsp failed to find a default project: {e}"
-                )));
-            }
-        };
-        let bex = self.get_bex_for_project(&project_root)?;
-        bex.call_function(function_name, args, call_id, cancel)
-            .await
     }
 }
 

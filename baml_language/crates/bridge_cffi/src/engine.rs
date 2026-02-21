@@ -42,7 +42,7 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
 pub fn initialize_runtime(
     root_path: &str,
     src_files: HashMap<String, String>,
-) -> Result<(), BridgeError> {
+) -> Result<Arc<dyn Bex>, BridgeError> {
     let physical_fs = vfs::PhysicalFS::new("/");
     let vfs_root = vfs::VfsPath::new(physical_fs);
     let vfs_path = vfs_root
@@ -54,12 +54,12 @@ pub fn initialize_runtime(
         .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
         .collect();
 
-    let rt = bex_project::new(&vfs_path, bex_project::SysOps::native(), &files)?;
+    let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files)?;
 
     let mut guard = RUNTIME_INSTANCE
         .write()
         .map_err(|_| BridgeError::LockPoisoned)?;
-    *guard = Some(rt);
+    *guard = Some(rt.clone());
 
-    Ok(())
+    Ok(rt)
 }

@@ -100,12 +100,12 @@ impl HostSpanManager {
 
     /// Exit the current span successfully.
     pub fn exit_ok(&mut self) {
-        self.exit_inner(bex_external_types::BexExternalValue::Null);
+        self.exit_inner(bex_project::BexExternalValue::Null);
     }
 
     /// Exit the current span with an error.
     pub fn exit_error(&mut self, error_message: String) {
-        self.exit_inner(bex_external_types::BexExternalValue::String(error_message));
+        self.exit_inner(bex_project::BexExternalValue::String(error_message));
     }
 
     /// Merge tags into the current span and emit a `SetTags` event.
@@ -148,7 +148,7 @@ impl HostSpanManager {
         })
     }
 
-    fn exit_inner(&mut self, result: bex_external_types::BexExternalValue) {
+    fn exit_inner(&mut self, result: bex_project::BexExternalValue) {
         let Some(entry) = self.stack.pop() else {
             #[cfg(debug_assertions)]
             eprintln!("HostSpanManager::exit_inner called with empty stack");
@@ -187,7 +187,7 @@ impl Default for HostSpanManager {
 ///
 /// If the value is a JSON object, each key-value pair becomes a separate entry.
 /// Otherwise wraps the whole value as a single element.
-fn json_to_bex_values(value: &serde_json::Value) -> Vec<bex_external_types::BexExternalValue> {
+fn json_to_bex_values(value: &serde_json::Value) -> Vec<bex_project::BexExternalValue> {
     if let serde_json::Value::Object(map) = value {
         map.values().map(json_value_to_bex).collect()
     } else {
@@ -195,8 +195,8 @@ fn json_to_bex_values(value: &serde_json::Value) -> Vec<bex_external_types::BexE
     }
 }
 
-fn json_value_to_bex(value: &serde_json::Value) -> bex_external_types::BexExternalValue {
-    use bex_external_types::BexExternalValue;
+fn json_value_to_bex(value: &serde_json::Value) -> bex_project::BexExternalValue {
+    use bex_project::BexExternalValue;
 
     match value {
         serde_json::Value::Null => BexExternalValue::Null,
@@ -212,12 +212,12 @@ fn json_value_to_bex(value: &serde_json::Value) -> bex_external_types::BexExtern
         }
         serde_json::Value::String(s) => BexExternalValue::String(s.clone()),
         serde_json::Value::Array(items) => BexExternalValue::Array {
-            element_type: bex_external_types::Ty::Null,
+            element_type: bex_project::Ty::Null,
             items: items.iter().map(json_value_to_bex).collect(),
         },
         serde_json::Value::Object(map) => BexExternalValue::Map {
-            key_type: bex_external_types::Ty::String,
-            value_type: bex_external_types::Ty::Null,
+            key_type: bex_project::Ty::String,
+            value_type: bex_project::Ty::Null,
             entries: map
                 .iter()
                 .map(|(k, v)| (k.clone(), json_value_to_bex(v)))

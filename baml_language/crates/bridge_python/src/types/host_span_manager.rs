@@ -13,13 +13,13 @@ use pyo3::{
 /// All core logic (span stack, event emission) lives in bridge_cffi.
 #[pyclass]
 pub struct HostSpanManager {
-    inner: baml_cffi::host_spans::HostSpanManager,
+    inner: bridge_cffi::host_spans::HostSpanManager,
 }
 
 impl HostSpanManager {
     pub fn new() -> Self {
         Self {
-            inner: baml_cffi::host_spans::HostSpanManager::new(),
+            inner: bridge_cffi::host_spans::HostSpanManager::new(),
         }
     }
 

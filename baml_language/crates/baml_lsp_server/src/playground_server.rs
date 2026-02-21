@@ -246,20 +246,30 @@ async fn handle_ws_in_message(
                 }
             };
 
-            let bex = state.bex.clone();
             let broadcast_tx = state.broadcast_tx.clone();
             let call_id = sys_types::CallId(id);
             let fs_path = bex_project::FsPath::from_str(project);
 
+            let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
+
+            let bex = match state.bex.get_bex_for_project(&fs_path).map_err(|e| {
+                WsOutMessage::CallFunctionError {
+                    id,
+                    error: format!("Failed to get Bex for project: {e}"),
+                }
+            }) {
+                Ok(bex) => bex,
+                Err(e) => {
+                    if let Some(ws_msg) = to_ws_text(&e) {
+                        let _ = sink.send(ws_msg).await;
+                    }
+                    return;
+                }
+            };
+
             tokio::spawn(async move {
                 let out = match bex
-                    .call_function_for_project(
-                        &fs_path,
-                        &name,
-                        kwargs.into(),
-                        call_id,
-                        sys_types::CancellationToken::new(),
-                    )
+                    .call_function(&name, kwargs.into(), function_call_ctx.build())
                     .await
                 {
                     Ok(result) => match bridge_ctypes::external_to_cffi_value(&result) {

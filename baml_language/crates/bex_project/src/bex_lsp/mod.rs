@@ -95,19 +95,11 @@ pub trait PlaygroundSender: Send + Sync {
 //
 // Send + Sync are required so that `Arc<dyn BexLsp>` can be used as Axum app
 // state (e.g. in playground_server's WsState), which must be Clone + Send + Sync.
-
-#[async_trait::async_trait]
-pub trait BexLsp:
-    Send + Sync + notification::BexLspNotification + request::BexLspRequest + crate::bex::Bex
-{
-    async fn call_function_for_project(
+pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexLspRequest {
+    fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
-        function_name: &str,
-        args: crate::BexArgs,
-        call_id: crate::CallId,
-        cancel: sys_types::CancellationToken,
-    ) -> Result<crate::BexExternalValue, crate::RuntimeError>;
+    ) -> Result<Box<dyn crate::Bex>, crate::RuntimeError>;
 
     fn request_playground_state(&self);
 }

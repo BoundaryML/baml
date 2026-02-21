@@ -26,15 +26,61 @@ pub fn register_errors(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-/// Convert a `bex_engine::EngineError` into a Python exception.
-pub fn engine_error_to_py(err: bex_engine::EngineError) -> PyErr {
-    use bex_engine::EngineError;
+pub fn bridge_error_to_py(err: bridge_cffi::error::BridgeError) -> PyErr {
+    match err {
+        bridge_cffi::BridgeError::Ctypes(ctypes_error) => {
+            PyErr::new::<BamlInvalidArgumentError, _>(format!("Ctypes error: {ctypes_error}"))
+        }
+        bridge_cffi::BridgeError::NotInitialized => PyErr::new::<BamlInvalidArgumentError, _>(
+            "Engine not initialized. Call create_baml_runtime first.",
+        ),
+        bridge_cffi::BridgeError::ProjectNotInitialized => todo!(),
+        bridge_cffi::BridgeError::LockPoisoned => todo!(),
+        bridge_cffi::BridgeError::Runtime(runtime_error) => runtime_error_to_py(runtime_error),
+        bridge_cffi::BridgeError::NullFunctionName => {
+            PyErr::new::<BamlInvalidArgumentError, _>("Null function name pointer")
+        }
+        bridge_cffi::BridgeError::InvalidFunctionName(utf8_error) => {
+            PyErr::new::<BamlInvalidArgumentError, _>(format!(
+                "Invalid UTF-8 in function name: {utf8_error}",
+            ))
+        }
+        bridge_cffi::BridgeError::FunctionNotFound { name } => {
+            PyErr::new::<BamlInvalidArgumentError, _>(format!("Function not found: {name}"))
+        }
+        bridge_cffi::BridgeError::MissingArgument {
+            function,
+            parameter,
+        } => PyErr::new::<BamlInvalidArgumentError, _>(format!(
+            "Missing argument '{parameter}' for function '{function}'",
+        )),
+        bridge_cffi::BridgeError::NotImplemented(_) => {
+            PyErr::new::<BamlInvalidArgumentError, _>("Not implemented: {0}")
+        }
+        bridge_cffi::BridgeError::DuplicateCallId(_) => PyErr::new::<BamlInvalidArgumentError, _>(
+            "call_id {0} is already in use by an active call",
+        ),
+    }
+}
+
+/// Convert a `bex_project::RuntimeError` into a Python exception.
+pub fn runtime_error_to_py(err: bex_project::RuntimeError) -> PyErr {
+    use bex_project::RuntimeError;
 
     match &err {
-        EngineError::FunctionNotFound { .. } => {
+        RuntimeError::InvalidArgument { .. } => {
             PyErr::new::<BamlInvalidArgumentError, _>(err.to_string())
         }
-        EngineError::Cancelled => PyErr::new::<BamlCancelledError, _>(err.to_string()),
+        RuntimeError::Engine(engine_err) => {
+            use bex_project::EngineError;
+            match engine_err {
+                EngineError::FunctionNotFound { .. } => {
+                    PyErr::new::<BamlInvalidArgumentError, _>(err.to_string())
+                }
+                EngineError::Cancelled => PyErr::new::<BamlCancelledError, _>(err.to_string()),
+                _ => PyErr::new::<BamlClientError, _>(err.to_string()),
+            }
+        }
         _ => PyErr::new::<BamlClientError, _>(err.to_string()),
     }
 }

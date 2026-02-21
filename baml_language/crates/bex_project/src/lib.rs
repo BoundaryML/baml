@@ -10,7 +10,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 pub use bex::Bex;
-pub use bex_external_types::{BexExternalValue, Ty};
+pub use bex_engine::{EngineError, FunctionCallContextBuilder};
+pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 pub use sys_types::{CallId, CancellationToken, SysOps};
 use thiserror::Error;
 
@@ -52,15 +53,18 @@ pub enum RuntimeError {
     Access(#[from] bex_heap::AccessError),
 }
 
+/// Keep pass-by-value so the returned `Arc<impl Bex>` does not capture caller locals;
+/// taking `&VfsPath` / `&HashMap` would require returning a value that references them.
+#[allow(clippy::needless_pass_by_value)]
 pub fn new(
-    root_path: &vfs::VfsPath,
+    root_path: vfs::VfsPath,
     sys_ops: SysOps,
-    files: &std::collections::HashMap<crate::fs::FsPath, String>,
-) -> Result<Arc<dyn Bex>, RuntimeError> {
-    let project = project::BexProject::new(root_path, Arc::new(sys_ops));
-    project.update_all_sources(files);
+    files: std::collections::HashMap<crate::fs::FsPath, String>,
+) -> Result<Arc<impl Bex>, RuntimeError> {
+    let project = project::BexProject::new(&root_path, Arc::new(sys_ops));
+    project.update_all_sources(&files);
     let engine = project.take()?;
-    Ok(engine as Arc<dyn Bex>)
+    Ok(engine)
 }
 
 pub use bex_lsp::{

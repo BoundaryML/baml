@@ -26,6 +26,7 @@ baml_lsp_actions = { workspace = true }
 baml_project = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }
+bex_events = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
