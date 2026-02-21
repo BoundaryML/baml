@@ -1738,10 +1738,10 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
 /// Compile a MIR function to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-pub(crate) fn compile_mir_function<'a>(
-    mir: &'a MirFunction,
-    line_starts: &'a [u32],
-    ctx: MirCodegenContext<'a, '_>,
+pub(crate) fn compile_mir_function<'mir>(
+    mir: &'mir MirFunction,
+    line_starts: &'mir [u32],
+    ctx: MirCodegenContext<'mir, '_>,
     opt: crate::analysis::OptLevel,
 ) -> Function {
     // Run analysis
