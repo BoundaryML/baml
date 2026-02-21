@@ -6,7 +6,6 @@ expression: first
 // including chains and nested chains
 
 function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
-
     // ===== Basic arithmetic =====
     a + b;
     a - b;
@@ -83,7 +82,7 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
 
     // ===== Trivia between operands (block comments) =====
     /* 1 left leading */
-    a + b;
+    a/* 2 left trailing *//* 3 operator leading */+/* 4 operator trailing *//* 5 right leading */b/* 6 right trailing */;
 
     // ===== Trivia in chained binary (line comments) =====
     // 1 first leading
@@ -187,7 +186,18 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
 
     // ===== Trivia in long wrapping chain (block comments) =====
     /* 1 leading */
-    a + b + c + d + a + b + c + d + a + b + c + d;
+    a /* 2 trailing */
+        + b /* 6 trailing */
+        + c /* 10 trailing */
+        + d /* 14 trailing */
+        + a /* 18 trailing */
+        + b /* 22 trailing */
+        + c /* 26 trailing */
+        + d /* 30 trailing */
+        + a /* 34 trailing */
+        + b /* 38 trailing */
+        + c /* 42 trailing */
+        + d/* 46 trailing */;
 
     // ===== Trivia in long wrapping logical chain (line comments) =====
     // 1 leading

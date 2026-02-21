@@ -149,11 +149,11 @@ client<llm> TriviaClient { // 12 open brace trailing
 /* 1 client keyword leading */
 client<llm> TriviaClientBlock { /* 12 open brace trailing */
     /* 13 provider key leading */
-    provider: openai, /* 16 provider value trailing */
+    provider: /* 15 provider value leading */openai, /* 16 provider value trailing */
     /* 17 options key leading */
-    options: { /* 20 options open brace trailing */
+    options: /* 18 options key trailing *//* 19 options brace leading */{ /* 20 options open brace trailing */
         /* 21 first option leading */
-        model: "gpt-4", /* 24 model value trailing */
+        model: /* 23 model value leading */"gpt-4", /* 24 model value trailing */
         /* 25 options close brace leading */
     }, /* 26 options close brace trailing */
     /* 27 close brace leading */
@@ -282,21 +282,21 @@ client<llm> TriviaDeeplyNestedClient { // 9 open brace trailing
 /* 1 client leading */
 client<llm> TriviaDeeplyNestedClientBlock { /* 9 open brace trailing */
     /* 10 provider leading */
-    provider: openai, /* 13 value trailing */
+    provider: /* 12 value leading */openai, /* 13 value trailing */
     /* 14 options leading */
-    options: { /* 17 options brace trailing */
+    options: /* 16 options brace leading */{ /* 17 options brace trailing */
         /* 18 model leading */
-        model: "gpt-4", /* 21 model value trailing */
+        model: /* 20 model value leading */"gpt-4", /* 21 model value trailing */
         /* 22 headers leading */
-        headers: { /* 25 headers brace trailing */
+        headers: /* 24 headers brace leading */{ /* 25 headers brace trailing */
             /* 26 first header leading */
-            "X-API-Key": "my-key", /* 29 first value trailing */
+            "X-API-Key": /* 28 first value leading */"my-key", /* 29 first value trailing */
             /* 30 second header leading */
-            "Authorization": "Bearer token", /* 33 second value trailing */
+            "Authorization": /* 32 second value leading */"Bearer token", /* 33 second value trailing */
             /* 34 headers close leading */
         }, /* 35 headers close trailing */
         /* 36 options close leading */
-    }, /* 39 comma trailing */
+    }/* 37 options close trailing *//* 38 comma leading */, /* 39 comma trailing */
     /* 40 close brace leading */
 } /* 41 close brace trailing */
 
@@ -318,9 +318,9 @@ client<llm> TriviaLongValueClientBlock {
     provider: openai,
     options: {
         /* 1 key leading */
-        model: "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", /* 4 value trailing */
+        model: /* 3 value leading */"some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", /* 4 value trailing */
         /* 5 next key leading */
-        base_url: "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", /* 8 next value trailing */
+        base_url: /* 7 next value leading */"https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", /* 8 next value trailing */
     },
 }
 
@@ -355,14 +355,14 @@ retry_policy TriviaRetry { // 6 open brace trailing
 /* 1 keyword leading */
 retry_policy TriviaRetryBlock { /* 6 open brace trailing */
     /* 7 first item leading */
-    max_retries: 3, /* 10 value trailing */
+    max_retries: /* 9 value leading */3, /* 10 value trailing */
     /* 11 close brace leading */
 } /* 12 close brace trailing */
 
 // ===== Test declaration =====
 function TestTarget() -> string {
-    client BasicClient
-    prompt #"Hello"#
+    client: BasicClient
+    prompt: #"Hello"#
 }
 
 test BasicTest {
@@ -388,7 +388,7 @@ test TypeBuilderTest {
             P,
             Q,
         }
-        type InnerAlias = string | int
+        type InnerAlias = string | int;
     },
     args: {},
 }
@@ -409,9 +409,9 @@ test TriviaTest { // 6 open brace trailing
 /* 1 test keyword leading */
 test TriviaTestBlock { /* 6 open brace trailing */
     /* 7 functions key leading */
-    functions: [TestTarget], /* 10 functions value trailing */
+    functions: /* 9 functions value leading */[TestTarget], /* 10 functions value trailing */
     /* 11 args key leading */
-    args: { /* 14 args open brace trailing */
+    args: /* 13 args block leading */{ /* 14 args open brace trailing */
         /* 15 args close brace leading */
     }, /* 16 args close brace trailing */
     /* 17 close brace leading */
@@ -429,7 +429,13 @@ test LongTypeBuilderTest {
             VeryLongVariantNameThatExceedsLimit,
             AnotherVeryLongVariantName,
         }
-        type VeryLongTypeAliasNameThatExceedsLimit = int | string | bool | float | null | int[] | string[]
+        type VeryLongTypeAliasNameThatExceedsLimit = int
+            | string
+            | bool
+            | float
+            | null
+            | int[]
+            | string[];
     },
     args: {},
 }
@@ -444,7 +450,7 @@ test TriviaTypeBuilderTest { // 6 open brace trailing
         // 15 class leading
         class TbInnerClass { // 20 class brace trailing
             // 21 field leading
-            field_name: int // 24 type trailing // 24 type trailing
+            field_name: int // 24 type trailing
             // 25 class close leading
         } // 26 class close trailing
         // 27 enum leading
@@ -454,7 +460,7 @@ test TriviaTypeBuilderTest { // 6 open brace trailing
             // 35 enum close leading
         } // 36 enum close trailing
         // 37 type alias leading
-        type TbAlias = string // 44 rhs trailing
+        type TbAlias = string; // 44 rhs trailing
         // 45 tb close leading
     }, // 46 tb close trailing
     // 47 args leading
@@ -470,27 +476,27 @@ test TriviaTypeBuilderTest { // 6 open brace trailing
 /* 1 test leading */
 test TriviaTypeBuilderTestBlock { /* 6 open brace trailing */
     /* 7 functions leading */
-    functions: [TestTarget], /* 10 value trailing */
+    functions: /* 9 value leading */[TestTarget], /* 10 value trailing */
     /* 11 type_builder leading */
     type_builder { /* 14 tb open brace trailing */
         /* 15 class leading */
         class TbInnerClassBlock { /* 20 class brace trailing */
             /* 21 field leading */
-            field_name: int /* 24 type trailing */
+            field_name: /* 22 field name trailing *//* 23 type leading */int /* 24 type trailing */
             /* 25 class close leading */
         } /* 26 class close trailing */
         /* 27 enum leading */
         enum TbInnerEnumBlock { /* 32 enum brace trailing */
             /* 33 variant leading */
-            X, /* 34 variant trailing */
+            X/* 34 variant trailing */, /* 34 variant trailing */
             /* 35 enum close leading */
         } /* 36 enum close trailing */
         /* 37 type alias leading */
-        type TbAliasBlock = string /* 44 rhs trailing */
+        type TbAliasBlock = /* 42 equals trailing *//* 43 rhs leading */string; /* 44 rhs trailing */
         /* 45 tb close leading */
     }, /* 46 tb close trailing */
     /* 47 args leading */
-    args: { /* 50 args brace trailing */
+    args: /* 49 args brace leading */{ /* 50 args brace trailing */
         /* 51 args close leading */
     }, /* 52 args close trailing */
     /* 53 close leading */

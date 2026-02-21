@@ -122,7 +122,8 @@ function TriviaFunc( // 6 open paren trailing
     // 7 param leading
     x: int, // 11 type trailing
     // 12 close paren leading
-) -> int { // 19 body open trailing
+) -> int // 17 return type trailing
+{ // 19 body open trailing
     x
 } // 20 body close trailing
 
@@ -132,9 +133,9 @@ function TriviaFunc( // 6 open paren trailing
 /* 1 function keyword leading */
 function TriviaFuncBlock( /* 6 open paren trailing */
     /* 7 param leading */
-    x: int, /* 11 type trailing */
+    x: /* 9 colon trailing *//* 10 type leading */int, /* 11 type trailing */
     /* 12 close paren leading */
-) -> int { /* 19 body open trailing */
+) -> /* 15 arrow trailing *//* 16 return type leading */int /* 17 return type trailing */ { /* 19 body open trailing */
     x
 } /* 20 body close trailing */
 
@@ -153,9 +154,9 @@ function MultiParamTrivia(
 // ===== Multiple param trivia (block comments) =====
 function MultiParamTriviaBlock(
     /* 1 first param leading */
-    a: int, /* 6 comma trailing */
+    a: /* 3 first colon trailing *//* 4 first type leading */int/* 5 first type trailing */, /* 6 comma trailing */
     /* 7 second param leading */
-    b: string, /* 11 second type trailing */
+    b: /* 9 second colon trailing *//* 10 second type leading */string, /* 11 second type trailing */
 ) -> int {
     a
 }
@@ -171,7 +172,8 @@ function TriviaWrapParams( // 5 trailing
     third_parameter: bool, // 23 trailing
     // 24 leading
     fourth_parameter: float, // 28 trailing
-) -> string { // 35 trailing
+) -> string // 33 trailing
+{ // 35 trailing
     "result"
 } // 36 trailing
 
@@ -181,14 +183,14 @@ function TriviaWrapParams( // 5 trailing
 /* 1 leading */
 function TriviaWrapParamsBlock( /* 5 trailing */
     /* 6 leading */
-    first_parameter: int, /* 11 trailing */
+    first_parameter: /* 8 trailing *//* 9 leading */int/* 10 trailing */, /* 11 trailing */
     /* 12 leading */
-    second_parameter: string, /* 17 trailing */
+    second_parameter: /* 14 trailing *//* 15 leading */string/* 16 trailing */, /* 17 trailing */
     /* 18 leading */
-    third_parameter: bool, /* 23 trailing */
+    third_parameter: /* 20 trailing *//* 21 leading */bool/* 22 trailing */, /* 23 trailing */
     /* 24 leading */
-    fourth_parameter: float, /* 28 trailing */
-) -> string { /* 35 trailing */
+    fourth_parameter: /* 26 trailing *//* 27 leading */float, /* 28 trailing */
+) -> /* 31 trailing *//* 32 leading */string /* 33 trailing */ { /* 35 trailing */
     "result"
 } /* 36 trailing */
 
@@ -198,17 +200,28 @@ function TriviaWrapParamsBlock( /* 5 trailing */
 function TriviaWrapReturnType(
     x: int,
 ) -> int // 2 first trailing
+    // 3 pipe leading
     | string // 6 second trailing
+    // 7 pipe leading
     | bool // 10 third trailing
+    // 11 pipe leading
     | null // 14 fourth trailing
 {
     x
 }
 
 // ===== Trivia on wrapping return type (block comments) =====
-function TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
+function TriviaWrapReturnTypeBlock(
+    x: int,
+) -> /* 1 first member leading */int /* 2 first trailing */
+    /* 3 pipe leading */
+    |/* 4 pipe trailing *//* 5 second leading */string /* 6 second trailing */
+    /* 7 pipe leading */
+    |/* 8 pipe trailing *//* 9 third leading */bool /* 10 third trailing */
+    /* 11 pipe leading */
+    |/* 12 pipe trailing *//* 13 fourth leading */null /* 14 fourth trailing */
+{
     x
-
 }
 
 ///////////////////
@@ -220,7 +233,8 @@ function TriviaEverythingLong_NameAndParamsAndReturn( // 5 trailing
     first_long_param: map<string, int>, // 11 trailing
     // 12 leading
     second_long_param: (int | string | bool)[], // 16 trailing
-) -> map<string, int | string | bool | float | null> { // 23 trailing
+) -> map<string, int | string | bool | float | null> // 21 trailing
+{ // 23 trailing
     { "a": 1 }
 } // 24 trailing
 
@@ -230,10 +244,10 @@ function TriviaEverythingLong_NameAndParamsAndReturn( // 5 trailing
 /* 1 leading */
 function TriviaEverythingLong_NameAndParamsAndReturnBlock( /* 5 trailing */
     /* 6 leading */
-    first_long_param: map<string, int>, /* 11 trailing */
+    first_long_param: /* 8 trailing *//* 9 leading */map<string, int>/* 10 trailing */, /* 11 trailing */
     /* 12 leading */
-    second_long_param: (int | string | bool)[], /* 16 trailing */
-) -> map<string, int | string | bool | float | null> { /* 23 trailing */
+    second_long_param: /* 14 trailing *//* 15 leading */(int | string | bool)[], /* 16 trailing */
+) -> /* 19 trailing *//* 20 leading */map<string, int | string | bool | float | null> /* 21 trailing */ { /* 23 trailing */
     { "a": 1 }
 } /* 24 trailing */
 
@@ -343,14 +357,14 @@ function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
 
 // ===== LLM function basic =====
 function LlmBasic(name: string) -> string {
-    client GPT4
-    prompt #"Say hello to {{name}}"#
+    client: GPT4
+    prompt: #"Say hello to {{name}}"#
 }
 
 // ===== LLM function with multi-line prompt =====
 function LlmMultiLine(text: string) -> string {
-    client GPT4
-    prompt #"
+    client: GPT4
+    prompt: #"
         Analyze the following text:
         {{ text }}
         Return a summary.
@@ -359,14 +373,14 @@ function LlmMultiLine(text: string) -> string {
 
 // ===== LLM function with string client =====
 function LlmStringClient(text: string) -> string {
-    client "openai/gpt-4o"
-    prompt #"Summarize: {{ text }}"#
+    client: "openai/gpt-4o"
+    prompt: #"Summarize: {{ text }}"#
 }
 
 // ===== LLM function prompt before client (order test) =====
 function LlmReversedOrder(text: string) -> string {
-    client GPT4
-    prompt #"Summarize: {{ text }}"#
+    client: GPT4
+    prompt: #"Summarize: {{ text }}"#
 }
 
 // ===== LLM function with wrapping signature =====
@@ -376,8 +390,8 @@ function LlmWithLongSignature(
     third_context: string,
     user_query: string,
 ) -> string {
-    client GPT4
-    prompt #"
+    client: GPT4
+    prompt: #"
         Context: {{ first_context }} {{ second_context }} {{ third_context }}
         Query: {{ user_query }}
     "#

@@ -100,7 +100,7 @@ class MultiBlockAttr {
 // 1 class keyword leading
 class TriviaClass { // 6 open brace trailing
     // 7 field leading
-    name: string // 12 type trailing // 12 type trailing
+    name: string // 12 type trailing
     // 13 close brace leading
 } // 14 close brace trailing
 
@@ -110,7 +110,7 @@ class TriviaClass { // 6 open brace trailing
 /* 1 class keyword leading */
 class TriviaClassBlock { /* 6 open brace trailing */
     /* 7 field leading */
-    name: string /* 12 type trailing */
+    name: /* 10 colon trailing *//* 11 type leading */string /* 12 type trailing */
     /* 13 close brace leading */
 } /* 14 close brace trailing */
 
@@ -120,6 +120,7 @@ class TriviaClassBlock { /* 6 open brace trailing */
 class TriviaFieldAttrs {
     // 1 field leading
     name: string // 6 type trailing
+        // 7 attr leading
         @description( // 10 open paren trailing
             // 11 arg leading
             "the name", // 12 arg trailing
@@ -130,7 +131,8 @@ class TriviaFieldAttrs {
 // ===== Trivia on field with attributes (block comments) =====
 class TriviaFieldAttrsBlock {
     /* 1 field leading */
-    name: string /* 6 type trailing */
+    name: /* 4 colon trailing *//* 5 type leading */string /* 6 type trailing */
+        /* 7 attr leading */
         @description( /* 10 open paren trailing */
             /* 11 arg leading */
             "the name", /* 12 arg trailing */
@@ -143,14 +145,15 @@ class TriviaLongFieldType {
     // 1 field leading
     data: map< // 7 open angle trailing
         // 8 key type leading
-        string, // 9 key type trailing
+        string, // 10 comma trailing
         // 11 value type leading
         int // 12 first trailing
             | string // 15 second trailing
             | bool // 18 third trailing
             | float // 21 fourth trailing
-            | null // 24 fifth trailing // 24 fifth trailing
+            | null // 24 fifth trailing
     > // 25 close angle trailing
+        // 26 attr leading
         @description( // 28 attr open trailing
             // 29 attr arg leading
             "a long description", // 30 attr arg trailing
@@ -160,12 +163,17 @@ class TriviaLongFieldType {
 // ===== Trivia on field with long wrapping type (block comments) =====
 class TriviaLongFieldTypeBlock {
     /* 1 field leading */
-    data: map< /* 7 open angle trailing */
+    data: /* 4 colon trailing *//* 5 type leading */map< /* 7 open angle trailing */
         /* 8 key type leading */
-        string, /* 9 key type trailing */
+        string/* 9 key type trailing */, /* 10 comma trailing */
         /* 11 value type leading */
-        int | string | bool | float | null /* 24 fifth trailing */
+        int /* 12 first trailing */
+            |/* 13 pipe trailing *//* 14 second leading */string /* 15 second trailing */
+            |/* 16 pipe trailing *//* 17 third leading */bool /* 18 third trailing */
+            |/* 19 pipe trailing *//* 20 fourth leading */float /* 21 fourth trailing */
+            |/* 22 pipe trailing *//* 23 fifth leading */null /* 24 fifth trailing */
     > /* 25 close angle trailing */
+        /* 26 attr leading */
         @description( /* 28 attr open trailing */
             /* 29 attr arg leading */
             "a long description", /* 30 attr arg trailing */
@@ -176,23 +184,29 @@ class TriviaLongFieldTypeBlock {
 class TriviaMultiAttr {
     // 1 field leading
     name: string // 6 type trailing
+        // 7 first attr leading
         @description( // 9 first attr open trailing
             // 10 arg leading
             "name", // 11 arg trailing
-        )
+        ) // 12 first attr close trailing
+        // 13 second attr leading
         @alias( // 15 second attr open trailing
             // 16 arg leading
             "user_name", // 17 arg trailing
-        )
+        ) // 18 second attr close trailing
+        // 19 third attr leading    
         @stream.done // 20 third attr trailing
 }
 
 // ===== Trivia on field with multiple attributes (block comments) =====
 class TriviaMultiAttrBlock {
     /* 1 field leading */
-    name: string /* 6 type trailing */
-        @description(/* 9 first attr open trailing *//* 10 arg leading */"name"/* 11 arg trailing */)
-        @alias(/* 15 second attr open trailing *//* 16 arg leading */"user_name"/* 17 arg trailing */)
+    name: /* 4 colon trailing *//* 5 type leading */string /* 6 type trailing */
+        /* 7 first attr leading */
+        @description(/* 9 first attr open trailing *//* 10 arg leading */"name"/* 11 arg trailing */) /* 12 first attr close trailing */
+        /* 13 second attr leading */
+        @alias(/* 15 second attr open trailing *//* 16 arg leading */"user_name"/* 17 arg trailing */) /* 18 second attr close trailing */
+        /* 19 third attr leading */
         @stream.done /* 20 third attr trailing */
 }
 

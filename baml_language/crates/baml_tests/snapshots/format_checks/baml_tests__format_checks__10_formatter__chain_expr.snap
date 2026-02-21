@@ -42,7 +42,6 @@ class ChainMetadata {
 }
 
 function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {
-
     // ===== Simple path =====
     user;
     user.name;
@@ -60,7 +59,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
 
     // ===== Trivia in path (block comments) =====
     /* 1 first leading */
-    user.name;
+    user.name/* 6 field trailing */;
 
     // ===== Trivia in deep path (line comments) =====
     // 1 root leading
@@ -89,7 +88,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
             /* 8 arg leading */
             0, /* 9 arg trailing */
             /* 10 close paren leading */
-        );
+        )/* 11 close paren trailing */;
 
     // ===== Index access =====
     items[0];
@@ -99,11 +98,19 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
 
     // ===== Trivia in index (line comments) =====
     // 1 base leading
-    items[0];
+    items[ // 4 open bracket trailing
+        // 5 index leading
+        0 // 6 index trailing
+        // 7 close bracket leading
+    ];
 
     // ===== Trivia in index (block comments) =====
     /* 1 base leading */
-    items[0];
+    items[ /* 4 open bracket trailing */
+        /* 5 index leading */
+        0 /* 6 index trailing */
+        /* 7 close bracket leading */
+    ]/* 8 close bracket trailing */;
 
     // ===== Chained calls =====
     user.name.len().to_string();
@@ -164,7 +171,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
         .color
         .len(/* 18 trailing */)
         .to_string(/* 23 trailing */)
-        .len(/* 28 trailing */);
+        .len(/* 28 trailing */)/* 29 trailing */;
 
     // ===== Trivia in call with long args (line comments) =====
     // 1 leading

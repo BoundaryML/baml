@@ -953,13 +953,16 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                 }
             };
 
-            assert_eq!(
-                first, second,
-                "Formatter is not idempotent for {}.\n\
-                 === first pass ===\n{}\n\
-                 === second pass ===\n{}",
-                #relative_path, first, second
-            );
+            if first != second {
+                std::fs::write(format!("{}/{}.new", SNAPSHOT_PATH, #relative_path), second.as_bytes()).unwrap();
+                panic!(
+                    "Formatter is not idempotent for {}.\n\
+                    Second pass output written to {}/{}.new",
+                    #relative_path,
+                    SNAPSHOT_PATH,
+                    #relative_path
+                );
+            }
         }
     }
 }

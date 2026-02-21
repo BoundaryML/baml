@@ -1699,6 +1699,9 @@ impl<'a> Parser<'a> {
             had_named_param |= self.parse_function_type_param_inner();
 
             while self.eat(TokenKind::Comma) {
+                if self.at(TokenKind::RParen) {
+                    break;
+                }
                 had_named_param |= self.parse_function_type_param_inner();
             }
         }
@@ -2196,6 +2199,9 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::CLIENT_FIELD, |p| {
             p.expect(TokenKind::Client);
 
+            // Optional colon
+            p.eat(TokenKind::Colon);
+
             // Client name can be:
             // - A simple identifier: MyClient
             // - A quoted string: "openai/gpt-4o"
@@ -2225,6 +2231,9 @@ impl<'a> Parser<'a> {
             } else {
                 p.error_unexpected_token("'prompt' keyword".to_string());
             }
+
+            // Optional colon
+            p.eat(TokenKind::Colon);
 
             // Prompt value (usually a raw string)
             if !p.parse_any_string() {
@@ -4010,6 +4019,9 @@ impl<'a> Parser<'a> {
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                 p.parse_field_attribute();
             }
+
+            // Optional semicolon
+            p.eat(TokenKind::Semicolon);
         });
     }
 }

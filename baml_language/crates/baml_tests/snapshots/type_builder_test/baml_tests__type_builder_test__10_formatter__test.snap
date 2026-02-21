@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function Fn() -> string {
-    client "openai/gpt-4o"
-    prompt #"Hi"#
+    client: "openai/gpt-4o"
+    prompt: #"Hi"#
 }
 
 class TopLevelClass {
@@ -32,7 +32,7 @@ test MyTest {
             P,
             Q,
         }
-        type MyAlias = string | int
+        type MyAlias = string | int;
     },
     args: {
         from_text: "test",

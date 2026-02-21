@@ -6,7 +6,6 @@ expression: first
 // both for and while loops
 
 function LoopStmts(items: int[], flag: bool) -> int {
-
     // ===== Basic while loop =====
     let a = 0;
     while (a < 10) {
@@ -42,8 +41,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
     // 1 while keyword leading
     while ( // 4 open paren trailing
         // 5 expr leading
-        a < 10 // 6 expr trailing        // 7 close paren leading
-
+        a < 10 // 6 expr trailing
+        // 7 close paren leading
     ) { // 10 body open trailing
         a += 1;
         // 11 body close leading
@@ -56,8 +55,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
     /* 1 while keyword leading */
     while ( /* 4 open paren trailing */
         /* 5 expr leading */
-        a < 10 /* 6 expr trailing */        /* 7 close paren leading */
-
+        a < 10 /* 6 expr trailing */
+        /* 7 close paren leading */
     ) { /* 10 body open trailing */
         a += 1;
         /* 11 body close leading */
@@ -102,7 +101,15 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on C-style for (line comments) =====
     // 1 for keyword leading
-    for (let i = 0; i < 10; i += 1) { // 21 body open trailing
+    for ( // 4 open paren trailing
+        // 5 init leading
+        let i = 0; // 12 semi1 trailing
+        // 13 condition leading
+        i < 10; // 15 semi2 trailing
+        // 16 update leading
+        i += 1 // 17 update trailing
+        // 18 close paren leading
+    ) { // 21 body open trailing
         result += i;
         // 22 body close leading
     } // 23 body close trailing
@@ -112,7 +119,15 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on C-style for (block comments) =====
     /* 1 for keyword leading */
-    for (let i = 0; i < 10; i += 1) { /* 21 body open trailing */
+    for ( /* 4 open paren trailing */
+        /* 5 init leading */
+        let i = /* 9 equals trailing *//* 10 init value leading */0/* 11 init value trailing */; /* 12 semi1 trailing */
+        /* 13 condition leading */
+        i < 10/* 14 condition trailing */; /* 15 semi2 trailing */
+        /* 16 update leading */
+        i += 1 /* 17 update trailing */
+        /* 18 close paren leading */
+    ) { /* 21 body open trailing */
         result += i;
         /* 22 body close leading */
     } /* 23 body close trailing */
@@ -122,7 +137,11 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on for-in (line comments) =====
     // 1 for keyword leading
-    for (let item in items) { // 16 body open trailing
+    for ( // 4 open paren trailing
+        // 5 let leading
+        let item in items // 12 iterator trailing
+        // 13 close paren leading
+) { // 16 body open trailing
         result += item;
         // 17 body close leading
     } // 18 body close trailing
@@ -130,7 +149,11 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on for-in (block comments) =====
     /* 1 for keyword leading */
-    for (let item in items) { /* 16 body open trailing */
+    for ( /* 4 open paren trailing */
+        /* 5 let leading */
+        let item in /* 10 in trailing *//* 11 iterator leading */items /* 12 iterator trailing */
+        /* 13 close paren leading */
+) { /* 16 body open trailing */
         result += item;
         /* 17 body close leading */
     } /* 18 body close trailing */
@@ -188,27 +211,29 @@ function LoopStmts(items: int[], flag: bool) -> int {
     ;
 
     // ===== Long for-in with long array exceeding limit =====
-    for (let item in
-        [
+    for (
+        let item in [
             "very long string one",
             "very long string two",
             "very long string three",
             "very long string four",
-        ]) {
+        ]
+) {
         result += 1;
     }
     ;
 
     // ===== Very long for-in with complex iterator exceeding limit =====
-    for (let extremely_long_item_variable_name in
-        [
+    for (
+        let extremely_long_item_variable_name in [
             "alpha bravo charlie",
             "delta echo foxtrot",
             "golf hotel india",
             "juliet kilo lima",
             "mike november oscar",
             "papa quebec romeo",
-        ]) {
+        ]
+) {
         result += 1;
     }
     ;
@@ -223,8 +248,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
             && a != result
             && a + result < 10000
             && a * result > 500
-            && a - result != 42 // 6 condition trailing        // 7 close paren leading
-
+            && a - result != 42 // 6 condition trailing
+        // 7 close paren leading
     ) { // 10 body open trailing
         a += 1;
         // 11 close leading
@@ -243,8 +268,8 @@ function LoopStmts(items: int[], flag: bool) -> int {
             && a != result
             && a + result < 10000
             && a * result > 500
-            && a - result != 42 /* 6 condition trailing */        /* 7 close paren leading */
-
+            && a - result != 42 /* 6 condition trailing */
+        /* 7 close paren leading */
     ) { /* 10 body open trailing */
         a += 1;
         /* 11 close leading */
@@ -255,10 +280,14 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on wrapping C-style for (line comments) =====
     // 1 for leading
-    for (
-        let extremely_long_loop_counter_variable = a * a + result * result;
-        extremely_long_loop_counter_variable < 1000000 && flag && a > 0;
-        extremely_long_loop_counter_variable += a + result
+    for ( // 4 open paren trailing
+        // 5 init leading
+        let extremely_long_loop_counter_variable = a * a + result * result; // 12 semi1 trailing
+        // 13 condition leading
+        extremely_long_loop_counter_variable < 1000000 && flag && a > 0; // 15 semi2 trailing
+        // 16 update leading
+        extremely_long_loop_counter_variable += a + result // 17 update trailing
+        // 18 close paren leading
     ) { // 21 body open trailing
         result += extremely_long_loop_counter_variable;
         // 22 close leading
@@ -269,10 +298,14 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on wrapping C-style for (block comments) =====
     /* 1 for leading */
-    for (
-        let extremely_long_loop_counter_variable = a * a + result * result;
-        extremely_long_loop_counter_variable < 1000000 && flag && a > 0;
-        extremely_long_loop_counter_variable += a + result
+    for ( /* 4 open paren trailing */
+        /* 5 init leading */
+        let extremely_long_loop_counter_variable = /* 9 equals trailing *//* 10 init value leading */a * a + result * result/* 11 init value trailing */; /* 12 semi1 trailing */
+        /* 13 condition leading */
+        extremely_long_loop_counter_variable < 1000000 && flag && a > 0/* 14 condition trailing */; /* 15 semi2 trailing */
+        /* 16 update leading */
+        extremely_long_loop_counter_variable += a + result /* 17 update trailing */
+        /* 18 close paren leading */
     ) { /* 21 body open trailing */
         result += extremely_long_loop_counter_variable;
         /* 22 close leading */
@@ -283,15 +316,18 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on wrapping for-in (line comments) =====
     // 1 for leading
-    for (let extremely_long_item_variable_name in
-        [
+    for ( // 4 open paren trailing
+        // 5 let leading
+        let extremely_long_item_variable_name in [
             "alpha bravo charlie",
             "delta echo foxtrot",
             "golf hotel india",
             "juliet kilo lima",
             "mike november oscar",
             "papa quebec romeo",
-        ]) { // 16 body open trailing
+        ] // 12 iterator trailing
+        // 13 close paren leading
+) { // 16 body open trailing
         result += 1;
         // 17 close leading
     } // 18 close trailing
@@ -301,15 +337,18 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on wrapping for-in (block comments) =====
     /* 1 for leading */
-    for (let extremely_long_item_variable_name in
-        [
+    for ( /* 4 open paren trailing */
+        /* 5 let leading */
+        let extremely_long_item_variable_name in /* 10 in trailing *//* 11 iterator leading */[
             "alpha bravo charlie",
             "delta echo foxtrot",
             "golf hotel india",
             "juliet kilo lima",
             "mike november oscar",
             "papa quebec romeo",
-        ]) { /* 16 body open trailing */
+        ] /* 12 iterator trailing */
+        /* 13 close paren leading */
+) { /* 16 body open trailing */
         result += 1;
         /* 17 close leading */
     } /* 18 close trailing */
@@ -464,7 +503,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on let statement (block comments) =====
     /* 1 let keyword leading */
-    let trivia_var_block: int = 42; /* 13 semicolon trailing */
+    let trivia_var_block: /* 6 colon trailing *//* 7 type leading */int/* 8 type trailing */ = /* 10 equals trailing *//* 11 value leading */42/* 12 value trailing */; /* 13 semicolon trailing */
 
     // ===== Trivia on wrapping let with long type (line comments) =====
     // 1 let leading
@@ -474,7 +513,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on wrapping let with long type (block comments) =====
     /* 1 let leading */
-    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = { "key": 42 }; /* 13 semicolon trailing */
+    let very_long_variable_name_for_testing_wrapping: /* 6 colon trailing *//* 7 type leading */map<string, int | string | bool | float | null>/* 8 type trailing */ = /* 10 equals trailing *//* 11 value leading */{ "key": 42 }/* 12 value trailing */; /* 13 semicolon trailing */
 
     ///////////////////
 
@@ -494,7 +533,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
     // ===== Trivia on wrapping let with long expression (block comments) =====
     /* 1 let leading */
-    let another_extremely_long_variable_name = a * a
+    let another_extremely_long_variable_name = /* 6 equals trailing *//* 7 value leading */a * a
         + result * result
         + a * result
         + a
@@ -502,7 +541,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
         + a * a * a
         + result * result * result
         + a * result * a
-        + result * a * result; /* 9 semicolon trailing */
+        + result * a * result/* 8 value trailing */; /* 9 semicolon trailing */
 
     ///////////////////
 
@@ -521,7 +560,7 @@ function AssertStmts(x: int, y: int) -> int {
 
     // ===== Trivia on assert (block comments) =====
     /* 1 assert keyword leading */
-    assert x > 0; /* 5 semicolon trailing */
+    assert /* 2 assert keyword trailing *//* 3 condition leading */x > 0/* 4 condition trailing */; /* 5 semicolon trailing */
 
     // ===== Long assert condition exceeding limit =====
     assert x > 0
@@ -564,7 +603,7 @@ function AssertStmts(x: int, y: int) -> int {
 
     // ===== Trivia on wrapping assert (block comments) =====
     /* 1 assert leading */
-    assert x > 0
+    assert /* 2 assert trailing *//* 3 condition leading */x > 0
         && x < 100
         && y > 0
         && y < 100
@@ -572,7 +611,7 @@ function AssertStmts(x: int, y: int) -> int {
         && x + y < 150
         && x * y > 10
         && x - y != 42
-        && x % 7 == 0; /* 5 semicolon trailing */
+        && x % 7 == 0/* 4 condition trailing */; /* 5 semicolon trailing */
 
     ///////////////////
 

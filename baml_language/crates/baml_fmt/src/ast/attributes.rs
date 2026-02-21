@@ -372,28 +372,28 @@ impl AttributeArgs {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        printer.print_trivia_single_line_squished(open_trailing)?;
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (arg, comma)) in self.args.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
             let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
-            printer.print_trivia_single_line_squished(arg_leading)?;
+            printer.try_print_trivia_single_line_squished(arg_leading)?;
             if printer
                 .print(arg, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
             }
-            printer.print_trivia_single_line_squished(arg_trailing)?;
+            printer.try_print_trivia_single_line_squished(arg_trailing)?;
             if i + 1 < self.args.len() {
                 if let Some(comma) = comma {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
-                    printer.print_trivia_single_line_squished(comma_leading)?;
+                    printer.try_print_trivia_single_line_squished(comma_leading)?;
                     printer.print_raw_token(comma);
-                    printer.print_trivia_single_line_squished(comma_trailing)?;
+                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
                 } else {
                     printer.print_str(",");
                 }
@@ -402,13 +402,13 @@ impl AttributeArgs {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
                     printer.trivia.get_for_range_split(comma.span());
-                printer.print_trivia_single_line_squished(comma_leading)?;
-                printer.print_trivia_single_line_squished(comma_trailing)?;
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
             }
         }
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.print_trivia_single_line_squished(close_leading)?;
+        printer.try_print_trivia_single_line_squished(close_leading)?;
         printer.print_raw_token(&self.close_paren);
 
         if printer.output.len() > shape.width {

@@ -9,4 +9,4 @@ class A {
     field: string
 }
 
-type A = int
+type A = int;

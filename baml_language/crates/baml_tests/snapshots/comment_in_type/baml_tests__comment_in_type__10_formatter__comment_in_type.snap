@@ -12,12 +12,12 @@ function FunctionWithComments(
     a: string,
     b: int, // comment after param type
 ) -> string {
-    client TestClient
-    prompt #"test"#
+    client: TestClient
+    prompt: #"test"#
 }
 
 // Another test - comment immediately after arrow
 function CommentAfterArrow() -> string {
-    client TestClient
-    prompt #"test"#
+    client: TestClient
+    prompt: #"test"#
 }

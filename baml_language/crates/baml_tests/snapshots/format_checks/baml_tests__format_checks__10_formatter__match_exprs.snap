@@ -19,10 +19,9 @@ enum MatchStatus {
     Pending,
 }
 
-type MatchResult = MatchSuccess | MatchFailure
+type MatchResult = MatchSuccess | MatchFailure;
 
 function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
-
     // ===== Basic match =====
 
     match (x) {
@@ -89,7 +88,7 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia in guard arm (block comments) =====
     match (x) {
         /* 1 arm leading */
-        n: int if n > 0 => "positive", /* 14 comma trailing */
+        n: /* 3 colon trailing *//* 4 type leading */int if n > 0 => "positive", /* 14 comma trailing */
         _ => "other",
     }
 
@@ -263,7 +262,8 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia on wrapping arm (block comments) =====
     match (x) {
         /* 1 arm leading */
-        n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 => {
+        n: /* 3 colon trailing *//* 4 type leading */int
+            if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 => {
             /* 12 body leading */
             "acceptable small positive number that passes all the defined filter conditions" /* 13 body trailing */
         }, /* 14 comma trailing */
