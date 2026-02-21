@@ -7,6 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [lib]
+# Library name is bridge_cffi; baml-sys/integ-tests still look for baml_cffi. For release,
+# the artifact can be renamed (e.g. via mv) as needed when we switch to this bridge.
 name = "bridge_cffi"
 crate-type = [ "cdylib", "lib" ]
 
