@@ -221,13 +221,16 @@ impl BexMulitProject {
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
-    ) -> Result<Box<dyn crate::bex::Bex>, RuntimeError> {
-        let projects = self.projects.lock().unwrap();
-        let project = projects
-            .get(project_root)
-            .ok_or(RuntimeError::Compilation {
-                message: "Project not found".to_string(),
-            })?;
+    ) -> Result<Box<dyn crate::Bex>, RuntimeError> {
+        let project = {
+            let projects = self.projects.lock().unwrap();
+            projects
+                .get(project_root)
+                .ok_or(RuntimeError::Compilation {
+                    message: format!("Project not found: {}", project_root.as_path().display()),
+                })?
+                .clone()
+        };
         let bex = project.project.get_bex()?;
         Ok(Box::new(bex))
     }

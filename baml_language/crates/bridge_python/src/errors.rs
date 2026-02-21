@@ -34,8 +34,12 @@ pub fn bridge_error_to_py(err: bridge_cffi::error::BridgeError) -> PyErr {
         bridge_cffi::BridgeError::NotInitialized => PyErr::new::<BamlInvalidArgumentError, _>(
             "Engine not initialized. Call create_baml_runtime first.",
         ),
-        bridge_cffi::BridgeError::ProjectNotInitialized => todo!(),
-        bridge_cffi::BridgeError::LockPoisoned => todo!(),
+        bridge_cffi::BridgeError::ProjectNotInitialized => {
+            PyErr::new::<BamlClientError, _>("Project not initialized")
+        }
+        bridge_cffi::BridgeError::LockPoisoned => {
+            PyErr::new::<BamlClientError, _>("Internal error: lock poisoned")
+        }
         bridge_cffi::BridgeError::Runtime(runtime_error) => runtime_error_to_py(runtime_error),
         bridge_cffi::BridgeError::NullFunctionName => {
             PyErr::new::<BamlInvalidArgumentError, _>("Null function name pointer")
@@ -54,11 +58,11 @@ pub fn bridge_error_to_py(err: bridge_cffi::error::BridgeError) -> PyErr {
         } => PyErr::new::<BamlInvalidArgumentError, _>(format!(
             "Missing argument '{parameter}' for function '{function}'",
         )),
-        bridge_cffi::BridgeError::NotImplemented(_) => {
-            PyErr::new::<BamlInvalidArgumentError, _>("Not implemented: {0}")
+        bridge_cffi::BridgeError::NotImplemented(msg) => {
+            PyErr::new::<BamlInvalidArgumentError, _>(format!("Not implemented: {msg}"))
         }
-        bridge_cffi::BridgeError::DuplicateCallId(_) => PyErr::new::<BamlInvalidArgumentError, _>(
-            "call_id {0} is already in use by an active call",
+        bridge_cffi::BridgeError::DuplicateCallId(id) => PyErr::new::<BamlInvalidArgumentError, _>(
+            format!("call_id {id} is already in use by an active call",),
         ),
     }
 }

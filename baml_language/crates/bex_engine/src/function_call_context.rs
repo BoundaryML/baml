@@ -3,6 +3,9 @@ use std::sync::Arc;
 use bex_events::HostSpanContext;
 use sys_types::{CallId, CancellationToken};
 
+/// Per-call context passed to [`BexEngine::call_function`].
+///
+/// Constructed via [`FunctionCallContextBuilder`].
 pub struct FunctionCallContext {
     pub call_id: CallId,
     pub host_ctx: Option<HostSpanContext>,
