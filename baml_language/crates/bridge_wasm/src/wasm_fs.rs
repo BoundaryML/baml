@@ -1,3 +1,5 @@
+// vfs::VfsMetadata and vfs::FileSystem use std::time::SystemTime; helpers convert to/from it.
+#[allow(clippy::disallowed_types)]
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use js_sys::{Array, Uint8Array};
@@ -6,10 +8,14 @@ use wasm_bindgen::{JsValue, prelude::*};
 
 use crate::send_wrapper::SendWrapper;
 
+/// Converts from `vfs::FileSystem` trait's `std::time::SystemTime` to millis for JS.
+#[allow(clippy::disallowed_types)]
 fn system_time_to_millis(t: SystemTime) -> u64 {
     u64::try_from(t.duration_since(UNIX_EPOCH).unwrap().as_millis()).unwrap_or(u64::MAX)
 }
 
+/// Converts from JS millis to `vfs::VfsMetadata`'s `std::time::SystemTime`.
+#[allow(clippy::disallowed_types)]
 fn millis_to_system_time(ms: u64) -> SystemTime {
     UNIX_EPOCH + Duration::from_millis(ms)
 }
