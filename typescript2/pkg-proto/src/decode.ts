@@ -57,6 +57,9 @@ function deserializeValue(holder: CFFIValueHolderType): BamlJsValue {
     case 'literalValue': {
       const lit = holder.value.literalValue;
       if (!lit.literal) return null;
+    case 'literalValue': {
+      const lit = holder.value.literalValue;
+      if (!lit.literal) return null;
       switch (lit.literal.$case) {
         case 'stringLiteral':
           return lit.literal.stringLiteral.value;
