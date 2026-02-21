@@ -228,6 +228,7 @@ fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
         match obj {
             Object::String(s) => {
                 let escaped = s
+                    .replace('\\', "\\\\")
                     .replace('\n', "\\n")
                     .replace('\r', "\\r")
                     .replace('\t', "\\t");

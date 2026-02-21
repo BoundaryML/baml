@@ -552,6 +552,20 @@ mod tests {
     }
 
     #[test]
+    fn test_baml_std_prefix_matches_display() {
+        assert_eq!(BAML_STD_PREFIX, "baml.");
+
+        let builtin = QualifiedName::builtin(vec![Name::new("Array")], Name::new("length"));
+        assert!(builtin.display().starts_with(BAML_STD_PREFIX));
+
+        let std_item = QualifiedName::baml_std(vec![Name::new("http")], Name::new("get"));
+        assert!(std_item.display().starts_with(BAML_STD_PREFIX));
+
+        let env = QualifiedName::from_builtin_path("env.get");
+        assert!(!env.display().starts_with(BAML_STD_PREFIX));
+    }
+
+    #[test]
     fn test_user_module() {
         let qn = QualifiedName::user_module(vec![Name::new("users")], Name::new("User"));
         assert!(!qn.is_local());

@@ -1607,9 +1607,10 @@ impl PullSink for StackifyCodegen<'_, '_> {
             lc_inst,
             OperandMeta::Const(format!("{variant_idx} /* {enum_name}.{variant} */")),
         );
-        self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
+        let inst = self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
             enum_obj_idx,
         )));
+        self.set_operand(inst, OperandMeta::Object(enum_name.to_string()));
         Ok(())
     }
 

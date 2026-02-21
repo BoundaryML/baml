@@ -50,7 +50,9 @@ fn generate_tests(_out_dir: &str, manifest_dir: &str) {
     let exclude_builtins = quote!(|name: &&String| !name.starts_with(BAML_STD_PREFIX));
     let project_modules: TokenStream = projects
         .iter()
-        .map(|project| generate_project_tests(project, manifest_dir, exclude_builtins.clone()))
+        .map(|project| {
+            generate_project_tests(project, manifest_dir, exclude_builtins.clone(), false)
+        })
         .collect();
 
     let baml_std_module = generate_baml_std_test(manifest_dir);
@@ -190,6 +192,7 @@ fn generate_project_tests(
     project: &TestProject,
     manifest_dir: &str,
     codegen_filter: TokenStream,
+    require_codegen_functions: bool,
 ) -> TokenStream {
     let module_name = format_ident!("{}", project.name.replace("-", "_"));
     let snapshot_path = format!(
@@ -206,7 +209,7 @@ fn generate_project_tests(
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
     let diagnostics_test = generate_diagnostics_test(project);
-    let codegen_test = generate_codegen_test(project, codegen_filter);
+    let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
 
     let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
 
@@ -696,7 +699,7 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
     };
 
     let include_builtins = quote!(|name: &&String| name.starts_with(BAML_STD_PREFIX));
-    generate_project_tests(&project, manifest_dir, include_builtins)
+    generate_project_tests(&project, manifest_dir, include_builtins, true)
 }
 
 /// Emits a `quote!` fragment that collects sorted functions from a compiled program,
@@ -729,8 +732,25 @@ fn emit_collect_functions(filter_expr: TokenStream) -> TokenStream {
     }
 }
 
-fn generate_codegen_test(project: &TestProject, codegen_filter: TokenStream) -> TokenStream {
+fn generate_codegen_test(
+    project: &TestProject,
+    codegen_filter: TokenStream,
+    require_non_empty: bool,
+) -> TokenStream {
     let collect_functions = emit_collect_functions(codegen_filter);
+    let project_name = project.name.clone();
+    let require_functions_guard = if require_non_empty {
+        quote! {
+            if functions.is_empty() {
+                panic!(
+                    "No functions matched codegen filter in project '{}'",
+                    #project_name
+                );
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     let file_loaders: TokenStream = project
         .files
@@ -778,6 +798,8 @@ fn generate_codegen_test(project: &TestProject, codegen_filter: TokenStream) -> 
                     // Collect sorted functions, excluding builtins (baml.*)
                     // which are snapshotted separately in baml_std.
                     #collect_functions
+
+                    #require_functions_guard
 
                     output = bex_vm::debug::display_program(
                         &functions,
