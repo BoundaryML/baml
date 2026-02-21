@@ -850,11 +850,9 @@ impl BexEngine {
 
         // active_calls cleanup is done by ActiveCallGuard on drop
 
-        // If the call failed and the token is cancelled, upgrade to
-        // EngineError::Cancelled. This ensures cooperative BAML-level checks
-        // (which produce SysOpError via baml.sys.panic) are reported as
-        // Cancelled so callers can programmatically distinguish cancellation
-        // from genuine failures.
+        // If the call failed and the token is cancelled, prefer
+        // EngineError::Cancelled so callers can reliably distinguish user-
+        // initiated cancellation from genuine execution failures.
         match result {
             Err(_) if cancel.is_cancelled() => Err(EngineError::Cancelled),
             other => other,
@@ -975,6 +973,28 @@ impl BexEngine {
         }
     }
 
+    /// Abort all in-flight async sys-op tasks tracked by this call.
+    fn abort_inflight_tasks(abort_handles: &[futures::future::AbortHandle]) {
+        for handle in abort_handles {
+            handle.abort();
+        }
+    }
+
+    /// Engine-level cancellation safepoint.
+    ///
+    /// Keeps cancellation handling centralized in the engine loop instead of
+    /// requiring individual BAML code paths or `sys_ops` to be cancel-aware.
+    fn cancellation_safepoint(
+        cancel: &CancellationToken,
+        abort_handles: &[futures::future::AbortHandle],
+    ) -> Result<(), EngineError> {
+        if cancel.is_cancelled() {
+            Self::abort_inflight_tasks(abort_handles);
+            return Err(EngineError::Cancelled);
+        }
+        Ok(())
+    }
+
     /// Run the VM event loop until completion, with epoch tracking.
     ///
     /// The `my_epoch` parameter is used to check if GC has been requested
@@ -991,14 +1011,14 @@ impl BexEngine {
         let (pending_futures, mut processed_futures) = mpsc::unbounded_channel::<FutureResult>();
         // Abort handles for spawned async tasks.
         //
-        // Cancellation design: the VM event loop uses a biased `tokio::select!`
-        // at every `Await` instruction, so cancellation is detected immediately
-        // regardless of whether the in-flight sys_op is cancel-aware. However,
-        // without abort handles the *spawned task* running the sys_op would
-        // continue as an orphan until it completes naturally. For short-lived
-        // ops (env.get, render_prompt, parse) this is irrelevant, but for
-        // long-running ops (HTTP requests burning provider tokens, multi-second
-        // sleeps) orphans waste real resources.
+        // Cancellation design: the engine checks cancellation at centralized
+        // safepoints (VM loop boundaries + ScheduleFuture boundaries), and uses
+        // a biased `tokio::select!` while waiting at `Await`. This keeps
+        // cancellation in the engine, so individual sys_ops don't need to be
+        // cancellation-aware. Without abort handles, async sys-op tasks would
+        // continue as orphans after cancellation until they complete naturally.
+        // For long-running ops (HTTP requests, multi-second sleeps), that
+        // wastes real resources.
         //
         // Rather than making individual sys_ops cancel-aware (wrapping each in
         // its own `tokio::select!`), we store abort handles here and kill all
@@ -1011,8 +1031,12 @@ impl BexEngine {
         let mut abort_handles: Vec<futures::future::AbortHandle> = Vec::new();
 
         'vm_exec: loop {
+            Self::cancellation_safepoint(cancel, &abort_handles)?;
+
             match vm.exec()? {
                 VmExecState::Complete(value) => {
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+
                     // Emit FunctionEnd for the root entry-point span if tracing
                     if let Some(state) = span_state.as_mut() {
                         if let Some(root_span) = state.stack.pop() {
@@ -1049,6 +1073,8 @@ impl BexEngine {
                 }
 
                 VmExecState::ScheduleFuture(id) => {
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+
                     let pending = vm.pending_future(id)?;
 
                     // Convert arguments to BexExternalValue
@@ -1058,8 +1084,14 @@ impl BexEngine {
                         .map(|v| self.vm_arg_to_bex_value(v))
                         .collect();
 
-                    match self.execute_sys_op(pending.operation, &args, call_id, cancel) {
+                    let sys_op_result =
+                        self.execute_sys_op(pending.operation, &args, call_id, cancel);
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+
+                    match sys_op_result {
                         SysOpResult::Ready(result) => {
+                            Self::cancellation_safepoint(cancel, &abort_handles)?;
+
                             // Sync operation - set future to Ready without touching stack.
                             // The VM will continue to the Await instruction which will
                             // extract the value from the Ready future.
@@ -1075,6 +1107,8 @@ impl BexEngine {
                             vm.set_future_ready(id, value)?;
                         }
                         SysOpResult::Async(fut) => {
+                            Self::cancellation_safepoint(cancel, &abort_handles)?;
+
                             // Async operation — wrap in Abortable and spawn.
                             let pending_futures = pending_futures.clone();
                             let (abort_handle, abort_reg) =
@@ -1171,9 +1205,7 @@ impl BexEngine {
                             () = cancel.cancelled() => {
                                 // Abort all in-flight spawned tasks to stop
                                 // HTTP requests, sleeps, etc. immediately.
-                                for handle in &abort_handles {
-                                    handle.abort();
-                                }
+                                Self::abort_inflight_tasks(&abort_handles);
                                 return Err(EngineError::Cancelled);
                             }
                             future = processed_futures.recv() => {

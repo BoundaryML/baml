@@ -256,72 +256,7 @@ async fn selective_cancellation_only_affects_target() {
 }
 
 // ============================================================================
-// 5. Cooperative cancellation_requested check — BAML code sees the cancellation
-// ============================================================================
-
-#[tokio::test]
-async fn cancellation_requested_returns_false_when_not_cancelled() {
-    // cancellation_requested() is a sync sys_op (SysOpOutput::ok), so it takes
-    // the Ready path: ScheduleFuture → set_future_ready → Await sees Ready →
-    // extracts value without entering the biased select.
-    let source = r#"
-        function main() -> bool {
-            baml.sys.cancellation_requested()
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
-        .expect("Failed to create engine");
-
-    let result = engine
-        .call_function(
-            "main",
-            vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-        )
-        .await
-        .expect("call should succeed");
-
-    assert_eq!(result, BexExternalValue::Bool(false));
-}
-
-#[tokio::test]
-async fn cancellation_requested_with_precancelled_token_returns_cancelled() {
-    // With a pre-cancelled token, call_function fails fast before the VM
-    // even starts. This guarantees consistent Err(Cancelled) regardless of
-    // whether the function uses sync or async sys_ops.
-    let source = r#"
-        function main() -> bool {
-            baml.sys.cancellation_requested()
-        }
-    "#;
-
-    let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
-        .expect("Failed to create engine");
-
-    let cancel = CancellationToken::new();
-    cancel.cancel(); // Pre-cancel
-
-    let result = engine
-        .call_function(
-            "main",
-            vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_cancel_token(cancel)
-                .build(),
-        )
-        .await;
-
-    assert!(
-        matches!(result, Err(EngineError::Cancelled)),
-        "Pre-cancelled token should return Cancelled, got: {result:?}"
-    );
-}
-
-// ============================================================================
-// 6. Multiple sequential sleeps — cancel partway through
+// 5. Multiple sequential sleeps — cancel partway through
 // ============================================================================
 
 #[tokio::test]
@@ -380,7 +315,7 @@ async fn cancel_interrupts_sequential_sleeps() {
 }
 
 // ============================================================================
-// 7. Non-cancelled token lets function complete normally
+// 6. Non-cancelled token lets function complete normally
 // ============================================================================
 
 #[tokio::test]
@@ -409,7 +344,7 @@ async fn non_cancelled_token_completes_normally() {
 }
 
 // ============================================================================
-// 8. Cancel is idempotent — multiple cancel() calls are harmless
+// 7. Cancel is idempotent — multiple cancel() calls are harmless
 // ============================================================================
 
 #[tokio::test]

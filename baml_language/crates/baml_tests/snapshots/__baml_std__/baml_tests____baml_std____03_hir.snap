@@ -107,9 +107,6 @@ function execute_client(llm_client: baml.llm.Client, context: baml.llm.Execution
             {
                 let attempt = 0;
                 while (attempt <= r.max_retries) {
-                    if (baml.sys.cancellation_requested()) {
-                        return;
-                    };
                     let attempt_delay = inherited_delay_ms;
                     if (attempt > 0) {
                         attempt_delay = baml.math.trunc(current_delay);
@@ -138,9 +135,6 @@ function execute_client(llm_client: baml.llm.Client, context: baml.llm.Execution
 function execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.ExecutionResult {
     match (llm_client.client_type) {
         baml.llm.ClientType.Primitive => {
-            if (baml.sys.cancellation_requested()) {
-                return;
-            };
             let resolve_fn = baml.llm.resolve_client(llm_client.name);
             let primitive = resolve_fn();
             let prompt = primitive.render_prompt(context.jinja_string, context.args);
@@ -165,9 +159,6 @@ function execute_client_once(llm_client: baml.llm.Client, context: baml.llm.Exec
                 while (_i < _len) {
                     let sub = _iter[_i];
                     _i += 1;
-                    if (baml.sys.cancellation_requested()) {
-                        return;
-                    };
                     let result = baml.llm.execute_client(sub, context, active_delay_ms);
                     if (result.ok) {
                         return result;
@@ -177,9 +168,6 @@ function execute_client_once(llm_client: baml.llm.Client, context: baml.llm.Exec
             baml.llm.ExecutionResult { ok: false, value: null }
         },
         baml.llm.ClientType.RoundRobin => {
-            if (baml.sys.cancellation_requested()) {
-                return;
-            };
             let idx = baml.llm.round_robin_next(llm_client.name) % llm_client.sub_clients.length();
             baml.llm.execute_client(llm_client.sub_clients.at(idx), context, active_delay_ms)
         },
@@ -204,9 +192,6 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
     let result = baml.llm.execute_client(llm_client, context, 0);
     if (result.ok) {
         return result.value;
-    };
-    if (baml.sys.cancellation_requested()) {
-        baml.sys.panic("Operation cancelled");
     };
     baml.sys.panic("All orchestration steps failed");
 }
