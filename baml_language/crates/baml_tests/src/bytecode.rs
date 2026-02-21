@@ -289,16 +289,24 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             let num_instructions = input.instructions.len();
             bex_vm_types::Bytecode {
                 meta: vec![
-                    bex_vm_types::bytecode::InstructionMeta {
-                        source_line: 1,
-                        operand: None,
-                    };
+                    bex_vm_types::bytecode::InstructionMeta { operand: None };
                     num_instructions
                 ],
                 instructions: input.instructions,
                 constants: input.constants,
                 resolved_constants: Vec::new(),
                 jump_tables: Vec::new(),
+                line_table: if num_instructions == 0 {
+                    Vec::new()
+                } else {
+                    vec![bex_vm_types::bytecode::LineTableEntry {
+                        pc: 0,
+                        span: baml_base::Span::fake(),
+                        line: 1,
+                        sequence_point: true,
+                        discriminator: 0,
+                    }]
+                },
             }
         },
         kind: bex_vm_types::FunctionKind::Bytecode,
@@ -307,6 +315,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
             names.resize_with(names.capacity(), String::new);
             names
         },
+        debug_locals: Vec::new(),
         span: baml_base::Span::fake(),
         block_notifications: Vec::new(),
         viz_nodes: Vec::new(),

@@ -581,6 +581,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                 bytecode: function.bytecode,
                 kind,
                 local_names: function.local_names,
+                debug_locals: function.debug_locals,
                 span: function.span,
                 block_notifications: function.block_notifications,
                 viz_nodes: function.viz_nodes,

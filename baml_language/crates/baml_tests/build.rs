@@ -572,7 +572,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
                         let inference = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_field_types_map.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
 
                         // Lower HIR → VIR → MIR
-                        let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx, &type_aliases_map, &recursive_aliases, &[]) {
+                        let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx, &type_aliases_map, &recursive_aliases) {
                             Ok(vir) => {
                                 let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &enums, &class_type_tags, &resolution_ctx, &type_aliases_map, &recursive_aliases);
                                 baml_compiler_mir::pretty::display_function(&mir)

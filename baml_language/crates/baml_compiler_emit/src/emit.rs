@@ -9,6 +9,7 @@ use std::{
     convert::Infallible,
 };
 
+use baml_base::Span;
 use baml_compiler_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, Local, MirFunction, Operand, Place, Rvalue,
     StatementKind, Terminator, UnaryOp,
@@ -18,7 +19,8 @@ use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, GlobalIndex,
     Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
-        BlockNotification, BlockNotificationType, InstructionMeta, JumpTableData, OperandMeta,
+        BlockNotification, BlockNotificationType, DebugLocalScope, InstructionMeta, JumpTableData,
+        LineTableEntry, OperandMeta,
     },
 };
 
@@ -96,7 +98,7 @@ fn analyze_switch(arms: &[(i64, BlockId)]) -> SwitchStrategy {
 
 use crate::{
     MirCodegenContext,
-    analysis::{AnalysisResult, LocalClassification},
+    analysis::{AnalysisResult, LocalClassification, StatementRef},
     pull_semantics::{
         self, LocalAssignBehavior, LocalPullAction, LocalStoreBehavior, PullSink, StackEffectSink,
     },
@@ -131,6 +133,11 @@ enum PendingJumpTarget {
 
 /// MIR to bytecode compiler with stackification.
 struct StackifyCodegen<'ctx, 'obj> {
+    /// MIR being compiled.
+    mir: &'ctx MirFunction,
+    /// Line index for the MIR's source file.
+    line_starts: &'ctx [u32],
+
     /// Resolved global names to indices.
     globals: &'ctx HashMap<String, usize>,
     /// Resolved class field indices.
@@ -172,8 +179,13 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Bytecode being generated.
     bytecode: Bytecode,
 
-    /// Current source line for debugging.
-    current_source_line: usize,
+    /// Current source span for emitted instructions.
+    current_debug_span: Option<Span>,
+    /// Whether the next emitted instruction should create a sequence point
+    /// line-table entry.
+    pending_sequence_point: bool,
+    /// Per-line discriminator counters for sequence points.
+    next_line_discriminator: HashMap<usize, u32>,
 
     /// The next block in RPO order (for fall-through optimization).
     next_block: Option<BlockId>,
@@ -190,18 +202,20 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Slot index → variable name mapping for debug metadata.
     slot_names: Vec<String>,
-
-    /// MIR local → source line mapping (for virtual local inlining).
-    /// When a virtual local is inlined at a use site, this allows updating
-    /// `current_source_line` so the emitted instructions get the correct line.
-    local_source_lines: HashMap<Local, usize>,
 }
 
 impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Create a new stackification codegen instance.
     #[allow(clippy::needless_pass_by_value)] // ctx is destructured into self fields
-    fn new(ctx: MirCodegenContext<'ctx, 'obj>, analysis: AnalysisResult) -> Self {
+    fn new(
+        mir: &'ctx MirFunction,
+        line_starts: &'ctx [u32],
+        ctx: MirCodegenContext<'ctx, 'obj>,
+        analysis: AnalysisResult,
+    ) -> Self {
         Self {
+            mir,
+            line_starts,
             globals: ctx.globals,
             classes: ctx.classes,
             class_object_indices: ctx.class_object_indices,
@@ -217,13 +231,14 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             dead_unreachable_blocks: HashSet::new(),
             trap_pc: None,
             bytecode: Bytecode::new(),
-            current_source_line: 0,
+            current_debug_span: None,
+            pending_sequence_point: false,
+            next_line_discriminator: HashMap::new(),
             next_block: None,
             watched_locals_initialized: HashSet::new(),
             block_notifications: Vec::new(),
             local_types: HashMap::new(),
             slot_names: Vec::new(),
-            local_source_lines: HashMap::new(),
         }
     }
 
@@ -274,8 +289,25 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         })
     }
 
+    fn span_for_statement_ref(&self, block: BlockId, statement_ref: StatementRef) -> Option<Span> {
+        let block = self.mir.block(block);
+        match statement_ref {
+            StatementRef::Statement(index) => block.statements.get(index).and_then(|s| s.span),
+            StatementRef::Terminator => block.terminator_span,
+        }
+    }
+
+    fn def_span_for_local(&self, local: Local) -> Option<Span> {
+        self.analysis
+            .def_use
+            .get(&local)
+            .and_then(|du| du.def.as_ref())
+            .and_then(|def| self.span_for_statement_ref(def.block, def.statement_ref))
+    }
+
     /// Compile a MIR function to bytecode.
-    fn compile(mut self, mir: &MirFunction) -> Function {
+    fn compile(mut self) -> Function {
+        let mir = self.mir;
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
 
@@ -286,23 +318,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         // Build slot name mapping for debug metadata.
         self.slot_names = Self::build_local_names(mir, &self.local_slots);
-
-        // Build local → source line mapping for virtual local inlining.
-        // When virtual locals are inlined at use sites, we need to know
-        // each local's source line so emitted instructions get the right line.
-        for block in &mir.blocks {
-            for stmt in &block.statements {
-                if let StatementKind::Assign {
-                    destination: Place::Local(local),
-                    ..
-                } = &stmt.kind
-                {
-                    if stmt.source_line != 0 {
-                        self.local_source_lines.insert(*local, stmt.source_line);
-                    }
-                }
-            }
-        }
 
         // 2. Emit blocks in RPO order.
         //
@@ -356,7 +371,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
             self.block_addresses.insert(block_id, self.current_pc());
             let block = mir.block(block_id);
-            self.emit_block(block, mir);
+            self.emit_block(block);
         }
 
         // If any pending edges target dead-unreachable MIR blocks, patch them
@@ -380,6 +395,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 header_level: node.header_level,
             })
             .collect();
+        let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
         // 5. Build the Function
         Function {
@@ -389,7 +405,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             bytecode: self.bytecode,
             kind: FunctionKind::Bytecode,
             local_names: self.slot_names,
-            span: baml_base::Span::fake(),
+            debug_locals,
+            span: mir.span.unwrap_or_else(Span::fake),
             block_notifications: self.block_notifications,
             viz_nodes,
             return_type: baml_type::Ty::Null,
@@ -463,14 +480,100 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         self.bytecode.instructions.len()
     }
 
+    /// Convert a byte offset to a 1-indexed line number.
+    fn offset_to_line(&self, offset: u32) -> usize {
+        match self.line_starts.binary_search(&offset) {
+            Ok(idx) => idx + 1,
+            Err(idx) => idx,
+        }
+    }
+
+    /// Normalize a span start offset to avoid leading-newline attribution.
+    ///
+    /// Some statement spans start at the newline byte preceding the real token.
+    /// If `start + 1` is a known line start, prefer that offset.
+    fn normalize_span_start_offset(&self, start: u32) -> u32 {
+        if self.line_starts.binary_search(&(start + 1)).is_ok() {
+            start + 1
+        } else {
+            start
+        }
+    }
+
+    /// Convert a source span to a display line number.
+    ///
+    /// Sequence points (statement/terminator boundaries) use normalized start
+    /// lines. Non-sequence expression entries fall back to end-line attribution
+    /// when a span crosses lines, which avoids collapsing multiline operand
+    /// spans to the previous line.
+    fn span_to_line(&self, span: Span, sequence_point: bool) -> usize {
+        let start: u32 = span.range.start().into();
+        let start = self.normalize_span_start_offset(start);
+        let start_line = self.offset_to_line(start);
+
+        if sequence_point {
+            return start_line;
+        }
+
+        let start_u32: u32 = span.range.start().into();
+        let end_u32: u32 = span.range.end().into();
+        if end_u32 > start_u32 {
+            let end_minus_one = end_u32 - 1;
+            let end_line = self.offset_to_line(end_minus_one);
+            if end_line > start_line && end_line - start_line <= 1 {
+                return end_line;
+            }
+        }
+
+        start_line
+    }
+
+    /// Set the current debug span used for subsequent emitted instructions.
+    fn set_debug_span(&mut self, span: Option<Span>, sequence_point: bool) {
+        self.current_debug_span = span;
+        self.pending_sequence_point = sequence_point;
+    }
+
+    /// Emit a line-table entry for an instruction if needed.
+    fn emit_line_table_entry(&mut self, pc: usize) {
+        let Some(span) = self.current_debug_span else {
+            self.pending_sequence_point = false;
+            return;
+        };
+
+        let must_emit = match self.bytecode.line_table.last() {
+            None => true,
+            Some(last) => last.span != span || self.pending_sequence_point,
+        };
+
+        if must_emit {
+            let line = self.span_to_line(span, self.pending_sequence_point);
+            let discriminator = if self.pending_sequence_point {
+                let counter = self.next_line_discriminator.entry(line).or_insert(0);
+                let out = *counter;
+                *counter += 1;
+                out
+            } else {
+                0
+            };
+            self.bytecode.line_table.push(LineTableEntry {
+                pc,
+                span,
+                line,
+                sequence_point: self.pending_sequence_point,
+                discriminator,
+            });
+        }
+
+        self.pending_sequence_point = false;
+    }
+
     /// Emit an instruction and return its index.
     fn emit(&mut self, instruction: Instruction) -> usize {
         let index = self.bytecode.instructions.len();
         self.bytecode.instructions.push(instruction);
-        self.bytecode.meta.push(InstructionMeta {
-            source_line: self.current_source_line,
-            operand: None,
-        });
+        self.bytecode.meta.push(InstructionMeta { operand: None });
+        self.emit_line_table_entry(index);
         index
     }
 
@@ -551,6 +654,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         .any(|(_, target)| matches!(target, PendingJumpTarget::Trap))
             });
         if needs_trap {
+            self.set_debug_span(None, false);
             self.trap_pc = Some(self.emit(Instruction::Unreachable));
         }
     }
@@ -560,26 +664,22 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     // ========================================================================
 
     /// Emit a basic block.
-    fn emit_block(&mut self, block: &BasicBlock, mir: &MirFunction) {
+    fn emit_block(&mut self, block: &BasicBlock) {
         // Emit all statements
         for stmt in &block.statements {
-            if stmt.source_line != 0 {
-                self.current_source_line = stmt.source_line;
-            }
-            self.emit_statement(&stmt.kind, mir);
+            self.set_debug_span(stmt.span, true);
+            self.emit_statement(&stmt.kind);
         }
 
         // Emit terminator
         if let Some(term) = &block.terminator {
-            if block.terminator_source_line != 0 {
-                self.current_source_line = block.terminator_source_line;
-            }
-            self.emit_terminator(term, mir);
+            self.set_debug_span(block.terminator_span, true);
+            self.emit_terminator(term);
         }
     }
 
     /// Emit a statement (with virtual assignment skipping).
-    fn emit_statement(&mut self, kind: &StatementKind, mir: &MirFunction) {
+    fn emit_statement(&mut self, kind: &StatementKind) {
         match kind {
             StatementKind::Assign { destination, value } => {
                 // Check if this is an assignment to a Virtual, PhiLike, or Dead local
@@ -615,7 +715,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         self.emit_rvalue_pull(value);
                         self.emit_store_place(destination);
                         // Emit Watch only once for watched locals (at initialization)
-                        let local_decl = mir.local(*local);
+                        let local_decl = self.mir.local(*local);
                         if local_decl.is_watched && !self.watched_locals_initialized.contains(local)
                         {
                             self.watched_locals_initialized.insert(*local);
@@ -653,7 +753,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit(Instruction::NotifyBlock(block_index));
             }
             StatementKind::WatchOptions { local, filter } => {
-                let channel_name = mir.local(*local).name.as_deref();
+                let channel_name = self.mir.local(*local).name.as_deref();
                 unwrap_infallible(pull_semantics::walk_watch_options_statement(
                     self,
                     *local,
@@ -821,7 +921,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     // ========================================================================
 
     /// Emit a terminator.
-    fn emit_terminator(&mut self, term: &Terminator, mir: &MirFunction) {
+    fn emit_terminator(&mut self, term: &Terminator) {
         match term {
             Terminator::Goto { target } => {
                 // Skip jump if target is the next block (fall-through)
@@ -835,7 +935,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             } => {
                 // Optimization: If else_block is unreachable (last arm of exhaustive match),
                 // we know the condition must be true, so skip the comparison entirely.
-                if self.analysis.is_block_unreachable(*else_block, mir) {
+                if self.analysis.is_block_unreachable(*else_block, self.mir) {
                     // Don't evaluate condition - just go directly to then_block
                     self.emit_jump_unless_fallthrough(*then_block);
                 } else {
@@ -1334,6 +1434,47 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
         names
     }
+
+    /// Build lexical-scope metadata for user-visible locals.
+    fn build_debug_locals(
+        mir: &MirFunction,
+        local_slots: &HashMap<Local, usize>,
+    ) -> Vec<DebugLocalScope> {
+        let mut locals = Vec::new();
+
+        for (&local, &slot) in local_slots {
+            let decl = mir.local(local);
+            let Some(name) = decl.name.as_ref() else {
+                continue;
+            };
+            let Some(scope_span) = decl.scope_span else {
+                continue;
+            };
+            if name.as_str() == "_" {
+                continue;
+            }
+            locals.push(DebugLocalScope {
+                slot,
+                name: name.to_string(),
+                scope_span,
+            });
+        }
+
+        locals.sort_by(|a, b| {
+            (
+                a.scope_span.file_id.as_u32(),
+                u32::from(a.scope_span.range.start()),
+                a.slot,
+            )
+                .cmp(&(
+                    b.scope_span.file_id.as_u32(),
+                    u32::from(b.scope_span.range.start()),
+                    b.slot,
+                ))
+        });
+
+        locals
+    }
 }
 
 impl PullSink for StackifyCodegen<'_, '_> {
@@ -1349,12 +1490,8 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
         let action = match classification {
             LocalClassification::Virtual => {
-                // Update source line from the defining MIR statement.
-                if let Some(&line) = self.local_source_lines.get(&local) {
-                    if line != 0 {
-                        self.current_source_line = line;
-                    }
-                }
+                // Attribute inlined virtual loads to their defining statement.
+                self.set_debug_span(self.def_span_for_local(local), false);
                 // Inline the definition rvalue at use site.
                 let rvalue = self.analysis.def_use[&local]
                     .def
@@ -1601,9 +1738,10 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
 /// Compile a MIR function to bytecode using stackification.
 ///
 /// This is the main entry point for the optimized MIR-based code generation.
-pub(crate) fn compile_mir_function(
-    mir: &MirFunction,
-    ctx: MirCodegenContext<'_, '_>,
+pub(crate) fn compile_mir_function<'a>(
+    mir: &'a MirFunction,
+    line_starts: &'a [u32],
+    ctx: MirCodegenContext<'a, '_>,
     opt: crate::analysis::OptLevel,
 ) -> Function {
     // Run analysis
@@ -1612,6 +1750,6 @@ pub(crate) fn compile_mir_function(
     crate::verifier::verify_mir_emit_invariants(mir, &analysis);
 
     // Compile with stackification
-    let codegen = StackifyCodegen::new(ctx, analysis);
-    codegen.compile(mir)
+    let codegen = StackifyCodegen::new(mir, line_starts, ctx, analysis);
+    codegen.compile()
 }

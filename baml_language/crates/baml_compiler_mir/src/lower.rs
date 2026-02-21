@@ -308,6 +308,10 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     fn lower_function(&mut self, signature: &FunctionSignature, body: &ExprBody) {
         self.builder = MirBuilder::new(signature.name.clone(), signature.params.len());
         self.viz_context.function_name = signature.name.to_string();
+        let function_scope_span = body.source_spans.get(&body.root).copied();
+        if let Some(span) = function_scope_span {
+            self.builder.set_span(span);
+        }
 
         // _0: return place
         // Use signature return type, not body root type (which may be Never for diverging bodies)
@@ -316,6 +320,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             .lower_type_ref(&signature.return_type, Span::default());
         let ret_ty = self.convert_tir_ty(&ret_ty_tir);
         let ret = self.builder.declare_local(None, ret_ty, None, false);
+        self.builder.set_local_scope_span(ret, function_scope_span);
         assert_eq!(ret, Local(0));
 
         // _1..=_n: parameters
@@ -327,6 +332,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             let local = self
                 .builder
                 .declare_local(Some(param.name.clone()), param_ty, None, false);
+            self.builder
+                .set_local_scope_span(local, function_scope_span);
             self.locals.insert(param.name.clone(), local);
         }
 
@@ -354,9 +361,13 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// This is the core of `TypedIR` lowering. Unlike HIR lowering which needs
     /// separate `lower_expr_to_place` and `lower_stmt`, here we have just one method.
     fn lower_expr(&mut self, expr_id: ExprId, dest: Place, body: &ExprBody) {
-        // Set source line from VIR expression span so MIR statements get tagged.
-        if let Some(&line) = body.source_lines.get(&expr_id) {
-            self.builder.current_source_line = line;
+        // Set source span from VIR expression span so MIR statements get tagged.
+        //
+        // Some VIR nodes are synthetic (e.g. path segment desugaring) and don't
+        // carry their own span. In that case, keep the current span from the
+        // parent expression instead of clearing it.
+        if let Some(span) = body.source_spans.get(&expr_id).copied() {
+            self.builder.current_source_span = Some(span);
         }
 
         let expr = body.expr(expr_id);
@@ -549,6 +560,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 let local =
                     self.builder
                         .declare_local(Some(name.clone()), local_ty, None, *is_watched);
+                self.builder
+                    .set_local_scope_span(local, body.source_spans.get(let_body).copied());
                 self.lower_expr(*value, Place::local(local), body);
 
                 // Bind the variable
@@ -756,8 +769,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             } => {
                 // If there are no spreads, use the simple aggregate approach
                 if spreads.is_empty() {
-                    // Save the object's source line; field value lowering may change it.
-                    let object_source_line = self.builder.current_source_line;
+                    // Save the object's source span; field value lowering may change it.
+                    let object_source_span = self.builder.current_source_span;
 
                     let field_operands: Vec<Operand> = fields
                         .iter()
@@ -770,8 +783,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         AggregateKind::Class("Anonymous".to_string())
                     };
 
-                    // Restore the object's source line for the aggregate statement.
-                    self.builder.current_source_line = object_source_line;
+                    // Restore the object's source span for the aggregate statement.
+                    self.builder.current_source_span = object_source_span;
                     self.builder.assign(
                         dest,
                         Rvalue::Aggregate {
@@ -1054,7 +1067,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 };
 
                 // For each arm, create test and body blocks
-                let match_source_line = self.builder.current_source_line;
+                let match_source_span = self.builder.current_source_span;
                 let last_arm_idx = arms.len().saturating_sub(1);
                 for (i, arm) in arms.iter().enumerate() {
                     let is_last_arm = i == last_arm_idx;
@@ -1068,12 +1081,12 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         self.builder.create_block()
                     };
 
-                    // Restore match expression source line for pattern test,
+                    // Restore match expression source span for pattern test,
                     // so it doesn't leak from the previous arm's body.
-                    self.builder.current_source_line = match_source_line;
+                    self.builder.current_source_span = match_source_span;
 
                     // Generate pattern test
-                    let arm_source_line = body.source_lines.get(&arm.body).copied().unwrap_or(0);
+                    let arm_source_span = body.source_spans.get(&arm.body).copied();
                     self.lower_pattern_test(
                         arm.pattern,
                         scrutinee_local,
@@ -1081,7 +1094,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         arm_block,
                         next_block,
                         body,
-                        arm_source_line,
+                        arm_source_span,
                     );
 
                     // Arm body
@@ -1464,9 +1477,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         for (i, arm) in arms.iter().enumerate() {
             self.builder.set_current_block(arm_blocks[i]);
 
-            // Set source line from the arm body so the binding gets the right line.
-            if let Some(&line) = body.source_lines.get(&arm.body) {
-                self.builder.current_source_line = line;
+            // Set source span from the arm body so the binding gets the right span.
+            if let Some(span) = body.source_spans.get(&arm.body).copied() {
+                self.builder.current_source_span = Some(span);
             }
 
             // If this is a binding or typed binding arm, bind the variable
@@ -1479,6 +1492,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         None,
                         false,
                     );
+                    self.builder
+                        .set_local_scope_span(local, body.source_spans.get(&arm.body).copied());
                     self.builder.assign(
                         Place::local(local),
                         Rvalue::Use(Operand::copy_local(scrutinee_local)),
@@ -1493,6 +1508,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         let local =
                             self.builder
                                 .declare_local(Some(name.clone()), pattern_ty, None, false);
+                        self.builder
+                            .set_local_scope_span(local, body.source_spans.get(&arm.body).copied());
                         self.builder.assign(
                             Place::local(local),
                             Rvalue::Use(Operand::copy_local(scrutinee_local)),
@@ -1516,8 +1533,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// Lower a pattern match test, branching to `success_block` if the pattern matches,
     /// or `fail_block` if it doesn't.
     ///
-    /// `binding_source_line` is set as the source line before emitting any variable
-    /// binding so that the binding statement gets the arm's line, not the match expression's.
+    /// `binding_source_span` is set before emitting any variable binding so that
+    /// the binding statement gets the arm span, not the match expression span.
     #[allow(clippy::too_many_arguments)]
     fn lower_pattern_test(
         &mut self,
@@ -1527,7 +1544,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         success_block: BlockId,
         fail_block: BlockId,
         body: &ExprBody,
-        binding_source_line: usize,
+        binding_source_span: Option<Span>,
     ) {
         let pat = body.pattern(pat_id);
         match pat {
@@ -1535,15 +1552,15 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // Binding always matches. `_` is a discard binding and must not
                 // be materialized as a usable local.
                 if name.as_str() != "_" {
-                    if binding_source_line != 0 {
-                        self.builder.current_source_line = binding_source_line;
-                    }
+                    self.builder.current_source_span = binding_source_span;
                     let local = self.builder.declare_local(
                         Some(name.clone()),
                         scrutinee_ty.clone(),
                         None,
                         false,
                     );
+                    self.builder
+                        .set_local_scope_span(local, binding_source_span);
                     self.builder.assign(
                         Place::local(local),
                         Rvalue::Use(Operand::copy_local(scrutinee_local)),
@@ -1578,12 +1595,12 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 // `_` is a discard binding and must not be materialized.
                 self.builder.set_current_block(bind_block);
                 if name.as_str() != "_" {
-                    if binding_source_line != 0 {
-                        self.builder.current_source_line = binding_source_line;
-                    }
+                    self.builder.current_source_span = binding_source_span;
                     let local =
                         self.builder
                             .declare_local(Some(name.clone()), pattern_ty, None, false);
+                    self.builder
+                        .set_local_scope_span(local, binding_source_span);
                     self.builder.assign(
                         Place::local(local),
                         Rvalue::Use(Operand::copy_local(scrutinee_local)),
@@ -1645,7 +1662,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         success_block,
                         next_try,
                         body,
-                        binding_source_line,
+                        binding_source_span,
                     );
                     if i + 1 < pats.len() {
                         self.builder.set_current_block(next_try);

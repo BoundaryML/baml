@@ -359,6 +359,7 @@ pub fn compile_files(
             bytecode: Bytecode::default(),
             kind,
             local_names: Vec::new(),
+            debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
             viz_nodes: Vec::new(),
@@ -374,7 +375,6 @@ pub fn compile_files(
 
     // Compile each user function using MIR
     for file in files {
-        // Build line starts table for span → line number conversion.
         let line_starts = build_line_starts(file.text(db));
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
@@ -421,6 +421,7 @@ pub fn compile_files(
                                 .iter()
                                 .map(std::string::ToString::to_string)
                                 .collect(),
+                            debug_locals: Vec::new(),
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
                             viz_nodes: Vec::new(),
@@ -457,7 +458,6 @@ pub fn compile_files(
                             &resolution_ctx,
                             &type_aliases,
                             &recursive_aliases,
-                            &line_starts,
                         )
                         .map_err(|e| e.in_function(signature.name.to_string()))?;
                         let mir = baml_compiler_mir::lower(
@@ -481,7 +481,7 @@ pub fn compile_files(
                             enum_variants: &enum_variants,
                             objects: &mut program.objects,
                         };
-                        compile_mir_function(&mir, ctx, opt)
+                        compile_mir_function(&mir, &line_starts, ctx, opt)
                     }
                 };
 
@@ -763,7 +763,6 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
 /// Build a table of byte offsets where each line starts in the source text.
 ///
 /// Returns `[0, offset_of_line_2, offset_of_line_3, ...]`.
-/// Used for converting byte offsets from spans to 1-indexed line numbers.
 #[allow(clippy::cast_possible_truncation)]
 fn build_line_starts(text: &str) -> Vec<u32> {
     let mut starts = vec![0u32];

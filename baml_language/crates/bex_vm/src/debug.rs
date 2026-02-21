@@ -25,17 +25,15 @@
 //!
 //! ```
 
-use std::{fmt::Write, io::IsTerminal};
+use std::fmt::Write;
 
 use bex_vm_types::{
-    HeapPtr, StackIndex,
+    HeapPtr,
     bytecode::Instruction,
-    indexable::{GlobalPool, ObjectPool},
+    indexable::{GlobalIndex, GlobalPool, ObjectPool},
     types::{Function, Object, Value},
 };
 use colored::{Color, Colorize};
-
-use crate::indexable::EvalStack;
 
 /// Display format for bytecode output.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -47,6 +45,41 @@ pub enum BytecodeFormat {
     /// Expanded raw format showing source lines, bytecode addresses,
     /// raw operand indices, and metadata annotations in a table layout.
     Expanded,
+}
+
+/// Resolve a global reference (global slot or callee slot) to display metadata.
+fn display_global_ref(
+    index: GlobalIndex,
+    globals: &GlobalPool,
+    objects: Option<&ObjectPool>,
+    compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
+) -> String {
+    // Prefer runtime globals.
+    if index.raw() < globals.len() {
+        return format!("({})", display_value(&globals[index]));
+    }
+
+    // At compile time, resolve from compile-time globals/object pool.
+    if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects)
+        && let Some(const_val) = ct_globals.get(index.raw())
+    {
+        return format!("({})", display_const_value(const_val, Some(objs)));
+    }
+
+    format!("(global {})", index.raw())
+}
+
+/// Return the source line column text for a bytecode PC.
+///
+/// Returns an empty string when line info is unavailable or unchanged.
+fn display_source_line_cell(function: &Function, pc: usize, last_line: &mut usize) -> String {
+    match function.bytecode.source_line_for_pc(pc) {
+        line if line != 0 && line != *last_line => {
+            *last_line = line;
+            line.to_string()
+        }
+        _ => String::new(),
+    }
 }
 
 /// Context aware instruction display.
@@ -63,15 +96,19 @@ pub enum BytecodeFormat {
 ///
 /// If there's no relevant metadata to attach to the instruction, then this
 /// function returns an empty string.
-pub fn display_instruction(
+pub(crate) fn display_instruction(
     instruction_ptr: usize,
     function: &Function,
-    stack: &EvalStack,
     globals: &GlobalPool,
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
 ) -> (String, String) {
     let instruction = &function.bytecode.instructions[instruction_ptr];
+    let operand_meta = function
+        .bytecode
+        .meta
+        .get(instruction_ptr)
+        .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
         Instruction::NotifyBlock(block_index) => {
@@ -92,75 +129,22 @@ pub fn display_instruction(
             }
         }
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
-            // Prefer runtime globals, fall back to compile-time lookup
-            if index.raw() < globals.len() {
-                format!("({})", display_value(&globals[*index]))
-            } else if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
-                // At compile time, look up the global value then resolve to object
-                if let Some(const_val) = ct_globals.get(index.raw()) {
-                    format!("({})", display_const_value(const_val, Some(objs)))
-                } else {
-                    format!("(global {})", index.raw())
-                }
-            } else {
-                format!("(global {})", index.raw())
-            }
+            display_global_ref(*index, globals, objects, compile_time_globals)
         }
         Instruction::Call(callee) | Instruction::DispatchFuture(callee) => {
-            if callee.raw() < globals.len() {
-                format!("({})", display_value(&globals[*callee]))
-            } else if let (Some(ct_globals), Some(objs)) = (compile_time_globals, objects) {
-                if let Some(const_val) = ct_globals.get(callee.raw()) {
-                    format!("({})", display_const_value(const_val, Some(objs)))
-                } else {
-                    format!("(global {})", callee.raw())
-                }
-            } else {
-                format!("(global {})", callee.raw())
-            }
+            display_global_ref(*callee, globals, objects, compile_time_globals)
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
         | Instruction::Watch(index)
         | Instruction::Unwatch(index)
-        | Instruction::Notify(index) => {
-            format!(
-                "({})",
-                function.local_names.get(*index).unwrap_or(&"?".to_string())
-            )
-        }
-        Instruction::LoadField(index) | Instruction::StoreField(index) => 'field: {
-            // When the compiler calls this, there's no runtime stack so it's
-            // not possible to get instruction parameters from the stack.
-            // TODO: Figure out a way to get this information without running
-            // the VM. When the compiler emits instructions, it could append
-            // some metadata to each one of them, simplifying this code a lot
-            // since the VM at runtime would only have to print the stack. All
-            // instructions with metadata would be provided by the compiler.
-            if stack.is_empty() {
-                break 'field String::new();
-            }
-
-            // TODO: prevent panic here
-
-            let Value::Object(reference) = stack[StackIndex::from_raw(stack.len() - 2)] else {
-                break 'field String::from("(ERROR: value not an object)");
-            };
-
-            // SAFETY: During debug display, we assume the pointer is valid
-            let instance = unsafe { reference.get() };
-            let Object::Instance(instance) = instance else {
-                break 'field String::from("(ERROR: value not an instance)");
-            };
-
-            // SAFETY: During debug display, we assume the pointer is valid
-            let class = unsafe { instance.class.get() };
-            let Object::Class(class) = class else {
-                break 'field String::from("(ERROR: class not found)");
-            };
-
-            format!("({})", class.fields[*index].name)
-        }
+        | Instruction::Notify(index) => match function.local_names.get(*index) {
+            Some(name) => format!("({name})"),
+            None => "(?)".to_string(),
+        },
+        Instruction::LoadField(_) | Instruction::StoreField(_) => operand_meta
+            .map(|m| format!("({})", m.as_str()))
+            .unwrap_or_default(),
         Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
@@ -211,7 +195,7 @@ pub fn display_instruction(
 /// The default display for objects is just a reference number. If we want
 /// all the information, we have to dereference the object and call it's
 /// `to_string` implementation.
-pub fn display_value(value: &Value) -> String {
+pub(crate) fn display_value(value: &Value) -> String {
     match value {
         Value::Object(ptr) => display_object_ptr(*ptr),
         other => other.to_string(),
@@ -380,7 +364,6 @@ impl Col {
 /// symmetric and returns the entire table.
 pub fn display_bytecode(
     function: &Function,
-    stack: &EvalStack,
     globals: &GlobalPool,
     objects: Option<&ObjectPool>,
     compile_time_globals: Option<&[bex_vm_types::ConstValue]>,
@@ -404,7 +387,6 @@ pub fn display_bytecode(
         let (instruction, metadata) = display_instruction(
             instruction_ptr,
             function,
-            stack,
             globals,
             objects,
             compile_time_globals,
@@ -412,18 +394,7 @@ pub fn display_bytecode(
 
         // decide whether to show the line number
         // since a single line could emit multiple instructions
-        let source_line = match function
-            .bytecode
-            .meta
-            .get(instruction_ptr)
-            .map(|m| &m.source_line)
-        {
-            Some(line) if last_line != *line => {
-                last_line = *line;
-                line.to_string()
-            }
-            _ => String::new(),
-        };
+        let source_line = display_source_line_cell(function, instruction_ptr, &mut last_line);
 
         let instruction_color = instruction_color(&function.bytecode.instructions[instruction_ptr]);
 
@@ -495,18 +466,6 @@ pub fn display_bytecode(
     table
 }
 
-/// Prints the dissassembly of a function.
-#[allow(clippy::print_stderr)] // intentional debug output for disassembly
-pub fn disassemble(function: &Function, stack: &EvalStack, globals: &GlobalPool) {
-    let use_colors = std::io::stdout().is_terminal();
-
-    // At runtime, resolved_constants has HeapPtr that can be dereferenced,
-    // so we don't need the ObjectPool or compile-time globals
-    let disassembly = display_bytecode(function, stack, globals, None, None, use_colors);
-
-    eprintln!("{disassembly}");
-}
-
 /// Display bytecode in a human-readable textual assembly format.
 ///
 /// This format replaces numeric indices with resolved names and uses labels
@@ -537,7 +496,7 @@ pub fn disassemble(function: &Function, stack: &EvalStack, globals: &GlobalPool)
 ///
 /// This format is stable across global index changes (adding builtins won't
 /// shift indices) making it suitable for snapshot tests.
-pub fn display_bytecode_textual(function: &Function) -> String {
+fn display_bytecode_textual(function: &Function) -> String {
     use std::collections::{BTreeMap, BTreeSet};
 
     let instructions = &function.bytecode.instructions;
@@ -852,13 +811,7 @@ fn display_bytecode_expanded(function: &Function) -> String {
 
     for (ip, instruction) in instructions.iter().enumerate() {
         // Source line column (only when it changes).
-        let source_line = match function.bytecode.meta.get(ip).map(|m| m.source_line) {
-            Some(line) if line != last_line => {
-                last_line = line;
-                line.to_string()
-            }
-            _ => String::new(),
-        };
+        let source_line = display_source_line_cell(function, ip, &mut last_line);
 
         // Address column.
         let address = ip.to_string();

@@ -1,5 +1,7 @@
 //! Instruction set and bytecode representation.
 
+use baml_base::Span;
+
 use crate::{GlobalIndex, ObjectIndex, types::ConstValue};
 
 // ============================================================================
@@ -600,14 +602,40 @@ impl OperandMeta {
 
 /// Per-instruction debug metadata, populated by the compiler.
 ///
-/// Parallel to `Bytecode::instructions`. Contains source location
-/// and resolved operand names for debug display.
+/// Parallel to `Bytecode::instructions`. Contains resolved operand names for
+/// debug display.
 #[derive(Clone, Debug, Default)]
 pub struct InstructionMeta {
-    /// Source line number this instruction was generated from.
-    pub source_line: usize,
     /// Resolved operand name (if applicable to the instruction type).
     pub operand: Option<OperandMeta>,
+}
+
+/// Run-length encoded source mapping entry.
+///
+/// Each entry applies from `pc` (inclusive) until the next entry.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LineTableEntry {
+    /// Bytecode program counter where this entry begins.
+    pub pc: usize,
+    /// Source span for this bytecode range.
+    pub span: Span,
+    /// 1-indexed source line for quick stack traces/disassembly.
+    pub line: usize,
+    /// True when this entry is a debugger sequence point.
+    pub sequence_point: bool,
+    /// Distinguishes multiple stops on the same line.
+    pub discriminator: u32,
+}
+
+/// Debug metadata for a named local variable and its lexical scope.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DebugLocalScope {
+    /// Stack slot used by this local.
+    pub slot: usize,
+    /// User-facing variable name.
+    pub name: String,
+    /// Source span where this variable is in scope.
+    pub scope_span: Span,
 }
 
 /// Executable bytecode.
@@ -629,7 +657,12 @@ pub struct Bytecode {
     /// Jump tables for switch dispatch (indexed by `JumpTable` instruction).
     pub jump_tables: Vec<JumpTableData>,
 
-    /// Per-instruction debug metadata (source lines, resolved operand names).
+    /// Line table mapping bytecode PCs to source spans.
+    ///
+    /// Entries are run-length encoded by PC ranges.
+    pub line_table: Vec<LineTableEntry>,
+
+    /// Per-instruction debug metadata (resolved operand names).
     ///
     /// Parallel to `instructions`. Populated by the compiler at emit time.
     pub meta: Vec<InstructionMeta>,
@@ -648,8 +681,23 @@ impl Bytecode {
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
+            line_table: Vec::new(),
             meta: Vec::new(),
         }
+    }
+
+    /// Get the source mapping entry that applies to the given bytecode PC.
+    pub fn line_entry_for_pc(&self, pc: usize) -> Option<&LineTableEntry> {
+        if self.line_table.is_empty() {
+            return None;
+        }
+        let idx = self.line_table.partition_point(|entry| entry.pc <= pc);
+        (idx > 0).then(|| &self.line_table[idx - 1])
+    }
+
+    /// Get the 1-indexed source line for a bytecode PC.
+    pub fn source_line_for_pc(&self, pc: usize) -> usize {
+        self.line_entry_for_pc(pc).map_or(0, |entry| entry.line)
     }
 
     /// Resolve constants from `ConstValue` to Value using a resolver function.

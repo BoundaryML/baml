@@ -1023,7 +1023,6 @@ impl CompilerRunner {
                         &resolution_ctx,
                         &type_aliases_map,
                         &recursive_aliases,
-                        &[],
                     ) {
                         Ok(typed_ir) => {
                             // Pretty print the TypedIR
@@ -1155,7 +1154,6 @@ impl CompilerRunner {
                         &resolution_ctx,
                         &type_aliases_map,
                         &recursive_aliases,
-                        &[],
                     ) {
                         Ok(vir) => {
                             let mir = baml_compiler_mir::lower(
@@ -1428,16 +1426,9 @@ impl CompilerRunner {
                 writeln!(output, "{}", func_header).ok();
                 output_annotated.push((func_header, LineStatus::Unknown));
 
-                // Use empty GlobalPool for compile-time display (no heap available)
-                // Pass ObjectPool and compile-time globals to resolve names
-                let empty_globals = bex_vm_types::indexable::GlobalPool::new();
-                let bytecode_table = bex_vm::debug::display_bytecode(
-                    func,
-                    &bex_vm::EvalStack::new(),
-                    &empty_globals,
-                    Some(&program.objects),
-                    Some(&program.globals),
-                    false, // no colors for static display
+                let bytecode_table = bex_vm::debug::display_program(
+                    &[(func_name.to_string(), func)],
+                    bex_vm::debug::BytecodeFormat::Textual,
                 );
 
                 if bytecode_table.is_empty() {

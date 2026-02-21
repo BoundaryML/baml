@@ -826,7 +826,9 @@ impl BexVm {
                 Ok(ErrorLocation {
                     function_name: function.name.clone(),
                     function_span: function.span,
-                    error_line: function.bytecode.meta[last_executed_instruction].source_line,
+                    error_line: function
+                        .bytecode
+                        .source_line_for_pc(last_executed_instruction),
                 })
             })
             .collect::<Result<Vec<_>, VmError>>()
@@ -1205,7 +1207,6 @@ impl BexVm {
                 let (instruction, metadata) = crate::debug::display_instruction(
                     instruction_ptr,
                     function,
-                    &self.stack,
                     &self.globals,
                     None,
                     None,

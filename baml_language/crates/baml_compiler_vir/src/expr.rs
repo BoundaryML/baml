@@ -57,9 +57,9 @@ pub struct ExprBody {
     /// builtin, enum variant, etc.). This is carried from TIR so that MIR
     /// lowering doesn't need to re-derive resolution from types.
     pub resolutions: rustc_hash::FxHashMap<ExprId, ResolvedValue>,
-    /// Source line numbers for expressions (VIR `ExprId` → 1-indexed line number).
+    /// Source spans for expressions (VIR `ExprId` → source span).
     /// Populated from HIR source map during lowering.
-    pub source_lines: rustc_hash::FxHashMap<ExprId, usize>,
+    pub source_spans: rustc_hash::FxHashMap<ExprId, baml_base::Span>,
     /// Root expression of the body.
     pub root: ExprId,
 }

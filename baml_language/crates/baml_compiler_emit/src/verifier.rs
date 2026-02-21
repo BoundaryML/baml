@@ -159,6 +159,7 @@ mod tests {
             name: Some(Name::new(name)),
             ty: Ty::Int,
             span: None,
+            scope_span: None,
             is_watched: false,
         }
     }
@@ -168,6 +169,7 @@ mod tests {
             name: Some(Name::new(name)),
             ty: Ty::Int,
             span: None,
+            scope_span: None,
             is_watched: true,
         }
     }
@@ -179,7 +181,6 @@ mod tests {
                 value: Rvalue::Use(Operand::Constant(Constant::Int(value))),
             },
             span: None,
-            source_line: 0,
         }
     }
 
@@ -200,21 +201,21 @@ mod tests {
                         arm_names: vec![],
                     }),
                     span: None,
-                    terminator_source_line: 0,
+                    terminator_span: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
                     statements: vec![stmt_assign(Local(0), 1)],
                     terminator: Some(Terminator::Return),
                     span: None,
-                    terminator_source_line: 0,
+                    terminator_span: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
                     statements: vec![],
                     terminator: Some(Terminator::Unreachable),
                     span: None,
-                    terminator_source_line: 0,
+                    terminator_span: None,
                 },
             ],
             entry: BlockId(0),
@@ -248,21 +249,21 @@ mod tests {
                         arm_names: vec![],
                     }),
                     span: None,
-                    terminator_source_line: 0,
+                    terminator_span: None,
                 },
                 BasicBlock {
                     id: BlockId(1),
                     statements: vec![stmt_assign(Local(0), 1)],
                     terminator: Some(Terminator::Return),
                     span: None,
-                    terminator_source_line: 0,
+                    terminator_span: None,
                 },
                 BasicBlock {
                     id: BlockId(2),
                     statements: vec![],
                     terminator: Some(Terminator::Goto { target: BlockId(1) }),
                     span: None,
-                    terminator_source_line: 0,
+                    terminator_span: None,
                 },
             ],
             entry: BlockId(0),
@@ -287,7 +288,7 @@ mod tests {
                 statements: vec![],
                 terminator: Some(Terminator::Return),
                 span: None,
-                terminator_source_line: 0,
+                terminator_span: None,
             }],
             entry: BlockId(0),
             locals: vec![local("ret"), local_watched("x")],
