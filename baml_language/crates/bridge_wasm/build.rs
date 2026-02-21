@@ -1,4 +1,4 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
 
 fn main() {
     if std::env::var("BRIDGE_WASM_FORCE_RERUN").is_ok() {
@@ -7,7 +7,9 @@ fn main() {
         println!("cargo:rerun-if-changed=FORCE_RERUN");
     }
 
-    let ts = SystemTime::now()
+    // Build script runs on the host; [`std::time::SystemTime`] is correct at this callsite.
+    #[allow(clippy::disallowed_types)]
+    let ts = std::time::SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();

@@ -238,18 +238,24 @@ impl vfs::FileSystem for WasmFs {
         self.vfs.remove_dir(path).map_err(|e| js_err_to_vfs(&e))
     }
 
+    /// [`vfs::FileSystem`] trait requires [`std::time::SystemTime`] in the signature.
+    #[allow(clippy::disallowed_types)]
     fn set_creation_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
         self.vfs
             .set_time("creation", path, system_time_to_millis(time))
             .map_err(|e| js_err_to_vfs(&e))
     }
 
+    /// [`vfs::FileSystem`] trait requires [`std::time::SystemTime`] in the signature.
+    #[allow(clippy::disallowed_types)]
     fn set_modification_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
         self.vfs
             .set_time("modification", path, system_time_to_millis(time))
             .map_err(|e| js_err_to_vfs(&e))
     }
 
+    /// [`vfs::FileSystem`] trait requires [`std::time::SystemTime`] in the signature.
+    #[allow(clippy::disallowed_types)]
     fn set_access_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
         self.vfs
             .set_time("access", path, system_time_to_millis(time))

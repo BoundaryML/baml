@@ -101,65 +101,6 @@ fn glob_to_regex(glob: &str) -> GlobPattern {
     }
 }
 
-/// Thin wrapper so we can construct a `VfsPath` from a `&dyn vfs::FileSystem`
-/// reference for the fallback `walk_dir` implementation.
-#[allow(dead_code)]
-struct WrapFs(&'static dyn vfs::FileSystem);
-
-impl std::fmt::Debug for WrapFs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WrapFs({:?})", self.0)
-    }
-}
-
-impl vfs::FileSystem for WrapFs {
-    fn read_dir(&self, path: &str) -> vfs::VfsResult<Box<dyn Iterator<Item = String> + Send>> {
-        self.0.read_dir(path)
-    }
-    fn create_dir(&self, path: &str) -> vfs::VfsResult<()> {
-        self.0.create_dir(path)
-    }
-    fn open_file(&self, path: &str) -> vfs::VfsResult<Box<dyn vfs::SeekAndRead + Send>> {
-        self.0.open_file(path)
-    }
-    fn create_file(&self, path: &str) -> vfs::VfsResult<Box<dyn vfs::SeekAndWrite + Send>> {
-        self.0.create_file(path)
-    }
-    fn append_file(&self, path: &str) -> vfs::VfsResult<Box<dyn vfs::SeekAndWrite + Send>> {
-        self.0.append_file(path)
-    }
-    fn metadata(&self, path: &str) -> vfs::VfsResult<vfs::VfsMetadata> {
-        self.0.metadata(path)
-    }
-    fn exists(&self, path: &str) -> vfs::VfsResult<bool> {
-        self.0.exists(path)
-    }
-    fn remove_file(&self, path: &str) -> vfs::VfsResult<()> {
-        self.0.remove_file(path)
-    }
-    fn remove_dir(&self, path: &str) -> vfs::VfsResult<()> {
-        self.0.remove_dir(path)
-    }
-    fn set_creation_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
-        self.0.set_creation_time(path, time)
-    }
-    fn set_modification_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
-        self.0.set_modification_time(path, time)
-    }
-    fn set_access_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
-        self.0.set_access_time(path, time)
-    }
-    fn copy_file(&self, src: &str, dest: &str) -> vfs::VfsResult<()> {
-        self.0.copy_file(src, dest)
-    }
-    fn move_file(&self, src: &str, dest: &str) -> vfs::VfsResult<()> {
-        self.0.move_file(src, dest)
-    }
-    fn move_dir(&self, src: &str, dest: &str) -> vfs::VfsResult<()> {
-        self.0.move_dir(src, dest)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct BamlVFS {
     fs: std::sync::Arc<Box<dyn BulkReadFileSystem>>,
@@ -262,14 +203,20 @@ impl vfs::FileSystem for BamlVFS {
         self.fs.remove_dir(path)
     }
 
+    /// [`vfs::FileSystem`] trait requires [`std::time::SystemTime`] in the signature.
+    #[allow(clippy::disallowed_types)]
     fn set_creation_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
         self.fs.set_creation_time(path, time)
     }
 
+    /// [`vfs::FileSystem`] trait requires [`std::time::SystemTime`] in the signature.
+    #[allow(clippy::disallowed_types)]
     fn set_modification_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
         self.fs.set_modification_time(path, time)
     }
 
+    /// [`vfs::FileSystem`] trait requires [`std::time::SystemTime`] in the signature.
+    #[allow(clippy::disallowed_types)]
     fn set_access_time(&self, path: &str, time: std::time::SystemTime) -> vfs::VfsResult<()> {
         self.fs.set_access_time(path, time)
     }
