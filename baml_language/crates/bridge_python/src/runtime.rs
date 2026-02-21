@@ -71,7 +71,7 @@ impl BamlRuntime {
             .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
             .unwrap_or_default();
 
-        let call_id = bex_project::CallId::default();
+        let call_id = bex_project::CallId::next();
         let mut call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_collectors(collector_arcs)
             .with_cancel_token(cancel);
@@ -127,7 +127,7 @@ impl BamlRuntime {
             .map(|colls| colls.iter().map(|c| c.inner_arc()).collect())
             .unwrap_or_default();
 
-        let call_id = bex_project::CallId::default();
+        let call_id = bex_project::CallId::next();
         let mut call_ctx = bex_project::FunctionCallContextBuilder::new(call_id)
             .with_collectors(collector_arcs)
             .with_cancel_token(cancel);

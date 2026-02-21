@@ -19,21 +19,22 @@ pub struct FunctionCallContextBuilder {
 }
 
 impl FunctionCallContextBuilder {
-    pub fn build(self) -> FunctionCallContext {
-        FunctionCallContext {
-            call_id: self.call_id,
-            host_ctx: self.host_ctx,
-            collectors: self.collectors.unwrap_or_default(),
-            cancel: self.cancel.unwrap_or_default(),
-        }
-    }
-
     pub fn new(call_id: CallId) -> Self {
         Self {
             call_id,
             host_ctx: None,
             collectors: None,
             cancel: None,
+        }
+    }
+
+    #[must_use]
+    pub fn build(self) -> FunctionCallContext {
+        FunctionCallContext {
+            call_id: self.call_id,
+            host_ctx: self.host_ctx,
+            collectors: self.collectors.unwrap_or_default(),
+            cancel: self.cancel.unwrap_or_default(),
         }
     }
 

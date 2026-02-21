@@ -134,6 +134,38 @@ impl EpochState {
     }
 }
 
+/// RAII guard: inserts (`call_id`, cancel) on construction and removes `call_id` on drop,
+/// so `active_calls` is cleaned up on all exit paths (success, early return, or panic).
+struct ActiveCallGuard<'a> {
+    active_calls: &'a Mutex<HashMap<CallId, CancellationToken>>,
+    call_id: CallId,
+}
+
+impl<'a> ActiveCallGuard<'a> {
+    fn new(
+        active_calls: &'a Mutex<HashMap<CallId, CancellationToken>>,
+        call_id: CallId,
+        cancel: &CancellationToken,
+    ) -> Result<Self, EngineError> {
+        let mut map = active_calls.lock().unwrap();
+        if map.contains_key(&call_id) {
+            return Err(EngineError::DuplicateCallId { call_id });
+        }
+        map.insert(call_id, cancel.clone());
+        Ok(Self {
+            active_calls,
+            call_id,
+        })
+    }
+}
+
+impl Drop for ActiveCallGuard<'_> {
+    fn drop(&mut self) {
+        let mut active_calls = self.active_calls.lock().unwrap();
+        active_calls.remove(&self.call_id);
+    }
+}
+
 // ============================================================================
 // Span Tracking (per-invocation, NOT on Arc<BexEngine>)
 // ============================================================================
@@ -700,14 +732,7 @@ impl BexEngine {
             self.gc_complete.notified().await;
         }
 
-        // Fail fast if already in progress.
-        {
-            let mut active_calls = self.active_calls.lock().unwrap();
-            if active_calls.contains_key(&call_id) {
-                return Err(EngineError::DuplicateCallId { call_id });
-            }
-            active_calls.insert(call_id, cancel.clone());
-        }
+        let _call_guard = ActiveCallGuard::new(&self.active_calls, call_id, &cancel)?;
 
         let function_index = self.lookup_function(function_name)?;
         let return_type = self.function_return_type(function_name).unwrap_or(Ty::Null);
@@ -823,10 +848,7 @@ impl BexEngine {
             self.epoch_drained.notify_one();
         }
 
-        {
-            let mut active_calls = self.active_calls.lock().unwrap();
-            active_calls.remove(&call_id);
-        }
+        // active_calls cleanup is done by ActiveCallGuard on drop
 
         // If the call failed and the token is cancelled, upgrade to
         // EngineError::Cancelled. This ensures cooperative BAML-level checks

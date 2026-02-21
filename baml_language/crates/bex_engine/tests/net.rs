@@ -36,7 +36,7 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
         .call_function(
             "main",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await?;
 
@@ -70,7 +70,7 @@ async fn net_connect_failure() -> anyhow::Result<()> {
         .call_function(
             "main",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await;
 
@@ -117,7 +117,7 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
         .call_function(
             "main",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await?;
 

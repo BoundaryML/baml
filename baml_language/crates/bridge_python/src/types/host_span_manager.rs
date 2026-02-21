@@ -114,3 +114,20 @@ fn py_to_json(obj: &Bound<'_, PyAny>) -> serde_json::Value {
         Err(_) => serde_json::Value::String("<unprintable>".to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_starts_with_zero_depth() {
+        let mgr = HostSpanManager::new();
+        assert_eq!(mgr.inner.context_depth(), 0);
+    }
+
+    #[test]
+    fn host_span_context_none_when_empty() {
+        let mgr = HostSpanManager::new();
+        assert!(mgr.host_span_context().is_none());
+    }
+}

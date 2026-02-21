@@ -74,7 +74,7 @@ async fn trace_single_function() {
         BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
 
     let (host_ctx, guard) = setup_tracking();
-    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::default())
+    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
@@ -117,7 +117,7 @@ async fn trace_nested_expression_calls_no_child_spans() {
         BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
 
     let (host_ctx, guard) = setup_tracking();
-    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::default())
+    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
@@ -160,7 +160,7 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
         BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
 
     let (host_ctx, guard) = setup_tracking();
-    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::default())
+    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
@@ -197,7 +197,7 @@ async fn trace_sibling_expression_calls_no_child_spans() {
         BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
 
     let (host_ctx, guard) = setup_tracking();
-    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::default())
+    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
@@ -226,7 +226,7 @@ async fn trace_captures_root_args() {
         BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
 
     let (host_ctx, guard) = setup_tracking();
-    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::default())
+    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_host_ctx(host_ctx)
         .build();
     let value = engine
@@ -268,7 +268,7 @@ async fn trace_captures_root_result() {
         BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
 
     let (host_ctx, guard) = setup_tracking();
-    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::default())
+    let call_ctx = bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next())
         .with_host_ctx(host_ctx)
         .build();
     let value = engine

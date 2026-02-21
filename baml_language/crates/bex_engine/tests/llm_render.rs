@@ -239,7 +239,7 @@ function test_render() -> int {
         .call_function(
             "test_render",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await;
 
@@ -293,7 +293,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await;
 
@@ -363,7 +363,7 @@ function test_build_request() -> int {
         .call_function(
             "test_build_request",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await;
     assert!(result.is_ok(), "build_request should succeed: {result:?}");
@@ -405,7 +405,7 @@ function test_call_llm() -> unknown {
         .call_function(
             "test_call_llm",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await;
 
@@ -451,7 +451,7 @@ function test_call_llm() -> string {
         .call_function(
             "test_call_llm",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await;
 
@@ -498,7 +498,7 @@ function test_call_llm() -> unknown {
         .call_function(
             "test_call_llm",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await;
 
@@ -557,7 +557,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("failed to render prompt that calls template_string Greet(name)");
@@ -600,7 +600,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("failed to render prompt with nested template_strings Outer() -> Inner()");
@@ -649,7 +649,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("failed to render prompt with 2-arg template_string Describe(label, person)");
@@ -692,7 +692,7 @@ function get_prompt() -> baml.llm.PromptAst {
         .call_function(
             "get_prompt",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("failed to render prompt that calls parameterless template_string Header()");

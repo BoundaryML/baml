@@ -44,7 +44,7 @@ async fn test_concurrent_calls_no_race() {
                 .call_function(
                     "test_function",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 )
                 .await
         }));
@@ -91,7 +91,7 @@ async fn test_concurrent_allocations_no_overlap() {
                 .call_function(
                     "allocate_many",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 )
                 .await?;
             count.fetch_add(1, Ordering::SeqCst);
@@ -147,7 +147,7 @@ async fn test_heap_stats_during_concurrent_execution() {
                 .call_function(
                     "test_function",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 )
                 .await
         }));
@@ -207,7 +207,7 @@ async fn test_concurrent_string_allocations() {
                 .call_function(
                     &func,
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 )
                 .await?;
 
@@ -263,7 +263,7 @@ async fn test_concurrent_array_allocations() {
                 .call_function(
                     func_name,
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 )
                 .await?;
 
@@ -316,7 +316,7 @@ async fn test_call_function_with_external_args() {
         .call_function(
             "concat_strings",
             vec!["Hello".into(), "World".into()],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("call_function failed");
@@ -337,7 +337,7 @@ async fn test_call_function_with_external_args() {
         .call_function(
             "sum_array",
             vec![arr],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("call_function failed");
@@ -349,7 +349,7 @@ async fn test_call_function_with_external_args() {
         .call_function(
             "add_numbers",
             vec![BexExternalValue::from(15i64), BexExternalValue::from(27i64)],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("call_function failed");

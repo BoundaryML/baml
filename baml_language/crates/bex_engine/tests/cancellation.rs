@@ -39,7 +39,7 @@ async fn cancel_before_call_returns_cancelled() {
         .call_function(
             "main",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default())
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
                 .build(),
         )
@@ -82,7 +82,7 @@ async fn cancel_during_sleep_returns_promptly() {
                 .call_function(
                     "main",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default())
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel_clone)
                         .build(),
                 )
@@ -154,7 +154,7 @@ async fn cancel_during_http_returns_promptly() {
                 .call_function(
                     "main",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default())
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel_clone)
                         .build(),
                 )
@@ -213,7 +213,7 @@ async fn selective_cancellation_only_affects_target() {
                 .call_function(
                     "slow",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default())
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel)
                         .build(),
                 )
@@ -229,7 +229,7 @@ async fn selective_cancellation_only_affects_target() {
                 .call_function(
                     "fast",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default())
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel)
                         .build(),
                 )
@@ -278,7 +278,7 @@ async fn cancellation_requested_returns_false_when_not_cancelled() {
         .call_function(
             "main",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("call should succeed");
@@ -308,7 +308,7 @@ async fn cancellation_requested_with_precancelled_token_returns_cancelled() {
         .call_function(
             "main",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default())
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
                 .build(),
         )
@@ -354,7 +354,7 @@ async fn cancel_interrupts_sequential_sleeps() {
                 .call_function(
                     "main",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default())
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel_clone)
                         .build(),
                 )
@@ -400,7 +400,7 @@ async fn non_cancelled_token_completes_normally() {
         .call_function(
             "main",
             vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await
         .expect("call should succeed");
@@ -437,7 +437,7 @@ async fn cancel_is_idempotent() {
                 .call_function(
                     "main",
                     vec![],
-                    FunctionCallContextBuilder::new(sys_types::CallId::default())
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
                         .with_cancel_token(cancel_clone)
                         .build(),
                 )

@@ -4,7 +4,14 @@
 //! that the BEX engine can dispatch to. Operations receive and return
 //! `BexExternalValue` directly.
 
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 
 // Re-export BexExternalValue and BexValue for ops
 pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
@@ -20,16 +27,29 @@ pub use tokio_util::sync::CancellationToken;
 /// Opaque per-call identifier. Passed to every `sys_op` for call correlation.
 ///
 /// The playground uses this to associate fetch logs with the function call
-/// that triggered them. Callers that don't need tracking pass `CallId::default()`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+/// that triggered them. Callers that don't need tracking pass `CallId::next()`.
+/// Use `CallId::next()` for a unique ID per call (e.g. from bridges with concurrent calls).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct CallId(pub u64);
+
+static NEXT_CALL_ID: AtomicU64 = AtomicU64::new(0);
+
+impl CallId {
+    /// Returns a fresh call ID that is unique across the process. Use this from
+    /// bridges (e.g. Python) when multiple overlapping calls can occur.
+    #[inline]
+    pub fn next() -> Self {
+        CallId(NEXT_CALL_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
 // ============================================================================
 // Operation Errors
 // ============================================================================
 
 impl std::fmt::Display for CallId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FnId({})", self.0)
+        write!(f, "CallId({})", self.0)
     }
 }
 
@@ -826,7 +846,7 @@ mod tests {
         let heap = test_heap();
         let ctx = test_ctx();
         let op = SysOps::unsupported(SysOp::BamlSysShell);
-        let result = op(&heap, vec![], &ctx, CallId::default());
+        let result = op(&heap, vec![], &ctx, CallId::next());
         match result {
             SysOpResult::Ready(Err(e)) => {
                 assert!(matches!(e.kind, OpErrorKind::Unsupported));
@@ -843,7 +863,7 @@ mod tests {
         let ops = SysOps::all_unsupported();
 
         // Test fs_open returns Unsupported
-        let result = (ops.baml_fs_open)(&heap, vec![], &ctx, CallId::default());
+        let result = (ops.baml_fs_open)(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
@@ -853,7 +873,7 @@ mod tests {
         ));
 
         // Test shell returns Unsupported
-        let result = (ops.baml_sys_shell)(&heap, vec![], &ctx, CallId::default());
+        let result = (ops.baml_sys_shell)(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
@@ -871,7 +891,7 @@ mod tests {
 
         // Test that get() returns the correct function pointer
         let fn_ptr = ops.get(SysOp::BamlFsOpen);
-        let result = fn_ptr(&heap, vec![], &ctx, CallId::default());
+        let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
         assert!(matches!(result, SysOpResult::Ready(Err(_))));
     }
 

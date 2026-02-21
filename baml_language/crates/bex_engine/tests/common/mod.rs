@@ -77,7 +77,7 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
         .call_function(
             input.entry,
             input.inputs,
-            FunctionCallContextBuilder::new(sys_types::CallId::default()).build(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
         .await;
 
