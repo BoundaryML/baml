@@ -19,8 +19,13 @@ static RUNTIME_INSTANCE: RwLock<Option<Arc<dyn Bex>>> = RwLock::new(None);
 static TOKIO_RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
 
 /// Initialize the global Tokio runtime.
-pub fn get_tokio_runtime() -> &'static Arc<Runtime> {
-    TOKIO_RUNTIME.get_or_init(|| Arc::new(Runtime::new().expect("Failed to create Tokio runtime")))
+pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
+    let result = TOKIO_RUNTIME.get_or_try_init(|| {
+        Runtime::new()
+            .map_err(|e| BridgeError::Internal(format!("Failed to create Tokio runtime: {e}")))
+            .map(Arc::new)
+    });
+    result.cloned()
 }
 
 /// Get a clone of the global runtime, or error if not initialized.

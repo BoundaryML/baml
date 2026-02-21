@@ -36,4 +36,7 @@ pub enum BridgeError {
 
     #[error("call_id {0} is already in use by an active call")]
     DuplicateCallId(u32),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }

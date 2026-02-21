@@ -64,6 +64,9 @@ pub fn bridge_error_to_py(err: bridge_cffi::error::BridgeError) -> PyErr {
         bridge_cffi::BridgeError::DuplicateCallId(id) => PyErr::new::<BamlInvalidArgumentError, _>(
             format!("call_id {id} is already in use by an active call",),
         ),
+        bridge_cffi::BridgeError::Internal(msg) => {
+            PyErr::new::<BamlError, _>(format!("Internal error: {msg}"))
+        }
     }
 }
 

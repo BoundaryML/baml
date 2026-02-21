@@ -83,7 +83,7 @@ fn call_function_inner(
     let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
 
     // Spawn async task with panic catching
-    get_tokio_runtime().spawn(async move {
+    get_tokio_runtime()?.spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
         let result = AssertUnwindSafe(async {
             runtime
