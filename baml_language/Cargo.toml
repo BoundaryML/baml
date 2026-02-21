@@ -226,6 +226,8 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 pedantic = { level = "warn", priority = -2 }
 # Enabled at the crate level
 disallowed_methods = "allow"
+# Used by clippy-wasm task (CLIPPY_CONF_DIR=clippy-wasm); config in clippy-wasm/clippy.toml
+disallowed_types = "warn"
 # Allowed pedantic lints
 char_lit_as_u8 = "allow"
 collapsible_else_if = "allow"
