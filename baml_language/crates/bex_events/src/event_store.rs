@@ -190,10 +190,9 @@ pub fn events_for_span(id: &SpanId) -> Option<Vec<RuntimeEvent>> {
 #[cfg(test)]
 #[allow(unsafe_code)]
 mod tests {
-    use std::{
-        sync::{Mutex, OnceLock},
-        time::SystemTime,
-    };
+    use std::sync::{Mutex, OnceLock};
+
+    use web_time::SystemTime;
 
     use super::*;
     use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};

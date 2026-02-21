@@ -257,9 +257,9 @@ impl FunctionLog {
 
 // ─────────────────────────── Helpers ─────────────────────────────────────
 
-fn system_time_to_epoch_ms(t: std::time::SystemTime) -> i64 {
+fn system_time_to_epoch_ms(t: web_time::SystemTime) -> i64 {
     i64::try_from(
-        t.duration_since(std::time::UNIX_EPOCH)
+        t.duration_since(web_time::UNIX_EPOCH)
             .unwrap_or(Duration::ZERO)
             .as_millis(),
     )
@@ -278,7 +278,7 @@ fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
+    use web_time::SystemTime;
 
     use super::*;
     use crate::{FunctionEnd, FunctionStart, SpanContext};

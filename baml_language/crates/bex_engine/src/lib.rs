@@ -62,7 +62,6 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
-    time::{Instant, SystemTime},
 };
 
 pub use bex_events::HostSpanContext;
@@ -81,6 +80,7 @@ use sys_types::{CallId, OpError, SysOpResult};
 use thiserror::Error;
 use tokio::sync::{Notify, mpsc};
 pub use tokio_util::sync::CancellationToken;
+use web_time::{Instant, SystemTime};
 
 // ============================================================================
 // Engine Types
@@ -343,7 +343,7 @@ fn default_round_robin_start() -> usize {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn default_round_robin_start() -> usize {
-    use std::time::UNIX_EPOCH;
+    use web_time::UNIX_EPOCH;
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.subsec_nanos());

@@ -26,8 +26,25 @@ description = "List crates excluded from WASM builds (metadata.ci.wasm_support =
 run = "cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then false else (.metadata.ci.wasm_support | not) end) | .name' | sort"
 
 [tasks.clippy-wasm]
-description = "Run cargo clippy for wasm target"
-run = "cargo clippy $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | \"-p \\(.name)\"' | xargs) --target wasm32-unknown-unknown --all-features --locked -- -D warnings"
+description = "Run cargo clippy for wasm target (bans std::time::{SystemTime,Instant})"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Write a temporary clippy.toml that bans std::time types on WASM.
+# On wasm32, web_time types are distinct from std::time so clippy correctly
+# flags only direct std::time usage without false-positiving on web_time.
+trap 'rm -f clippy.toml' EXIT
+cat > clippy.toml <<'TOML'
+disallowed-types = [
+    { path = "std::time::SystemTime", reason = "use web_time::SystemTime for WASM compatibility" },
+    { path = "std::time::Instant", reason = "use web_time::Instant for WASM compatibility" },
+]
+TOML
+
+WASM_PKGS=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | "-p \\(.name)"' | xargs)
+cargo clippy $WASM_PKGS --target wasm32-unknown-unknown --all-features --locked -- -D warnings -W clippy::disallowed-types
+"""
 sources = ["**/*.rs", "**/Cargo.toml"]
 
 [tasks.stow]
