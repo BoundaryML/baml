@@ -2,36 +2,41 @@
 title: Boundary Studio
 ---
 
-<Tip>
-For 2025 Q1, Boundary Studio is free for new accounts!
+<Warning>
+**Deprecation notice:** Boundary Studio v1 at `app.boundaryml.com` will be deprecated by **end of March 2026**. Please migrate to the new [Boundary Studio](https://studio.boundaryml.com) at `studio.boundaryml.com`.
+</Warning>
 
-Boundary Studio 2 will be released in 2025 Q2 with a new pricing model.
-</Tip>
+## Getting Started
 
-To enable observability with BAML, you'll first need to sign up for a [Boundary Studio](https://app.boundaryml.com) account.
+To enable observability with BAML, sign up for a [Boundary Studio](https://studio.boundaryml.com) account.
 
-Once you've signed up, you'll be able to create a new project and get your API key.
-
-Then simply add the following environment variable prior to running your application:
+Once you've signed up, create a new project and get your API key. Then add the following environment variable before running your application:
 
 ```bash
 export BOUNDARY_API_KEY=your_api_key_here
 ```
 
-There you'll be able to see all the metrics and logs from your application including:
+That's it — your BAML function calls will now be traced automatically.
 
-- Cost
-- Function calls
-- Execution time
-- Token Usage
-- Prompt Logs
-- and more...
+## Dashboard
+
+The dashboard gives you a high-level overview of your LLM usage across all your BAML functions
+
+<img src="/assets/studio/studiov2-dashboard.png" width="auto" />
+
+## Traces
+
+The traces view lets you inspect every LLM call your application makes.
+Since Studio has access to the BAML definitions, it can represent your traces as functions, with typed parameters, inputs and outputs. Other observability platforms can only show you raw json blobs, which makes it hard to connect your data to your code.
+
+<img src="/assets/studio/studiov2-traces.png" />
 
 ## Tracing Custom Events
 
-
 BAML allows you to trace any function with the **@trace** decorator.
-This will make the function's input and output show up in the Boundary dashboard. This works for any python function you define yourself. BAML LLM functions (or any other function declared in a .baml file) are already traced by default. Logs are only sent to the Dashboard if you setup your environment variables correctly.
+This will make the function's input and output show up in the Boundary dashboard. This works for any python or Typescript function you define.
+
+BAML LLM functions (or any other function declared in a .baml file) are already traced by default. Logs are only sent to the Dashboard if you setup `BOUNDARY_API_KEY` environment variable.
 
 ### Example
 
@@ -152,11 +157,6 @@ Tracing non-baml functions is not yet supported in Ruby.
 Tracing non-baml functions is not yet supported in REST (OpenAPI).
 ```
 </CodeGroup>
-
-
-This allows us to see each function invocation, as well as all its children in the dashboard:
-
-<img src="/assets/studio/dashboard-test-pic.png" width="auto" />
 
 
 ### Adding custom tags

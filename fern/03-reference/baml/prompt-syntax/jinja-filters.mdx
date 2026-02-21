@@ -17,6 +17,12 @@ Jinja filters allow you to transform and format values within your BAML prompts.
 
 Serializes values into structured text while preserving all BAML-specific aliases. Use the required `type` argument to choose the output representation.
 
+<Note>
+This is BAML's serialization filter, not Python's `%`-style string formatting. The `|format` filter in BAML always requires a `type` keyword argument.
+
+For string formatting, use Python's `.format()` method syntax instead: `"{}, {}!".format("Hello", "World")`. See the [String Formatting](/ref/prompt-syntax/what-is-jinja#string-formatting) cookbook for examples.
+</Note>
+
 **Signature**: `value|format(type="yaml" | "json" | "toon", **kwargs)`
 
 **Required arguments**:

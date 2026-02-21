@@ -15,6 +15,7 @@ bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
 indexmap = { workspace = true }
 minijinja = { workspace = true }
+minijinja-contrib = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
