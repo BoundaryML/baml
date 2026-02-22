@@ -1034,7 +1034,13 @@ impl BexEngine {
                     // "Cancel wins" semantics: if cancellation races with a
                     // completed VM step, report `Cancelled` rather than
                     // returning a success value.
-                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+                    //
+                    // Still emit FunctionEnd first so tracing consumers see
+                    // a paired root FunctionStart/FunctionEnd span.
+                    let cancelled = cancel.is_cancelled();
+                    if cancelled {
+                        Self::abort_inflight_tasks(&abort_handles);
+                    }
 
                     // Emit FunctionEnd for the root entry-point span if tracing
                     if let Some(state) = span_state.as_mut() {
@@ -1059,6 +1065,10 @@ impl BexEngine {
                             };
                             bex_events::event_store::emit(end_event);
                         }
+                    }
+
+                    if cancelled {
+                        return Err(EngineError::Cancelled);
                     }
 
                     return self.heap.with_gc_protection(|protected| {
