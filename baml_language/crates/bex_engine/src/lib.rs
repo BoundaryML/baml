@@ -1089,6 +1089,9 @@ impl BexEngine {
 
                     match sys_op_result {
                         SysOpResult::Ready(result) => {
+                            // Guard the "commit to VM state" boundary.
+                            Self::cancellation_safepoint(cancel, &abort_handles)?;
+
                             // Sync operation - set future to Ready without touching stack.
                             // The VM will continue to the Await instruction which will
                             // extract the value from the Ready future.
@@ -1104,6 +1107,9 @@ impl BexEngine {
                             vm.set_future_ready(id, value)?;
                         }
                         SysOpResult::Async(fut) => {
+                            // Guard the "spawn side effect" boundary.
+                            Self::cancellation_safepoint(cancel, &abort_handles)?;
+
                             // Async operation — wrap in Abortable and spawn.
                             let pending_futures = pending_futures.clone();
                             let (abort_handle, abort_reg) =
@@ -1132,6 +1138,8 @@ impl BexEngine {
                 }
 
                 VmExecState::Await(future_id) => {
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+
                     // Check if GC is waiting for our epoch to drain
                     let current = self.current_epoch.load(Ordering::Acquire);
                     if current > my_epoch {
