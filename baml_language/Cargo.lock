@@ -768,6 +768,7 @@ version = "0.0.0-beta"
 dependencies = [
  "bex_events",
  "tempfile",
+ "tracing",
  "web-time",
 ]
 

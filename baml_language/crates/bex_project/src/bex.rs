@@ -17,6 +17,9 @@ pub trait Bex: Send + Sync {
     ) -> Result<BexExternalValue, RuntimeError>;
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError>;
+
+    /// Event sink for this runtime (if any). Used by bridges for flush and `HostSpanManager`.
+    fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>>;
 }
 
 #[async_trait]
@@ -34,6 +37,10 @@ impl Bex for BexProject {
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
         let bex = self.get_bex()?;
         Bex::cancel_function_call(&*bex, call_id)
+    }
+
+    fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
+        self.event_sink()
     }
 }
 
@@ -90,6 +97,10 @@ impl Bex for BexEngine {
         self.cancel_function_call(call_id)
             .map_err(RuntimeError::from)
     }
+
+    fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
+        self.event_sink()
+    }
 }
 
 #[async_trait]
@@ -105,5 +116,9 @@ impl Bex for std::sync::Arc<BexEngine> {
 
     fn cancel_function_call(&self, call_id: CallId) -> Result<(), RuntimeError> {
         Bex::cancel_function_call(self.as_ref(), call_id)
+    }
+
+    fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
+        self.as_ref().event_sink()
     }
 }

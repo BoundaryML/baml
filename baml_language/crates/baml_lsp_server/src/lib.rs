@@ -143,6 +143,7 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     let event_sink = std::env::var("BAML_TRACE_FILE")
         .ok()
         .map(|trace_file| bex_events_native::start(trace_file.into()));
+    let event_sink_for_flush = event_sink.clone();
 
     // Create the BexLsp (multi-project LSP)
     let bex = bex_project::new_lsp(
@@ -223,5 +224,8 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     }
 
     tracing::info!("LSP server shutting down");
+    if let Some(sink) = event_sink_for_flush {
+        sink.flush();
+    }
     Ok(())
 }

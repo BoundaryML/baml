@@ -67,7 +67,12 @@ pub fn start() {
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
     LOGGER_INIT.call_once(|| {
-        wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
+        let level = if cfg!(debug_assertions) {
+            log::Level::Debug
+        } else {
+            log::Level::Info
+        };
+        wasm_logger::init(wasm_logger::Config::new(level));
     });
 }
 

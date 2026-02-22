@@ -1,4 +1,13 @@
 use sys_types::{CallId, OpErrorKind, SysOpOutput, SysOpSys};
+use wasm_bindgen::prelude::*;
+
+use crate::send_wrapper::SendFuture;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = "setTimeout")]
+    fn set_timeout(closure: &js_sys::Function, millis: i32) -> i32;
+}
 
 pub(crate) struct WasmSys;
 
@@ -14,9 +23,13 @@ impl SysOpSys for WasmSys {
     }
 
     fn baml_sys_sleep(&self, _call_id: CallId, delay_ms: i64) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(delay_ms.cast_unsigned())).await;
+        let millis = i32::try_from(delay_ms.clamp(0, i64::from(i32::MAX))).unwrap_or(i32::MAX);
+        let promise = js_sys::Promise::new(&mut |resolve, _reject| {
+            set_timeout(&resolve, millis);
+        });
+        SysOpOutput::async_op(SendFuture(async move {
+            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
             Ok(())
-        })
+        }))
     }
 }

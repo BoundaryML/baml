@@ -36,6 +36,10 @@ impl BexProject {
         }
     }
 
+    pub(crate) fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
+        self.event_sink.clone()
+    }
+
     #[allow(dead_code)]
     pub(crate) fn update_single_source(&self, path: &vfs::VfsPath, source: &str) {
         let mut db = self.db.lock().unwrap();

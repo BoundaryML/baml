@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 bex_events = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

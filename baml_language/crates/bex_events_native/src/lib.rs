@@ -4,12 +4,21 @@
 //! Events are buffered in-memory and written to the given JSONL file path
 //! on `flush()` or when the channel is closed (process shutdown).
 //!
+//! **Guaranteed delivery:** Callers must call `flush()` before process shutdown (e.g. before
+//! dropping the sink or exiting) to ensure all buffered events are written. The LSP and CFFI
+//! bridges do this; short-lived processes that drop the sink without flushing may lose events.
+//!
 //! This crate does not read env vars — the caller decides where events go.
 
 use std::{
     io::Write,
-    path::PathBuf,
-    sync::{Arc, mpsc},
+    path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+        mpsc,
+    },
+    time::Duration,
 };
 
 use bex_events::{EventSink, RuntimeEvent};
@@ -23,6 +32,9 @@ enum PublisherMessage {
     Flush(mpsc::SyncSender<()>),
 }
 
+const AUTO_FLUSH_INTERVAL: Duration = Duration::from_secs(5);
+const AUTO_FLUSH_THRESHOLD: usize = 1024;
+
 /// Native event sink backed by a bounded channel and a background thread.
 ///
 /// Created via [`start()`]. Implements [`EventSink`] — `send` dispatches to the
@@ -30,17 +42,24 @@ enum PublisherMessage {
 /// thread writes all buffered events.
 pub struct NativeEventSink {
     tx: mpsc::SyncSender<PublisherMessage>,
+    dropped: AtomicUsize,
 }
 
 impl EventSink for NativeEventSink {
     fn send(&self, event: RuntimeEvent) {
-        let _ = self.tx.try_send(PublisherMessage::Event(event));
+        if self.tx.try_send(PublisherMessage::Event(event)).is_err() {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     fn flush(&self) {
+        let dropped = self.dropped.swap(0, Ordering::Relaxed);
+        if dropped > 0 {
+            tracing::warn!(dropped, "bex-publisher: events dropped (channel full)");
+        }
         let (ack_tx, ack_rx) = mpsc::sync_channel(1);
         if self.tx.send(PublisherMessage::Flush(ack_tx)).is_ok() {
-            let _ = ack_rx.recv_timeout(std::time::Duration::from_secs(30));
+            let _ = ack_rx.recv_timeout(Duration::from_secs(30));
         }
     }
 }
@@ -58,25 +77,58 @@ pub fn start(trace_file: PathBuf) -> Arc<dyn EventSink> {
         .spawn(move || publisher_loop(rx, &trace_file))
         .expect("failed to spawn bex-publisher thread");
 
-    Arc::new(NativeEventSink { tx })
+    Arc::new(NativeEventSink {
+        tx,
+        dropped: AtomicUsize::new(0),
+    })
 }
 
 /// The publisher worker loop.
-#[allow(clippy::needless_pass_by_value)]
-fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: &PathBuf) {
+///
+/// Auto-flushes when the buffer reaches `AUTO_FLUSH_THRESHOLD` events or
+/// when `AUTO_FLUSH_INTERVAL` elapses without an explicit flush, preventing
+/// unbounded buffer growth.
+#[allow(clippy::needless_pass_by_value)] // rx is moved into this thread and must be owned
+fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: &Path) {
     let mut buffer: Vec<RuntimeEvent> = Vec::new();
+
+    // Block on the first message so we don't spin when idle.
+    let first = rx.recv();
+    match first {
+        Ok(PublisherMessage::Event(e)) => buffer.push(e),
+        Ok(PublisherMessage::Flush(ack)) => {
+            let _ = ack.send(());
+        }
+        Err(_) => return,
+    }
+
     loop {
-        match rx.recv() {
+        match rx.recv_timeout(AUTO_FLUSH_INTERVAL) {
             Ok(PublisherMessage::Event(e)) => {
                 buffer.push(e);
+                if buffer.len() >= AUTO_FLUSH_THRESHOLD {
+                    write_jsonl_to_file(&buffer, trace_file);
+                    buffer.clear();
+                }
             }
             Ok(PublisherMessage::Flush(ack)) => {
                 write_jsonl_to_file(&buffer, trace_file);
                 buffer.clear();
                 let _ = ack.send(());
             }
-            Err(_) => {
-                // Channel closed — flush remaining events.
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                write_jsonl_to_file(&buffer, trace_file);
+                buffer.clear();
+                // Park until the next message so we don't spin on timeouts when idle.
+                match rx.recv() {
+                    Ok(PublisherMessage::Event(e)) => buffer.push(e),
+                    Ok(PublisherMessage::Flush(ack)) => {
+                        let _ = ack.send(());
+                    }
+                    Err(_) => break,
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
                 write_jsonl_to_file(&buffer, trace_file);
                 break;
             }
@@ -85,7 +137,7 @@ fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: &PathBuf) {
 }
 
 /// Write buffered events to the given JSONL file (append mode).
-fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &PathBuf) {
+fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &Path) {
     if events.is_empty() {
         return;
     }
@@ -94,6 +146,11 @@ fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &PathBuf) {
         .append(true)
         .open(trace_file)
     else {
+        tracing::warn!(
+            ?trace_file,
+            "bex-publisher: failed to open trace file, dropping {} events",
+            events.len()
+        );
         return;
     };
     for event in events {

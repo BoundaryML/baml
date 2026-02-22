@@ -571,6 +571,11 @@ impl BexEngine {
         }
     }
 
+    /// Return the event sink for this engine (if any). Used by bridges for flush / `HostSpanManager`.
+    pub fn event_sink(&self) -> Option<std::sync::Arc<dyn bex_events::EventSink>> {
+        self.event_sink.clone()
+    }
+
     /// Pre-extract LLM function metadata from heap objects.
     ///
     /// This avoids passing raw `HeapPtr`s to `sys_ops` — instead, we read the

@@ -89,14 +89,6 @@ pub fn emit(event: &RuntimeEvent) {
     }
 }
 
-/// No-op. Flushing is handled by the `EventSink` on the engine/runtime layer.
-///
-/// Retained for backward compatibility — callers that haven't migrated to
-/// sink-based flushing will compile but this does nothing.
-pub fn flush() {
-    // Sink-based flush is handled by the runtime layer (BexEngine / bridge crate).
-}
-
 /// Start tracking a span ID for in-memory querying (collector use case).
 /// Typically called with the `engine_span_id` (unique per `call_function`).
 pub fn track(span_id: &SpanId) {

@@ -2,7 +2,7 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, OnceLock, RwLock},
+    sync::{Arc, RwLock},
 };
 
 use bex_project::Bex;
@@ -17,9 +17,6 @@ static RUNTIME_INSTANCE: RwLock<Option<Arc<dyn Bex>>> = RwLock::new(None);
 
 /// Global Tokio runtime for async execution.
 static TOKIO_RUNTIME: OnceCell<Arc<Runtime>> = OnceCell::new();
-
-/// Global event sink for `flush_events()` access.
-static EVENT_SINK: OnceLock<Arc<dyn bex_events::EventSink>> = OnceLock::new();
 
 /// Initialize the global Tokio runtime.
 pub fn get_tokio_runtime() -> Result<Arc<Runtime>, BridgeError> {
@@ -62,12 +59,9 @@ pub fn initialize_runtime(
         .map(|(k, v)| (bex_project::FsPath::from_str(k), v))
         .collect();
 
-    // Start the native event sink if BAML_TRACE_FILE is set.
-    let event_sink = std::env::var("BAML_TRACE_FILE").ok().map(|trace_file| {
-        EVENT_SINK
-            .get_or_init(|| bex_events_native::start(trace_file.into()))
-            .clone()
-    });
+    let event_sink = std::env::var("BAML_TRACE_FILE")
+        .ok()
+        .map(|trace_file| bex_events_native::start(trace_file.into()));
 
     let rt = bex_project::new(vfs_path, bex_project::SysOps::native(), files, event_sink)?;
 
@@ -79,14 +73,16 @@ pub fn initialize_runtime(
     Ok(rt)
 }
 
-/// Flush the global event sink. Called by `bridge_python::flush_events()`.
+/// Flush the current runtime's event sink. Called by `bridge_python::flush_events()`.
 pub fn flush_event_sink() {
-    if let Some(sink) = EVENT_SINK.get() {
+    if let Ok(rt) = get_runtime()
+        && let Some(sink) = rt.event_sink()
+    {
         sink.flush();
     }
 }
 
-/// Get a clone of the global event sink (for passing to HostSpanManager).
+/// Get the current runtime's event sink (for passing to HostSpanManager).
 pub fn get_event_sink() -> Option<Arc<dyn bex_events::EventSink>> {
-    EVENT_SINK.get().cloned()
+    get_runtime().ok().and_then(|rt| rt.event_sink())
 }
