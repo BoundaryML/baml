@@ -4,6 +4,10 @@
 //! Events are buffered in-memory and written to the given JSONL file path
 //! on `flush()` or when the channel is closed (process shutdown).
 //!
+//! **Guaranteed delivery:** Callers must call `flush()` before process shutdown (e.g. before
+//! dropping the sink or exiting) to ensure all buffered events are written. The LSP and CFFI
+//! bridges do this; short-lived processes that drop the sink without flushing may lose events.
+//!
 //! This crate does not read env vars — the caller decides where events go.
 
 use std::{
@@ -84,7 +88,7 @@ pub fn start(trace_file: PathBuf) -> Arc<dyn EventSink> {
 /// Auto-flushes when the buffer reaches `AUTO_FLUSH_THRESHOLD` events or
 /// when `AUTO_FLUSH_INTERVAL` elapses without an explicit flush, preventing
 /// unbounded buffer growth.
-#[allow(clippy::needless_pass_by_value)]
+#[allow(clippy::needless_pass_by_value)] // rx is moved into this thread and must be owned
 fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>, trace_file: &Path) {
     let mut buffer: Vec<RuntimeEvent> = Vec::new();
 
@@ -142,6 +146,11 @@ fn write_jsonl_to_file(events: &[RuntimeEvent], trace_file: &Path) {
         .append(true)
         .open(trace_file)
     else {
+        tracing::warn!(
+            ?trace_file,
+            "bex-publisher: failed to open trace file, dropping {} events",
+            events.len()
+        );
         return;
     };
     for event in events {
