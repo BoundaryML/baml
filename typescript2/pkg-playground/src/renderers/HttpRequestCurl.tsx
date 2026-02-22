@@ -42,8 +42,9 @@ function toCurl(req: HttpRequestShape): string {
   if (method !== 'GET') parts.push(`-X ${method}`);
   for (const [k, v] of Object.entries(headers)) {
     if (v !== undefined && v !== null) {
-      const escaped = String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-      parts.push(`-H "${String(k)}: ${escaped}"`);
+      const escapedKey = String(k).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const escapedVal = String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      parts.push(`-H "${escapedKey}: ${escapedVal}"`);
     }
   }
   if (body != null && body !== '') {
@@ -55,6 +56,10 @@ function toCurl(req: HttpRequestShape): string {
   return parts.join(' \\\n  ');
 }
 
+function escapeJsSingle(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 function toJsFetch(req: HttpRequestShape): string {
   const method = (req.method ?? 'GET').toUpperCase();
   const url = req.url ?? '';
@@ -64,7 +69,7 @@ function toJsFetch(req: HttpRequestShape): string {
   if (Object.keys(headers).length > 0) {
     const headersStr = Object.entries(headers)
       .filter(([, v]) => v != null)
-      .map(([k, v]) => `    '${k.replace(/'/g, "\\'")}': '${String(v).replace(/'/g, "\\'")}'`)
+      .map(([k, v]) => `    '${escapeJsSingle(k)}': '${escapeJsSingle(String(v))}'`)
       .join(',\n');
     opts.push(`  headers: {\n${headersStr}\n  }`);
   }
@@ -73,7 +78,11 @@ function toJsFetch(req: HttpRequestShape): string {
     const escaped = formatted.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
     opts.push(`  body: \`${escaped}\``);
   }
-  return `fetch('${url.replace(/'/g, "\\'")}', {\n${opts.join(',\n')}\n});`;
+  return `fetch('${escapeJsSingle(url)}', {\n${opts.join(',\n')}\n});`;
+}
+
+function escapePySingle(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function toPythonRequests(req: HttpRequestShape): string {
@@ -87,7 +96,7 @@ function toPythonRequests(req: HttpRequestShape): string {
   if (Object.keys(headers).length > 0) {
     const headersStr = Object.entries(headers)
       .filter(([, v]) => v != null)
-      .map(([k, v]) => `        '${k.replace(/'/g, "\\'")}': '${String(v).replace(/'/g, "\\'")}'`)
+      .map(([k, v]) => `        '${escapePySingle(k)}': '${escapePySingle(String(v))}'`)
       .join(',\n');
     kwargs.push(`    headers={\n${headersStr}\n    }`);
   }
@@ -95,7 +104,7 @@ function toPythonRequests(req: HttpRequestShape): string {
     kwargs.push(`    data='''\n${prettyBody(body)}\n    '''`);
   }
   const kwargsBlock = kwargs.length ? ',\n' + kwargs.join(',\n') : '';
-  return `import requests\n\nresponse = requests.${fn}(\n    ${args}'${url.replace(/'/g, "\\'")}'${kwargsBlock}\n)`;
+  return `import requests\n\nresponse = requests.${fn}(\n    ${args}'${escapePySingle(url)}'${kwargsBlock}\n)`;
 }
 
 function escapeGoString(s: string): string {
@@ -109,14 +118,14 @@ function toGo(req: HttpRequestShape): string {
   const body = req.body ?? '';
   const bodyArg = body ? `strings.NewReader("${escapeGoString(prettyBody(body))}")` : 'nil';
   const lines: string[] = [
-    `req, err := http.NewRequest("${method}", "${url.replace(/"/g, '\\"')}", ${bodyArg})`,
+    `req, err := http.NewRequest("${method}", "${escapeGoString(url)}", ${bodyArg})`,
     'if err != nil { log.Fatal(err) }',
   ];
   if (body) {
     lines.push('defer req.Body.Close()');
   }
   for (const [k, v] of Object.entries(headers)) {
-    if (v != null) lines.push(`req.Header.Set("${k.replace(/"/g, '\\"')}", "${String(v).replace(/"/g, '\\"')}")`);
+    if (v != null) lines.push(`req.Header.Set("${escapeGoString(k)}", "${escapeGoString(String(v))}")`);
   }
   lines.push('resp, err := http.DefaultClient.Do(req)');
   lines.push('if err != nil { log.Fatal(err) }');
@@ -130,6 +139,10 @@ function toGo(req: HttpRequestShape): string {
   );
 }
 
+function escapeRustString(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+}
+
 function toRust(req: HttpRequestShape): string {
   const method = (req.method ?? 'GET').toLowerCase();
   const url = req.url ?? '';
@@ -138,16 +151,21 @@ function toRust(req: HttpRequestShape): string {
   const bodyFormatted = body ? prettyBody(body) : '';
   const lines: string[] = [
     'let client = reqwest::blocking::Client::new();',
-    `let response = client.${method}("${url.replace(/"/g, '\\"')}")`,
+    `let response = client.${method}("${escapeRustString(url)}")`,
   ];
   for (const [k, v] of Object.entries(headers)) {
-    if (v != null) lines.push(`    .header("${k.replace(/"/g, '\\"')}", "${String(v).replace(/"/g, '\\"')}")`);
+    if (v != null) lines.push(`    .header("${escapeRustString(k)}", "${escapeRustString(String(v))}")`);
   }
   if (body) {
-    const hashCount = bodyFormatted.includes('"#') ? 2 : 1;
+    let maxHashes = 0;
+    const re = /"(#+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(bodyFormatted)) !== null) {
+      maxHashes = Math.max(maxHashes, m[1].length);
+    }
+    const hashCount = maxHashes + 1;
     const hash = '#'.repeat(hashCount);
-    const safeForTemplate = bodyFormatted.replace(/`/g, '\\`').replace(/\$/g, '\\$');
-    lines.push(`    .body(r${hash}"\n${safeForTemplate}\n"${hash})`);
+    lines.push(`    .body(r${hash}"\n${bodyFormatted}\n"${hash})`);
   }
   lines.push('    .send()?;');
   return '// reqwest = { version = "0.11", features = ["blocking"] }\n\n' + lines.join('\n');

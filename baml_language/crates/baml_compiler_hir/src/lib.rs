@@ -3350,12 +3350,21 @@ fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<Hi
         }
     }
 
-    // Check function parameters
+    // Check function parameters (skip synthetic render_prompt/build_request variants)
     for item in items.items(db) {
         if let ItemId::Function(loc) = item {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
             let func = &item_tree[loc.id(db)];
+            if matches!(
+                &func.compiler_generated,
+                Some(
+                    item_tree::CompilerGenerated::LlmRenderPrompt { .. }
+                        | item_tree::CompilerGenerated::LlmBuildRequest { .. }
+                )
+            ) {
+                continue;
+            }
             let sig = function_signature(db, *loc);
 
             for param in &sig.params {
