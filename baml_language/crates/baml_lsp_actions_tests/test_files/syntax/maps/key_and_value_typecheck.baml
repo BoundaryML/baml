@@ -64,10 +64,10 @@ function UseMapTypecheck() -> int {
 //    │ Note: Error code: E0067
 // ───╯
 // Error: Expected `map<int, string>`, found `string`
-//    ╭─[ maps_key_and_value_typecheck.baml:3:15 ]
+//    ╭─[ maps_key_and_value_typecheck.baml:3:16 ]
 //    │
 //  3 │     { (1 + 1): "2" }
-//    │               ──┬─  
+//    │                ─┬─  
 //    │                 ╰─── Expected `map<int, string>`, found `string`
 //    │ 
 //    │ Note: Error code: E0001

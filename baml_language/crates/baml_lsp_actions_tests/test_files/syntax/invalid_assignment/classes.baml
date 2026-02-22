@@ -64,11 +64,11 @@ function ClassAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `Person`, found `string`
-//     ╭─[ invalid_assignment_classes.baml:33:6 ]
+//     ╭─[ invalid_assignment_classes.baml:33:7 ]
 //     │
 //  33 │     p3 = "not a person";
-//     │         ───────┬───────  
-//     │                ╰───────── Expected `Person`, found `string`
+//     │          ───────┬──────  
+//     │                 ╰──────── Expected `Person`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

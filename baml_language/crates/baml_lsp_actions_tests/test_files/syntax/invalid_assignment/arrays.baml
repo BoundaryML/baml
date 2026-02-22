@@ -79,10 +79,10 @@ function ArrayAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `int[]`, found `string`
-//     ╭─[ invalid_assignment_arrays.baml:34:5 ]
+//     ╭─[ invalid_assignment_arrays.baml:34:6 ]
 //     │
 //  34 │     h = "array";
-//     │        ────┬───  
+//     │         ───┬───  
 //     │            ╰───── Expected `int[]`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
