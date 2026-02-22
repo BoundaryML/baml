@@ -70,7 +70,7 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     let source = input.source.replace("{ROOT}", &root_path);
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, Arc::new(sys_types::SysOps::native()))
+    let engine = BexEngine::new(snapshot, Arc::new(sys_types::SysOps::native()), None)
         .expect("Failed to create engine");
 
     let result = engine

@@ -72,8 +72,12 @@ async fn trace_single_function() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     let (host_ctx, guard) = setup_tracking();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -115,8 +119,12 @@ async fn trace_nested_expression_calls_no_child_spans() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     let (host_ctx, guard) = setup_tracking();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -158,8 +166,12 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     let (host_ctx, guard) = setup_tracking();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -195,8 +207,12 @@ async fn trace_sibling_expression_calls_no_child_spans() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     let (host_ctx, guard) = setup_tracking();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -224,8 +240,12 @@ async fn trace_captures_root_args() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     let (host_ctx, guard) = setup_tracking();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
@@ -266,8 +286,12 @@ async fn trace_captures_root_result() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     let (host_ctx, guard) = setup_tracking();
     let call_ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())

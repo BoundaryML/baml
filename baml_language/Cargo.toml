@@ -29,6 +29,7 @@ members = [
   "crates/baml_workspace",
   "crates/bex_engine",
   "crates/bex_events",
+  "crates/bex_events_native",
   "crates/bex_external_types",
   "crates/bex_heap",
   "crates/bex_project",
@@ -103,6 +104,7 @@ bridge_cffi = { path = "crates/bridge_cffi" }
 bridge_python = { path = "crates/bridge_python" }
 bridge_wasm = { path = "crates/bridge_wasm" }
 bex_events = { path = "crates/bex_events" }
+bex_events_native = { path = "crates/bex_events_native" }
 bex_resource_types = { path = "crates/bex_resource_types" }
 
 # External dependency for sys_llm jinja module

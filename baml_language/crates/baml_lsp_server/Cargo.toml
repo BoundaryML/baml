@@ -10,6 +10,7 @@ native-tls = [ "reqwest/native-tls", "sys_native/native-tls" ]
 rustls = [ "reqwest/rustls", "sys_native/rustls" ]
 
 [dependencies]
+bex_events_native = { workspace = true }
 bex_heap = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }

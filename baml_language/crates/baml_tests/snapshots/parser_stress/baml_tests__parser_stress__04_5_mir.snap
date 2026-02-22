@@ -8,6 +8,7 @@ fn ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     let _1: void
 
     bb0: {
+        _0 = {  };
         goto -> bb2;
     }
 

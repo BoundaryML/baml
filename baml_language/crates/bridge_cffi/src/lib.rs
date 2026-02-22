@@ -11,6 +11,7 @@ pub mod host_spans;
 mod panic;
 
 pub use bridge_ctypes::baml;
+pub use engine::{flush_event_sink, get_event_sink};
 pub use error::BridgeError;
 pub use ffi::{
     callbacks::{CallbackFn, OnTickCallbackFn, register_callbacks},

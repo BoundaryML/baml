@@ -13,8 +13,12 @@ use sys_native::SysOpsExt;
 /// Helper: compile source, create engine, call function, return result.
 async fn run(source: &str, entry: &str) -> Result<BexExternalValue, bex_engine::EngineError> {
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native()))
-        .expect("Failed to create engine");
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .expect("Failed to create engine");
     engine
         .call_function(
             entry,

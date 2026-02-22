@@ -27,7 +27,7 @@ function BodyTorture() -> int {
 }
 
 function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    load_var _0
+    alloc_map 0
     return
 }
 

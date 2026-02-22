@@ -2792,6 +2792,9 @@ impl LoweringContext {
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::STRING_LITERAL
                     | SyntaxKind::RAW_STRING_LITERAL
+                    | SyntaxKind::OBJECT_LITERAL
+                    | SyntaxKind::ARRAY_LITERAL
+                    | SyntaxKind::MAP_LITERAL
             )
         }) {
             Some(self.lower_expr(&child_node))

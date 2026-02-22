@@ -34,6 +34,7 @@ struct BexMulitProject {
     projects:
         std::sync::Arc<std::sync::Mutex<HashMap<crate::fs::FsPath, std::sync::Arc<LiveProject>>>>,
     sys_op_factory: SysOpFactory,
+    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     #[allow(dead_code)] // TODO: reserved for upcoming playground integration
     playground_state: std::sync::Arc<std::sync::Mutex<PlaygroundState>>,
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
@@ -169,10 +170,12 @@ impl BexMulitProject {
         sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
         playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
         fs: crate::fs::BamlVFS,
+        event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     ) -> Self {
         Self {
             projects: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             sys_op_factory,
+            event_sink,
             playground_state: std::sync::Arc::new(
                 std::sync::Mutex::new(PlaygroundState::default()),
             ),
@@ -206,7 +209,7 @@ impl BexMulitProject {
         }
 
         let sys_ops = (self.sys_op_factory)(&root_path);
-        let project = crate::project::BexProject::new(&root_path, sys_ops);
+        let project = crate::project::BexProject::new(&root_path, sys_ops, self.event_sink.clone());
         let project = std::sync::Arc::new(LiveProject {
             project,
             in_memory_changes: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
@@ -542,6 +545,7 @@ pub fn new_lsp(
     sender: std::sync::Arc<dyn LspClientSenderTrait + Send + Sync>,
     playground_sender: std::sync::Arc<dyn crate::bex_lsp::PlaygroundSender>,
     fs: crate::fs::BamlVFS,
+    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
 ) -> impl crate::bex_lsp::BexLsp {
-    BexMulitProject::new(sys_op_factory, sender, playground_sender, fs)
+    BexMulitProject::new(sys_op_factory, sender, playground_sender, fs, event_sink)
 }

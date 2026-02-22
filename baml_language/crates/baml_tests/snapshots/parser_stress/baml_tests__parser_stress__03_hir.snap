@@ -13,7 +13,7 @@ class StringTorture {
 }
 
 function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
-    return;
+    return {  };
 }
 
 function DeepExpression() -> int {

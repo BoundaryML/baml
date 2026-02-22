@@ -542,15 +542,15 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
     load_field .name
     dispatch_future baml.llm.round_robin_next
     await
-    store_var _92
+    store_var _99
     load_var llm_client
     load_field .sub_clients
     call baml.Array.length
-    store_var _97
+    store_var _104
     load_var llm_client
     load_field .sub_clients
-    load_var _92
-    load_var _97
+    load_var _99
+    load_var _104
     bin_op %
     call baml.Array.at
     load_var context
@@ -670,6 +670,19 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
     dispatch_future baml.llm.get_return_type
     await
     store_var return_type
+    load_var primitive
+    load_var body
+    load_var return_type
+    dispatch_future baml.llm.PrimitiveClient.parse
+    await
+    store_var _52
+    alloc_instance baml.llm.ExecutionResult
+    copy 0
+    load_const true
+    store_field .ok
+    copy 0
+    load_var _52
+    store_field .value
     return
 }
 
