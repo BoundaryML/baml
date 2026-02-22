@@ -92,6 +92,38 @@ struct FutureResult {
     result: Result<BexExternalValue, EngineError>,
 }
 
+/// RAII guard for in-flight async sys-op task abort handles.
+///
+/// On drop, aborts all tracked tasks so early returns (`?`) do not leave
+/// spawned work running in the background.
+struct AbortHandlesGuard {
+    handles: Vec<futures::future::AbortHandle>,
+}
+
+impl AbortHandlesGuard {
+    fn new() -> Self {
+        Self {
+            handles: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, handle: futures::future::AbortHandle) {
+        self.handles.push(handle);
+    }
+
+    fn as_slice(&self) -> &[futures::future::AbortHandle] {
+        &self.handles
+    }
+}
+
+impl Drop for AbortHandlesGuard {
+    fn drop(&mut self) {
+        for handle in &self.handles {
+            handle.abort();
+        }
+    }
+}
+
 /// Wrapper for VM pointer that implements Send.
 ///
 /// # Safety
@@ -1024,10 +1056,10 @@ impl BexEngine {
         //
         // We use `futures::future::AbortHandle` (not `tokio::task::AbortHandle`)
         // so the same mechanism works on both native and WASM targets.
-        let mut abort_handles: Vec<futures::future::AbortHandle> = Vec::new();
+        let mut abort_handles = AbortHandlesGuard::new();
 
         'vm_exec: loop {
-            Self::cancellation_safepoint(cancel, &abort_handles)?;
+            Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
 
             match vm.exec()? {
                 VmExecState::Complete(value) => {
@@ -1039,7 +1071,7 @@ impl BexEngine {
                     // a paired root FunctionStart/FunctionEnd span.
                     let cancelled = cancel.is_cancelled();
                     if cancelled {
-                        Self::abort_inflight_tasks(&abort_handles);
+                        Self::abort_inflight_tasks(abort_handles.as_slice());
                     }
 
                     // Emit FunctionEnd for the root entry-point span if tracing
@@ -1091,15 +1123,15 @@ impl BexEngine {
                         .map(|v| self.vm_arg_to_bex_value(v))
                         .collect();
 
-                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+                    Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
                     let sys_op_result =
                         self.execute_sys_op(pending.operation, &args, call_id, cancel);
-                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+                    Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
 
                     match sys_op_result {
                         SysOpResult::Ready(result) => {
                             // Guard the "commit to VM state" boundary.
-                            Self::cancellation_safepoint(cancel, &abort_handles)?;
+                            Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
 
                             // Sync operation - set future to Ready without touching stack.
                             // The VM will continue to the Await instruction which will
@@ -1117,7 +1149,7 @@ impl BexEngine {
                         }
                         SysOpResult::Async(fut) => {
                             // Guard the "spawn side effect" boundary.
-                            Self::cancellation_safepoint(cancel, &abort_handles)?;
+                            Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
 
                             // Async operation — wrap in Abortable and spawn.
                             let pending_futures = pending_futures.clone();
@@ -1147,7 +1179,7 @@ impl BexEngine {
                 }
 
                 VmExecState::Await(future_id) => {
-                    Self::cancellation_safepoint(cancel, &abort_handles)?;
+                    Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
 
                     // Check if GC is waiting for our epoch to drain
                     let current = self.current_epoch.load(Ordering::Acquire);
@@ -1217,7 +1249,7 @@ impl BexEngine {
                             () = cancel.cancelled() => {
                                 // Abort all in-flight spawned tasks to stop
                                 // HTTP requests, sleeps, etc. immediately.
-                                Self::abort_inflight_tasks(&abort_handles);
+                                Self::abort_inflight_tasks(abort_handles.as_slice());
                                 return Err(EngineError::Cancelled);
                             }
                             future = processed_futures.recv() => {
