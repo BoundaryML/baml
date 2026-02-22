@@ -111,16 +111,16 @@ impl AbortHandlesGuard {
         self.handles.push(handle);
     }
 
-    fn as_slice(&self) -> &[futures::future::AbortHandle] {
-        &self.handles
+    fn abort_all(&self) {
+        for handle in &self.handles {
+            handle.abort();
+        }
     }
 }
 
 impl Drop for AbortHandlesGuard {
     fn drop(&mut self) {
-        for handle in &self.handles {
-            handle.abort();
-        }
+        self.abort_all();
     }
 }
 
@@ -1001,23 +1001,16 @@ impl BexEngine {
         }
     }
 
-    /// Abort all in-flight async sys-op tasks tracked by this call.
-    fn abort_inflight_tasks(abort_handles: &[futures::future::AbortHandle]) {
-        for handle in abort_handles {
-            handle.abort();
-        }
-    }
-
     /// Engine-level cancellation safepoint.
     ///
     /// Keeps cancellation handling centralized in the engine loop instead of
     /// requiring individual BAML code paths or `sys_ops` to be cancel-aware.
     fn cancellation_safepoint(
         cancel: &CancellationToken,
-        abort_handles: &[futures::future::AbortHandle],
+        abort_handles: &AbortHandlesGuard,
     ) -> Result<(), EngineError> {
         if cancel.is_cancelled() {
-            Self::abort_inflight_tasks(abort_handles);
+            abort_handles.abort_all();
             return Err(EngineError::Cancelled);
         }
         Ok(())
@@ -1059,7 +1052,7 @@ impl BexEngine {
         let mut abort_handles = AbortHandlesGuard::new();
 
         'vm_exec: loop {
-            Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
+            Self::cancellation_safepoint(cancel, &abort_handles)?;
 
             match vm.exec()? {
                 VmExecState::Complete(value) => {
@@ -1071,7 +1064,7 @@ impl BexEngine {
                     // a paired root FunctionStart/FunctionEnd span.
                     let cancelled = cancel.is_cancelled();
                     if cancelled {
-                        Self::abort_inflight_tasks(abort_handles.as_slice());
+                        abort_handles.abort_all();
                     }
 
                     // Emit FunctionEnd for the root entry-point span if tracing
@@ -1123,15 +1116,15 @@ impl BexEngine {
                         .map(|v| self.vm_arg_to_bex_value(v))
                         .collect();
 
-                    Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
                     let sys_op_result =
                         self.execute_sys_op(pending.operation, &args, call_id, cancel);
-                    Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
 
                     match sys_op_result {
                         SysOpResult::Ready(result) => {
                             // Guard the "commit to VM state" boundary.
-                            Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
+                            Self::cancellation_safepoint(cancel, &abort_handles)?;
 
                             // Sync operation - set future to Ready without touching stack.
                             // The VM will continue to the Await instruction which will
@@ -1149,7 +1142,7 @@ impl BexEngine {
                         }
                         SysOpResult::Async(fut) => {
                             // Guard the "spawn side effect" boundary.
-                            Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
+                            Self::cancellation_safepoint(cancel, &abort_handles)?;
 
                             // Async operation — wrap in Abortable and spawn.
                             let pending_futures = pending_futures.clone();
@@ -1179,7 +1172,7 @@ impl BexEngine {
                 }
 
                 VmExecState::Await(future_id) => {
-                    Self::cancellation_safepoint(cancel, abort_handles.as_slice())?;
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
 
                     // Check if GC is waiting for our epoch to drain
                     let current = self.current_epoch.load(Ordering::Acquire);
@@ -1249,7 +1242,7 @@ impl BexEngine {
                             () = cancel.cancelled() => {
                                 // Abort all in-flight spawned tasks to stop
                                 // HTTP requests, sleeps, etc. immediately.
-                                Self::abort_inflight_tasks(abort_handles.as_slice());
+                                abort_handles.abort_all();
                                 return Err(EngineError::Cancelled);
                             }
                             future = processed_futures.recv() => {
