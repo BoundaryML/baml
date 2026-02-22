@@ -992,7 +992,6 @@ dependencies = [
  "serde_json",
  "sys_types",
  "thiserror 2.0.18",
- "tokio",
  "tsify",
  "vfs",
  "wasm-bindgen",

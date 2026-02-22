@@ -20,7 +20,13 @@ function isHttpRequest(value: unknown): value is HttpRequestShape {
   return typeof o.url === 'string' && typeof o.method === 'string';
 }
 
-const HEREDOC = 'EOF';
+function safeHeredoc(body: string): string {
+  let tag = 'EOF';
+  while (body.includes(`\n${tag}\n`) || body.startsWith(`${tag}\n`) || body.endsWith(`\n${tag}`)) {
+    tag += '_';
+  }
+  return tag;
+}
 
 const PYTHON_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
 
@@ -48,9 +54,10 @@ function toCurl(req: HttpRequestShape): string {
     }
   }
   if (body != null && body !== '') {
+    const heredoc = safeHeredoc(prettyBody(body));
     parts.push('-d @-');
     parts.push(`'${url.replace(/'/g, "'\\''")}'`);
-    return parts.join(' \\\n  ') + ` <<'${HEREDOC}'\n${prettyBody(body)}\n${HEREDOC}`;
+    return parts.join(' \\\n  ') + ` <<'${heredoc}'\n${prettyBody(body)}\n${heredoc}`;
   }
   parts.push(`'${url.replace(/'/g, "'\\''")}'`);
   return parts.join(' \\\n  ');
@@ -101,7 +108,8 @@ function toPythonRequests(req: HttpRequestShape): string {
     kwargs.push(`    headers={\n${headersStr}\n    }`);
   }
   if (body != null && body !== '') {
-    kwargs.push(`    data='''\n${prettyBody(body)}\n    '''`);
+    const safeBody = prettyBody(body).replace(/'''/g, "\\'\\'\\'" );
+    kwargs.push(`    data='''\n${safeBody}\n    '''`);
   }
   const kwargsBlock = kwargs.length ? ',\n' + kwargs.join(',\n') : '';
   return `import requests\n\nresponse = requests.${fn}(\n    ${args}'${escapePySingle(url)}'${kwargsBlock}\n)`;
@@ -143,15 +151,20 @@ function escapeRustString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
 }
 
+const REQWEST_SHORTCUT_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head']);
+
 function toRust(req: HttpRequestShape): string {
   const method = (req.method ?? 'GET').toLowerCase();
   const url = req.url ?? '';
   const headers = req.headers ?? {};
   const body = req.body ?? '';
   const bodyFormatted = body ? prettyBody(body) : '';
+  const clientCall = REQWEST_SHORTCUT_METHODS.has(method)
+    ? `client.${method}("${escapeRustString(url)}")`
+    : `client.request("${method.toUpperCase()}".parse().unwrap(), "${escapeRustString(url)}")`;
   const lines: string[] = [
     'let client = reqwest::blocking::Client::new();',
-    `let response = client.${method}("${escapeRustString(url)}")`,
+    `let response = ${clientCall}`,
   ];
   for (const [k, v] of Object.entries(headers)) {
     if (v != null) lines.push(`    .header("${escapeRustString(k)}", "${escapeRustString(String(v))}")`);

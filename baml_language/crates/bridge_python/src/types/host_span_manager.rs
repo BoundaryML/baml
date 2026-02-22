@@ -36,10 +36,7 @@ impl HostSpanManager {
 impl HostSpanManager {
     #[new]
     fn py_new() -> Self {
-        let sink = bridge_cffi::get_event_sink();
-        Self {
-            inner: bridge_cffi::host_spans::HostSpanManager::new(sink),
-        }
+        Self::new()
     }
 
     /// Enter a new host-language span (`@trace` function start).
