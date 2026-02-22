@@ -22,6 +22,8 @@ function isHttpRequest(value: unknown): value is HttpRequestShape {
 
 const HEREDOC = 'EOF';
 
+const PYTHON_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
+
 /** Pretty-print JSON when possible so snippets are readable. */
 function prettyBody(body: string): string {
   try {
@@ -40,7 +42,8 @@ function toCurl(req: HttpRequestShape): string {
   if (method !== 'GET') parts.push(`-X ${method}`);
   for (const [k, v] of Object.entries(headers)) {
     if (v !== undefined && v !== null) {
-      parts.push(`-H "${String(k)}: ${String(v).replace(/"/g, '\\"')}"`);
+      const escaped = String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      parts.push(`-H "${String(k)}: ${escaped}"`);
     }
   }
   if (body != null && body !== '') {
@@ -78,18 +81,7 @@ function toPythonRequests(req: HttpRequestShape): string {
   const url = req.url ?? '';
   const headers = req.headers ?? {};
   const body = req.body;
-  const fn =
-    method === 'get'
-      ? 'get'
-      : method === 'post'
-        ? 'post'
-        : method === 'put'
-          ? 'put'
-          : method === 'patch'
-            ? 'patch'
-            : method === 'delete'
-              ? 'delete'
-              : 'request';
+  const fn = PYTHON_METHODS.has(method) ? method : 'request';
   const args = fn === 'request' ? `'${method}', ` : '';
   const kwargs: string[] = [];
   if (Object.keys(headers).length > 0) {
@@ -119,8 +111,10 @@ function toGo(req: HttpRequestShape): string {
   const lines: string[] = [
     `req, err := http.NewRequest("${method}", "${url.replace(/"/g, '\\"')}", ${bodyArg})`,
     'if err != nil { log.Fatal(err) }',
-    'defer req.Body.Close()',
   ];
+  if (body) {
+    lines.push('defer req.Body.Close()');
+  }
   for (const [k, v] of Object.entries(headers)) {
     if (v != null) lines.push(`req.Header.Set("${k.replace(/"/g, '\\"')}", "${String(v).replace(/"/g, '\\"')}")`);
   }
@@ -210,12 +204,12 @@ const tabCls = (active: boolean) =>
 export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value }) => {
   const [copied, setCopied] = useState(false);
   const [format, setFormat] = useState<HttpRequestSnippetFormat>('curl');
+  const httpReq = isHttpRequest(value) ? value : null;
 
-  if (!isHttpRequest(value)) {
-    return <pre className={preCls}>{JSON.stringify(value, null, 2)}</pre>;
-  }
-
-  const snippet = useMemo(() => formatSnippet(value, format), [value, format]);
+  const snippet = useMemo(
+    () => (httpReq ? formatSnippet(httpReq, format) : ''),
+    [httpReq, format],
+  );
 
   const onCopy = useCallback(async () => {
     try {
@@ -226,6 +220,10 @@ export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value }) => {
       // ignore
     }
   }, [snippet]);
+
+  if (!httpReq) {
+    return <pre className={preCls}>{JSON.stringify(value, null, 2)}</pre>;
+  }
 
   return (
     <div className="space-y-1">

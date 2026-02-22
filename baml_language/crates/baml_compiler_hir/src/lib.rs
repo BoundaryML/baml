@@ -1289,7 +1289,9 @@ fn build_function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Func
                     body::lower_llm_to_build_request(base_name.as_str(), &param_names);
                 return FunctionBody::Expr(expr_body, source_map);
             }
-            item_tree::CompilerGenerated::ClientResolve { .. } => {}
+            item_tree::CompilerGenerated::ClientResolve { .. } => {
+                unreachable!("ClientResolve is handled by the early-return block above")
+            }
         }
     }
 
@@ -1631,26 +1633,30 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
             if let Some(func_def) = FunctionDef::cast(node.clone()) {
                 if func_def.llm_body().is_some() {
                     // LLM function: expand into Foo, Foo.render_prompt, Foo.build_request
-                    let base_name: Name =
-                        func_def.name().map(|n| n.text().into()).unwrap_or_default();
-                    tree.alloc_function(item_tree::Function {
-                        name: base_name.clone(),
-                        compiler_generated: Some(item_tree::CompilerGenerated::LlmCall {
-                            base_name: base_name.clone(),
-                        }),
-                    });
-                    tree.alloc_function(item_tree::Function {
-                        name: Name::new(format!("{base_name}.render_prompt")),
-                        compiler_generated: Some(item_tree::CompilerGenerated::LlmRenderPrompt {
-                            base_name: base_name.clone(),
-                        }),
-                    });
-                    tree.alloc_function(item_tree::Function {
-                        name: Name::new(format!("{base_name}.build_request")),
-                        compiler_generated: Some(item_tree::CompilerGenerated::LlmBuildRequest {
-                            base_name,
-                        }),
-                    });
+                    if let Some(name_tok) = func_def.name() {
+                        let base_name: Name = name_tok.text().into();
+                        tree.alloc_function(item_tree::Function {
+                            name: base_name.clone(),
+                            compiler_generated: Some(item_tree::CompilerGenerated::LlmCall {
+                                base_name: base_name.clone(),
+                            }),
+                        });
+                        tree.alloc_function(item_tree::Function {
+                            name: Name::new(format!("{base_name}.render_prompt")),
+                            compiler_generated: Some(
+                                item_tree::CompilerGenerated::LlmRenderPrompt {
+                                    base_name: base_name.clone(),
+                                },
+                            ),
+                        });
+                        tree.alloc_function(item_tree::Function {
+                            name: Name::new(format!("{base_name}.build_request")),
+                            compiler_generated: Some(
+                                item_tree::CompilerGenerated::LlmBuildRequest { base_name },
+                            ),
+                        });
+                    }
+                    // Malformed LLM function with no name; skip expansion (matches lower_function behavior).
                 } else if let Some(func) = lower_function(node) {
                     tree.alloc_function(func);
                 }
