@@ -1,8 +1,8 @@
-//! Global `EventStore` with an MPSC publisher thread.
+//! Global `EventStore` — in-memory event aggregation for `Collector` queries.
 //!
-//! All events (engine + host-language spans) flow through this module.
-//! The publisher thread buffers events and writes JSONL to file on `flush()`
-//! (if `BAML_TRACE_FILE` is set).
+//! All events flow through `emit()` for routing into the `CollectorStore`.
+//! Event persistence (JSONL file, JS callback, etc.) is handled by an
+//! `EventSink` injected at the `BexEngine` / `HostSpanManager` level.
 //!
 //! Collectors track specific engine span IDs (one per `call_function`
 //! invocation). Events are routed to the correct bucket by matching
@@ -10,81 +10,22 @@
 
 use std::{
     collections::HashMap,
-    io::Write,
-    sync::{Mutex, OnceLock, mpsc},
+    sync::{Mutex, OnceLock},
 };
 
 use crate::{RuntimeEvent, SpanId};
 
-// ─────────────────────────── Publisher Channel ───────────────────────────
+// ─────────────────────────── Event Sink ─────────────────────────────────
 
-/// Messages sent to the publisher thread.
-#[allow(clippy::large_enum_variant)]
-enum PublisherMessage {
-    /// A new event to buffer.
-    Event(RuntimeEvent),
-    /// Flush buffered events to disk; ack when done.
-    Flush(mpsc::SyncSender<()>),
-}
-
-/// The global sender half of the publisher channel.
-static PUBLISHER_TX: OnceLock<mpsc::SyncSender<PublisherMessage>> = OnceLock::new();
-
-/// Lazily start the publisher thread and return the sender.
-fn ensure_publisher() -> &'static mpsc::SyncSender<PublisherMessage> {
-    PUBLISHER_TX.get_or_init(|| {
-        let (tx, rx) = mpsc::sync_channel(4096);
-        std::thread::Builder::new()
-            .name("bex-publisher".into())
-            .spawn(move || publisher_loop(rx))
-            .expect("failed to spawn publisher thread");
-        tx
-    })
-}
-
-/// The publisher worker loop. Receives events and flush requests.
-#[allow(clippy::needless_pass_by_value)] // Receiver must be owned by the thread
-fn publisher_loop(rx: mpsc::Receiver<PublisherMessage>) {
-    let mut buffer: Vec<RuntimeEvent> = Vec::new();
-    loop {
-        match rx.recv() {
-            Ok(PublisherMessage::Event(e)) => {
-                buffer.push(e);
-            }
-            Ok(PublisherMessage::Flush(ack)) => {
-                write_jsonl_to_file(&buffer);
-                buffer.clear();
-                let _ = ack.send(());
-            }
-            Err(_) => {
-                // Channel closed (process shutting down) — flush remaining events.
-                write_jsonl_to_file(&buffer);
-                break;
-            }
-        }
-    }
-}
-
-/// Write buffered events to the JSONL file specified by `BAML_TRACE_FILE`.
-/// If the env var is not set, this is a no-op (just discards the buffer).
-fn write_jsonl_to_file(events: &[RuntimeEvent]) {
-    let Some(trace_file) = std::env::var("BAML_TRACE_FILE").ok() else {
-        return;
-    };
-    if events.is_empty() {
-        return;
-    }
-    let Ok(mut file) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&trace_file)
-    else {
-        return;
-    };
-    for event in events {
-        let line = crate::serialize::event_to_jsonl(event);
-        let _ = writeln!(file, "{line}");
-    }
+/// Sink for events; implemented by the runtime layer.
+///
+/// Native: thread + channel + JSONL file writer (in `bex_events_native`).
+/// WASM: no-op (or future JS callback).
+pub trait EventSink: Send + Sync {
+    /// Send an event (e.g. into a channel). Should be non-blocking.
+    fn send(&self, event: RuntimeEvent);
+    /// Flush buffered events. May block until the consumer has written.
+    fn flush(&self);
 }
 
 // ─────────────────────────── Collector Store ─────────────────────────────
@@ -116,11 +57,13 @@ fn collector_store() -> &'static Mutex<CollectorStore> {
 
 // ─────────────────────────── Public API ──────────────────────────────────
 
-/// Send an event to the publisher thread. Always succeeds (drops if channel full).
-///
-/// Also stores the event in the collector store if the event's `span_id`
+/// Store an event in the collector store if the event's `span_id`
 /// or `parent_span_id` matches a tracked engine span.
-pub fn emit(event: RuntimeEvent) {
+///
+/// This function only performs in-memory aggregation for `Collector` queries.
+/// To also persist events (JSONL file, JS callback, etc.), set an `EventSink`
+/// on the `BexEngine` — the engine calls `sink.send(event)` after this function.
+pub fn emit(event: &RuntimeEvent) {
     // Store in collector if tracked — route by span_id or parent_span_id
     {
         let mut store = collector_store().lock().unwrap();
@@ -143,21 +86,6 @@ pub fn emit(event: RuntimeEvent) {
                     .push(event.clone());
             }
         }
-    }
-
-    // Send to publisher thread (drop on full — bounded channel)
-    let tx = ensure_publisher();
-    let _ = tx.try_send(PublisherMessage::Event(event));
-}
-
-/// Flush the publisher — writes all buffered events to JSONL file (if `BAML_TRACE_FILE` set).
-/// Blocks until the publisher acknowledges the flush.
-pub fn flush() {
-    let tx = ensure_publisher();
-    let (ack_tx, ack_rx) = mpsc::sync_channel(1);
-    if tx.send(PublisherMessage::Flush(ack_tx)).is_ok() {
-        // Block until publisher acks (30s timeout to avoid deadlock)
-        let _ = ack_rx.recv_timeout(std::time::Duration::from_secs(30));
     }
 }
 
@@ -188,17 +116,11 @@ pub fn events_for_span(id: &SpanId) -> Option<Vec<RuntimeEvent>> {
 }
 
 #[cfg(test)]
-#[allow(unsafe_code)]
 mod tests {
-    use std::sync::{Mutex, OnceLock};
-
     use web_time::SystemTime;
 
     use super::*;
     use crate::{EventKind, FunctionEvent, FunctionStart, SpanContext};
-
-    /// Global lock to guard `BAML_TRACE_FILE` env var mutations against parallel test races.
-    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
     /// Create an event whose `span_id` matches the given ID (function's own event).
     fn make_event(span_id: SpanId) -> RuntimeEvent {
@@ -237,31 +159,6 @@ mod tests {
     }
 
     #[test]
-    fn test_emit_and_flush_to_file() {
-        let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-        let dir = tempfile::tempdir().unwrap();
-        let trace_path = dir.path().join("trace.jsonl");
-
-        // SAFETY: guarded by ENV_LOCK to prevent parallel test races.
-        unsafe {
-            std::env::set_var("BAML_TRACE_FILE", trace_path.to_str().unwrap());
-        }
-
-        let span = SpanId::new();
-        emit(make_event(span));
-        flush();
-
-        let contents = std::fs::read_to_string(&trace_path).unwrap();
-        assert!(!contents.is_empty(), "trace file should have content");
-        assert!(contents.contains("test_fn"));
-
-        // Clean up
-        unsafe {
-            std::env::remove_var("BAML_TRACE_FILE");
-        }
-    }
-
-    #[test]
     fn test_track_emit_query_untrack() {
         let engine_span = SpanId::new();
 
@@ -269,7 +166,7 @@ mod tests {
         track(&engine_span);
 
         // Emit event with span_id matching the tracked span
-        emit(make_event(engine_span.clone()));
+        emit(&make_event(engine_span.clone()));
 
         // Query
         let events = events_for_span(&engine_span).unwrap();
@@ -288,10 +185,10 @@ mod tests {
         track(&engine_span);
 
         // Emit the function's own event (span_id matches)
-        emit(make_event(engine_span.clone()));
+        emit(&make_event(engine_span.clone()));
 
         // Emit a child event (parent_span_id matches)
-        emit(make_child_event(engine_span.clone(), host_root));
+        emit(&make_child_event(engine_span.clone(), host_root));
 
         let events = events_for_span(&engine_span).unwrap();
         assert_eq!(events.len(), 2);
@@ -306,7 +203,7 @@ mod tests {
         track(&span);
         track(&span); // ref_count = 2
 
-        emit(make_event(span.clone()));
+        emit(&make_event(span.clone()));
 
         untrack(&span); // ref_count = 1 → still tracked
         assert!(events_for_span(&span).is_some());

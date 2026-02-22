@@ -98,6 +98,7 @@ name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
+approved_prefixes = ["events"]
 link_crates = ["baml_builtins", "baml_type", "sys_types"]
 
 # lsp namespace configuration
@@ -115,7 +116,7 @@ link_crates = ["bex_project", "sys_native", "sys_types"]
 # bridge_python and bridge_cffi need bex_events for event handling.
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
-pattern.exclude = ["bex_project", "bex_events", "bex_heap", "bex_resource_types"]
+pattern.exclude = ["bex_project", "bex_events", "bex_events_native", "bex_heap", "bex_resource_types"]
 allowed_crates = []
 reason = "Bridge crates must use bex_project re-exports, not bex internals directly."
 

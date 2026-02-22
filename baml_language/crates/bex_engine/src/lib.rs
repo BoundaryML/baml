@@ -347,6 +347,9 @@ pub struct BexEngine {
     sys_ops: std::sync::Arc<sys_types::SysOps>,
     /// Context passed to `sys_ops` that need engine-level information.
     sys_op_ctx: sys_types::SysOpContext,
+    /// Optional event sink for persisting events (JSONL file, JS callback, etc.).
+    /// If `None`, events are only stored in the `CollectorStore` for in-memory queries.
+    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
 
     // --- Epoch-based GC coordination ---
     /// Current epoch counter (monotonically increasing).
@@ -399,6 +402,7 @@ impl BexEngine {
     pub fn new(
         bytecode_program: bex_vm_types::Program,
         sys_ops: std::sync::Arc<sys_types::SysOps>,
+        event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode = bex_vm::convert_program(bytecode_program)?;
@@ -547,6 +551,7 @@ impl BexEngine {
             resolved_enum_names,
             sys_ops,
             sys_op_ctx,
+            event_sink,
             // Initialize epoch tracking
             current_epoch: AtomicU64::new(0),
             epoch_states: [EpochState::new(), EpochState::new()],
@@ -555,6 +560,15 @@ impl BexEngine {
             gc_in_progress: AtomicBool::new(false),
             active_calls: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Emit an event: store in `CollectorStore` for in-memory queries,
+    /// then forward to the event sink (if set) for persistence.
+    fn emit(&self, event: bex_events::RuntimeEvent) {
+        bex_events::event_store::emit(&event);
+        if let Some(sink) = &self.event_sink {
+            sink.send(event);
+        }
     }
 
     /// Pre-extract LLM function metadata from heap objects.
@@ -837,7 +851,7 @@ impl BexEngine {
             root_span_id: effective_root_span_id.clone(),
         };
 
-        bex_events::event_store::emit(RuntimeEvent {
+        self.emit(RuntimeEvent {
             ctx: root_ctx,
             call_stack,
             timestamp: SystemTime::now(),
@@ -1088,7 +1102,7 @@ impl BexEngine {
                                     duration: root_span.started_at.elapsed(),
                                 })),
                             };
-                            bex_events::event_store::emit(end_event);
+                            self.emit(end_event);
                         }
                     }
 
@@ -1305,7 +1319,7 @@ impl BexEngine {
                                         },
                                     )),
                                 };
-                                bex_events::event_store::emit(enter_event);
+                                self.emit(enter_event);
 
                                 state.stack.push(EngineSpan {
                                     span_id,
@@ -1341,7 +1355,7 @@ impl BexEngine {
                                             },
                                         )),
                                     };
-                                    bex_events::event_store::emit(exit_event);
+                                    self.emit(exit_event);
                                 }
                             }
                         }

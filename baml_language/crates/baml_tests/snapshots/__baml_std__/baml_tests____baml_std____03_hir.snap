@@ -144,7 +144,7 @@ function execute_client_once(llm_client: baml.llm.Client, context: baml.llm.Exec
             if (http_response.ok()) {
                 let body = http_response.text();
                 let return_type = baml.llm.get_return_type(context.function_name);
-                return;
+                return baml.llm.ExecutionResult { ok: true, value: primitive.parse(body, return_type) };
             };
             if (active_delay_ms > 0) {
                 baml.sys.sleep(active_delay_ms);

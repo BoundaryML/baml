@@ -51,6 +51,7 @@ mod wasm_fs;
 mod wasm_http;
 mod wasm_lsp;
 mod wasm_playground;
+mod wasm_sys;
 
 pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
 pub use error::BridgeError;
@@ -66,7 +67,12 @@ pub fn start() {
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
     LOGGER_INIT.call_once(|| {
-        wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
+        let level = if cfg!(debug_assertions) {
+            log::Level::Debug
+        } else {
+            log::Level::Info
+        };
+        wasm_logger::init(wasm_logger::Config::new(level));
     });
 }
 
@@ -176,6 +182,7 @@ impl BamlWasmRuntime {
         let sys_ops = sys_types::SysOpsBuilder::new()
             .with_http_instance(std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)))
             .with_env_instance(std::sync::Arc::new(wasm_env::WasmEnv::new(env_vars_fn)))
+            .with_sys_instance(std::sync::Arc::new(wasm_sys::WasmSys::new()))
             .build();
         let sys_ops = std::sync::Arc::new(sys_ops);
         let sys_op_factory = std::sync::Arc::new(move |_path: &vfs::VfsPath| sys_ops.clone());
@@ -192,6 +199,7 @@ impl BamlWasmRuntime {
             std::sync::Arc::new(lsp),
             std::sync::Arc::new(playground),
             bex_project::BamlVFS::new(vfs),
+            None,
         );
 
         Ok(BamlWasmRuntime { bex: Box::new(bex) })

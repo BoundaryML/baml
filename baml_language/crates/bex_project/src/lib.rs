@@ -11,6 +11,7 @@ use std::{collections::HashMap, sync::Arc};
 
 pub use bex::Bex;
 pub use bex_engine::{EngineError, FunctionCallContextBuilder};
+pub use bex_events::EventSink;
 pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
 pub use sys_types::{CallId, CancellationToken, SysOps};
 use thiserror::Error;
@@ -60,8 +61,9 @@ pub fn new(
     root_path: vfs::VfsPath,
     sys_ops: SysOps,
     files: std::collections::HashMap<crate::fs::FsPath, String>,
+    event_sink: Option<std::sync::Arc<dyn EventSink>>,
 ) -> Result<Arc<impl Bex>, RuntimeError> {
-    let project = project::BexProject::new(&root_path, Arc::new(sys_ops));
+    let project = project::BexProject::new(&root_path, Arc::new(sys_ops), event_sink);
     project.update_all_sources(&files);
     let engine = project.take()?;
     Ok(engine)

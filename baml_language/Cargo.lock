@@ -586,6 +586,7 @@ dependencies = [
  "anyhow",
  "axum",
  "base64",
+ "bex_events_native",
  "bex_heap",
  "bex_project",
  "bridge_ctypes",
@@ -757,8 +758,17 @@ dependencies = [
  "bex_external_types",
  "indexmap",
  "serde_json",
- "tempfile",
  "uuid",
+ "web-time",
+]
+
+[[package]]
+name = "bex_events_native"
+version = "0.0.0-beta"
+dependencies = [
+ "bex_events",
+ "tempfile",
+ "tracing",
  "web-time",
 ]
 
@@ -916,6 +926,7 @@ name = "bridge_cffi"
 version = "0.218.1"
 dependencies = [
  "bex_events",
+ "bex_events_native",
  "bex_project",
  "bridge_ctypes",
  "cbindgen",

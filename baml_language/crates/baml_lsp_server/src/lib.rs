@@ -139,8 +139,20 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
         playground_via_browser,
     ));
 
+    // Start the native event sink if BAML_TRACE_FILE is set.
+    let event_sink = std::env::var("BAML_TRACE_FILE")
+        .ok()
+        .map(|trace_file| bex_events_native::start(trace_file.into()));
+    let event_sink_for_flush = event_sink.clone();
+
     // Create the BexLsp (multi-project LSP)
-    let bex = bex_project::new_lsp(sys_op_factory, lsp_sender, playground_sender, baml_vfs);
+    let bex = bex_project::new_lsp(
+        sys_op_factory,
+        lsp_sender,
+        playground_sender,
+        baml_vfs,
+        event_sink,
+    );
     let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
 
     // Start playground HTTP/WS server
@@ -212,5 +224,8 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     }
 
     tracing::info!("LSP server shutting down");
+    if let Some(sink) = event_sink_for_flush {
+        sink.flush();
+    }
     Ok(())
 }

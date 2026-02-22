@@ -6,6 +6,7 @@ use crate::RuntimeError;
 pub(crate) struct BexProject {
     pub(crate) db: std::sync::Arc<std::sync::Mutex<baml_project::ProjectDatabase>>,
     sys_ops: std::sync::Arc<SysOps>,
+    event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     current_bex: std::sync::RwLock<(bool, Option<std::sync::Arc<BexEngine>>)>,
 }
 
@@ -20,12 +21,17 @@ impl BexProject {
         })
     }
 
-    pub(crate) fn new(root_path: &vfs::VfsPath, sys_ops: std::sync::Arc<SysOps>) -> Self {
+    pub(crate) fn new(
+        root_path: &vfs::VfsPath,
+        sys_ops: std::sync::Arc<SysOps>,
+        event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+    ) -> Self {
         let mut db = baml_project::ProjectDatabase::new();
         db.set_project_root(crate::fs::FsPath::from_vfs(root_path).as_path());
         Self {
             db: std::sync::Arc::new(std::sync::Mutex::new(db)),
             sys_ops,
+            event_sink,
             current_bex: std::sync::RwLock::new((false, None)),
         }
     }
@@ -133,8 +139,8 @@ impl BexProject {
     fn update_bex(&self) -> Result<(), RuntimeError> {
         self.set_bex_outdated();
         let bytecode = self.get_bytecode()?;
-        let runtime =
-            BexEngine::new(bytecode, self.sys_ops.clone()).map_err(RuntimeError::Engine)?;
+        let runtime = BexEngine::new(bytecode, self.sys_ops.clone(), self.event_sink.clone())
+            .map_err(RuntimeError::Engine)?;
         self.set_current_bex(runtime);
         Ok(())
     }

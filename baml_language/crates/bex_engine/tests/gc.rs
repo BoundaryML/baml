@@ -19,8 +19,12 @@ async fn test_handle_prevents_gc_collection() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     // Get a handle to a string object
     let result = engine
@@ -54,8 +58,12 @@ async fn test_array_preserved_through_gc() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     // Get a handle to the array
     let result = engine
@@ -104,8 +112,12 @@ async fn test_gc_updates_forwarding_pointers() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     // Create objects
     let result = engine
@@ -146,8 +158,12 @@ async fn test_multiple_handles_survive_gc() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     // Create multiple handles
     let h1 = engine
@@ -200,8 +216,12 @@ async fn test_primitive_returns_are_external_values() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine =
-        BexEngine::new(snapshot, std::sync::Arc::new(sys_types::SysOps::native())).unwrap();
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )
+    .unwrap();
 
     // Int should be BexExternalValue::Int
     let result = engine

@@ -20,6 +20,7 @@ bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
 bex_events = { workspace = true }
+bex_events_native = { workspace = true }
 bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
