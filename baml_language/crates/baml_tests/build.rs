@@ -930,7 +930,15 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
             let first = match baml_fmt::format(&content, &options) {
                 Ok(formatted) => formatted,
                 Err(e) => {
-                    let output = format!("=== FORMATTER ERROR ===\n{}", e);
+                    let output = match e {
+                        baml_fmt::FormatterError::ParseErrors(e) => {
+                            format!("=== PARSER ERROR ===\n{:?}", e)
+                        }
+                        baml_fmt::FormatterError::StrongAstError(e) => {
+                            let e = e.print_with_file_context(#relative_path, &content);
+                            format!("=== STRONG AST ERROR ===\n{}", e)
+                        }
+                    };
                     with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                         assert_snapshot!(#snapshot_name, output);
                     });

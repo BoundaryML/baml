@@ -1,5 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== FORMATTER ERROR ===
+=== PARSER ERROR ===
 [UnexpectedToken { expected: "')'", found: "identifier", span: Span { file_id: FileId(0), range: 117..124 } }, UnexpectedToken { expected: "Unclosed string literal", found: "EOF", span: Span { file_id: FileId(0), range: 170..171 } }, UnexpectedToken { expected: "'}'", found: "EOF", span: Span { file_id: FileId(0), range: 170..171 } }]
