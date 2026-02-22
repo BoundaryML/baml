@@ -241,15 +241,14 @@ impl Printable for ParenType {
 #[derive(Debug)]
 pub struct PathType {
     pub first: t::Word,
-    pub rest: Vec<(t::DoubleColon, t::Word)>,
+    pub rest: Vec<(t::Dot, t::Word)>,
 }
 
 impl Printable for PathType {
-    /// Always prints as a single line.
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.first);
-        for (double_colon, word) in &self.rest {
-            printer.print_raw_token(double_colon);
+        for (dot, word) in &self.rest {
+            printer.print_raw_token(dot);
             printer.print_raw_token(word);
         }
         PrintInfo::default_single_line()
@@ -492,10 +491,10 @@ impl UnionTypeMember {
             SyntaxKind::WORD => {
                 let first = t::Word::from_cst(first)?;
                 let mut rest = Vec::new();
-                while let Some(double_colon) = it.next_if_kind(SyntaxKind::DOUBLE_COLON) {
-                    let double_colon = t::DoubleColon::from_cst(double_colon)?;
-                    let word = it.expect_parse()?;
-                    rest.push((double_colon, word));
+                while let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
+                    let dot = t::Dot::from_cst(dot)?;
+                    let word: t::Word = it.expect_parse()?;
+                    rest.push((dot, word));
                 }
                 Ok(UnionTypeMember::Path(PathType { first, rest }))
             }

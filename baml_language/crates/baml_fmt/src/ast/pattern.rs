@@ -16,7 +16,7 @@ use crate::{
 pub enum MatchPattern {
     Literal(Literal),
     Binding(BindingPattern),
-    EnumVariant(EnumVariantPattern),
+    Path(PathPattern),
     Union(UnionPattern),
     /// This would be a top-level nested pattern, meaning there are parentheses around the whole thing
     Nested(NestedPattern),
@@ -55,7 +55,7 @@ impl FromCST for MatchPattern {
         let ty = if rest.is_empty() {
             match first_elem {
                 UnionPatternMember::Literal(lit) => MatchPattern::Literal(lit),
-                UnionPatternMember::EnumVariant(variant) => MatchPattern::EnumVariant(variant),
+                UnionPatternMember::PathVariant(variant) => MatchPattern::Path(variant),
                 UnionPatternMember::Word(word) => MatchPattern::Binding(BindingPattern {
                     name: word,
                     ty: None,
@@ -84,7 +84,7 @@ impl Printable for MatchPattern {
         match self {
             MatchPattern::Literal(lit) => printer.print(lit, shape),
             MatchPattern::Binding(binding) => binding.print(shape, printer),
-            MatchPattern::EnumVariant(variant) => variant.print(shape, printer),
+            MatchPattern::Path(variant) => variant.print(shape, printer),
             MatchPattern::Union(union) => union.print(shape, printer),
             MatchPattern::Nested(nested) => nested.print(shape, printer),
         }
@@ -93,7 +93,7 @@ impl Printable for MatchPattern {
         match self {
             MatchPattern::Literal(lit) => lit.leftmost_token(),
             MatchPattern::Binding(binding) => binding.leftmost_token(),
-            MatchPattern::EnumVariant(variant) => variant.leftmost_token(),
+            MatchPattern::Path(variant) => variant.leftmost_token(),
             MatchPattern::Union(union) => union.leftmost_token(),
             MatchPattern::Nested(nested) => nested.leftmost_token(),
         }
@@ -102,7 +102,7 @@ impl Printable for MatchPattern {
         match self {
             MatchPattern::Literal(lit) => lit.rightmost_token(),
             MatchPattern::Binding(binding) => binding.rightmost_token(),
-            MatchPattern::EnumVariant(variant) => variant.rightmost_token(),
+            MatchPattern::Path(variant) => variant.rightmost_token(),
             MatchPattern::Union(union) => union.rightmost_token(),
             MatchPattern::Nested(nested) => nested.rightmost_token(),
         }
@@ -147,24 +147,28 @@ impl Printable for BindingPattern {
 }
 
 #[derive(Debug)]
-pub struct EnumVariantPattern {
-    pub enum_name: t::Word,
-    pub dot: t::Dot,
-    pub variant_name: t::Word,
+pub struct PathPattern {
+    pub first: t::Word,
+    pub rest: Vec<(t::Dot, t::Word)>,
 }
 
-impl Printable for EnumVariantPattern {
+impl Printable for PathPattern {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.enum_name);
-        printer.print_raw_token(&self.dot);
-        printer.print_raw_token(&self.variant_name);
+        printer.print_raw_token(&self.first);
+        for (dot, word) in &self.rest {
+            printer.print_raw_token(dot);
+            printer.print_raw_token(word);
+        }
         PrintInfo::default_single_line()
     }
     fn leftmost_token(&self) -> TextRange {
-        self.enum_name.span()
+        self.first.span()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.variant_name.span()
+        self.rest
+            .last()
+            .map_or(&self.first, |(_, word)| word)
+            .span()
     }
 }
 
@@ -271,7 +275,7 @@ pub enum UnionPatternMember {
     /// Includes things like `null`, `true`, `false`.
     /// Should probably treat these as literals, but we can change if we have a use case.
     Word(t::Word),
-    EnumVariant(EnumVariantPattern),
+    PathVariant(PathPattern),
     Nested(NestedPattern),
 }
 
@@ -304,16 +308,17 @@ impl UnionPatternMember {
             }
         };
 
-        if let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
+        let mut rest = Vec::new();
+        while let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
             let dot = t::Dot::from_cst(dot)?;
-            let variant_name = it.expect_parse()?;
-            Ok(UnionPatternMember::EnumVariant(EnumVariantPattern {
-                enum_name: first,
-                dot,
-                variant_name,
-            }))
-        } else {
+            let word: t::Word = it.expect_parse()?;
+            rest.push((dot, word));
+        }
+
+        if rest.is_empty() {
             Ok(UnionPatternMember::Word(first))
+        } else {
+            Ok(UnionPatternMember::PathVariant(PathPattern { first, rest }))
         }
     }
 }
@@ -322,7 +327,7 @@ impl From<UnionPatternMember> for MatchPattern {
     fn from(member: UnionPatternMember) -> Self {
         match member {
             UnionPatternMember::Literal(lit) => MatchPattern::Literal(lit),
-            UnionPatternMember::EnumVariant(variant) => MatchPattern::EnumVariant(variant),
+            UnionPatternMember::PathVariant(variant) => MatchPattern::Path(variant),
             UnionPatternMember::Word(word) => MatchPattern::Binding(BindingPattern {
                 name: word,
                 ty: None,
@@ -340,7 +345,7 @@ impl Printable for UnionPatternMember {
                 printer.print_raw_token(word);
                 PrintInfo::default_single_line()
             }
-            UnionPatternMember::EnumVariant(variant) => variant.print(shape, printer),
+            UnionPatternMember::PathVariant(variant) => variant.print(shape, printer),
             UnionPatternMember::Nested(nested) => nested.print(shape, printer),
         }
     }
@@ -348,7 +353,7 @@ impl Printable for UnionPatternMember {
         match self {
             UnionPatternMember::Literal(lit) => lit.leftmost_token(),
             UnionPatternMember::Word(word) => word.span(),
-            UnionPatternMember::EnumVariant(variant) => variant.leftmost_token(),
+            UnionPatternMember::PathVariant(variant) => variant.leftmost_token(),
             UnionPatternMember::Nested(nested) => nested.leftmost_token(),
         }
     }
@@ -356,7 +361,7 @@ impl Printable for UnionPatternMember {
         match self {
             UnionPatternMember::Literal(lit) => lit.rightmost_token(),
             UnionPatternMember::Word(word) => word.span(),
-            UnionPatternMember::EnumVariant(variant) => variant.rightmost_token(),
+            UnionPatternMember::PathVariant(variant) => variant.rightmost_token(),
             UnionPatternMember::Nested(nested) => nested.rightmost_token(),
         }
     }

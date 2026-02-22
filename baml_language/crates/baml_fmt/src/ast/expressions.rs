@@ -306,12 +306,6 @@ impl FromCST for PathExpr {
     }
 }
 
-impl KnownKind for PathExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::PATH_EXPR
-    }
-}
-
 impl PathExpr {
     /// Returns the width of the expression if it fits on a single line.
     /// Returns `None` if it can never be single-lined.
@@ -2296,7 +2290,7 @@ impl Printable for ArrayInitializer {
 /// Corresponds to a [`SyntaxKind::OBJECT_LITERAL`] node.
 #[derive(Debug)]
 pub struct ObjectInitializer {
-    pub name: t::Word,
+    pub name: PathExpr,
     pub open_brace: t::LBrace,
     pub fields: Vec<(ObjectField, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
@@ -2310,7 +2304,8 @@ impl FromCST for ObjectInitializer {
         let mut it = SyntaxNodeIter::new(&node);
 
         // WORD (object type name)
-        let name = it.expect_parse()?;
+        let name = it.expect_next("a WORD or PATH_EXPR")?;
+        let name = PathExpr::from_cst(name)?;
 
         let open_brace = it.expect_parse()?;
 
@@ -2376,7 +2371,7 @@ impl PrintMultiLine for ObjectInitializer {
             first_line_offset: 0,
         };
 
-        printer.print_raw_token(&self.name);
+        printer.print(&self.name, Shape::unlimited_single_line());
         printer.print_str(" ");
         printer.print_raw_token(&self.open_brace);
         printer.print_trivia_all_trailing_for(self.open_brace.span());
@@ -2411,31 +2406,21 @@ impl ObjectInitializer {
     /// Returns `None` if it can never be single-lined.
     pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
         // Name { field1: v1, field2: v2 }
-        let mut len = usize::from(self.name.span().len()) + const { " {  }".len() };
+        let mut len = self.name.single_line_width(input)? + const { " {  }".len() };
         let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
-        for t in open_trailing {
-            len += t.single_line_len(input.input)?;
-        }
+        len += open_trailing.try_squished_len(input.input)?;
         for (i, (field, comma)) in self.fields.iter().enumerate() {
             let (fld_leading, fld_trailing) = input.trivia.get_for_element(field);
-            for t in fld_leading {
-                len += t.single_line_len(input.input)?;
-            }
+            len += fld_leading.try_squished_len(input.input)?;
             len += field.single_line_width(input)?;
-            for t in fld_trailing {
-                len += t.single_line_len(input.input)?;
-            }
+            len += fld_trailing.try_squished_len(input.input)?;
             if i + 1 < self.fields.len() {
                 if let Some(comma) = comma {
                     let (comma_leading, comma_trailing) =
                         input.trivia.get_for_range_split(comma.span());
-                    for t in comma_leading {
-                        len += t.single_line_len(input.input)?;
-                    }
+                    len += comma_leading.try_squished_len(input.input)?;
                     len += 1; // ","
-                    for t in comma_trailing {
-                        len += t.single_line_len(input.input)?;
-                    }
+                    len += comma_trailing.try_squished_len(input.input)?;
                 } else {
                     len += 1; // ","
                 }
@@ -2444,18 +2429,12 @@ impl ObjectInitializer {
                 // Trailing comma is removed in single-line mode, but check trivia
                 let (comma_leading, comma_trailing) =
                     input.trivia.get_for_range_split(comma.span());
-                for t in comma_leading {
-                    len += t.single_line_len(input.input)?;
-                }
-                for t in comma_trailing {
-                    len += t.single_line_len(input.input)?;
-                }
+                len += comma_leading.try_squished_len(input.input)?;
+                len += comma_trailing.try_squished_len(input.input)?;
             }
         }
         let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
-        for t in close_leading {
-            len += t.single_line_len(input.input)?;
-        }
+        len += close_leading.try_squished_len(input.input)?;
         Some(len)
     }
 
@@ -2466,7 +2445,7 @@ impl ObjectInitializer {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the object initializer on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.name);
+        printer.print(&self.name, Shape::unlimited_single_line());
         printer.print_str(" ");
         printer.print_raw_token(&self.open_brace);
         printer.print_str(" ");
@@ -2525,7 +2504,7 @@ impl Printable for ObjectInitializer {
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.name.span()
+        self.name.leftmost_token()
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_brace.span()
