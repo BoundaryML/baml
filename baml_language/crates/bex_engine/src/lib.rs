@@ -848,15 +848,11 @@ impl BexEngine {
             self.epoch_drained.notify_one();
         }
 
-        // active_calls cleanup is done by ActiveCallGuard on drop
-
-        // If the call failed and the token is cancelled, prefer
-        // EngineError::Cancelled so callers can reliably distinguish user-
-        // initiated cancellation from genuine execution failures.
-        match result {
-            Err(_) if cancel.is_cancelled() => Err(EngineError::Cancelled),
-            other => other,
-        }
+        // active_calls cleanup is done by ActiveCallGuard on drop.
+        //
+        // Keep genuine engine errors intact. Cancellation is surfaced directly
+        // by engine safepoints as `EngineError::Cancelled`.
+        result
     }
 
     /// Cancel a function call by its ID.
@@ -1035,6 +1031,9 @@ impl BexEngine {
 
             match vm.exec()? {
                 VmExecState::Complete(value) => {
+                    // "Cancel wins" semantics: if cancellation races with a
+                    // completed VM step, report `Cancelled` rather than
+                    // returning a success value.
                     Self::cancellation_safepoint(cancel, &abort_handles)?;
 
                     // Emit FunctionEnd for the root entry-point span if tracing
