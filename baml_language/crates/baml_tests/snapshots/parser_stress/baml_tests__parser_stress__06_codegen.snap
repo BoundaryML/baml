@@ -63,12 +63,48 @@ function Process1(input: string) -> string {
     return
 }
 
+function Process1.build_request(input: string) -> baml.http.Request {
+    load_const "Process1"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process1.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process1"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process10(input: string) -> string {
     load_const "Process10"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process10.build_request(input: string) -> baml.http.Request {
+    load_const "Process10"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process10.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process10"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -81,12 +117,48 @@ function Process100(input: string) -> string {
     return
 }
 
+function Process100.build_request(input: string) -> baml.http.Request {
+    load_const "Process100"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process100.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process100"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process11(input: string) -> string {
     load_const "Process11"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process11.build_request(input: string) -> baml.http.Request {
+    load_const "Process11"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process11.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process11"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -99,12 +171,48 @@ function Process12(input: string) -> string {
     return
 }
 
+function Process12.build_request(input: string) -> baml.http.Request {
+    load_const "Process12"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process12.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process12"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process13(input: string) -> string {
     load_const "Process13"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process13.build_request(input: string) -> baml.http.Request {
+    load_const "Process13"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process13.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process13"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -117,12 +225,48 @@ function Process14(input: string) -> string {
     return
 }
 
+function Process14.build_request(input: string) -> baml.http.Request {
+    load_const "Process14"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process14.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process14"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process15(input: string) -> string {
     load_const "Process15"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process15.build_request(input: string) -> baml.http.Request {
+    load_const "Process15"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process15.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process15"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -135,12 +279,48 @@ function Process16(input: string) -> string {
     return
 }
 
+function Process16.build_request(input: string) -> baml.http.Request {
+    load_const "Process16"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process16.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process16"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process17(input: string) -> string {
     load_const "Process17"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process17.build_request(input: string) -> baml.http.Request {
+    load_const "Process17"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process17.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process17"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -153,12 +333,48 @@ function Process18(input: string) -> string {
     return
 }
 
+function Process18.build_request(input: string) -> baml.http.Request {
+    load_const "Process18"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process18.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process18"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process19(input: string) -> string {
     load_const "Process19"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process19.build_request(input: string) -> baml.http.Request {
+    load_const "Process19"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process19.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process19"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -171,12 +387,48 @@ function Process2(input: string) -> string {
     return
 }
 
+function Process2.build_request(input: string) -> baml.http.Request {
+    load_const "Process2"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process2.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process2"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process20(input: string) -> string {
     load_const "Process20"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process20.build_request(input: string) -> baml.http.Request {
+    load_const "Process20"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process20.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process20"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -189,12 +441,48 @@ function Process21(input: string) -> string {
     return
 }
 
+function Process21.build_request(input: string) -> baml.http.Request {
+    load_const "Process21"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process21.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process21"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process22(input: string) -> string {
     load_const "Process22"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process22.build_request(input: string) -> baml.http.Request {
+    load_const "Process22"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process22.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process22"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -207,12 +495,48 @@ function Process23(input: string) -> string {
     return
 }
 
+function Process23.build_request(input: string) -> baml.http.Request {
+    load_const "Process23"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process23.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process23"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process24(input: string) -> string {
     load_const "Process24"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process24.build_request(input: string) -> baml.http.Request {
+    load_const "Process24"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process24.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process24"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -225,12 +549,48 @@ function Process25(input: string) -> string {
     return
 }
 
+function Process25.build_request(input: string) -> baml.http.Request {
+    load_const "Process25"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process25.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process25"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process26(input: string) -> string {
     load_const "Process26"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process26.build_request(input: string) -> baml.http.Request {
+    load_const "Process26"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process26.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process26"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -243,12 +603,48 @@ function Process27(input: string) -> string {
     return
 }
 
+function Process27.build_request(input: string) -> baml.http.Request {
+    load_const "Process27"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process27.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process27"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process28(input: string) -> string {
     load_const "Process28"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process28.build_request(input: string) -> baml.http.Request {
+    load_const "Process28"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process28.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process28"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -261,12 +657,48 @@ function Process29(input: string) -> string {
     return
 }
 
+function Process29.build_request(input: string) -> baml.http.Request {
+    load_const "Process29"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process29.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process29"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process3(input: string) -> string {
     load_const "Process3"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process3.build_request(input: string) -> baml.http.Request {
+    load_const "Process3"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process3.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process3"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -279,12 +711,48 @@ function Process30(input: string) -> string {
     return
 }
 
+function Process30.build_request(input: string) -> baml.http.Request {
+    load_const "Process30"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process30.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process30"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process31(input: string) -> string {
     load_const "Process31"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process31.build_request(input: string) -> baml.http.Request {
+    load_const "Process31"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process31.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process31"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -297,12 +765,48 @@ function Process32(input: string) -> string {
     return
 }
 
+function Process32.build_request(input: string) -> baml.http.Request {
+    load_const "Process32"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process32.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process32"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process33(input: string) -> string {
     load_const "Process33"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process33.build_request(input: string) -> baml.http.Request {
+    load_const "Process33"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process33.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process33"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -315,12 +819,48 @@ function Process34(input: string) -> string {
     return
 }
 
+function Process34.build_request(input: string) -> baml.http.Request {
+    load_const "Process34"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process34.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process34"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process35(input: string) -> string {
     load_const "Process35"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process35.build_request(input: string) -> baml.http.Request {
+    load_const "Process35"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process35.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process35"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -333,12 +873,48 @@ function Process36(input: string) -> string {
     return
 }
 
+function Process36.build_request(input: string) -> baml.http.Request {
+    load_const "Process36"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process36.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process36"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process37(input: string) -> string {
     load_const "Process37"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process37.build_request(input: string) -> baml.http.Request {
+    load_const "Process37"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process37.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process37"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -351,12 +927,48 @@ function Process38(input: string) -> string {
     return
 }
 
+function Process38.build_request(input: string) -> baml.http.Request {
+    load_const "Process38"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process38.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process38"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process39(input: string) -> string {
     load_const "Process39"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process39.build_request(input: string) -> baml.http.Request {
+    load_const "Process39"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process39.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process39"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -369,12 +981,48 @@ function Process4(input: string) -> string {
     return
 }
 
+function Process4.build_request(input: string) -> baml.http.Request {
+    load_const "Process4"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process4.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process4"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process40(input: string) -> string {
     load_const "Process40"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process40.build_request(input: string) -> baml.http.Request {
+    load_const "Process40"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process40.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process40"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -387,12 +1035,48 @@ function Process41(input: string) -> string {
     return
 }
 
+function Process41.build_request(input: string) -> baml.http.Request {
+    load_const "Process41"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process41.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process41"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process42(input: string) -> string {
     load_const "Process42"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process42.build_request(input: string) -> baml.http.Request {
+    load_const "Process42"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process42.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process42"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -405,12 +1089,48 @@ function Process43(input: string) -> string {
     return
 }
 
+function Process43.build_request(input: string) -> baml.http.Request {
+    load_const "Process43"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process43.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process43"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process44(input: string) -> string {
     load_const "Process44"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process44.build_request(input: string) -> baml.http.Request {
+    load_const "Process44"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process44.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process44"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -423,12 +1143,48 @@ function Process45(input: string) -> string {
     return
 }
 
+function Process45.build_request(input: string) -> baml.http.Request {
+    load_const "Process45"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process45.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process45"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process46(input: string) -> string {
     load_const "Process46"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process46.build_request(input: string) -> baml.http.Request {
+    load_const "Process46"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process46.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process46"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -441,12 +1197,48 @@ function Process47(input: string) -> string {
     return
 }
 
+function Process47.build_request(input: string) -> baml.http.Request {
+    load_const "Process47"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process47.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process47"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process48(input: string) -> string {
     load_const "Process48"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process48.build_request(input: string) -> baml.http.Request {
+    load_const "Process48"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process48.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process48"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -459,12 +1251,48 @@ function Process49(input: string) -> string {
     return
 }
 
+function Process49.build_request(input: string) -> baml.http.Request {
+    load_const "Process49"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process49.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process49"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process5(input: string) -> string {
     load_const "Process5"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process5.build_request(input: string) -> baml.http.Request {
+    load_const "Process5"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process5.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process5"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -477,12 +1305,48 @@ function Process50(input: string) -> string {
     return
 }
 
+function Process50.build_request(input: string) -> baml.http.Request {
+    load_const "Process50"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process50.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process50"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process51(input: string) -> string {
     load_const "Process51"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process51.build_request(input: string) -> baml.http.Request {
+    load_const "Process51"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process51.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process51"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -495,12 +1359,48 @@ function Process52(input: string) -> string {
     return
 }
 
+function Process52.build_request(input: string) -> baml.http.Request {
+    load_const "Process52"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process52.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process52"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process53(input: string) -> string {
     load_const "Process53"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process53.build_request(input: string) -> baml.http.Request {
+    load_const "Process53"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process53.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process53"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -513,12 +1413,48 @@ function Process54(input: string) -> string {
     return
 }
 
+function Process54.build_request(input: string) -> baml.http.Request {
+    load_const "Process54"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process54.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process54"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process55(input: string) -> string {
     load_const "Process55"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process55.build_request(input: string) -> baml.http.Request {
+    load_const "Process55"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process55.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process55"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -531,12 +1467,48 @@ function Process56(input: string) -> string {
     return
 }
 
+function Process56.build_request(input: string) -> baml.http.Request {
+    load_const "Process56"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process56.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process56"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process57(input: string) -> string {
     load_const "Process57"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process57.build_request(input: string) -> baml.http.Request {
+    load_const "Process57"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process57.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process57"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -549,12 +1521,48 @@ function Process58(input: string) -> string {
     return
 }
 
+function Process58.build_request(input: string) -> baml.http.Request {
+    load_const "Process58"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process58.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process58"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process59(input: string) -> string {
     load_const "Process59"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process59.build_request(input: string) -> baml.http.Request {
+    load_const "Process59"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process59.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process59"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -567,12 +1575,48 @@ function Process6(input: string) -> string {
     return
 }
 
+function Process6.build_request(input: string) -> baml.http.Request {
+    load_const "Process6"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process6.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process6"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process60(input: string) -> string {
     load_const "Process60"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process60.build_request(input: string) -> baml.http.Request {
+    load_const "Process60"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process60.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process60"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -585,12 +1629,48 @@ function Process61(input: string) -> string {
     return
 }
 
+function Process61.build_request(input: string) -> baml.http.Request {
+    load_const "Process61"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process61.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process61"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process62(input: string) -> string {
     load_const "Process62"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process62.build_request(input: string) -> baml.http.Request {
+    load_const "Process62"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process62.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process62"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -603,12 +1683,48 @@ function Process63(input: string) -> string {
     return
 }
 
+function Process63.build_request(input: string) -> baml.http.Request {
+    load_const "Process63"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process63.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process63"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process64(input: string) -> string {
     load_const "Process64"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process64.build_request(input: string) -> baml.http.Request {
+    load_const "Process64"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process64.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process64"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -621,12 +1737,48 @@ function Process65(input: string) -> string {
     return
 }
 
+function Process65.build_request(input: string) -> baml.http.Request {
+    load_const "Process65"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process65.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process65"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process66(input: string) -> string {
     load_const "Process66"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process66.build_request(input: string) -> baml.http.Request {
+    load_const "Process66"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process66.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process66"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -639,12 +1791,48 @@ function Process67(input: string) -> string {
     return
 }
 
+function Process67.build_request(input: string) -> baml.http.Request {
+    load_const "Process67"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process67.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process67"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process68(input: string) -> string {
     load_const "Process68"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process68.build_request(input: string) -> baml.http.Request {
+    load_const "Process68"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process68.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process68"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -657,12 +1845,48 @@ function Process69(input: string) -> string {
     return
 }
 
+function Process69.build_request(input: string) -> baml.http.Request {
+    load_const "Process69"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process69.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process69"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process7(input: string) -> string {
     load_const "Process7"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process7.build_request(input: string) -> baml.http.Request {
+    load_const "Process7"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process7.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process7"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -675,12 +1899,48 @@ function Process70(input: string) -> string {
     return
 }
 
+function Process70.build_request(input: string) -> baml.http.Request {
+    load_const "Process70"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process70.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process70"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process71(input: string) -> string {
     load_const "Process71"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process71.build_request(input: string) -> baml.http.Request {
+    load_const "Process71"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process71.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process71"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -693,12 +1953,48 @@ function Process72(input: string) -> string {
     return
 }
 
+function Process72.build_request(input: string) -> baml.http.Request {
+    load_const "Process72"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process72.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process72"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process73(input: string) -> string {
     load_const "Process73"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process73.build_request(input: string) -> baml.http.Request {
+    load_const "Process73"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process73.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process73"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -711,12 +2007,48 @@ function Process74(input: string) -> string {
     return
 }
 
+function Process74.build_request(input: string) -> baml.http.Request {
+    load_const "Process74"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process74.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process74"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process75(input: string) -> string {
     load_const "Process75"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process75.build_request(input: string) -> baml.http.Request {
+    load_const "Process75"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process75.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process75"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -729,12 +2061,48 @@ function Process76(input: string) -> string {
     return
 }
 
+function Process76.build_request(input: string) -> baml.http.Request {
+    load_const "Process76"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process76.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process76"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process77(input: string) -> string {
     load_const "Process77"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process77.build_request(input: string) -> baml.http.Request {
+    load_const "Process77"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process77.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process77"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -747,12 +2115,48 @@ function Process78(input: string) -> string {
     return
 }
 
+function Process78.build_request(input: string) -> baml.http.Request {
+    load_const "Process78"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process78.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process78"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process79(input: string) -> string {
     load_const "Process79"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process79.build_request(input: string) -> baml.http.Request {
+    load_const "Process79"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process79.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process79"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -765,12 +2169,48 @@ function Process8(input: string) -> string {
     return
 }
 
+function Process8.build_request(input: string) -> baml.http.Request {
+    load_const "Process8"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process8.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process8"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process80(input: string) -> string {
     load_const "Process80"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process80.build_request(input: string) -> baml.http.Request {
+    load_const "Process80"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process80.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process80"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -783,12 +2223,48 @@ function Process81(input: string) -> string {
     return
 }
 
+function Process81.build_request(input: string) -> baml.http.Request {
+    load_const "Process81"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process81.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process81"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process82(input: string) -> string {
     load_const "Process82"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process82.build_request(input: string) -> baml.http.Request {
+    load_const "Process82"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process82.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process82"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -801,12 +2277,48 @@ function Process83(input: string) -> string {
     return
 }
 
+function Process83.build_request(input: string) -> baml.http.Request {
+    load_const "Process83"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process83.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process83"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process84(input: string) -> string {
     load_const "Process84"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process84.build_request(input: string) -> baml.http.Request {
+    load_const "Process84"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process84.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process84"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -819,12 +2331,48 @@ function Process85(input: string) -> string {
     return
 }
 
+function Process85.build_request(input: string) -> baml.http.Request {
+    load_const "Process85"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process85.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process85"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process86(input: string) -> string {
     load_const "Process86"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process86.build_request(input: string) -> baml.http.Request {
+    load_const "Process86"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process86.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process86"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -837,12 +2385,48 @@ function Process87(input: string) -> string {
     return
 }
 
+function Process87.build_request(input: string) -> baml.http.Request {
+    load_const "Process87"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process87.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process87"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process88(input: string) -> string {
     load_const "Process88"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process88.build_request(input: string) -> baml.http.Request {
+    load_const "Process88"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process88.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process88"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -855,12 +2439,48 @@ function Process89(input: string) -> string {
     return
 }
 
+function Process89.build_request(input: string) -> baml.http.Request {
+    load_const "Process89"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process89.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process89"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process9(input: string) -> string {
     load_const "Process9"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process9.build_request(input: string) -> baml.http.Request {
+    load_const "Process9"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process9.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process9"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -873,12 +2493,48 @@ function Process90(input: string) -> string {
     return
 }
 
+function Process90.build_request(input: string) -> baml.http.Request {
+    load_const "Process90"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process90.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process90"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process91(input: string) -> string {
     load_const "Process91"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process91.build_request(input: string) -> baml.http.Request {
+    load_const "Process91"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process91.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process91"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -891,12 +2547,48 @@ function Process92(input: string) -> string {
     return
 }
 
+function Process92.build_request(input: string) -> baml.http.Request {
+    load_const "Process92"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process92.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process92"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process93(input: string) -> string {
     load_const "Process93"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process93.build_request(input: string) -> baml.http.Request {
+    load_const "Process93"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process93.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process93"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -909,12 +2601,48 @@ function Process94(input: string) -> string {
     return
 }
 
+function Process94.build_request(input: string) -> baml.http.Request {
+    load_const "Process94"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process94.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process94"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process95(input: string) -> string {
     load_const "Process95"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process95.build_request(input: string) -> baml.http.Request {
+    load_const "Process95"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process95.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process95"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -927,12 +2655,48 @@ function Process96(input: string) -> string {
     return
 }
 
+function Process96.build_request(input: string) -> baml.http.Request {
+    load_const "Process96"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process96.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process96"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process97(input: string) -> string {
     load_const "Process97"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process97.build_request(input: string) -> baml.http.Request {
+    load_const "Process97"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process97.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process97"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -945,11 +2709,47 @@ function Process98(input: string) -> string {
     return
 }
 
+function Process98.build_request(input: string) -> baml.http.Request {
+    load_const "Process98"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process98.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process98"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function Process99(input: string) -> string {
     load_const "Process99"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function Process99.build_request(input: string) -> baml.http.Request {
+    load_const "Process99"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Process99.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Process99"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }

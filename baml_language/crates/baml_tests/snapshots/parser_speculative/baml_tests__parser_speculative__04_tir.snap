@@ -4,17 +4,37 @@ source: crates/baml_tests/src/generated_tests.rs
 === TYPE INFERENCE ===
   Function AnotherLLM:
     Return: String
+  Function AnotherLLM.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function Ambiguous.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function AnotherLLM.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function Ambiguous.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
   Function Ambiguous:
     Return: String
   Function ProcessData:
     Return: String
+  Function ExtractData.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
   Function ExtractData:
     Return: Class(QualifiedName { namespace: Local, name: "JsonData" })
+  Function ExtractData.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
   Function SimpleCalc:
     Return: Int
+  Function ChainedProcess.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function LLMAnalyze.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
   Function ProcessAnalysis:
     Return: String
   Function LLMAnalyze:
     Return: Class(QualifiedName { namespace: Local, name: "Analysis" })
   Function ChainedProcess:
     Return: String
+  Function LLMAnalyze.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function ChainedProcess.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })

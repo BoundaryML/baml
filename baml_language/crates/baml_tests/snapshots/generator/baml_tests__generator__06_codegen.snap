@@ -7,3 +7,17 @@ function GetUser() -> MyClass {
     call baml.llm.call_llm_function
     return
 }
+
+function GetUser.build_request() -> baml.http.Request {
+    load_const "GetUser"
+    alloc_map 0
+    call baml.llm.build_request
+    return
+}
+
+function GetUser.render_prompt() -> baml.llm.PromptAst {
+    load_const "GetUser"
+    alloc_map 0
+    call baml.llm.render_prompt
+    return
+}

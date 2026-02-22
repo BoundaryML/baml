@@ -21,6 +21,11 @@ import type {
   RunEntry,
   WorkerOutMessage,
 } from './worker-protocol';
+import type { ResultRendererProps } from './result-renderers';
+import { ResultDisplay } from './ResultDisplay';
+import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
+
+registerBuiltinResultRenderers();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,13 +64,19 @@ export interface ExecutionPanelProps {
   port: RuntimePort;
   /** Dev-only: connection version so we can verify the port changed on restart. */
   connectionVersion?: number;
+  /**
+   * Optional custom result renderers: BAML type string -> React component.
+   * E.g. { 'baml.http.Request': MyCurlComponent }.
+   * Built-in renderers (e.g. curl for baml.http.Request) are always available.
+   */
+  resultRenderers?: Record<string, FC<ResultRendererProps>>;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion }) => {
+export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersion, resultRenderers }) => {
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -628,7 +639,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                   {run.result != null && (
                     <div className="py-1.5 pr-2.5 pl-[22px]">
                       <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
-                      <pre className={`${codeBlockCls} border-vsc-green! text-vsc-green!`}>{run.result}</pre>
+                      <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
                     </div>
                   )}
                 </div>

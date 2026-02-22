@@ -2,6 +2,14 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+function TypeBuilderFn.build_request(from_text: string) -> baml.http.Request {
+    baml.llm.build_request("TypeBuilderFn", { "from_text": from_text })
+}
+
+function TypeBuilderFn.render_prompt(from_text: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("TypeBuilderFn", { "from_text": from_text })
+}
+
 function TypeBuilderFn(from_text: string) -> Resume {
     baml.llm.call_llm_function("TypeBuilderFn", { "from_text": from_text })
 }

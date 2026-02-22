@@ -8,10 +8,38 @@ function GetMixedList() -> int | string[] {
     return
 }
 
+function GetMixedList.build_request() -> baml.http.Request {
+    load_const "GetMixedList"
+    alloc_map 0
+    call baml.llm.build_request
+    return
+}
+
+function GetMixedList.render_prompt() -> baml.llm.PromptAst {
+    load_const "GetMixedList"
+    alloc_map 0
+    call baml.llm.render_prompt
+    return
+}
+
 function GetMixedMap() -> map<string, int | string> {
     load_const "GetMixedMap"
     alloc_map 0
     call baml.llm.call_llm_function
+    return
+}
+
+function GetMixedMap.build_request() -> baml.http.Request {
+    load_const "GetMixedMap"
+    alloc_map 0
+    call baml.llm.build_request
+    return
+}
+
+function GetMixedMap.render_prompt() -> baml.llm.PromptAst {
+    load_const "GetMixedMap"
+    alloc_map 0
+    call baml.llm.render_prompt
     return
 }
 
@@ -22,11 +50,43 @@ function GetStatus() -> Status {
     return
 }
 
+function GetStatus.build_request() -> baml.http.Request {
+    load_const "GetStatus"
+    alloc_map 0
+    call baml.llm.build_request
+    return
+}
+
+function GetStatus.render_prompt() -> baml.llm.PromptAst {
+    load_const "GetStatus"
+    alloc_map 0
+    call baml.llm.render_prompt
+    return
+}
+
 function GetUser(id: int) -> User {
     load_const "GetUser"
     load_var id
     load_const "id"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function GetUser.build_request(id: int) -> baml.http.Request {
+    load_const "GetUser"
+    load_var id
+    load_const "id"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function GetUser.render_prompt(id: int) -> baml.llm.PromptAst {
+    load_const "GetUser"
+    load_var id
+    load_const "id"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }

@@ -2,8 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
+  Function FunctionWithComments.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function FunctionWithComments.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
   Function CommentAfterArrow:
     Return: String
+  Function CommentAfterArrow.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function CommentAfterArrow.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
   Function FunctionWithComments:
     Return: String
   Function TestClient.resolve:

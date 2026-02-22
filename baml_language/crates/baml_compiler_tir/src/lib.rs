@@ -1444,15 +1444,10 @@ pub fn function_type_inference<'db>(
     // type annotation, but they'll still point to the offending expression.
     let signature = baml_compiler_hir::function_signature(db, function);
 
-    // For LLM functions, use the original LlmBody for type inference.
-    // The synthetic Expr body (call_llm_function) is for compilation, not
-    // type-checking. TIR validates the Jinja template and returns the
-    // declared return type.
+    // For the main LLM-call function (Foo), use the original LlmBody for type inference.
+    // For Foo.render_prompt and Foo.build_request, use the synthetic Expr body.
     let body = if let Some(llm_meta) = baml_compiler_hir::llm_function_meta(db, function) {
         Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone()))
-    } else if baml_compiler_hir::is_llm_function(db, function) {
-        // Malformed LLM function - skip type-checking
-        Arc::new(baml_compiler_hir::FunctionBody::Missing)
     } else {
         baml_compiler_hir::function_body(db, function)
     };

@@ -4,9 +4,25 @@ source: crates/baml_tests/src/generated_tests.rs
 === TYPE INFERENCE ===
   Function GetMixedMap:
     Return: Map { key: String, value: Union([Int, String]) }
+  Function GetMixedMap.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function GetUser.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function GetMixedMap.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
   Function GetMixedList:
     Return: List(Union([Int, String]))
+  Function GetStatus.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
   Function GetStatus:
     Return: Enum(QualifiedName { namespace: Local, name: "Status" })
   Function GetUser:
     Return: Class(QualifiedName { namespace: Local, name: "User" })
+  Function GetUser.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function GetStatus.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function GetMixedList.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function GetMixedList.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })

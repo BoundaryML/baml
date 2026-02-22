@@ -2,8 +2,24 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+function FunctionWithComments.render_prompt(a: string, b: int) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("FunctionWithComments", { "a": a, "b": b })
+}
+
+function FunctionWithComments.build_request(a: string, b: int) -> baml.http.Request {
+    baml.llm.build_request("FunctionWithComments", { "a": a, "b": b })
+}
+
 function CommentAfterArrow() -> string {
     baml.llm.call_llm_function("CommentAfterArrow", {  })
+}
+
+function CommentAfterArrow.render_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt("CommentAfterArrow", {  })
+}
+
+function CommentAfterArrow.build_request() -> baml.http.Request {
+    baml.llm.build_request("CommentAfterArrow", {  })
 }
 
 function FunctionWithComments(a: string, b: int) -> string {

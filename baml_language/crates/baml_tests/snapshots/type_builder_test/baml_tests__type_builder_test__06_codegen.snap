@@ -7,3 +7,17 @@ function Fn() -> string {
     call baml.llm.call_llm_function
     return
 }
+
+function Fn.build_request() -> baml.http.Request {
+    load_const "Fn"
+    alloc_map 0
+    call baml.llm.build_request
+    return
+}
+
+function Fn.render_prompt() -> baml.llm.PromptAst {
+    load_const "Fn"
+    alloc_map 0
+    call baml.llm.render_prompt
+    return
+}

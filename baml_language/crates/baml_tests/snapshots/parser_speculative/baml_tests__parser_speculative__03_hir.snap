@@ -6,6 +6,22 @@ function AnotherLLM(input: string) -> string {
     baml.llm.call_llm_function("AnotherLLM", { "input": input })
 }
 
+function AnotherLLM.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("AnotherLLM", { "input": input })
+}
+
+function Ambiguous.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Ambiguous", { "input": input })
+}
+
+function AnotherLLM.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("AnotherLLM", { "input": input })
+}
+
+function Ambiguous.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Ambiguous", { "input": input })
+}
+
 function Ambiguous(input: string) -> string {
     baml.llm.call_llm_function("Ambiguous", { "input": input })
 }
@@ -23,12 +39,28 @@ class JsonData {
   field2: int
 }
 
+function ExtractData.render_prompt(text: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("ExtractData", { "text": text })
+}
+
 function ExtractData(text: string) -> JsonData {
     baml.llm.call_llm_function("ExtractData", { "text": text })
 }
 
+function ExtractData.build_request(text: string) -> baml.http.Request {
+    baml.llm.build_request("ExtractData", { "text": text })
+}
+
 function SimpleCalc(a: int, b: int) -> int {
     return a + b * 2;
+}
+
+function ChainedProcess.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("ChainedProcess", { "input": input })
+}
+
+function LLMAnalyze.render_prompt(text: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("LLMAnalyze", { "text": text })
 }
 
 function ProcessAnalysis(analysis: Analysis) -> string {
@@ -50,6 +82,14 @@ function LLMAnalyze(text: string) -> Analysis {
 
 function ChainedProcess(input: string) -> string {
     baml.llm.call_llm_function("ChainedProcess", { "input": input })
+}
+
+function LLMAnalyze.build_request(text: string) -> baml.http.Request {
+    baml.llm.build_request("LLMAnalyze", { "text": text })
+}
+
+function ChainedProcess.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("ChainedProcess", { "input": input })
 }
 
 class Analysis {

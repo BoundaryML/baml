@@ -2,8 +2,24 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+function BadParam.build_request(x: map<string, int>) -> baml.http.Request {
+    baml.llm.build_request("BadParam", { "x": x })
+}
+
+function BadParam.render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("BadParam", { "x": x })
+}
+
+function BadReturnType.build_request() -> baml.http.Request {
+    baml.llm.build_request("BadReturnType", {  })
+}
+
 function BadReturnType() -> map<string, int> {
     baml.llm.call_llm_function("BadReturnType", {  })
+}
+
+function BadReturnType.render_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt("BadReturnType", {  })
 }
 
 function BadParam(x: map<string, int>) -> string {

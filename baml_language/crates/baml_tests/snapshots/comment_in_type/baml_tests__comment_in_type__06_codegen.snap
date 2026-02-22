@@ -8,6 +8,20 @@ function CommentAfterArrow() -> string {
     return
 }
 
+function CommentAfterArrow.build_request() -> baml.http.Request {
+    load_const "CommentAfterArrow"
+    alloc_map 0
+    call baml.llm.build_request
+    return
+}
+
+function CommentAfterArrow.render_prompt() -> baml.llm.PromptAst {
+    load_const "CommentAfterArrow"
+    alloc_map 0
+    call baml.llm.render_prompt
+    return
+}
+
 function FunctionWithComments(a: string, b: int) -> string {
     load_const "FunctionWithComments"
     load_var a
@@ -16,6 +30,28 @@ function FunctionWithComments(a: string, b: int) -> string {
     load_const "b"
     alloc_map 2
     call baml.llm.call_llm_function
+    return
+}
+
+function FunctionWithComments.build_request(a: string, b: int) -> baml.http.Request {
+    load_const "FunctionWithComments"
+    load_var a
+    load_var b
+    load_const "a"
+    load_const "b"
+    alloc_map 2
+    call baml.llm.build_request
+    return
+}
+
+function FunctionWithComments.render_prompt(a: string, b: int) -> baml.llm.PromptAst {
+    load_const "FunctionWithComments"
+    load_var a
+    load_var b
+    load_const "a"
+    load_const "b"
+    alloc_map 2
+    call baml.llm.render_prompt
     return
 }
 

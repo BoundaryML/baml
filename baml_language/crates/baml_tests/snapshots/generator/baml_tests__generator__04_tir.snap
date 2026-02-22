@@ -2,5 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
+  Function GetUser.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
   Function GetUser:
     Return: Class(QualifiedName { namespace: Local, name: "MyClass" })
+  Function GetUser.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })

@@ -10,6 +10,24 @@ function FormatMessage(name: string) -> string {
     return
 }
 
+function FormatMessage.build_request(name: string) -> baml.http.Request {
+    load_const "FormatMessage"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function FormatMessage.render_prompt(name: string) -> baml.llm.PromptAst {
+    load_const "FormatMessage"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function GPT4.resolve() -> baml.llm.PrimitiveClient {
     load_const "GPT4"
     load_const "unknown"
@@ -35,5 +53,23 @@ function ProcessText(input: string) -> string {
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function ProcessText.build_request(input: string) -> baml.http.Request {
+    load_const "ProcessText"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function ProcessText.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "ProcessText"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }

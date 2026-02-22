@@ -6,6 +6,14 @@ function FormatMessage(name: string) -> string {
     baml.llm.call_llm_function("FormatMessage", { "name": name })
 }
 
+function FormatMessage.render_prompt(name: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("FormatMessage", { "name": name })
+}
+
+function FormatMessage.build_request(name: string) -> baml.http.Request {
+    baml.llm.build_request("FormatMessage", { "name": name })
+}
+
 class NestedQuotes {
   single_in_double: string
   double_in_single: string
@@ -21,6 +29,14 @@ class NestedQuotes {
   json_like: string
   key: <unknown>
   value: <unknown>
+}
+
+function ProcessText.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("ProcessText", { "input": input })
+}
+
+function ProcessText.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("ProcessText", { "input": input })
 }
 
 function ProcessText(input: string) -> string {

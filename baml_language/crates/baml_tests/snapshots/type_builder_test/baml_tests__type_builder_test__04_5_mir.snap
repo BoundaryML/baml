@@ -2,6 +2,52 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
+fn Fn.build_request() -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: null
+    let _2: "Fn"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.build_request;
+        _2 = const "Fn";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn Fn.render_prompt() -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: null
+    let _2: "Fn"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.render_prompt;
+        _2 = const "Fn";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
 fn Fn() -> string {
     // Locals:
     let _0: string // return

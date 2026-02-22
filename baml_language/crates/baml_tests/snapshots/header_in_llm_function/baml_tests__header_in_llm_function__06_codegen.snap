@@ -10,6 +10,24 @@ function FetchDatax(user_id: string) -> Hi {
     return
 }
 
+function FetchDatax.build_request(user_id: string) -> baml.http.Request {
+    load_const "FetchDatax"
+    load_var user_id
+    load_const "user_id"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function FetchDatax.render_prompt(user_id: string) -> baml.llm.PromptAst {
+    load_const "FetchDatax"
+    load_var user_id
+    load_const "user_id"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function VertexGCP.resolve() -> baml.llm.PrimitiveClient {
     load_const "VertexGCP"
     load_const "vertex-ai"

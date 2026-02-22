@@ -10,6 +10,14 @@ function VertexGCP.resolve() -> baml.llm.PrimitiveClient {
     baml.llm.build_primitive_client("VertexGCP", "vertex-ai", "user", ["user", "assistant", "system"], { "model": "gemini-2" })
 }
 
+function FetchDatax.build_request(user_id: string) -> baml.http.Request {
+    baml.llm.build_request("FetchDatax", { "user_id": user_id })
+}
+
+function FetchDatax.render_prompt(user_id: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("FetchDatax", { "user_id": user_id })
+}
+
 class Hi {
   name: string
 }

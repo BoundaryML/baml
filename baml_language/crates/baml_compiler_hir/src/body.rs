@@ -136,6 +136,97 @@ pub fn lower_llm_to_call_llm_function(
     (body, source_map)
 }
 
+/// Create a synthetic body that calls `baml.llm.render_prompt(base_name, args)`.
+pub fn lower_llm_to_render_prompt(
+    base_name: &str,
+    param_names: &[Name],
+) -> (ExprBody, HirSourceMap) {
+    use crate::Name;
+    let mut exprs: Arena<Expr> = Arena::new();
+    let source_map = HirSourceMap::new();
+
+    let (args_map, fn_name_expr, _) = llm_builtin_call_args(&mut exprs, base_name, param_names);
+    let callee = exprs.alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("render_prompt"),
+    ]));
+    let call_expr = exprs.alloc(Expr::Call {
+        callee,
+        args: vec![fn_name_expr, args_map],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        types: Arena::new(),
+        root_expr: Some(call_expr),
+        diagnostics: Vec::new(),
+    };
+
+    (body, source_map)
+}
+
+/// Create a synthetic body that calls `baml.llm.build_request(base_name, args)`.
+pub fn lower_llm_to_build_request(
+    base_name: &str,
+    param_names: &[Name],
+) -> (ExprBody, HirSourceMap) {
+    use crate::Name;
+    let mut exprs: Arena<Expr> = Arena::new();
+    let source_map = HirSourceMap::new();
+
+    let (args_map, fn_name_expr, _) = llm_builtin_call_args(&mut exprs, base_name, param_names);
+    let callee = exprs.alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("build_request"),
+    ]));
+    let call_expr = exprs.alloc(Expr::Call {
+        callee,
+        args: vec![fn_name_expr, args_map],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        types: Arena::new(),
+        root_expr: Some(call_expr),
+        diagnostics: Vec::new(),
+    };
+
+    (body, source_map)
+}
+
+/// Shared args for LLM builtin calls: (`args_map`, `fn_name_literal`, `_unused`).
+fn llm_builtin_call_args(
+    exprs: &mut Arena<Expr>,
+    base_name: &str,
+    param_names: &[Name],
+) -> (ExprId, ExprId, ExprId) {
+    use crate::Name;
+    let entries: Vec<(ExprId, ExprId)> = param_names
+        .iter()
+        .map(|name| {
+            let key = exprs.alloc(Expr::Literal(Literal::String(name.to_string())));
+            let value = exprs.alloc(Expr::Path(vec![name.clone()]));
+            (key, value)
+        })
+        .collect();
+    let args_map = exprs.alloc(Expr::Map { entries });
+    let fn_name_expr = exprs.alloc(Expr::Literal(Literal::String(base_name.to_string())));
+    let callee_expr = exprs.alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("call_llm_function"),
+    ]));
+    (args_map, fn_name_expr, callee_expr)
+}
+
 pub fn strip_string_delimiters(text: &str) -> &str {
     let text = text.trim();
     if text.starts_with("#\"") && text.ends_with("\"#") {

@@ -10,9 +10,41 @@ function BadParam(x: map<string, int>) -> string {
     return
 }
 
+function BadParam.build_request(x: map<string, int>) -> baml.http.Request {
+    load_const "BadParam"
+    load_var x
+    load_const "x"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function BadParam.render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
+    load_const "BadParam"
+    load_var x
+    load_const "x"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function BadReturnType() -> map<string, int> {
     load_const "BadReturnType"
     alloc_map 0
     call baml.llm.call_llm_function
+    return
+}
+
+function BadReturnType.build_request() -> baml.http.Request {
+    load_const "BadReturnType"
+    alloc_map 0
+    call baml.llm.build_request
+    return
+}
+
+function BadReturnType.render_prompt() -> baml.llm.PromptAst {
+    load_const "BadReturnType"
+    alloc_map 0
+    call baml.llm.render_prompt
     return
 }

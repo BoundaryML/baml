@@ -10,12 +10,48 @@ function Ambiguous(input: string) -> string {
     return
 }
 
+function Ambiguous.build_request(input: string) -> baml.http.Request {
+    load_const "Ambiguous"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function Ambiguous.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Ambiguous"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function AnotherLLM(input: string) -> string {
     load_const "AnotherLLM"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function AnotherLLM.build_request(input: string) -> baml.http.Request {
+    load_const "AnotherLLM"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function AnotherLLM.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "AnotherLLM"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -28,6 +64,24 @@ function ChainedProcess(input: string) -> string {
     return
 }
 
+function ChainedProcess.build_request(input: string) -> baml.http.Request {
+    load_const "ChainedProcess"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function ChainedProcess.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "ChainedProcess"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function ExtractData(text: string) -> JsonData {
     load_const "ExtractData"
     load_var text
@@ -37,12 +91,48 @@ function ExtractData(text: string) -> JsonData {
     return
 }
 
+function ExtractData.build_request(text: string) -> baml.http.Request {
+    load_const "ExtractData"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function ExtractData.render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const "ExtractData"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function LLMAnalyze(text: string) -> Analysis {
     load_const "LLMAnalyze"
     load_var text
     load_const "text"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function LLMAnalyze.build_request(text: string) -> baml.http.Request {
+    load_const "LLMAnalyze"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function LLMAnalyze.render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const "LLMAnalyze"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 

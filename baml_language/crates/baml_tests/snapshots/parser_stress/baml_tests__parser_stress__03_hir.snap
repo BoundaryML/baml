@@ -40,8 +40,20 @@ class Level3 {
   field: Level4
 }
 
+function Process24.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process24", { "input": input })
+}
+
 function Process22(input: string) -> string {
     baml.llm.call_llm_function("Process22", { "input": input })
+}
+
+function Process66.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process66", { "input": input })
+}
+
+function Process30.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process30", { "input": input })
 }
 
 function Process54(input: string) -> string {
@@ -60,8 +72,24 @@ function Process68(input: string) -> string {
     baml.llm.call_llm_function("Process68", { "input": input })
 }
 
+function Process58.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process58", { "input": input })
+}
+
+function Process36.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process36", { "input": input })
+}
+
+function Process53.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process53", { "input": input })
+}
+
 function Process14(input: string) -> string {
     baml.llm.call_llm_function("Process14", { "input": input })
+}
+
+function Process22.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process22", { "input": input })
 }
 
 function Process79(input: string) -> string {
@@ -72,20 +100,60 @@ function Process84(input: string) -> string {
     baml.llm.call_llm_function("Process84", { "input": input })
 }
 
+function Process62.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process62", { "input": input })
+}
+
+function Process97.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process97", { "input": input })
+}
+
+function Process9.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process9", { "input": input })
+}
+
 function Process33(input: string) -> string {
     baml.llm.call_llm_function("Process33", { "input": input })
+}
+
+function Process33.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process33", { "input": input })
 }
 
 function Process12(input: string) -> string {
     baml.llm.call_llm_function("Process12", { "input": input })
 }
 
+function Process59.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process59", { "input": input })
+}
+
+function Process37.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process37", { "input": input })
+}
+
+function Process59.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process59", { "input": input })
+}
+
 function Process74(input: string) -> string {
     baml.llm.call_llm_function("Process74", { "input": input })
 }
 
+function Process45.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process45", { "input": input })
+}
+
+function Process13.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process13", { "input": input })
+}
+
 function Process99(input: string) -> string {
     baml.llm.call_llm_function("Process99", { "input": input })
+}
+
+function Process76.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process76", { "input": input })
 }
 
 function Process64(input: string) -> string {
@@ -96,16 +164,36 @@ function Process52(input: string) -> string {
     baml.llm.call_llm_function("Process52", { "input": input })
 }
 
+function Process40.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process40", { "input": input })
+}
+
 function Process7(input: string) -> string {
     baml.llm.call_llm_function("Process7", { "input": input })
+}
+
+function Process32.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process32", { "input": input })
 }
 
 function Process80(input: string) -> string {
     baml.llm.call_llm_function("Process80", { "input": input })
 }
 
+function Process88.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process88", { "input": input })
+}
+
+function Process31.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process31", { "input": input })
+}
+
 function Process58(input: string) -> string {
     baml.llm.call_llm_function("Process58", { "input": input })
+}
+
+function Process42.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process42", { "input": input })
 }
 
 function Process97(input: string) -> string {
@@ -116,20 +204,80 @@ function Process36(input: string) -> string {
     baml.llm.call_llm_function("Process36", { "input": input })
 }
 
+function Process63.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process63", { "input": input })
+}
+
+function Process51.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process51", { "input": input })
+}
+
+function Process54.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process54", { "input": input })
+}
+
+function Process47.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process47", { "input": input })
+}
+
+function Process26.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process26", { "input": input })
+}
+
 function Process63(input: string) -> string {
     baml.llm.call_llm_function("Process63", { "input": input })
+}
+
+function Process37.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process37", { "input": input })
 }
 
 function Process19(input: string) -> string {
     baml.llm.call_llm_function("Process19", { "input": input })
 }
 
+function Process95.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process95", { "input": input })
+}
+
+function Process33.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process33", { "input": input })
+}
+
+function Process56.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process56", { "input": input })
+}
+
+function Process80.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process80", { "input": input })
+}
+
+function Process13.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process13", { "input": input })
+}
+
+function Process94.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process94", { "input": input })
+}
+
+function Process60.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process60", { "input": input })
+}
+
 function Process83(input: string) -> string {
     baml.llm.call_llm_function("Process83", { "input": input })
 }
 
+function Process36.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process36", { "input": input })
+}
+
 function Process18(input: string) -> string {
     baml.llm.call_llm_function("Process18", { "input": input })
+}
+
+function Process56.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process56", { "input": input })
 }
 
 function Process26(input: string) -> string {
@@ -140,8 +288,16 @@ function Process43(input: string) -> string {
     baml.llm.call_llm_function("Process43", { "input": input })
 }
 
+function Process41.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process41", { "input": input })
+}
+
 function Process46(input: string) -> string {
     baml.llm.call_llm_function("Process46", { "input": input })
+}
+
+function Process91.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process91", { "input": input })
 }
 
 function Process62(input: string) -> string {
@@ -168,8 +324,24 @@ function Process38(input: string) -> string {
     baml.llm.call_llm_function("Process38", { "input": input })
 }
 
+function Process29.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process29", { "input": input })
+}
+
+function Process25.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process25", { "input": input })
+}
+
 function Process41(input: string) -> string {
     baml.llm.call_llm_function("Process41", { "input": input })
+}
+
+function Process98.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process98", { "input": input })
+}
+
+function Process18.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process18", { "input": input })
 }
 
 function Process28(input: string) -> string {
@@ -180,6 +352,18 @@ function Process65(input: string) -> string {
     baml.llm.call_llm_function("Process65", { "input": input })
 }
 
+function Process17.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process17", { "input": input })
+}
+
+function Process5.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process5", { "input": input })
+}
+
+function Process95.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process95", { "input": input })
+}
+
 function Process6(input: string) -> string {
     baml.llm.call_llm_function("Process6", { "input": input })
 }
@@ -188,8 +372,16 @@ function Process32(input: string) -> string {
     baml.llm.call_llm_function("Process32", { "input": input })
 }
 
+function Process52.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process52", { "input": input })
+}
+
 function Process92(input: string) -> string {
     baml.llm.call_llm_function("Process92", { "input": input })
+}
+
+function Process90.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process90", { "input": input })
 }
 
 function Process55(input: string) -> string {
@@ -200,16 +392,100 @@ function Process66(input: string) -> string {
     baml.llm.call_llm_function("Process66", { "input": input })
 }
 
+function Process97.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process97", { "input": input })
+}
+
+function Process27.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process27", { "input": input })
+}
+
+function Process93.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process93", { "input": input })
+}
+
+function Process8.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process8", { "input": input })
+}
+
+function Process16.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process16", { "input": input })
+}
+
+function Process86.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process86", { "input": input })
+}
+
+function Process85.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process85", { "input": input })
+}
+
 function Process56(input: string) -> string {
     baml.llm.call_llm_function("Process56", { "input": input })
+}
+
+function Process67.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process67", { "input": input })
+}
+
+function Process11.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process11", { "input": input })
 }
 
 function Process67(input: string) -> string {
     baml.llm.call_llm_function("Process67", { "input": input })
 }
 
+function Process76.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process76", { "input": input })
+}
+
+function Process78.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process78", { "input": input })
+}
+
+function Process12.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process12", { "input": input })
+}
+
+function Process79.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process79", { "input": input })
+}
+
+function Process57.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process57", { "input": input })
+}
+
+function Process12.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process12", { "input": input })
+}
+
+function Process75.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process75", { "input": input })
+}
+
+function Process77.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process77", { "input": input })
+}
+
+function Process93.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process93", { "input": input })
+}
+
+function Process64.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process64", { "input": input })
+}
+
+function Process48.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process48", { "input": input })
+}
+
 function Process3(input: string) -> string {
     baml.llm.call_llm_function("Process3", { "input": input })
+}
+
+function Process43.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process43", { "input": input })
 }
 
 function Process75(input: string) -> string {
@@ -224,6 +500,30 @@ function Process49(input: string) -> string {
     baml.llm.call_llm_function("Process49", { "input": input })
 }
 
+function Process96.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process96", { "input": input })
+}
+
+function Process41.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process41", { "input": input })
+}
+
+function Process20.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process20", { "input": input })
+}
+
+function Process50.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process50", { "input": input })
+}
+
+function Process44.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process44", { "input": input })
+}
+
+function Process60.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process60", { "input": input })
+}
+
 function Process61(input: string) -> string {
     baml.llm.call_llm_function("Process61", { "input": input })
 }
@@ -232,12 +532,32 @@ function Process96(input: string) -> string {
     baml.llm.call_llm_function("Process96", { "input": input })
 }
 
+function Process15.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process15", { "input": input })
+}
+
+function Process82.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process82", { "input": input })
+}
+
 function Process34(input: string) -> string {
     baml.llm.call_llm_function("Process34", { "input": input })
 }
 
+function Process96.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process96", { "input": input })
+}
+
+function Process49.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process49", { "input": input })
+}
+
 function Process59(input: string) -> string {
     baml.llm.call_llm_function("Process59", { "input": input })
+}
+
+function Process54.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process54", { "input": input })
 }
 
 function Process89(input: string) -> string {
@@ -248,20 +568,92 @@ function Process45(input: string) -> string {
     baml.llm.call_llm_function("Process45", { "input": input })
 }
 
+function Process1.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process1", { "input": input })
+}
+
+function Process25.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process25", { "input": input })
+}
+
 function Process86(input: string) -> string {
     baml.llm.call_llm_function("Process86", { "input": input })
+}
+
+function Process19.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process19", { "input": input })
+}
+
+function Process38.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process38", { "input": input })
+}
+
+function Process23.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process23", { "input": input })
+}
+
+function Process65.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process65", { "input": input })
+}
+
+function Process23.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process23", { "input": input })
+}
+
+function Process72.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process72", { "input": input })
+}
+
+function Process35.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process35", { "input": input })
+}
+
+function Process100.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process100", { "input": input })
+}
+
+function Process46.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process46", { "input": input })
+}
+
+function Process4.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process4", { "input": input })
+}
+
+function Process86.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process86", { "input": input })
+}
+
+function Process73.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process73", { "input": input })
 }
 
 function Process16(input: string) -> string {
     baml.llm.call_llm_function("Process16", { "input": input })
 }
 
+function Process65.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process65", { "input": input })
+}
+
 function Process39(input: string) -> string {
     baml.llm.call_llm_function("Process39", { "input": input })
 }
 
+function Process78.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process78", { "input": input })
+}
+
+function Process68.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process68", { "input": input })
+}
+
 function Process82(input: string) -> string {
     baml.llm.call_llm_function("Process82", { "input": input })
+}
+
+function Process35.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process35", { "input": input })
 }
 
 function Process2(input: string) -> string {
@@ -272,20 +664,104 @@ function Process27(input: string) -> string {
     baml.llm.call_llm_function("Process27", { "input": input })
 }
 
+function Process11.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process11", { "input": input })
+}
+
+function Process100.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process100", { "input": input })
+}
+
+function Process61.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process61", { "input": input })
+}
+
 function Process53(input: string) -> string {
     baml.llm.call_llm_function("Process53", { "input": input })
+}
+
+function Process62.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process62", { "input": input })
 }
 
 function Process23(input: string) -> string {
     baml.llm.call_llm_function("Process23", { "input": input })
 }
 
+function Process16.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process16", { "input": input })
+}
+
+function Process21.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process21", { "input": input })
+}
+
+function Process74.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process74", { "input": input })
+}
+
+function Process55.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process55", { "input": input })
+}
+
 function Process9(input: string) -> string {
     baml.llm.call_llm_function("Process9", { "input": input })
 }
 
+function Process61.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process61", { "input": input })
+}
+
+function Process84.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process84", { "input": input })
+}
+
+function Process89.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process89", { "input": input })
+}
+
+function Process52.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process52", { "input": input })
+}
+
+function Process74.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process74", { "input": input })
+}
+
+function Process30.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process30", { "input": input })
+}
+
+function Process32.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process32", { "input": input })
+}
+
+function Process48.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process48", { "input": input })
+}
+
+function Process28.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process28", { "input": input })
+}
+
+function Process19.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process19", { "input": input })
+}
+
+function Process31.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process31", { "input": input })
+}
+
+function Process89.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process89", { "input": input })
+}
+
 function Process72(input: string) -> string {
     baml.llm.call_llm_function("Process72", { "input": input })
+}
+
+function Process38.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process38", { "input": input })
 }
 
 function Process77(input: string) -> string {
@@ -300,12 +776,40 @@ function Process30(input: string) -> string {
     baml.llm.call_llm_function("Process30", { "input": input })
 }
 
+function Process20.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process20", { "input": input })
+}
+
+function Process26.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process26", { "input": input })
+}
+
 function Process8(input: string) -> string {
     baml.llm.call_llm_function("Process8", { "input": input })
 }
 
+function Process83.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process83", { "input": input })
+}
+
+function Process63.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process63", { "input": input })
+}
+
+function Process39.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process39", { "input": input })
+}
+
 function Process11(input: string) -> string {
     baml.llm.call_llm_function("Process11", { "input": input })
+}
+
+function Process28.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process28", { "input": input })
+}
+
+function Process24.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process24", { "input": input })
 }
 
 function Process37(input: string) -> string {
@@ -320,8 +824,36 @@ function Process91(input: string) -> string {
     baml.llm.call_llm_function("Process91", { "input": input })
 }
 
+function Process46.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process46", { "input": input })
+}
+
 function Process31(input: string) -> string {
     baml.llm.call_llm_function("Process31", { "input": input })
+}
+
+function Process70.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process70", { "input": input })
+}
+
+function Process3.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process3", { "input": input })
+}
+
+function Process29.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process29", { "input": input })
+}
+
+function Process9.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process9", { "input": input })
+}
+
+function Process84.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process84", { "input": input })
+}
+
+function Process43.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process43", { "input": input })
 }
 
 function Process50(input: string) -> string {
@@ -336,16 +868,92 @@ function Process98(input: string) -> string {
     baml.llm.call_llm_function("Process98", { "input": input })
 }
 
+function Process88.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process88", { "input": input })
+}
+
+function Process87.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process87", { "input": input })
+}
+
+function Process91.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process91", { "input": input })
+}
+
+function Process71.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process71", { "input": input })
+}
+
 function Process85(input: string) -> string {
     baml.llm.call_llm_function("Process85", { "input": input })
+}
+
+function Process6.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process6", { "input": input })
+}
+
+function Process71.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process71", { "input": input })
+}
+
+function Process47.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process47", { "input": input })
+}
+
+function Process67.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process67", { "input": input })
+}
+
+function Process72.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process72", { "input": input })
+}
+
+function Process69.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process69", { "input": input })
+}
+
+function Process17.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process17", { "input": input })
+}
+
+function Process79.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process79", { "input": input })
 }
 
 function Process78(input: string) -> string {
     baml.llm.call_llm_function("Process78", { "input": input })
 }
 
+function Process2.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process2", { "input": input })
+}
+
 function Process1(input: string) -> string {
     baml.llm.call_llm_function("Process1", { "input": input })
+}
+
+function Process94.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process94", { "input": input })
+}
+
+function Process5.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process5", { "input": input })
+}
+
+function Process98.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process98", { "input": input })
+}
+
+function Process81.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process81", { "input": input })
+}
+
+function Process81.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process81", { "input": input })
+}
+
+function Process2.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process2", { "input": input })
 }
 
 function Process90(input: string) -> string {
@@ -356,8 +964,36 @@ function Process17(input: string) -> string {
     baml.llm.call_llm_function("Process17", { "input": input })
 }
 
+function Process50.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process50", { "input": input })
+}
+
+function Process49.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process49", { "input": input })
+}
+
+function Process27.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process27", { "input": input })
+}
+
+function Process22.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process22", { "input": input })
+}
+
+function Process64.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process64", { "input": input })
+}
+
 function Process81(input: string) -> string {
     baml.llm.call_llm_function("Process81", { "input": input })
+}
+
+function Process58.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process58", { "input": input })
+}
+
+function Process83.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process83", { "input": input })
 }
 
 function Process71(input: string) -> string {
@@ -368,20 +1004,80 @@ function Process15(input: string) -> string {
     baml.llm.call_llm_function("Process15", { "input": input })
 }
 
+function Process8.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process8", { "input": input })
+}
+
 function Process42(input: string) -> string {
     baml.llm.call_llm_function("Process42", { "input": input })
+}
+
+function Process92.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process92", { "input": input })
+}
+
+function Process6.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process6", { "input": input })
 }
 
 function Process51(input: string) -> string {
     baml.llm.call_llm_function("Process51", { "input": input })
 }
 
+function Process7.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process7", { "input": input })
+}
+
 function Process5(input: string) -> string {
     baml.llm.call_llm_function("Process5", { "input": input })
 }
 
+function Process21.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process21", { "input": input })
+}
+
 function Process13(input: string) -> string {
     baml.llm.call_llm_function("Process13", { "input": input })
+}
+
+function Process10.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process10", { "input": input })
+}
+
+function Process14.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process14", { "input": input })
+}
+
+function Process92.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process92", { "input": input })
+}
+
+function Process7.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process7", { "input": input })
+}
+
+function Process85.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process85", { "input": input })
+}
+
+function Process73.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process73", { "input": input })
+}
+
+function Process55.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process55", { "input": input })
+}
+
+function Process82.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process82", { "input": input })
+}
+
+function Process44.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process44", { "input": input })
+}
+
+function Process99.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process99", { "input": input })
 }
 
 function Process29(input: string) -> string {
@@ -392,8 +1088,40 @@ function Process93(input: string) -> string {
     baml.llm.call_llm_function("Process93", { "input": input })
 }
 
+function Process51.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process51", { "input": input })
+}
+
+function Process90.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process90", { "input": input })
+}
+
+function Process34.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process34", { "input": input })
+}
+
+function Process87.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process87", { "input": input })
+}
+
+function Process1.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process1", { "input": input })
+}
+
+function Process53.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process53", { "input": input })
+}
+
+function Process39.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process39", { "input": input })
+}
+
 function Process70(input: string) -> string {
     baml.llm.call_llm_function("Process70", { "input": input })
+}
+
+function Process75.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process75", { "input": input })
 }
 
 function Process76(input: string) -> string {
@@ -404,12 +1132,56 @@ function Process10(input: string) -> string {
     baml.llm.call_llm_function("Process10", { "input": input })
 }
 
+function Process68.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process68", { "input": input })
+}
+
 function Process21(input: string) -> string {
     baml.llm.call_llm_function("Process21", { "input": input })
 }
 
+function Process15.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process15", { "input": input })
+}
+
+function Process14.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process14", { "input": input })
+}
+
+function Process57.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process57", { "input": input })
+}
+
+function Process66.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process66", { "input": input })
+}
+
+function Process40.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process40", { "input": input })
+}
+
+function Process77.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process77", { "input": input })
+}
+
+function Process99.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process99", { "input": input })
+}
+
 function Process100(input: string) -> string {
     baml.llm.call_llm_function("Process100", { "input": input })
+}
+
+function Process80.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process80", { "input": input })
+}
+
+function Process18.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process18", { "input": input })
+}
+
+function Process70.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process70", { "input": input })
 }
 
 function Process94(input: string) -> string {
@@ -432,8 +1204,36 @@ function Process88(input: string) -> string {
     baml.llm.call_llm_function("Process88", { "input": input })
 }
 
+function Process69.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process69", { "input": input })
+}
+
 function Process73(input: string) -> string {
     baml.llm.call_llm_function("Process73", { "input": input })
+}
+
+function Process45.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process45", { "input": input })
+}
+
+function Process4.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process4", { "input": input })
+}
+
+function Process10.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process10", { "input": input })
+}
+
+function Process42.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Process42", { "input": input })
+}
+
+function Process34.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process34", { "input": input })
+}
+
+function Process3.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("Process3", { "input": input })
 }
 
 function Process57(input: string) -> string {

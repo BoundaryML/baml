@@ -2,6 +2,62 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
+fn TypeBuilderFn.build_request(from_text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: string // from_text // param
+    let _2: null
+    let _3: "TypeBuilderFn"
+    let _4: map<string, unknown>
+    let _5: "from_text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.build_request;
+        _3 = const "TypeBuilderFn";
+        _5 = const "from_text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn TypeBuilderFn.render_prompt(from_text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: string // from_text // param
+    let _2: null
+    let _3: "TypeBuilderFn"
+    let _4: map<string, unknown>
+    let _5: "from_text"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.render_prompt;
+        _3 = const "TypeBuilderFn";
+        _5 = const "from_text";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
 fn TypeBuilderFn(from_text: string) -> Resume {
     // Locals:
     let _0: Resume // return

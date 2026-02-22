@@ -2,5 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
+  Function TypeBuilderFn.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function TypeBuilderFn.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
   Function TypeBuilderFn:
     Return: Class(QualifiedName { namespace: Local, name: "Resume" })

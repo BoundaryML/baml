@@ -9,3 +9,21 @@ function HelloWorld(name: string) -> string {
     call baml.llm.call_llm_function
     return
 }
+
+function HelloWorld.build_request(name: string) -> baml.http.Request {
+    load_const "HelloWorld"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function HelloWorld.render_prompt(name: string) -> baml.llm.PromptAst {
+    load_const "HelloWorld"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}

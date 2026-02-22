@@ -2,6 +2,14 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+function Fn.build_request() -> baml.http.Request {
+    baml.llm.build_request("Fn", {  })
+}
+
+function Fn.render_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt("Fn", {  })
+}
+
 function Fn() -> string {
     baml.llm.call_llm_function("Fn", {  })
 }

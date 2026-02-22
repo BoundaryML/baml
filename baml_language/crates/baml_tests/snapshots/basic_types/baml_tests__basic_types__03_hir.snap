@@ -21,8 +21,24 @@ function GetMixedMap() -> map<string, int | string> {
     baml.llm.call_llm_function("GetMixedMap", {  })
 }
 
+function GetMixedMap.render_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt("GetMixedMap", {  })
+}
+
+function GetUser.build_request(id: int) -> baml.http.Request {
+    baml.llm.build_request("GetUser", { "id": id })
+}
+
+function GetMixedMap.build_request() -> baml.http.Request {
+    baml.llm.build_request("GetMixedMap", {  })
+}
+
 function GetMixedList() -> (int | string)[] {
     baml.llm.call_llm_function("GetMixedList", {  })
+}
+
+function GetStatus.render_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt("GetStatus", {  })
 }
 
 function GetStatus() -> Status {
@@ -31,6 +47,22 @@ function GetStatus() -> Status {
 
 function GetUser(id: int) -> User {
     baml.llm.call_llm_function("GetUser", { "id": id })
+}
+
+function GetUser.render_prompt(id: int) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("GetUser", { "id": id })
+}
+
+function GetStatus.build_request() -> baml.http.Request {
+    baml.llm.build_request("GetStatus", {  })
+}
+
+function GetMixedList.build_request() -> baml.http.Request {
+    baml.llm.build_request("GetMixedList", {  })
+}
+
+function GetMixedList.render_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt("GetMixedList", {  })
 }
 
 class User {

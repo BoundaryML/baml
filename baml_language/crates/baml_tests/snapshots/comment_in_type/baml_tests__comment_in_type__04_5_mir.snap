@@ -2,6 +2,72 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
+fn FunctionWithComments.render_prompt(a: string, b: int) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: string // a // param
+    let _2: int // b // param
+    let _3: null
+    let _4: "FunctionWithComments"
+    let _5: map<string, unknown>
+    let _6: "a"
+    let _7: string
+    let _8: "b"
+    let _9: int
+
+    bb0: {
+        _3 = const fn baml.llm.render_prompt;
+        _4 = const "FunctionWithComments";
+        _6 = const "a";
+        _7 = copy _1;
+        _8 = const "b";
+        _9 = copy _2;
+        _5 = { copy _6: copy _7, copy _8: copy _9 };
+        _0 = call copy _3(copy _4, copy _5) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn FunctionWithComments.build_request(a: string, b: int) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: string // a // param
+    let _2: int // b // param
+    let _3: null
+    let _4: "FunctionWithComments"
+    let _5: map<string, unknown>
+    let _6: "a"
+    let _7: string
+    let _8: "b"
+    let _9: int
+
+    bb0: {
+        _3 = const fn baml.llm.build_request;
+        _4 = const "FunctionWithComments";
+        _6 = const "a";
+        _7 = copy _1;
+        _8 = const "b";
+        _9 = copy _2;
+        _5 = { copy _6: copy _7, copy _8: copy _9 };
+        _0 = call copy _3(copy _4, copy _5) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
 fn CommentAfterArrow() -> string {
     // Locals:
     let _0: string // return
@@ -11,6 +77,52 @@ fn CommentAfterArrow() -> string {
 
     bb0: {
         _1 = const fn baml.llm.call_llm_function;
+        _2 = const "CommentAfterArrow";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn CommentAfterArrow.render_prompt() -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: null
+    let _2: "CommentAfterArrow"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.render_prompt;
+        _2 = const "CommentAfterArrow";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn CommentAfterArrow.build_request() -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: null
+    let _2: "CommentAfterArrow"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.build_request;
         _2 = const "CommentAfterArrow";
         _3 = {  };
         _0 = call copy _1(copy _2, copy _3) -> [bb2];

@@ -2,8 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+function GetUser.build_request() -> baml.http.Request {
+    baml.llm.build_request("GetUser", {  })
+}
+
 function GetUser() -> MyClass {
     baml.llm.call_llm_function("GetUser", {  })
+}
+
+function GetUser.render_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt("GetUser", {  })
 }
 
 class MyClass {

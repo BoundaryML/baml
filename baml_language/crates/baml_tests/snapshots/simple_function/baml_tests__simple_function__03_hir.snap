@@ -2,6 +2,14 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+function HelloWorld.build_request(name: string) -> baml.http.Request {
+    baml.llm.build_request("HelloWorld", { "name": name })
+}
+
+function HelloWorld.render_prompt(name: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("HelloWorld", { "name": name })
+}
+
 function HelloWorld(name: string) -> string {
     baml.llm.call_llm_function("HelloWorld", { "name": name })
 }

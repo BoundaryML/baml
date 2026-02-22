@@ -9,3 +9,21 @@ function TypeBuilderFn(from_text: string) -> Resume {
     call baml.llm.call_llm_function
     return
 }
+
+function TypeBuilderFn.build_request(from_text: string) -> baml.http.Request {
+    load_const "TypeBuilderFn"
+    load_var from_text
+    load_const "from_text"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function TypeBuilderFn.render_prompt(from_text: string) -> baml.llm.PromptAst {
+    load_const "TypeBuilderFn"
+    load_var from_text
+    load_const "from_text"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
