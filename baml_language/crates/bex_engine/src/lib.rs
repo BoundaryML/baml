@@ -1073,8 +1073,6 @@ impl BexEngine {
                 }
 
                 VmExecState::ScheduleFuture(id) => {
-                    Self::cancellation_safepoint(cancel, &abort_handles)?;
-
                     let pending = vm.pending_future(id)?;
 
                     // Convert arguments to BexExternalValue
@@ -1084,14 +1082,13 @@ impl BexEngine {
                         .map(|v| self.vm_arg_to_bex_value(v))
                         .collect();
 
+                    Self::cancellation_safepoint(cancel, &abort_handles)?;
                     let sys_op_result =
                         self.execute_sys_op(pending.operation, &args, call_id, cancel);
                     Self::cancellation_safepoint(cancel, &abort_handles)?;
 
                     match sys_op_result {
                         SysOpResult::Ready(result) => {
-                            Self::cancellation_safepoint(cancel, &abort_handles)?;
-
                             // Sync operation - set future to Ready without touching stack.
                             // The VM will continue to the Await instruction which will
                             // extract the value from the Ready future.
@@ -1107,8 +1104,6 @@ impl BexEngine {
                             vm.set_future_ready(id, value)?;
                         }
                         SysOpResult::Async(fut) => {
-                            Self::cancellation_safepoint(cancel, &abort_handles)?;
-
                             // Async operation — wrap in Abortable and spawn.
                             let pending_futures = pending_futures.clone();
                             let (abort_handle, abort_reg) =
