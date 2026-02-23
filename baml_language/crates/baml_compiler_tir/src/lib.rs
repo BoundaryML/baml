@@ -1167,11 +1167,10 @@ fn add_builtin_jinja_types(jinja_env: &mut jinja::JinjaTypeEnv) {
 /// preserving all error data while converting the span to an `ErrorLocation`.
 fn jinja_error_to_tir(error: jinja::TypeError) -> TirTypeError {
     let span = error.span();
-    // Minijinja spans are 0-based and point to the character *before* the actual token.
-    // We add 1 to both offsets to correct for this off-by-one.
+    // Minijinja spans are 0-based byte offsets into the template text.
     let location = ErrorLocation::JinjaTemplate {
-        start_offset: span.start_offset + 1,
-        end_offset: span.end_offset + 1,
+        start_offset: span.start_offset,
+        end_offset: span.end_offset,
     };
 
     match error {

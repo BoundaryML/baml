@@ -112,6 +112,9 @@ pub enum SyntaxKind {
     PLUS_PLUS,   // ++
     MINUS_MINUS, // --
 
+    // Backslash
+    BACKSLASH,
+
     // Whitespace and comments (preserved for losslessness)
     WHITESPACE,
     NEWLINE,

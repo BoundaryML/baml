@@ -128,6 +128,9 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::PlusPlus => SyntaxKind::PLUS_PLUS,
         TokenKind::MinusMinus => SyntaxKind::MINUS_MINUS,
 
+        // Backslash
+        TokenKind::Backslash => SyntaxKind::BACKSLASH,
+
         // Whitespace
         TokenKind::Whitespace => SyntaxKind::WHITESPACE,
         TokenKind::Newline => SyntaxKind::NEWLINE,
@@ -903,6 +906,24 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Eat a basic trivia token (whitespace or newline).
+    fn eat_basic_trivia(&mut self) -> bool {
+        let Some(token) = self.tokens.get(self.current) else {
+            return false;
+        };
+        let kind = match token.kind {
+            TokenKind::Whitespace => SyntaxKind::WHITESPACE,
+            TokenKind::Newline => SyntaxKind::NEWLINE,
+            _ => return false,
+        };
+        self.events.push(Event::Token {
+            kind,
+            text: token.text.clone(),
+        });
+        self.current += 1;
+        true
+    }
+
     /// Expect a token, emit error if not found
     fn expect(&mut self, kind: TokenKind) -> bool {
         if self.eat(kind) {
@@ -1053,6 +1074,11 @@ impl<'a> Parser<'a> {
     /// Find the token position after consuming N hashes.
     /// Skips all trivia (whitespace, newlines, and comments) before the first hash,
     /// then only skips basic trivia (whitespace, newlines) between hashes.
+    ///
+    /// ## Returns
+    /// - `None` if a non-hash, non-basic-trivia token is encountered before the number of hashes is reached.
+    /// - `None` if the end has been reached
+    /// - `Some(i)` with the first non-basic-trivia token after the hashes. Will always be a valid index in [`Self::tokens`].
     fn find_token_after_hashes(&self, hash_count: usize) -> Option<usize> {
         let mut hashes_seen = 0;
         let mut i = self.current;
@@ -1139,6 +1165,16 @@ impl<'a> Parser<'a> {
                 if loop_counter > 100_000 {
                     p.error_unexpected_token("String parsing exceeded iteration limit".to_string());
                     return;
+                }
+
+                if p.at_raw(TokenKind::Backslash) {
+                    p.bump_raw(); // Consume backslash
+                    if let Some(directly_after) = p.tokens.get(p.current)
+                        && directly_after.kind == TokenKind::Quote
+                    {
+                        p.bump_raw(); // Consume quote without ending string
+                    }
+                    continue;
                 }
 
                 // Check if next token is the closing quote
@@ -1361,6 +1397,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse plain text content between Jinja constructs
+    ///
+    /// Will consume trailing whitespace as well.
     fn parse_prompt_text(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::PROMPT_TEXT, |p| {
             // Collect tokens until we hit a Jinja construct or closing delimiter
@@ -1375,6 +1413,7 @@ impl<'a> Parser<'a> {
 
                 // Check for Jinja constructs
                 if p.at_jinja_expression() || p.at_jinja_statement() || p.at_jinja_comment() {
+                    while p.eat_basic_trivia() {} // make it part of the PROMPT_TEXT
                     break;
                 }
 
@@ -3782,19 +3821,25 @@ impl<'a> Parser<'a> {
             return true;
         }
 
-        // Block strings start with #" - check for both tokens
+        // Block strings start with #", ##", etc.
         // (Just # alone like `#helloworld` is a legacy unquoted string)
         if self.at(TokenKind::Hash) {
-            if let Some(next) = self.peek(1) {
-                if next.kind == TokenKind::Quote {
-                    return true;
-                }
+            let num_hashes = self.count_consecutive_hashes();
+            if let Some(next) = self.find_token_after_hashes(num_hashes) {
+                return self.tokens[next].kind == TokenKind::Quote;
             }
             return false;
         }
 
         // Number literals
         if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+            return true;
+        }
+        if self.at(TokenKind::Minus)
+            && self.peek(1).is_some_and(|t| {
+                matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+            })
+        {
             return true;
         }
 

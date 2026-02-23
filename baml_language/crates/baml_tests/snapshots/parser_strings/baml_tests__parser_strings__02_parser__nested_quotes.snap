@@ -56,11 +56,11 @@ SOURCE_FILE
           QUOTE """
     FIELD "The"
       WORD "The"
-    ERROR_TOKEN "\"
+    BACKSLASH "\"
     QUOTE """
     FIELD "quote"
       WORD "quote"
-    ERROR_TOKEN "\"
+    BACKSLASH "\"
     QUOTE """
     FIELD
       WORD "is"
@@ -77,23 +77,21 @@ SOURCE_FILE
         WORD "description"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "It's \"
+          STRING_LITERAL "It's \"really\" 'complex'"
             QUOTE """
             WORD "It"
             ERROR_TOKEN "'"
             WORD "s"
-            ERROR_TOKEN "\"
+            BACKSLASH "\"
             QUOTE """
-    FIELD "really"
-      WORD "really"
-    ERROR_TOKEN "\"
-    QUOTE """
-    ERROR_TOKEN "'"
-    FIELD "complex"
-      WORD "complex"
-    ERROR_TOKEN "'"
-    QUOTE """
-    R_PAREN ")"
+            WORD "really"
+            BACKSLASH "\"
+            QUOTE """
+            ERROR_TOKEN "'"
+            WORD "complex"
+            ERROR_TOKEN "'"
+            QUOTE """
+          R_PAREN ")"
     FIELD
       WORD "json_like"
       TYPE_EXPR "string"
@@ -103,26 +101,24 @@ SOURCE_FILE
         WORD "alias"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "{\"
+          STRING_LITERAL "{\"key\": \"value\"}"
             QUOTE """
             L_BRACE "{"
-            ERROR_TOKEN "\"
+            BACKSLASH "\"
             QUOTE """
-    FIELD "key"
-      WORD "key"
-    ERROR_TOKEN "\"
-    QUOTE """
-    COLON ":"
-    ERROR_TOKEN "\"
-    QUOTE """
-    FIELD "value"
-      WORD "value"
-    ERROR_TOKEN "\"
-    QUOTE """
+            WORD "key"
+            BACKSLASH "\"
+            QUOTE """
+            COLON ":"
+            BACKSLASH "\"
+            QUOTE """
+            WORD "value"
+            BACKSLASH "\"
+            QUOTE """
+            R_BRACE "}"
+            QUOTE """
+          R_PAREN ")"
     R_BRACE "}"
-  QUOTE """
-  R_PAREN ")"
-  R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "FormatMessage"
@@ -234,12 +230,12 @@ Error: field 'The' is missing a type annotation
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found error
+Error: Expected Unexpected token in class body, found '\'
    ╭─[ nested_quotes.baml:5:41 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                         ┬  
-   │                                         ╰── Expected Unexpected token in class body, found error
+   │                                         ╰── Expected Unexpected token in class body, found '\'
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -264,12 +260,12 @@ Error: field 'quote' is missing a type annotation
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected Unexpected token in class body, found error
+Error: Expected Unexpected token in class body, found '\'
    ╭─[ nested_quotes.baml:5:48 ]
    │
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                ┬  
-   │                                                ╰── Expected Unexpected token in class body, found error
+   │                                                ╰── Expected Unexpected token in class body, found '\'
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -300,226 +296,6 @@ Error: Expected Unexpected token in class body, found ')'
  5 │   escaped_in_escaped string @alias("The \"quote\" is here")
    │                                                           ┬  
    │                                                           ╰── Expected Unexpected token in class body, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ')', found identifier
-   ╭─[ nested_quotes.baml:6:47 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                               ───┬──  
-   │                                                  ╰──── Expected ')', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: field 'really' is missing a type annotation
-   ╭─[ nested_quotes.baml:6:47 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                               ───┬──  
-   │                                                  ╰──── field 'really' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found error
-   ╭─[ nested_quotes.baml:6:53 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                     ┬  
-   │                                                     ╰── Expected Unexpected token in class body, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:6:54 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                      ┬  
-   │                                                      ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found error
-   ╭─[ nested_quotes.baml:6:56 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                        ┬  
-   │                                                        ╰── Expected Unexpected token in class body, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: field 'complex' is missing a type annotation
-   ╭─[ nested_quotes.baml:6:57 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                         ───┬───  
-   │                                                            ╰───── field 'complex' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found error
-   ╭─[ nested_quotes.baml:6:64 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                                ┬  
-   │                                                                ╰── Expected Unexpected token in class body, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:6:65 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                                 ┬  
-   │                                                                 ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found ')'
-   ╭─[ nested_quotes.baml:6:66 ]
-   │
- 6 │   complex_nesting string @description("It's \"really\" 'complex'")
-   │                                                                  ┬  
-   │                                                                  ╰── Expected Unexpected token in class body, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ')', found identifier
-   ╭─[ nested_quotes.baml:7:31 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                               ─┬─  
-   │                                ╰─── Expected ')', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: field 'key' is missing a type annotation
-   ╭─[ nested_quotes.baml:7:31 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                               ─┬─  
-   │                                ╰─── field 'key' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found error
-   ╭─[ nested_quotes.baml:7:34 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                  ┬  
-   │                                  ╰── Expected Unexpected token in class body, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:7:35 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                   ┬  
-   │                                   ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found ':'
-   ╭─[ nested_quotes.baml:7:36 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                    ┬  
-   │                                    ╰── Expected Unexpected token in class body, found ':'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found error
-   ╭─[ nested_quotes.baml:7:38 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                      ┬  
-   │                                      ╰── Expected Unexpected token in class body, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:7:39 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                       ┬  
-   │                                       ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: field 'value' is missing a type annotation
-   ╭─[ nested_quotes.baml:7:40 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                        ──┬──  
-   │                                          ╰──── field 'value' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found error
-   ╭─[ nested_quotes.baml:7:45 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                             ┬  
-   │                                             ╰── Expected Unexpected token in class body, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found '"'
-   ╭─[ nested_quotes.baml:7:46 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                              ┬  
-   │                                              ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ nested_quotes.baml:7:48 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                                ┬  
-   │                                                ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found ')'
-   ╭─[ nested_quotes.baml:7:49 ]
-   │
- 7 │   json_like string @alias("{\"key\": \"value\"}")
-   │                                                 ┬  
-   │                                                 ╰── Expected top-level declaration, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '}'
-   ╭─[ nested_quotes.baml:8:1 ]
-   │
- 8 │ }
-   │ ┬  
-   │ ╰── Expected top-level declaration, found '}'
    │ 
    │ Note: Error code: E0010
 ───╯

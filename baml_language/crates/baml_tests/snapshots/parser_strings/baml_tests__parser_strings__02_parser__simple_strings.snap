@@ -61,9 +61,9 @@ SOURCE_FILE
           STRING_LITERAL "line1\nline2\ttab"
             QUOTE """
             WORD "line1"
-            ERROR_TOKEN "\"
+            BACKSLASH "\"
             WORD "nline2"
-            ERROR_TOKEN "\"
+            BACKSLASH "\"
             WORD "ttab"
             QUOTE """
           R_PAREN ")"
@@ -76,18 +76,17 @@ SOURCE_FILE
         WORD "alias"
         ATTRIBUTE_ARGS
           L_PAREN "("
-          STRING_LITERAL "She said \"
+          STRING_LITERAL "She said \"hello\""
             QUOTE """
             WORD "She"
             WORD "said"
-            ERROR_TOKEN "\"
+            BACKSLASH "\"
             QUOTE """
-    FIELD "hello"
-      WORD "hello"
-    ERROR_TOKEN "\"
-    QUOTE """
-    QUOTE """
-    R_PAREN ")"
+            WORD "hello"
+            BACKSLASH "\"
+            QUOTE """
+            QUOTE """
+          R_PAREN ")"
     R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -124,62 +123,4 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected ')', found identifier
-   ╭─[ simple_strings.baml:7:41 ]
-   │
- 7 │   with_quotes string @alias("She said \"hello\"")
-   │                                         ──┬──  
-   │                                           ╰──── Expected ')', found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: field 'hello' is missing a type annotation
-   ╭─[ simple_strings.baml:7:41 ]
-   │
- 7 │   with_quotes string @alias("She said \"hello\"")
-   │                                         ──┬──  
-   │                                           ╰──── field 'hello' is missing a type annotation
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found error
-   ╭─[ simple_strings.baml:7:46 ]
-   │
- 7 │   with_quotes string @alias("She said \"hello\"")
-   │                                              ┬  
-   │                                              ╰── Expected Unexpected token in class body, found error
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found '"'
-   ╭─[ simple_strings.baml:7:47 ]
-   │
- 7 │   with_quotes string @alias("She said \"hello\"")
-   │                                               ┬  
-   │                                               ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found '"'
-   ╭─[ simple_strings.baml:7:48 ]
-   │
- 7 │   with_quotes string @alias("She said \"hello\"")
-   │                                                ┬  
-   │                                                ╰── Expected Unexpected token in class body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected Unexpected token in class body, found ')'
-   ╭─[ simple_strings.baml:7:49 ]
-   │
- 7 │   with_quotes string @alias("She said \"hello\"")
-   │                                                 ┬  
-   │                                                 ╰── Expected Unexpected token in class body, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
+None

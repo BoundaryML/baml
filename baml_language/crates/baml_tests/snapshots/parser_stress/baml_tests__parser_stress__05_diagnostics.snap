@@ -7792,12 +7792,12 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected expression, found error
+  [parse] Error: Expected expression, found '\'
    ╭─[ very_invalid.baml:8:10 ]
    │
  8 │   while \ {
    │          ┬  
-   │          ╰── Expected expression, found error
+   │          ╰── Expected expression, found '\'
    │ 
    │ Note: Error code: E0010
 ───╯
