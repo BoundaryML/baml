@@ -1,0 +1,111 @@
+// Test: Catch/throw MIR lowering
+// Each function exercises a specific catch/throw pattern.
+
+// Helper function used as call target
+function MayFail(x: int) -> string {
+    "ok"
+}
+
+function AlsoMayFail(x: int) -> string {
+    "also ok"
+}
+
+// ============================================================================
+// SINGLE CATCH CLAUSE
+// ============================================================================
+
+// Basic: call with a single catch clause containing one wildcard arm
+function SingleCatchWildcard(x: int) -> string {
+    MayFail(x) catch (e) {
+        _ => "caught"
+    }
+}
+
+// Single catch with typed arm
+function SingleCatchTyped(x: int) -> string {
+    MayFail(x) catch (e) {
+        _: string => "caught string"
+    }
+}
+
+// ============================================================================
+// CATCH_ALL WITH FALLBACK
+// ============================================================================
+
+// catch_all adds an implicit rethrow for unmatched errors
+function CatchAllWithFallback(x: int) -> string {
+    MayFail(x) catch_all (e) {
+        _: string => "caught string"
+    }
+}
+
+// ============================================================================
+// CATCH_ALL_PANICS
+// ============================================================================
+
+// catch_all_panics catches panics that would normally propagate
+function CatchAllPanics(x: int) -> string {
+    MayFail(x) catch_all_panics (e) {
+        _: string => "caught string"
+    }
+}
+
+// ============================================================================
+// MULTIPLE CATCH ARMS
+// ============================================================================
+
+// Multiple typed arms in a single catch
+function MultipleCatchArms(x: int) -> string {
+    MayFail(x) catch (e) {
+        _: string => "caught string",
+        _: int => "caught int"
+    }
+}
+
+// ============================================================================
+// NESTED CATCH
+// ============================================================================
+
+// Nested catch: inner catch wraps one call, outer catch wraps a different call
+function NestedCatch(x: int) -> string {
+    let inner = MayFail(x) catch (e) {
+        _ => "inner caught"
+    };
+    AlsoMayFail(x) catch (e) {
+        _ => inner
+    }
+}
+
+// ============================================================================
+// THROW EXPRESSION
+// ============================================================================
+
+// Throw re-raises the caught error
+function CatchAndRethrow(x: int) -> string {
+    MayFail(x) catch (e) {
+        _ => throw e
+    }
+}
+
+// ============================================================================
+// THROW STATEMENT
+// ============================================================================
+
+// Throw as a statement
+function ThrowStatement(x: int) -> string {
+    throw "error"
+    "unreachable"
+}
+
+// ============================================================================
+// CHAINED CATCH CLAUSES
+// ============================================================================
+
+// Multiple catch clauses on the same expression
+function ChainedCatchClauses(x: int) -> string {
+    MayFail(x) catch (e) {
+        _: string => "first handler"
+    } catch (e2) {
+        _: int => "second handler"
+    }
+}

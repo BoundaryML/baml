@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TYPE INFERENCE ===
+  Function CatchAllPanics:
+    Return: Union([String, Literal(String("caught string"))])
+  Function CatchAndRethrow:
+    Return: Union([String, Unknown])
+  Function ChainedCatchClauses:
+    Return: Union([String, Literal(String("first handler")), Literal(String("second handler"))])
+  Function SingleCatchWildcard:
+    Return: Union([String, Literal(String("caught"))])
+  Function ThrowStatement:
+    Return: Literal(String("unreachable"))
+  Function MayFail:
+    Return: Literal(String("ok"))
+  Function SingleCatchTyped:
+    Return: Union([String, Literal(String("caught string"))])
+  Function AlsoMayFail:
+    Return: Literal(String("also ok"))
+  Function NestedCatch:
+    Return: Union([String, Union([String, Literal(String("inner caught"))])])
+  Function CatchAllWithFallback:
+    Return: Union([String, Literal(String("caught string"))])
+  Function MultipleCatchArms:
+    Return: Union([String, Literal(String("caught string")), Literal(String("caught int"))])

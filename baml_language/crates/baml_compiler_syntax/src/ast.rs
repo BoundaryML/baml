@@ -684,6 +684,7 @@ ast_node!(WhileStmt, WHILE_STMT);
 ast_node!(ForExpr, FOR_EXPR);
 ast_node!(BlockExpr, BLOCK_EXPR);
 ast_node!(ReturnStmt, RETURN_STMT);
+ast_node!(ThrowStmt, THROW_STMT);
 ast_node!(BreakStmt, BREAK_STMT);
 ast_node!(ContinueStmt, CONTINUE_STMT);
 ast_node!(PathExpr, PATH_EXPR);
@@ -693,6 +694,11 @@ ast_node!(MatchExpr, MATCH_EXPR);
 ast_node!(MatchArm, MATCH_ARM);
 ast_node!(MatchPattern, MATCH_PATTERN);
 ast_node!(MatchGuard, MATCH_GUARD);
+ast_node!(CatchExpr, CATCH_EXPR);
+ast_node!(CatchClause, CATCH_CLAUSE);
+ast_node!(CatchArm, CATCH_ARM);
+ast_node!(CatchPattern, CATCH_PATTERN);
+ast_node!(ThrowExpr, THROW_EXPR);
 
 // Implement accessor methods
 impl SourceFile {
@@ -2173,6 +2179,8 @@ impl LetStmt {
                     | SyntaxKind::INDEX_EXPR
                     | SyntaxKind::IF_EXPR
                     | SyntaxKind::MATCH_EXPR
+                    | SyntaxKind::CATCH_EXPR
+                    | SyntaxKind::THROW_EXPR
                     | SyntaxKind::BLOCK_EXPR
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::ARRAY_LITERAL
@@ -2219,6 +2227,13 @@ impl ReturnStmt {
     /// Get the return value expression, if present.
     pub fn value(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
+    }
+}
+
+impl ThrowStmt {
+    /// Get the throw expression node.
+    pub fn expr(&self) -> Option<ThrowExpr> {
+        self.syntax.children().find_map(ThrowExpr::cast)
     }
 }
 
@@ -2326,6 +2341,7 @@ impl BlockExpr {
                         | SyntaxKind::FOR_EXPR
                         | SyntaxKind::BREAK_STMT
                         | SyntaxKind::CONTINUE_STMT
+                        | SyntaxKind::THROW_STMT
                         | SyntaxKind::ASSERT_STMT => Some(BlockElement::Stmt(n)),
                         // Header comment (//# name)
                         SyntaxKind::HEADER_COMMENT => Some(BlockElement::HeaderComment(n)),
@@ -2336,6 +2352,8 @@ impl BlockExpr {
                         | SyntaxKind::CALL_EXPR
                         | SyntaxKind::IF_EXPR
                         | SyntaxKind::MATCH_EXPR
+                        | SyntaxKind::CATCH_EXPR
+                        | SyntaxKind::THROW_EXPR
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
@@ -2605,6 +2623,135 @@ impl MatchGuard {
     /// For `if condition`, returns the condition expression.
     pub fn condition(&self) -> Option<SyntaxNode> {
         self.syntax.children().next()
+    }
+}
+
+impl ThrowExpr {
+    /// Get the thrown expression/value.
+    pub fn value(&self) -> Option<SyntaxNode> {
+        self.syntax.children().next()
+    }
+}
+
+impl CatchExpr {
+    /// Get the base expression before the first catch clause.
+    pub fn base(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() != SyntaxKind::CATCH_CLAUSE)
+    }
+
+    /// Iterate over attached catch clauses in source order.
+    pub fn clauses(&self) -> impl Iterator<Item = CatchClause> + '_ {
+        self.syntax.children().filter_map(CatchClause::cast)
+    }
+}
+
+impl CatchClause {
+    /// Get the clause keyword token (`catch`, `catch_all`, `catch_all_panics`).
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| {
+                matches!(
+                    t.kind(),
+                    SyntaxKind::KW_CATCH
+                        | SyntaxKind::KW_CATCH_ALL
+                        | SyntaxKind::KW_CATCH_ALL_PANICS
+                )
+            })
+    }
+
+    /// Get the binding pattern from `catch (...)`.
+    pub fn binding(&self) -> Option<CatchPattern> {
+        self.syntax.children().find_map(CatchPattern::cast)
+    }
+
+    /// Iterate over typed/fallback arm entries for this clause.
+    pub fn arms(&self) -> impl Iterator<Item = CatchArm> + '_ {
+        self.syntax.children().filter_map(CatchArm::cast)
+    }
+
+    /// Get the clause body when parsed as a plain block (non-arm form).
+    pub fn block_body(&self) -> Option<BlockExpr> {
+        self.syntax.children().find_map(BlockExpr::cast)
+    }
+}
+
+impl CatchArm {
+    /// Get the pattern for this catch arm.
+    pub fn pattern(&self) -> Option<CatchPattern> {
+        self.syntax.children().find_map(CatchPattern::cast)
+    }
+
+    /// Get the body expression of this arm.
+    pub fn body(&self) -> Option<SyntaxNode> {
+        let mut found_fat_arrow = false;
+        for element in self.syntax.children_with_tokens() {
+            match element {
+                rowan::NodeOrToken::Token(token) => {
+                    if token.kind() == SyntaxKind::FAT_ARROW {
+                        found_fat_arrow = true;
+                    }
+                }
+                rowan::NodeOrToken::Node(node) => {
+                    if found_fat_arrow {
+                        return Some(node);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Check if this catch arm has a block body.
+    pub fn has_block_body(&self) -> bool {
+        self.body()
+            .map(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .unwrap_or(false)
+    }
+}
+
+impl CatchPattern {
+    /// Check if this is a union pattern (has `|` separators).
+    pub fn is_union(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|token| token.kind() == SyntaxKind::PIPE)
+    }
+
+    /// Check if this is a typed binding pattern (has `:`).
+    pub fn is_typed_binding(&self) -> bool {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .any(|token| token.kind() == SyntaxKind::COLON)
+    }
+
+    /// Check if this is a wildcard pattern (`_`).
+    pub fn is_wildcard(&self) -> bool {
+        let tokens: Vec<_> = self
+            .syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|t| t.kind() == SyntaxKind::WORD)
+            .collect();
+        tokens.len() == 1 && tokens[0].text() == "_"
+    }
+
+    /// Get the binding name for this pattern.
+    pub fn binding_name(&self) -> Option<SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| token.kind() == SyntaxKind::WORD)
+    }
+
+    /// Get the type expression for typed bindings.
+    pub fn binding_type(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
     }
 }
 

@@ -30,8 +30,8 @@ use la_arena::Arena;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, PatId, Pattern, SpreadField, Ty,
-    UnaryOp,
+    AssignOp, BinaryOp, CatchArm, CatchClause, CatchClauseKind, Expr, ExprBody, ExprId, Literal,
+    MatchArm, PatId, Pattern, SpreadField, Ty, UnaryOp,
 };
 
 /// Error that occurs when lowering HIR to VIR.
@@ -557,6 +557,41 @@ impl<'a> LoweringContext<'a> {
                 self.weave_block(stmts, *tail_expr, hir_body)
             }
 
+            HirExpr::Catch { base, clauses } => {
+                let base_id = self.lower_expr(*base, hir_body)?;
+                let mut lowered_clauses = Vec::with_capacity(clauses.len());
+                for clause in clauses {
+                    let binding_id = self.lower_pattern(clause.binding, hir_body)?;
+                    let mut lowered_arms = Vec::with_capacity(clause.arms.len());
+                    for arm_id in &clause.arms {
+                        let arm = &hir_body.catch_arms[*arm_id];
+                        let pattern_id = self.lower_pattern(arm.pattern, hir_body)?;
+                        let body = self.lower_expr(arm.body, hir_body)?;
+                        lowered_arms.push(CatchArm {
+                            pattern: pattern_id,
+                            body,
+                        });
+                    }
+                    lowered_clauses.push(CatchClause {
+                        kind: CatchClauseKind::from(clause.kind),
+                        binding: binding_id,
+                        arms: lowered_arms,
+                    });
+                }
+                Ok(self.builder.alloc(
+                    Expr::Catch {
+                        base: base_id,
+                        clauses: lowered_clauses,
+                    },
+                    ty,
+                ))
+            }
+
+            HirExpr::Throw { value } => {
+                let value_id = self.lower_expr(*value, hir_body)?;
+                Ok(self.builder.alloc(Expr::Throw { value: value_id }, ty))
+            }
+
             HirExpr::Match {
                 scrutinee, arms, ..
             } => {
@@ -842,6 +877,13 @@ impl<'a> LoweringContext<'a> {
                 },
                 Ty::Void,
             )),
+
+            HirStmt::Throw { value } => {
+                let value_id = self.lower_expr(*value, hir_body)?;
+                Ok(self
+                    .builder
+                    .alloc(Expr::Throw { value: value_id }, Ty::Void))
+            }
         };
 
         // Record source span from HIR source map onto VIR expression.

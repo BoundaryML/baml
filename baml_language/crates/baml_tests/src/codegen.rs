@@ -107,6 +107,15 @@ fn convert_instruction(
             }
         }
         bex_vm_types::Instruction::Await => Instruction::Await,
+        bex_vm_types::Instruction::PushUnwind {
+            handler,
+            error_slot,
+        } => Instruction::PushUnwind {
+            handler: *handler,
+            error_slot: *error_slot,
+        },
+        bex_vm_types::Instruction::PopUnwind => Instruction::PopUnwind,
+        bex_vm_types::Instruction::Throw => Instruction::Throw,
         bex_vm_types::Instruction::Watch(idx) => Instruction::Watch(*idx),
         bex_vm_types::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
         bex_vm_types::Instruction::Notify(idx) => Instruction::Notify(*idx),

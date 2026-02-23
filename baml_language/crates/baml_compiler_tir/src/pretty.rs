@@ -232,6 +232,10 @@ impl<'a> TreeRenderer<'a> {
             Expr::Match { arms, .. } => {
                 format!("Match({} arms): {}", arms.len(), ty)
             }
+            Expr::Catch { clauses, .. } => {
+                format!("Catch({} clauses): {}", clauses.len(), ty)
+            }
+            Expr::Throw { .. } => format!("Throw: {ty}"),
             Expr::Missing => format!("<missing>: {ty}"),
         }
     }
@@ -360,6 +364,41 @@ impl<'a> TreeRenderer<'a> {
                     self.pop_continuation();
                 }
             }
+            Expr::Catch { base, clauses } => {
+                // Render the base expression
+                self.render_expr(*base, body, result, clauses.is_empty());
+
+                // Render each catch clause's arms
+                for (ci, clause) in clauses.iter().enumerate() {
+                    let is_last_clause = ci == clauses.len() - 1;
+                    let kind_str = match clause.kind {
+                        baml_compiler_hir::CatchClauseKind::Catch => "catch",
+                        baml_compiler_hir::CatchClauseKind::CatchAll => "catch_all",
+                        baml_compiler_hir::CatchClauseKind::CatchAllPanics => "catch_all_panics",
+                    };
+                    let clause_prefix = self.make_prefix(is_last_clause);
+                    writeln!(
+                        self.output,
+                        "{clause_prefix}{kind_str}({} arms):",
+                        clause.arms.len()
+                    )
+                    .ok();
+                    self.push_continuation(!is_last_clause);
+                    for (ai, arm_id) in clause.arms.iter().enumerate() {
+                        let arm = &body.catch_arms[*arm_id];
+                        let is_last_arm = ai == clause.arms.len() - 1;
+                        let arm_prefix = self.make_prefix(is_last_arm);
+                        writeln!(self.output, "{arm_prefix}arm[{ai}]:").ok();
+                        self.push_continuation(!is_last_arm);
+                        self.render_expr(arm.body, body, result, true);
+                        self.pop_continuation();
+                    }
+                    self.pop_continuation();
+                }
+            }
+            Expr::Throw { value } => {
+                self.render_expr(*value, body, result, true);
+            }
             Expr::Literal(_) | Expr::Path(_) | Expr::Missing => {
                 // Leaf nodes, no children
             }
@@ -482,6 +521,12 @@ impl<'a> TreeRenderer<'a> {
             Stmt::HeaderComment { name, level } => {
                 writeln!(self.output, "{prefix}HeaderComment({name}, level={level})").ok();
             }
+            Stmt::Throw { value } => {
+                writeln!(self.output, "{prefix}Throw").ok();
+                self.push_continuation(!is_last);
+                self.render_expr(*value, body, result, true);
+                self.pop_continuation();
+            }
         }
     }
 
@@ -586,6 +631,8 @@ pub fn expr_to_string(expr_id: ExprId, body: &ExprBody) -> String {
         Expr::Block { .. } => "{ ... }".to_string(),
         Expr::If { .. } => "if ... { ... }".to_string(),
         Expr::Match { arms, .. } => format!("match {{ {} arms }}", arms.len()),
+        Expr::Catch { clauses, .. } => format!("catch {{ {} clauses }}", clauses.len()),
+        Expr::Throw { .. } => "throw ...".to_string(),
         Expr::Missing => "<missing>".to_string(),
     }
 }

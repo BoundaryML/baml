@@ -2610,6 +2610,67 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             }
         }
 
+        Expr::Catch { base, clauses } => {
+            // Infer the base expression type first
+            let base_ty = infer_expr(ctx, *base, body);
+
+            // Each catch clause introduces a scope for its binding and arms
+            let mut arm_types: Vec<Ty> = Vec::new();
+
+            for clause in clauses {
+                ctx.push_scope();
+
+                // Bind the catch variable as Error type (opaque for now)
+                let binding_pat = &body.patterns[clause.binding];
+                if let Pattern::Binding(name) = binding_pat {
+                    if name.as_str() != "_" {
+                        ctx.define(name.clone(), Ty::String);
+                    }
+                }
+
+                // Infer each arm's body
+                for arm_id in &clause.arms {
+                    let arm = &body.catch_arms[*arm_id];
+                    ctx.push_scope();
+
+                    // Bind the arm pattern if it introduces a binding
+                    let arm_pat = &body.patterns[arm.pattern];
+                    if let Pattern::Binding(name) = arm_pat {
+                        if name.as_str() != "_" {
+                            ctx.define(name.clone(), Ty::String);
+                        }
+                    }
+
+                    let arm_ty = infer_expr(ctx, arm.body, body);
+                    arm_types.push(arm_ty);
+                    ctx.pop_scope();
+                }
+
+                ctx.pop_scope();
+            }
+
+            // Result type is union of base type and all arm types
+            // (the catch can either succeed with base_ty or recover with an arm type)
+            let mut all_types = vec![base_ty];
+            all_types.extend(arm_types);
+
+            // Deduplicate
+            all_types.dedup();
+            if all_types.len() == 1 {
+                all_types.into_iter().next().unwrap()
+            } else {
+                Ty::Union(all_types)
+            }
+        }
+
+        Expr::Throw { value } => {
+            // Infer the thrown value (should be a string/error, but we accept any for now)
+            infer_expr(ctx, *value, body);
+            // Throw diverges — it never produces a value.
+            // Using Unknown (treated as uninhabited) since we don't have a Never type yet.
+            Ty::Unknown
+        }
+
         Expr::Missing => Ty::Unknown,
     };
 
@@ -3619,6 +3680,13 @@ fn check_stmt_with_return(
 
         Stmt::HeaderComment { .. } => {
             // Header comments don't need type checking - they're just annotations
+        }
+
+        Stmt::Throw { value } => {
+            // Infer the thrown value (should be a string/error, but we accept any for now)
+            infer_expr(ctx, *value, body);
+            // Throw diverges — subsequent statements are unreachable.
+            // No return type to record; this is a diverging statement.
         }
     }
 }

@@ -20,7 +20,7 @@ use baml_base::{Name, QualifiedName, Span};
 use baml_compiler_hir::FunctionSignature;
 use baml_compiler_tir::{ResolvedValue, TypeResolutionContext};
 use baml_compiler_vir::{
-    AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp,
+    AssignOp, BinaryOp, CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp,
 };
 use baml_type::{Ty, TypeName};
 
@@ -88,6 +88,8 @@ struct LoweringContext<'a, 'ctx> {
     locals: HashMap<Name, Local>,
     /// Current loop context for break/continue.
     loop_context: Option<LoopContext>,
+    /// Current catch context for unwind routing.
+    catch_context: Option<CatchContext>,
     /// Class field mappings (class name -> field name -> field index).
     class_fields: &'ctx HashMap<String, HashMap<String, usize>>,
     /// Enum variant mappings (enum name -> variant name -> variant index).
@@ -151,6 +153,20 @@ struct LoopContext {
     watched_locals_depth: usize,
 }
 
+/// Context for the current catch handler.
+///
+/// When lowering expressions inside a `catch`, all `Call`/`Await`
+/// terminators use `unwind_target` as their unwind destination.
+/// The runtime stores the error in `error_local` before jumping
+/// to the unwind target.
+#[derive(Clone)]
+struct CatchContext {
+    /// Block to jump to when an error is caught.
+    unwind_target: BlockId,
+    /// Local that holds the error value in the unwind path.
+    error_local: Local,
+}
+
 impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -168,6 +184,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             builder: MirBuilder::new(Name::new(""), arity),
             locals: HashMap::new(),
             loop_context: None,
+            catch_context: None,
             class_fields,
             enum_variants,
             class_type_tags,
@@ -1155,6 +1172,38 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
             }
+
+            // ========== Error Handling ==========
+            Expr::Catch { base, clauses } => {
+                self.lower_catch(*base, clauses, dest, body);
+            }
+
+            Expr::Throw { value } => {
+                // Lower the thrown value, then emit a Throw terminator.
+                let thrown_ty = body.ty(*value).clone();
+                let thrown = self.builder.temp(thrown_ty);
+                self.lower_expr(*value, Place::local(thrown), body);
+
+                if let Some(catch_ctx) = self.catch_context.clone() {
+                    // Throw inside an active catch scope: route directly to the
+                    // enclosing handler by storing into its error local.
+                    self.builder.assign(
+                        Place::local(catch_ctx.error_local),
+                        Rvalue::Use(Operand::copy_local(thrown)),
+                    );
+                    self.builder.goto(catch_ctx.unwind_target);
+                } else {
+                    // No active catch scope: propagate to caller/runtime.
+                    self.builder.throw(Operand::copy_local(thrown));
+                }
+
+                // Assign unit to dest in a dead block to satisfy builder invariants.
+                // The Throw terminator diverges, so this block is unreachable.
+                let dead_block = self.builder.create_block();
+                self.builder.set_current_block(dead_block);
+                self.builder
+                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
         }
     }
 
@@ -1923,6 +1972,196 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         }
     }
 
+    /// Lower a catch expression.
+    ///
+    /// ```text
+    /// base_expr catch (e) {
+    ///     p1 => body1,
+    ///     p2 => body2,
+    /// } catch_all (e2) {
+    ///     p3 => body3,
+    /// }
+    /// ```
+    ///
+    /// Produces a MIR CFG where:
+    /// - The base expression's `Call`/`Await` terminators get `unwind` targets
+    /// - Each catch clause becomes a handler block with pattern dispatch
+    /// - Chained clauses are nested: clause[n+1] catches errors from clause[n]'s handlers
+    /// - `catch`: unmatched errors rethrow
+    /// - `catch_all`: adds implicit rethrow fallback
+    /// - `catch_all_panics`: like `catch_all` but also catches panics
+    fn lower_catch(
+        &mut self,
+        base: ExprId,
+        clauses: &[baml_compiler_vir::CatchClause],
+        dest: Place,
+        body: &ExprBody,
+    ) {
+        if clauses.is_empty() {
+            // No clauses — just lower the base (degenerate case).
+            self.lower_expr(base, dest, body);
+            return;
+        }
+
+        // Join block where all paths (normal + handler arms) converge.
+        let join_block = self.builder.create_block();
+
+        // Process clauses from outermost to innermost.
+        // clause[0] catches errors from the base expression.
+        // clause[1] catches errors from clause[0]'s handler bodies.
+        // etc.
+        //
+        // We build the handler blocks in reverse so that inner clauses'
+        // unwind targets are available when we build outer clauses.
+
+        // First, allocate an error local and handler entry block for each clause.
+        let clause_data: Vec<(Local, BlockId)> = clauses
+            .iter()
+            .map(|_clause| {
+                // Error local — will hold the error value when the handler runs.
+                // BuiltinUnknown because errors can be of any type.
+                let error_local = self.builder.temp(Ty::BuiltinUnknown);
+                // Handler entry block.
+                let handler_entry = self.builder.create_block();
+                (error_local, handler_entry)
+            })
+            .collect();
+
+        // Build handler blocks in reverse order (innermost first) so that
+        // each handler body's throw/rethrow can reference the next clause's handler.
+        for clause_idx in (0..clauses.len()).rev() {
+            let clause = &clauses[clause_idx];
+            let (error_local, handler_entry) = clause_data[clause_idx];
+
+            // If there's a next clause, its handler is the catch context for
+            // this clause's arm bodies (so rethrows from arms go there).
+            let outer_catch_for_arms = if clause_idx + 1 < clauses.len() {
+                let (next_error_local, next_handler_entry) = clause_data[clause_idx + 1];
+                Some(CatchContext {
+                    unwind_target: next_handler_entry,
+                    error_local: next_error_local,
+                })
+            } else {
+                // Outermost clause — arm bodies rethrow to the enclosing
+                // catch context (if any) or propagate to caller.
+                self.catch_context.clone()
+            };
+
+            // Build the handler block.
+            let saved_block = self.builder.current_block();
+            self.builder.set_current_block(handler_entry);
+
+            // Bind the error to the clause's binding pattern.
+            let pat = body.pattern(clause.binding);
+            match pat {
+                Pattern::Binding(name) if name.as_str() != "_" => {
+                    let binding_local = self.builder.declare_local(
+                        Some(name.clone()),
+                        Ty::BuiltinUnknown,
+                        None,
+                        false,
+                    );
+                    self.builder.assign(
+                        Place::local(binding_local),
+                        Rvalue::Use(Operand::copy_local(error_local)),
+                    );
+                    self.locals.insert(name.clone(), binding_local);
+                }
+                _ => {
+                    // Wildcard binding `_` or other pattern — no local needed.
+                }
+            }
+
+            // Dispatch through the catch arms (pattern-matching chain, like match).
+            let fallthrough_block = self.builder.create_block();
+            let last_arm_idx = clause.arms.len().saturating_sub(1);
+
+            for (arm_idx, arm) in clause.arms.iter().enumerate() {
+                let is_last_arm = arm_idx == last_arm_idx;
+                let arm_block = self.builder.create_block();
+                let next_block = if is_last_arm {
+                    fallthrough_block
+                } else {
+                    self.builder.create_block()
+                };
+
+                // Pattern test: branch to arm_block if pattern matches,
+                // else fall through to next_block.
+                let arm_source_span = body.source_spans.get(&arm.body).copied();
+                self.lower_pattern_test(
+                    arm.pattern,
+                    error_local,
+                    &Ty::BuiltinUnknown,
+                    arm_block,
+                    next_block,
+                    body,
+                    arm_source_span,
+                );
+
+                // Arm body — set catch context so throws within arm bodies
+                // route to the next clause (if any).
+                self.builder.set_current_block(arm_block);
+                let old_catch = self.catch_context.take();
+                self.catch_context.clone_from(&outer_catch_for_arms);
+                self.lower_expr(arm.body, dest.clone(), body);
+                self.catch_context = old_catch;
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(join_block);
+                }
+
+                if !is_last_arm {
+                    self.builder.set_current_block(next_block);
+                }
+            }
+
+            // Fallthrough block: no arm matched.
+            // Behavior depends on clause kind:
+            //   catch: rethrow (unmatched error propagates)
+            //   catch_all: rethrow (implicit fallback)
+            //   catch_all_panics: rethrow (implicit fallback)
+            self.builder.set_current_block(fallthrough_block);
+            match clause.kind {
+                CatchClauseKind::Catch
+                | CatchClauseKind::CatchAll
+                | CatchClauseKind::CatchAllPanics => {
+                    // Rethrow the error. If there's an outer catch context, route
+                    // directly to its handler local/block. Otherwise propagate.
+                    if let Some(catch_ctx) = outer_catch_for_arms.clone() {
+                        self.builder.assign(
+                            Place::local(catch_ctx.error_local),
+                            Rvalue::Use(Operand::copy_local(error_local)),
+                        );
+                        self.builder.goto(catch_ctx.unwind_target);
+                    } else {
+                        self.builder.throw(Operand::copy_local(error_local));
+                    }
+                }
+            }
+
+            // Restore the block we were in before building the handler.
+            self.builder.set_current_block(saved_block);
+        }
+
+        // Now lower the base expression with the innermost clause as catch context.
+        let (first_error_local, first_handler_entry) = clause_data[0];
+        let old_catch = self.catch_context.take();
+        self.catch_context = Some(CatchContext {
+            unwind_target: first_handler_entry,
+            error_local: first_error_local,
+        });
+
+        self.lower_expr(base, dest, body);
+
+        self.catch_context = old_catch;
+
+        // If the base didn't diverge, jump to join.
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(join_block);
+        }
+
+        self.builder.set_current_block(join_block);
+    }
+
     /// Lower a function call.
     fn lower_call(
         &mut self,
@@ -2243,9 +2482,14 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     }
 
     /// Emit a function call with automatic continue block handling.
+    ///
+    /// If a `CatchContext` is active, the call's unwind target is set so that
+    /// errors route to the catch handler block.
     fn emit_call(&mut self, callee: Operand, args: Vec<Operand>, dest: Place) {
         let continue_block = self.builder.create_block();
-        self.builder.call(callee, args, dest, continue_block, None);
+        let unwind = self.catch_context.as_ref().map(|ctx| ctx.unwind_target);
+        self.builder
+            .call(callee, args, dest, continue_block, unwind);
         self.builder.set_current_block(continue_block);
     }
 
@@ -2255,6 +2499,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// This emits:
     /// 1. `DispatchFuture`: Start the async operation, get a future handle
     /// 2. Await: Wait for the future and retrieve the result
+    ///
+    /// If a `CatchContext` is active, the Await's unwind target is set so that
+    /// errors route to the catch handler block.
     fn emit_sys_op_call(&mut self, callee: Operand, args: Vec<Operand>, dest: Place) {
         // Create a temp to hold the future handle
         // Future handles are opaque to the VM - we use Null type
@@ -2270,9 +2517,10 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             .dispatch_future(callee, args, future_place.clone(), await_block);
 
         // In await_block: wait for the future and store result in dest
+        let unwind = self.catch_context.as_ref().map(|ctx| ctx.unwind_target);
         self.builder.set_current_block(await_block);
         self.builder
-            .await_(future_place, dest, continue_block, None);
+            .await_(future_place, dest, continue_block, unwind);
 
         // Continue execution after await completes
         self.builder.set_current_block(continue_block);

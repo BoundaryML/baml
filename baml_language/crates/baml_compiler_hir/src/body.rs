@@ -66,6 +66,7 @@ pub fn empty_primitive_client_body(
         stmts: Arena::new(),
         patterns: Arena::new(),
         match_arms: Arena::new(),
+        catch_arms: Arena::new(),
         types: Arena::new(),
         root_expr: Some(call_expr),
         diagnostics: Vec::new(),
@@ -120,6 +121,7 @@ fn lower_llm_builtin(
         stmts: Arena::new(),
         patterns: Arena::new(),
         match_arms: Arena::new(),
+        catch_arms: Arena::new(),
         types: Arena::new(),
         root_expr: Some(call_expr),
         diagnostics: Vec::new(),
@@ -328,6 +330,9 @@ pub struct ExprBody {
     /// Match arm arena
     pub match_arms: Arena<MatchArm>,
 
+    /// Catch arm arena (for catch clause arms)
+    pub catch_arms: Arena<CatchArm>,
+
     /// Type annotation arena (for let bindings, etc.)
     pub types: Arena<crate::type_ref::TypeRef>,
 
@@ -347,11 +352,21 @@ pub struct MatchArmSpans {
     pub pattern_span: Span,
 }
 
+/// Span information for a single catch arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CatchArmSpans {
+    /// Span of the entire arm (pattern + body)
+    pub arm_span: Span,
+    /// Span of just the pattern
+    pub pattern_span: Span,
+}
+
 // IDs for arena indices
 pub type ExprId = Idx<Expr>;
 pub type StmtId = Idx<Stmt>;
 pub type PatId = Idx<Pattern>;
 pub type MatchArmId = Idx<MatchArm>;
+pub type CatchArmId = Idx<CatchArm>;
 /// ID for any syntactic occurrence of a type (annotations, generic arguments, etc.)
 pub type TypeId = Idx<crate::type_ref::TypeRef>;
 
@@ -440,6 +455,22 @@ pub enum Expr {
     /// Index access: `array[0]`, `map[key]`
     Index { base: ExprId, index: ExprId },
 
+    /// Catch expression: `expr catch (e) { ... } catch_all (e) { ... }`
+    ///
+    /// Wraps a callable expression with one or more catch clauses.
+    /// Each clause specifies how to handle errors from the wrapped call.
+    Catch {
+        /// The base expression being wrapped (typically a `Call`).
+        base: ExprId,
+        /// Ordered catch clauses.
+        clauses: Vec<CatchClause>,
+    },
+
+    /// Throw expression: `throw expr`
+    ///
+    /// Evaluates the expression and throws it as an error. Diverges (never returns).
+    Throw { value: ExprId },
+
     /// Missing/error expression
     Missing,
 }
@@ -495,6 +526,12 @@ pub enum Stmt {
 
     /// Assert statement: `assert condition;`
     Assert { condition: ExprId },
+
+    /// Throw statement: `throw expr;`
+    ///
+    /// Evaluates the expression and throws it as an error. Control never
+    /// reaches statements following this one.
+    Throw { value: ExprId },
 
     /// Missing/error statement
     Missing,
@@ -579,6 +616,57 @@ pub struct MatchArm {
     /// Optional guard: `if condition`
     /// Note: Guards do NOT contribute to exhaustiveness checking.
     pub guard: Option<ExprId>,
+
+    /// The body expression (result if this arm matches)
+    pub body: ExprId,
+}
+
+// ============================================================================
+// Catch/Throw Types
+// ============================================================================
+
+/// The kind of a catch clause, determining its desugared behavior.
+///
+/// - `Catch`: only catches the listed exception types; unmatched errors rethrow.
+/// - `CatchAll`: catches all errors, with an implicit rethrow fallback if no explicit
+///   catch-all arm is provided.
+/// - `CatchAllPanics`: like `CatchAll` but also catches panics.
+///
+/// See `agreed-upon-format.txt` for desugaring rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CatchClauseKind {
+    Catch,
+    CatchAll,
+    CatchAllPanics,
+}
+
+/// A single catch clause attached to a callable expression.
+///
+/// Clause structure: `catch_keyword (binding_pattern) { arm1, arm2, ... }` (arm form)
+/// or: `catch_keyword (binding_pattern) { stmts }` (block form, treated as single-arm).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatchClause {
+    /// Which catch variant this is.
+    pub kind: CatchClauseKind,
+
+    /// The binding pattern that names the caught error: `catch (e) { ... }`.
+    /// This is defined in scope for all arms.
+    pub binding: PatId,
+
+    /// Arms of the catch clause. In block form, there is exactly one arm
+    /// with a wildcard pattern and the block body.
+    pub arms: Vec<CatchArmId>,
+}
+
+/// A single arm in a catch clause.
+///
+/// Grammar: `pattern '=>' body`
+/// Very similar to `MatchArm` but without guards, and shares the binding
+/// from the parent `CatchClause`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatchArm {
+    /// The pattern to match the caught error against (typed binding, wildcard, etc.)
+    pub pattern: PatId,
 
     /// The body expression (result if this arm matches)
     pub body: ExprId,
@@ -794,6 +882,7 @@ struct LoweringContext {
     stmts: Arena<Stmt>,
     patterns: Arena<Pattern>,
     match_arms: Arena<MatchArm>,
+    catch_arms: Arena<CatchArm>,
     types: Arena<crate::type_ref::TypeRef>,
     /// File ID for creating spans
     file_id: FileId,
@@ -830,6 +919,7 @@ impl LoweringContext {
             stmts: Arena::new(),
             patterns: Arena::new(),
             match_arms: Arena::new(),
+            catch_arms: Arena::new(),
             types: Arena::new(),
             file_id,
             names_in_scope: std::collections::HashSet::new(),
@@ -904,6 +994,12 @@ impl LoweringContext {
         id
     }
 
+    fn alloc_catch_arm(&mut self, arm: CatchArm, spans: CatchArmSpans) -> CatchArmId {
+        let id = self.catch_arms.alloc(arm);
+        self.source_map.insert_catch_arm(id, spans);
+        id
+    }
+
     fn alloc_type(&mut self, type_ref: crate::type_ref::TypeRef, range: TextRange) -> TypeId {
         let id = self.types.alloc(type_ref);
         self.source_map.insert_type(id, self.span_from_range(range));
@@ -916,6 +1012,7 @@ impl LoweringContext {
             stmts: self.stmts,
             patterns: self.patterns,
             match_arms: self.match_arms,
+            catch_arms: self.catch_arms,
             types: self.types,
             root_expr,
             diagnostics: self.diagnostics,
@@ -978,6 +1075,7 @@ impl LoweringContext {
                             self.alloc_stmt(Stmt::Continue, node.text_range())
                         }
                         SyntaxKind::ASSERT_STMT => self.lower_assert_stmt(node),
+                        SyntaxKind::THROW_STMT => self.lower_throw_stmt(node),
                         _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
                     };
 
@@ -1086,6 +1184,8 @@ impl LoweringContext {
             SyntaxKind::CALL_EXPR => self.lower_call_expr(node),
             SyntaxKind::IF_EXPR => self.lower_if_expr(node),
             SyntaxKind::MATCH_EXPR => self.lower_match_expr(node),
+            SyntaxKind::CATCH_EXPR => self.lower_catch_expr(node),
+            SyntaxKind::THROW_EXPR => self.lower_throw_expr(node),
             SyntaxKind::BLOCK_EXPR => {
                 if let Some(block) = baml_compiler_syntax::ast::BlockExpr::cast(node.clone()) {
                     self.lower_block_expr(&block)
@@ -2024,6 +2124,333 @@ impl LoweringContext {
                 self.alloc_pattern(Pattern::Binding(name), TextRange::new(start, end))
             }
         }
+    }
+
+    // ========================================================================
+    // Catch/Throw Lowering
+    // ========================================================================
+
+    /// Lower a catch expression from CST to HIR.
+    ///
+    /// `CATCH_EXPR` structure (from parser):
+    /// - A base expression (the callable being wrapped)
+    /// - One or more `CATCH_CLAUSE` children
+    fn lower_catch_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::SyntaxKind;
+
+        let catch_span = self.span_from_node(node);
+        let mut base = None;
+        let mut clauses = Vec::new();
+
+        for child in node.children() {
+            match child.kind() {
+                SyntaxKind::CATCH_CLAUSE => {
+                    clauses.push(self.lower_catch_clause(&child));
+                }
+                _ => {
+                    // The first non-CATCH_CLAUSE child is the base expression
+                    if base.is_none() {
+                        base = Some(self.lower_expr(&child));
+                    }
+                }
+            }
+        }
+
+        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        let expr_id = self.exprs.alloc(Expr::Catch { base, clauses });
+        self.source_map.insert_expr(expr_id, catch_span);
+        expr_id
+    }
+
+    /// Lower a single catch clause from CST to HIR.
+    ///
+    /// `CATCH_CLAUSE` structure (from parser):
+    /// - Keyword token (`KW_CATCH`, `KW_CATCH_ALL`, `KW_CATCH_ALL_PANICS`)
+    /// - `CATCH_PATTERN` node (the error binding)
+    /// - Either `CATCH_ARM` children (arm form) or `BLOCK_EXPR` child (plain block form)
+    fn lower_catch_clause(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> CatchClause {
+        use baml_compiler_syntax::SyntaxKind;
+
+        let mut kind = CatchClauseKind::Catch;
+        let mut binding = None;
+        let mut arms = Vec::new();
+        let mut block_body = None;
+
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(token) => match token.kind() {
+                    SyntaxKind::KW_CATCH => kind = CatchClauseKind::Catch,
+                    SyntaxKind::KW_CATCH_ALL => kind = CatchClauseKind::CatchAll,
+                    SyntaxKind::KW_CATCH_ALL_PANICS => kind = CatchClauseKind::CatchAllPanics,
+                    _ => {}
+                },
+                rowan::NodeOrToken::Node(child) => {
+                    match child.kind() {
+                        SyntaxKind::CATCH_PATTERN => {
+                            binding = Some(self.lower_catch_pattern(&child));
+                        }
+                        SyntaxKind::CATCH_ARM => {
+                            let (arm, spans) = self.lower_catch_arm(&child);
+                            let arm_id = self.alloc_catch_arm(arm, spans);
+                            arms.push(arm_id);
+                        }
+                        SyntaxKind::BLOCK_EXPR => {
+                            // Plain block form: `catch (e) { ... }`
+                            // This is syntactic sugar for a single catch-all arm
+                            if let Some(block) =
+                                baml_compiler_syntax::ast::BlockExpr::cast(child.clone())
+                            {
+                                block_body = Some(self.lower_block_expr(&block));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        // If we got a plain block body (not arms), wrap it as a single wildcard arm
+        if arms.is_empty() {
+            if let Some(body_expr) = block_body {
+                let wildcard_pat = self.patterns.alloc(Pattern::Binding(Name::new("_")));
+                let arm = CatchArm {
+                    pattern: wildcard_pat,
+                    body: body_expr,
+                };
+                let arm_span = self.span_from_node(node);
+                let spans = CatchArmSpans {
+                    arm_span,
+                    pattern_span: arm_span,
+                };
+                let arm_id = self.alloc_catch_arm(arm, spans);
+                arms.push(arm_id);
+            }
+        }
+
+        let binding =
+            binding.unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_"))));
+
+        CatchClause {
+            kind,
+            binding,
+            arms,
+        }
+    }
+
+    /// Lower a single catch arm from CST to HIR.
+    ///
+    /// `CATCH_ARM` structure (from parser):
+    /// - `CATCH_PATTERN` node (the pattern for this arm)
+    /// - `FAT_ARROW` token (`=>`)
+    /// - Body expression (block or expression)
+    fn lower_catch_arm(
+        &mut self,
+        node: &baml_compiler_syntax::SyntaxNode,
+    ) -> (CatchArm, CatchArmSpans) {
+        use baml_compiler_syntax::SyntaxKind;
+
+        let arm_span = self.span_from_node(node);
+        let mut pattern = None;
+        let mut pattern_span = None;
+        let mut body = None;
+        let mut seen_fat_arrow = false;
+
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) => {
+                    match child.kind() {
+                        SyntaxKind::CATCH_PATTERN => {
+                            pattern_span = Some(self.span_from_node(&child));
+                            pattern = Some(self.lower_catch_pattern(&child));
+                        }
+                        // Handle string literals as body nodes
+                        SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+                            if seen_fat_arrow && body.is_none() =>
+                        {
+                            body = Some(self.lower_string_literal(&child));
+                        }
+                        _ => {
+                            // After the fat arrow, the node is the body
+                            if seen_fat_arrow && body.is_none() {
+                                body = Some(self.lower_expr(&child));
+                            }
+                        }
+                    }
+                }
+                rowan::NodeOrToken::Token(token) => {
+                    match token.kind() {
+                        SyntaxKind::FAT_ARROW => {
+                            seen_fat_arrow = true;
+                        }
+                        // Handle literal tokens as body
+                        SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
+                            let value = token.text().parse::<i64>().unwrap_or(0);
+                            body = Some(self.alloc_expr(
+                                Expr::Literal(Literal::Int(value)),
+                                token.text_range(),
+                            ));
+                        }
+                        SyntaxKind::FLOAT_LITERAL if seen_fat_arrow && body.is_none() => {
+                            let text = token.text().to_string();
+                            body = Some(self.alloc_expr(
+                                Expr::Literal(Literal::Float(text)),
+                                token.text_range(),
+                            ));
+                        }
+                        SyntaxKind::WORD if seen_fat_arrow && body.is_none() => {
+                            let text = token.text();
+                            let range = token.text_range();
+                            let expr = match text {
+                                "true" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(true)), range)
+                                }
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), range)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), range),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), range),
+                            };
+                            body = Some(expr);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        let arm = CatchArm {
+            pattern: pattern
+                .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_")))),
+            body: body.unwrap_or_else(|| self.exprs.alloc(Expr::Missing)),
+        };
+
+        let spans = CatchArmSpans {
+            arm_span,
+            pattern_span: pattern_span.unwrap_or(arm_span),
+        };
+
+        (arm, spans)
+    }
+
+    /// Lower a catch pattern from CST to HIR.
+    ///
+    /// `CATCH_PATTERN` has the same structure as `MATCH_PATTERN`:
+    /// - Simple binding: `e`, `_`
+    /// - Typed binding: `e: HttpError`
+    /// - Literal: `404`, `"not_found"`
+    /// - Enum variant: `HttpStatus.NotFound`
+    /// - Union: `400 | 404 | 500`
+    ///
+    /// We reuse `lower_match_pattern` since the pattern grammar is identical.
+    fn lower_catch_pattern(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> PatId {
+        // CATCH_PATTERN has the same internal structure as MATCH_PATTERN,
+        // so we can reuse the match pattern lowering logic directly.
+        self.lower_match_pattern(node)
+    }
+
+    /// Lower a throw expression from CST to HIR.
+    ///
+    /// `THROW_EXPR` structure: `throw` keyword followed by an expression.
+    fn lower_throw_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
+        let throw_span = self.span_from_node(node);
+
+        // The first child node is the value expression
+        let value = if let Some(child) = node.children().next() {
+            self.lower_expr(&child)
+        } else {
+            // Try token-level lowering for simple values like `throw "error"`
+            self.lower_throw_value_token(node)
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()))
+        };
+
+        let expr_id = self.exprs.alloc(Expr::Throw { value });
+        self.source_map.insert_expr(expr_id, throw_span);
+        expr_id
+    }
+
+    /// Lower a throw statement from CST to HIR.
+    ///
+    /// `THROW_STMT` structure: contains a `THROW_EXPR` child.
+    fn lower_throw_stmt(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> StmtId {
+        use baml_compiler_syntax::SyntaxKind;
+
+        // THROW_STMT wraps a THROW_EXPR
+        let value = node
+            .children()
+            .find(|c| c.kind() == SyntaxKind::THROW_EXPR)
+            .map(|throw_expr_node| {
+                // The THROW_EXPR has the value as its child
+                if let Some(child) = throw_expr_node.children().next() {
+                    self.lower_expr(&child)
+                } else {
+                    self.lower_throw_value_token(&throw_expr_node)
+                        .unwrap_or_else(|| {
+                            self.alloc_expr(Expr::Missing, throw_expr_node.text_range())
+                        })
+                }
+            })
+            .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
+
+        self.alloc_stmt(Stmt::Throw { value }, node.text_range())
+    }
+
+    /// Try to lower a throw value from direct tokens (for `throw "error"`, `throw 42`, etc.)
+    fn lower_throw_value_token(
+        &mut self,
+        node: &baml_compiler_syntax::SyntaxNode,
+    ) -> Option<ExprId> {
+        use baml_compiler_syntax::SyntaxKind;
+
+        for token in node
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+        {
+            match token.kind() {
+                SyntaxKind::KW_THROW => continue, // skip the 'throw' keyword
+                SyntaxKind::INTEGER_LITERAL => {
+                    let value = token.text().parse::<i64>().unwrap_or(0);
+                    return Some(
+                        self.alloc_expr(Expr::Literal(Literal::Int(value)), token.text_range()),
+                    );
+                }
+                SyntaxKind::FLOAT_LITERAL => {
+                    let text = token.text().to_string();
+                    return Some(
+                        self.alloc_expr(Expr::Literal(Literal::Float(text)), token.text_range()),
+                    );
+                }
+                SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                    let text = token.text().to_string();
+                    let content = if text.starts_with("#\"") && text.ends_with("\"#") {
+                        text[2..text.len() - 2].to_string()
+                    } else if text.starts_with('"') && text.ends_with('"') {
+                        text[1..text.len() - 1].to_string()
+                    } else {
+                        text
+                    };
+                    return Some(
+                        self.alloc_expr(
+                            Expr::Literal(Literal::String(content)),
+                            token.text_range(),
+                        ),
+                    );
+                }
+                SyntaxKind::WORD => {
+                    let text = token.text();
+                    let range = token.text_range();
+                    let expr = match text {
+                        "true" => Expr::Literal(Literal::Bool(true)),
+                        "false" => Expr::Literal(Literal::Bool(false)),
+                        "null" => Expr::Literal(Literal::Null),
+                        _ => Expr::Path(vec![Name::new(text)]),
+                    };
+                    return Some(self.alloc_expr(expr, range));
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     fn lower_call_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {

@@ -45,11 +45,15 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Break => SyntaxKind::KW_BREAK,
         TokenKind::Continue => SyntaxKind::KW_CONTINUE,
         TokenKind::Return => SyntaxKind::KW_RETURN,
+        TokenKind::Throw => SyntaxKind::KW_THROW,
         TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Env => SyntaxKind::KW_ENV,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
+        TokenKind::Catch => SyntaxKind::KW_CATCH,
+        TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
+        TokenKind::CatchAllPanics => SyntaxKind::KW_CATCH_ALL_PANICS,
         TokenKind::Assert => SyntaxKind::KW_ASSERT,
 
         // Literals
@@ -2209,6 +2213,8 @@ impl<'a> Parser<'a> {
             self.parse_break_stmt();
         } else if self.at(TokenKind::Continue) {
             self.parse_continue_stmt();
+        } else if self.at(TokenKind::Throw) {
+            self.parse_throw_stmt();
         } else if self.at(TokenKind::Assert) {
             self.parse_assert_stmt();
         } else {
@@ -2287,6 +2293,32 @@ impl<'a> Parser<'a> {
 
             // Consume trailing semicolon
             p.eat(TokenKind::Semicolon);
+        });
+    }
+
+    fn parse_throw_stmt(&mut self) {
+        self.with_node(SyntaxKind::THROW_STMT, |p| {
+            p.parse_throw_expr();
+            p.eat(TokenKind::Semicolon);
+        });
+    }
+
+    fn parse_throw_expr(&mut self) {
+        self.with_node(SyntaxKind::THROW_EXPR, |p| {
+            p.expect(TokenKind::Throw);
+
+            // Throw requires a payload expression.
+            if p.at(TokenKind::Semicolon) || p.at(TokenKind::Comma) || p.at(TokenKind::RBrace) {
+                p.error_unexpected_token("expression after 'throw'".to_string());
+                return;
+            }
+
+            if p.at_end() {
+                p.error_unexpected_token("expression after 'throw'".to_string());
+                return;
+            }
+
+            p.parse_expr_bp(0);
         });
     }
 
@@ -2533,6 +2565,254 @@ impl<'a> Parser<'a> {
         });
     }
 
+    fn at_catch_clause_start(&self) -> bool {
+        self.at(TokenKind::Catch)
+            || self.at(TokenKind::CatchAll)
+            || self.at(TokenKind::CatchAllPanics)
+    }
+
+    fn parse_catch_expr(&mut self, expr_start: usize) {
+        let lhs_start = self.find_previous_expr_start_after(expr_start);
+        if !self.expression_contains_call(lhs_start) {
+            if let Some(token) = self.current() {
+                self.error(
+                    "catch clauses can only be attached to callable expressions".to_string(),
+                    token.span,
+                );
+            }
+        }
+
+        self.wrap_events_in_node(lhs_start, SyntaxKind::CATCH_EXPR);
+        while self.at_catch_clause_start() {
+            self.parse_catch_clause();
+        }
+        self.finish_node();
+    }
+
+    fn parse_catch_clause(&mut self) {
+        self.with_node(SyntaxKind::CATCH_CLAUSE, |p| {
+            if p.at_catch_clause_start() {
+                p.bump();
+            } else {
+                p.error_unexpected_token("catch clause keyword".to_string());
+                return;
+            }
+
+            if p.expect(TokenKind::LParen) {
+                p.parse_catch_pattern();
+                p.expect(TokenKind::RParen);
+            }
+
+            if !p.at(TokenKind::LBrace) {
+                p.error_unexpected_token("catch clause body".to_string());
+                return;
+            }
+
+            if p.looks_like_catch_arm_block() {
+                p.bump(); // {
+
+                if p.at(TokenKind::RBrace) {
+                    p.error_unexpected_token("at least one catch arm".to_string());
+                } else {
+                    p.parse_catch_arm();
+                    while !p.at(TokenKind::RBrace) && !p.at_end() {
+                        p.parse_catch_arm();
+                    }
+                }
+
+                p.expect(TokenKind::RBrace);
+            } else {
+                p.parse_block_expr();
+            }
+        });
+    }
+
+    fn parse_catch_arm(&mut self) {
+        self.with_node(SyntaxKind::CATCH_ARM, |p| {
+            p.parse_catch_pattern();
+
+            if p.at(TokenKind::FatArrow) {
+                p.bump(); // =>
+            } else {
+                p.error_unexpected_token("'=>' after catch pattern".to_string());
+                p.recover_catch_arm();
+                return;
+            }
+
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.parse_expr();
+            }
+
+            p.eat(TokenKind::Comma);
+        });
+    }
+
+    fn parse_catch_pattern(&mut self) {
+        self.with_node(SyntaxKind::CATCH_PATTERN, |p| {
+            p.parse_pattern_element();
+            while p.at(TokenKind::Pipe) {
+                p.bump(); // |
+                p.parse_pattern_element();
+            }
+        });
+    }
+
+    fn recover_catch_arm(&mut self) {
+        while !self.at_end() {
+            if self.at(TokenKind::RBrace) {
+                break;
+            }
+            if self.eat(TokenKind::Comma) {
+                break;
+            }
+            if self.looks_like_catch_arm_start() {
+                break;
+            }
+            self.bump();
+        }
+    }
+
+    fn current_non_trivia_index(&self) -> Option<usize> {
+        let mut i = self.current;
+
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            let kind = self.tokens[i].kind;
+            if self.is_basic_trivia(kind) {
+                i += 1;
+                continue;
+            }
+
+            return Some(i);
+        }
+
+        None
+    }
+
+    fn looks_like_catch_arm_start(&self) -> bool {
+        let mut i = self.current_non_trivia_index().unwrap_or(self.current);
+        let mut scanned = 0usize;
+
+        while i < self.tokens.len() && scanned < 64 {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            let kind = self.tokens[i].kind;
+            if self.is_basic_trivia(kind) {
+                i += 1;
+                continue;
+            }
+
+            if matches!(
+                kind,
+                TokenKind::RBrace | TokenKind::Comma | TokenKind::Semicolon
+            ) {
+                return false;
+            }
+
+            if kind == TokenKind::FatArrow {
+                return true;
+            }
+
+            i += 1;
+            scanned += 1;
+        }
+
+        false
+    }
+
+    fn looks_like_catch_arm_block(&self) -> bool {
+        let Some(open_brace_index) = self.current_non_trivia_index() else {
+            return false;
+        };
+
+        if self.tokens[open_brace_index].kind != TokenKind::LBrace {
+            return false;
+        }
+
+        let mut i = open_brace_index + 1;
+        let mut brace_depth = 1u32;
+        let mut paren_depth = 0u32;
+        let mut bracket_depth = 0u32;
+
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            let kind = self.tokens[i].kind;
+            if self.is_basic_trivia(kind) {
+                i += 1;
+                continue;
+            }
+
+            match kind {
+                TokenKind::LParen => paren_depth += 1,
+                TokenKind::RParen => paren_depth = paren_depth.saturating_sub(1),
+                TokenKind::LBracket => bracket_depth += 1,
+                TokenKind::RBracket => bracket_depth = bracket_depth.saturating_sub(1),
+                TokenKind::LBrace => brace_depth += 1,
+                TokenKind::RBrace => {
+                    brace_depth = brace_depth.saturating_sub(1);
+                    if brace_depth == 0 {
+                        return false;
+                    }
+                }
+                _ => {
+                    if brace_depth == 1 && paren_depth == 0 && bracket_depth == 0 {
+                        if kind == TokenKind::FatArrow {
+                            return true;
+                        }
+
+                        if kind == TokenKind::Semicolon
+                            || matches!(
+                                kind,
+                                TokenKind::Let
+                                    | TokenKind::Return
+                                    | TokenKind::Throw
+                                    | TokenKind::If
+                                    | TokenKind::While
+                                    | TokenKind::For
+                                    | TokenKind::Break
+                                    | TokenKind::Continue
+                                    | TokenKind::Assert
+                            )
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            i += 1;
+        }
+
+        false
+    }
+
+    fn expression_contains_call(&self, start_index: usize) -> bool {
+        self.events[start_index..].iter().any(|event| {
+            matches!(
+                event,
+                Event::StartNode {
+                    kind: SyntaxKind::CALL_EXPR,
+                }
+            )
+        })
+    }
+
     fn parse_while_stmt(&mut self) {
         self.with_node(SyntaxKind::WHILE_STMT, |p| {
             p.expect(TokenKind::While);
@@ -2725,7 +3005,10 @@ impl<'a> Parser<'a> {
             }
 
             // Check for special cases first
-            if op == TokenKind::Less && self.looks_like_generic_args() {
+            if self.at_catch_clause_start() {
+                self.parse_catch_expr(expr_start);
+                continue;
+            } else if op == TokenKind::Less && self.looks_like_generic_args() {
                 // Parse as generic arguments: foo<T>
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::PATH_EXPR);
@@ -2925,6 +3208,9 @@ impl<'a> Parser<'a> {
             self.bump();
         } else if self.parse_any_string() {
             // String literal
+        } else if self.at(TokenKind::Throw) {
+            // Throw expression
+            self.parse_throw_expr();
         } else if self.at(TokenKind::Word) {
             let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
             if text == "true" || text == "false" {
@@ -4014,4 +4300,183 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
     parser.finish_node();
 
     parser.build_tree(cache)
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_base::FileId;
+    use baml_compiler_lexer::lex_lossless;
+    use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+
+    use super::{ParseError, parse_file};
+
+    fn parse_source(source: &str) -> (SyntaxNode, Vec<ParseError>) {
+        let tokens = lex_lossless(source, FileId::new(0));
+        let (green, errors) = parse_file(&tokens);
+        (SyntaxNode::new_root(green), errors)
+    }
+
+    fn assert_no_errors(errors: &[ParseError]) {
+        assert!(
+            errors.is_empty(),
+            "expected no parse errors, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn parses_chained_catch_clauses_with_ordered_keywords_and_typed_arms() {
+        let source = r#"
+function Demo() -> int {
+  foo() catch (e) {
+    _ => { throw e; }
+  } catch_all (e) {
+    _: ValidationError => { 1 }
+    other => { throw other; }
+  } catch_all_panics (e) {
+    _: Panic => { throw e; }
+    other => 2
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let catch_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CATCH_EXPR)
+            .expect("expected CATCH_EXPR node");
+
+        let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
+        assert_eq!(child_kinds[0], SyntaxKind::CALL_EXPR);
+        assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+        assert_eq!(child_kinds[2], SyntaxKind::CATCH_CLAUSE);
+        assert_eq!(child_kinds[3], SyntaxKind::CATCH_CLAUSE);
+
+        let clauses: Vec<_> = catch_expr
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::CATCH_CLAUSE)
+            .collect();
+        assert_eq!(clauses.len(), 3);
+
+        let keywords: Vec<_> = clauses
+            .iter()
+            .filter_map(|clause| {
+                clause
+                    .children_with_tokens()
+                    .filter_map(rowan::NodeOrToken::into_token)
+                    .find(|t| {
+                        matches!(
+                            t.kind(),
+                            SyntaxKind::KW_CATCH
+                                | SyntaxKind::KW_CATCH_ALL
+                                | SyntaxKind::KW_CATCH_ALL_PANICS
+                        )
+                    })
+                    .map(|t| t.kind())
+            })
+            .collect();
+
+        assert_eq!(
+            keywords,
+            vec![
+                SyntaxKind::KW_CATCH,
+                SyntaxKind::KW_CATCH_ALL,
+                SyntaxKind::KW_CATCH_ALL_PANICS,
+            ]
+        );
+
+        let second_clause_arms: Vec<_> = clauses[1]
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::CATCH_ARM)
+            .collect();
+        assert_eq!(second_clause_arms.len(), 2);
+        assert!(
+            second_clause_arms[0]
+                .text()
+                .to_string()
+                .contains("ValidationError")
+        );
+        assert!(second_clause_arms[1].text().to_string().contains("other"));
+    }
+
+    #[test]
+    fn parses_throw_statement_and_throw_expression_in_catch_arm() {
+        let source = r#"
+function Demo() -> int {
+  throw err;
+  foo() catch (e) {
+    other => throw other
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let throw_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::THROW_STMT)
+            .expect("expected THROW_STMT node");
+        assert!(
+            throw_stmt
+                .children()
+                .any(|child| child.kind() == SyntaxKind::THROW_EXPR)
+        );
+
+        let throw_expr_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::THROW_EXPR)
+            .count();
+        assert_eq!(throw_expr_count, 2);
+    }
+
+    #[test]
+    fn reports_missing_fat_arrow_in_catch_arm_and_recovers_next_arm() {
+        let source = r#"
+function Demo() -> int {
+  foo() catch (e) {
+    _: ValidationError
+    other => 1
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+
+        assert!(errors.iter().any(|error| {
+            matches!(
+                error,
+                ParseError::UnexpectedToken { expected, .. }
+                    if expected == "'=>' after catch pattern"
+            )
+        }));
+
+        let arm_count = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::CATCH_ARM)
+            .count();
+        assert_eq!(arm_count, 2);
+    }
+
+    #[test]
+    fn reports_catch_on_non_callable_expression() {
+        let source = r#"
+function Demo() -> int {
+  value catch (e) {
+    other => 1
+  }
+}
+"#;
+
+        let (_, errors) = parse_source(source);
+
+        assert!(errors.iter().any(|error| {
+            matches!(
+                error,
+                ParseError::InvalidSyntax { message, .. }
+                    if message == "catch clauses can only be attached to callable expressions"
+            )
+        }));
+    }
 }

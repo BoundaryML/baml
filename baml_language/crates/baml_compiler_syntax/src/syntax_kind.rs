@@ -29,7 +29,11 @@ pub enum SyntaxKind {
     KW_BREAK,
     KW_CONTINUE,
     KW_RETURN,
+    KW_THROW,
     KW_MATCH,
+    KW_CATCH,
+    KW_CATCH_ALL,
+    KW_CATCH_ALL_PANICS,
     KW_ASSERT,
 
     // Other keywords
@@ -231,6 +235,11 @@ pub enum SyntaxKind {
     MATCH_ARM,
     MATCH_PATTERN,
     MATCH_GUARD,
+    CATCH_EXPR,
+    CATCH_CLAUSE,
+    CATCH_ARM,
+    CATCH_PATTERN,
+    THROW_EXPR,
     WHILE_STMT,
     FOR_EXPR,
     LET_STMT,
@@ -238,6 +247,7 @@ pub enum SyntaxKind {
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
+    THROW_STMT,
     ASSERT_STMT,
 
     // Expression components
@@ -350,7 +360,11 @@ impl SyntaxKind {
                 | Self::KW_BREAK
                 | Self::KW_CONTINUE
                 | Self::KW_RETURN
+                | Self::KW_THROW
                 | Self::KW_MATCH
+                | Self::KW_CATCH
+                | Self::KW_CATCH_ALL
+                | Self::KW_CATCH_ALL_PANICS
                 | Self::KW_ASSERT
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF

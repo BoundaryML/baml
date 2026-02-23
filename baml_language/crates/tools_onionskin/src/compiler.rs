@@ -2038,15 +2038,17 @@ fn format_expr_function_body(
     output: &mut String,
     indent: usize,
 ) {
-    use baml_compiler_syntax::ast::*;
-
     // Look for block expression or other expression types
-    if let Some(block) = body.syntax().children().find_map(BlockExpr::cast) {
+    if let Some(block) = body
+        .syntax()
+        .children()
+        .find_map(baml_compiler_syntax::ast::BlockExpr::cast)
+    {
         write_indent(output, indent);
         writeln!(output, "EXPR_BLOCK").ok();
         format_block_expr(&block, output, indent + 1);
-    } else if let Some(expr) = body.syntax().children().find_map(Expr::cast) {
-        format_expr(&expr, output, indent);
+    } else if let Some(expr_node) = body.syntax().children().next() {
+        format_expr_node(&expr_node, output, indent);
     } else {
         // Fallback: show raw syntax
         write_indent(output, indent);
@@ -2094,21 +2096,33 @@ fn format_block_expr(
 ) {
     use baml_compiler_syntax::ast::*;
 
-    // Iterate through statements in the block
-    for child in block.syntax().children() {
-        if let Some(let_stmt) = LetStmt::cast(child.clone()) {
-            format_let_stmt(&let_stmt, output, indent);
-        } else if let Some(if_expr) = IfExpr::cast(child.clone()) {
-            format_if_expr(&if_expr, output, indent);
-        } else if let Some(expr) = Expr::cast(child.clone()) {
-            format_expr(&expr, output, indent);
+    for element in block.elements() {
+        match element {
+            BlockElement::Stmt(node) => {
+                if let Some(let_stmt) = LetStmt::cast(node.clone()) {
+                    format_let_stmt(&let_stmt, output, indent);
+                } else if let Some(return_stmt) = ReturnStmt::cast(node.clone()) {
+                    format_return_stmt(&return_stmt, output, indent);
+                } else if let Some(throw_stmt) = ThrowStmt::cast(node.clone()) {
+                    format_throw_stmt(&throw_stmt, output, indent);
+                } else {
+                    write_indent(output, indent);
+                    writeln!(output, "STMT {}", node.text().to_string().trim()).ok();
+                }
+            }
+            BlockElement::ExprNode(node) => {
+                format_expr_node(&node, output, indent);
+            }
+            BlockElement::ExprToken(token) => {
+                write_indent(output, indent);
+                writeln!(output, "EXPR {}", token.text()).ok();
+            }
+            BlockElement::HeaderComment(_) => {}
         }
     }
 }
 
 fn format_let_stmt(stmt: &baml_compiler_syntax::ast::LetStmt, output: &mut String, indent: usize) {
-    use baml_compiler_syntax::ast::*;
-
     write_indent(output, indent);
     writeln!(output, "STMT_LET").ok();
 
@@ -2124,10 +2138,15 @@ fn format_let_stmt(stmt: &baml_compiler_syntax::ast::LetStmt, output: &mut Strin
     }
 
     // Find the value expression
-    if let Some(expr) = stmt.syntax().children().find_map(Expr::cast) {
+    if let Some(initializer) = stmt.initializer() {
         write_indent(output, indent + 1);
         writeln!(output, "VALUE").ok();
-        format_expr(&expr, output, indent + 2);
+        format_expr_node(&initializer, output, indent + 2);
+    } else if let Some(initializer_token) = stmt.initializer_token() {
+        write_indent(output, indent + 1);
+        writeln!(output, "VALUE").ok();
+        write_indent(output, indent + 2);
+        writeln!(output, "EXPR {}", initializer_token.text()).ok();
     }
 }
 
@@ -2141,9 +2160,9 @@ fn format_if_expr(if_expr: &baml_compiler_syntax::ast::IfExpr, output: &mut Stri
     if let Some(cond) = if_expr
         .syntax()
         .children()
-        .find_map(baml_compiler_syntax::ast::Expr::cast)
+        .find(|n| n.kind() != baml_compiler_syntax::SyntaxKind::BLOCK_EXPR)
     {
-        format_expr(&cond, output, indent + 2);
+        format_expr_node(&cond, output, indent + 2);
     }
 
     // Then branch
@@ -2172,6 +2191,206 @@ fn format_expr(expr: &baml_compiler_syntax::ast::Expr, output: &mut String, inde
         writeln!(output, "EXPR").ok();
         write_indent(output, indent + 1);
         writeln!(output, "{}", text.trim()).ok();
+    }
+}
+
+fn format_expr_node(expr_node: &SyntaxNode, output: &mut String, indent: usize) {
+    use baml_compiler_syntax::ast::*;
+
+    if let Some(catch_expr) = CatchExpr::cast(expr_node.clone()) {
+        format_catch_expr(&catch_expr, output, indent);
+        return;
+    }
+
+    if let Some(throw_expr) = ThrowExpr::cast(expr_node.clone()) {
+        format_throw_expr(&throw_expr, output, indent);
+        return;
+    }
+
+    if let Some(if_expr) = IfExpr::cast(expr_node.clone()) {
+        format_if_expr(&if_expr, output, indent);
+        return;
+    }
+
+    if let Some(block_expr) = BlockExpr::cast(expr_node.clone()) {
+        write_indent(output, indent);
+        writeln!(output, "EXPR_BLOCK").ok();
+        format_block_expr(&block_expr, output, indent + 1);
+        return;
+    }
+
+    if let Some(expr) = Expr::cast(expr_node.clone()) {
+        format_expr(&expr, output, indent);
+        return;
+    }
+
+    let text = expr_node.text().to_string();
+    if text.len() < 40 && !text.contains('\n') {
+        write_indent(output, indent);
+        writeln!(output, "EXPR {}", text.trim()).ok();
+    } else {
+        write_indent(output, indent);
+        writeln!(output, "EXPR").ok();
+        write_indent(output, indent + 1);
+        writeln!(output, "{}", text.trim()).ok();
+    }
+}
+
+fn format_return_stmt(
+    stmt: &baml_compiler_syntax::ast::ReturnStmt,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "STMT_RETURN").ok();
+
+    if let Some(value) = stmt.value() {
+        write_indent(output, indent + 1);
+        writeln!(output, "VALUE").ok();
+        format_expr_node(&value, output, indent + 2);
+        return;
+    }
+
+    let text = stmt.syntax().text().to_string();
+    if let Some((_, value_text)) = text.split_once("return") {
+        let value = value_text.trim().trim_end_matches(';').trim();
+        if !value.is_empty() {
+            write_indent(output, indent + 1);
+            writeln!(output, "VALUE").ok();
+            write_indent(output, indent + 2);
+            writeln!(output, "EXPR {}", value).ok();
+        }
+    }
+}
+
+fn format_throw_stmt(
+    stmt: &baml_compiler_syntax::ast::ThrowStmt,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "STMT_THROW").ok();
+
+    if let Some(expr) = stmt.expr() {
+        format_throw_expr(&expr, output, indent + 1);
+    }
+}
+
+fn format_throw_expr(
+    expr: &baml_compiler_syntax::ast::ThrowExpr,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "EXPR_THROW").ok();
+
+    if let Some(value) = expr.value() {
+        write_indent(output, indent + 1);
+        writeln!(output, "VALUE").ok();
+        format_expr_node(&value, output, indent + 2);
+        return;
+    }
+
+    let text = expr.syntax().text().to_string();
+    if let Some((_, value_text)) = text.split_once("throw") {
+        let value = value_text.trim();
+        if !value.is_empty() {
+            write_indent(output, indent + 1);
+            writeln!(output, "VALUE").ok();
+            write_indent(output, indent + 2);
+            writeln!(output, "EXPR {}", value).ok();
+        }
+    }
+}
+
+fn format_catch_expr(
+    catch_expr: &baml_compiler_syntax::ast::CatchExpr,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "EXPR_CATCH").ok();
+
+    if let Some(base) = catch_expr.base() {
+        write_indent(output, indent + 1);
+        writeln!(output, "BASE").ok();
+        format_expr_node(&base, output, indent + 2);
+    }
+
+    for clause in catch_expr.clauses() {
+        format_catch_clause(&clause, output, indent + 1);
+    }
+}
+
+fn format_catch_clause(
+    clause: &baml_compiler_syntax::ast::CatchClause,
+    output: &mut String,
+    indent: usize,
+) {
+    write_indent(output, indent);
+    writeln!(output, "CATCH_CLAUSE").ok();
+
+    if let Some(keyword) = clause.keyword() {
+        write_indent(output, indent + 1);
+        writeln!(output, "KIND {}", keyword.text()).ok();
+    }
+
+    if let Some(binding) = clause.binding() {
+        write_indent(output, indent + 1);
+        writeln!(
+            output,
+            "BINDING {}",
+            binding.syntax().text().to_string().trim()
+        )
+        .ok();
+    }
+
+    let arms: Vec<_> = clause.arms().collect();
+    if !arms.is_empty() {
+        write_indent(output, indent + 1);
+        writeln!(output, "ARMS").ok();
+        for arm in arms {
+            format_catch_arm(&arm, output, indent + 2);
+        }
+    } else if let Some(block_body) = clause.block_body() {
+        write_indent(output, indent + 1);
+        writeln!(output, "BODY").ok();
+        format_block_expr(&block_body, output, indent + 2);
+    }
+}
+
+fn format_catch_arm(arm: &baml_compiler_syntax::ast::CatchArm, output: &mut String, indent: usize) {
+    write_indent(output, indent);
+    writeln!(output, "CATCH_ARM").ok();
+
+    if let Some(pattern) = arm.pattern() {
+        write_indent(output, indent + 1);
+        writeln!(
+            output,
+            "PATTERN {}",
+            pattern.syntax().text().to_string().trim()
+        )
+        .ok();
+    }
+
+    write_indent(output, indent + 1);
+    writeln!(output, "BODY").ok();
+    if let Some(body) = arm.body() {
+        format_expr_node(&body, output, indent + 2);
+    } else if let Some(body_text) = extract_arm_body_text(arm.syntax()) {
+        write_indent(output, indent + 2);
+        writeln!(output, "EXPR {}", body_text).ok();
+    }
+}
+
+fn extract_arm_body_text(arm_syntax: &SyntaxNode) -> Option<String> {
+    let text = arm_syntax.text().to_string();
+    let (_, rhs) = text.split_once("=>")?;
+    let body = rhs.trim().trim_end_matches(',').trim();
+    if body.is_empty() {
+        None
+    } else {
+        Some(body.to_string())
     }
 }
 

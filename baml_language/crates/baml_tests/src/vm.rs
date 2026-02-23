@@ -360,6 +360,12 @@ pub enum Instruction {
     /// Direct call to a statically-known function by name.
     Call(String),
     CallIndirect,
+    PushUnwind {
+        handler: isize,
+        error_slot: usize,
+    },
+    PopUnwind,
+    Throw,
 
     Return,
     Assert,

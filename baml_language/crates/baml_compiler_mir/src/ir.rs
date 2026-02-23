@@ -285,6 +285,15 @@ pub enum Terminator {
         /// Block to jump to if the future fails (for catch).
         unwind: Option<BlockId>,
     },
+
+    /// Throw an error value, unwinding to the nearest catch handler.
+    ///
+    /// If no catch handler is active, the error propagates to the caller.
+    /// The `value` operand holds the error object to be thrown.
+    Throw {
+        /// The error value to throw.
+        value: Operand,
+    },
 }
 
 impl Terminator {
@@ -321,6 +330,7 @@ impl Terminator {
                 }
                 succs
             }
+            Terminator::Throw { .. } => vec![],
         }
     }
 }

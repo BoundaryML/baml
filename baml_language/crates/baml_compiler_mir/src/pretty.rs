@@ -260,6 +260,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             }
             write!(f, "];")
         }
+        Terminator::Throw { value } => {
+            write!(f, "throw ")?;
+            write_operand(f, value)?;
+            write!(f, ";")
+        }
     }
 }
 

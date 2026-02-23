@@ -290,6 +290,11 @@ impl MirBuilder {
         self.set_terminator(Terminator::Unreachable);
     }
 
+    /// Emit a throw terminator (unwind with error value).
+    pub(crate) fn throw(&mut self, value: Operand) {
+        self.set_terminator(Terminator::Throw { value });
+    }
+
     /// Emit a dispatch future (for LLM calls).
     pub(crate) fn dispatch_future(
         &mut self,

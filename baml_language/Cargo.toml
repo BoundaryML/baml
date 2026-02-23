@@ -7,6 +7,7 @@ members = [
   "crates/baml_codegen_python",
   "crates/baml_codegen_tests",
   "crates/baml_codegen_types",
+  "crates/baml_compiler_analysis",
   "crates/baml_compiler_diagnostics",
   "crates/baml_compiler_emit",
   "crates/baml_compiler_hir",
@@ -73,6 +74,7 @@ baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 baml_codegen_python = { path = "crates/baml_codegen_python" }
 baml_codegen_tests = { path = "crates/baml_codegen_tests" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
+baml_compiler_analysis = { path = "crates/baml_compiler_analysis" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_emit = { path = "crates/baml_compiler_emit" }
 baml_compiler_hir = { path = "crates/baml_compiler_hir" }

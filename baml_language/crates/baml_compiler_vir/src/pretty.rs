@@ -5,7 +5,9 @@
 
 use std::fmt::Write;
 
-use crate::{AssignOp, BinaryOp, Expr, ExprBody, ExprId, Literal, Pattern, UnaryOp};
+use crate::{
+    AssignOp, BinaryOp, CatchClauseKind, Expr, ExprBody, ExprId, Literal, Pattern, UnaryOp,
+};
 
 /// Pretty print an expression body.
 pub fn pretty_print(body: &ExprBody) -> String {
@@ -318,6 +320,38 @@ impl<'a> PrettyPrinter<'a> {
                     self.print_expr(arm.body, level + 2);
                 }
             }
+            Expr::Catch { base, clauses } => {
+                self.indent(level);
+                writeln!(self.output, "catch : {ty}").unwrap();
+                self.indent(level + 1);
+                self.output.push_str("base:\n");
+                self.print_expr(*base, level + 2);
+                for (ci, clause) in clauses.iter().enumerate() {
+                    self.output.push('\n');
+                    self.indent(level + 1);
+                    let kind_str = match clause.kind {
+                        CatchClauseKind::Catch => "catch",
+                        CatchClauseKind::CatchAll => "catch_all",
+                        CatchClauseKind::CatchAllPanics => "catch_all_panics",
+                    };
+                    let binding_str = self.format_pattern(clause.binding);
+                    writeln!(self.output, "{kind_str}({binding_str}) [{ci}]:").unwrap();
+                    for (ai, arm) in clause.arms.iter().enumerate() {
+                        self.indent(level + 2);
+                        let pat_str = self.format_pattern(arm.pattern);
+                        writeln!(self.output, "{pat_str} => [{ai}]").unwrap();
+                        self.print_expr(arm.body, level + 3);
+                        self.output.push('\n');
+                    }
+                }
+            }
+
+            Expr::Throw { value } => {
+                self.indent(level);
+                writeln!(self.output, "throw : {ty}").unwrap();
+                self.print_expr(*value, level + 1);
+            }
+
             Expr::NotifyBlock { name, level: lvl } => {
                 self.indent(level);
                 self.output.push_str("//");

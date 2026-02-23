@@ -815,6 +815,9 @@ fn collect_uses_in_terminator(
                 }
             }
         }
+        Terminator::Throw { value } => {
+            collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
+        }
     }
 }
 

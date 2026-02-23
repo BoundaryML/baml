@@ -75,8 +75,16 @@ pub enum TokenKind {
     Continue,
     #[token("return")]
     Return,
+    #[token("throw")]
+    Throw,
     #[token("match")]
     Match,
+    #[token("catch")]
+    Catch,
+    #[token("catch_all")]
+    CatchAll,
+    #[token("catch_all_panics")]
+    CatchAllPanics,
     #[token("assert")]
     Assert,
 
@@ -270,7 +278,11 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Break => "break",
             TokenKind::Continue => "continue",
             TokenKind::Return => "return",
+            TokenKind::Throw => "throw",
             TokenKind::Match => "match",
+            TokenKind::Catch => "catch",
+            TokenKind::CatchAll => "catch_all",
+            TokenKind::CatchAllPanics => "catch_all_panics",
             TokenKind::Assert => "assert",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
@@ -793,6 +805,20 @@ mod tests {
 
         let all = lex("get_client");
         assert_eq!(all[0].text, "get_client");
+    }
+
+    #[test]
+    fn test_exception_keywords() {
+        let tokens = lex_no_whitespace("throw catch catch_all catch_all_panics");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Throw,
+                TokenKind::Catch,
+                TokenKind::CatchAll,
+                TokenKind::CatchAllPanics,
+            ]
+        );
     }
 
     #[test]

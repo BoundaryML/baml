@@ -1,0 +1,181 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function AlsoMayFail(x: int) -> string {
+    load_const "also ok"
+    return
+}
+
+function CatchAllPanics(x: int) -> string {
+    load_var x
+    call MayFail
+    jump L2
+    load_var _2
+    store_var e
+    load_var _2
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    unreachable
+
+  L1:
+    load_const "caught string"
+
+  L2:
+    return
+}
+
+function CatchAllWithFallback(x: int) -> string {
+    load_var x
+    call MayFail
+    jump L2
+    load_var _2
+    store_var e
+    load_var _2
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    unreachable
+
+  L1:
+    load_const "caught string"
+
+  L2:
+    return
+}
+
+function CatchAndRethrow(x: int) -> string {
+    load_var x
+    call MayFail
+    jump L0
+    unreachable
+
+  L0:
+    return
+}
+
+function ChainedCatchClauses(x: int) -> string {
+    load_var x
+    call MayFail
+    jump L2
+    load_var _2
+    store_var e
+    load_var _2
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    unreachable
+
+  L1:
+    load_const "first handler"
+
+  L2:
+    return
+}
+
+function MayFail(x: int) -> string {
+    load_const "ok"
+    return
+}
+
+function MultipleCatchArms(x: int) -> string {
+    load_var x
+    call MayFail
+    jump L4
+    load_var _2
+    store_var e
+    load_var _2
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+    jump L3
+
+  L0:
+    load_var _2
+    pop 1
+    load_const false
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    unreachable
+
+  L2:
+    load_const "caught int"
+    jump L4
+
+  L3:
+    load_const "caught string"
+
+  L4:
+    return
+}
+
+function NestedCatch(x: int) -> string {
+    load_var x
+    call MayFail
+    store_var inner
+    jump L0
+    load_var _3
+    store_var e
+    load_const "inner caught"
+    store_var inner
+
+  L0:
+    load_var x
+    call AlsoMayFail
+    jump L1
+    load_var _7
+    store_var e
+    load_var inner
+
+  L1:
+    return
+}
+
+function SingleCatchTyped(x: int) -> string {
+    load_var x
+    call MayFail
+    jump L2
+    load_var _2
+    store_var e
+    load_var _2
+    pop 1
+    load_const false
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    unreachable
+
+  L1:
+    load_const "caught string"
+
+  L2:
+    return
+}
+
+function SingleCatchWildcard(x: int) -> string {
+    load_var x
+    call MayFail
+    jump L0
+    load_var _2
+    store_var e
+    load_const "caught"
+
+  L0:
+    return
+}
+
+function ThrowStatement(x: int) -> string {
+    unreachable
+}

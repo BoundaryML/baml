@@ -289,6 +289,29 @@ pub enum Instruction {
     /// Arity is read from the runtime callee function object.
     CallIndirect,
 
+    /// Push an unwind handler for catch semantics.
+    ///
+    /// The handler remains active until a matching `POP_UNWIND` is executed
+    /// or an exception unwinds control flow to `handler`.
+    ///
+    /// Format: `PUSH_UNWIND handler, error_slot` where:
+    /// - `handler` is the relative jump offset to the catch handler block.
+    /// - `error_slot` is the frame-local slot that receives the exception value.
+    PushUnwind {
+        /// Relative offset from current instruction to handler entry.
+        handler: isize,
+        /// Frame-local slot index for the caught error value.
+        error_slot: usize,
+    },
+
+    /// Pop the most recently pushed unwind handler for the current frame.
+    PopUnwind,
+
+    /// Throw the value on top of the stack.
+    ///
+    /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
+    Throw,
+
     /// Return from a function.
     ///
     /// No arguments needed, result is stored in the eval stack and the VM
@@ -544,6 +567,14 @@ impl std::fmt::Display for Instruction {
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::Call(callee) => write!(f, "CALL {callee}"),
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
+            Instruction::PushUnwind {
+                handler,
+                error_slot,
+            } => {
+                write!(f, "PUSH_UNWIND {handler:+}, {error_slot}")
+            }
+            Instruction::PopUnwind => f.write_str("POP_UNWIND"),
+            Instruction::Throw => f.write_str("THROW"),
 
             Instruction::Return => f.write_str("RETURN"),
             Instruction::Assert => f.write_str("ASSERT"),

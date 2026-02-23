@@ -1,0 +1,70 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+function CatchAllPanics(x: int) -> string {
+    MayFail(x) catch_all_panics (e) {
+        _: string => "caught string",
+    }
+}
+
+function CatchAndRethrow(x: int) -> string {
+    MayFail(x) catch (e) {
+        _ => throw e,
+    }
+}
+
+function ChainedCatchClauses(x: int) -> string {
+    MayFail(x) catch (e) {
+        _: string => "first handler",
+    } catch (e2) {
+        _: int => "second handler",
+    }
+}
+
+function SingleCatchWildcard(x: int) -> string {
+    MayFail(x) catch (e) {
+        _ => "caught",
+    }
+}
+
+function ThrowStatement(x: int) -> string {
+    throw "error";
+    "unreachable"
+}
+
+function MayFail(x: int) -> string {
+    "ok"
+}
+
+function SingleCatchTyped(x: int) -> string {
+    MayFail(x) catch (e) {
+        _: string => "caught string",
+    }
+}
+
+function AlsoMayFail(x: int) -> string {
+    "also ok"
+}
+
+function NestedCatch(x: int) -> string {
+    let inner = MayFail(x) catch (e) {
+        _ => "inner caught",
+    };
+    AlsoMayFail(x) catch (e) {
+        _ => inner,
+    }
+}
+
+function CatchAllWithFallback(x: int) -> string {
+    MayFail(x) catch_all (e) {
+        _: string => "caught string",
+    }
+}
+
+function MultipleCatchArms(x: int) -> string {
+    MayFail(x) catch (e) {
+        _: string => "caught string",
+        _: int => "caught int",
+    }
+}

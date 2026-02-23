@@ -393,6 +393,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler_analysis"
+version = "0.0.0-beta"
+dependencies = [
+ "insta",
+]
+
+[[package]]
 name = "baml_compiler_diagnostics"
 version = "0.0.0-beta"
 dependencies = [
