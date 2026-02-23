@@ -12,7 +12,7 @@ use std::{
     sync::{Arc, atomic::AtomicU32},
 };
 
-use baml_compiler_emit::{CompileOptions, OptLevel};
+use baml_compiler_emit::CompileOptions;
 use baml_db::{FileId, SourceFile};
 use baml_workspace::Project;
 use salsa::Setter;

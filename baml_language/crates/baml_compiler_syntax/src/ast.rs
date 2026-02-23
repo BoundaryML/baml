@@ -1409,11 +1409,7 @@ impl ConfigValue {
             .filter(|token| !token.kind().is_trivia() && token.kind() != SyntaxKind::QUOTE)
             .map(|token| token.text().to_string())
             .collect();
-        if text.is_empty() {
-            None
-        } else {
-            Some(text)
-        }
+        if text.is_empty() { None } else { Some(text) }
     }
 }
 

@@ -1370,7 +1370,7 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
-            baml_compiler_emit::CompileOptions {
+            &baml_compiler_emit::CompileOptions {
                 emit_test_cases: false,
             },
         ) {
@@ -1478,7 +1478,7 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
-            baml_compiler_emit::CompileOptions {
+            &baml_compiler_emit::CompileOptions {
                 emit_test_cases: false,
             },
         ) {
@@ -1633,7 +1633,7 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
-            baml_compiler_emit::CompileOptions {
+            &baml_compiler_emit::CompileOptions {
                 emit_test_cases: false,
             },
         ) {

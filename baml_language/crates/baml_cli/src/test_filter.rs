@@ -32,6 +32,7 @@ impl TestFilter {
         }
     }
 
+    #[allow(clippy::print_stderr)]
     pub fn filter_expr_match(filter_expr: &str, subject: &str) -> bool {
         if filter_expr.is_empty() {
             return true;

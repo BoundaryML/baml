@@ -1,16 +1,18 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::baml_compiler_diagnostics::Severity;
-use baml_db::baml_compiler_emit;
-use baml_db::baml_compiler_hir::{ItemId, file_item_tree, project_items};
+use baml_db::{
+    baml_compiler_diagnostics::Severity,
+    baml_compiler_emit,
+    baml_compiler_hir::{ItemId, file_item_tree, project_items},
+};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
-use bex_engine::{BexEngine, BexExternalValue, test_arg_to_external};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, test_arg_to_external};
 use clap::Args;
-use sys_native::SysOpsExt;
+use sys_native::{CallId, SysOpsExt};
 
 use crate::test_filter::TestFilter;
 
@@ -122,7 +124,7 @@ impl TestArgs {
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         // Create the engine with native (tokio-based) sys ops.
-        let engine = BexEngine::new(bytecode, sys_native::SysOps::native())
+        let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), None)
             .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
 
         // Create a tokio runtime for async execution.
@@ -157,7 +159,11 @@ impl TestArgs {
             };
 
             // Execute the function.
-            match rt.block_on(engine.call_function(func_name, ordered_args, None, &[])) {
+            match rt.block_on(engine.call_function(
+                func_name,
+                ordered_args,
+                FunctionCallContextBuilder::new(CallId::next()).build(),
+            )) {
                 Ok(result) => {
                     println!("PASS {func_name}::{test_name}");
                     println!("  => {result:?}");

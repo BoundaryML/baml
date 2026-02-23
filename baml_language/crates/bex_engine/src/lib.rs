@@ -55,8 +55,6 @@
 
 mod conversion;
 mod function_call_context;
-pub use conversion::test_arg_to_external;
-
 use std::{
     collections::HashMap,
     sync::{
@@ -75,6 +73,7 @@ use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
+pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
 use sys_types::{CallId, OpError, SysOpResult};
@@ -983,13 +982,9 @@ impl BexEngine {
         function_name: &str,
         test_name: &str,
     ) -> Option<&bex_vm_types::TestCase> {
-        self.test_cases.iter().find(|t| {
-            t.function_names
-                .iter()
-                .find(|n| &function_name == n)
-                .is_some()
-                && t.name == test_name
-        })
+        self.test_cases
+            .iter()
+            .find(|t| t.function_names.iter().any(|n| function_name == n) && t.name == test_name)
     }
 
     /// Collect roots from a yielded VM.

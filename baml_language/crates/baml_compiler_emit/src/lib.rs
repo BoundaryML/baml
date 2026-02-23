@@ -781,7 +781,7 @@ fn convert_hir_test_arg(
                 _ => (baml_type::Ty::String, baml_type::Ty::Null),
             };
             bex_vm_types::TestArgValue::Map {
-                key_type: key_type.clone(),
+                key_type,
                 value_type: value_type.clone(),
                 entries: map
                     .iter()
