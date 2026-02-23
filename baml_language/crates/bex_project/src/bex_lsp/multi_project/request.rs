@@ -1,8 +1,9 @@
 use lsp_types::{
     CodeLens, CodeLensOptions, CompletionOptions, DiagnosticOptions, DiagnosticServerCapabilities,
-    HoverProviderCapability, SaveOptions, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
-    WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
+    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, SaveOptions,
+    ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+    TextDocumentSyncSaveOptions, WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities,
+    WorkspaceServerCapabilities,
 };
 
 use super::{BexMulitProject, LspError, WithDiagnostics, commands, wasm_helpers};
@@ -54,6 +55,12 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
             }),
             ..Default::default()
         }),
+        inlay_hint_provider: Some(lsp_types::OneOf::Right(
+            InlayHintServerCapabilities::Options(InlayHintOptions {
+                work_done_progress_options: WorkDoneProgressOptions::default(),
+                resolve_provider: Some(false),
+            }),
+        )),
         ..Default::default()
     }
 }
@@ -160,6 +167,46 @@ impl BexLspRequest for BexMulitProject {
         };
 
         Ok(Some(lenses))
+    }
+
+    fn on_request_text_document_inlay_hint(
+        &self,
+        params: lsp_request_params!("textDocument/inlayHint"),
+    ) -> Result<lsp_request_result!("textDocument/inlayHint"), LspError> {
+        let path = self.get_path_from_uri(&params.text_document.uri)?;
+        let root_path = Self::get_baml_project_root(&path)?;
+        let project_handle = self.get_or_create_project(root_path)?;
+
+        let project = project_handle.project.try_lock_db()?;
+        let lsp_db = project.db();
+        let Some(baml_project) = project.project() else {
+            return Ok(None);
+        };
+        let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
+            return Ok(None);
+        };
+
+        let hints = baml_lsp_actions::inlay_hints::inlay_hints(lsp_db, source_file, baml_project);
+
+        let text = source_file.text(lsp_db);
+        let lsp_hints = hints
+            .into_iter()
+            .map(|h| lsp_types::InlayHint {
+                position: baml_project::position::offset_to_lsp_position(
+                    text,
+                    usize::from(h.offset),
+                ),
+                label: lsp_types::InlayHintLabel::String(h.label),
+                kind: Some(lsp_types::InlayHintKind::PARAMETER),
+                padding_left: Some(h.padding_left),
+                padding_right: Some(h.padding_right),
+                text_edits: None,
+                tooltip: None,
+                data: None,
+            })
+            .collect();
+
+        Ok(Some(lsp_hints))
     }
 
     fn on_request_text_document_code_action(

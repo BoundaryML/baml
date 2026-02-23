@@ -2755,7 +2755,7 @@ impl LoweringContext {
                 let name_str = token.text();
                 self.add_name_to_scope(name_str);
                 let name = Name::new(name_str);
-                self.patterns.alloc(Pattern::Binding(name))
+                self.alloc_pattern(Pattern::Binding(name), token.text_range())
             })
             .unwrap_or_else(|| {
                 self.alloc_pattern(
@@ -3317,12 +3317,12 @@ impl LoweringContext {
             .and_then(|ls| ls.name())
             .map(|n| {
                 self.add_name_to_scope(n.text());
-                self.patterns.alloc(Pattern::Binding(Name::new(n.text())))
+                self.alloc_pattern(Pattern::Binding(Name::new(n.text())), n.text_range())
             })
             .or_else(|| {
                 for_expr.loop_var().map(|n| {
                     self.add_name_to_scope(n.text());
-                    self.patterns.alloc(Pattern::Binding(Name::new(n.text())))
+                    self.alloc_pattern(Pattern::Binding(Name::new(n.text())), n.text_range())
                 })
             })
             .unwrap_or_else(|| self.patterns.alloc(Pattern::Binding(Name::new("_"))));

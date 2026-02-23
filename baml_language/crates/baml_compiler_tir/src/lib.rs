@@ -1863,7 +1863,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             );
                             // Look up builtin signature and compute function type
                             let full_path = qn.display();
-                            if let Some(def) = builtins::lookup_builtin_by_path(full_path.as_str())
+                            let ty = if let Some(def) =
+                                builtins::lookup_builtin_by_path(full_path.as_str())
                             {
                                 let mut param_types: Vec<(Option<Name>, Ty)> = Vec::new();
                                 if let Some(ref receiver_pattern) = def.receiver {
@@ -1879,20 +1880,22 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                     ));
                                 }
                                 let return_type = builtins::substitute_unknown(&def.returns);
-                                return Ty::Function {
+                                Ty::Function {
                                     params: param_types,
                                     ret: Box::new(return_type),
-                                };
-                            }
-                            return Ty::Unknown;
+                                }
+                            } else {
+                                Ty::Unknown
+                            };
+                            ctx.set_expr_type(expr_id, ty.clone());
+                            return ty;
                         }
                         PathResolution::Function(qn) => {
                             ctx.set_expr_resolution(expr_id, ResolvedValue::Function(qn.clone()));
                             let path_name = qn.display_name();
-                            if let Some(func_ty) = ctx.lookup(&path_name).cloned() {
-                                return func_ty;
-                            }
-                            return Ty::Unknown;
+                            let ty = ctx.lookup(&path_name).cloned().unwrap_or(Ty::Unknown);
+                            ctx.set_expr_type(expr_id, ty.clone());
+                            return ty;
                         }
                         PathResolution::EnumVariant { enum_fqn, variant } => {
                             ctx.set_expr_resolution(
@@ -1904,7 +1907,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             );
                             let enum_name = enum_fqn.display_name();
                             ctx.enum_variant_exprs.insert(expr_id, (enum_name, variant));
-                            return Ty::Enum(enum_fqn);
+                            let ty = Ty::Enum(enum_fqn);
+                            ctx.set_expr_type(expr_id, ty.clone());
+                            return ty;
                         }
                     }
                 }

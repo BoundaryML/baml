@@ -25,6 +25,7 @@ pub mod document_symbols;
 pub mod find_references;
 pub mod goto_definition;
 pub mod hover;
+pub mod inlay_hints;
 
 pub use code_action::{CodeAction, CodeActionKind};
 pub use code_lens::{CodeLens, CodeLensKind};
