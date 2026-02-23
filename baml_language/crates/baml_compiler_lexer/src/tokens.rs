@@ -768,7 +768,6 @@ mod tests {
         let source = r#""This is a \" string""#;
         let tokens = lex_token_kinds(source);
 
-        // Should be: Quote, Word("This"), Whitespace, Word("is"), Whitespace, Word("a"), Whitespace, Quote, Word("string"), Quote
         assert_eq!(
             tokens,
             vec![

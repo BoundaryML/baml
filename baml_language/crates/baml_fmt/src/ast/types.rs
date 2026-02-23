@@ -1153,14 +1153,31 @@ impl<T: Printable> ConstrainedType<T> {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the type alias on a single line.
     pub fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        if printer.print(&*self.ty, shape.clone()).multi_lined {
+        if printer
+            .print(&*self.ty, Shape::unlimited_single_line())
+            .multi_lined
+        {
             return None;
         }
 
-        for attr in &self.attrs {
-            printer.print_spaces(1);
-            if printer.print(attr, shape.clone()).multi_lined {
+        let (_, ty_trailing) = printer.trivia.get_for_element(&*self.ty);
+        let mut trivia_len = printer.try_print_trivia_single_line_squished(ty_trailing)?;
+
+        for (i, attr) in self.attrs.iter().enumerate() {
+            let (attr_leading, attr_trailing) = printer.trivia.get_for_element(attr);
+            trivia_len += printer.try_print_trivia_single_line_squished(attr_leading)?;
+            if trivia_len == 0 {
+                printer.print_spaces(1);
+            }
+            if printer
+                .print(attr, Shape::unlimited_single_line())
+                .multi_lined
+            {
                 return None;
+            }
+            let is_last = i + 1 >= self.attrs.len();
+            if !is_last {
+                trivia_len = printer.try_print_trivia_single_line_squished(attr_trailing)?;
             }
         }
 
@@ -1174,6 +1191,7 @@ impl<T: Printable> ConstrainedType<T> {
 
 impl<T: Printable> Printable for ConstrainedType<T> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        debug_assert!(!self.attrs.is_empty());
         printer
             .try_sub_printer(|p| self.try_print_single_line(&shape, p))
             .unwrap_or_else(|| self.print_multi_line(shape, printer))

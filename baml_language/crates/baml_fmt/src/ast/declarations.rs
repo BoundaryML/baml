@@ -1616,7 +1616,6 @@ impl FromCST for ConfigBlock {
                 }
                 SyntaxKind::BLOCK_ATTRIBUTE => {
                     ConfigBlockMember::BlockAttribute(BlockAttribute::from_cst(elem)?)
-                    // idk if commas are allowed after block attributes, but I'll allow it here for now
                 }
                 _ => {
                     return Err(StrongAstError::UnexpectedKindDesc {
@@ -1685,34 +1684,67 @@ impl Printable for ConfigBlock {
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
 
-        for (item, comma) in &self.items {
+        let mut block_attrs: Vec<(&BlockAttribute, &ConfigBlockMember, Option<&t::Comma>)> = self
+            .items
+            .iter()
+            .filter_map(|(item, comma)| match item {
+                ConfigBlockMember::BlockAttribute(attr) => Some((attr, item, comma.as_ref())),
+                _ => None,
+            })
+            .collect();
+        block_attrs.sort_by_cached_key(|(attr, _, _)| {
+            attr.name_parts_str(printer.input).collect::<Vec<&str>>()
+        });
+        let other_items = self
+            .items
+            .iter()
+            .filter(|(item, _)| !matches!(item, ConfigBlockMember::BlockAttribute(_)))
+            .map(|(item, comma)| (item, comma.as_ref()));
+
+        let ordered_items = block_attrs
+            .into_iter()
+            .map(|(_, member, comma)| (member, comma))
+            .chain(other_items);
+
+        for (i, (item, comma)) in ordered_items.enumerate() {
             let (item_leading, item_trailing) = printer.trivia.get_for_element(item);
+            let item_leading = if i == 0 {
+                item_leading.trim_leading_blanks() // this is first item
+            } else {
+                item_leading
+            };
+
             printer.print_trivia_with_newline(item_leading, inner_indent);
             printer.print_spaces(inner_indent);
             printer.print(item, inner_shape.clone());
 
-            if let Some(comma) = comma {
-                let (comma_leading, comma_trailing) =
-                    printer.trivia.get_for_range_split(comma.span());
-                match item {
-                    ConfigBlockMember::BlockAttribute(_) => {
-                        // remove the trailing comma, keep the comments
-                        printer.print_trivia_trailing(item_trailing);
-                        printer.print_trivia_trailing(comma_leading);
-                    }
-                    _ => {
-                        // should have the trailing comma
-                        printer.print_trivia_squished(item_trailing);
-                        printer.print_trivia_squished(comma_leading);
-                        printer.print_raw_token(comma);
-                    }
+            match (item, comma) {
+                (ConfigBlockMember::BlockAttribute(_), Some(comma)) => {
+                    // remove the trailing comma, keep the comments
+                    let (comma_leading, comma_trailing) =
+                        printer.trivia.get_for_range_split(comma.span());
+                    printer.print_trivia_trailing(item_trailing);
+                    printer.print_trivia_trailing(comma_leading);
+                    printer.print_trivia_trailing(comma_trailing);
                 }
-                printer.print_trivia_trailing(comma_trailing);
-            } else {
-                if !matches!(item, ConfigBlockMember::BlockAttribute(_)) {
+                (ConfigBlockMember::BlockAttribute(_), None) => {
+                    // keep no comma, print trivia nicely
+                    printer.print_trivia_trailing(item_trailing);
+                }
+                (_, Some(comma)) => {
+                    // keep the comma, print trivia nicely
+                    let (comma_leading, comma_trailing) =
+                        printer.trivia.get_for_range_split(comma.span());
+                    printer.print_trivia_squished(item_trailing);
+                    printer.print_trivia_squished(comma_leading);
+                    printer.print_raw_token(comma);
+                    printer.print_trivia_trailing(comma_trailing);
+                }
+                (_, None) => {
+                    // comma is inserted *before* the trailing trivia
                     printer.print_str(",");
+                    printer.print_trivia_trailing(item_trailing);
                 }
-                printer.print_trivia_trailing(item_trailing);
             }
             printer.print_newline();
         }

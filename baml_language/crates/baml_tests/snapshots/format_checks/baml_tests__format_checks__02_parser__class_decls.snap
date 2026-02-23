@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -45,19 +44,7 @@ class EmptyClass {
     L_BRACE "{"
     FIELD
       WORD "name"
-      TYPE_EXPR "string"
-        WORD "string"
-    FIELD
-      WORD "age"
-      TYPE_EXPR "int"
-        WORD "int"
-    R_BRACE "}"
-  CLASS_DEF
-    KW_CLASS "class"
-    WORD "TrailingCommaFields"
-    L_BRACE "{"
-    FIELD
-      WORD "name"
+      COLON ":"
       TYPE_EXPR "string"
         WORD "string"
     FIELD
@@ -65,10 +52,6 @@ class EmptyClass {
       COLON ":"
       TYPE_EXPR "int"
         WORD "int"
-    FIELD
-      WORD "active"
-      TYPE_EXPR "bool"
-        WORD "bool"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"

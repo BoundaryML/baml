@@ -41,6 +41,17 @@ impl KnownKind for BlockAttribute {
     }
 }
 
+impl BlockAttribute {
+    pub fn name_parts_str<'s>(&self, input: &'s str) -> impl Iterator<Item = &'s str> {
+        std::iter::once(&self.name.first)
+            .chain(self.name.rest.iter().map(|(_, part)| part))
+            .map(|part| match part {
+                AttributeNamePart::Word(word) => &input[word.span()],
+                AttributeNamePart::Keyword(range) => &input[*range],
+            })
+    }
+}
+
 impl Printable for BlockAttribute {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;

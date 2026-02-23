@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: first
+source: crates/baml_tests/src/generated_tests.rs
 ---
 // Testing all the formatter cases for class declarations
 
@@ -24,13 +23,6 @@ class MultiField {
 class ColonFields {
     name: string
     age: int
-}
-
-// ===== Fields with trailing commas =====
-class TrailingCommaFields {
-    name: string
-    age: int
-    active: bool
 }
 
 // ===== Field with single attribute =====

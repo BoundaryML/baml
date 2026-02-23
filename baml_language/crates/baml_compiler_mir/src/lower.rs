@@ -1528,7 +1528,10 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
             // Lower the arm body
             self.lower_expr(arm.body, dest.clone(), body);
-            self.builder.goto(join_block);
+            // if not already terminated by a return/break/continue, goto join_block
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join_block);
+            }
         }
 
         self.builder.set_current_block(join_block);

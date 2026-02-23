@@ -215,12 +215,6 @@ class SingleField {
   name: string
 }
 
-class TrailingCommaFields {
-  name: string
-  age: int
-  active: bool
-}
-
 class ExtraWhitespace {
   name: string
   age: int

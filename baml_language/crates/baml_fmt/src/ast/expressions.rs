@@ -541,12 +541,12 @@ impl BinaryExpr {
         let (op_leading, op_trailing) = input.trivia.get_for_range_split(self.op.span());
         trivia_len += (op_leading.try_squished_len(input.input)?
             + left_trailing.try_squished_len(input.input)?)
-        .min(const { " ".len() }); // basically, if not comments then we have the space
+        .max(const { " ".len() }); // basically, if not comments then we have the space
 
         let right_leading = input.trivia.get_leading_for_element(right);
         trivia_len += (right_leading.try_squished_len(input.input)?
             + op_trailing.try_squished_len(input.input)?)
-        .min(const { " ".len() }); // basically, if not comments then we have the space
+        .max(const { " ".len() }); // basically, if not comments then we have the space
 
         let len = left_width + usize::from(self.op.span().len()) + right_width + trivia_len;
         Some(len)
@@ -1051,10 +1051,9 @@ impl MatchExpr {
         printer.print_newline();
 
         printer.print_standalone_with_trivia(&*self.scrutinee, paren_inner_indent);
-
+        printer.print_newline();
         printer
             .print_trivia_all_leading_with_newline_for(self.close_paren.span(), paren_inner_indent);
-        printer.print_newline();
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_paren);
     }
@@ -1660,6 +1659,7 @@ impl Printable for CallArgs {
 /// Represents the bracket-enclosed portion of an index expression: `[expr]`.
 /// Analogous to [`CallArgs`] for call expressions.
 /// Used by both [`IndexExpr`] and [`PrintChain`].
+#[derive(Debug)]
 pub struct IndexArgs<'a> {
     pub open_bracket: &'a t::LBracket,
     pub index: &'a Expression,
@@ -1821,10 +1821,26 @@ impl PrintMultiLine for IndexExpr {
 
 impl IndexExpr {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        if printer.print(&*self.base, shape.clone()).multi_lined {
+        let base_len = self.base.single_line_width(printer)?;
+        let args_len = self.args().single_line_width(printer)?;
+        if base_len + args_len > shape.width {
             return None;
         }
-        self.args().try_print_single_line(shape, printer)
+        if self
+            .base
+            .print(Shape::unlimited_single_line(), printer)
+            .multi_lined
+        {
+            return None;
+        }
+        if self
+            .args()
+            .print(Shape::unlimited_single_line(), printer)
+            .multi_lined
+        {
+            return None;
+        }
+        Some(PrintInfo::default_single_line())
     }
 }
 

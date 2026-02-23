@@ -197,16 +197,27 @@ impl PrintMultiLine for UnionPattern {
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut info = printer.print(&*self.first, shape.clone());
+        let inner_indent = shape.indent + printer.config.indent_width;
         printer.print_trivia_all_trailing_for(self.first.rightmost_token());
         for (i, (pipe, pattern)) in self.rest.iter().enumerate() {
             info.multi_lined = true;
             printer.print_newline();
+            let (pipe_leading, pipe_trailing) = printer.trivia.get_for_range_split(pipe.span());
+            let (pattern_leading, pattern_trailing) = printer.trivia.get_for_element(pattern);
+
+            printer.print_trivia_with_newline(pipe_leading, inner_indent);
             printer.print_spaces(shape.indent + printer.config.indent_width);
+
             printer.print_raw_token(pipe);
-            printer.print_str(" ");
+            let mut post_pipe_len = printer.print_trivia_squished(pipe_trailing);
+            post_pipe_len += printer.print_trivia_squished(pattern_leading);
+            if post_pipe_len == 0 {
+                printer.print_spaces(1); // only add space if there are no block comments between
+            }
+
             printer.print(pattern, shape.clone());
             if i + 1 < self.rest.len() {
-                printer.print_trivia_all_trailing_for(pattern.rightmost_token());
+                printer.print_trivia_trailing(pattern_trailing);
             }
         }
         info
@@ -217,30 +228,44 @@ impl UnionPattern {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the union pattern on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        if self.first.print(shape.clone(), printer).multi_lined {
+        if self
+            .first
+            .print(Shape::unlimited_single_line(), printer)
+            .multi_lined
+        {
             return None;
         }
         let first_trailing = printer.trivia.get_trailing_for_element(&*self.first);
-        printer.try_print_trivia_single_line_squished(first_trailing)?;
+        let mut pre_pipe_len = printer.try_print_trivia_single_line_squished(first_trailing)?;
 
         for (i, (pipe, pattern)) in self.rest.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None; // early abort
             }
             let (pipe_leading, pipe_trailing) = printer.trivia.get_for_range_split(pipe.span());
-            printer.print_spaces(1);
-            printer.try_print_trivia_single_line_squished(pipe_leading)?;
-            printer.print_raw_token(pipe);
-            printer.try_print_trivia_single_line_squished(pipe_trailing)?;
-            printer.print_spaces(1);
-
             let (pattern_leading, pattern_trailing) = printer.trivia.get_for_element(pattern);
-            printer.try_print_trivia_single_line_squished(pattern_leading)?;
-            if pattern.print(shape.clone(), printer).multi_lined {
+
+            pre_pipe_len += printer.try_print_trivia_single_line_squished(pipe_leading)?; // could be put on preceding lines
+            if pre_pipe_len == 0 {
+                printer.print_spaces(1); // only add space if there are no block comments between
+            }
+
+            printer.print_raw_token(pipe);
+
+            let mut post_pipe_len = printer.print_trivia_squished(pipe_trailing);
+            post_pipe_len += printer.print_trivia_squished(pattern_leading);
+            if post_pipe_len == 0 {
+                printer.print_spaces(1); // only add space if there are no block comments between
+            }
+
+            if pattern
+                .print(Shape::unlimited_single_line(), printer)
+                .multi_lined
+            {
                 return None;
             }
             if i + 1 < self.rest.len() {
-                printer.try_print_trivia_single_line_squished(pattern_trailing)?;
+                pre_pipe_len = printer.try_print_trivia_single_line_squished(pattern_trailing)?;
             }
         }
 

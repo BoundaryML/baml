@@ -18,15 +18,8 @@ class MultiField {
 
 // ===== Fields with colons =====
 class ColonFields {
-    name string
-    age int
-}
-
-// ===== Fields with trailing commas =====
-class TrailingCommaFields {
-    name string
+    name: string
     age: int
-    active bool
 }
 
 // ===== Field with single attribute =====

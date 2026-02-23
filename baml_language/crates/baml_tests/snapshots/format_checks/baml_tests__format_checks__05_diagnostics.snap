@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === DIAGNOSTICS ===
   [hir] Error: Unknown retry policy `MyRetryPolicy`
@@ -14,9 +13,9 @@ expression: output
 ────╯
 
   [validation] Error: Duplicate class `ExtraWhitespace`
-     ╭─[ class_decls.baml:303:10 ]
+     ╭─[ class_decls.baml:296:10 ]
      │
- 303 │ class    ExtraWhitespace    {
+ 296 │ class    ExtraWhitespace    {
      │          ───────┬───────  
      │                 ╰───────── class `ExtraWhitespace` redefined here
      │
@@ -36,9 +35,9 @@ expression: output
      │         ───────┬───────  
      │                ╰───────── enum `ExtraWhitespace` redefined here
      │
-     ├─[ class_decls.baml:303:10 ]
+     ├─[ class_decls.baml:296:10 ]
      │
- 303 │ class    ExtraWhitespace    {
+ 296 │ class    ExtraWhitespace    {
      │          ───────┬───────  
      │                 ╰───────── `ExtraWhitespace` first defined in class_decls.baml
      │ 
@@ -52,9 +51,9 @@ expression: output
      │             ───────┬───────  
      │                    ╰───────── function `ExtraWhitespace` redefined here
      │
-     ├─[ class_decls.baml:303:10 ]
+     ├─[ class_decls.baml:296:10 ]
      │
- 303 │ class    ExtraWhitespace    {
+ 296 │ class    ExtraWhitespace    {
      │          ───────┬───────  
      │                 ╰───────── `ExtraWhitespace` first defined in class_decls.baml
      │ 
@@ -196,9 +195,9 @@ expression: output
      │                    ───────┬───────  
      │                           ╰───────── template_string `ExtraWhitespace` redefined here
      │
-     ├─[ class_decls.baml:303:10 ]
+     ├─[ class_decls.baml:296:10 ]
      │
- 303 │ class    ExtraWhitespace    {
+ 296 │ class    ExtraWhitespace    {
      │          ───────┬───────  
      │                 ╰───────── `ExtraWhitespace` first defined in class_decls.baml
      │ 
@@ -308,9 +307,9 @@ expression: output
      │         ───────┬───────  
      │                ╰───────── type alias `ExtraWhitespace` redefined here
      │
-     ├─[ class_decls.baml:303:10 ]
+     ├─[ class_decls.baml:296:10 ]
      │
- 303 │ class    ExtraWhitespace    {
+ 296 │ class    ExtraWhitespace    {
      │          ───────┬───────  
      │                 ╰───────── `ExtraWhitespace` first defined in class_decls.baml
      │ 
