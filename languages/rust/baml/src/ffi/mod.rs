@@ -1,10 +1,11 @@
 mod bindings;
 pub mod callbacks;
 
-use crate::proto::baml_cffi_v1::{invocation_response::Response, InvocationResponse};
 use baml_sys::Buffer;
 pub(crate) use bindings::*;
 use prost::Message;
+
+use crate::proto::baml_cffi_v1::{invocation_response::Response, InvocationResponse};
 
 /// RAII guard that frees Buffer on drop
 pub(crate) struct BufferGuard(pub Buffer);
@@ -35,7 +36,7 @@ pub(crate) fn decode_async_response(buf: Buffer) -> Result<(), String> {
 
     // Safety: Buffer pointer and length are valid as returned from FFI
     #[allow(unsafe_code)]
-    let bytes = unsafe { std::slice::from_raw_parts(_guard.0.ptr as *const u8, _guard.0.len) };
+    let bytes = unsafe { std::slice::from_raw_parts(_guard.0.ptr.cast::<u8>(), _guard.0.len) };
 
     let response =
         InvocationResponse::decode(bytes).map_err(|e| format!("failed to decode response: {e}"))?;
