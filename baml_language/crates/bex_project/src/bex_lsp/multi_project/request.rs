@@ -34,6 +34,7 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
             commands: vec![commands::OpenBamlPanel::COMMAND_ID.to_string()],
             work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
         }),
+        document_formatting_provider: Some(lsp_types::OneOf::Left(true)),
         definition_provider: Some(lsp_types::OneOf::Left(true)),
         references_provider: Some(lsp_types::OneOf::Left(true)),
         hover_provider: Some(HoverProviderCapability::Simple(true)),
@@ -687,6 +688,68 @@ impl BexLspRequest for BexMulitProject {
         } else {
             Ok(Some(lsp_types::DocumentSymbolResponse::Nested(symbols)))
         }
+    }
+
+    fn on_request_text_document_formatting(
+        &self,
+        params: lsp_request_params!("textDocument/formatting"),
+    ) -> Result<lsp_request_result!("textDocument/formatting"), LspError> {
+        let path = self.get_path_from_uri(&params.text_document.uri)?;
+        let root_path = Self::get_baml_project_root(&path)?;
+        let project_handle = self.get_or_create_project(root_path)?;
+        // Get current file text from the project database.
+        let text = {
+            let db = project_handle.project.try_lock_db()?;
+            let Some(source_file) = db.get_file(std::path::Path::new(path.as_str())) else {
+                return Err(LspError::FileNotFound(path));
+            };
+            source_file.text(&*db).clone()
+        };
+
+        // Map LSP FormattingOptions → baml_fmt FormatOptions.
+        let options = baml_fmt::FormatOptions::default();
+
+        // Run the formatter. On parse errors, return no edits (silently skip).
+        let formatted = match baml_fmt::format(&text, &options) {
+            Ok(f) => f,
+            Err(baml_fmt::FormatterError::ParseErrors { .. }) => return Ok(None),
+            Err(baml_fmt::FormatterError::StrongAstError(e)) => {
+                return Err(crate::RuntimeError::Other(format!(
+                    "Failed to build strong AST: {}",
+                    e.print_with_file_context(path.as_str(), &text)
+                ))
+                .into());
+            }
+        };
+
+        // No change → no edits.
+        if formatted == text {
+            return Ok(None);
+        }
+
+        // Compute end position of the original text for the replacement range.
+        let line_count = u32::try_from(text.lines().count()).unwrap_or(u32::MAX);
+        let last_line_len =
+            u32::try_from(text.lines().last().map_or(0, str::len)).unwrap_or(u32::MAX);
+        let (end_line, end_char) = if text.ends_with('\n') {
+            (line_count, 0)
+        } else {
+            (line_count.saturating_sub(1), last_line_len)
+        };
+
+        Ok(Some(vec![lsp_types::TextEdit {
+            range: lsp_types::Range {
+                start: lsp_types::Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: lsp_types::Position {
+                    line: end_line,
+                    character: end_char,
+                },
+            },
+            new_text: formatted,
+        }]))
     }
 }
 

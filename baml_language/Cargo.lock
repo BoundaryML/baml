@@ -817,6 +817,7 @@ dependencies = [
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_db",
+ "baml_fmt",
  "baml_lsp_actions",
  "baml_project",
  "baml_workspace",
