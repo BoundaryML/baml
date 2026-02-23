@@ -1,0 +1,110 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+function IfElseWithHeaders(flag: bool) -> string {
+    //# Checkflag
+    if (flag) {
+        //# Truebranch
+        "yes"
+    } else {
+        //# Falsebranch
+        "no"
+    }
+}
+
+function Headers() -> string {
+    //# Setup
+    let x = 1;
+    //## Configuration
+    let y = 2;
+    //# Processing
+    let z = x + y;
+    z.to_string()
+}
+
+function SimpleFunction() -> int {
+    42
+}
+
+function LlmFunction(input: string) -> string {
+    baml.llm.call_llm_function("LlmFunction", { "input": input })
+}
+
+function NestedControlFlow(x: int) -> string {
+    //# Outer
+    if (x > 0) {
+        //# Positive
+        if (x > 100) {
+            //# Large
+            "large"
+        } else {
+            //# Small
+            "small"
+        }
+    } else {
+        //# Non-positive
+        "zero or negative"
+    }
+}
+
+function ElseIfChain(x: int) -> string {
+    if (x == 1) {
+        //# Caseone
+        "one"
+    } else if (x == 2) {
+        //# Casetwo
+        "two"
+    } else if (x == 3) {
+        //# Casethree
+        "three"
+    } else {
+        //# Defaultcase
+        "other"
+    }
+}
+
+function WhileWithHeaders() -> int {
+    //# Initialize
+    let count = 0;
+    //# Loop
+    while (count < 10) {
+        //# Iteration
+        count += 1;
+    }
+    //# Done
+    count
+}
+
+function MatchExpression(x: int) -> string {
+    match (x) {
+        1 => {
+            //# One
+            "one"
+        },
+        2 => {
+            //# Two
+            "two"
+        },
+        _ => {
+            //# Default
+            "other"
+        },
+    }
+}
+
+function LlmFunction.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("LlmFunction", { "input": input })
+}
+
+function LlmFunction.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("LlmFunction", { "input": input })
+}
+
+function TestClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("TestClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
+client TestClient {
+  provider: openai
+}

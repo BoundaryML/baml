@@ -524,6 +524,7 @@ dependencies = [
  "baml_compiler_tir",
  "baml_type",
  "baml_workspace",
+ "indexmap",
  "insta",
  "la-arena",
  "pretty_assertions",

@@ -1,0 +1,248 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== CONTROL FLOW GRAPHS ===
+--- HeaderOnlyFunction (raw) ---
+Nodes:
+  [0] parent=- type=function label="HeaderOnlyFunction"
+  [1] parent=0 type=header label="JustHeaders"
+  [2] parent=1 type=header label="NoCode"
+  [3] parent=2 type=header label="OnlyDocumentation"
+  [4] parent=3 type=header label="PureAnnotation"
+  [5] parent=4 type=header label="NoExpressions"
+  [6] parent=5 type=header label="UntilTheEnd"
+Edges:
+--- HeaderOnlyFunction (flattened) ---
+Nodes:
+  [0] parent=- type=function label="HeaderOnlyFunction"
+  [1] parent=0 type=header label="JustHeaders"
+  [2] parent=1 type=header label="NoCode"
+  [3] parent=2 type=header label="OnlyDocumentation"
+  [4] parent=3 type=header label="PureAnnotation"
+  [5] parent=4 type=header label="NoExpressions"
+  [6] parent=5 type=header label="UntilTheEnd"
+Edges:
+
+--- VeryLongHeaderTitle (raw) ---
+Nodes:
+  [0] parent=- type=function label="VeryLongHeaderTitle"
+  [1] parent=0 type=header label="ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader"
+  [2] parent=1 type=header label="AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':\",.<>?AndNumbers1234567890"
+Edges:
+--- VeryLongHeaderTitle (flattened) ---
+Nodes:
+  [0] parent=- type=function label="VeryLongHeaderTitle"
+  [1] parent=0 type=header label="ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader"
+  [2] parent=1 type=header label="AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':\",.<>?AndNumbers1234567890"
+Edges:
+
+--- HeadersAroundExpressions (raw) ---
+Nodes:
+  [0] parent=- type=function label="HeadersAroundExpressions"
+  [1] parent=0 type=header label="BeforeLet"
+  [2] parent=1 type=header label="AfterLet"
+  [3] parent=2 type=header label="BeforeIf"
+  [4] parent=3 type=branch-group label="if (x > 0)"
+  [5] parent=4 type=branch-arm label="if (x > 0)"
+  [6] parent=5 type=header label="InsideIf"
+  [7] parent=4 type=branch-arm label="else"
+  [8] parent=7 type=header label="InsideElse"
+  [9] parent=2 type=header label="AfterIf"
+  [10] parent=1 type=header label="BeforeFor"
+  [11] parent=10 type=loop label="while (_i < _len)"
+  [12] parent=11 type=header label="InsideFor"
+  [13] parent=1 type=header label="AfterFor"
+  [14] parent=0 type=header label="FinalSection"
+Edges:
+  3 -> 9
+  2 -> 10
+  10 -> 13
+  1 -> 14
+--- HeadersAroundExpressions (flattened) ---
+Nodes:
+  [0] parent=- type=function label="HeadersAroundExpressions"
+  [1] parent=0 type=header label="BeforeLet"
+  [2] parent=1 type=header label="AfterLet"
+  [3] parent=2 type=header label="BeforeIf"
+  [4] parent=3 type=branch-group label="if (x > 0)"
+  [6] parent=3 type=header label="InsideIf"
+  [8] parent=3 type=header label="InsideElse"
+  [9] parent=2 type=header label="AfterIf"
+  [10] parent=1 type=header label="BeforeFor"
+  [11] parent=10 type=loop label="while (_i < _len)"
+  [12] parent=11 type=header label="InsideFor"
+  [13] parent=1 type=header label="AfterFor"
+  [14] parent=0 type=header label="FinalSection"
+Edges:
+  3 -> 9
+  2 -> 10
+  10 -> 13
+  1 -> 14
+  4 -> 6
+  4 -> 8
+
+--- HeadersInComplexNesting (raw) ---
+Nodes:
+  [0] parent=- type=function label="HeadersInComplexNesting"
+  [1] parent=0 type=header label="MainFunction"
+  [2] parent=1 type=header label="InsideBlockExpression"
+  [3] parent=2 type=other-scope label="let inner = ..."
+  [4] parent=3 type=branch-group label="if (true)"
+  [5] parent=4 type=branch-arm label="if (true)"
+  [6] parent=5 type=header label="InsideIfTrue"
+  [7] parent=6 type=header label="VeryDeepBlock"
+  [8] parent=5 type=header label="BacktoIfLevel"
+  [9] parent=4 type=branch-arm label="else"
+  [10] parent=9 type=header label="InsideElse"
+  [11] parent=1 type=header label="BacktoBlockLevel"
+  [12] parent=0 type=header label="BacktoFunctionLevel"
+Edges:
+  6 -> 8
+  2 -> 11
+  1 -> 12
+--- HeadersInComplexNesting (flattened) ---
+Nodes:
+  [0] parent=- type=function label="HeadersInComplexNesting"
+  [1] parent=0 type=header label="MainFunction"
+  [2] parent=1 type=header label="InsideBlockExpression"
+  [4] parent=2 type=branch-group label="if (true)"
+  [6] parent=2 type=header label="InsideIfTrue"
+  [7] parent=6 type=header label="VeryDeepBlock"
+  [8] parent=2 type=header label="BacktoIfLevel"
+  [10] parent=2 type=header label="InsideElse"
+  [11] parent=1 type=header label="BacktoBlockLevel"
+  [12] parent=0 type=header label="BacktoFunctionLevel"
+Edges:
+  6 -> 8
+  2 -> 11
+  1 -> 12
+  4 -> 6
+  4 -> 10
+
+--- HeadersAndComments (raw) ---
+Nodes:
+  [0] parent=- type=function label="HeadersAndComments"
+  [1] parent=0 type=header label="HeaderBeforeComment"
+  [2] parent=1 type=header label="HeaderAfterComment"
+  [3] parent=2 type=header label="HeaderAfterDocComment"
+Edges:
+--- HeadersAndComments (flattened) ---
+Nodes:
+  [0] parent=- type=function label="HeadersAndComments"
+  [1] parent=0 type=header label="HeaderBeforeComment"
+  [2] parent=1 type=header label="HeaderAfterComment"
+  [3] parent=2 type=header label="HeaderAfterDocComment"
+Edges:
+
+--- ConsecutiveHeaders (raw) ---
+Nodes:
+  [0] parent=- type=function label="ConsecutiveHeaders"
+  [1] parent=0 type=header label="FirstHeader"
+  [2] parent=0 type=header label="SecondHeader"
+  [3] parent=0 type=header label="ThirdHeader"
+  [4] parent=3 type=header label="SubsectionA"
+  [5] parent=3 type=header label="SubsectionB"
+  [6] parent=3 type=header label="SubsectionC"
+Edges:
+  1 -> 2
+  2 -> 3
+  4 -> 5
+  5 -> 6
+--- ConsecutiveHeaders (flattened) ---
+Nodes:
+  [0] parent=- type=function label="ConsecutiveHeaders"
+  [1] parent=0 type=header label="FirstHeader"
+  [2] parent=0 type=header label="SecondHeader"
+  [3] parent=0 type=header label="ThirdHeader"
+  [4] parent=3 type=header label="SubsectionA"
+  [5] parent=3 type=header label="SubsectionB"
+  [6] parent=3 type=header label="SubsectionC"
+Edges:
+  1 -> 2
+  2 -> 3
+  4 -> 5
+  5 -> 6
+
+--- UnicodeHeaders (raw) ---
+Nodes:
+  [0] parent=- type=function label="UnicodeHeaders"
+  [1] parent=0 type=header label="你好世界"
+  [2] parent=1 type=header label="Émojis🎉🎊"
+  [3] parent=2 type=header label="Special«Characters»™"
+Edges:
+--- UnicodeHeaders (flattened) ---
+Nodes:
+  [0] parent=- type=function label="UnicodeHeaders"
+  [1] parent=0 type=header label="你好世界"
+  [2] parent=1 type=header label="Émojis🎉🎊"
+  [3] parent=2 type=header label="Special«Characters»™"
+Edges:
+
+--- HeaderLevels (raw) ---
+Nodes:
+  [0] parent=- type=function label="HeaderLevels"
+  [1] parent=0 type=header label="Level1"
+  [2] parent=1 type=header label="Level2"
+  [3] parent=2 type=header label="Level3"
+  [4] parent=3 type=header label="Level4"
+  [5] parent=4 type=header label="Level5"
+  [6] parent=5 type=header label="Level6"
+  [7] parent=6 type=header label="Level7-Morethan6levels"
+  [8] parent=7 type=header label="Level8"
+  [9] parent=8 type=header label="Level9"
+Edges:
+--- HeaderLevels (flattened) ---
+Nodes:
+  [0] parent=- type=function label="HeaderLevels"
+  [1] parent=0 type=header label="Level1"
+  [2] parent=1 type=header label="Level2"
+  [3] parent=2 type=header label="Level3"
+  [4] parent=3 type=header label="Level4"
+  [5] parent=4 type=header label="Level5"
+  [6] parent=5 type=header label="Level6"
+  [7] parent=6 type=header label="Level7-Morethan6levels"
+  [8] parent=7 type=header label="Level8"
+  [9] parent=8 type=header label="Level9"
+Edges:
+
+--- HeadersWithSpecialChars (raw) ---
+Nodes:
+  [0] parent=- type=function label="HeadersWithSpecialChars"
+  [1] parent=0 type=header label="Header-With-Dashes"
+  [2] parent=1 type=header label="Header_With_Underscores"
+  [3] parent=2 type=header label="Header.With.Dots"
+  [4] parent=3 type=header label="HeaderWithSlashes"
+  [5] parent=4 type=header label="Header\\With\\Backslashes"
+  [6] parent=5 type=header label="Header|With|Pipes"
+Edges:
+--- HeadersWithSpecialChars (flattened) ---
+Nodes:
+  [0] parent=- type=function label="HeadersWithSpecialChars"
+  [1] parent=0 type=header label="Header-With-Dashes"
+  [2] parent=1 type=header label="Header_With_Underscores"
+  [3] parent=2 type=header label="Header.With.Dots"
+  [4] parent=3 type=header label="HeaderWithSlashes"
+  [5] parent=4 type=header label="Header\\With\\Backslashes"
+  [6] parent=5 type=header label="Header|With|Pipes"
+Edges:
+
+--- HeadersWithWhitespace (raw) ---
+Nodes:
+  [0] parent=- type=function label="HeadersWithWhitespace"
+  [1] parent=0 type=header label="ExtraSpacesBeforeTitle"
+  [2] parent=1 type=header label="MixedTabsAndSpaces"
+  [3] parent=2 type=header label="AllTabs"
+  [4] parent=0 type=header label="TrailingSpaces"
+  [5] parent=4 type=header label="MultipleSpacesBetweenWords"
+Edges:
+  1 -> 4
+--- HeadersWithWhitespace (flattened) ---
+Nodes:
+  [0] parent=- type=function label="HeadersWithWhitespace"
+  [1] parent=0 type=header label="ExtraSpacesBeforeTitle"
+  [2] parent=1 type=header label="MixedTabsAndSpaces"
+  [3] parent=2 type=header label="AllTabs"
+  [4] parent=0 type=header label="TrailingSpaces"
+  [5] parent=4 type=header label="MultipleSpacesBetweenWords"
+Edges:
+  1 -> 4

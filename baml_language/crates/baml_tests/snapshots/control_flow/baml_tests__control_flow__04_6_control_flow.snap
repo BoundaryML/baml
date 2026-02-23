@@ -1,0 +1,154 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== CONTROL FLOW GRAPHS ===
+--- IfElseWithHeaders (raw) ---
+Nodes:
+  [0] parent=- type=function label="IfElseWithHeaders"
+  [1] parent=0 type=header label="Checkflag"
+  [2] parent=1 type=branch-group label="if (flag)"
+  [3] parent=2 type=branch-arm label="if (flag)"
+  [4] parent=3 type=header label="Truebranch"
+  [5] parent=2 type=branch-arm label="else"
+  [6] parent=5 type=header label="Falsebranch"
+Edges:
+--- IfElseWithHeaders (flattened) ---
+Nodes:
+  [0] parent=- type=function label="IfElseWithHeaders"
+  [1] parent=0 type=header label="Checkflag"
+  [2] parent=1 type=branch-group label="if (flag)"
+  [4] parent=1 type=header label="Truebranch"
+  [6] parent=1 type=header label="Falsebranch"
+Edges:
+  2 -> 4
+  2 -> 6
+
+--- Headers (raw) ---
+Nodes:
+  [0] parent=- type=function label="Headers"
+  [1] parent=0 type=header label="Setup"
+  [2] parent=1 type=header label="Configuration"
+  [3] parent=0 type=header label="Processing"
+Edges:
+  1 -> 3
+--- Headers (flattened) ---
+Nodes:
+  [0] parent=- type=function label="Headers"
+  [1] parent=0 type=header label="Setup"
+  [2] parent=1 type=header label="Configuration"
+  [3] parent=0 type=header label="Processing"
+Edges:
+  1 -> 3
+
+--- SimpleFunction (raw) ---
+Nodes:
+  [0] parent=- type=function label="SimpleFunction"
+Edges:
+--- SimpleFunction (flattened) ---
+Nodes:
+  [0] parent=- type=function label="SimpleFunction"
+Edges:
+
+--- NestedControlFlow (raw) ---
+Nodes:
+  [0] parent=- type=function label="NestedControlFlow"
+  [1] parent=0 type=header label="Outer"
+  [2] parent=1 type=branch-group label="if (x > 0)"
+  [3] parent=2 type=branch-arm label="if (x > 0)"
+  [4] parent=3 type=header label="Positive"
+  [5] parent=4 type=branch-group label="if (x > 100)"
+  [6] parent=5 type=branch-arm label="if (x > 100)"
+  [7] parent=6 type=header label="Large"
+  [8] parent=5 type=branch-arm label="else"
+  [9] parent=8 type=header label="Small"
+  [10] parent=2 type=branch-arm label="else"
+  [11] parent=10 type=header label="Non-positive"
+Edges:
+--- NestedControlFlow (flattened) ---
+Nodes:
+  [0] parent=- type=function label="NestedControlFlow"
+  [1] parent=0 type=header label="Outer"
+  [2] parent=1 type=branch-group label="if (x > 0)"
+  [4] parent=1 type=header label="Positive"
+  [5] parent=4 type=branch-group label="if (x > 100)"
+  [7] parent=4 type=header label="Large"
+  [9] parent=4 type=header label="Small"
+  [11] parent=1 type=header label="Non-positive"
+Edges:
+  5 -> 7
+  5 -> 9
+  2 -> 4
+  2 -> 11
+
+--- ElseIfChain (raw) ---
+Nodes:
+  [0] parent=- type=function label="ElseIfChain"
+  [1] parent=0 type=branch-group label="if (x == 1)"
+  [2] parent=1 type=branch-arm label="if (x == 1)"
+  [3] parent=2 type=header label="Caseone"
+  [4] parent=1 type=branch-arm label="else if (x == 2)"
+  [5] parent=4 type=header label="Casetwo"
+  [6] parent=1 type=branch-arm label="else if (x == 3)"
+  [7] parent=6 type=header label="Casethree"
+  [8] parent=1 type=branch-arm label="else"
+  [9] parent=8 type=header label="Defaultcase"
+Edges:
+--- ElseIfChain (flattened) ---
+Nodes:
+  [0] parent=- type=function label="ElseIfChain"
+  [1] parent=0 type=branch-group label="if (x == 1)"
+  [3] parent=0 type=header label="Caseone"
+  [5] parent=0 type=header label="Casetwo"
+  [7] parent=0 type=header label="Casethree"
+  [9] parent=0 type=header label="Defaultcase"
+Edges:
+  1 -> 3
+  1 -> 5
+  1 -> 7
+  1 -> 9
+
+--- WhileWithHeaders (raw) ---
+Nodes:
+  [0] parent=- type=function label="WhileWithHeaders"
+  [1] parent=0 type=header label="Initialize"
+  [2] parent=0 type=header label="Loop"
+  [3] parent=2 type=loop label="while (count < 10)"
+  [4] parent=3 type=header label="Iteration"
+  [5] parent=0 type=header label="Done"
+Edges:
+  1 -> 2
+  2 -> 5
+--- WhileWithHeaders (flattened) ---
+Nodes:
+  [0] parent=- type=function label="WhileWithHeaders"
+  [1] parent=0 type=header label="Initialize"
+  [2] parent=0 type=header label="Loop"
+  [3] parent=2 type=loop label="while (count < 10)"
+  [4] parent=3 type=header label="Iteration"
+  [5] parent=0 type=header label="Done"
+Edges:
+  1 -> 2
+  2 -> 5
+
+--- MatchExpression (raw) ---
+Nodes:
+  [0] parent=- type=function label="MatchExpression"
+  [1] parent=0 type=branch-group label="match (x)"
+  [2] parent=1 type=branch-arm label="1"
+  [3] parent=2 type=header label="One"
+  [4] parent=1 type=branch-arm label="2"
+  [5] parent=4 type=header label="Two"
+  [6] parent=1 type=branch-arm label="_"
+  [7] parent=6 type=header label="Default"
+Edges:
+--- MatchExpression (flattened) ---
+Nodes:
+  [0] parent=- type=function label="MatchExpression"
+  [1] parent=0 type=branch-group label="match (x)"
+  [3] parent=0 type=header label="One"
+  [5] parent=0 type=header label="Two"
+  [7] parent=0 type=header label="Default"
+Edges:
+  1 -> 3
+  1 -> 5
+  1 -> 7

@@ -49,6 +49,7 @@
 //!
 //! This eliminates the need for separate statement handling and makes traversals uniform.
 
+pub mod control_flow;
 mod expr;
 mod lower;
 mod pretty;
