@@ -17,7 +17,7 @@ pub fn event_to_jsonl(event: &RuntimeEvent) -> String {
 
     let timestamp_epoch_ms = event
         .timestamp
-        .duration_since(std::time::UNIX_EPOCH)
+        .duration_since(web_time::UNIX_EPOCH)
         .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
         .unwrap_or(0);
 
@@ -143,7 +143,7 @@ fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
+    use web_time::SystemTime;
 
     use super::*;
     use crate::{FunctionStart, SpanContext, SpanId};

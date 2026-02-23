@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-3c66388e75d3efcb/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -4385,6 +4384,267 @@ SOURCE_FILE
               QUOTE """
               WORD "first"
               WORD "pending"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "DispatchState"
+    L_BRACE "{"
+    ENUM_VARIANT "Alpha"
+      WORD "Alpha"
+    ENUM_VARIANT "Beta"
+      WORD "Beta"
+    ENUM_VARIANT "Gamma"
+      WORD "Gamma"
+    ENUM_VARIANT "Delta"
+      WORD "Delta"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "JumpTableEnumDiscriminant"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "state"
+        COLON ":"
+        TYPE_EXPR "DispatchState"
+          WORD "DispatchState"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "state"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "DispatchState.Alpha"
+              WORD "DispatchState"
+              DOT "."
+              WORD "Alpha"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "10"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "DispatchState.Beta"
+              WORD "DispatchState"
+              DOT "."
+              WORD "Beta"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "20"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "DispatchState.Gamma"
+              WORD "DispatchState"
+              DOT "."
+              WORD "Gamma"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "30"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "DispatchState.Delta"
+              WORD "DispatchState"
+              DOT "."
+              WORD "Delta"
+            FAT_ARROW "=>"
+            INTEGER_LITERAL "40"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "JumpTableTypeTag"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "value"
+        COLON ":"
+        TYPE_EXPR "int | string | bool | float"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+          PIPE "|"
+          WORD "bool"
+          PIPE "|"
+          WORD "float"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "value"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "i"
+              COLON ":"
+              TYPE_EXPR "int"
+                WORD "int"
+            FAT_ARROW "=>"
+            STRING_LITERAL "int"
+              QUOTE """
+              WORD "int"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "s"
+              COLON ":"
+              TYPE_EXPR "string"
+                WORD "string"
+            FAT_ARROW "=>"
+            STRING_LITERAL "string"
+              QUOTE """
+              WORD "string"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "b"
+              COLON ":"
+              TYPE_EXPR "bool"
+                WORD "bool"
+            FAT_ARROW "=>"
+            STRING_LITERAL "bool"
+              QUOTE """
+              WORD "bool"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "f"
+              COLON ":"
+              TYPE_EXPR "float"
+                WORD "float"
+            FAT_ARROW "=>"
+            STRING_LITERAL "float"
+              QUOTE """
+              WORD "float"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Cat"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Dog"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Bird"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Fish"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "JumpTableClassTypeTag"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "pet"
+        COLON ":"
+        TYPE_EXPR "Cat | Dog | Bird | Fish"
+          WORD "Cat"
+          PIPE "|"
+          WORD "Dog"
+          PIPE "|"
+          WORD "Bird"
+          PIPE "|"
+          WORD "Fish"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "pet"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "c"
+              COLON ":"
+              TYPE_EXPR "Cat"
+                WORD "Cat"
+            FAT_ARROW "=>"
+            STRING_LITERAL "cat"
+              QUOTE """
+              WORD "cat"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "d"
+              COLON ":"
+              TYPE_EXPR "Dog"
+                WORD "Dog"
+            FAT_ARROW "=>"
+            STRING_LITERAL "dog"
+              QUOTE """
+              WORD "dog"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "b"
+              COLON ":"
+              TYPE_EXPR "Bird"
+                WORD "Bird"
+            FAT_ARROW "=>"
+            STRING_LITERAL "bird"
+              QUOTE """
+              WORD "bird"
+              QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN
+              WORD "f"
+              COLON ":"
+              TYPE_EXPR "Fish"
+                WORD "Fish"
+            FAT_ARROW "=>"
+            STRING_LITERAL "fish"
+              QUOTE """
+              WORD "fish"
               QUOTE """
           R_BRACE "}"
         R_BRACE "}"

@@ -623,7 +623,7 @@ impl PullSink for StackCarryPullSink<'_> {
         }
     }
 
-    fn load_field(&mut self, _field: usize) -> Result<(), Self::Error> {
+    fn load_field(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
         if !self.sim.pop_n(1) {
             return Err(());
         }
@@ -683,7 +683,7 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn store_field(&mut self, _field_idx: usize) -> Result<(), Self::Error> {
+    fn store_field(&mut self, _field_idx: usize, _name: &str) -> Result<(), Self::Error> {
         // StoreField consumes object + value; class construction leaves original
         // instance below those two entries.
         if !self.sim.pop_n(2) {
@@ -733,10 +733,18 @@ impl PullSink for StackCarryPullSink<'_> {
         self.sim.push();
         Ok(())
     }
+
+    fn resolve_field_name(&self, _base: &Place, field_idx: usize) -> String {
+        format!("{field_idx}")
+    }
+
+    fn class_field_name(&self, _class_name: &str, field_idx: usize) -> String {
+        format!("{field_idx}")
+    }
 }
 
 impl StackEffectSink for StackCarryPullSink<'_> {
-    fn store_field_value(&mut self, _field: usize) -> Result<(), Self::Error> {
+    fn store_field_value(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }

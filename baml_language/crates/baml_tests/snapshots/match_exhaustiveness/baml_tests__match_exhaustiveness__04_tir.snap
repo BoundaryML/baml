@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-40b0bd756827c945/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function NestedLiteralUnions:
@@ -32,6 +31,8 @@ expression: output
       - Non-exhaustive match on bool: missing true
   Function ExhaustiveEnumAllVariants:
     Return: Union([Literal(String("active")), Literal(String("inactive")), Literal(String("pending"))])
+  Function JumpTableEnumDiscriminant:
+    Return: Union([Literal(Int(10)), Literal(Int(20)), Literal(Int(30)), Literal(Int(40))])
   Function ExhaustiveTypeAlias:
     Return: String
   Function EnumVariantAfterTypedEnum:
@@ -135,6 +136,8 @@ expression: output
       - Non-exhaustive match on AlwaysTrue: missing true
   Function ExhaustiveWithNamedCatchAll:
     Return: Union([Literal(Int(100)), Int])
+  Function JumpTableTypeTag:
+    Return: Union([Literal(String("int")), Literal(String("string")), Literal(String("bool")), Literal(String("float"))])
   Function NestedTypeBindings:
     Return: Union([Literal(Int(0)), Literal(Int(1))])
     Errors:
@@ -235,6 +238,8 @@ expression: output
     Return: Union([Literal(String("active")), Literal(String("inactive")), Literal(String("pending"))])
   Function StringLiteralWithCatchAll:
     Return: Union([Literal(String("User message")), Literal(String("Assistant message")), Literal(String("Other"))])
+  Function JumpTableClassTypeTag:
+    Return: Union([Literal(String("cat")), Literal(String("dog")), Literal(String("bird")), Literal(String("fish"))])
   Function NonExhaustiveEnumMissingMultiple:
     Return: Literal(String("active"))
     Errors:

@@ -18,6 +18,17 @@ use baml_compiler_mir::{
     BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue, StatementKind, Terminator,
 };
 
+/// Optimization level for bytecode generation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OptLevel {
+    /// No inlining of user-named locals. Compiler temps are still optimized.
+    /// Produces bytecode that closely mirrors the source structure.
+    Zero,
+    /// Full optimization: inline single-use locals, copy propagation, stack carry.
+    #[default]
+    One,
+}
+
 use crate::stack_carry;
 
 // ============================================================================
@@ -146,7 +157,7 @@ pub(crate) struct AnalysisResult {
 
 impl AnalysisResult {
     /// Analyze a MIR function and produce classification results.
-    pub(crate) fn analyze(mir: &MirFunction) -> Self {
+    pub(crate) fn analyze(mir: &MirFunction, opt: OptLevel) -> Self {
         // Step 1: Build predecessor map
         let predecessors = build_predecessors(mir);
 
@@ -169,6 +180,7 @@ impl AnalysisResult {
             &dominators,
             &predecessors,
             &initial_redirect_targets,
+            opt,
         );
 
         // Step 7: Enhanced jump threading using classification info.
@@ -187,8 +199,14 @@ impl AnalysisResult {
         // (or iterative transforms like branch folding/DCE rewrite CFG edges between
         // rounds), upgrade this to a true fixed-point convergence loop.
         if redirect_targets != initial_redirect_targets {
-            let (reclassified, recopy_sources) =
-                classify_locals(mir, &def_use, &dominators, &predecessors, &redirect_targets);
+            let (reclassified, recopy_sources) = classify_locals(
+                mir,
+                &def_use,
+                &dominators,
+                &predecessors,
+                &redirect_targets,
+                opt,
+            );
             classifications = reclassified;
             copy_sources = recopy_sources;
         }
@@ -813,6 +831,7 @@ fn classify_locals(
     dominators: &Dominators,
     predecessors: &HashMap<BlockId, Vec<BlockId>>,
     redirect_targets: &HashMap<BlockId, BlockId>,
+    opt: OptLevel,
 ) -> (HashMap<Local, LocalClassification>, HashMap<Local, Local>) {
     let mut classifications = HashMap::new();
     let mut copy_sources: HashMap<Local, Local> = HashMap::new();
@@ -831,6 +850,10 @@ fn classify_locals(
         // simple check handles the common pattern-matching wildcard case.
         let is_unused_wildcard = du.uses.is_empty() && local_decl.name.as_deref() == Some("_");
 
+        // User-named locals (name.is_some()) are kept as Real at O0.
+        // Compiler temps have name=None and are always eligible for optimization.
+        let is_user_local = local_decl.name.is_some();
+
         let classification = if local_decl.is_watched {
             // Watched variables must always be Real - no optimizations allowed.
             // This ensures they have a stable stack slot for Watch/Unwatch instructions.
@@ -848,12 +871,21 @@ fn classify_locals(
         } else if idx != 0
             && let Some(source) = get_copy_source(du, mir, def_use)
         {
-            // Copy propagation: this local is just `_X = copy _Y` where _Y is suitable.
-            // We can eliminate _X and use _Y directly at all use sites.
-            copy_sources.insert(local, source);
-            LocalClassification::CopyOf
+            if opt == OptLevel::Zero && is_user_local {
+                // At O0, keep user-named locals as Real.
+                LocalClassification::Real
+            } else {
+                // Copy propagation: this local is just `_X = copy _Y` where _Y is suitable.
+                // We can eliminate _X and use _Y directly at all use sites.
+                copy_sources.insert(local, source);
+                LocalClassification::CopyOf
+            }
         } else if can_be_virtual(du, dominators, mir, def_use, predecessors) {
-            LocalClassification::Virtual
+            if opt == OptLevel::Zero && is_user_local {
+                LocalClassification::Real
+            } else {
+                LocalClassification::Virtual
+            }
         } else if is_phi_like(local, du, mir, predecessors, def_use) {
             // Stack-carry candidate validated in a later stack simulation pass.
             stack_carry_candidates.insert(local, stack_carry::StackCarryKind::PhiLike);

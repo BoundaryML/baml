@@ -52,11 +52,19 @@ impl<T> SendWrapper<T> {
 
     /// Get a reference to the inner value.
     pub(crate) fn inner(&self) -> &T {
-        &self.0
+        self
     }
 
     /// Take the inner value (for use when the wrapper is stored in a container).
     pub(crate) fn into_inner(self) -> T {
         self.0
+    }
+}
+
+impl<T> std::ops::Deref for SendWrapper<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

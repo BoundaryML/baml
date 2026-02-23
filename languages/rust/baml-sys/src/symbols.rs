@@ -11,7 +11,7 @@ use crate::{
 
 /// Callback function type for results.
 pub type CallbackFn =
-    extern "C" fn(call_id: u32, is_done: c_int, content: *const i8, length: size_t);
+    extern "C" fn(call_id: u32, is_done: c_int, content: *const c_char, length: size_t);
 
 /// Callback function type for streaming ticks.
 pub type OnTickCallbackFn = extern "C" fn(call_id: u32);
@@ -21,7 +21,7 @@ pub type OnTickCallbackFn = extern "C" fn(call_id: u32);
 #[allow(missing_docs)] // FFI struct fields are self-explanatory
 pub struct Buffer {
     /// Pointer to the buffer data.
-    pub ptr: *const i8,
+    pub ptr: *const c_char,
     /// Length of the buffer.
     pub len: size_t,
 }
@@ -82,7 +82,7 @@ fn load_symbols(lib: &'static LoadedLibrary) -> Result<Symbols> {
         // Verify version matches - version() now returns Buffer
         let version_buf = version();
         let lib_version = if !version_buf.ptr.is_null() && version_buf.len > 0 {
-            let bytes = std::slice::from_raw_parts(version_buf.ptr as *const u8, version_buf.len);
+            let bytes = std::slice::from_raw_parts(version_buf.ptr.cast::<u8>(), version_buf.len);
             String::from_utf8_lossy(bytes).into_owned()
         } else {
             "unknown".to_string()

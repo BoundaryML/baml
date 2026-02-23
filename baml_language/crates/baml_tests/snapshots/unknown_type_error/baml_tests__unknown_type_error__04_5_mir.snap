@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn Bar(x: null) -> int {
@@ -16,7 +15,6 @@ fn Bar(x: null) -> int {
     bb1: {
         return;
     }
-
 }
 
 fn Foo() -> null {
@@ -31,7 +29,6 @@ fn Foo() -> null {
     bb1: {
         return;
     }
-
 }
 
 fn Baz() -> null? {
@@ -46,5 +43,4 @@ fn Baz() -> null? {
     bb1: {
         return;
     }
-
 }

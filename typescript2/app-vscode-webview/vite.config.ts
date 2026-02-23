@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,12 +23,18 @@ const wasmNoCachePlugin = () => ({
 });
 
 export default defineConfig({
-  plugins: [react(), wasmNoCachePlugin()],
+  plugins: [react(), tailwindcss(), wasmNoCachePlugin()],
   resolve: {
     alias: {
       '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
+      '@b/pkg-proto': resolve(projectRoot, '../pkg-proto/src'),
       '@b/bridge_wasm': resolve(projectRoot, '../pkg-playground/wasm/bridge_wasm.js'),
     }
+  },
+  worker: {
+    // monaco-languageclient workers use dynamic imports (code-splitting),
+    // which requires ES module format instead of the default iife.
+    format: 'es',
   },
   server: {
     port: 4000,

@@ -1,13 +1,7 @@
 //! Function call FFI entry points.
 
-use std::{
-    collections::HashMap,
-    ffi::CStr,
-    panic::AssertUnwindSafe,
-    sync::{LazyLock, Mutex},
-};
+use std::{ffi::CStr, panic::AssertUnwindSafe};
 
-use bex_factory::CancellationToken;
 use bridge_ctypes::{DecodeFromBuffer, kwargs_to_bex_values};
 use futures::future::FutureExt;
 use prost::Message;
@@ -21,13 +15,6 @@ use crate::{
     error::BridgeError,
     ffi::callbacks::{send_error_to_callback, send_result_to_callback},
 };
-
-/// Registry of active function calls, keyed by call ID.
-///
-/// Each entry holds a `CancellationToken` that can be fired by
-/// `cancel_function_call` to abort the in-flight call.
-static ACTIVE_CALLS: LazyLock<Mutex<HashMap<u32, CancellationToken>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Encode a success response (task spawned successfully).
 fn encode_success_response() -> Buffer {
@@ -93,35 +80,18 @@ fn call_function_inner(
     let kwargs = kwargs_to_bex_values(args.kwargs)?;
 
     // Silently ignore collectors and type_builder (not supported)
-    // TODO: Support collectors when bex_engine adds support
-    // TODO: Support type_builder when bex_engine adds support
-
-    // Create cancellation token and register it so cancel_function_call can fire it.
-    let cancel = CancellationToken::new();
-    {
-        let mut calls = ACTIVE_CALLS.lock().unwrap_or_else(|e| e.into_inner());
-        if calls.contains_key(&id) {
-            return Err(BridgeError::DuplicateCallId(id));
-        }
-        calls.insert(id, cancel.clone());
-    }
+    let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));
 
     // Spawn async task with panic catching
-    get_tokio_runtime().spawn(async move {
+    get_tokio_runtime()?.spawn(async move {
         // Wrap the async block with catch_unwind to handle panics
         let result = AssertUnwindSafe(async {
             runtime
-                .call_function(&func_name, kwargs.into(), cancel)
+                .call_function(&func_name, kwargs.into(), call_ctx.build())
                 .await
         })
         .catch_unwind()
         .await;
-
-        // Unregister from active calls.
-        ACTIVE_CALLS
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&id);
 
         match result {
             Ok(Ok(value)) => {
@@ -181,15 +151,14 @@ pub extern "C" fn call_function_stream_from_c(
 /// 1. The engine's Await handler to exit immediately with `EngineError::Cancelled`
 /// 2. All in-flight async tasks (HTTP requests, sleeps) to be aborted
 ///
-/// If the call has already completed or the ID is unknown, this is a no-op.
+/// If the call has already completed or the ID is unknown, this returns an error.
 #[unsafe(no_mangle)]
 pub extern "C" fn cancel_function_call(id: u32) -> Buffer {
-    if let Some(token) = ACTIVE_CALLS
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .remove(&id)
-    {
-        token.cancel();
+    match get_runtime() {
+        Ok(runtime) => match runtime.cancel_function_call(sys_types::CallId(id.into())) {
+            Ok(()) => encode_success_response(),
+            Err(e) => encode_error_response(&BridgeError::Runtime(e)),
+        },
+        Err(e) => encode_error_response(&e),
     }
-    encode_success_response()
 }

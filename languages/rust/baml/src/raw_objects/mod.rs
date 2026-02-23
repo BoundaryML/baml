@@ -7,6 +7,7 @@
 #![allow(unsafe_code)]
 
 use std::{
+    ffi::c_char,
     fs::OpenOptions,
     io::Write,
     sync::{Mutex, OnceLock},
@@ -119,7 +120,7 @@ use std::{ffi::c_void, sync::Arc};
 pub use collector::{Collector, FunctionLog, LogType, StreamTiming, Timing, Usage};
 pub use http::{HTTPBody, HTTPRequest, HTTPResponse, SSEResponse};
 pub use llm_call::{LLMCall, LLMCallKind, LLMStreamCall};
-pub use media::{Audio, Image, Pdf, Video, BamlMediaRepr, BamlMediaReprContent};
+pub use media::{Audio, BamlMediaRepr, BamlMediaReprContent, Image, Pdf, Video};
 use prost::Message;
 pub use type_builder::{
     ClassBuilder, ClassPropertyBuilder, EnumBuilder, EnumValueBuilder, TypeBuilder, TypeDef,
@@ -214,7 +215,7 @@ impl RawObject {
 
         // Call FFI
         let response_buf = unsafe {
-            ffi::call_object_constructor(buf.as_ptr().cast::<i8>(), buf.len())
+            ffi::call_object_constructor(buf.as_ptr().cast::<c_char>(), buf.len())
                 .map_err(|e| BamlError::internal(format!("Failed to load BAML library: {e}")))?
         };
 
@@ -465,7 +466,7 @@ impl RawObject {
             .map_err(|e| BamlError::internal(format!("failed to encode method call: {e}")))?;
 
         let response_buf = unsafe {
-            ffi::call_object_method(self.inner.runtime, buf.as_ptr().cast::<i8>(), buf.len())
+            ffi::call_object_method(self.inner.runtime, buf.as_ptr().cast::<c_char>(), buf.len())
                 .map_err(|e| BamlError::internal(format!("Failed to load BAML library: {e}")))?
         };
 

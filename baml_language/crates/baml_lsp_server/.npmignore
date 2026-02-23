@@ -1,3 +1,0 @@
-# Override .gitignore to include built binaries for npm packaging
-!../target/debug/language-server
-!../target/release/language-server

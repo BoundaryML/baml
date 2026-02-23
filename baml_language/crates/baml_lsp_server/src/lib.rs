@@ -1,120 +1,231 @@
-#![deny(clippy::print_stdout)]
-// TODO: Remove these allows once the LSP is fully implemented
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    unreachable_pub,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::empty_structs_with_brackets,
-    clippy::let_and_return
-)]
-use std::num::NonZeroUsize;
+//! `baml_lsp_server2` — Native LSP server for BAML using `bex_project`.
+//!
+//! This crate provides a native (stdio) LSP server that delegates all
+//! LSP logic to `bex_project::BexLsp`. It acts as the native counterpart
+//! to `bridge_wasm`, providing:
+//!
+//! - Stdio transport for LSP messages
+//! - Native filesystem (VFS) for project file access
+//! - Playground HTTP/WS server for webview communication
+//! - Fetch log interception for the playground
+//! - Env var resolution via the playground webview
+//!
+//! # Architecture
+//!
+//! ```text
+//!  ┌────────────┐   stdio    ┌──────────────────┐
+//!  │  LSP Client│ <--------> │  baml_lsp_server2 │
+//!  │  (VS Code) │            │                    │
+//!  └────────────┘            │  ┌──────────────┐  │
+//!                            │  │  bex_project  │  │
+//!  ┌────────────┐   ws      │  │  (BexLsp)     │  │
+//!  │  Playground│ <--------> │  └──────────────┘  │
+//!  │  Webview   │            │                    │
+//!  └────────────┘            └──────────────────────┘
+//! ```
+//!
+//! `bex_project` handles all LSP protocol logic. This crate only provides:
+//! - Transport (stdio reader/writer, WS server)
+//! - Native implementations of `SysOps` (with playground interception)
+//! - `LspClientSenderTrait` and `PlaygroundSender` implementations
+//!
+//! **TLS:** Enable exactly one of `native-tls` or `rustls`. CI may build with
+//! `--all-features` (both enabled); prefer one when building the LSP binary.
 
-use anyhow::Context;
-pub use edit::{DocumentKey, PositionEncoding, TextDocument};
-// TODO: playground_server is commented out for now
-// use playground_server::{WebviewCommand, WebviewRouterMessage};
-pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
-use tokio::sync::broadcast;
+mod native_lsp_sender;
+mod native_vfs;
+pub mod playground_env;
+pub mod playground_http;
+pub mod playground_sender;
+pub mod playground_server;
+pub mod playground_ws;
 
-use crate::server::{Server, ServerArgs};
+use std::sync::Arc;
 
-#[macro_use]
-mod message;
+use playground_env::{PlaygroundEnv, PlaygroundEnvState};
+use playground_http::{PlaygroundHttp, PlaygroundHttpState};
+use playground_ws::WsOutMessage;
+use tokio::net::TcpListener;
 
-pub mod cors_bypass_proxy;
-pub mod edit;
-pub mod logging;
-pub mod server;
-pub mod session;
-#[cfg(test)]
-mod tests;
-
-// additional baml modules
-mod baml_project;
-mod baml_source_file;
-mod baml_text_size;
-
-pub(crate) const SERVER_NAME: &str = "baml-lsp";
-pub(crate) const DIAGNOSTIC_NAME: &str = "BAML";
-
-pub(crate) fn version() -> &'static str {
+pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-pub fn run_server() -> anyhow::Result<()> {
+/// Build `SysOps` for a playground-connected project.
+///
+/// Uses native FS/sys/net but intercepts HTTP (for fetch logs) and env
+/// (for webview-resolved env vars).
+fn build_playground_sys_ops(
+    broadcast_tx: &tokio::sync::broadcast::Sender<WsOutMessage>,
+    env_state: &Arc<PlaygroundEnvState>,
+) -> sys_types::SysOps {
+    let http_state = Arc::new(PlaygroundHttpState::new(broadcast_tx.clone()));
+    sys_types::SysOpsBuilder::new()
+        .with_fs::<sys_native::NativeSysOps>()
+        .with_sys::<sys_native::NativeSysOps>()
+        .with_net::<sys_native::NativeSysOps>()
+        .with_http_instance(Arc::new(PlaygroundHttp(http_state)))
+        .with_env_instance(Arc::new(PlaygroundEnv(env_state.clone())))
+        .build()
+}
+
+/// Run the native BAML LSP server.
+///
+/// This is the main entry point. It:
+/// 1. Creates the tokio runtime and broadcast channel
+/// 2. Sets up native VFS and playground-intercepting SysOps
+/// 3. Creates `bex_project::BexLsp` via `bex_project::new_lsp`
+/// 4. Starts the playground HTTP/WS server
+/// 5. Runs the stdio LSP event loop
+pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
+    // Set up tracing → stderr so vscode-languageclient captures it
+    // in the "BAML Language Server" output channel.
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("debug")),
+        )
+        .with_ansi(false)
+        .init();
+
+    tracing::info!("baml-lsp v{} starting", version());
+
     let tokio_runtime = tokio::runtime::Runtime::new()?;
 
-    // TODO: playground_server is commented out for now
-    // We create dummy channels that won't be used
-    let (webview_router_to_websocket_tx, _) = broadcast::channel::<()>(100);
-    let (to_webview_router_tx, to_webview_router_rx) = broadcast::channel::<()>(100);
+    // Broadcast channel for playground WS messages (fetch logs, env requests, etc.)
+    let (broadcast_tx, _) = tokio::sync::broadcast::channel::<WsOutMessage>(64);
+    let env_state = Arc::new(PlaygroundEnvState::new(broadcast_tx.clone()));
 
-    // TODO: Playground server is disabled for now
-    // let port_config = playground_server::PortConfiguration {
-    //     base_port: 3700,
-    //     max_attempts: 100,
-    // };
-    // let port_picks = tokio_runtime.block_on(playground_server::pick_ports(port_config))?;
+    // Build SysOps with playground interception.
+    // The factory creates the same ops for every project.
+    let broadcast_tx_for_factory = broadcast_tx.clone();
+    let env_state_for_factory = env_state.clone();
+    #[allow(clippy::type_complexity)]
+    let sys_op_factory: Arc<dyn Fn(&vfs::VfsPath) -> Arc<sys_types::SysOps> + Send + Sync> =
+        Arc::new(move |_path: &vfs::VfsPath| {
+            Arc::new(build_playground_sys_ops(
+                &broadcast_tx_for_factory,
+                &env_state_for_factory,
+            ))
+        });
 
-    // {
-    //     let webview_router_to_websocket_tx = webview_router_to_websocket_tx.clone();
-    //     let to_webview_router_tx = to_webview_router_tx.clone();
-    //     tokio_runtime.spawn(futures::future::join(
-    //         async move {
-    //             eprintln!("Playground server started");
-    //             let server = playground_server::PlaygroundServer {
-    //                 app_state: playground_server::AppState {
-    //                     webview_router_to_websocket_rx_provider: webview_router_to_websocket_tx
-    //                         .into(),
-    //                     to_webview_router_tx: to_webview_router_tx.clone(),
-    //                     playground_port: port_picks.playground_port,
-    //                     proxy_port: port_picks.proxy_port,
-    //                     editor_config: std::sync::Arc::new(std::sync::RwLock::new(
-    //                         playground_server::config::EditorConfig::default(),
-    //                     )),
-    //                 },
-    //             };
-    //             let fut = server.run(port_picks.playground_listener).await;
-    //             eprintln!("Playground server finished");
-    //             fut
-    //         },
-    //         cors_bypass_proxy::ProxyServer {}.run(port_picks.proxy_listener),
-    //     ));
-    // }
+    // Native VFS
+    let vfs: Arc<Box<dyn bex_project::BulkReadFileSystem>> =
+        Arc::new(Box::new(native_vfs::NativeVfs::new()));
+    let baml_vfs = bex_project::BamlVFS::new(vfs);
 
-    // eprintln!(
-    //     "Playground started on: http://localhost:{}",
-    //     port_picks.playground_port
-    // );
-    // eprintln!(
-    //     "Proxy started on: http://localhost:{}",
-    //     port_picks.proxy_port
-    // );
+    // Stdio sender (LSP client sender)
+    let (writer_tx, writer_rx) = crossbeam::channel::unbounded::<lsp_server::Message>();
+    let writer_tx = Arc::new(writer_tx);
+    let lsp_sender: Arc<dyn bex_project::LspClientSenderTrait + Send + Sync> =
+        Arc::new(native_lsp_sender::NativeLspSender::new(&writer_tx));
 
-    let four = NonZeroUsize::new(4).unwrap();
+    // Pick the playground port early so we can pass it to the sender.
+    let (playground_listener, playground_port): (Option<TcpListener>, u16) =
+        match tokio_runtime.block_on(playground_server::pick_port(3700, 100)) {
+            Ok((listener, port)) => (Some(listener), port),
+            Err(e) => {
+                tracing::error!("Could not find playground port: {e}");
+                (None, 0)
+            }
+        };
 
-    // by default, we set the number of worker threads to `num_cpus`, with a maximum of 4.
-    let worker_threads = std::thread::available_parallelism()
-        .unwrap_or(four)
-        .max(four);
+    // Playground sender (needs port + lsp_sender for OpenPlayground)
+    let playground_sender = Arc::new(playground_sender::NativePlaygroundSender::new(
+        broadcast_tx.clone(),
+        lsp_sender.clone(),
+        playground_port,
+        playground_via_browser,
+    ));
 
-    Server::new(
-        worker_threads,
-        ServerArgs {
-            tokio_runtime,
-            webview_router_to_websocket_tx,
-            to_webview_router_rx,
-            to_webview_router_tx: to_webview_router_tx.clone(),
-            // TODO: Using dummy port values for now since playground is disabled
-            playground_port: 0,
-            proxy_port: 0,
-        },
-    )
-    .context("Failed to start server")?
-    .run()
-    .context("Failed to run server")?;
+    // Start the native event sink if BAML_TRACE_FILE is set.
+    let event_sink = std::env::var("BAML_TRACE_FILE")
+        .ok()
+        .map(|trace_file| bex_events_native::start(trace_file.into()));
+    let event_sink_for_flush = event_sink.clone();
+
+    // Create the BexLsp (multi-project LSP)
+    let bex = bex_project::new_lsp(
+        sys_op_factory,
+        lsp_sender,
+        playground_sender,
+        baml_vfs,
+        event_sink,
+    );
+    let bex: Arc<dyn bex_project::BexLsp> = Arc::new(bex);
+
+    // Start playground HTTP/WS server
+    if let Some(listener) = playground_listener {
+        let bex_for_playground = bex.clone();
+        let btx = broadcast_tx.clone();
+        let es = env_state.clone();
+        tokio_runtime.spawn(async move {
+            if let Err(e) = playground_server::run(listener, bex_for_playground, btx, es).await {
+                tracing::error!("Playground server exited: {e}");
+            }
+        });
+    }
+
+    // Spawn the stdout writer thread.
+    std::thread::Builder::new()
+        .name("lsp-stdout-writer".into())
+        .spawn(move || {
+            let stdout = std::io::stdout();
+            let mut stdout = stdout.lock();
+            while let Ok(msg) = writer_rx.recv() {
+                if msg.write(&mut stdout).is_err() {
+                    break;
+                }
+            }
+        })?;
+
+    // Main event loop: read from stdin, dispatch to bex_project.
+    let stdin = std::io::stdin();
+    let mut stdin = stdin.lock();
+
+    // Main event loop — forward all messages to bex_project.
+    // The `initialize` handshake is handled by `bex_project` via `handle_request`.
+    loop {
+        let msg = match lsp_server::Message::read(&mut stdin) {
+            Ok(Some(msg)) => msg,
+            Ok(None) => break,
+            Err(e) => {
+                tracing::error!("Failed to read LSP message: {e}");
+                break;
+            }
+        };
+
+        match msg {
+            lsp_server::Message::Notification(notification) => {
+                tracing::debug!("<<< notification: {}", notification.method);
+                if notification.method == "exit" {
+                    break;
+                }
+                bex.handle_notification(notification);
+            }
+            lsp_server::Message::Request(request) => {
+                tracing::debug!("<<< request: {} (id={})", request.method, request.id);
+                if request.method == "shutdown" {
+                    let response = lsp_server::Response {
+                        id: request.id,
+                        result: Some(serde_json::Value::Null),
+                        error: None,
+                    };
+                    let _ = writer_tx.send(lsp_server::Message::Response(response));
+                    continue;
+                }
+                bex.handle_request(request);
+            }
+            lsp_server::Message::Response(response) => {
+                tracing::debug!("<<< response from client: {:?}", response.id);
+            }
+        }
+    }
+
+    tracing::info!("LSP server shutting down");
+    if let Some(sink) = event_sink_for_flush {
+        sink.flush();
+    }
     Ok(())
 }

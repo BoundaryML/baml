@@ -1,0 +1,22 @@
+[package]
+name = "bex_events_native"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Native EventSink implementation: thread + channel + JSONL file writer"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+bex_events = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+web-time = { workspace = true }

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-6b46971f444a527b/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
@@ -73,5 +72,4 @@ fn OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
     bb5: {
         goto -> bb1;
     }
-
 }

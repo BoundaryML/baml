@@ -4493,4 +4493,47 @@ Enum value is not equal to the "ALIAS_B" string, as expected
 
         Ok(())
     }
+
+    #[test]
+    fn test_string_format_method() -> anyhow::Result<()> {
+        setup_logging();
+
+        let args = BamlValue::Map(BamlMap::new());
+
+        let ir = make_test_ir(
+            "
+            class C {
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            r#"{{ "{}, {}!".format("Hello", "World") }}"#,
+            &args,
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_string(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        match rendered {
+            RenderedPrompt::Completion(content) => {
+                assert_eq!(content, "Hello, World!");
+            }
+            _ => panic!("Expected Completion prompt"),
+        }
+
+        Ok(())
+    }
 }

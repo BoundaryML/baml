@@ -11,4 +11,4 @@ pub mod qualified_name;
 pub use core_types::*;
 pub use debug_log::{DebugMessage, drain_debug_log, has_debug_messages};
 pub use files::*;
-pub use qualified_name::{Namespace, QualifiedName};
+pub use qualified_name::{BAML_STD_PREFIX, Namespace, QualifiedName};

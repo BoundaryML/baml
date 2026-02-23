@@ -267,18 +267,6 @@ macro_rules! with_builtins {
                     /// Abort execution with an error message.
                     #[sys_op]
                     fn panic(message: String);
-
-                    /// Check if the current function call has been cancelled.
-                    ///
-                    /// This is a sync sys_op (Ready path), so it bypasses the
-                    /// VM's biased `tokio::select!` and returns directly to
-                    /// BAML code. In practice, `true` is only observable if
-                    /// all preceding sys_ops in the current execution were also
-                    /// sync — any async op (sleep, HTTP, etc.) would have
-                    /// triggered VM-level cancellation at its Await first.
-                    #[sys_op]
-                    #[uses(engine_ctx)]
-                    fn cancellation_requested() -> bool;
                 }
 
                 // =====================================================================
@@ -800,6 +788,7 @@ mod tests {
 // ============================================================================
 
 /// Builtin BAML source files for built-in functions.
+pub const BUILTIN_PATH_PREFIX: &str = "<builtin>/";
 ///
 /// These files are compiled together with user code and provide
 /// implementations for builtin namespaces like `baml.llm`.
@@ -875,4 +864,21 @@ pub mod baml_sources {
 /// Get all builtin BAML sources.
 pub fn baml_sources() -> impl Iterator<Item = &'static baml_sources::BuiltinSource> {
     baml_sources::ALL.iter()
+}
+
+#[cfg(test)]
+mod builtin_path_tests {
+    use super::{BUILTIN_PATH_PREFIX, baml_sources};
+
+    #[test]
+    fn test_builtin_path_prefix_consistent_with_all() {
+        for source in baml_sources::ALL {
+            assert!(
+                source.path.starts_with(BUILTIN_PATH_PREFIX),
+                "BuiltinSource path {:?} does not start with BUILTIN_PATH_PREFIX ({:?})",
+                source.path,
+                BUILTIN_PATH_PREFIX,
+            );
+        }
+    }
 }

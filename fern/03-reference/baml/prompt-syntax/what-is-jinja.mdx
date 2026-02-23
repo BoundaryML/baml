@@ -79,5 +79,34 @@ function MyFunc(arg1: string, user: User) -> string {
 }
 ```
 
+### String Formatting
+
+BAML supports Python's new-style string formatting via the `.format()` method on strings. This uses `{}` placeholders (not `%s`-style).
+
+```jinja
+{# Basic substitution #}
+{{ "{}, {}!".format("Hello", "World") }}
+{# Output: Hello, World! #}
+
+{# Number formatting with commas #}
+{{ "{:,}".format(1234567) }}
+{# Output: 1,234,567 #}
+
+{# Fixed decimal places #}
+{{ "{:.2f}".format(3.14159) }}
+{# Output: 3.14 #}
+
+{# Padding and alignment #}
+{{ "{:<10}".format("left") }}
+{{ "{:>10}".format("right") }}
+{{ "{:^10}".format("center") }}
+```
+
+<Note>
+Only new-style `{}` formatting is supported. Old-style `%s` formatting via the `|format` filter is **not** available because BAML uses the `|format` filter for [serializing objects](/ref/prompt-syntax/jinja-filters#format) (e.g. `value|format(type="yaml")`).
+</Note>
+
+For a full reference of what's possible with Python's format specification, see [pyformat.info](https://pyformat.info/).
+
 ### Built-in filters
 See [jinja docs](https://jinja.palletsprojects.com/en/3.1.x/templates/#list-of-builtin-filters)

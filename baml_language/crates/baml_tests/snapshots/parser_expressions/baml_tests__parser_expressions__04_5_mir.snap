@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn Calculate() -> int {
@@ -52,7 +51,6 @@ fn Calculate() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn FieldAccess(user: User) -> string {
@@ -99,7 +97,6 @@ fn FieldAccess(user: User) -> string {
     bb2: {
         return;
     }
-
 }
 
 fn IndexAccess(users: IndexUser[]) -> string {
@@ -154,7 +151,6 @@ fn IndexAccess(users: IndexUser[]) -> string {
     bb2: {
         return;
     }
-
 }
 
 fn TestPrecedence() -> bool {
@@ -236,5 +232,4 @@ fn TestPrecedence() -> bool {
     bb8: {
         return;
     }
-
 }

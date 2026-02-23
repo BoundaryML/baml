@@ -1,0 +1,86 @@
+/*
+ * Layout CSS for the monaco-vscode-api ViewsService workbench.
+ * Based on monaco-languageclient examples: resources/styles/views.css
+ *
+ * This is required for the sidebar + editor layout to work correctly
+ * when using defaultHtmlAugmentationInstructions / defaultViewsInit.
+ */
+
+/* The wrapper <div is="app"> created by defaultHtmlAugmentationInstructions
+   needs to fill its parent so #workbench-container height: 100% resolves. */
+div[is="app"] {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+#sidebarDiv,
+#sidebarRightDiv {
+    display: flex;
+    flex: none;
+}
+
+#sidebar {
+    width: 200px;
+}
+
+#editorsDiv {
+    flex: 1;
+    min-width: 0;
+}
+
+#editors {
+    position: relative;
+    min-width: 0;
+    height: 100%;
+}
+
+#sidebar-right {
+    max-width: 500px;
+}
+
+#auxiliaryBar-left,
+#auxiliaryBar {
+    max-width: 300px;
+}
+
+/* Hide parts we don't need — they take vertical space from our split layout */
+#panel {
+    display: none;
+}
+
+#titleBar {
+    position: relative;
+    flex: none;
+}
+
+#banner {
+    display: none;
+}
+
+#statusBar {
+    display: none;
+}
+
+#workbench-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#workbench-top {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+/*
+ * The Quick Open dialog (Cmd+P) centers itself within the workbench container,
+ * which is only the left portion of the page. Override to center it on the
+ * full viewport so it doesn't look off-center.
+ */
+.quick-input-widget {
+    left: 50vw !important;
+    transform: translateX(-50%);
+}

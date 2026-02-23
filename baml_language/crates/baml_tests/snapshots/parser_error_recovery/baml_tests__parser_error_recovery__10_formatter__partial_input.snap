@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-1a45e748177ce512/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === FORMATTER ERROR ===
 [InvalidSyntax { message: "field 'field2' is missing a type annotation", span: Span { file_id: FileId(0), range: 110..116 } }, InvalidSyntax { message: "field 'string' is missing a type annotation", span: Span { file_id: FileId(0), range: 195..201 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'@'", span: Span { file_id: FileId(0), range: 202..203 } }, InvalidSyntax { message: "Unexpected 'string' in type expression", span: Span { file_id: FileId(0), range: 242..248 } }, UnexpectedToken { expected: "')'", found: "'}'", span: Span { file_id: FileId(0), range: 281..282 } }, UnexpectedToken { expected: "')'", found: "function", span: Span { file_id: FileId(0), range: 353..361 } }, UnexpectedToken { expected: "return type (->)", found: "function", span: Span { file_id: FileId(0), range: 353..361 } }, UnexpectedToken { expected: "function body", found: "function", span: Span { file_id: FileId(0), range: 353..361 } }, UnexpectedToken { expected: "'{'", found: "identifier", span: Span { file_id: FileId(0), range: 476..482 } }, UnexpectedToken { expected: "top-level declaration", found: "identifier", span: Span { file_id: FileId(0), range: 476..482 } }, UnexpectedToken { expected: "top-level declaration", found: "'}'", span: Span { file_id: FileId(0), range: 483..484 } }]

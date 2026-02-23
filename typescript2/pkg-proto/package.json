@@ -1,0 +1,21 @@
+{
+  "name": "@b/pkg-proto",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "generate": "buf generate ../../baml_language/crates/bridge_ctypes/types",
+    "build": "pnpm run generate",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.0.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.50.0",
+    "ts-proto": "^2.6.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

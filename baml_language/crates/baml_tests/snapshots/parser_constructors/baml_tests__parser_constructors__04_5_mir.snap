@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn floatArray() -> float[] {
@@ -21,7 +20,6 @@ fn floatArray() -> float[] {
     bb1: {
         return;
     }
-
 }
 
 fn stringArray() -> string[] {
@@ -42,7 +40,6 @@ fn stringArray() -> string[] {
     bb1: {
         return;
     }
-
 }
 
 fn pointArray() -> Point[] {
@@ -75,7 +72,6 @@ fn pointArray() -> Point[] {
     bb1: {
         return;
     }
-
 }
 
 fn boolArray() -> bool[] {
@@ -96,7 +92,6 @@ fn boolArray() -> bool[] {
     bb1: {
         return;
     }
-
 }
 
 fn mixedArray() -> int | string[] {
@@ -117,7 +112,6 @@ fn mixedArray() -> int | string[] {
     bb1: {
         return;
     }
-
 }
 
 fn intArray() -> int[] {
@@ -138,7 +132,6 @@ fn intArray() -> int[] {
     bb1: {
         return;
     }
-
 }
 
 fn point() -> Point {
@@ -157,7 +150,6 @@ fn point() -> Point {
     bb1: {
         return;
     }
-
 }
 
 fn vec2d() -> Vec2D {
@@ -184,7 +176,6 @@ fn vec2d() -> Vec2D {
     bb1: {
         return;
     }
-
 }
 
 fn boolValues() -> map<string, bool> {
@@ -207,7 +198,6 @@ fn boolValues() -> map<string, bool> {
     bb1: {
         return;
     }
-
 }
 
 fn intValues() -> map<string, int> {
@@ -230,7 +220,6 @@ fn intValues() -> map<string, int> {
     bb1: {
         return;
     }
-
 }
 
 fn stringValues() -> map<string, string> {
@@ -253,7 +242,6 @@ fn stringValues() -> map<string, string> {
     bb1: {
         return;
     }
-
 }
 
 fn floatValues() -> map<string, float> {
@@ -276,5 +264,4 @@ fn floatValues() -> map<string, float> {
     bb1: {
         return;
     }
-
 }

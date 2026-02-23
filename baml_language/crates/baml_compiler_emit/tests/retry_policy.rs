@@ -19,7 +19,8 @@ retry_policy Bad {
     let project = db.get_project().expect("project should be initialized");
     let files = project.files(&db).clone();
 
-    let err = compile_files(&db, &files).expect_err("invalid retry_policy should fail compile");
+    let err = compile_files(&db, &files, baml_compiler_emit::OptLevel::One)
+        .expect_err("invalid retry_policy should fail compile");
 
     match err {
         LoweringError::InvalidRetryPolicyValue {

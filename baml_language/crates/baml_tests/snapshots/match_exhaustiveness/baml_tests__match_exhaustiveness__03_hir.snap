@@ -1,626 +1,652 @@
 ---
-source: target/debug/build/baml_tests-9bb63ec260e05ea9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function NestedLiteralUnions(code: int) -> string {
-      match (code) {
-          200 | 201 | 202 | 204 => "success",
-          400 | 404 | 405 | 406 | 409 => "client error",
-          _ => "other",
-      }
+    match (code) {
+        200 | 201 | 202 | 204 => "success",
+        400 | 404 | 405 | 406 | 409 => "client error",
+        _ => "other",
+    }
 }
 
 function ExhaustiveEnumWithTypedPattern(s: Status) -> string {
-      match (s) {
-          x: Status => "any status",
-      }
+    match (s) {
+        x: Status => "any status",
+    }
 }
 
 function ParenthesizedSingleLiteral(b: bool) -> string {
-      match (b) {
-          true => "yes",
-          false => "no",
-      }
+    match (b) {
+        true => "yes",
+        false => "no",
+    }
 }
 
 function DuplicateEnumVariant(s: Status) -> string {
-      match (s) {
-          Status.Active => "first",
-          Status.Active => "second",
-          Status.Inactive => "inactive",
-          Status.Pending => "pending",
-      }
+    match (s) {
+        Status.Active => "first",
+        Status.Active => "second",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+    }
 }
 
 function WrongLiteralTypeBoolWithInt(b: bool) -> string {
-      match (b) {
-          42 => "wrong type",
-      }
+    match (b) {
+        42 => "wrong type",
+    }
 }
 
 function UnreachableMultiple(x: int) -> string {
-      match (x) {
-          _ => "catch all",
-          n: int => "unreachable 1",
-          m: int => "unreachable 2",
-      }
+    match (x) {
+        _ => "catch all",
+        n: int => "unreachable 1",
+        m: int => "unreachable 2",
+    }
 }
 
 function OverlappingWithBindings(r: Result) -> string {
-      match (r) {
-          s: Success => s.data,
-          x: Success | Failure => "remaining",
-      }
+    match (r) {
+        s: Success => s.data,
+        x: Success | Failure => "remaining",
+    }
 }
 
 function ExhaustiveNullableEnum(s: Status?) -> string {
-      match (s) {
-          Status.Active => "active",
-          Status.Inactive => "inactive",
-          Status.Pending => "pending",
-          null => "no status",
-      }
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+        null => "no status",
+    }
 }
 
 function NonExhaustiveBoolMissingTrue(b: bool) -> string {
-      match (b) {
-          false => "no",
-      }
+    match (b) {
+        false => "no",
+    }
 }
 
 function ExhaustiveEnumAllVariants(s: Status) -> string {
-      match (s) {
-          Status.Active => "active",
-          Status.Inactive => "inactive",
-          Status.Pending => "pending",
-      }
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+    }
+}
+
+function JumpTableEnumDiscriminant(state: DispatchState) -> int {
+    match (state) {
+        DispatchState.Alpha => 10,
+        DispatchState.Beta => 20,
+        DispatchState.Gamma => 30,
+        DispatchState.Delta => 40,
+    }
 }
 
 function ExhaustiveTypeAlias(r: Result) -> string {
-      match (r) {
-          s: Success => s.data,
-          f: Failure => f.reason,
-      }
+    match (r) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+    }
 }
 
 function EnumVariantAfterTypedEnum(s: Status) -> string {
-      match (s) {
-          x: Status => "any status",
-          Status.Active => "unreachable",
-      }
+    match (s) {
+        x: Status => "any status",
+        Status.Active => "unreachable",
+    }
 }
 
 function BoolLiteralAfterTypedBool(b: bool) -> string {
-      match (b) {
-          x: bool => "any bool",
-          true => "unreachable",
-      }
+    match (b) {
+        x: bool => "any bool",
+        true => "unreachable",
+    }
 }
 
 function LiteralUnionWithCatchAll(code: int) -> string {
-      match (code) {
-          200 | 201 => "success",
-          400 | 404 => "client error",
-          _ => "other",
-      }
+    match (code) {
+        200 | 201 => "success",
+        400 | 404 => "client error",
+        _ => "other",
+    }
 }
 
 function ExhaustiveIntLiterals(code: SuccessCode) -> string {
-      match (code) {
-          200 => "OK",
-          201 => "Created",
-          204 => "No Content",
-      }
+    match (code) {
+        200 => "OK",
+        201 => "Created",
+        204 => "No Content",
+    }
 }
 
 function ExhaustiveStringLiterals(role: Role) -> string {
-      match (role) {
-          "user" => "User",
-          "assistant" => "Assistant",
-          "system" => "System",
-      }
+    match (role) {
+        "user" => "User",
+        "assistant" => "Assistant",
+        "system" => "System",
+    }
 }
 
 function ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
-      match (r) {
-          s: Success => s.data,
-          _ => "fallback",
-      }
+    match (r) {
+        s: Success => s.data,
+        _ => "fallback",
+    }
 }
 
 function DuplicateIntLiteral(x: int) -> string {
-      match (x) {
-          1 => "first one",
-          1 => "second one",
-          _ => "other",
-      }
+    match (x) {
+        1 => "first one",
+        1 => "second one",
+        _ => "other",
+    }
 }
 
 function ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
-      match (x) {
-          s: Success => s.data,
-          200 => "http ok",
-      }
+    match (x) {
+        s: Success => s.data,
+        200 => "http ok",
+    }
 }
 
 function ExhaustiveLiteralWithBaseType(x: int) -> string {
-      match (x) {
-          200 => "ok",
-          n: int => "other",
-      }
+    match (x) {
+        200 => "ok",
+        n: int => "other",
+    }
 }
 
 function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
-      match (s) {
-          Status.Active => "active",
-          Status.Inactive => "inactive",
-          Status.Pending => "pending",
-      }
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+    }
 }
 
 function NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
-      match (r) {
-          s: Success => s.data,
-      }
+    match (r) {
+        s: Success => s.data,
+    }
 }
 
 function BoolUnionPattern(b: bool) -> string {
-      match (b) {
-          true | false => "covered",
-      }
+    match (b) {
+        true | false => "covered",
+    }
 }
 
 function StringLiteralUnionPattern(role: Role) -> string {
-      match (role) {
-          "user" | "assistant" => "chat participant",
-          "system" => "system",
-      }
+    match (role) {
+        "user" | "assistant" => "chat participant",
+        "system" => "system",
+    }
 }
 
 function ExhaustiveBool(b: bool) -> string {
-      match (b) {
-          true => "yes",
-          false => "no",
-      }
+    match (b) {
+        true => "yes",
+        false => "no",
+    }
 }
 
 function NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
-      match (dm) {
-          s: Success => s.data,
-          f: Failure => f.reason,
-      }
+    match (dm) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+    }
 }
 
 function ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
-      match (dm) {
-          s: Success => s.data,
-          f: Failure => f.reason,
-          null => "nothing",
-      }
+    match (dm) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+        null => "nothing",
+    }
 }
 
 function ExhaustiveOptionalSingleton(code: MaybeOk) -> string {
-      match (code) {
-          200 => "OK",
-          null => "no code",
-      }
+    match (code) {
+        200 => "OK",
+        null => "no code",
+    }
 }
 
 function BoolWithCatchAll(b: bool) -> string {
-      match (b) {
-          true => "yes",
-          _ => "no",
-      }
+    match (b) {
+        true => "yes",
+        _ => "no",
+    }
 }
 
 function GuardedOnlyNonExhaustive(x: int) -> int {
-      match (x) {
-          n: int if n > 0 => n * 2,
-          n: int if n < 0 => n * -1,
-      }
+    match (x) {
+        n: int if n > 0 => n * 2,
+        n: int if n < 0 => n * -1,
+    }
 }
 
 function NonExhaustiveBoolMissingFalse(b: bool) -> string {
-      match (b) {
-          true => "yes",
-      }
+    match (b) {
+        true => "yes",
+    }
 }
 
 function IntLiteralUnionPattern(code: SuccessCode) -> string {
-      match (code) {
-          200 | 201 => "success with body",
-          204 => "no content",
-      }
+    match (code) {
+        200 | 201 => "success with body",
+        204 => "no content",
+    }
 }
 
 function ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
-      match (x) {
-          0 => match (y) {
-              0 => match (z) {
-                  0 => "all zero",
-                  _ => "z nonzero",
-              },
-              _ => "y nonzero",
-          },
-          _ => "x nonzero",
-      }
+    match (x) {
+        0 => match (y) {
+            0 => match (z) {
+                0 => "all zero",
+                _ => "z nonzero",
+            },
+            _ => "y nonzero",
+        },
+        _ => "x nonzero",
+    }
 }
 
 function MultipleUnreachableSpans(s: Status) -> string {
-      match (s) {
-          Status.Active => "active",
-          Status.Active => "duplicate 1",
-          Status.Inactive => "inactive",
-          Status.Active => "duplicate 2",
-          Status.Pending => "pending",
-      }
+    match (s) {
+        Status.Active => "active",
+        Status.Active => "duplicate 1",
+        Status.Inactive => "inactive",
+        Status.Active => "duplicate 2",
+        Status.Pending => "pending",
+    }
 }
 
 function ExhaustiveCustomBool(b: CustomBool) -> string {
-      match (b) {
-          true => "yes",
-          false => "no",
-      }
+    match (b) {
+        true => "yes",
+        false => "no",
+    }
 }
 
 function NestedEnumMatch(s1: Status, s2: Status) -> string {
-      match (s1) {
-          Status.Active => match (s2) {
-              Status.Active => "both active",
-              Status.Inactive => "first active, second inactive",
-              Status.Pending => "first active, second pending",
-          },
-          Status.Inactive => "first inactive",
-          Status.Pending => "first pending",
-      }
+    match (s1) {
+        Status.Active => match (s2) {
+            Status.Active => "both active",
+            Status.Inactive => "first active, second inactive",
+            Status.Pending => "first active, second pending",
+        },
+        Status.Inactive => "first inactive",
+        Status.Pending => "first pending",
+    }
 }
 
 function ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
-      match (x) {
-          200 => "http ok",
-          "success" => "string success",
-          true => "boolean true",
-      }
+    match (x) {
+        200 => "http ok",
+        "success" => "string success",
+        true => "boolean true",
+    }
 }
 
 function PartialUnionPlusCatchAll(r: FullResult) -> string {
-      match (r) {
-          x: Success | Failure => "success or failure",
-          _: Pending => "pending",
-      }
+    match (r) {
+        x: Success | Failure => "success or failure",
+        _: Pending => "pending",
+    }
 }
 
 function ExhaustiveTrueType(t: AlwaysTrue) -> string {
-      match (t) {
-          true => "always true",
-      }
+    match (t) {
+        true => "always true",
+    }
 }
 
 function NestedMatchSpans(x: int, y: bool) -> string {
-      match (x) {
-          0 => match (y) {
-              true => "zero true",
-              false => "zero false",
-              true => "unreachable nested",
-          },
-          _ => "other",
-      }
+    match (x) {
+        0 => match (y) {
+            true => "zero true",
+            false => "zero false",
+            true => "unreachable nested",
+        },
+        _ => "other",
+    }
 }
 
 function NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
-      match (code) {
-          null => "no code",
-      }
+    match (code) {
+        null => "no code",
+    }
 }
 
 function GetStatus() -> Status {
-      Status.Active
+    Status.Active
 }
 
 function EnumVariantUnion(s: Status) -> string {
-      match (s) {
-          Status.Active | Status.Pending => "actionable",
-          Status.Inactive => "inactive",
-      }
+    match (s) {
+        Status.Active | Status.Pending => "actionable",
+        Status.Inactive => "inactive",
+    }
 }
 
 function NestedTypeAlias(mr: MaybeResult) -> string {
-      match (mr) {
-          s: Success => s.data,
-          f: Failure => f.reason,
-          null => "nothing",
-      }
+    match (mr) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+        null => "nothing",
+    }
 }
 
 function ExhaustiveFalseType(f: AlwaysFalse) -> string {
-      match (f) {
-          false => "always false",
-      }
+    match (f) {
+        false => "always false",
+    }
 }
 
 function NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
-      match (code) {
-          200 => "OK",
-      }
+    match (code) {
+        200 => "OK",
+    }
 }
 
 function NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
-      match (t) {
-          false => "wrong!",
-      }
+    match (t) {
+        false => "wrong!",
+    }
 }
 
 function ExhaustiveWithNamedCatchAll(x: int) -> int {
-      match (x) {
-          1 => 100,
-          other => other + 1,
-      }
+    match (x) {
+        1 => 100,
+        other => other + 1,
+    }
+}
+
+function JumpTableTypeTag(value: int | string | bool | float) -> string {
+    match (value) {
+        i: int => "int",
+        s: string => "string",
+        b: bool => "bool",
+        f: float => "float",
+    }
 }
 
 function NestedTypeBindings(r: Result) -> int {
-      match (r) {
-          s: Success | Failure => 0,
-          f: Failure => 1,
-      }
+    match (r) {
+        s: Success | Failure => 0,
+        f: Failure => 1,
+    }
 }
 
 function NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
-      match (code) {
-          200 => "ok",
-      }
+    match (code) {
+        200 => "ok",
+    }
 }
 
 function ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
-      match (code) {
-          200 => "ok",
-          201 => "created",
-      }
+    match (code) {
+        200 => "ok",
+        201 => "created",
+    }
 }
 
 function WrongLiteralTypeIntWithString(x: int) -> string {
-      match (x) {
-          "hello" => "wrong type",
-      }
+    match (x) {
+        "hello" => "wrong type",
+    }
 }
 
 function ExhaustiveEnumWithCatchAll(s: Status) -> string {
-      match (s) {
-          Status.Active => "active",
-          _ => "other",
-      }
+    match (s) {
+        Status.Active => "active",
+        _ => "other",
+    }
 }
 
 function GuardedWithFallback(x: int) -> int {
-      match (x) {
-          n: int if n > 0 => n * 2,
-          _ => 0,
-      }
+    match (x) {
+        n: int if n > 0 => n * 2,
+        _ => 0,
+    }
 }
 
 function MatchArithmeticScrutinee(a: int, b: int) -> string {
-      match (a + b) {
-          0 => "zero",
-          1 => "one",
-          _ => "other",
-      }
+    match (a + b) {
+        0 => "zero",
+        1 => "one",
+        _ => "other",
+    }
 }
 
 function HighLineNumberNonExhaustive(s: Status) -> string {
-      match (s) {
-          Status.Active => "active only",
-      }
+    match (s) {
+        Status.Active => "active only",
+    }
 }
 
 function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
-      match (s) {
-          Status.Active => "active",
-          Status.Inactive => "inactive",
-          null => "no status",
-      }
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        null => "no status",
+    }
 }
 
 function DeeplyNestedLiterals(x: SuccessCode) -> string {
-      match (x) {
-          200 | 201 | 204 => "all success codes",
-      }
+    match (x) {
+        200 | 201 | 204 => "all success codes",
+    }
 }
 
 function NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
-      match (r) {
-          s: Success => s.data,
-          f: Failure => f.reason,
-      }
+    match (r) {
+        s: Success => s.data,
+        f: Failure => f.reason,
+    }
 }
 
 function ExhaustiveSingletonInt(code: HttpOk) -> string {
-      match (code) {
-          200 => "OK",
-      }
+    match (code) {
+        200 => "OK",
+    }
 }
 
 function NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
-      match (x) {
-          s: Success => s.data,
-      }
+    match (x) {
+        s: Success => s.data,
+    }
 }
 
 function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
-      match (s) {
-          x: Status => "some status",
-          null => "no status",
-      }
+    match (s) {
+        x: Status => "some status",
+        null => "no status",
+    }
 }
 
 function DuplicateStringLiteral(role: Role) -> string {
-      match (role) {
-          "user" => "first user",
-          "user" => "second user",
-          "assistant" => "assistant",
-          "system" => "system",
-      }
+    match (role) {
+        "user" => "first user",
+        "user" => "second user",
+        "assistant" => "assistant",
+        "system" => "system",
+    }
 }
 
 function NonExhaustiveEnumMissingOne(s: Status) -> string {
-      match (s) {
-          Status.Active => "active",
-          Status.Inactive => "inactive",
-      }
+    match (s) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+    }
 }
 
 function MatchComplexScrutinee(x: int) -> string {
-      match (x * 2 + 1) {
-          1 => "x was 0",
-          3 => "x was 1",
-          _ => "other",
-      }
+    match (x * 2 + 1) {
+        1 => "x was 0",
+        3 => "x was 1",
+        _ => "other",
+    }
 }
 
 function ExhaustiveOptional(x: int?) -> string {
-      match (x) {
-          n: int => "has value",
-          null => "no value",
-      }
+    match (x) {
+        n: int => "has value",
+        null => "no value",
+    }
 }
 
 function NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
-      match (b) {
-          true => "yes",
-      }
+    match (b) {
+        true => "yes",
+    }
 }
 
 function NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
-      match (x) {
-          200 => "http ok",
-          "success" => "string success",
-      }
+    match (x) {
+        200 => "http ok",
+        "success" => "string success",
+    }
 }
 
 function NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
-      match (x) {
-          200 => "http ok",
-      }
+    match (x) {
+        200 => "http ok",
+    }
 }
 
 function UnreachableAfterCatchAll(x: int) -> string {
-      match (x) {
-          _ => "catch all",
-          n: int => "never reached",
-      }
+    match (x) {
+        _ => "catch all",
+        n: int => "never reached",
+    }
 }
 
 function OptionalWithCatchAll(x: int?) -> string {
-      match (x) {
-          null => "no value",
-          _ => "has value",
-      }
+    match (x) {
+        null => "no value",
+        _ => "has value",
+    }
 }
 
 function DuplicateBoolLiteral(b: bool) -> string {
-      match (b) {
-          true => "first true",
-          true => "second true",
-          false => "false",
-      }
+    match (b) {
+        true => "first true",
+        true => "second true",
+        false => "false",
+    }
 }
 
 function OverlappingTypedPatterns(r: Result) -> string {
-      match (r) {
-          _: Success => "success",
-          _: Success | Failure => "covers failure only (success already handled)",
-      }
+    match (r) {
+        _: Success => "success",
+        _: Success | Failure => "covers failure only (success already handled)",
+    }
 }
 
 function StringLiteralAfterStringType(s: string) -> string {
-      match (s) {
-          x: string => "any string",
-          "hello" => "unreachable",
-      }
+    match (s) {
+        x: string => "any string",
+        "hello" => "unreachable",
+    }
 }
 
 function NestedEnumVariantUnions(s: Status) -> string {
-      match (s) {
-          Status.Active | Status.Pending | Status.Inactive => "all statuses",
-      }
+    match (s) {
+        Status.Active | Status.Pending | Status.Inactive => "all statuses",
+    }
 }
 
 function UnionPatternCoversAll(r: Result) -> string {
-      match (r) {
-          x: Success | Failure => "covered",
-      }
+    match (r) {
+        x: Success | Failure => "covered",
+    }
 }
 
 function ExhaustiveWithUnderscore(x: int) -> int {
-      match (x) {
-          1 => 100,
-          2 => 200,
-          _ => 0,
-      }
+    match (x) {
+        1 => 100,
+        2 => 200,
+        _ => 0,
+    }
 }
 
 function PartialUnionPatternCoverage(r: FullResult) -> string {
-      match (r) {
-          x: Success | Failure => "not pending",
-      }
+    match (r) {
+        x: Success | Failure => "not pending",
+    }
 }
 
 function NonExhaustiveStringLiteral(role: Role) -> string {
-      match (role) {
-          "user" => "User",
-          "assistant" => "Assistant",
-      }
+    match (role) {
+        "user" => "User",
+        "assistant" => "Assistant",
+    }
 }
 
 function MatchFunctionCallScrutinee() -> string {
-      match (GetStatus()) {
-          Status.Active => "active",
-          Status.Inactive => "inactive",
-          Status.Pending => "pending",
-      }
+    match (GetStatus()) {
+        Status.Active => "active",
+        Status.Inactive => "inactive",
+        Status.Pending => "pending",
+    }
 }
 
 function StringLiteralWithCatchAll(role: Role) -> string {
-      match (role) {
-          "user" => "User message",
-          "assistant" => "Assistant message",
-          _ => "Other",
-      }
+    match (role) {
+        "user" => "User message",
+        "assistant" => "Assistant message",
+        _ => "Other",
+    }
+}
+
+function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
+    match (pet) {
+        c: Cat => "cat",
+        d: Dog => "dog",
+        b: Bird => "bird",
+        f: Fish => "fish",
+    }
 }
 
 function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
-      match (s) {
-          Status.Active => "active",
-      }
+    match (s) {
+        Status.Active => "active",
+    }
 }
 
 function MixedPatterns(x: int) -> string {
-      match (x) {
-          0 => "zero",
-          1 => "one",
-          n: int if n > 0 => "positive",
-          _ => "negative",
-      }
+    match (x) {
+        0 => "zero",
+        1 => "one",
+        n: int if n > 0 => "positive",
+        _ => "negative",
+    }
 }
 
 function NonExhaustiveIntLiteral(code: SuccessCode) -> string {
-      match (code) {
-          200 => "OK",
-          201 => "Created",
-      }
+    match (code) {
+        200 => "OK",
+        201 => "Created",
+    }
 }
 
 function LiteralAfterTypedPattern(x: int) -> string {
-      match (x) {
-          n: int => "int",
-          42 => "unreachable",
-      }
+    match (x) {
+        n: int => "int",
+        42 => "unreachable",
+    }
 }
 
 function EnumVariantUnionWithCatchAll(s: Status) -> string {
-      match (s) {
-          Status.Active | Status.Pending => "actionable",
-          _ => "other",
-      }
+    match (s) {
+        Status.Active | Status.Pending => "actionable",
+        _ => "other",
+    }
 }
 
 class Success {
@@ -631,8 +657,31 @@ class Pending {
   eta: int
 }
 
+class Fish {
+  name: string
+}
+
+class Bird {
+  name: string
+}
+
+class Cat {
+  name: string
+}
+
+class Dog {
+  name: string
+}
+
 class Failure {
   reason: string
+}
+
+enum DispatchState {
+  Alpha
+  Beta
+  Gamma
+  Delta
 }
 
 enum Status {

@@ -1,0 +1,82 @@
+{
+	"folders": [
+		{
+			"path": "baml_language"
+		},
+		{
+			"path": "typescript2"
+		}
+	],
+	"settings": {
+		"rust-analyzer.cargo.features": "all",
+		"rust-analyzer.check.features": "all",
+		"claudeCode.useTerminal": true
+	},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Launch VS Code extension (v2)",
+				"type": "extensionHost",
+				"request": "launch",
+				"sourceMaps": true,
+				"cwd": "${workspaceFolder:typescript2}/app-vscode-ext",
+				"args": [
+				  "--disable-extensions",
+				  "--extensionDevelopmentPath=${workspaceFolder:typescript2}/app-vscode-ext"
+				],
+				"outFiles": ["${workspaceFolder:typescript2}/app-vscode-ext/dist/**"],
+				"env": {
+				  "VSCODE_DEBUG_MODE": "true",
+				  "BAML_CLI_PATH": "${workspaceFolder:baml_language}/target/debug/baml-cli",
+				  "BAML_PLAYGROUND_DEV_PORT": "4000"
+				}
+			  }
+		]
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "build-cli",
+				"type": "shell",
+				"command": "cargo build -p baml_cli",
+				"options": {
+					"cwd": "${workspaceFolder:baml_language}"
+				},
+				"group": "build",
+				"problemMatcher": ["$rustc"]
+			},
+			{
+				"label": "build-extension",
+				"type": "shell",
+				"command": "pnpm --filter app-vscode-ext build",
+				"options": {
+					"cwd": "${workspaceFolder:typescript2}"
+				},
+				"group": "build",
+				"problemMatcher": ["$tsc"]
+			},
+			{
+				"label": "build-webview",
+				"type": "shell",
+				"command": "pnpm --filter app-vscode-webview build",
+				"options": {
+					"cwd": "${workspaceFolder:typescript2}"
+				},
+				"group": "build",
+				"problemMatcher": ["$tsc"]
+			},
+			{
+				"label": "build-all",
+				"dependsOn": ["build-cli", "build-extension", "build-webview"],
+				"dependsOrder": "parallel",
+				"group": {
+					"kind": "build",
+					"isDefault": true
+				},
+				"problemMatcher": []
+			}
+		]
+	}
+}

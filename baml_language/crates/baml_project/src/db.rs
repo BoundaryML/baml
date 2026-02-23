@@ -8,7 +8,7 @@
 
 use std::{
     collections::HashMap,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Arc, atomic::AtomicU32},
 };
 
@@ -34,8 +34,8 @@ pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
 ///
 /// ```ignore
 /// let mut db = ProjectDatabase::new();
-/// db.set_project_root(Path::new("/my/project"));
-/// db.add_or_update_file(Path::new("/my/project/main.baml"), "class Foo {}");
+/// db.set_project_root(std::path::Path::new("/my/project"));
+/// db.add_or_update_file(std::path::Path::new("/my/project/main.baml"), "class Foo {}");
 ///
 /// let result = db.check();
 /// for diag in &result.diagnostics {
@@ -52,9 +52,9 @@ pub struct ProjectDatabase {
     /// The current project. Set via `set_project_root()`.
     project: Option<Project>,
     /// Maps file paths to their `SourceFile` handles.
-    file_map: HashMap<PathBuf, SourceFile>,
+    file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps `FileId` to file path for reverse lookup.
-    file_id_to_path: HashMap<FileId, PathBuf>,
+    file_id_to_path: HashMap<FileId, std::path::PathBuf>,
 }
 
 #[salsa::db]
@@ -79,6 +79,9 @@ impl baml_compiler_vir::Db for ProjectDatabase {}
 
 #[salsa::db]
 impl baml_compiler_mir::Db for ProjectDatabase {}
+
+#[salsa::db]
+impl baml_compiler_emit::Db for ProjectDatabase {}
 
 impl ProjectDatabase {
     /// Create a new empty database.
@@ -146,14 +149,14 @@ impl ProjectDatabase {
     }
 
     /// Get the file path for a `FileId`.
-    pub fn file_id_to_path(&self, file_id: FileId) -> Option<&PathBuf> {
+    pub fn file_id_to_path(&self, file_id: FileId) -> Option<&std::path::PathBuf> {
         self.file_id_to_path.get(&file_id)
     }
 
     /// Add a file to the database (internal helper).
     fn add_file_internal(
         &mut self,
-        path: impl Into<PathBuf>,
+        path: impl Into<std::path::PathBuf>,
         text: impl Into<String>,
     ) -> SourceFile {
         let file_id = FileId::new(
@@ -171,7 +174,7 @@ impl ProjectDatabase {
     /// Otherwise, a new `SourceFile` is created.
     ///
     /// Returns the `SourceFile` handle.
-    pub fn add_or_update_file(&mut self, path: &Path, content: &str) -> SourceFile {
+    pub fn add_or_update_file(&mut self, path: &std::path::Path, content: &str) -> SourceFile {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         if let Some(&existing_file) = self.file_map.get(&canonical_path) {
@@ -201,7 +204,7 @@ impl ProjectDatabase {
     ///
     /// Note: Salsa doesn't support true removal, but we can remove it from our tracking
     /// and the project's file list.
-    pub fn remove_file(&mut self, path: &Path) {
+    pub fn remove_file(&mut self, path: &std::path::Path) {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         if let Some(file) = self.file_map.remove(&canonical_path) {
@@ -230,7 +233,7 @@ impl ProjectDatabase {
     /// Builtin files are available from the start of the compilation pipeline.
     ///
     /// Returns the created `Project`.
-    pub fn set_project_root(&mut self, root: &Path) -> Project {
+    pub fn set_project_root(&mut self, root: &std::path::Path) -> Project {
         let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
 
         // Collect existing user files that are under this root
@@ -300,7 +303,7 @@ impl ProjectDatabase {
     /// Add a file to the database.
     ///
     /// This is an alias for `add_or_update_file` for API compatibility.
-    pub fn add_file(&mut self, path: impl AsRef<Path>, content: &str) -> SourceFile {
+    pub fn add_file(&mut self, path: impl AsRef<std::path::Path>, content: &str) -> SourceFile {
         self.add_or_update_file(path.as_ref(), content)
     }
 
@@ -309,20 +312,30 @@ impl ProjectDatabase {
         self.file_map.values().copied()
     }
 
+    /// Get all file paths currently tracked by the database.
+    pub fn non_builtin_file_paths(&self) -> impl Iterator<Item = std::path::PathBuf> {
+        self.file_map
+            .keys()
+            .filter(|path| !path.starts_with(baml_builtins::BUILTIN_PATH_PREFIX))
+            .cloned()
+    }
+
     /// Get a `SourceFile` by its path.
-    pub fn get_file(&self, path: &Path) -> Option<SourceFile> {
+    pub fn get_file(&self, path: &std::path::Path) -> Option<SourceFile> {
         let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         self.file_map.get(&canonical_path).copied()
     }
 
     /// Get a `FileId` by its path.
-    pub fn path_to_file_id(&self, path: &Path) -> Option<FileId> {
+    pub fn path_to_file_id(&self, path: &std::path::Path) -> Option<FileId> {
         self.get_file(path).map(|file| file.file_id(self))
     }
 
     /// Get the file path for a `FileId`.
-    pub fn get_path(&self, file_id: FileId) -> Option<&Path> {
-        self.file_id_to_path.get(&file_id).map(PathBuf::as_path)
+    pub fn get_path(&self, file_id: FileId) -> Option<&std::path::Path> {
+        self.file_id_to_path
+            .get(&file_id)
+            .map(std::path::PathBuf::as_path)
     }
 
     /// Get a `SourceFile` by its `FileId`.
@@ -330,6 +343,20 @@ impl ProjectDatabase {
         self.file_id_to_path
             .get(&file_id)
             .and_then(|path| self.file_map.get(path).copied())
+    }
+
+    /// Get the compiled bytecode for the project.
+    pub fn get_bytecode(&self) -> Result<bex_vm_types::Program, baml_compiler_emit::LoweringError> {
+        // First ensure no diagnostics errors are present
+        let diagnostics = self.check();
+        if diagnostics
+            .diagnostics
+            .iter()
+            .any(|diag| diag.severity == baml_compiler_diagnostics::Severity::Error)
+        {
+            return Err(baml_compiler_emit::LoweringError::HasDiagnosticsErrors);
+        }
+        baml_compiler_emit::generate_project_bytecode(self)
     }
 }
 
@@ -355,7 +382,7 @@ mod tests {
     #[test]
     fn test_add_file() {
         let mut db = ProjectDatabase::new();
-        let path = Path::new("/tmp/test.baml");
+        let path = std::path::Path::new("/tmp/test.baml");
         let content = "class Foo { name string }";
 
         let file = db.add_or_update_file(path, content);
@@ -365,7 +392,7 @@ mod tests {
     #[test]
     fn test_update_file() {
         let mut db = ProjectDatabase::new();
-        let path = Path::new("/tmp/test.baml");
+        let path = std::path::Path::new("/tmp/test.baml");
 
         let file1 = db.add_or_update_file(path, "class Foo {}");
         let file2 = db.add_or_update_file(path, "class Bar {}");
@@ -379,7 +406,7 @@ mod tests {
     #[test]
     fn test_set_project_root() {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(Path::new("/tmp"));
+        db.set_project_root(std::path::Path::new("/tmp"));
 
         assert!(db.get_project().is_some());
     }

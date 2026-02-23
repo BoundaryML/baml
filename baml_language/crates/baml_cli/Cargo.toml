@@ -25,11 +25,12 @@ clap-cargo = { workspace = true }
 ctrlc = { workspace = true }
 
 [features]
+default = [ "native-tls" ]
+native-tls = [ "baml_lsp_server/native-tls" ]
+rustls = [ "baml_lsp_server/rustls" ]
 defaults = [  ]
 internal = [  ]
 skip-integ-tests = [  ]
-# TODO: reqwest is not currently a dependency
-# static-ssl = ["reqwest/native-tls-vendored"]
 
 # [dev-dependencies]
 # assert_cmd = "2"

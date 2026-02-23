@@ -9,7 +9,7 @@ license.workspace = true
 doctest = false
 
 [dependencies]
-bex_factory = { workspace = true }
+bex_project = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }

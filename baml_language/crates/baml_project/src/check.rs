@@ -12,7 +12,7 @@
 //! }
 //! ```
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use baml_compiler_diagnostics::{Diagnostic, ToDiagnostic};
 use baml_compiler_hir::{
@@ -35,7 +35,7 @@ pub struct CheckResult {
     /// Maps `FileId` to source text (for Ariadne rendering).
     pub sources: HashMap<FileId, String>,
     /// Maps `FileId` to file path (for URL generation).
-    pub file_paths: HashMap<FileId, PathBuf>,
+    pub file_paths: HashMap<FileId, std::path::PathBuf>,
 }
 
 /// Collect all diagnostics from a project.
@@ -271,7 +271,7 @@ impl ProjectDatabase {
 
         let source_files: Vec<SourceFile> = self.get_source_files();
         let mut sources: HashMap<FileId, String> = HashMap::new();
-        let mut file_paths: HashMap<FileId, PathBuf> = HashMap::new();
+        let mut file_paths: HashMap<FileId, std::path::PathBuf> = HashMap::new();
 
         // Build all maps
         for source_file in &source_files {

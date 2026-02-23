@@ -1,197 +1,196 @@
 ---
-source: target/debug/build/baml_tests-176fd1045f27e6d5/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function mul_assign() -> int {
-      let x = 3;
-      x *= 4;
-      return x;
+    let x = 3;
+    x *= 4;
+    return x;
 }
 
 function assign_in_loop() -> int {
-      let sum = 0;
-      let i = 0;
-      while (i < 5) {
-          sum += i;
-          i += 1;
-      }
-      return sum;
+    let sum = 0;
+    let i = 0;
+    while (i < 5) {
+        sum += i;
+        i += 1;
+    }
+    return sum;
 }
 
 function multi_assign() -> int {
-      let a = 1;
-      let b = 2;
-      a = 10;
-      b = 20;
-      return a + b;
+    let a = 1;
+    let b = 2;
+    a = 10;
+    b = 20;
+    return a + b;
 }
 
 function sub_assign() -> int {
-      let x = 10;
-      x -= 3;
-      return x;
+    let x = 10;
+    x -= 3;
+    return x;
 }
 
 function add_assign() -> int {
-      let x = 10;
-      x += 5;
-      return x;
+    let x = 10;
+    x += 5;
+    return x;
 }
 
 function simple_assign() -> int {
-      let x = 1;
-      x = 5;
-      return x;
+    let x = 1;
+    x = 5;
+    return x;
 }
 
 function block_with_tail() -> int {
-      let x = {
-          let y = 1;
-          let z = 2;
-          y + z
-      };
-      return x;
+    let x = {
+        let y = 1;
+        let z = 2;
+        y + z
+    };
+    return x;
 }
 
 function break_in_for() -> int {
-      {
-          let i = 0;
-          while (i < 10) {
-              break;
-              i = i + 1;
-          }
-      };
-      return 1;
+    {
+        let i = 0;
+        while (i < 10) {
+            break;
+            i = i + 1;
+        }
+    };
+    return 1;
 }
 
 function simple_continue() -> int {
-      while (true) {
-          continue;
-      }
-      return 0;
+    while (true) {
+        continue;
+    }
+    return 0;
 }
 
 function continue_with_locals() -> int {
-      while (true) {
-          let x = 1;
-          if (true) {
-              let y = 2;
-              continue;
-          };
-      }
-      return 5;
+    while (true) {
+        let x = 1;
+        if (true) {
+            let y = 2;
+            continue;
+        };
+    }
+    return 5;
 }
 
 function simple_break() -> int {
-      while (true) {
-          break;
-      }
-      return 42;
+    while (true) {
+        break;
+    }
+    return 42;
 }
 
 function nested_break() -> int {
-      while (true) {
-          while (true) {
-              break;
-          }
-          break;
-      }
-      return 3;
+    while (true) {
+        while (true) {
+            break;
+        }
+        break;
+    }
+    return 3;
 }
 
 function continue_in_for() -> int {
-      {
-          let i = 0;
-          while (i < 10) {
-              {
-                  i = i + 1;
-                  continue;
-              };
-              i = i + 1;
-          }
-      };
-      return 2;
+    {
+        let i = 0;
+        while (i < 10) {
+            {
+                i = i + 1;
+                continue;
+            };
+            i = i + 1;
+        }
+    };
+    return 2;
 }
 
 function break_with_locals() -> int {
-      while (true) {
-          let x = 1;
-          if (true) {
-              let y = 2;
-              break;
-          };
-      }
-      return 4;
+    while (true) {
+        let x = 1;
+        if (true) {
+            let y = 2;
+            break;
+        };
+    }
+    return 4;
 }
 
 function c_style_for_loop() -> int {
-      let result = 0;
-      {
-          let i = 0;
-          while (i < 10) {
-              result += i;
-              i += 1;
-          }
-      };
-      return result;
+    let result = 0;
+    {
+        let i = 0;
+        while (i < 10) {
+            result += i;
+            i += 1;
+        }
+    };
+    return result;
 }
 
 function iterator_style_for_loop() -> int {
-      let result = 0;
-      {
-          let _iter = [1, 2, 3];
-          let _len = _iter.length();
-          let _i = 0;
-          while (_i < _len) {
-              let i = _iter[_i];
-              _i += 1;
-              result += i;
-          }
-      };
-      return result;
+    let result = 0;
+    {
+        let _iter = [1, 2, 3];
+        let _len = _iter.length();
+        let _i = 0;
+        while (_i < _len) {
+            let i = _iter[_i];
+            _i += 1;
+            result += i;
+        }
+    };
+    return result;
 }
 
 function nested_for_loop() -> int {
-      let result = 0;
-      {
-          let _iter = [1, 2, 3];
-          let _len = _iter.length();
-          let _i = 0;
-          while (_i < _len) {
-              let i = _iter[_i];
-              _i += 1;
-              {
-                  let _iter1 = [4, 5, 6];
-                  let _len1 = _iter1.length();
-                  let _i1 = 0;
-                  while (_i1 < _len1) {
-                      let j = _iter1[_i1];
-                      _i1 += 1;
-                      result += i * j;
-                  }
-              };
-          }
-      };
-      return result;
+    let result = 0;
+    {
+        let _iter = [1, 2, 3];
+        let _len = _iter.length();
+        let _i = 0;
+        while (_i < _len) {
+            let i = _iter[_i];
+            _i += 1;
+            {
+                let _iter1 = [4, 5, 6];
+                let _len1 = _iter1.length();
+                let _i1 = 0;
+                while (_i1 < _len1) {
+                    let j = _iter1[_i1];
+                    _i1 += 1;
+                    result += i * j;
+                }
+            };
+        }
+    };
+    return result;
 }
 
 function ConditionalLogic(age: int) -> string {
-      if (age < 18) {
-          return "minor";
-      } else if (age < 65) {
-          return "adult";
-      } else {
-          return "senior";
-      }
+    if (age < 18) {
+        return "minor";
+    } else if (age < 65) {
+        return "adult";
+    } else {
+        return "senior";
+    }
 }
 
 function let_statements() -> int {
-      let x = 1;
-      let y: int = 2;
-      let z: int[] = [1, 2, 3];
-      let point: Point = Point { x: 1, y: 2 };
-      return point.x + point.y;
+    let x = 1;
+    let y: int = 2;
+    let z: int[] = [1, 2, 3];
+    let point: Point = Point { x: 1, y: 2 };
+    return point.x + point.y;
 }
 
 class Point {
@@ -200,20 +199,20 @@ class Point {
 }
 
 function simple_while_loop() -> int {
-      let i = 0;
-      while (i < 10) {
-          i = i + 1;
-      }
-      return i;
+    let i = 0;
+    while (i < 10) {
+        i = i + 1;
+    }
+    return i;
 }
 
 function nested_while_loop() -> int {
-      let i = 0;
-      while (i < 10) {
-          let j = 0;
-          while (j < 10) {
-              j = j + 1;
-          }
-      }
-      return i;
+    let i = 0;
+    while (i < 10) {
+        let j = 0;
+        while (j < 10) {
+            j = j + 1;
+        }
+    }
+    return i;
 }

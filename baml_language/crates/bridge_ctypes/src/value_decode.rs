@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use bex_factory::{BexExternalValue, Ty};
+use bex_project::{BexExternalValue, Ty};
 use indexmap::IndexMap;
 
 use crate::{

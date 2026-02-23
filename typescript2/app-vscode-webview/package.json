@@ -15,15 +15,17 @@
     "test:unit:run": "vitest run --project unit",
     "test:browser": "vitest --project browser",
     "test:browser:run": "vitest run --project browser",
-    "test:hmr": "vitest --project hmr",
-    "test:hmr:run": "vitest run --project hmr"
+    "pretest:browser:run": "pnpm --filter @b/pkg-proto generate",
+    "pretest:unit:run": "pnpm --filter @b/pkg-proto generate"
   },
   "dependencies": {
     "@b/pkg-playground": "workspace:*",
+    "@b/pkg-proto": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
@@ -35,6 +37,7 @@
     "jotai-devtools": "^0.13.0",
     "jsdom": "^25.0.1",
     "playwright": "^1.57.0",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
     "vite": "^6.0.0",
     "vitest": "^4.0.16"

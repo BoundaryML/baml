@@ -1,6 +1,7 @@
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use bex_external_types::BexExternalValue;
+use web_time::SystemTime;
 
 use crate::{SpanContext, SpanId};
 

@@ -13,7 +13,7 @@ use std::{
     },
 };
 
-use bex_factory::{ResourceHandle, ResourceRegistryRef, ResourceType};
+use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 use js_sys::Promise;
 
 use crate::send_wrapper::SendWrapper;

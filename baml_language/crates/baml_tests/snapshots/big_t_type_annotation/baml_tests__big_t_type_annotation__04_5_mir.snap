@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn test_big_t_type(function_name: string) -> string {
@@ -35,5 +34,4 @@ fn test_big_t_type(function_name: string) -> string {
     bb4: {
         return;
     }
-
 }
