@@ -43,7 +43,7 @@ fn build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm
     let _36: int
     let _37: void
     let _38: baml.llm.OrchestrationStep[] // _iter1
-    let _39: null
+    let _39: (baml.llm.Client, baml.llm.PlannerState) -> baml.llm.OrchestrationStep[]
     let _40: baml.llm.Client
     let _41: baml.llm.PlannerState
     let _42: int // _len1
@@ -82,7 +82,7 @@ fn build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm
     let _75: baml.llm.Client
     let _76: (baml.llm.Client[]) -> int
     let _77: (baml.llm.PlannerState, string, int) -> int
-    let _78: null
+    let _78: (baml.llm.Client, baml.llm.PlannerState) -> baml.llm.OrchestrationStep[]
     let _79: baml.llm.Client
     let _80: baml.llm.Client[]
     let _81: baml.llm.Client
@@ -295,7 +295,7 @@ fn build_plan_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.Pl
     let _3: baml.llm.RetryPolicy?
     let _4: baml.llm.Client
     let _5: bool
-    let _6: null
+    let _6: (baml.llm.Client, baml.llm.PlannerState) -> baml.llm.OrchestrationStep[]
     let _7: baml.llm.Client
     let _8: baml.llm.PlannerState
     let _9: bool
@@ -340,7 +340,7 @@ fn build_plan_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.Pl
     let _48: void
     let _49: float
     let _50: baml.llm.OrchestrationStep[] // inner
-    let _51: null
+    let _51: (baml.llm.Client, baml.llm.PlannerState) -> baml.llm.OrchestrationStep[]
     let _52: baml.llm.Client
     let _53: baml.llm.PlannerState
     let _54: void
@@ -568,7 +568,7 @@ fn render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.
     let _5: string
     let _6: null
     let _7: baml.llm.PrimitiveClient // primitive_client
-    let _8: null
+    let _8: (string) -> baml.llm.PrimitiveClient
     let _9: string
     let _10: baml.llm.PromptAst // prompt
     let _11: baml.llm.PrimitiveClient
@@ -690,7 +690,7 @@ fn build_attempt(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     let _1: baml.llm.Client // llm_client // param
     let _2: baml.llm.PlannerState // planner_state
     let _3: null[]
-    let _4: null
+    let _4: (baml.llm.Client, baml.llm.PlannerState) -> baml.llm.OrchestrationStep[]
     let _5: baml.llm.Client
     let _6: baml.llm.PlannerState
 
@@ -721,7 +721,7 @@ fn execute_client(llm_client: baml.llm.Client, context: baml.llm.ExecutionContex
     let _4: baml.llm.RetryPolicy?
     let _5: baml.llm.Client
     let _6: bool
-    let _7: null
+    let _7: (baml.llm.Client, baml.llm.ExecutionContext, int) -> baml.llm.ExecutionResult
     let _8: baml.llm.Client
     let _9: baml.llm.ExecutionContext
     let _10: int
@@ -773,7 +773,7 @@ fn execute_client(llm_client: baml.llm.Client, context: baml.llm.ExecutionContex
     let _56: void
     let _57: int
     let _58: baml.llm.ExecutionResult // result
-    let _59: null
+    let _59: (baml.llm.Client, baml.llm.ExecutionContext, int) -> baml.llm.ExecutionResult
     let _60: baml.llm.Client
     let _61: baml.llm.ExecutionContext
     let _62: int
@@ -1064,7 +1064,7 @@ fn execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionC
     let _86: 1
     let _87: int
     let _88: baml.llm.ExecutionResult // result
-    let _89: null
+    let _89: (baml.llm.Client, baml.llm.ExecutionContext, int) -> baml.llm.ExecutionResult
     let _90: baml.llm.Client
     let _91: baml.llm.ExecutionContext
     let _92: int
@@ -1085,7 +1085,7 @@ fn execute_client_once(llm_client: baml.llm.Client, context: baml.llm.ExecutionC
     let _107: baml.llm.Client[]
     let _108: baml.llm.Client
     let _109: (baml.llm.Client[]) -> int
-    let _110: null
+    let _110: (baml.llm.Client, baml.llm.ExecutionContext, int) -> baml.llm.ExecutionResult
     let _111: baml.llm.Client
     let _112: baml.llm.Client[]
     let _113: baml.llm.Client
@@ -1396,7 +1396,7 @@ fn build_plan(llm_client: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     let _1: baml.llm.Client // llm_client // param
     let _2: baml.llm.PlannerState // planner_state
     let _3: null[]
-    let _4: null
+    let _4: (baml.llm.Client, baml.llm.PlannerState) -> baml.llm.OrchestrationStep[]
     let _5: baml.llm.Client
     let _6: baml.llm.PlannerState
 
@@ -1424,10 +1424,10 @@ fn build_request(function_name: string, args: map<string, unknown>) -> baml.http
     let _1: string // function_name // param
     let _2: map<string, unknown> // args // param
     let _3: baml.llm.PrimitiveClient // primitive_client
-    let _4: null
+    let _4: (string) -> baml.llm.PrimitiveClient
     let _5: string
     let _6: baml.llm.PromptAst // specialized_prompt
-    let _7: null
+    let _7: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _8: string
     let _9: map<string, unknown>
     let _10: void
@@ -1491,7 +1491,7 @@ fn call_llm_function(function_name: string, args: map<string, unknown>) -> unkno
     let _13: map<string, unknown>
     let _14: string
     let _15: baml.llm.ExecutionResult // result
-    let _16: null
+    let _16: (baml.llm.Client, baml.llm.ExecutionContext, int) -> baml.llm.ExecutionResult
     let _17: baml.llm.Client
     let _18: baml.llm.ExecutionContext
     let _19: 0

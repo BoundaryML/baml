@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 fn GetUser.build_request() -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.http.Request
     let _2: "GetUser"
     let _3: map<string, unknown>
 
@@ -28,7 +28,7 @@ fn GetUser.build_request() -> baml.http.Request {
 fn GetUser() -> MyClass {
     // Locals:
     let _0: MyClass // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> unknown
     let _2: "GetUser"
     let _3: map<string, unknown>
 
@@ -51,7 +51,7 @@ fn GetUser() -> MyClass {
 fn GetUser.render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _2: "GetUser"
     let _3: map<string, unknown>
 

@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 fn GetMixedMap() -> map<string, int | string> {
     // Locals:
     let _0: map<string, int | string> // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> unknown
     let _2: "GetMixedMap"
     let _3: map<string, unknown>
 
@@ -28,7 +28,7 @@ fn GetMixedMap() -> map<string, int | string> {
 fn GetMixedMap.render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _2: "GetMixedMap"
     let _3: map<string, unknown>
 
@@ -52,7 +52,7 @@ fn GetUser.build_request(id: int) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: int // id // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "GetUser"
     let _4: map<string, unknown>
     let _5: "id"
@@ -79,7 +79,7 @@ fn GetUser.build_request(id: int) -> baml.http.Request {
 fn GetMixedMap.build_request() -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.http.Request
     let _2: "GetMixedMap"
     let _3: map<string, unknown>
 
@@ -102,7 +102,7 @@ fn GetMixedMap.build_request() -> baml.http.Request {
 fn GetMixedList() -> int | string[] {
     // Locals:
     let _0: int | string[] // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> unknown
     let _2: "GetMixedList"
     let _3: map<string, unknown>
 
@@ -125,7 +125,7 @@ fn GetMixedList() -> int | string[] {
 fn GetStatus.render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _2: "GetStatus"
     let _3: map<string, unknown>
 
@@ -148,7 +148,7 @@ fn GetStatus.render_prompt() -> baml.llm.PromptAst {
 fn GetStatus() -> Status {
     // Locals:
     let _0: Status // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> unknown
     let _2: "GetStatus"
     let _3: map<string, unknown>
 
@@ -172,7 +172,7 @@ fn GetUser(id: int) -> User {
     // Locals:
     let _0: User // return
     let _1: int // id // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "GetUser"
     let _4: map<string, unknown>
     let _5: "id"
@@ -200,7 +200,7 @@ fn GetUser.render_prompt(id: int) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: int // id // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "GetUser"
     let _4: map<string, unknown>
     let _5: "id"
@@ -227,7 +227,7 @@ fn GetUser.render_prompt(id: int) -> baml.llm.PromptAst {
 fn GetStatus.build_request() -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.http.Request
     let _2: "GetStatus"
     let _3: map<string, unknown>
 
@@ -250,7 +250,7 @@ fn GetStatus.build_request() -> baml.http.Request {
 fn GetMixedList.build_request() -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.http.Request
     let _2: "GetMixedList"
     let _3: map<string, unknown>
 
@@ -273,7 +273,7 @@ fn GetMixedList.build_request() -> baml.http.Request {
 fn GetMixedList.render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _2: "GetMixedList"
     let _3: map<string, unknown>
 

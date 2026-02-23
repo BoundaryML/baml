@@ -6,7 +6,7 @@ fn FormatMessage(name: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // name // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "FormatMessage"
     let _4: map<string, unknown>
     let _5: "name"
@@ -34,7 +34,7 @@ fn FormatMessage.render_prompt(name: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // name // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "FormatMessage"
     let _4: map<string, unknown>
     let _5: "name"
@@ -62,7 +62,7 @@ fn FormatMessage.build_request(name: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // name // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "FormatMessage"
     let _4: map<string, unknown>
     let _5: "name"
@@ -90,7 +90,7 @@ fn ProcessText.build_request(input: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "ProcessText"
     let _4: map<string, unknown>
     let _5: "input"
@@ -118,7 +118,7 @@ fn ProcessText.render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "ProcessText"
     let _4: map<string, unknown>
     let _5: "input"
@@ -146,7 +146,7 @@ fn ProcessText(input: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "ProcessText"
     let _4: map<string, unknown>
     let _5: "input"
