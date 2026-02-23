@@ -360,52 +360,57 @@ class ClassB {
 "#,
     );
 
-    // Query both files initially
+    // Query both files initially.
+    // file_a query warms the cache (including project_stream_names which
+    // reads ALL user files' file_lowering). So file_b's lowering is
+    // already cached when we query it — only file_item_tree and file_items
+    // need fresh execution for file_b.
     let _ = baml_compiler_hir::file_items(test_db.db(), file_a);
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_b);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
-            ("file_lowering", 1),
-            ("file_items", 1),
+            ("file_item_tree", 1), // First time for file_b
+            ("file_items", 1),     // First time for file_b
         ],
     );
 
     // Modify only file_a
-    file_a.set_text(test_db.db_mut()).to(r#"
+    file_a.set_text(test_db.db_mut()).to(
+        r#"
 class ClassA {
     field string
     newField int
 }
 "#
-    .to_string());
+        .to_string(),
+    );
 
-    // Query file_b - should be fully cached (file_a's change doesn't affect it)
+    // Query file_b after modifying file_a.
+    // project_stream_names re-verifies file_a's lowering (triggering lex/parse/lowering
+    // for file_a), but since stream name sets are unchanged (same class names, just
+    // new fields), early cutoff applies to file_item_tree and file_items for file_b.
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_b);
         },
         &[
-            ("lex_file", 0),
-            ("parse_result", 0),
-            ("file_lowering", 0),
-            ("file_items", 0),
+            ("file_items", 0),     // Early cutoff: stream names unchanged
+            ("file_item_tree", 0), // Early cutoff: same expanded tree
         ],
     );
 
-    // Query file_a - should re-execute
+    // Query file_a — file_lowering was already re-executed during the
+    // file_b query (as part of project_stream_names verification).
+    // Only file_item_tree and file_items need fresh execution.
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_a);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
-            ("file_lowering", 1),
-            ("file_items", 1),
+            ("file_item_tree", 1), // Must re-execute: base item tree changed
+            ("file_items", 1),     // Must re-execute: expanded tree changed
         ],
     );
 }

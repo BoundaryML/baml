@@ -14,6 +14,11 @@ function HelloWorld(name: string) -> string {
     baml.llm.call_llm_function("HelloWorld", { "name": name })
 }
 
+class stream.User {
+  name: null | string
+  age: null | int
+}
+
 class User {
   name: string
   age: int

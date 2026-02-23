@@ -2,20 +2,35 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+type stream.MetaList = type[]
+
 type MetaUnion = type | string
 
 type MetaList = type[]
 
 type MetaAlias = type
 
+type stream.MetaUnion = type | string
+
+type stream.MetaAlias = type
+
 function test_type_annotation(function_name: string) -> string {
     let t: type = baml.llm.get_return_type(function_name);
     return "ok";
 }
 
+class stream.RiskFactor {
+  type: null | string
+  severity: null | float
+}
+
 class RiskFactor {
   type: string
   severity: float
+}
+
+class stream.MetaField {
+  type: null | type
 }
 
 class MetaField {

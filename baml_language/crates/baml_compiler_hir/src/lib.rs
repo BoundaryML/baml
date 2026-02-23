@@ -38,6 +38,7 @@ pub mod pretty;
 pub mod reserved_names;
 mod signature;
 mod source_map;
+pub mod stream_expand;
 pub mod symbol_table;
 mod test;
 mod type_ref;
@@ -170,13 +171,137 @@ pub fn file_lowering(db: &dyn Db, file: SourceFile) -> LoweringResult<'_> {
     LoweringResult::new(db, Arc::new(item_tree), diagnostics)
 }
 
-/// Extract `ItemTree` from a file's syntax tree.
+/// Helper: reconstruct `TypeNameSets` from a tracked `StreamNameSets`.
+fn reconstruct_name_sets(name_sets: StreamNameSets<'_>, db: &dyn Db) -> stream_expand::TypeNameSets {
+    stream_expand::TypeNameSets {
+        class_names: name_sets.class_names(db).iter().cloned().collect(),
+        enum_names: name_sets.enum_names(db).iter().cloned().collect(),
+        alias_names: name_sets.alias_names(db).iter().cloned().collect(),
+    }
+}
+
+/// Tracked: Project-wide type name classification for stream expansion.
 ///
-/// This is a convenience wrapper around `file_lowering` for callers that
-/// only need the `ItemTree`. Not tracked separately since `file_lowering`
-/// already caches the result - this just clones the Arc (O(1)).
+/// Classifies all type names (class, enum, alias) across the entire project.
+/// Uses CST-level data (parser output) to avoid depending on HIR lowering.
+///
+/// This is a separate tracked query so that:
+/// - Its output is memoized and compared for early cutoff
+/// - If names don't change (e.g., body-only edits), downstream queries stay cached
+#[salsa::tracked]
+pub struct StreamNameSets<'db> {
+    #[tracked]
+    #[returns(ref)]
+    pub class_names: Vec<Name>,
+    #[tracked]
+    #[returns(ref)]
+    pub enum_names: Vec<Name>,
+    #[tracked]
+    #[returns(ref)]
+    pub alias_names: Vec<Name>,
+}
+
+/// Tracked: Compute project-wide name sets for stream expansion.
+///
+/// Reads from `file_lowering` output (not CSTs directly) to leverage per-file
+/// caching. Only iterates user files (not builtins) since builtin types
+/// don't need stream expansion.
+#[salsa::tracked]
+pub fn project_stream_names(
+    db: &dyn Db,
+    project: baml_workspace::Project,
+) -> StreamNameSets<'_> {
+    let mut class_names = Vec::new();
+    let mut enum_names = Vec::new();
+    let mut alias_names = Vec::new();
+
+    for file in project.files(db) {
+        // Skip builtin files — they don't need stream expansion
+        if file
+            .path(db)
+            .to_string_lossy()
+            .starts_with(BUILTIN_PATH_PREFIX)
+        {
+            continue;
+        }
+        let result = file_lowering(db, *file);
+        let tree = result.item_tree(db);
+        for class in tree.classes.values() {
+            if class.compiler_generated.is_none() {
+                class_names.push(class.name.clone());
+            }
+        }
+        for enum_def in tree.enums.values() {
+            enum_names.push(enum_def.name.clone());
+        }
+        for alias in tree.type_aliases.values() {
+            if alias.compiler_generated.is_none() {
+                alias_names.push(alias.name.clone());
+            }
+        }
+    }
+
+    // Sort for deterministic Salsa comparison (early cutoff)
+    class_names.sort();
+    enum_names.sort();
+    alias_names.sort();
+    StreamNameSets::new(db, class_names, enum_names, alias_names)
+}
+
+/// Tracked: Get the expanded `ItemTree` for a file, including `stream.*` variants.
+///
+/// This wraps `file_lowering` and adds compiler-generated `stream.*` class and
+/// type alias variants for streaming support (BEP-006). The stream expansion
+/// uses `project_stream_names` for cross-file type classification.
+///
+/// Builtin files are returned as-is (no stream expansion).
+///
+/// This is tracked separately from `file_lowering` to preserve per-file
+/// incrementality: `file_lowering` has no cross-file dependencies, while
+/// this function depends on `project_stream_names` (project-wide, with
+/// early cutoff for unchanged name sets).
+#[salsa::tracked]
 pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
-    file_lowering(db, file).item_tree(db).clone()
+    let base = file_lowering(db, file);
+
+    // Skip stream expansion for builtin files
+    let is_builtin = file
+        .path(db)
+        .to_string_lossy()
+        .starts_with(BUILTIN_PATH_PREFIX);
+    if is_builtin {
+        return base.item_tree(db).clone();
+    }
+
+    let project = db.project();
+    let name_sets = project_stream_names(db, project);
+    let names = reconstruct_name_sets(name_sets, db);
+
+    let mut tree: ItemTree = (**base.item_tree(db)).clone();
+
+    // Generate stream.* variants for user-defined classes
+    let user_classes: Vec<item_tree::Class> = tree
+        .classes
+        .values()
+        .filter(|c| c.compiler_generated.is_none())
+        .cloned()
+        .collect();
+    for class in &user_classes {
+        tree.alloc_class(stream_expand::stream_expand_class(class, &names));
+    }
+
+    // Generate stream.* variants for user-defined type aliases
+    let user_aliases: Vec<item_tree::TypeAlias> = tree
+        .type_aliases
+        .values()
+        .filter(|a| a.compiler_generated.is_none())
+        .cloned()
+        .collect();
+    for alias in &user_aliases {
+        tree.alloc_type_alias(stream_expand::stream_expand_type_alias(alias, &names));
+    }
+
+    Arc::new(tree)
 }
 
 // Future: When we add modules, we'll need a function like this:
@@ -1774,6 +1899,13 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
             let mut field_description = Attribute::Unset;
             let mut field_skip = Attribute::Unset;
 
+            // Streaming attributes (Phase 3)
+            let mut stream_starts_as: Option<TypeRef> = None;
+            let mut stream_type_attr: Option<TypeRef> = None;
+            let mut sap_completed = false;
+            let mut sap_must_start = false;
+            let mut stream_with_state = false;
+
             // Validate field attributes for duplicates and constraint syntax
             let mut seen_field_attrs: FxHashMap<String, Span> = FxHashMap::default();
             for attr in field_node.attributes() {
@@ -1856,8 +1988,80 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                             // Validate constraint attribute syntax
                             validate_constraint_attribute(&attr, &attr_name, attr_span, ctx);
                         }
+                        "stream.starts_as" => {
+                            // @stream.starts_as(<value>) - parse the argument as a value.
+                            // Quoted strings → StringLiteral, unquoted → parse as type name.
+                            if attr.has_single_string_arg() {
+                                // Quoted string: @stream.starts_as("Loading...")
+                                if let Some(text) = attr.string_arg() {
+                                    stream_starts_as = Some(TypeRef::StringLiteral(text));
+                                }
+                            } else if attr.has_single_string_or_unquoted_arg() {
+                                // Unquoted: @stream.starts_as(null), @stream.starts_as(never)
+                                if let Some(text) = attr.string_arg() {
+                                    stream_starts_as = Some(TypeRef::from_text(&text));
+                                }
+                            } else if !attr.has_args() {
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: attr_span,
+                                    received: "no arguments".to_string(),
+                                });
+                            }
+                        }
+                        "stream.type" => {
+                            // @stream.type(<type_expr>) - parse the argument as a type ref
+                            if attr.has_single_string_or_unquoted_arg() || attr.has_single_string_arg() {
+                                if let Some(text) = attr.string_arg() {
+                                    let type_ref = TypeRef::from_text(&text);
+                                    stream_type_attr = Some(type_ref);
+                                }
+                            } else if !attr.has_args() {
+                                ctx.push_diagnostic(HirDiagnostic::InvalidAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: attr_span,
+                                    received: "no arguments".to_string(),
+                                });
+                            }
+                        }
+                        "sap.completed" => {
+                            // @sap.completed - flag, no arguments
+                            if attr.has_args() {
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                });
+                            }
+                            sap_completed = true;
+                        }
+                        "sap.must_start" => {
+                            // @sap.must_start - flag, no arguments
+                            if attr.has_args() {
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                });
+                            }
+                            sap_must_start = true;
+                        }
+                        "stream.with_state" => {
+                            // @stream.with_state - flag, no arguments
+                            if attr.has_args() {
+                                let arg_span =
+                                    attr.args_span().map(|r| ctx.span(r)).unwrap_or(attr_span);
+                                ctx.push_diagnostic(HirDiagnostic::UnexpectedAttributeArg {
+                                    attr_name: attr_name.clone(),
+                                    span: arg_span,
+                                });
+                            }
+                            stream_with_state = true;
+                        }
                         _ => {
-                            // Other attributes (stream.done, etc.) - just validate duplicates
+                            // Other attributes - just validate duplicates
                         }
                     }
                 }
@@ -1879,6 +2083,12 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 alias: field_alias,
                 description: field_description,
                 skip: field_skip,
+                stream_starts_as,
+                stream_type_attr,
+                sap_completed,
+                sap_must_start,
+                stream_with_state,
+                sap_annotations: Vec::new(),
             });
         }
     }
@@ -1974,6 +2184,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
         is_dynamic: class_is_dynamic,
         alias: class_alias,
         description: class_description,
+        compiler_generated: None,
     })
 }
 
@@ -2327,7 +2538,11 @@ pub(crate) fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
         .map(|t| TypeRef::from_ast(&t))
         .unwrap_or(TypeRef::Unknown);
 
-    Some(TypeAlias { name, type_ref })
+    Some(TypeAlias {
+        name,
+        type_ref,
+        compiler_generated: None,
+    })
 }
 
 //
@@ -2483,6 +2698,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let class = &item_tree[local_id];
+                // Skip compiler-generated classes (e.g., stream.* variants)
+                if class.compiler_generated.is_some() {
+                    continue;
+                }
                 let name_key = item_name_key(db, file, &class.name);
                 let span =
                     get_item_name_span(db, file, "class", class.name.as_str(), local_id.index())
@@ -2507,6 +2726,10 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let alias = &item_tree[local_id];
+                // Skip compiler-generated type aliases (e.g., stream.* variants)
+                if alias.compiler_generated.is_some() {
+                    continue;
+                }
                 let name_key = item_name_key(db, file, &alias.name);
                 let span = get_item_name_span(
                     db,
@@ -3247,12 +3470,15 @@ fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<Hi
     // Check if Python is a target (for field name == type name check)
     let has_python = output_types.contains(&reserved_names::OutputType::PythonPydantic);
 
-    // Check class fields
+    // Check class fields (skip compiler-generated classes like stream.* variants)
     for item in items.items(db) {
         if let ItemId::Class(loc) = item {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
             let class = &item_tree[loc.id(db)];
+            if class.compiler_generated.is_some() {
+                continue;
+            }
             let class_name = class.name.as_str();
 
             for field in &class.fields {

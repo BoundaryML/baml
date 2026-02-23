@@ -5,3 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 class Union {
   u: Union | Union | Union | Union
 }
+
+class stream.Union {
+  u: null | stream.Union | stream.Union | stream.Union | stream.Union
+}

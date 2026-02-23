@@ -23,6 +23,10 @@ class Hi {
   name: string
 }
 
+class stream.Hi {
+  name: null | string
+}
+
 client VertexGCP {
   provider: vertex-ai
 }

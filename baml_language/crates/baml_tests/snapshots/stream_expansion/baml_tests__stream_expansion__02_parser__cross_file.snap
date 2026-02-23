@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "CrossFileUser"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "edu"
+      TYPE_EXPR "Education"
+        WORD "Education"
+    FIELD
+      WORD "status"
+      TYPE_EXPR "Status"
+        WORD "Status"
+    R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "CrossFileAlias"
+    EQUALS "="
+    TYPE_EXPR "Education | int"
+      WORD "Education"
+      PIPE "|"
+      WORD "int"
+
+=== ERRORS ===
+None

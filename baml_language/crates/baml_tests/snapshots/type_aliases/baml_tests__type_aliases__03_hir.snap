@@ -16,6 +16,12 @@ function Baz() -> Json {
 
 type bar = int
 
+type stream.bar = int
+
+type stream.Json = int | float | string | stream.Json[] | map<string, stream.Json>
+
+type stream.foo = stream.bar
+
 type Json = int | float | string | Json[] | map<string, Json>
 
 type foo = bar
@@ -28,8 +34,14 @@ function MakeJSON(i: NotJSON) -> JSON {
     i.inner
 }
 
+class stream.NotJSON {
+  inner: null | name
+}
+
 class NotJSON {
   inner: name
 }
+
+type stream.JSON = int | float | string | bool | stream.JSON[] | map<string, json>
 
 type JSON = int | float | string | bool | JSON[] | map<string, json>

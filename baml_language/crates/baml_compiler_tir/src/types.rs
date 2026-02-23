@@ -135,6 +135,11 @@ pub enum Ty {
     /// Meta-type — the type of type values at the TIR level.
     /// Matches `TypePattern::Type` in builtin signatures.
     Type,
+
+    /// Bottom type — the type with no values.
+    /// Used for stream expansion field omission.
+    /// `T | Never` simplifies to `T` during union normalization.
+    Never,
 }
 
 impl Ty {
@@ -173,6 +178,8 @@ impl Ty {
         match self {
             // Error recovery: don't emit additional errors when type inference failed
             Ty::Unknown | Ty::Error => true,
+            // Bottom type: explicitly uninhabited
+            Ty::Never => true,
             // Empty union has no members, therefore no possible values
             Ty::Union(types) => types.is_empty(),
             // All other types are inhabited
@@ -276,6 +283,7 @@ impl fmt::Display for Ty {
             Ty::BuiltinUnknown => write!(f, "unknown"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
             Ty::Type => write!(f, "type"),
+            Ty::Never => write!(f, "never"),
         }
     }
 }
@@ -304,6 +312,9 @@ mod tests {
         assert!(Ty::Unknown.is_uninhabited());
         assert!(Ty::Error.is_uninhabited());
 
+        // Never is the bottom type — explicitly uninhabited
+        assert!(Ty::Never.is_uninhabited());
+
         // Empty union is uninhabited (no possible values)
         assert!(Ty::Union(vec![]).is_uninhabited());
 
@@ -319,5 +330,10 @@ mod tests {
         assert!(!Ty::Void.is_uninhabited());
         assert!(!Ty::List(Box::new(Ty::Int)).is_uninhabited());
         assert!(!Ty::Optional(Box::new(Ty::Int)).is_uninhabited());
+    }
+
+    #[test]
+    fn test_never_display() {
+        assert_eq!(Ty::Never.to_string(), "never");
     }
 }

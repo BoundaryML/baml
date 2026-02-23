@@ -14,6 +14,10 @@ function TypeBuilderFn(from_text: string) -> Resume {
     baml.llm.call_llm_function("TypeBuilderFn", { "from_text": from_text })
 }
 
+class stream.Resume {
+  name: null | string
+}
+
 class Resume {
   name: string
 }

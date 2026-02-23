@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "Active"
+      WORD "Active"
+    ENUM_VARIANT "Inactive"
+      WORD "Inactive"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Education"
+    L_BRACE "{"
+    FIELD
+      WORD "school"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "degree"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

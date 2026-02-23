@@ -137,15 +137,20 @@ pub enum Ty {
     ///
     /// This is a compiler-only variant that should never reach runtime.
     BuiltinUnknown,
+
+    /// Bottom type — compiler-only, used for stream expansion.
+    /// `T | Never` simplifies to `T`. A field whose stream type is entirely
+    /// `Never` is omitted from the `stream.*` class.
+    /// Mapped from TIR `Ty::Never`. Should not reach runtime.
+    Never,
 }
 
-// NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
+// NOTE: `Unknown` and `Error` are intentionally excluded from this enum.
 // - Unknown/Error are TIR-only error recovery types. They are mapped to `Null` during
 //   TIR→baml_type conversion in `convert_tir_ty`. All real type checking happens in TIR
 //   (which keeps its own Ty), so VIR+ stages don't need these for error recovery.
-// - Never is a VIR-only bottom type for diverging expressions (return/break/continue).
-//   MIR already collapsed Never→Void via control flow terminators. VIR lowering now
-//   produces `Void` directly instead of `Never`.
+// - Never IS included (compiler-only) for stream expansion. It is used to mark fields
+//   that should be omitted from stream.* classes. It should not reach runtime.
 
 impl Ty {
     // --- Opaque type constructors ---
@@ -288,6 +293,7 @@ impl Ty {
                 | Ty::Void
                 | Ty::WatchAccessor(_)
                 | Ty::BuiltinUnknown
+                | Ty::Never
         )
     }
 
@@ -300,6 +306,7 @@ impl Ty {
                 tn.display_name
             )),
             Ty::Void => Err("Void type should not reach runtime".to_string()),
+            Ty::Never => Err("Never type should not reach runtime".to_string()),
             Ty::WatchAccessor(inner) => inner.validate_runtime(),
             Ty::BuiltinUnknown => Ok(()),
             // Recurse into containers
@@ -373,6 +380,7 @@ impl fmt::Display for Ty {
             Ty::Void => write!(f, "void"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
+            Ty::Never => write!(f, "never"),
         }
     }
 }

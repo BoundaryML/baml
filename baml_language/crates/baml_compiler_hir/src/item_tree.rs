@@ -225,6 +225,20 @@ pub struct Function {
     pub compiler_generated: Option<CompilerGenerated>,
 }
 
+/// Metadata for compiler-generated classes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClassCompilerGenerated {
+    /// Stream expansion: `class stream.Resume` generated from `class Resume`.
+    StreamExpand { source_name: Name },
+}
+
+/// Metadata for compiler-generated type aliases.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeAliasCompilerGenerated {
+    /// Stream expansion: `type stream.Foo` generated from `type Foo`.
+    StreamExpand { source_name: Name },
+}
+
 /// A class definition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Class {
@@ -238,6 +252,9 @@ pub struct Class {
     pub alias: Attribute<String>,
     /// @@description("text") - documentation for the class
     pub description: Attribute<String>,
+    /// If this class is compiler-generated, contains metadata.
+    /// `None` for user-defined classes.
+    pub compiler_generated: Option<ClassCompilerGenerated>,
     // Note: Generic parameters are queried separately via generic_params()
     // for incrementality - changes to generics don't invalidate ItemTree
 }
@@ -255,6 +272,48 @@ pub struct Field {
     pub description: Attribute<String>,
     /// @skip - exclude field from serialization
     pub skip: Attribute<()>,
+
+    // Streaming attributes (user-specified, Phase 3)
+    /// @stream.starts_as(<value>) -- value before streaming begins.
+    /// Must be a singleton type: literal, null, never.
+    pub stream_starts_as: Option<TypeRef>,
+    /// @stream.type(<type_expr>) -- override the streaming type.
+    pub stream_type_attr: Option<TypeRef>,
+    /// @sap.completed -- field value only emitted when fully parsed.
+    pub sap_completed: bool,
+    /// @sap.must_start -- field absent until parsing begins (equivalent to @stream.starts_as(never)).
+    pub sap_must_start: bool,
+    /// @stream.with_state -- wraps final stream type in StreamState<T>.
+    pub stream_with_state: bool,
+
+    // Compiler-internal annotations for the SAP/jsonish deserializer.
+    // Built during stream expansion from the user-specified attributes above.
+    pub sap_annotations: Vec<SapAnnotation>,
+}
+
+/// Compiler-internal annotations consumed by the SAP/jsonish deserializer.
+/// Lowered from @stream.starts_as / @stream.type during expansion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SapAnnotation {
+    /// @sap.missing(T) -- value to produce when field's JSON key is absent.
+    Missing(SapValue),
+    /// @sap.completed -- type variant only matches when fully parsed.
+    Completed,
+}
+
+/// A value that can appear in @sap.missing annotations.
+/// Restricted to singleton types (value-as-type).
+/// Must survive through the pipeline to runtime for jsonish to query.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SapValue {
+    Null,
+    Never,            // field absent (no value to emit)
+    String(String),   // e.g., "Loading..."
+    Int(i64),         // e.g., 0, -1
+    Float(String),    // e.g., 0.0 (string to preserve Eq/Hash)
+    Bool(bool),       // e.g., false
+    EmptyList,        // []
+    EmptyMap,         // {}
 }
 
 /// An enum definition.
@@ -288,6 +347,9 @@ pub struct EnumVariant {
 pub struct TypeAlias {
     pub name: Name,
     pub type_ref: TypeRef,
+    /// If this alias is compiler-generated, contains metadata.
+    /// `None` for user-defined type aliases.
+    pub compiler_generated: Option<TypeAliasCompilerGenerated>,
     // Note: Generic parameters are queried separately via generic_params()
 }
 

@@ -157,7 +157,8 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
         | Ty::Function { .. }
         | Ty::Void
         | Ty::WatchAccessor(_)
-        | Ty::BuiltinUnknown => unreachable!("compiler-only variant should not reach FFI"),
+        | Ty::BuiltinUnknown
+        | Ty::Never => unreachable!("compiler-only variant should not reach FFI"),
     };
 
     CffiFieldTypeHolder { r#type: field_type }

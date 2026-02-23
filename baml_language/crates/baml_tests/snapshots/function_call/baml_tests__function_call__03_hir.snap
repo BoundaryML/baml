@@ -33,6 +33,10 @@ function Baz.Greeting(self: Baz) -> string {
     "Hello, " + self.name + "!"
 }
 
+class stream.Baz {
+  name: null | string
+}
+
 class Baz {
   name: string
 }

@@ -369,6 +369,7 @@ fn normalize_impl(
         Ty::Resource => StructuralTy::Resource,
         Ty::BuiltinUnknown => StructuralTy::BuiltinUnknown,
         Ty::Type => StructuralTy::Type,
+        Ty::Never => StructuralTy::Error, // Never is uninhabited, treat like Error for subtyping
         Ty::Literal(lit) => StructuralTy::Literal(lit.clone()),
         Ty::Class(fqn) => StructuralTy::Class(fqn.name.clone()),
         Ty::Enum(fqn) => StructuralTy::Enum(fqn.name.clone()),

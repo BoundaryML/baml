@@ -107,6 +107,11 @@ pub enum TypeRef {
     /// Used in type annotations like `let t: type = ...`.
     /// Maps to `tir::Ty::Type` during lowering.
     Type,
+
+    /// The bottom type — no values inhabit this type.
+    /// Used in stream expansion: `T | never` simplifies to `T`.
+    /// A field whose stream type is entirely `never` is omitted from `stream.*` class.
+    Never,
 }
 
 impl TypeRef {
@@ -387,6 +392,43 @@ impl TypeRef {
     }
 
     /// Create a `TypeRef` from a type name string (primitive or user-defined).
+    /// Parse a type reference from text by re-lexing and re-parsing.
+    ///
+    /// This is used for parsing type expressions from attribute arguments
+    /// (e.g., `@stream.type(Person[])` or `@stream.starts_as(null)`).
+    ///
+    /// The text is wrapped in a dummy type alias (`type __dummy = <text>`)
+    /// and parsed as a BAML file. This supports all valid type expression forms
+    /// including arrays, maps, unions, and generics.
+    pub fn from_text(text: &str) -> Self {
+        let text = text.trim();
+        if text.is_empty() {
+            return TypeRef::Unknown;
+        }
+
+        // Wrap in a dummy type alias for parsing
+        let dummy = format!("type __dummy = {text}");
+        let file_id = baml_base::FileId::new(u32::MAX); // sentinel
+        let tokens = baml_compiler_lexer::lex_lossless(&dummy, file_id);
+        let (green, _errors) = baml_compiler_parser::parse_file(&tokens);
+        let root = baml_compiler_syntax::SyntaxNode::new_root(green);
+
+        // Find the TYPE_ALIAS_DEF node and extract its type expression
+        use baml_compiler_syntax::SyntaxKind;
+        for child in root.children() {
+            if child.kind() == SyntaxKind::TYPE_ALIAS_DEF {
+                if let Some(alias) = baml_compiler_syntax::ast::TypeAliasDef::cast(child) {
+                    if let Some(type_expr) = alias.ty() {
+                        return Self::from_ast(&type_expr);
+                    }
+                }
+            }
+        }
+
+        // Fallback: treat as a simple type name
+        Self::from_type_name(text)
+    }
+
     fn from_type_name(name: &str) -> Self {
         // Use case-sensitive matching for type keywords.
         // This ensures that `Unknown` is treated as a user-defined type name,
@@ -399,6 +441,7 @@ impl TypeRef {
             "null" => TypeRef::Null,
             "unknown" => TypeRef::BuiltinUnknown,
             "type" => TypeRef::Type,
+            "never" => TypeRef::Never,
             "image" => TypeRef::Media(baml_base::MediaKind::Image),
             "audio" => TypeRef::Media(baml_base::MediaKind::Audio),
             "video" => TypeRef::Media(baml_base::MediaKind::Video),

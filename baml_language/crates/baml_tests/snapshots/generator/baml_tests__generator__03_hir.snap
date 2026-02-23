@@ -15,6 +15,11 @@ function GetUser.render_prompt() -> baml.llm.PromptAst {
     baml.llm.render_prompt("GetUser", {  })
 }
 
+class stream.MyClass {
+  name: null | string
+  age: null | int
+}
+
 class MyClass {
   name: string
   age: int

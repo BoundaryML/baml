@@ -2,6 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+class stream.HasDuplicateField {
+  name: null | string
+  age: null | int
+  name: null | int
+}
+
+class stream.HasDuplicateFieldAttr {
+  name: null | string
+}
+
 class HasDuplicateField {
   name: string
   age: int
@@ -14,6 +24,10 @@ class HasDuplicateDescription {
 
 class HasDuplicateFieldAttr {
   name: string
+}
+
+class stream.HasDuplicateDescription {
+  name: null | string
 }
 
 enum HasDuplicateVariant {

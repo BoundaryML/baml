@@ -1,0 +1,200 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DefaultExpansion"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "count"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "score"
+      TYPE_EXPR "float"
+        WORD "float"
+    FIELD
+      WORD "flag"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    FIELD
+      WORD "status"
+      TYPE_EXPR "Status"
+        WORD "Status"
+    FIELD
+      WORD "edu"
+      TYPE_EXPR "Education"
+        WORD "Education"
+    FIELD
+      WORD "tags"
+      TYPE_EXPR "string[]"
+        WORD "string"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "education"
+      TYPE_EXPR "Education[]"
+        WORD "Education"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "metadata"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int"
+            WORD "int"
+          GREATER ">"
+    FIELD
+      WORD "nested_map"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "Education"
+            WORD "Education"
+          GREATER ">"
+    FIELD
+      WORD "value"
+      TYPE_EXPR "int | string"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+    FIELD
+      WORD "mixed"
+      TYPE_EXPR "Education | int"
+        WORD "Education"
+        PIPE "|"
+        WORD "int"
+    FIELD
+      WORD "opt"
+      TYPE_EXPR "string?"
+        WORD "string"
+        QUESTION "?"
+    FIELD
+      WORD "opt_edu"
+      TYPE_EXPR "Education?"
+        WORD "Education"
+        QUESTION "?"
+    FIELD
+      WORD "tag"
+      TYPE_EXPR
+        STRING_LITERAL "resume"
+          QUOTE """
+          WORD "resume"
+          QUOTE """
+    FIELD
+      WORD "code"
+      TYPE_EXPR "42"
+        INTEGER_LITERAL "42"
+    FIELD
+      WORD "yes"
+      TYPE_EXPR "true"
+        WORD "true"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NestedContainers"
+    L_BRACE "{"
+    FIELD
+      WORD "matrix"
+      TYPE_EXPR "Education[][]"
+        WORD "Education"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "map_of_lists"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "Education[]"
+            WORD "Education"
+            L_BRACKET "["
+            R_BRACKET "]"
+          GREATER ">"
+    FIELD
+      WORD "list_of_maps"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "Education"
+            WORD "Education"
+          GREATER ">"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TreeNode"
+    L_BRACE "{"
+    FIELD
+      WORD "label"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "children"
+      TYPE_EXPR "TreeNode[]"
+        WORD "TreeNode"
+        L_BRACKET "["
+        R_BRACKET "]"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DynamicClass"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    BLOCK_ATTRIBUTE "@@dynamic"
+      AT_AT "@@"
+      KW_DYNAMIC "dynamic"
+    R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "AliasUnion"
+    EQUALS "="
+    TYPE_EXPR "Education | string"
+      WORD "Education"
+      PIPE "|"
+      WORD "string"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "AliasArray"
+    EQUALS "="
+    TYPE_EXPR "Education[]"
+      WORD "Education"
+      L_BRACKET "["
+      R_BRACKET "]"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "AliasPrimitive"
+    EQUALS "="
+    TYPE_EXPR "int"
+      WORD "int"
+
+=== ERRORS ===
+None

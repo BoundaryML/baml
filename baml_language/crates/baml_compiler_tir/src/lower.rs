@@ -208,6 +208,9 @@ fn lower_type_ref_resolved_with_ctx(
 
         // Type - the `type` keyword for the meta-type
         TypeRef::Type => Ty::Type,
+
+        // Never - the bottom type (no values)
+        TypeRef::Never => Ty::Never,
     }
 }
 
@@ -304,16 +307,20 @@ fn is_simple_type_name(name: &str) -> bool {
     !name.contains(['<', '>', '[', ']', '|', '?', ','])
 }
 
-/// Normalize a union type by flattening nested unions and removing duplicates.
+/// Normalize a union type by flattening nested unions, removing duplicates,
+/// eliminating `never`, and subsuming literals under their parent types.
 fn normalize_union(types: Vec<Ty>) -> Ty {
     let mut normalized = Vec::new();
 
     for ty in types {
         match ty {
+            // Never is the identity element of union — skip it
+            Ty::Never => continue,
+
             // Flatten nested unions
             Ty::Union(inner) => {
                 for inner_ty in inner {
-                    if !normalized.contains(&inner_ty) {
+                    if !matches!(inner_ty, Ty::Never) && !normalized.contains(&inner_ty) {
                         normalized.push(inner_ty);
                     }
                 }
@@ -327,9 +334,24 @@ fn normalize_union(types: Vec<Ty>) -> Ty {
         }
     }
 
+    // Literal subsumption: "foo" | string → string, 42 | int → int, etc.
+    // Remove literals that are subsumed by their parent primitive type.
+    let has_string = normalized.iter().any(|t| matches!(t, Ty::String));
+    let has_int = normalized.iter().any(|t| matches!(t, Ty::Int));
+    let has_float = normalized.iter().any(|t| matches!(t, Ty::Float));
+    let has_bool = normalized.iter().any(|t| matches!(t, Ty::Bool));
+
+    normalized.retain(|t| match t {
+        Ty::Literal(LiteralValue::String(_)) if has_string => false,
+        Ty::Literal(LiteralValue::Int(_)) if has_int => false,
+        Ty::Literal(LiteralValue::Float(_)) if has_float => false,
+        Ty::Literal(LiteralValue::Bool(_)) if has_bool => false,
+        _ => true,
+    });
+
     // Simplify
     match normalized.len() {
-        0 => Ty::Unknown, // Empty union becomes Unknown (could be Never in a more complete type system)
+        0 => Ty::Never, // Empty union (all never) = never
         1 => normalized.pop().unwrap(),
         _ => Ty::Union(normalized),
     }
@@ -342,7 +364,7 @@ mod tests {
     #[test]
     fn test_normalize_union_empty() {
         let result = normalize_union(vec![]);
-        assert_eq!(result, Ty::Unknown);
+        assert_eq!(result, Ty::Never);
     }
 
     #[test]
@@ -362,5 +384,76 @@ mod tests {
         let inner = Ty::Union(vec![Ty::Int, Ty::Float]);
         let result = normalize_union(vec![inner, Ty::String]);
         assert_eq!(result, Ty::Union(vec![Ty::Int, Ty::Float, Ty::String]));
+    }
+
+    #[test]
+    fn test_normalize_union_never_elimination() {
+        // T | never → T
+        let result = normalize_union(vec![Ty::String, Ty::Never]);
+        assert_eq!(result, Ty::String);
+    }
+
+    #[test]
+    fn test_normalize_union_all_never() {
+        // never | never → never
+        let result = normalize_union(vec![Ty::Never, Ty::Never]);
+        assert_eq!(result, Ty::Never);
+    }
+
+    #[test]
+    fn test_normalize_union_never_with_multiple() {
+        // string | never | int → string | int
+        let result = normalize_union(vec![Ty::String, Ty::Never, Ty::Int]);
+        assert_eq!(result, Ty::Union(vec![Ty::String, Ty::Int]));
+    }
+
+    #[test]
+    fn test_normalize_union_literal_subsumption_string() {
+        // "foo" | string → string
+        let result = normalize_union(vec![
+            Ty::Literal(LiteralValue::String("foo".to_string())),
+            Ty::String,
+        ]);
+        assert_eq!(result, Ty::String);
+    }
+
+    #[test]
+    fn test_normalize_union_literal_subsumption_int() {
+        // 42 | int → int
+        let result = normalize_union(vec![Ty::Literal(LiteralValue::Int(42)), Ty::Int]);
+        assert_eq!(result, Ty::Int);
+    }
+
+    #[test]
+    fn test_normalize_union_literal_subsumption_bool() {
+        // false | bool → bool
+        let result = normalize_union(vec![Ty::Literal(LiteralValue::Bool(false)), Ty::Bool]);
+        assert_eq!(result, Ty::Bool);
+    }
+
+    #[test]
+    fn test_normalize_union_literal_subsumption_float() {
+        // 3.14 | float → float
+        let result = normalize_union(vec![
+            Ty::Literal(LiteralValue::Float("3.14".to_string())),
+            Ty::Float,
+        ]);
+        assert_eq!(result, Ty::Float);
+    }
+
+    #[test]
+    fn test_normalize_union_distinct_literals_preserved() {
+        // "loading" | "resume" stays as "loading" | "resume"
+        let result = normalize_union(vec![
+            Ty::Literal(LiteralValue::String("loading".to_string())),
+            Ty::Literal(LiteralValue::String("resume".to_string())),
+        ]);
+        assert_eq!(
+            result,
+            Ty::Union(vec![
+                Ty::Literal(LiteralValue::String("loading".to_string())),
+                Ty::Literal(LiteralValue::String("resume".to_string())),
+            ])
+        );
     }
 }

@@ -649,6 +649,10 @@ function EnumVariantUnionWithCatchAll(s: Status) -> string {
     }
 }
 
+class stream.Cat {
+  name: null | string
+}
+
 class Success {
   data: string
 }
@@ -665,12 +669,36 @@ class Bird {
   name: string
 }
 
+class stream.Pending {
+  eta: null | int
+}
+
+class stream.Fish {
+  name: null | string
+}
+
 class Cat {
   name: string
 }
 
+class stream.Success {
+  data: null | string
+}
+
 class Dog {
   name: string
+}
+
+class stream.Dog {
+  name: null | string
+}
+
+class stream.Failure {
+  reason: null | string
+}
+
+class stream.Bird {
+  name: null | string
 }
 
 class Failure {
@@ -690,23 +718,45 @@ enum Status {
   Pending
 }
 
+type stream.MaybeResult = stream.Result | null
+
 type Result = Success | Failure
 
 type OkOrCreated = OkCode | 201
 
+type stream.Role = "user" | "assistant" | "system"
+
 type MaybeOk = 200?
 
+type stream.HttpOk = 200
+
 type SuccessCode = 200 | 201 | 204
+
+type stream.DoubleMaybe = stream.MaybeResult | null
+
+type stream.AlwaysTrue = true
 
 type AlwaysFalse = false
 
 type OkCode = 200
 
+type stream.OkCode = 200
+
 type MixedLiterals = 200 | "success" | true
+
+type stream.FullResult = stream.Success | stream.Failure | stream.Pending
+
+type stream.AlwaysFalse = false
 
 type MaybeResult = Result?
 
 type CustomBool = true | false
+
+type stream.CustomBool = true | false
+
+type stream.SuccessOr200 = stream.Success | 200
+
+type stream.Result = stream.Success | stream.Failure
 
 type Role = "user" | "assistant" | "system"
 
@@ -714,10 +764,20 @@ type FullResult = Success | Failure | Pending
 
 type SuccessOr200 = Success | 200
 
+type stream.SuccessCode = 200 | 201 | 204
+
 type HttpCreated = 201
+
+type stream.MaybeOk = 200 | null
 
 type HttpOk = 200
 
+type stream.OkOrCreated = stream.OkCode | 201
+
+type stream.MixedLiterals = 200 | "success" | true
+
 type DoubleMaybe = MaybeResult?
+
+type stream.HttpCreated = 201
 
 type AlwaysTrue = true

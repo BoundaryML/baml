@@ -20,12 +20,20 @@ client GPT4 {
   provider: unknown
 }
 
+class stream.User {
+  name: null | string
+}
+
 class Another {
   field: int
 }
 
 class User {
   name: string
+}
+
+class stream.Another {
+  field: null | int
 }
 
 function Incomplete(param1: string) -> <unknown> {
@@ -44,9 +52,25 @@ class Partial {
   string: <unknown>
 }
 
+class stream.Partial {
+  field1: null | str
+  field2: null | <unknown>
+  field3: null | string
+  string: null | <unknown>
+  alias: null | field5
+}
+
 enum ValidEnum {
   OPTION1
   OPTION2
+}
+
+class stream.Test {
+  field1: null | string
+  field2: null | string
+  another: null | closed
+  string: ")  // Should still parse this
+}"
 }
 
 class Test {

@@ -1,0 +1,161 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class WithStartsAs {
+  loading_name: string
+  explicit_null: string
+  absent_until_start: string
+}
+
+class stream.CombinedAttributes {
+  name: "" | string
+  plain: null | string
+}
+
+class CombinedAttributes {
+  name: string
+  plain: string
+}
+
+class WithStreamType {
+  omitted_field: "resume"
+  name: string
+}
+
+class stream.WithStreamType {
+  name: null | string
+}
+
+class stream.WithSapFlags {
+  type: "resume"
+  name: string
+  status: null | string
+}
+
+class WithSapFlags {
+  type: "resume"
+  name: string
+  status: string
+}
+
+class stream.WithStartsAs {
+  loading_name: "" | string
+  explicit_null: null | string
+  absent_until_start: string
+}
+
+class Education {
+  school: string
+  degree: string
+}
+
+class stream.Education {
+  school: null | string
+  degree: null | string
+}
+
+enum Status {
+  Active
+  Inactive
+}
+
+class stream.CrossFileUser {
+  name: null | string
+  edu: null | stream.Education
+  status: null | Status
+}
+
+class CrossFileUser {
+  name: string
+  edu: Education
+  status: Status
+}
+
+type stream.CrossFileAlias = stream.Education | int
+
+type CrossFileAlias = Education | int
+
+class NestedContainers {
+  matrix: Education[][]
+  map_of_lists: map<string, Education[]>
+  list_of_maps: map<string, Education>[]
+}
+
+class stream.TreeNode {
+  label: null | string
+  children: stream.TreeNode[]
+}
+
+class DefaultExpansion {
+  name: string
+  count: int
+  score: float
+  flag: bool
+  status: Status
+  edu: Education
+  tags: string[]
+  education: Education[]
+  metadata: map<string, int>
+  nested_map: map<string, Education>
+  value: int | string
+  mixed: Education | int
+  opt: string?
+  opt_edu: Education?
+  tag: "resume"
+  code: 42
+  yes: true
+}
+
+class stream.NestedContainers {
+  matrix: stream.Education[][]
+  map_of_lists: map<string, stream.Education[]>
+  list_of_maps: map<string, stream.Education>[]
+}
+
+class stream.DynamicClass {
+  name: null | string
+  @@dynamic
+}
+
+class TreeNode {
+  label: string
+  children: TreeNode[]
+}
+
+class DynamicClass {
+  name: string
+  @@dynamic
+}
+
+class stream.DefaultExpansion {
+  name: null | string
+  count: null | int
+  score: null | float
+  flag: null | bool
+  status: null | Status
+  edu: null | stream.Education
+  tags: string[]
+  education: stream.Education[]
+  metadata: map<string, int>
+  nested_map: map<string, stream.Education>
+  value: null | int | string
+  mixed: null | stream.Education | int
+  opt: null | string | null
+  opt_edu: null | stream.Education | null
+  tag: "resume"
+  code: 42
+  yes: true
+}
+
+type AliasUnion = Education | string
+
+type AliasArray = Education[]
+
+type stream.AliasArray = stream.Education[]
+
+type stream.AliasUnion = stream.Education | string
+
+type stream.AliasPrimitive = int
+
+type AliasPrimitive = int

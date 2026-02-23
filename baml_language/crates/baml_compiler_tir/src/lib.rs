@@ -388,6 +388,10 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
             let fqn = baml_compiler_hir::class_qualified_name(db, *class_loc);
             let class_name = fqn.display_name();
 
+            // Compiler-generated classes (e.g., stream.* variants) suppress error
+            // collection — their type errors are always duplicates of the source item's.
+            let is_compiler_generated = class_data.compiler_generated.is_some();
+
             let mut lowered_fields: HashMap<Name, Ty> = HashMap::new();
 
             // Lower each field's type with position-independent error location
@@ -400,7 +404,9 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
 
                 let (ty, field_errors) =
                     resolution_ctx.lower_type_ref(&field_data.type_ref, error_location);
-                errors.extend(field_errors);
+                if !is_compiler_generated {
+                    errors.extend(field_errors);
+                }
                 lowered_fields.insert(field_data.name.clone(), ty);
             }
 
@@ -447,7 +453,11 @@ pub fn type_aliases(db: &dyn Db, project: Project) -> TypeAliasesMap<'_> {
 
             let (lowered_ty, alias_errors) =
                 resolution_ctx.lower_type_ref(&alias_data.type_ref, error_location);
-            errors.extend(alias_errors);
+            // Compiler-generated aliases (e.g., stream.* variants) suppress error
+            // collection — their type errors are duplicates of the source item's.
+            if alias_data.compiler_generated.is_none() {
+                errors.extend(alias_errors);
+            }
             aliases.insert(alias_data.name.clone(), lowered_ty);
         }
     }
