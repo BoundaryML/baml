@@ -191,25 +191,49 @@ impl BexLspRequest for BexMulitProject {
         let text = source_file.text(lsp_db);
         let lsp_hints = hints
             .into_iter()
-            .map(|h| lsp_types::InlayHint {
-                position: baml_project::position::offset_to_lsp_position(
-                    text,
-                    usize::from(h.offset),
-                ),
-                label: lsp_types::InlayHintLabel::String(h.label),
-                kind: h.kind.map(|k| match k {
-                    baml_lsp_actions::inlay_hints::InlayHintKind::Parameter => {
-                        lsp_types::InlayHintKind::PARAMETER
-                    }
-                    baml_lsp_actions::inlay_hints::InlayHintKind::Type => {
-                        lsp_types::InlayHintKind::TYPE
-                    }
-                }),
-                padding_left: Some(h.padding_left),
-                padding_right: Some(h.padding_right),
-                text_edits: None,
-                tooltip: None,
-                data: None,
+            .map(|h| {
+                let label = lsp_types::InlayHintLabel::LabelParts(
+                    h.label
+                        .into_iter()
+                        .map(|part| {
+                            let location = part.target.and_then(|t| {
+                                let uri = wasm_helpers::from_file_path(&t.file_path).ok()?;
+                                let target_file_id = lsp_db.path_to_file_id(&t.file_path)?;
+                                let target_source = lsp_db.get_file_by_id(target_file_id)?;
+                                let target_text = target_source.text(lsp_db);
+                                let range =
+                                    baml_project::position::span_to_lsp_range(target_text, &t.span);
+                                Some(lsp_types::Location { uri, range })
+                            });
+                            lsp_types::InlayHintLabelPart {
+                                value: part.value,
+                                tooltip: None,
+                                location,
+                                command: None,
+                            }
+                        })
+                        .collect(),
+                );
+                lsp_types::InlayHint {
+                    position: baml_project::position::offset_to_lsp_position(
+                        text,
+                        usize::from(h.offset),
+                    ),
+                    label,
+                    kind: h.kind.map(|k| match k {
+                        baml_lsp_actions::inlay_hints::InlayHintKind::Parameter => {
+                            lsp_types::InlayHintKind::PARAMETER
+                        }
+                        baml_lsp_actions::inlay_hints::InlayHintKind::Type => {
+                            lsp_types::InlayHintKind::TYPE
+                        }
+                    }),
+                    padding_left: Some(h.padding_left),
+                    padding_right: Some(h.padding_right),
+                    text_edits: None,
+                    tooltip: None,
+                    data: None,
+                }
             })
             .collect();
 

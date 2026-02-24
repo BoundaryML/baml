@@ -8,11 +8,13 @@ use baml_db::{
         ExprBody, FunctionBody, HirSourceMap, ItemId, Stmt, SymbolTable, file_items, function_body,
         function_signature, symbol_table,
     },
-    baml_compiler_tir::{self, InferenceResult, ResolvedValue},
+    baml_compiler_tir::{self, InferenceResult, ResolvedValue, Ty},
     baml_workspace::Project,
 };
 use baml_project::ProjectDatabase;
 use text_size::TextSize;
+
+use crate::goto_definition::{NavigationTarget, lookup_symbol_definition};
 
 /// The semantic kind of an inlay hint, mirroring the LSP `InlayHintKind`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,12 +25,23 @@ pub enum InlayHintKind {
     Type,
 }
 
+/// A single segment of an inlay hint label.
+///
+/// When `target` is set, the editor renders the segment as a hyperlink
+/// that navigates to the target definition on click.
+pub struct InlayHintLabelPart {
+    /// The text to display for this segment.
+    pub value: String,
+    /// Optional navigation target; when set, the segment is a clickable link.
+    pub target: Option<NavigationTarget>,
+}
+
 /// An inlay hint to display inline in the editor.
 pub struct InlayHint {
     /// Byte offset where the hint is displayed.
     pub offset: TextSize,
-    /// Text shown, e.g. `"name:"` or `": string"`.
-    pub label: String,
+    /// Label segments. Each segment may optionally carry a navigation target.
+    pub label: Vec<InlayHintLabelPart>,
     /// Semantic kind used by the editor for styling/filtering.
     /// `None` means no specific kind, will fall back to a default.
     pub kind: Option<InlayHintKind>,
@@ -86,6 +99,93 @@ fn display_ty(ty: &baml_db::baml_compiler_tir::Ty) -> Option<baml_db::baml_compi
     }
 }
 
+/// Build a label with a single plain-text part (no navigation target).
+fn plain_label(text: impl Into<String>) -> Vec<InlayHintLabelPart> {
+    vec![InlayHintLabelPart {
+        value: text.into(),
+        target: None,
+    }]
+}
+
+/// Convert a [`Ty`] into label parts, wrapping in parentheses if it's a union.
+fn wrap_if_union(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
+    if matches!(ty, Ty::Union(_)) {
+        let mut parts = vec![InlayHintLabelPart {
+            value: "(".into(),
+            target: None,
+        }];
+        parts.extend(ty_to_label_parts(db, ty));
+        parts.push(InlayHintLabelPart {
+            value: ")".into(),
+            target: None,
+        });
+        parts
+    } else {
+        ty_to_label_parts(db, ty)
+    }
+}
+
+/// Convert a [`Ty`] into label parts, resolving named types to clickable links.
+fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
+    match ty {
+        Ty::Class(fqn) | Ty::Enum(fqn) | Ty::TypeAlias(fqn) => {
+            let target = lookup_symbol_definition(db, fqn);
+            vec![InlayHintLabelPart {
+                value: fqn.to_string(),
+                target,
+            }]
+        }
+        Ty::Optional(inner) => {
+            let mut parts = wrap_if_union(db, inner);
+            parts.push(InlayHintLabelPart {
+                value: "?".into(),
+                target: None,
+            });
+            parts
+        }
+        Ty::List(inner) => {
+            let mut parts = wrap_if_union(db, inner);
+            parts.push(InlayHintLabelPart {
+                value: "[]".into(),
+                target: None,
+            });
+            parts
+        }
+        Ty::Map { key, value } => {
+            let mut parts = vec![InlayHintLabelPart {
+                value: "map<".into(),
+                target: None,
+            }];
+            parts.extend(ty_to_label_parts(db, key));
+            parts.push(InlayHintLabelPart {
+                value: ", ".into(),
+                target: None,
+            });
+            parts.extend(ty_to_label_parts(db, value));
+            parts.push(InlayHintLabelPart {
+                value: ">".into(),
+                target: None,
+            });
+            parts
+        }
+        Ty::Union(types) => {
+            let mut parts = Vec::new();
+            for (i, t) in types.iter().enumerate() {
+                if i > 0 {
+                    parts.push(InlayHintLabelPart {
+                        value: " | ".into(),
+                        target: None,
+                    });
+                }
+                parts.extend(ty_to_label_parts(db, t));
+            }
+            parts
+        }
+        // All other types: plain text, no link.
+        other => plain_label(other.to_string()),
+    }
+}
+
 /// Emits `param_name:` labels before positional call arguments.
 pub struct CallArgNames;
 
@@ -125,7 +225,7 @@ impl HintCollector for CallArgNames {
 
                 hints.push(InlayHint {
                     offset: arg_span.range.start(),
-                    label: format!("{}:", param.name),
+                    label: plain_label(format!("{}:", param.name)),
                     kind: Some(InlayHintKind::Parameter),
                     padding_left: false,
                     padding_right: true,
@@ -171,28 +271,27 @@ impl HintCollector for LetTypeAnnotations {
                 continue;
             };
 
-            // Place the hint at the end of the bound pattern.
-            let Some(pat_span) = ctx.source_map.pattern_span(*pattern) else {
-                // Fall back to the statement span.
-                let Some(stmt_span) = ctx.source_map.stmt_span(stmt_id) else {
+            // Build label parts: ": " (plain) + type (with links).
+            let mut label = plain_label(": ");
+            label.extend(ty_to_label_parts(ctx.db, &ty));
+
+            // Place the hint at the end of the bound pattern, falling back to
+            // the statement start when no pattern span is available.
+            let (offset, padding_right) =
+                if let Some(pat_span) = ctx.source_map.pattern_span(*pattern) {
+                    (pat_span.range.end(), true)
+                } else if let Some(stmt_span) = ctx.source_map.stmt_span(stmt_id) {
+                    (stmt_span.range.start(), false)
+                } else {
                     continue;
                 };
-                hints.push(InlayHint {
-                    offset: stmt_span.range.start(),
-                    label: format!(": {ty} "),
-                    kind: Some(InlayHintKind::Type),
-                    padding_left: false,
-                    padding_right: false,
-                });
-                continue;
-            };
 
             hints.push(InlayHint {
-                offset: pat_span.range.end(),
-                label: format!(": {ty}"),
+                offset,
+                label,
                 kind: Some(InlayHintKind::Type),
                 padding_left: false,
-                padding_right: true,
+                padding_right,
             });
         }
     }
@@ -221,7 +320,7 @@ impl ItemHintCollector for ClosingBraceLabels {
                 };
                 hints.push(InlayHint {
                     offset: block_span.range.end(),
-                    label: format!("function {}", sig.name),
+                    label: plain_label(format!("function {}", sig.name)),
                     kind: None,
                     padding_left: true,
                     padding_right: false,
@@ -239,7 +338,7 @@ impl ItemHintCollector for ClosingBraceLabels {
 /// - Item-level hints: implement [`ItemHintCollector`] and add to `item_collectors`
 pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, _project: Project) -> Vec<InlayHint> {
     let body_collectors: &[&dyn HintCollector] = &[&CallArgNames, &LetTypeAnnotations];
-    let item_collectors: &[&dyn ItemHintCollector] = &[&ClosingBraceLabels];
+    let item_collectors: &[&dyn ItemHintCollector] = &[];
 
     let mut hints = Vec::new();
 

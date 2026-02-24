@@ -95,7 +95,11 @@ pub fn goto_definition(
     tracing::debug!(word, "goto_definition");
 
     // Get the function containing this position
-    let function_loc = find_function_at_position(db, file_id, position)?;
+    let Some(function_loc) = find_function_at_position(db, file_id, position) else {
+        // Outside a function body — try resolving the word as a type/value name directly.
+        let fqn = QualifiedName::local(word.into());
+        return lookup_symbol_definition(db, &fqn);
+    };
 
     // Get the function body
     let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
@@ -416,7 +420,7 @@ fn resolution_to_navigation_target(
 }
 
 /// Look up a symbol's definition in the symbol table.
-fn lookup_symbol_definition(db: &ProjectDatabase, fqn: &QualifiedName) -> Option<NavigationTarget> {
+pub(crate) fn lookup_symbol_definition(db: &ProjectDatabase, fqn: &QualifiedName) -> Option<NavigationTarget> {
     // Get the symbol table
     let project = db.get_project()?;
     let symbol_table = baml_db::baml_compiler_hir::symbol_table(db, project);
