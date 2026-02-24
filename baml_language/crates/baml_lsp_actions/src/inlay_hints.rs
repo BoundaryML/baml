@@ -183,59 +183,6 @@ impl HintCollector for LetTypeAnnotations {
     }
 }
 
-/// Emits `: Type` labels after the scrutinee in unannotated `match` expressions.
-///
-/// Only emitted when the user has not already written an explicit type annotation
-/// on the scrutinee (e.g. `match (x: int) { ... }` is left alone).
-/// Suppressed for `unknown` / `error` types.
-///
-/// Example output:
-/// ```baml
-/// match (x: int) { ... }
-/// ```
-pub struct MatchScrutineeTypes;
-
-impl HintCollector for MatchScrutineeTypes {
-    fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
-        use baml_db::baml_compiler_hir::Expr;
-
-        for (_, expr) in ctx.body.exprs.iter() {
-            let Expr::Match {
-                scrutinee,
-                scrutinee_type,
-                ..
-            } = expr
-            else {
-                continue;
-            };
-
-            // Skip if the user already wrote an explicit type annotation.
-            if scrutinee_type.is_some() {
-                continue;
-            }
-
-            let Some(raw_ty) = ctx.inference.expr_types.get(scrutinee) else {
-                continue;
-            };
-
-            let Some(ty) = display_ty(raw_ty) else {
-                continue;
-            };
-
-            let Some(scrutinee_span) = ctx.source_map.expr_span(*scrutinee) else {
-                continue;
-            };
-
-            hints.push(InlayHint {
-                offset: scrutinee_span.range.end(),
-                label: format!(": {ty}"),
-                padding_left: false,
-                padding_right: false,
-            });
-        }
-    }
-}
-
 /// Emits a label after the closing `}` of each top-level item showing what it
 /// closes, e.g. `} function foo` or `} class Foo`.
 ///
@@ -275,8 +222,7 @@ impl ItemHintCollector for ClosingBraceLabels {
 /// - Body-level hints: implement [`HintCollector`] and add to `body_collectors`
 /// - Item-level hints: implement [`ItemHintCollector`] and add to `item_collectors`
 pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, _project: Project) -> Vec<InlayHint> {
-    let body_collectors: &[&dyn HintCollector] =
-        &[&CallArgNames, &LetTypeAnnotations, &MatchScrutineeTypes];
+    let body_collectors: &[&dyn HintCollector] = &[&CallArgNames, &LetTypeAnnotations];
     let item_collectors: &[&dyn ItemHintCollector] = &[&ClosingBraceLabels];
 
     let mut hints = Vec::new();
