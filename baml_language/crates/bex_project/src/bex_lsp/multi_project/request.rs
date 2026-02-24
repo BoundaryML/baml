@@ -197,7 +197,14 @@ impl BexLspRequest for BexMulitProject {
                     usize::from(h.offset),
                 ),
                 label: lsp_types::InlayHintLabel::String(h.label),
-                kind: Some(lsp_types::InlayHintKind::PARAMETER),
+                kind: h.kind.map(|k| match k {
+                    baml_lsp_actions::inlay_hints::InlayHintKind::Parameter => {
+                        lsp_types::InlayHintKind::PARAMETER
+                    }
+                    baml_lsp_actions::inlay_hints::InlayHintKind::Type => {
+                        lsp_types::InlayHintKind::TYPE
+                    }
+                }),
                 padding_left: Some(h.padding_left),
                 padding_right: Some(h.padding_right),
                 text_edits: None,

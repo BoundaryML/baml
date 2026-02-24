@@ -14,12 +14,24 @@ use baml_db::{
 use baml_project::ProjectDatabase;
 use text_size::TextSize;
 
+/// The semantic kind of an inlay hint, mirroring the LSP `InlayHintKind`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InlayHintKind {
+    /// A parameter-name hint, e.g. `name:` before a call argument.
+    Parameter,
+    /// A type hint, e.g. `: string` after a variable name.
+    Type,
+}
+
 /// An inlay hint to display inline in the editor.
 pub struct InlayHint {
     /// Byte offset where the hint is displayed.
     pub offset: TextSize,
     /// Text shown, e.g. `"name:"` or `": string"`.
     pub label: String,
+    /// Semantic kind used by the editor for styling/filtering.
+    /// `None` means no specific kind, will fall back to a default.
+    pub kind: Option<InlayHintKind>,
     /// Insert a thin space between the hint and the token to its left.
     pub padding_left: bool,
     /// Insert a thin space between the hint and the token to its right.
@@ -114,6 +126,7 @@ impl HintCollector for CallArgNames {
                 hints.push(InlayHint {
                     offset: arg_span.range.start(),
                     label: format!("{}:", param.name),
+                    kind: Some(InlayHintKind::Parameter),
                     padding_left: false,
                     padding_right: true,
                 });
@@ -167,6 +180,7 @@ impl HintCollector for LetTypeAnnotations {
                 hints.push(InlayHint {
                     offset: stmt_span.range.start(),
                     label: format!(": {ty} "),
+                    kind: Some(InlayHintKind::Type),
                     padding_left: false,
                     padding_right: false,
                 });
@@ -176,6 +190,7 @@ impl HintCollector for LetTypeAnnotations {
             hints.push(InlayHint {
                 offset: pat_span.range.end(),
                 label: format!(": {ty}"),
+                kind: Some(InlayHintKind::Type),
                 padding_left: false,
                 padding_right: true,
             });
@@ -207,6 +222,7 @@ impl ItemHintCollector for ClosingBraceLabels {
                 hints.push(InlayHint {
                     offset: block_span.range.end(),
                     label: format!("function {}", sig.name),
+                    kind: None,
                     padding_left: true,
                     padding_right: false,
                 });
