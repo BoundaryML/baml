@@ -2,6 +2,23 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+function wrong_arity_definition() -> int {
+    Foo_arity(1, 2)
+}
+
+function missing_field_access() -> int {
+    let person = Person { name: "Ada" };
+    person.age
+}
+
+function Foo_arity(x: int) -> int {
+    x
+}
+
+class Person {
+  name: string
+}
+
 function Foo() -> int {
     1 + "foo"
 }

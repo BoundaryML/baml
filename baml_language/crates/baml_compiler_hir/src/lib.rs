@@ -393,6 +393,23 @@ pub fn enum_qualified_name<'db>(db: &'db dyn Db, enum_loc: EnumLoc<'db>) -> Qual
     }
 }
 
+/// Mirrors `enum_qualified_name` — type aliases in builtin BAML files
+/// get `baml.llm.*` names, user type aliases get local names.
+pub fn type_alias_qualified_name<'db>(
+    db: &'db dyn Db,
+    alias_loc: TypeAliasLoc<'db>,
+) -> QualifiedName {
+    let file = alias_loc.file(db);
+    let item_tree = file_item_tree(db, file);
+    let alias_def = &item_tree[alias_loc.id(db)];
+
+    let namespace = file_namespace(db, file).unwrap_or(Namespace::Local);
+    QualifiedName {
+        namespace,
+        name: alias_def.name.clone(),
+    }
+}
+
 /// Returns the set of variant names for an enum.
 ///
 /// Per-enum Salsa query — only invalidated when that enum's file changes.
@@ -738,7 +755,7 @@ pub fn project_type_names(db: &dyn Db, root: baml_workspace::Project) -> Project
 pub fn project_type_item_spans(
     db: &dyn Db,
     root: baml_workspace::Project,
-) -> std::sync::Arc<std::collections::HashMap<Name, Span>> {
+) -> std::sync::Arc<std::collections::HashMap<QualifiedName, Span>> {
     let items = project_items(db, root);
     let mut spans = std::collections::HashMap::new();
 
@@ -749,11 +766,12 @@ pub fn project_type_item_spans(
                 let item_tree = file_item_tree(db, file);
                 let class = &item_tree[loc.id(db)];
                 let name = class.name.clone();
+                let fqn = class_qualified_name(db, *loc);
 
                 if let Some(span) =
                     get_item_name_span(db, file, "class", name.as_str(), loc.id(db).index())
                 {
-                    spans.insert(name, span);
+                    spans.insert(fqn, span);
                 }
             }
             ItemId::TypeAlias(loc) => {
@@ -761,11 +779,12 @@ pub fn project_type_item_spans(
                 let item_tree = file_item_tree(db, file);
                 let alias = &item_tree[loc.id(db)];
                 let name = alias.name.clone();
+                let fqn = type_alias_qualified_name(db, *loc);
 
                 if let Some(span) =
                     get_item_name_span(db, file, "type alias", name.as_str(), loc.id(db).index())
                 {
-                    spans.insert(name, span);
+                    spans.insert(fqn, span);
                 }
             }
             _ => {}

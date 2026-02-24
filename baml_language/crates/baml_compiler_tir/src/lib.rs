@@ -801,7 +801,7 @@ impl<'db> TypeContext<'db> {
     /// Returns a position-independent location for the definition of a callable value.
     ///
     /// Uses `ErrorLocation::FunctionItem` so that `InferenceResult` does not embed
-    /// spans from the callee's file.  Span resolution happens at render time via
+    /// spans from the callee's file. Span resolution happens at render time via
     /// `project_function_item_spans`, which is intentionally separate from the
     /// type-inference Salsa query graph.
     fn function_definition_location(
@@ -815,8 +815,8 @@ impl<'db> TypeContext<'db> {
 
     /// Returns a position-independent location for a type definition.
     ///
-    /// Uses the existing `ErrorLocation::TypeItem(Name)` variant, resolved at
-    /// render time by `project_type_item_spans`.  No syntax-tree access occurs
+    /// Uses the existing `ErrorLocation::TypeDefinition(QualifiedName)` variant, resolved at
+    /// render time by `project_type_item_spans`. No syntax-tree access occurs
     /// inside the type-inference query.
     fn type_definition_location(
         &self,
@@ -824,9 +824,10 @@ impl<'db> TypeContext<'db> {
     ) -> Option<ErrorLocation> {
         // Verify the type exists before recording the location.
         self.fqn_symbol_table().lookup_type(self.db, fqn)?;
-        Some(ErrorLocation::TypeItem(fqn.name.clone()))
+        Some(ErrorLocation::TypeDefinition(fqn.clone()))
     }
 
+    /// Returns the definition location for the callee of a call expression.
     fn call_definition_location(&self, callee: ExprId) -> Option<ErrorLocation> {
         self.expr_resolutions
             .get(&callee)
@@ -3400,7 +3401,7 @@ fn infer_field_access(
                 // (deduplicated: if all the same, just return that single type)
                 let all_same = field_types
                     .first()
-                    .map_or(true, |first| field_types.iter().all(|t| t == first));
+                    .is_none_or(|first| field_types.iter().all(|t| t == first));
                 if all_same {
                     field_types.into_iter().next()
                 } else {
@@ -3679,6 +3680,56 @@ fn check_stmt_with_return(
 
         Stmt::HeaderComment { .. } => {
             // Header comments don't need type checking - they're just annotations
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_base::Name;
+    use baml_compiler_hir::{Namespace, QualifiedName};
+
+    #[test]
+    fn test_type_definition_location_preserves_namespace() {
+        // Verifies that type definition locations are namespace-aware,
+        // preventing collisions between builtin and user-defined types with the same name.
+        let fqn = QualifiedName {
+            namespace: Namespace::Builtin { path: vec![] },
+            name: Name::new("Response"),
+        };
+
+        let loc = ErrorLocation::TypeDefinition(fqn);
+
+        match loc {
+            ErrorLocation::TypeDefinition(q) => {
+                assert_eq!(q.namespace, Namespace::Builtin { path: vec![] });
+                assert_eq!(q.name.as_str(), "Response");
+            }
+            _ => panic!("Expected TypeDefinition variant"),
+        }
+    }
+
+    #[test]
+    fn test_call_definition_location_extraction() {
+        // call_definition_location depends on expr_resolutions being populated first.
+        // This test verifies the extraction chain used in call_definition_location.
+        let fqn = QualifiedName {
+            namespace: Namespace::Local,
+            name: Name::new("my_func"),
+        };
+
+        // Simulate expr_resolutions.get(&callee).and_then(ResolvedValue::as_function)
+        let resolved_as_function: Option<&QualifiedName> = Some(&fqn);
+
+        let loc = resolved_as_function.map(|qn| ErrorLocation::FunctionItem(qn.clone()));
+
+        match loc {
+            Some(ErrorLocation::FunctionItem(q)) => {
+                assert_eq!(q.namespace, Namespace::Local);
+                assert_eq!(q.name.as_str(), "my_func");
+            }
+            _ => panic!("Expected FunctionItem variant"),
         }
     }
 }

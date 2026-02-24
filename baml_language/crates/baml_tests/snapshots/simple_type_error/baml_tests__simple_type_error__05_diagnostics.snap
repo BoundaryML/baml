@@ -2,6 +2,35 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === DIAGNOSTICS ===
+  [type] Error: Expected 1 arguments, found 2
+   ╭─[ definition_spans.baml:2:3 ]
+   │
+ 2 │   Foo_arity(1, 2)
+   │   ───────┬───────  
+   │          ╰───────── Expected 1 arguments, found 2
+   │ 
+ 5 │ function Foo_arity(x: int) -> int {
+   │          ────┬────  
+   │              ╰────── Function defined here
+   │ 
+   │ Note: Error code: E0005
+───╯
+
+  [type] Error: Type `Person` has no field `age`
+    ╭─[ definition_spans.baml:10:39 ]
+    │
+ 10 │ ╭─▶   let person = Person { name: "Ada" };
+ 11 │ ├─▶   person.age
+    │ │                  
+    │ ╰────────────────── Type `Person` has no field `age`
+    │ 
+ 14 │     class Person {
+    │           ───┬──  
+    │              ╰──── Type defined here
+    │     
+    │     Note: Error code: E0007
+────╯
+
   [type] Error: Cannot apply operator 'Add' to types `int` and `string`
    ╭─[ simple_type_error.baml:2:3 ]
    │

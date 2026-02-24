@@ -793,39 +793,34 @@ function Greet(name: string) -> string {
     );
 }
 
-/// Test that whitespace-only changes in a calle do not invalidate
+/// Test that whitespace-only changes in a callee do not invalidate
 /// type inference in a caller when there is an arity error.
 ///
-/// This guards against a regression where span changes inside the callee
-/// would progate into the caller's cached InferenceResult.
+/// This guards against a regression where storing a raw `Span` from the
+/// callee inside `InferenceResult.errors[].definition_location` would cause
+/// the caller to be re-inferred whenever the callee's whitespace shifts.
+///
+/// The fix stores `ErrorLocation::FunctionItem(fqn)` (a name, not a byte
+/// offset) so the caller's `InferenceResult` is stable across such edits.
 #[test]
 fn callee_whitespace_change_does_not_invalidate_caller_inference_on_arity_error() {
     let mut test_db = IncrementalTestDb::new();
 
-    // Callee: a function with one parameter.
-    let callee_file = test_db.db_mut().add_file(
-        "callee.baml",
-        r##"
-function Add(x: int, y: int) -> int {
-    client GPT4
-    prompt #"Add {{x}} and {{y}}"#
-}
-"##,
-    );
+    // Callee: an expr function with exactly one parameter.
+    // Using an expr function means its HirSourceMap (spans) shifts when
+    // whitespace is added, making this a true test of span-independence.
+    let callee_file = test_db
+        .db_mut()
+        .add_file("callee.baml", r##"function Add(x: int) -> int { x }"##);
 
-    // Caller: calls Add with the wrong number of arguments → ArgumentCountMismatch.
-    // The error's `definition_location` must not embed callee file spans.
-    let caller_file = test_db.db_mut().add_file(
-        "caller.baml",
-        r##"
-function UseAdd(n: int) -> int {
-    client GPT4
-    prompt #"Use {{n}}"#
-}
-"##,
-    );
+    // Caller: an expr function that calls Add with 2 args instead of 1.
+    // This produces an ArgumentCountMismatch error whose `definition_location`
+    // must NOT embed a raw span from the callee file.
+    let caller_file = test_db
+        .db_mut()
+        .add_file("caller.baml", r##"function caller() -> int { Add(1, 2) }"##);
 
-    // First run — both functions get type-checked.
+    // First run — both expr functions get type-checked (1 inference each).
     test_db.assert_executed(
         |db| {
             query_all_type_inference(db, callee_file);
@@ -834,20 +829,20 @@ function UseAdd(n: int) -> int {
         &[("function_type_inference", 2)],
     );
 
-    // Whitespace-only change to the callee file (blank line before the function).
-    // This shifts every span inside callee.baml but changes no semantics.
+    // Whitespace-only change to the callee (blank line prepended).
+    // Every span inside callee.baml shifts, but the semantics are unchanged.
     callee_file.set_text(test_db.db_mut()).to(r##"
+function Add(x: int) -> int { x }"##
+        .to_string());
 
-function Add(x: int, y: int) -> int {
-    client GPT4
-    prompt #"Add {{x}} and {{y}}"#
-}
-"##
-    .to_string());
-
-    // After a whitespace-only change to callee:
-    // - lex/parse re-run for the callee
-    // - both callee and caller type inference remain cached
+    // After the whitespace-only edit to callee:
+    // - lex + parse re-run for the callee (input changed)
+    // - callee function_body changes (HirSourceMap spans shift) → callee re-infers (1)
+    // - caller function_body is untouched → caller stays cached (0)
+    //
+    // Regression guard: if definition_location stored a raw callee Span, the
+    // caller's InferenceResult would change here and trigger a re-inference.
+    // With ErrorLocation::FunctionItem(fqn) the result is span-independent.
     test_db.assert_executed(
         |db| {
             query_all_type_inference(db, callee_file);
@@ -856,7 +851,7 @@ function Add(x: int, y: int) -> int {
         &[
             ("lex_file", 1),                // callee re-lexed
             ("parse_result", 1),            // callee re-parsed
-            ("function_type_inference", 0), // caller inference cached — the regression guard
+            ("function_type_inference", 1), // callee re-infers; caller stays cached
         ],
     );
 }

@@ -2,6 +2,64 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
+fn wrong_arity_definition() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: (int) -> int
+    let _2: 1
+    let _3: 2
+
+    bb0: {
+        _1 = const fn Foo_arity;
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn missing_field_access() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: Person // person
+    let _2: "Ada"
+    let _3: Person
+
+    bb0: {
+        _2 = const "Ada";
+        _1 = Person { copy _2 };
+        _3 = copy _1;
+        _0 = copy _3.0;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn Foo_arity(x: int) -> int {
+    // Locals:
+    let _0: int // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn Foo() -> int {
     // Locals:
     let _0: int // return

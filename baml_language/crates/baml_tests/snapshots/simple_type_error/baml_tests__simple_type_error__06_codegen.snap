@@ -7,3 +7,24 @@ function Foo() -> int {
     bin_op +
     return
 }
+
+function Foo_arity(x: int) -> int {
+    load_var x
+    return
+}
+
+function missing_field_access() -> int {
+    alloc_instance Person
+    copy 0
+    load_const "Ada"
+    store_field .name
+    load_field .name
+    return
+}
+
+function wrong_arity_definition() -> int {
+    load_const 1
+    load_const 2
+    call Foo_arity
+    return
+}

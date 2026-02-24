@@ -185,9 +185,7 @@ pub fn symbol_table<'db>(
                 types.insert(fqn, Definition::Enum(*loc));
             }
             ItemId::TypeAlias(loc) => {
-                let item_tree = file_item_tree(db, loc.file(db));
-                let alias = &item_tree[loc.id(db)];
-                let fqn = QualifiedName::local(alias.name.clone());
+                let fqn = crate::type_alias_qualified_name(db, *loc);
                 types.insert(fqn, Definition::TypeAlias(*loc));
             }
             ItemId::Function(loc) => {

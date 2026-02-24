@@ -29,7 +29,7 @@ pub struct SpanResolutionContext<'a> {
     pub expr_fn_source_map: &'a HirSourceMap,
 
     /// Maps type item names (classes, enums, type aliases) to their definition spans.
-    pub type_spans: &'a HashMap<Name, Span>,
+    pub type_spans: &'a HashMap<QualifiedName, Span>,
 
     /// Maps function FQNs to their definition name spans.
     /// Populated from `project_function_item_spans` at render time.
@@ -74,6 +74,8 @@ pub enum ErrorLocation {
     /// Used for validation errors about type definitions (e.g., cycle detection).
     /// The Name is resolved to a span during diagnostic rendering.
     TypeItem(Name),
+    /// Error at a type definition, namespace-aware.
+    TypeDefinition(crate::QualifiedName),
     /// Error at a class field's type annotation.
     ///
     /// Used for unknown type errors in class field declarations.
@@ -109,7 +111,7 @@ pub enum ErrorLocation {
     },
     /// Error at a pattern (e.g., a typed binding in a match arm).
     Pattern(PatId),
-    /// Secondary location pointing at a function definition (e.g. for arity errors).
+    /// Secondary location pointing at a function definition (e.g., for arity errors).
     ///
     /// Stores the function's fully-qualified name; resolved to a span at render time
     /// via `project_function_item_spans`. Keeps `InferenceResult` position-independent
@@ -137,7 +139,12 @@ impl ErrorLocation {
                 .unwrap_or_default(),
             ErrorLocation::TypeItem(name) => ctx
                 .type_spans
-                .get(name)
+                .get(&crate::QualifiedName::local(name.clone()))
+                .copied()
+                .unwrap_or_else(Span::default),
+            ErrorLocation::TypeDefinition(fqn) => ctx
+                .type_spans
+                .get(fqn)
                 .copied()
                 .unwrap_or_else(Span::default),
             ErrorLocation::ClassFieldType {
@@ -148,7 +155,11 @@ impl ErrorLocation {
                 ctx.field_type_spans
                     .get(&(class_name.clone(), *field_index))
                     .copied()
-                    .or_else(|| ctx.type_spans.get(class_name).copied())
+                    .or_else(|| {
+                        ctx.type_spans
+                            .get(&crate::QualifiedName::local(class_name.clone()))
+                            .copied()
+                    })
                     .unwrap_or_else(Span::default)
             }
             ErrorLocation::TypeAliasType { alias_name, path } => {
@@ -163,7 +174,11 @@ impl ErrorLocation {
                             .copied()
                     })
                     // Fall back to the type alias name span
-                    .or_else(|| ctx.type_spans.get(alias_name).copied())
+                    .or_else(|| {
+                        ctx.type_spans
+                            .get(&crate::QualifiedName::local(alias_name.clone()))
+                            .copied()
+                    })
                     .unwrap_or_else(Span::default)
             }
             ErrorLocation::JinjaTemplate {

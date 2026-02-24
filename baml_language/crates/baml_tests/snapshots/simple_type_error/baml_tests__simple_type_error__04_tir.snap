@@ -2,6 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
+  Function wrong_arity_definition:
+    Return: Int
+    Errors:
+      - Expected 1 args, found 2
+  Function missing_field_access:
+    Return: Unknown
+    Errors:
+      - Person has no field age
+  Function Foo_arity:
+    Return: Int
   Function Foo:
     Return: Error
     Errors:

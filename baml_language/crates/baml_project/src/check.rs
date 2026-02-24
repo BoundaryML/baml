@@ -59,7 +59,7 @@ pub fn collect_diagnostics(
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    // Get cached item spans for error location resolution (all render-time, none inside inference)
+    // Get cached item spans for error location resolution
     let type_spans = project_type_item_spans(db, project);
     let function_spans = project_function_item_spans(db, project);
     let field_type_spans = project_class_field_type_spans(db, project);
