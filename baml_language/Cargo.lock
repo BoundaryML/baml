@@ -958,6 +958,7 @@ dependencies = [
 name = "bridge_ctypes"
 version = "0.1.0"
 dependencies = [
+ "baml_type",
  "bex_project",
  "bex_resource_types",
  "indexmap",

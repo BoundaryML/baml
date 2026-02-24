@@ -1,11 +1,12 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
+use baml_type::Literal;
 use bex_project::{BexExternalAdt, BexExternalValue, Ty};
 
 use crate::{
     baml::cffi::{
-        BamlFieldType, BamlFieldTypeAny, BamlFieldTypeBool, BamlFieldTypeFloat, BamlFieldTypeInt,
-        BamlFieldTypeList, BamlFieldTypeMap, BamlFieldTypeMedia, BamlFieldTypeNull,
+        BamlFieldType, BamlFieldTypeBool, BamlFieldTypeFloat, BamlFieldTypeInt, BamlFieldTypeList,
+        BamlFieldTypeLiteral, BamlFieldTypeMap, BamlFieldTypeMedia, BamlFieldTypeNull,
         BamlFieldTypeOptional, BamlFieldTypeString, BamlFieldTypeUnionVariant, BamlHandle,
         BamlOutboundMapEntry, BamlOutboundValue, BamlTypeName, BamlTypeNamespace, BamlValueClass,
         BamlValueEnum, BamlValueList, BamlValueMap, BamlValueUnionVariant,
@@ -136,6 +137,22 @@ pub fn external_to_baml_value(
     Ok(BamlOutboundValue { value: variant })
 }
 
+fn literal_to_field_type_literal(lit: &Literal) -> BamlFieldTypeLiteral {
+    use crate::baml::cffi::{
+        BamlLiteralBool, BamlLiteralInt, BamlLiteralString,
+        baml_field_type_literal::Literal as LiteralOneof,
+    };
+    let literal = match lit {
+        Literal::String(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
+        Literal::Int(i) => LiteralOneof::IntLiteral(BamlLiteralInt { value: *i }),
+        Literal::Bool(b) => LiteralOneof::BoolLiteral(BamlLiteralBool { value: *b }),
+        Literal::Float(s) => LiteralOneof::StringLiteral(BamlLiteralString { value: s.clone() }),
+    };
+    BamlFieldTypeLiteral {
+        literal: Some(literal),
+    }
+}
+
 fn media_kind_to_proto_enum(kind: bex_project::MediaKind) -> crate::baml::cffi::MediaTypeEnum {
     use crate::baml::cffi::MediaTypeEnum as E;
     match kind {
@@ -162,6 +179,20 @@ fn bex_media_to_proto_media(media: &bex_project::MediaValue) -> crate::baml::cff
     }
 }
 
+/// Adapter so we can use `.map(arc_prompt_ast_to_proto)` instead of a closure (PR review).
+fn arc_prompt_ast_to_proto(
+    p: &std::sync::Arc<bex_project::PromptAst>,
+) -> crate::baml::cffi::BamlValuePromptAst {
+    bex_prompt_ast_to_proto_prompt_ast(p.as_ref())
+}
+
+/// Adapter so we can use `.map(arc_prompt_ast_simple_to_proto)` instead of a closure (PR review).
+fn arc_prompt_ast_simple_to_proto(
+    s: &std::sync::Arc<bex_project::PromptAstSimple>,
+) -> crate::baml::cffi::BamlValuePromptAstSimple {
+    bex_prompt_ast_simple_to_proto_prompt_ast_simple(s.as_ref())
+}
+
 fn bex_prompt_ast_to_proto_prompt_ast(
     prompt_ast: &bex_project::PromptAst,
 ) -> crate::baml::cffi::BamlValuePromptAst {
@@ -185,10 +216,7 @@ fn bex_prompt_ast_to_proto_prompt_ast(
             }),
             bex_project::PromptAst::Vec(vec) => {
                 BamlValuePromptAstValue::Multiple(BamlValuePromptAstMultiple {
-                    items: vec
-                        .iter()
-                        .map(|p| bex_prompt_ast_to_proto_prompt_ast(p.as_ref()))
-                        .collect(),
+                    items: vec.iter().map(arc_prompt_ast_to_proto).collect(),
                 })
             }
         }),
@@ -216,7 +244,7 @@ fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
                 BamlValuePromptAstSimpleMultiple {
                     items: multiple
                         .iter()
-                        .map(|s| bex_prompt_ast_simple_to_proto_prompt_ast_simple(s.as_ref()))
+                        .map(arc_prompt_ast_simple_to_proto)
                         .collect::<Vec<_>>(),
                 },
             )),
@@ -258,7 +286,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
         Ty::Media(kind) => Some(FieldType::MediaType(BamlFieldTypeMedia {
             media: media_kind_to_proto_enum(*kind).into(),
         })),
-        Ty::Literal(_) => Some(FieldType::AnyType(BamlFieldTypeAny {})),
+        Ty::Literal(lit) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
         Ty::Opaque(tn) => {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
