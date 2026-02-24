@@ -32,6 +32,7 @@ pub(crate) enum CompilerPhase {
     Hir,
     Thir,
     TypedIr,
+    ControlFlow,
     Mir,
     Diagnostics,
     Codegen,
@@ -48,6 +49,7 @@ impl CompilerPhase {
         CompilerPhase::Hir,
         CompilerPhase::Thir,
         CompilerPhase::TypedIr,
+        CompilerPhase::ControlFlow,
         CompilerPhase::Mir,
         CompilerPhase::Diagnostics,
         CompilerPhase::Codegen,
@@ -64,6 +66,7 @@ impl CompilerPhase {
             CompilerPhase::Hir => "HIR (High-level IR)",
             CompilerPhase::Thir => "THIR (Typed HIR)",
             CompilerPhase::TypedIr => "TypedIR (Expr-only)",
+            CompilerPhase::ControlFlow => "Control Flow",
             CompilerPhase::Mir => "MIR (CFG)",
             CompilerPhase::Diagnostics => "Diagnostics",
             CompilerPhase::Codegen => "Codegen (Bytecode)",
@@ -80,7 +83,8 @@ impl CompilerPhase {
             CompilerPhase::Ast => CompilerPhase::Hir,
             CompilerPhase::Hir => CompilerPhase::Thir,
             CompilerPhase::Thir => CompilerPhase::TypedIr,
-            CompilerPhase::TypedIr => CompilerPhase::Mir,
+            CompilerPhase::TypedIr => CompilerPhase::ControlFlow,
+            CompilerPhase::ControlFlow => CompilerPhase::Mir,
             CompilerPhase::Mir => CompilerPhase::Diagnostics,
             CompilerPhase::Diagnostics => CompilerPhase::Codegen,
             CompilerPhase::Codegen => CompilerPhase::VmRunner,
@@ -98,7 +102,8 @@ impl CompilerPhase {
             CompilerPhase::Hir => CompilerPhase::Ast,
             CompilerPhase::Thir => CompilerPhase::Hir,
             CompilerPhase::TypedIr => CompilerPhase::Thir,
-            CompilerPhase::Mir => CompilerPhase::TypedIr,
+            CompilerPhase::ControlFlow => CompilerPhase::TypedIr,
+            CompilerPhase::Mir => CompilerPhase::ControlFlow,
             CompilerPhase::Diagnostics => CompilerPhase::Mir,
             CompilerPhase::Codegen => CompilerPhase::Diagnostics,
             CompilerPhase::VmRunner => CompilerPhase::Codegen,
@@ -116,6 +121,7 @@ impl CompilerPhase {
             CompilerPhase::Hir => "hir",
             CompilerPhase::Thir => "thir",
             CompilerPhase::TypedIr => "typedir",
+            CompilerPhase::ControlFlow => "controlflow",
             CompilerPhase::Mir => "mir",
             CompilerPhase::Diagnostics => "diagnostics",
             CompilerPhase::Codegen => "codegen",
@@ -404,6 +410,7 @@ impl CompilerRunner {
             CompilerPhase::Hir,
             CompilerPhase::Thir,
             CompilerPhase::TypedIr,
+            CompilerPhase::ControlFlow,
         ] {
             self.run_single_phase(phase);
         }
@@ -447,6 +454,7 @@ impl CompilerRunner {
             CompilerPhase::Hir => self.run_hir(),
             CompilerPhase::Thir => self.run_thir(),
             CompilerPhase::TypedIr => self.run_typed_ir(),
+            CompilerPhase::ControlFlow => self.run_control_flow(),
             CompilerPhase::Mir => self.run_mir(),
             CompilerPhase::Diagnostics => self.run_diagnostics(),
             CompilerPhase::Codegen => self.run_codegen(),
@@ -1052,6 +1060,154 @@ impl CompilerRunner {
         self.phase_outputs.insert(CompilerPhase::TypedIr, output);
         self.phase_outputs_annotated
             .insert(CompilerPhase::TypedIr, output_annotated);
+    }
+
+    fn run_control_flow(&mut self) {
+        use baml_compiler_hir::{CompilerGenerated, FunctionBody};
+        use baml_compiler_vir::control_flow::{
+            build_control_flow_graph, flatten_control_flow_graph,
+        };
+
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        // Build typing context for VIR lowering (same setup as run_typed_ir)
+        let globals = typing_context(&self.db, self.project_root)
+            .functions(&self.db)
+            .clone();
+        let class_fields = class_field_types(&self.db, self.project_root)
+            .classes(&self.db)
+            .clone();
+        let type_aliases_map = type_aliases(&self.db, self.project_root)
+            .aliases(&self.db)
+            .clone();
+        let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
+        let enum_variants_map = enum_variants(&self.db, self.project_root);
+        let enum_variants_data = enum_variants_map.enums(&self.db).clone();
+
+        let resolution_ctx =
+            baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
+
+        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
+        sorted_files.sort_by_key(|(path, _)| path.as_path());
+
+        for (path, source_file) in sorted_files {
+            let file_path = path.display().to_string();
+            let file_recomputed = self.modified_files.contains(path);
+
+            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
+            let items = items_struct.items(&self.db);
+            let item_tree = baml_compiler_hir::file_item_tree(&self.db, *source_file);
+
+            let mut file_has_output = false;
+
+            for item in items {
+                let ItemId::Function(func_id) = item else {
+                    continue;
+                };
+
+                let func = &item_tree[func_id.id(&self.db)];
+
+                // Skip compiler-generated functions
+                if let Some(ref cg) = func.compiler_generated {
+                    match cg {
+                        CompilerGenerated::ClientResolve { .. }
+                        | CompilerGenerated::LlmRenderPrompt { .. }
+                        | CompilerGenerated::LlmBuildRequest { .. }
+                        | CompilerGenerated::LlmCall { .. } => continue,
+                    }
+                }
+
+                let signature = function_signature(&self.db, *func_id);
+                let sig_source_map = function_signature_source_map(&self.db, *func_id);
+                let func_name = signature.name.to_string();
+                let body = function_body(&self.db, *func_id);
+
+                let status = if file_recomputed {
+                    LineStatus::Recomputed
+                } else {
+                    LineStatus::Cached
+                };
+
+                // Try to build control flow graph
+                let graph_result = match &*body {
+                    FunctionBody::Expr(_, _) => {
+                        let inference_result = baml_compiler_tir::infer_function(
+                            &self.db,
+                            &signature,
+                            Some(&sig_source_map),
+                            &body,
+                            Some(globals.clone()),
+                            Some(class_fields.clone()),
+                            Some(type_aliases_map.clone()),
+                            Some(enum_variants_data.clone()),
+                            *func_id,
+                        );
+
+                        match baml_compiler_vir::lower_from_hir(
+                            &body,
+                            &inference_result,
+                            &resolution_ctx,
+                            &type_aliases_map,
+                            &recursive_aliases,
+                        ) {
+                            Ok(expr_body) => {
+                                Some(build_control_flow_graph(&func_name, &expr_body))
+                            }
+                            Err(_) => None,
+                        }
+                    }
+                    _ => None,
+                };
+
+                let Some(graph) = graph_result else {
+                    continue;
+                };
+
+                if !file_has_output {
+                    writeln!(output, "File: {file_path}").ok();
+                    output_annotated
+                        .push((format!("File: {file_path}"), LineStatus::Unknown));
+                    file_has_output = true;
+                }
+
+                // Raw graph
+                let header = format!("--- {} (raw) ---", func_name);
+                writeln!(output, "{}", header).ok();
+                output_annotated.push((header, status));
+
+                let graph_str = format!("{}", graph);
+                for line in graph_str.lines() {
+                    writeln!(output, "{}", line).ok();
+                    output_annotated.push((line.to_string(), status));
+                }
+
+                // Flattened graph
+                let flattened = flatten_control_flow_graph(&graph);
+                let header = format!("--- {} (flattened) ---", func_name);
+                writeln!(output, "{}", header).ok();
+                output_annotated.push((header, status));
+
+                let flat_str = format!("{}", flattened);
+                for line in flat_str.lines() {
+                    writeln!(output, "{}", line).ok();
+                    output_annotated.push((line.to_string(), status));
+                }
+
+                writeln!(output).ok();
+                output_annotated.push((String::new(), LineStatus::Unknown));
+            }
+
+            if file_has_output {
+                writeln!(output).ok();
+                output_annotated.push((String::new(), LineStatus::Unknown));
+            }
+        }
+
+        self.phase_outputs
+            .insert(CompilerPhase::ControlFlow, output);
+        self.phase_outputs_annotated
+            .insert(CompilerPhase::ControlFlow, output_annotated);
     }
 
     fn run_mir(&mut self) {
