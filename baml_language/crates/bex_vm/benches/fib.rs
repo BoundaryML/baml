@@ -2,7 +2,7 @@
 //!
 //! Do not measure compilation here, only VM execution time.
 
-use baml_tests::bytecode::compile_source;
+use baml_tests::bytecode::{compile_source, make_vm};
 use bex_vm::BexVm;
 use bex_vm_types::Value;
 
@@ -19,7 +19,7 @@ fn bootstrap_vm(input: &Program) -> BexVm {
         .function_index(input.function)
         .expect("function not found");
 
-    let mut vm = BexVm::from_program(program).expect("All native functions should be attached");
+    let mut vm = make_vm(program).expect("native function attachment must succeed");
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &input.args);
     vm

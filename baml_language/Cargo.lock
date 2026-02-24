@@ -682,6 +682,7 @@ dependencies = [
  "baml_project",
  "baml_type",
  "baml_workspace",
+ "bex_heap",
  "bex_vm",
  "bex_vm_types",
  "codspeed-divan-compat",
@@ -4865,6 +4866,7 @@ dependencies = [
  "baml_project",
  "baml_type",
  "baml_workspace",
+ "bex_engine",
  "bex_vm",
  "bex_vm_types",
  "clap",
@@ -4875,6 +4877,8 @@ dependencies = [
  "rowan 0.16.1",
  "salsa",
  "similar",
+ "sys_types",
+ "tokio",
 ]
 
 [[package]]

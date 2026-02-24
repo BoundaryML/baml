@@ -28,7 +28,7 @@ use std::path::Path;
 
 pub use baml_project::ProjectDatabase;
 use bex_vm::{BexVm, VmExecState};
-use bex_vm_types::{ConstValue, ObjectIndex, Program as VmProgram};
+use bex_vm_types::{ConstValue, GlobalPool, ObjectIndex, Program as VmProgram};
 
 // Re-export test types from crate::vm
 pub use crate::vm::{
@@ -37,6 +37,26 @@ pub use crate::vm::{
 
 /// Backwards-compatible alias for code that still references `TestDatabase`.
 pub type TestDatabase = ProjectDatabase;
+
+/// Create a [`BexVm`] from a compiled program for direct VM testing.
+///
+/// Bypasses `BexEngine` — these tests exercise raw bytecode execution,
+/// exec-state sequencing, and watch/emit behaviour the engine does not expose.
+/// Production callers must use `BexEngine`.
+pub fn make_vm(program: VmProgram) -> Result<BexVm, bex_vm::errors::VmError> {
+    let bytecode = bex_vm::convert_program(program)?;
+
+    let objects: Vec<_> = bytecode.objects.into_iter().collect();
+    let heap = bex_heap::BexHeap::new(objects);
+
+    let globals: Vec<_> = bytecode
+        .globals
+        .into_iter()
+        .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
+        .collect();
+
+    Ok(BexVm::new(heap, GlobalPool::from_vec(globals)))
+}
 
 //
 // ────────────────────────────────────────────────────────── COMPILATION ─────
@@ -176,7 +196,7 @@ pub fn collect_vm_exec_states(
         .function_index(function)
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
-    let mut vm = BexVm::from_program(program)?;
+    let mut vm = make_vm(program)?;
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &[]);
 
@@ -244,7 +264,7 @@ fn setup_and_exec_program(
         .function_index(function)
         .ok_or_else(|| anyhow::anyhow!("function '{function}' not found"))?;
 
-    let mut vm = BexVm::from_program(program)?;
+    let mut vm = make_vm(program)?;
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &[]);
 
@@ -336,7 +356,7 @@ pub fn assert_vm_executes_bytecode_with_inspection(
         .function_indices
         .insert("test_fn".to_string(), fn_idx);
 
-    let mut vm = BexVm::from_program(program)?;
+    let mut vm = make_vm(program)?;
     // Get HeapPtr for function from the heap
     let function_ptr = vm.heap.compile_time_ptr(fn_idx);
     vm.set_entry_point(function_ptr, &[]);

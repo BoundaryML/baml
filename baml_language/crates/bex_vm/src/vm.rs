@@ -601,31 +601,6 @@ impl BexVm {
         Err(InternalError::InvalidObjectRef(ptr.as_ptr() as usize))
     }
 
-    /// TODO: We should remove this API in favor of using `bex_engine` only (vbv)
-    /// Creates a VM from a compiled [`bex_vm_types::Program`].
-    ///
-    /// This is primarily for testing. In production, use `BexEngine` which
-    /// manages the heap across multiple VM instances.
-    pub fn from_program(program: bex_vm_types::Program) -> Result<Self, VmError> {
-        let bytecode = convert_program(program)?;
-
-        // Extract compile-time objects for the heap
-        let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
-
-        // Create heap with compile-time objects
-        let heap = BexHeap::new(compile_time_objects);
-
-        // Convert compile-time globals (ConstValue) to runtime globals (Value)
-        let globals_vec: Vec<Value> = bytecode
-            .globals
-            .into_iter()
-            .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
-            .collect();
-        let globals = GlobalPool::from_vec(globals_vec);
-
-        Ok(Self::new(heap, globals))
-    }
-
     /// Bootstraps the VM preparing the given function to run.
     pub fn set_entry_point(&mut self, function: HeapPtr, args: &[Value]) {
         debug_assert!(

@@ -29,8 +29,11 @@ baml_fmt = { workspace = true }
 baml_project = { workspace = true }
 baml_type = { workspace = true }
 baml_workspace = { workspace = true }
+bex_engine = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+sys_types = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
 anyhow = { workspace = true }
 arboard = { workspace = true }
 clap = { workspace = true, features = [ "derive" ] }

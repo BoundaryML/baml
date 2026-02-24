@@ -1791,10 +1791,22 @@ impl CompilerRunner {
             .insert(CompilerPhase::VmRunner, output_annotated);
     }
 
-    /// Execute the selected function in the VM
+    /// Execute the selected function via the engine.
+    ///
+    /// Uses `BexEngine` with `SysOps::all_unsupported()` — this tool only runs
+    /// pure-compute functions. Any LLM or IO operation will surface as an engine
+    /// error rather than silently hanging.
     pub(crate) fn execute_selected_function(&mut self) {
-        use bex_vm::{BexVm, VmExecState};
-        use bex_vm_types::Object;
+        let result = self.try_execute_selected_function();
+        self.vm_runner_state.execution_result = Some(result);
+        self.run_vm_runner();
+    }
+
+    fn try_execute_selected_function(&mut self) -> VmExecutionResult {
+        use std::sync::Arc;
+
+        use bex_engine::{BexEngine, FunctionCallContextBuilder};
+        use sys_types::{CallId, SysOps};
 
         let files: Vec<_> = self.source_files.values().copied().collect();
         let program = match baml_compiler_emit::compile_files(
@@ -1806,13 +1818,7 @@ impl CompilerRunner {
             },
         ) {
             Ok(p) => p,
-            Err(err) => {
-                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(format!(
-                    "Codegen failed: {:?}",
-                    err
-                )));
-                return;
-            }
+            Err(err) => return VmExecutionResult::Error(format!("Codegen failed: {err}")),
         };
 
         let Some(func_name) = self
@@ -1820,73 +1826,43 @@ impl CompilerRunner {
             .available_functions
             .get(self.vm_runner_state.selected_function)
         else {
-            self.vm_runner_state.execution_result =
-                Some(VmExecutionResult::Error("No function selected".to_string()));
-            return;
+            return VmExecutionResult::Error("No function selected".to_string());
         };
 
-        let Some(func_index) = program.function_index(func_name) else {
-            self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(format!(
-                "Function '{}' not found",
-                func_name
-            )));
-            return;
+        // All sys-ops (LLM, HTTP, etc.) return Unsupported — correct for a
+        // pure-compute dev tool. No event sink needed.
+        //
+        // TODO(vbv): When the VM Runner gains support for async/LLM functions,
+        // inject a real SysOps and an event sink here instead.
+        let engine = match BexEngine::new(program, Arc::new(SysOps::all_unsupported()), None) {
+            Ok(e) => e,
+            Err(err) => return VmExecutionResult::Error(format!("Engine init failed: {err}")),
         };
 
-        // Check function arity
-        if let Some(Object::Function(func)) = program.objects.get(func_index)
-            && func.arity > 0
-        {
-            self.vm_runner_state.execution_result =
-                Some(VmExecutionResult::RequiresArgs { arity: func.arity });
-            return;
+        // Use the engine API for arity — avoids accessing raw heap objects.
+        match engine.function_params(func_name) {
+            Err(err) => return VmExecutionResult::Error(format!("{err}")),
+            Ok(params) if !params.is_empty() => {
+                return VmExecutionResult::RequiresArgs {
+                    arity: params.len(),
+                };
+            }
+            Ok(_) => {}
         }
 
-        // Create VM and run
-        let mut vm = match BexVm::from_program(program) {
-            Ok(vm) => vm,
-            Err(err) => {
-                self.vm_runner_state.execution_result =
-                    Some(VmExecutionResult::Error(format!("{:?}", err)));
-                return;
-            }
+        // Build a minimal per-call context: no host span, no collectors.
+        let ctx = FunctionCallContextBuilder::new(CallId::next()).build();
+
+        // Drive the async engine from this synchronous TUI context.
+        let rt = match tokio::runtime::Builder::new_current_thread().build() {
+            Ok(rt) => rt,
+            Err(err) => return VmExecutionResult::Error(format!("Runtime error: {err}")),
         };
-        // Convert compile-time index to runtime HeapPtr
-        let func_ptr = vm.heap.compile_time_ptr(func_index);
-        vm.set_entry_point(func_ptr, &[]);
 
-        match vm.exec() {
-            Ok(VmExecState::Complete(value)) => {
-                let result_str = format_vm_value(&value, &vm);
-                self.vm_runner_state.execution_result =
-                    Some(VmExecutionResult::Success(result_str));
-            }
-            Ok(VmExecState::Await(_)) => {
-                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                    "Function awaits a future (not supported in VM Runner)".to_string(),
-                ));
-            }
-            Ok(VmExecState::ScheduleFuture(_)) => {
-                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                    "Function schedules a future (not supported in VM Runner)".to_string(),
-                ));
-            }
-            Ok(VmExecState::Notify(_)) => {
-                self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(
-                    "Function sent a watch notification (not supported in VM Runner)".to_string(),
-                ));
-            }
-            Ok(VmExecState::SpanNotify(_)) => {
-                // Span notifications are ignored in the VM Runner — just continue.
-            }
-            Err(e) => {
-                self.vm_runner_state.execution_result =
-                    Some(VmExecutionResult::Error(format!("{:?}", e)));
-            }
+        match rt.block_on(engine.call_function(func_name, vec![], ctx)) {
+            Ok(value) => VmExecutionResult::Success(format_external_value(&value)),
+            Err(err) => VmExecutionResult::Error(format!("{err}")),
         }
-
-        // Regenerate output to show the result
-        self.run_vm_runner();
     }
 
     /// Get mutable VM runner state for UI
@@ -2685,68 +2661,45 @@ pub(crate) fn normalize_files_to_virtual_root(
         .collect()
 }
 
-/// Format a VM value for display
-fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
-    use bex_vm_types::{Object, Value};
+/// Format a `BexExternalValue` for display in the VM Runner panel.
+///
+/// `BexExternalValue` is fully self-describing (class names, variant names, and
+/// field names are embedded), so no heap access is required.
+fn format_external_value(value: &bex_engine::BexExternalValue) -> String {
+    use bex_engine::BexExternalValue as V;
 
     match value {
-        Value::Null => "null".to_string(),
-        Value::Int(i) => i.to_string(),
-        Value::Float(f) => f.to_string(),
-        Value::Bool(b) => b.to_string(),
-        Value::Object(idx) => {
-            let obj = vm.get_object(*idx);
-            match obj {
-                Object::String(s) => format!("\"{}\"", s),
-                Object::Array(arr) => {
-                    let items: Vec<String> = arr.iter().map(|v| format_vm_value(v, vm)).collect();
-                    format!("[{}]", items.join(", "))
-                }
-                Object::Map(map) => {
-                    let items: Vec<String> = map
-                        .iter()
-                        .map(|(k, v)| format!("\"{}\": {}", k, format_vm_value(v, vm)))
-                        .collect();
-                    format!("{{{}}}", items.join(", "))
-                }
-                Object::Instance(inst) => {
-                    let class_obj = vm.get_object(inst.class);
-                    if let Object::Class(class) = class_obj {
-                        let fields: Vec<String> = class
-                            .fields
-                            .iter()
-                            .zip(inst.fields.iter())
-                            .map(|(f, val)| format!("{}: {}", f.name, format_vm_value(val, vm)))
-                            .collect();
-                        format!("{}{{ {} }}", class.name, fields.join(", "))
-                    } else {
-                        "<instance>".to_string()
-                    }
-                }
-                Object::Variant(var) => {
-                    let enum_obj = vm.get_object(var.enm);
-                    if let Object::Enum(enm) = enum_obj {
-                        if let Some(v) = enm.variants.get(var.index) {
-                            format!("{}::{}", enm.name, v.name)
-                        } else {
-                            format!("{}::variant_{}", enm.name, var.index)
-                        }
-                    } else {
-                        "<variant>".to_string()
-                    }
-                }
-                Object::Function(f) => format!("<fn {}>", f.name),
-                Object::Class(c) => format!("<class {}>", c.name),
-                Object::Media(m) => format!("<type {}>", m.kind),
-                Object::Enum(e) => format!("<enum {}>", e.name),
-                Object::Future(_) => "<future>".to_string(),
-                Object::Resource(r) => format!("<resource: {}>", r),
-                Object::PromptAst(_) => "<prompt_ast>".to_string(),
-                Object::Collector(_) => "<collector>".to_string(),
-                Object::Type(ty) => format!("<type: {ty}>"),
-                #[cfg(feature = "heap_debug")]
-                Object::Sentinel(_) => "<sentinel>".to_string(),
-            }
+        V::Null => "null".to_string(),
+        V::Int(i) => i.to_string(),
+        V::Float(f) => f.to_string(),
+        V::Bool(b) => b.to_string(),
+        V::String(s) => format!("\"{s}\""),
+        V::Array { items, .. } => {
+            let parts: Vec<String> = items.iter().map(format_external_value).collect();
+            format!("[{}]", parts.join(", "))
         }
+        V::Map { entries, .. } => {
+            let parts: Vec<String> = entries
+                .iter()
+                .map(|(k, v)| format!("\"{k}\": {}", format_external_value(v)))
+                .collect();
+            format!("{{{}}}", parts.join(", "))
+        }
+        V::Instance { class_name, fields } => {
+            let parts: Vec<String> = fields
+                .iter()
+                .map(|(k, v)| format!("{k}: {}", format_external_value(v)))
+                .collect();
+            format!("{class_name}{{ {} }}", parts.join(", "))
+        }
+        V::Variant {
+            enum_name,
+            variant_name,
+        } => format!("{enum_name}::{variant_name}"),
+        // Unwrap the union wrapper — the display value is the inner value.
+        V::Union { value, .. } => format_external_value(value),
+        // Remaining variants (Resource, Handle, FunctionRef, Adt) are not
+        // expected from pure-compute functions; fall back to the type name.
+        other => format!("<{}>", other.type_name()),
     }
 }
