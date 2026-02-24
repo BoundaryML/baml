@@ -106,11 +106,12 @@ message BamlValueChecked {
 // We need to handle BamlMediaType. Since one variant is "Other(String)",
 // we represent it as a message with an enum tag and an optional string.
 enum MediaTypeEnum {
-  IMAGE = 0;
-  AUDIO = 1;
-  PDF = 2;
-  VIDEO = 3;
-  OTHER = 4;
+  MEDIA_TYPE_UNSPECIFIED = 0;
+  IMAGE = 1;
+  AUDIO = 2;
+  PDF = 3;
+  VIDEO = 4;
+  OTHER = 5;
 }
 
 message BamlValueMedia {

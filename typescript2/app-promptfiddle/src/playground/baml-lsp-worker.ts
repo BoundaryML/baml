@@ -473,12 +473,14 @@ self.onmessage = async (event: MessageEvent) => {
           handles.push(h);
           return h;
         });
+        const existing = liveHandles.get(msg.id);
+        if (existing) {
+          for (const h of existing) h.free();
+        }
         if (handles.length > 0) {
-          const existing = liveHandles.get(msg.id);
-          if (existing) {
-            for (const h of existing) h.free();
-          }
           liveHandles.set(msg.id, handles);
+        } else {
+          liveHandles.delete(msg.id);
         }
         const result = JSON.stringify(decoded, null, 2);
         postOut({ type: "callFunctionResult", id: msg.id, result });

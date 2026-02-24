@@ -7,7 +7,7 @@
  */
 
 import type { FC } from 'react';
-import { getBamlType, getResultRenderer } from './result-renderers';
+import { getBamlType, getResultRenderer, BAML_TYPE_KEY } from './result-renderers';
 import type { ResultRendererProps } from './result-renderers';
 
 const codeBlockCls =
@@ -54,7 +54,7 @@ const ValueRenderer: FC<{ value: unknown; customRenderers?: Record<string, FC<Re
 
   // Plain object — render each field, recursing into values
   const entries = Object.entries(value as Record<string, unknown>).filter(
-    ([k]) => k !== '$baml',
+    ([k]) => k !== BAML_TYPE_KEY,
   );
   if (entries.length === 0) {
     return <span className="font-vsc-mono text-xs text-vsc-text-faint">{'{}'}</span>;
@@ -63,11 +63,7 @@ const ValueRenderer: FC<{ value: unknown; customRenderers?: Record<string, FC<Re
   return (
     <div className="space-y-1">
       {entries.map(([key, val]) => {
-        const valType = getBamlType(val);
-        const hasRenderer = valType ? !!resolve(valType, customRenderers) : false;
-        const isComplex =
-          hasRenderer ||
-          (val != null && typeof val === 'object');
+        const isComplex = val != null && typeof val === 'object';
 
         if (!isComplex) {
           return (

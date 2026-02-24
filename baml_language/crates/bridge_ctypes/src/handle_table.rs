@@ -114,7 +114,7 @@ impl From<HandleTableValue> for BexExternalValue {
     }
 }
 
-/// Global handle table mapping opaque u64 keys to Arc<HandleTableValue>.
+/// Global handle table mapping opaque u64 keys to `Arc<HandleTableValue>`.
 /// Single instance shared by all bridges.
 pub struct HandleTable {
     next_key: AtomicU64,

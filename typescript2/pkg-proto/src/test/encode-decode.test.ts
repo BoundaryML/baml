@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { encodeCallArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
-import { CallFunctionArgs } from '../generated/baml/cffi/v1/baml_inbound';
+import { CallFunctionArgs, BamlHandleType } from '../generated/baml/cffi/v1/baml_inbound';
 import { BamlOutboundValue } from '../generated/baml/cffi/v1/baml_outbound';
 
 describe('encodeCallArgs', () => {
@@ -241,12 +241,12 @@ describe('decodeCallResult', () => {
     const bytes = encodeResult({
       value: {
         $case: 'handleValue',
-        handleValue: { key: 42, handleType: 5 },
+        handleValue: { key: 42, handleType: BamlHandleType.FUNCTION_REF },
       },
     });
     const result = decodeCallResult(bytes, (key, handleType, typeName) => {
       expect(key).toBe(42n);
-      expect(handleType).toBe(5);
+      expect(handleType).toBe(BamlHandleType.FUNCTION_REF);
       expect(typeName).toBe('function_ref');
       return { kind: 'functionRef', key: 42n };
     });

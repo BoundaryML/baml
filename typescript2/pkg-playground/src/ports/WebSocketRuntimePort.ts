@@ -198,20 +198,28 @@ export class WebSocketRuntimePort implements RuntimePort {
       case 'playgroundNotification':
         return { type: 'playgroundNotification', notification: raw.notification };
       case 'callFunctionResult': {
-        const bytes = base64ToUint8Array(raw.result);
-        const decoded = decodeCallResult(bytes, (key, handleType, typeName) => ({
-          handle_key: key,
-          handle_type: handleType,
-          type_name: typeName,
-        }));
-        return {
-          type: 'callFunctionResult',
-          id: raw.id,
-          result: JSON.stringify(decoded, (_, v) =>
-            typeof v === 'bigint' ? v.toString() : v,
-            2,
-          ),
-        };
+        try {
+          const bytes = base64ToUint8Array(raw.result);
+          const decoded = decodeCallResult(bytes, (key, handleType, typeName) => ({
+            handle_key: key,
+            handle_type: handleType,
+            type_name: typeName,
+          }));
+          return {
+            type: 'callFunctionResult',
+            id: raw.id,
+            result: JSON.stringify(decoded, (_, v) =>
+              typeof v === 'bigint' ? v.toString() : v,
+              2,
+            ),
+          };
+        } catch (e) {
+          return {
+            type: 'callFunctionError',
+            id: raw.id,
+            error: `Failed to decode result: ${e instanceof Error ? e.message : String(e)}`,
+          };
+        }
       }
       case 'callFunctionError':
         return { type: 'callFunctionError', id: raw.id, error: raw.error };

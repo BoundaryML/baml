@@ -29,7 +29,7 @@ fn type_name(ht: BamlHandleType) -> &'static str {
 /// `Drop` is called which releases the entry from the handle table.
 ///
 /// Implements `toJSON()` so `JSON.stringify` produces
-/// `{ "$handle": { "key": 42, "type": "image" } }`.
+/// `{ "$handle": { "key": "42", "handle_type": "image" } }`.
 #[wasm_bindgen]
 pub struct BamlHandle {
     key: u64,
@@ -84,7 +84,7 @@ impl BamlHandle {
     }
 
     /// Called by `JSON.stringify` on the `handle` field of a `BamlJsHandle<T>`.
-    /// Returns `{ handle_type: "image" }` — the `$baml` wrapper is added by
+    /// Returns `{ key: "42", handle_type: "image" }` — the `$baml` wrapper is added by
     /// the decoder, so this only needs to serialize the handle-specific metadata.
     #[wasm_bindgen(js_name = "toJSON")]
     pub fn to_json(&self) -> JsValue {

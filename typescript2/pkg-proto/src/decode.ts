@@ -33,6 +33,7 @@ export function handleTypeName(handleType: number): string {
 export type WrapHandleFn<T> = (key: bigint, handleType: number, typeName: string) => T;
 
 const MEDIA_TYPE_NAMES: Record<number, BamlJsMedia['media_type']> = {
+  [MediaTypeEnum.MEDIA_TYPE_UNSPECIFIED]: 'other',
   [MediaTypeEnum.IMAGE]: 'image',
   [MediaTypeEnum.AUDIO]: 'audio',
   [MediaTypeEnum.PDF]: 'pdf',
@@ -42,6 +43,14 @@ const MEDIA_TYPE_NAMES: Record<number, BamlJsMedia['media_type']> = {
 
 function mediaTypeName(mt: MediaTypeEnum): BamlJsMedia['media_type'] {
   return MEDIA_TYPE_NAMES[mt] ?? 'other';
+}
+
+function tryParseJson(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return s;
+  }
 }
 
 function deserializeMedia(m: BamlValueMedia): BamlJsMedia {
@@ -58,6 +67,10 @@ function deserializeMedia(m: BamlValueMedia): BamlJsMedia {
       return { ...base, content_type: 'base64' as const, base64: m.value.base64 };
     case 'file':
       return { ...base, content_type: 'file' as const, file: m.value.file };
+    default: {
+      const _exhaustive: never = m.value;
+      return { ...base, content_type: 'url' as const, url: '' };
+    }
   }
 }
 
@@ -70,6 +83,10 @@ function deserializePromptAstSimple(s: BamlValuePromptAstSimple): BamlJsPromptAs
       return { $baml: { type: '$prompt_ast_simple' }, content_type: 'media', value: deserializeMedia(s.value.media) };
     case 'multiple':
       return { $baml: { type: '$prompt_ast_simple' }, content_type: 'multiple', value: s.value.multiple.items.map(deserializePromptAstSimple) };
+    default: {
+      const _exhaustive: never = s.value;
+      return { $baml: { type: '$prompt_ast_simple' }, content_type: 'string', value: '' };
+    }
   }
 }
 
@@ -84,12 +101,16 @@ function deserializePromptAst(ast: BamlValuePromptAst): BamlJsPromptAst {
         $baml: { type: '$prompt_ast_message' },
         role: msg.role,
         content: msg.content ? deserializePromptAstSimple(msg.content) : null,
-        ...(msg.metadataAsJson ? { metadata: JSON.parse(msg.metadataAsJson) } : {}),
+        ...(msg.metadataAsJson ? { metadata: tryParseJson(msg.metadataAsJson) } : {}),
       };
       return { $baml: { type: '$prompt_ast' }, content_type: 'message', value: message };
     }
     case 'multiple':
       return { $baml: { type: '$prompt_ast' }, content_type: 'multiple', value: ast.value.multiple.items.map(deserializePromptAst) };
+    default: {
+      const _exhaustive: never = ast.value;
+      return { $baml: { type: '$prompt_ast' }, content_type: 'simple', value: { $baml: { type: '$prompt_ast_simple' }, content_type: 'string', value: '' } };
+    }
   }
 }
 
@@ -181,7 +202,7 @@ function deserializeValue<T>(
     case 'handleValue': {
       const handle = holder.value.handleValue;
       const key =
-        typeof handle.key === 'bigint' ? handle.key : BigInt(handle.key);
+        typeof handle.key === 'bigint' ? handle.key : BigInt(handle.key ?? 0);
       return {
         $baml: { type: '$handle' as const },
         handle: wrapHandle(key, handle.handleType, handleTypeName(handle.handleType)),

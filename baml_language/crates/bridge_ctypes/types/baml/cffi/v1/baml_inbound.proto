@@ -37,6 +37,7 @@ message BamlHandle {
 // concepts (e.g. JS uses plain interfaces). Engine resolves types from function
 // signatures.
 message InboundValue {
+  reserved 1;
   oneof value {
     string string_value = 2;
     int64 int_value = 3;
