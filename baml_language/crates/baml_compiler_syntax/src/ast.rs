@@ -342,6 +342,12 @@ impl TypeExpr {
     /// For `int[][]?` returns `[Array, Array, Optional]`.
     /// For `int?[]` returns `[Optional, Array]`.
     pub fn postfix_modifiers(&self) -> Vec<TypePostFixModifier> {
+        // if it's a union without parens, the postfix modifiers we'd find
+        // are actually the modifiers on the final union member
+        if self.is_union() {
+            return Vec::new();
+        }
+
         collect_postfix_modifiers(
             self.syntax
                 .children_with_tokens()

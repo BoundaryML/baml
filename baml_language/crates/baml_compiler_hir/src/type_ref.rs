@@ -137,31 +137,22 @@ impl TypeRef {
 
     /// Create a `TypeRef` from an AST `TypeExpr` node.
     ///
-    /// This uses structured CST accessors to properly handle complex types including:
-    /// - Primitives: int, string, bool, etc.
-    /// - Named types: User, `MyClass`
-    /// - Optional types: string?
-    /// - List types: string[]
-    /// - Union types: Success | Failure
-    /// - String literal types: "user" | "assistant"
-    /// - Parenthesized types: (int | string)[]
-    /// - Generic types: map<K, V>
+    /// Delegates to `from_ast_base` for the base type, then applies any
+    /// top-level postfix modifiers (`[]`, `?`).
     pub fn from_ast(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
-        // For top-level unions like `int[] | string?`, trailing modifiers
-        // belong to the last member, not the union itself. Union-level
-        // modifiers require parens: `(int | string)?[]`.
+        let base = Self::from_ast_base(type_expr);
+        Self::apply_modifiers(base, &type_expr.postfix_modifiers())
+    }
+
+    /// Parse the base type (no optional, no array).
+    fn from_ast_base(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Handle top-level unions like `int[] | string?`
         if type_expr.is_union() {
             let member_parts = type_expr.union_member_parts();
             let members: Vec<TypeRef> = member_parts.iter().map(Self::from_union_member).collect();
             return TypeRef::Union(members);
         }
 
-        let base = Self::from_ast_base(type_expr);
-        Self::apply_modifiers(base, &type_expr.postfix_modifiers())
-    }
-
-    /// Parse the base type (no optional, array, or union modifiers).
-    fn from_ast_base(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
         // Handle function types like `(x: int, y: int) -> bool`
         if type_expr.is_function_type() {
             let params = type_expr
