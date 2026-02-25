@@ -230,7 +230,25 @@ impl BexLspRequest for BexMulitProject {
                     }),
                     padding_left: Some(h.padding_left),
                     padding_right: Some(h.padding_right),
-                    text_edits: None,
+                    text_edits: if h.text_edits.is_empty() {
+                        None
+                    } else {
+                        Some(
+                            h.text_edits
+                                .iter()
+                                .map(|te| {
+                                    let pos = baml_project::position::offset_to_lsp_position(
+                                        text,
+                                        usize::from(te.offset),
+                                    );
+                                    lsp_types::TextEdit {
+                                        range: lsp_types::Range::new(pos, pos),
+                                        new_text: te.new_text.clone(),
+                                    }
+                                })
+                                .collect(),
+                        )
+                    },
                     tooltip: None,
                     data: None,
                 }

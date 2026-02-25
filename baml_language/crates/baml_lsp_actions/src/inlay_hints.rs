@@ -36,6 +36,14 @@ pub struct InlayHintLabelPart {
     pub target: Option<NavigationTarget>,
 }
 
+/// A text edit applied when the user double-clicks an inlay hint.
+pub struct InlayHintTextEdit {
+    /// Byte offset where the edit is inserted.
+    pub offset: TextSize,
+    /// The text to insert.
+    pub new_text: String,
+}
+
 /// An inlay hint to display inline in the editor.
 pub struct InlayHint {
     /// Byte offset where the hint is displayed.
@@ -49,6 +57,8 @@ pub struct InlayHint {
     pub padding_left: bool,
     /// Insert a thin space between the hint and the token to its right.
     pub padding_right: bool,
+    /// Text edits applied when the user double-clicks the hint.
+    pub text_edits: Vec<InlayHintTextEdit>,
 }
 
 /// Shared data passed to every [`HintCollector`] for a single function body.
@@ -255,6 +265,7 @@ impl HintCollector for CallArgNames {
                     kind: Some(InlayHintKind::Parameter),
                     padding_left: false,
                     padding_right: true,
+                    text_edits: vec![],
                 });
             }
         }
@@ -312,12 +323,19 @@ impl HintCollector for LetTypeAnnotations {
                     continue;
                 };
 
+            // Concatenate label parts into the text to insert on double-click.
+            let insert_text: String = label.iter().map(|p| p.value.as_str()).collect();
+
             hints.push(InlayHint {
                 offset,
                 label,
                 kind: Some(InlayHintKind::Type),
                 padding_left: false,
                 padding_right,
+                text_edits: vec![InlayHintTextEdit {
+                    offset,
+                    new_text: insert_text,
+                }],
             });
         }
     }
@@ -350,6 +368,7 @@ impl ItemHintCollector for ClosingBraceLabels {
                     kind: None,
                     padding_left: true,
                     padding_right: false,
+                    text_edits: vec![],
                 });
             }
             _ => {}
