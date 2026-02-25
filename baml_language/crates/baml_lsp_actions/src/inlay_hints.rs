@@ -70,27 +70,12 @@ pub struct HintContext<'a> {
     pub db: &'a ProjectDatabase,
 }
 
-/// Shared data passed to every [`ItemHintCollector`] for a single top-level item.
-pub struct ItemHintContext<'a> {
-    pub item_id: &'a ItemId<'a>,
-    pub sym_table: &'a SymbolTable<'a>,
-    pub db: &'a ProjectDatabase,
-}
-
 /// A hint producer that runs once per **function body**.
 ///
 /// Implement this to add hints that depend on inferred types or
 /// the expression/statement structure inside a function.
 pub trait HintCollector {
     fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>);
-}
-
-/// A hint producer that runs once per **top-level item** in the file.
-///
-/// Implement this to add hints at the item level (e.g. closing brace labels)
-/// without needing type-inference data.
-pub trait ItemHintCollector {
-    fn collect(&self, ctx: &ItemHintContext<'_>, hints: &mut Vec<InlayHint>);
 }
 
 /// Returns the display type for a hint, or `None` if the type should be suppressed.
@@ -239,7 +224,6 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 
 /// Emits `param_name:` labels before positional call arguments.
 pub struct CallArgNames;
-
 impl HintCollector for CallArgNames {
     fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
         use baml_db::baml_compiler_hir::Expr;
@@ -286,7 +270,6 @@ impl HintCollector for CallArgNames {
 /// The hint is suppressed when the binding already carries an explicit type
 /// annotation, or when the inferred type is `unknown` / `error`.
 pub struct LetTypeAnnotations;
-
 impl HintCollector for LetTypeAnnotations {
     fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
         for (stmt_id, stmt) in ctx.body.stmts.iter() {
@@ -359,49 +342,11 @@ impl HintCollector for LetTypeAnnotations {
     }
 }
 
-/// Emits a label after the closing `}` of each top-level item showing what it
-/// closes, e.g. `} function foo` or `} class Foo`.
-///
-/// Only emitted for multi-line items where the hint adds navigational value.
-pub struct ClosingBraceLabels;
-
-impl ItemHintCollector for ClosingBraceLabels {
-    fn collect(&self, ctx: &ItemHintContext<'_>, hints: &mut Vec<InlayHint>) {
-        match ctx.item_id {
-            ItemId::Function(func_loc) => {
-                let sig = function_signature(ctx.db, *func_loc);
-                let body = function_body(ctx.db, *func_loc);
-                let FunctionBody::Expr(expr_body, source_map) = &*body else {
-                    return;
-                };
-                let Some(root_id) = expr_body.root_expr else {
-                    return;
-                };
-                let Some(block_span) = source_map.expr_span(root_id) else {
-                    return;
-                };
-                hints.push(InlayHint {
-                    offset: block_span.range.end(),
-                    label: plain_label(format!("function {}", sig.name)),
-                    kind: None,
-                    padding_left: true,
-                    padding_right: false,
-                    text_edits: vec![],
-                });
-            }
-            _ => {}
-        }
-    }
-}
-
 /// Compute all inlay hints for the given file.
 ///
-/// To add new hint categories:
-/// - Body-level hints: implement [`HintCollector`] and add to `body_collectors`
-/// - Item-level hints: implement [`ItemHintCollector`] and add to `item_collectors`
+/// To add new hint categories, implement [`HintCollector`] and add to `collectors`.
 pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, _project: Project) -> Vec<InlayHint> {
-    let body_collectors: &[&dyn HintCollector] = &[&CallArgNames, &LetTypeAnnotations];
-    let item_collectors: &[&dyn ItemHintCollector] = &[];
+    let collectors: &[&dyn HintCollector] = &[&CallArgNames, &LetTypeAnnotations];
 
     let mut hints = Vec::new();
 
@@ -413,17 +358,6 @@ pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, _project: Project) ->
     let sym_table = symbol_table(db, project);
 
     for item_id in file_items.items(db) {
-        // Item-level hints run for every item kind.
-        let item_ctx = ItemHintContext {
-            item_id,
-            sym_table: &sym_table,
-            db,
-        };
-        for collector in item_collectors {
-            collector.collect(&item_ctx, &mut hints);
-        }
-
-        // Body-level hints only apply to functions with an expression body.
         let ItemId::Function(func_loc) = item_id else {
             continue;
         };
@@ -443,7 +377,7 @@ pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, _project: Project) ->
             db,
         };
 
-        for collector in body_collectors {
+        for collector in collectors {
             collector.collect(&ctx, &mut hints);
         }
     }
