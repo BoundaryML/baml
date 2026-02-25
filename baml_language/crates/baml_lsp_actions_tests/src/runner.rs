@@ -3,12 +3,14 @@
 //! This module uses the centralized `ProjectDatabase::check()` method for diagnostic
 //! collection, eliminating code duplication with the LSP server.
 
-use std::collections::HashMap;
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use baml_compiler_diagnostics::{RenderConfig, render_diagnostic};
-use baml_lsp_actions::inlay_hints::{InlayHint, InlayHintKind, inlay_hints as lsp_inlay_hints};
-use baml_lsp_actions::{MarkupKind, hover::hover as lsp_ide_hover};
+use baml_lsp_actions::{
+    MarkupKind,
+    hover::hover as lsp_ide_hover,
+    inlay_hints::{InlayHint, InlayHintKind, inlay_hints as lsp_inlay_hints},
+};
 use baml_project::ProjectDatabase;
 use text_size::TextSize;
 
