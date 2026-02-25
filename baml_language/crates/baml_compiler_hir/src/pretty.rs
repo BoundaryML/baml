@@ -522,11 +522,7 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap: bool) -> String {
                 .map(|t| type_ref_to_str_impl(t, false))
                 .collect::<Vec<_>>()
                 .join(" | ");
-            if wrap {
-                format!("({inner})")
-            } else {
-                inner
-            }
+            if wrap { format!("({inner})") } else { inner }
         }
         TypeRef::StringLiteral(s) => format!("\"{s}\""),
         TypeRef::IntLiteral(n) => n.to_string(),
@@ -555,11 +551,7 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap: bool) -> String {
                 .collect::<Vec<_>>()
                 .join(", ");
             let inner = format!("({}) -> {}", params_str, type_ref_to_str_impl(ret, false));
-            if wrap {
-                format!("({inner})")
-            } else {
-                inner
-            }
+            if wrap { format!("({inner})") } else { inner }
         }
         TypeRef::Error => "<error>".to_string(),
         TypeRef::Unknown => "<unknown>".to_string(),
