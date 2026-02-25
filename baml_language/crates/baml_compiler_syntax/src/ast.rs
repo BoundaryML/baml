@@ -166,23 +166,7 @@ impl UnionMemberParts {
     /// For `Union[]??` returns `[Array, Optional, Optional]`.
     /// For `Union?[]?` returns `[Optional, Array, Optional]`.
     pub fn postfix_modifiers(&self) -> Vec<TypePostFixModifier> {
-        let mut mods = Vec::new();
-        let mut last = None;
-        for token in &self.tokens {
-            match token.kind() {
-                SyntaxKind::QUESTION => {
-                    mods.push(TypePostFixModifier::Optional);
-                }
-                SyntaxKind::R_BRACKET if last == Some(SyntaxKind::L_BRACKET) => {
-                    mods.push(TypePostFixModifier::Array);
-                }
-                _ => (),
-            }
-
-            last = Some(token.kind());
-        }
-
-        mods
+        collect_postfix_modifiers(self.tokens.iter().map(SyntaxToken::kind))
     }
 
     /// Check if this member contains a `STRING_LITERAL` child node.
@@ -264,6 +248,26 @@ pub enum TypePostFixModifier {
     Array,
 }
 
+/// Shared helper: scan a stream of `SyntaxKind`s and collect postfix modifiers
+/// (`?` → Optional, `[]` → Array) in application order (innermost first).
+/// Assumes that trivia tokens are not included.
+fn collect_postfix_modifiers(kinds: impl Iterator<Item = SyntaxKind>) -> Vec<TypePostFixModifier> {
+    let mut mods = Vec::new();
+    let mut last = None;
+    for kind in kinds {
+        match kind {
+            SyntaxKind::QUESTION => mods.push(TypePostFixModifier::Optional),
+            SyntaxKind::R_BRACKET if last == Some(SyntaxKind::L_BRACKET) => {
+                mods.push(TypePostFixModifier::Array);
+            }
+            _ => (),
+        }
+        last = Some(kind);
+    }
+
+    mods
+}
+
 impl TypeExpr {
     /// Check if this is a union type (contains top-level PIPE separators).
     ///
@@ -338,31 +342,13 @@ impl TypeExpr {
     /// For `int[][]?` returns `[Array, Array, Optional]`.
     /// For `int?[]` returns `[Optional, Array]`.
     pub fn postfix_modifiers(&self) -> Vec<TypePostFixModifier> {
-        let tokens: Vec<_> = self
-            .syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|t| !t.kind().is_trivia())
-            .map(|t| t.kind())
-            .collect();
-
-        let mut mods = Vec::new();
-        let mut last = None;
-        for token in &tokens {
-            match token {
-                SyntaxKind::QUESTION => {
-                    mods.push(TypePostFixModifier::Optional);
-                }
-                SyntaxKind::R_BRACKET if last == Some(SyntaxKind::L_BRACKET) => {
-                    mods.push(TypePostFixModifier::Array);
-                }
-                _ => (),
-            }
-
-            last = Some(*token);
-        }
-
-        mods
+        collect_postfix_modifiers(
+            self.syntax
+                .children_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .filter(|t| !t.kind().is_trivia())
+                .map(|t| t.kind()),
+        )
     }
 
     /// Check if this type is wrapped in parentheses (e.g., `(int | string)`).
