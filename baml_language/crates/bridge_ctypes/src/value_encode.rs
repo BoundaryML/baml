@@ -149,7 +149,8 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
         Ty::Optional(inner) => Some(FieldType::OptionalType(Box::new(CffiFieldTypeOptional {
             value: Some(Box::new(ty_to_field_type(inner))),
         }))),
-        Ty::Media(_) | Ty::Literal(_) => Some(FieldType::AnyType(CffiFieldTypeAny {})),
+        // Never is uninhabited — no value to encode. Treat like any/unknown.
+        Ty::Never | Ty::Media(_) | Ty::Literal(_) => Some(FieldType::AnyType(CffiFieldTypeAny {})),
         Ty::Opaque(tn) => {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }

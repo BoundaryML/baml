@@ -50,6 +50,8 @@ pub enum TypeRef {
     String,
     Bool,
     Null,
+    /// The bottom type — uninhabited. No value has this type.
+    Never,
 
     Media(baml_base::MediaKind),
 
@@ -397,6 +399,7 @@ impl TypeRef {
             "string" => TypeRef::String,
             "bool" => TypeRef::Bool,
             "null" => TypeRef::Null,
+            "never" => TypeRef::Never,
             "unknown" => TypeRef::BuiltinUnknown,
             "type" => TypeRef::Type,
             "image" => TypeRef::Media(baml_base::MediaKind::Image),

@@ -401,8 +401,8 @@ impl<'a> ExhaustivenessChecker<'a> {
             // When they are, this should include key/value types: map<{key}, {value}>
             Ty::Map { .. } => vec![ValueSet::OfType(Name::new("<map>"))],
 
-            // Special types
-            Ty::Unknown | Ty::Error | Ty::Void | Ty::BuiltinUnknown => Vec::new(),
+            // Special types (uninhabited/void/error produce no required values)
+            Ty::Unknown | Ty::Error | Ty::Void | Ty::Never | Ty::BuiltinUnknown => Vec::new(),
             Ty::Function { .. } => vec![ValueSet::OfType(Name::new("<function>"))],
             Ty::WatchAccessor(_) => vec![ValueSet::OfType(Name::new("<$watch>"))],
         }
