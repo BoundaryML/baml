@@ -1211,6 +1211,8 @@ impl CompilerRunner {
     }
 
     fn run_mir(&mut self) {
+        use baml_compiler_hir::CompilerGenerated;
+
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
@@ -1283,8 +1285,22 @@ impl CompilerRunner {
             let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
             let items = items_struct.items(&self.db);
 
+            let item_tree = baml_compiler_hir::file_item_tree(&self.db, *source_file);
+
             for item in items {
                 if let ItemId::Function(func_id) = item {
+                    let func = &item_tree[func_id.id(&self.db)];
+
+                    // Skip compiler-generated functions (render_prompt, build_request, etc.)
+                    if let Some(ref cg) = func.compiler_generated {
+                        match cg {
+                            CompilerGenerated::ClientResolve { .. }
+                            | CompilerGenerated::LlmRenderPrompt { .. }
+                            | CompilerGenerated::LlmBuildRequest { .. }
+                            | CompilerGenerated::LlmCall { .. } => continue,
+                        }
+                    }
+
                     let signature = function_signature(&self.db, *func_id);
                     let sig_source_map = function_signature_source_map(&self.db, *func_id);
                     let func_name = signature.name.to_string();
