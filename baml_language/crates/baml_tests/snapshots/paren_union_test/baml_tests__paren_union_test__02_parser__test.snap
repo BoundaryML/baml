@@ -21,6 +21,658 @@ SOURCE_FILE
             PIPE "|"
             WORD "Union"
         R_PAREN ")"
+    FIELD
+      WORD "u_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "u_arr_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "Union | Union"
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "u_arr_arr_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "Union | Union"
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "u_opt_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "u_arr_opt"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+    FIELD
+      WORD "u_arr_opt_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "u_opt_arr_opt"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+    FIELD
+      WORD "u_opt_arr_arr_opt_arr_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "u_arr_opt_opt_arr_opt_opt"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        QUESTION "?"
+    FIELD
+      WORD "u_arr_arr_arr_opt_arr_arr_opt_opt_opt"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        QUESTION "?"
+        QUESTION "?"
+    FIELD
+      WORD "u_opt_opt_opt_arr_opt_opt_arr_arr_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+        QUESTION "?"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "arr_opt_arr_u_arr_arr_arr_opt_opt_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            L_BRACKET "["
+            R_BRACKET "]"
+            QUESTION "?"
+            L_BRACKET "["
+            R_BRACKET "]"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "opt_arr_opt_u_arr_arr_arr_opt_opt_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            QUESTION "?"
+            L_BRACKET "["
+            R_BRACKET "]"
+            QUESTION "?"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "fun"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "Union"
+            PIPE "|"
+            WORD "Union"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "Union | Union"
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+            R_PAREN ")"
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR
+          WORD "Union"
+          PIPE "|"
+          WORD "Union"
+          PIPE "|"
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "Union | Union"
+              WORD "Union"
+              PIPE "|"
+              WORD "Union"
+          R_PAREN ")"
+    FIELD
+      WORD "fun_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "Union | Union"
+                    WORD "Union"
+                    PIPE "|"
+                    WORD "Union"
+                R_PAREN ")"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              WORD "Union"
+              PIPE "|"
+              WORD "Union"
+              PIPE "|"
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "Union | Union"
+                  WORD "Union"
+                  PIPE "|"
+                  WORD "Union"
+              R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "fun_arr_opt"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "Union | Union"
+                    WORD "Union"
+                    PIPE "|"
+                    WORD "Union"
+                R_PAREN ")"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              WORD "Union"
+              PIPE "|"
+              WORD "Union"
+              PIPE "|"
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "Union | Union"
+                  WORD "Union"
+                  PIPE "|"
+                  WORD "Union"
+              R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+    FIELD
+      WORD "fun_opt"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "Union | Union"
+                    WORD "Union"
+                    PIPE "|"
+                    WORD "Union"
+                R_PAREN ")"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              WORD "Union"
+              PIPE "|"
+              WORD "Union"
+              PIPE "|"
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "Union | Union"
+                  WORD "Union"
+                  PIPE "|"
+                  WORD "Union"
+              R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+    FIELD
+      WORD "fun_opt_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "Union | Union"
+                    WORD "Union"
+                    PIPE "|"
+                    WORD "Union"
+                R_PAREN ")"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              WORD "Union"
+              PIPE "|"
+              WORD "Union"
+              PIPE "|"
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "Union | Union"
+                  WORD "Union"
+                  PIPE "|"
+                  WORD "Union"
+              R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "fun_opt_opt_opt_arr_arr_opt_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "Union | Union"
+                    WORD "Union"
+                    PIPE "|"
+                    WORD "Union"
+                R_PAREN ")"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              WORD "Union"
+              PIPE "|"
+              WORD "Union"
+              PIPE "|"
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "Union | Union"
+                  WORD "Union"
+                  PIPE "|"
+                  WORD "Union"
+              R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+        QUESTION "?"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "arr_opt_arr_fun_opt_opt_opt_arr_arr_opt_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+                L_BRACKET "["
+                R_BRACKET "]"
+                QUESTION "?"
+                L_BRACKET "["
+                R_BRACKET "]"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "Union | Union"
+                    WORD "Union"
+                    PIPE "|"
+                    WORD "Union"
+                R_PAREN ")"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              WORD "Union"
+              PIPE "|"
+              WORD "Union"
+              L_BRACKET "["
+              R_BRACKET "]"
+              QUESTION "?"
+              L_BRACKET "["
+              R_BRACKET "]"
+              PIPE "|"
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "Union | Union"
+                  WORD "Union"
+                  PIPE "|"
+                  WORD "Union"
+              R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+        QUESTION "?"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "Union"
+                PIPE "|"
+                WORD "Union"
+                QUESTION "?"
+                L_BRACKET "["
+                R_BRACKET "]"
+                QUESTION "?"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR "Union | Union"
+                    WORD "Union"
+                    PIPE "|"
+                    WORD "Union"
+                R_PAREN ")"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              WORD "Union"
+              PIPE "|"
+              WORD "Union"
+              QUESTION "?"
+              L_BRACKET "["
+              R_BRACKET "]"
+              QUESTION "?"
+              PIPE "|"
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                TYPE_EXPR "Union | Union"
+                  WORD "Union"
+                  PIPE "|"
+                  WORD "Union"
+              R_PAREN ")"
+        R_PAREN ")"
+        QUESTION "?"
+        QUESTION "?"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+        L_BRACKET "["
+        R_BRACKET "]"
     R_BRACE "}"
 
 === ERRORS ===
