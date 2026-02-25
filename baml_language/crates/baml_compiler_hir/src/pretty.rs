@@ -243,6 +243,7 @@ impl<'a> CodePrinter<'a> {
                 type_annotation,
                 initializer,
                 is_watched,
+                ..
             } => {
                 if *is_watched {
                     self.output.push_str("watch let ");

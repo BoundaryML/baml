@@ -5,8 +5,8 @@ use std::sync::Arc;
 use baml_db::{
     SourceFile,
     baml_compiler_hir::{
-        ExprBody, FunctionBody, HirSourceMap, ItemId, Stmt, SymbolTable, file_items, function_body,
-        function_signature, symbol_table,
+        ExprBody, FunctionBody, HirSourceMap, ItemId, LetOrigin, Stmt, SymbolTable, file_items,
+        function_body, function_signature, symbol_table,
     },
     baml_compiler_tir::{self, InferenceResult, Ty},
     baml_workspace::Project,
@@ -285,6 +285,7 @@ impl HintCollector for LetTypeAnnotations {
                 pattern,
                 type_annotation,
                 initializer,
+                origin,
                 ..
             } = stmt
             else {
@@ -324,7 +325,13 @@ impl HintCollector for LetTypeAnnotations {
                 };
 
             // Concatenate label parts into the text to insert on double-click.
-            let insert_text: String = label.iter().map(|p| p.value.as_str()).collect();
+            // Only allow this if the let statement was written in the source code.
+            // This is to prevent suggesting inserting type annotations in enhanced for loops.
+            let insert_text: Option<String> = if *origin == LetOrigin::Source {
+                Some(label.iter().map(|p| p.value.as_str()).collect())
+            } else {
+                None
+            };
 
             hints.push(InlayHint {
                 offset,
@@ -332,10 +339,12 @@ impl HintCollector for LetTypeAnnotations {
                 kind: Some(InlayHintKind::Type),
                 padding_left: false,
                 padding_right,
-                text_edits: vec![InlayHintTextEdit {
-                    offset,
-                    new_text: insert_text,
-                }],
+                text_edits: insert_text.map_or(Vec::new(), |text| {
+                    vec![InlayHintTextEdit {
+                        offset,
+                        new_text: text,
+                    }]
+                }),
             });
         }
     }

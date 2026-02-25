@@ -3486,6 +3486,7 @@ fn check_stmt_with_return(
             type_annotation,
             initializer,
             is_watched,
+            ..
         } => {
             let ty = if let Some(init) = initializer {
                 // If there's a type annotation, use check_expr for bidirectional typing
