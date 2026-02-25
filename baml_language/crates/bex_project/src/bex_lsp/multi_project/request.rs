@@ -186,8 +186,8 @@ impl BexLspRequest for BexMulitProject {
             return Ok(None);
         };
 
+        // Get hints and convert to LSP types
         let hints = baml_lsp_actions::inlay_hints::inlay_hints(lsp_db, source_file, baml_project);
-
         let text = source_file.text(lsp_db);
         let lsp_hints = hints
             .into_iter()
@@ -205,9 +205,10 @@ impl BexLspRequest for BexMulitProject {
                                     baml_project::position::span_to_lsp_range(target_text, &t.span);
                                 Some(lsp_types::Location { uri, range })
                             });
+
                             lsp_types::InlayHintLabelPart {
                                 value: part.value,
-                                tooltip: None,
+                                tooltip: None, // Nothing here at least for now
                                 location,
                                 command: None,
                             }
@@ -236,14 +237,14 @@ impl BexLspRequest for BexMulitProject {
                         Some(
                             h.text_edits
                                 .iter()
-                                .map(|te| {
+                                .map(|edit| {
                                     let pos = baml_project::position::offset_to_lsp_position(
                                         text,
-                                        usize::from(te.offset),
+                                        usize::from(edit.offset),
                                     );
                                     lsp_types::TextEdit {
                                         range: lsp_types::Range::new(pos, pos),
-                                        new_text: te.new_text.clone(),
+                                        new_text: edit.new_text.clone(),
                                     }
                                 })
                                 .collect(),

@@ -72,8 +72,7 @@ pub struct HintContext<'a> {
 
 /// A hint producer that runs once per **function body**.
 ///
-/// Implement this to add hints that depend on inferred types or
-/// the expression/statement structure inside a function.
+/// Implement this to add hints for the contents of a function body.
 pub trait HintCollector {
     fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>);
 }
@@ -238,8 +237,6 @@ impl HintCollector for CallArgNames {
             }
 
             // Get parameter names from the callee's inferred function type.
-            // This works uniformly for named functions, local variables holding
-            // functions, and any other expression with a function type.
             let Some(Ty::Function { params, .. }) = ctx.inference.expr_types.get(callee) else {
                 continue;
             };
@@ -269,6 +266,8 @@ impl HintCollector for CallArgNames {
 ///
 /// The hint is suppressed when the binding already carries an explicit type
 /// annotation, or when the inferred type is `unknown` / `error`.
+/// This works for let statements in both types of for loops as well, with extra
+/// logic to prevent suggesting inserting type annotations in for-in loops.
 pub struct LetTypeAnnotations;
 impl HintCollector for LetTypeAnnotations {
     fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
@@ -289,14 +288,17 @@ impl HintCollector for LetTypeAnnotations {
                 continue;
             }
 
+            // Skip if there is no initializer.
             let Some(init_id) = initializer else {
                 continue;
             };
 
+            // Get the inferred type of the initializer.
             let Some(raw_ty) = ctx.inference.expr_types.get(init_id) else {
                 continue;
             };
 
+            // Pretty print the type with goto definition support.
             let Some(ty) = display_ty(raw_ty) else {
                 continue;
             };
@@ -307,18 +309,17 @@ impl HintCollector for LetTypeAnnotations {
 
             // Place the hint at the end of the bound pattern, falling back to
             // the statement start when no pattern span is available.
-            let (offset, padding_right) =
-                if let Some(pat_span) = ctx.source_map.pattern_span(*pattern) {
-                    (pat_span.range.end(), true)
-                } else if let Some(stmt_span) = ctx.source_map.stmt_span(stmt_id) {
-                    (stmt_span.range.start(), false)
-                } else {
-                    continue;
-                };
+            let offset = if let Some(pat_span) = ctx.source_map.pattern_span(*pattern) {
+                pat_span.range.end()
+            } else if let Some(stmt_span) = ctx.source_map.stmt_span(stmt_id) {
+                stmt_span.range.start()
+            } else {
+                continue;
+            };
 
             // Concatenate label parts into the text to insert on double-click.
             // Only allow this if the let statement was written in the source code.
-            // This is to prevent suggesting inserting type annotations in enhanced for loops.
+            // This is to prevent suggesting inserting type annotations in for-in loops.
             let insert_text: Option<String> = if *origin == LetOrigin::Source {
                 Some(label.iter().map(|p| p.value.as_str()).collect())
             } else {
@@ -330,7 +331,7 @@ impl HintCollector for LetTypeAnnotations {
                 label,
                 kind: Some(InlayHintKind::Type),
                 padding_left: false,
-                padding_right,
+                padding_right: false,
                 text_edits: insert_text.map_or(Vec::new(), |text| {
                     vec![InlayHintTextEdit {
                         offset,
@@ -347,17 +348,16 @@ impl HintCollector for LetTypeAnnotations {
 /// To add new hint categories, implement [`HintCollector`] and add to `collectors`.
 pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, _project: Project) -> Vec<InlayHint> {
     let collectors: &[&dyn HintCollector] = &[&CallArgNames, &LetTypeAnnotations];
-
     let mut hints = Vec::new();
-
     let Some(project) = db.get_project() else {
         return hints;
     };
 
+    // Collect all function bodies in the file.
     let file_items = file_items(db, file);
     let sym_table = symbol_table(db, project);
-
     for item_id in file_items.items(db) {
+        // Only collect hints for function bodies. (for now, we may expand this)
         let ItemId::Function(func_loc) = item_id else {
             continue;
         };
@@ -368,7 +368,6 @@ pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, _project: Project) ->
         };
 
         let inference = baml_compiler_tir::function_type_inference(db, *func_loc);
-
         let ctx = HintContext {
             body: expr_body,
             inference: &inference,
