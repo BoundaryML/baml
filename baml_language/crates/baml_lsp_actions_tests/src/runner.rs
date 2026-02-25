@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use baml_compiler_diagnostics::{RenderConfig, render_diagnostic};
-use baml_lsp_actions::{MarkupKind, hover::hover as lsp_ide_hover};
 use baml_lsp_actions::inlay_hints::{InlayHint, InlayHintKind, inlay_hints as lsp_inlay_hints};
+use baml_lsp_actions::{MarkupKind, hover::hover as lsp_ide_hover};
 use baml_project::ProjectDatabase;
 use text_size::TextSize;
 
@@ -190,8 +190,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     let completions_passed = completion_result.as_ref().map(|r| r.passed).unwrap_or(true);
     let inlay_hints_passed = parsed.expected_inlay_hints == actual_inlay_hints;
 
-    let passed =
-        diagnostics_passed && hovers_passed && completions_passed && inlay_hints_passed;
+    let passed = diagnostics_passed && hovers_passed && completions_passed && inlay_hints_passed;
 
     let diff = if !passed {
         Some(generate_full_diff(
@@ -301,17 +300,14 @@ fn format_inlay_hints_results(
             if let Some(target) = &part.target {
                 let target_filename = target.file_path.display();
                 // Resolve target line:col from the target file's content.
-                let (target_line, target_col) =
-                    if let Some(target_vfile) = files.get(&target.file_path.display().to_string())
-                    {
-                        offset_to_line_col(
-                            &target_vfile.content,
-                            u32::from(target.span.range.start()),
-                        )
-                    } else {
-                        // Fallback: show raw byte offset.
-                        (u32::from(target.span.range.start()) as usize, 0)
-                    };
+                let (target_line, target_col) = if let Some(target_vfile) =
+                    files.get(&target.file_path.display().to_string())
+                {
+                    offset_to_line_col(&target_vfile.content, u32::from(target.span.range.start()))
+                } else {
+                    // Fallback: show raw byte offset.
+                    (u32::from(target.span.range.start()) as usize, 0)
+                };
                 output.push_str(&format!(
                     "//   target {:?} -> {target_filename}:{target_line}:{target_col}\n",
                     part.value
@@ -321,8 +317,7 @@ fn format_inlay_hints_results(
 
         // Show text edits.
         for edit in &hint.text_edits {
-            let (edit_line, edit_col) =
-                offset_to_line_col(file_content, u32::from(edit.offset));
+            let (edit_line, edit_col) = offset_to_line_col(file_content, u32::from(edit.offset));
             output.push_str(&format!(
                 "//   edit@{edit_line}:{edit_col} {:?}\n",
                 edit.new_text

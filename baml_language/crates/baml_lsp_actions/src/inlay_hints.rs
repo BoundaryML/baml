@@ -6,7 +6,7 @@ use baml_db::{
     SourceFile,
     baml_compiler_hir::{
         ExprBody, FunctionBody, HirSourceMap, ItemId, LetOrigin, Stmt, SymbolTable, file_items,
-        function_body, function_signature, symbol_table,
+        function_body, symbol_table,
     },
     baml_compiler_tir::{self, InferenceResult, Ty},
     baml_workspace::Project,
@@ -196,7 +196,7 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 
                 if let Some(name) = &param.0 {
                     parts.push(InlayHintLabelPart {
-                        value: format!("{}: ", name),
+                        value: format!("{name}: "),
                         target: None,
                     });
                 }
@@ -254,7 +254,7 @@ impl HintCollector for CallArgNames {
 
                 hints.push(InlayHint {
                     offset: arg_span.range.start(),
-                    label: plain_label(format!("{}:", name)),
+                    label: plain_label(format!("{name}:")),
                     kind: Some(InlayHintKind::Parameter),
                     padding_left: false,
                     padding_right: true,
