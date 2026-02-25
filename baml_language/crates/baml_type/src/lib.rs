@@ -82,6 +82,10 @@ pub enum Ty {
     String,
     Bool,
     Null,
+    /// The bottom type — uninhabited.
+    /// Used in streaming type expansion. `T | never → T`.
+    /// A field whose stream type is `never` is omitted entirely.
+    Never,
     Media(MediaKind),
     Literal(Literal),
     Class(TypeName),
@@ -139,13 +143,14 @@ pub enum Ty {
     BuiltinUnknown,
 }
 
-// NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
-// - Unknown/Error are TIR-only error recovery types. They are mapped to `Null` during
-//   TIR→baml_type conversion in `convert_tir_ty`. All real type checking happens in TIR
-//   (which keeps its own Ty), so VIR+ stages don't need these for error recovery.
-// - Never is a VIR-only bottom type for diverging expressions (return/break/continue).
-//   MIR already collapsed Never→Void via control flow terminators. VIR lowering now
-//   produces `Void` directly instead of `Never`.
+// NOTE: `Unknown` and `Error` are intentionally excluded from this enum.
+// They are TIR-only error recovery types, mapped to `Null` during TIR→baml_type
+// conversion in `convert_tir_ty`. All real type checking happens in TIR (which
+// keeps its own Ty), so VIR+ stages don't need these for error recovery.
+//
+// `Never` IS included — it's the bottom type used by the streaming type system
+// (e.g., `@stream.starts_as(never)`, `@stream.type(never)`). It can appear in
+// `ClassField.field_type` at runtime.
 
 impl Ty {
     // --- Opaque type constructors ---
@@ -227,13 +232,19 @@ impl Ty {
     /// Returns true if `self` can be used where `other` is expected.
     /// Ported from VIR `ty.rs:93-140` with literal subtyping rules.
     ///
-    /// Note: Unknown/Error/Never handling is not needed here because:
+    /// Note: Unknown/Error handling is not needed here because:
     /// - Unknown/Error are mapped to Null during TIR→baml_type conversion
-    /// - Never is mapped to Void during VIR lowering
     /// - All real type checking (where those variants matter) happens in TIR
+    ///
+    /// Never IS handled: it's the bottom type, subtype of everything.
     pub fn is_subtype_of(&self, other: &Ty) -> bool {
         // Same types are subtypes
         if self == other {
+            return true;
+        }
+
+        // Never <: T (bottom type is subtype of everything)
+        if matches!(self, Ty::Never) {
             return true;
         }
 
@@ -327,6 +338,7 @@ impl Ty {
             | Ty::String
             | Ty::Bool
             | Ty::Null
+            | Ty::Never
             | Ty::Media(_)
             | Ty::Literal(_)
             | Ty::Class(_)
@@ -370,6 +382,7 @@ impl fmt::Display for Ty {
                     .collect();
                 write!(f, "({}) -> {}", param_strs.join(", "), ret)
             }
+            Ty::Never => write!(f, "never"),
             Ty::Void => write!(f, "void"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
