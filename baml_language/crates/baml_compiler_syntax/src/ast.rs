@@ -168,7 +168,7 @@ impl UnionMemberParts {
     pub fn postfix_modifiers(&self) -> Vec<TypePostFixModifier> {
         let mut mods = Vec::new();
         let mut last = None;
-        for token in self.tokens.iter() {
+        for token in &self.tokens {
             match token.kind() {
                 SyntaxKind::QUESTION => {
                     mods.push(TypePostFixModifier::Optional);
@@ -348,7 +348,7 @@ impl TypeExpr {
 
         let mut mods = Vec::new();
         let mut last = None;
-        for token in tokens.iter() {
+        for token in &tokens {
             match token {
                 SyntaxKind::QUESTION => {
                     mods.push(TypePostFixModifier::Optional);

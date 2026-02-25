@@ -328,7 +328,7 @@ impl TypeRef {
     /// Apply postfix modifiers (`[]` and `?`) to a base type, innermost first.
     fn apply_modifiers(base: Self, modifiers: &[TypePostFixModifier]) -> Self {
         let mut result = base;
-        for modifier in modifiers.iter() {
+        for modifier in modifiers {
             match modifier {
                 TypePostFixModifier::Optional => {
                     result = TypeRef::Optional(Box::new(result));
