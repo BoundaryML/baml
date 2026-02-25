@@ -208,6 +208,14 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
                         target: None,
                     });
                 }
+
+                if let Some(name) = &param.0 {
+                    parts.push(InlayHintLabelPart {
+                        value: format!("{}: ", name),
+                        target: None,
+                    });
+                }
+
                 parts.extend(ty_to_label_parts(db, &param.1));
             }
             parts.push(InlayHintLabelPart {
@@ -223,6 +231,7 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 
             parts
         }
+
         // All other types: plain text, no link.
         other => plain_label(other.to_string()),
     }
