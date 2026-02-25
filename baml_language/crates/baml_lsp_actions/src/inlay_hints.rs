@@ -8,7 +8,7 @@ use baml_db::{
         ExprBody, FunctionBody, HirSourceMap, ItemId, Stmt, SymbolTable, file_items, function_body,
         function_signature, symbol_table,
     },
-    baml_compiler_tir::{self, InferenceResult, ResolvedValue, Ty},
+    baml_compiler_tir::{self, InferenceResult, Ty},
     baml_workspace::Project,
 };
 use baml_project::ProjectDatabase;
@@ -107,9 +107,10 @@ fn plain_label(text: impl Into<String>) -> Vec<InlayHintLabelPart> {
     }]
 }
 
-/// Convert a [`Ty`] into label parts, wrapping in parentheses if it's a union.
-fn wrap_if_union(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
-    if matches!(ty, Ty::Union(_)) {
+/// Convert a [`Ty`] into label parts, wrapping in parentheses if it's a
+/// compound type (union or function) that would be ambiguous without them.
+fn wrap_if_compound(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
+    if matches!(ty, Ty::Union(_) | Ty::Function { .. }) {
         let mut parts = vec![InlayHintLabelPart {
             value: "(".into(),
             target: None,
@@ -136,19 +137,21 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
             }]
         }
         Ty::Optional(inner) => {
-            let mut parts = wrap_if_union(db, inner);
+            let mut parts = wrap_if_compound(db, inner);
             parts.push(InlayHintLabelPart {
                 value: "?".into(),
                 target: None,
             });
+
             parts
         }
         Ty::List(inner) => {
-            let mut parts = wrap_if_union(db, inner);
+            let mut parts = wrap_if_compound(db, inner);
             parts.push(InlayHintLabelPart {
                 value: "[]".into(),
                 target: None,
             });
+
             parts
         }
         Ty::Map { key, value } => {
@@ -166,6 +169,7 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
                 value: ">".into(),
                 target: None,
             });
+
             parts
         }
         Ty::Union(types) => {
@@ -179,6 +183,34 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
                 }
                 parts.extend(ty_to_label_parts(db, t));
             }
+
+            parts
+        }
+        Ty::Function { params, ret } => {
+            let mut parts = vec![InlayHintLabelPart {
+                value: "(".into(),
+                target: None,
+            }];
+            for (i, param) in params.iter().enumerate() {
+                if i > 0 {
+                    parts.push(InlayHintLabelPart {
+                        value: ", ".into(),
+                        target: None,
+                    });
+                }
+                parts.extend(ty_to_label_parts(db, &param.1));
+            }
+            parts.push(InlayHintLabelPart {
+                value: ")".into(),
+                target: None,
+            });
+
+            parts.push(InlayHintLabelPart {
+                value: " -> ".into(),
+                target: None,
+            });
+            parts.extend(ty_to_label_parts(db, ret));
+
             parts
         }
         // All other types: plain text, no link.
@@ -191,7 +223,7 @@ pub struct CallArgNames;
 
 impl HintCollector for CallArgNames {
     fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
-        use baml_db::baml_compiler_hir::{Definition, Expr};
+        use baml_db::baml_compiler_hir::Expr;
 
         for (_, expr) in ctx.body.exprs.iter() {
             let Expr::Call { callee, args } = expr else {
@@ -202,21 +234,15 @@ impl HintCollector for CallArgNames {
                 continue;
             }
 
-            let Some(ResolvedValue::Function(fqn)) = ctx.inference.expr_resolutions.get(callee)
-            else {
+            // Get parameter names from the callee's inferred function type.
+            // This works uniformly for named functions, local variables holding
+            // functions, and any other expression with a function type.
+            let Some(Ty::Function { params, .. }) = ctx.inference.expr_types.get(callee) else {
                 continue;
             };
-
-            let Some(Definition::Function(callee_func_loc)) =
-                ctx.sym_table.lookup_value(ctx.db, fqn)
-            else {
-                continue;
-            };
-
-            let sig = function_signature(ctx.db, callee_func_loc);
 
             for (i, arg_id) in args.iter().enumerate() {
-                let Some(param) = sig.params.get(i) else {
+                let Some((Some(name), _)) = params.get(i) else {
                     break;
                 };
                 let Some(arg_span) = ctx.source_map.expr_span(*arg_id) else {
@@ -225,7 +251,7 @@ impl HintCollector for CallArgNames {
 
                 hints.push(InlayHint {
                     offset: arg_span.range.start(),
-                    label: plain_label(format!("{}:", param.name)),
+                    label: plain_label(format!("{}:", name)),
                     kind: Some(InlayHintKind::Parameter),
                     padding_left: false,
                     padding_right: true,
