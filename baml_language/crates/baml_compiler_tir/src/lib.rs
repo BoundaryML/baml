@@ -476,6 +476,12 @@ pub fn class_names(db: &dyn Db, project: Project) -> ClassNamesSet<'_> {
         }
     }
 
+    // Add stream.* class names from stream expansion
+    let stream_names = baml_compiler_hir::stream_expand::stream_type_names(db, project);
+    for (name, qn) in stream_names.class_names(db) {
+        names.insert(name.clone(), qn.clone());
+    }
+
     ClassNamesSet::new(db, names)
 }
 
@@ -521,6 +527,12 @@ pub fn type_alias_names(db: &dyn Db, project: Project) -> TypeAliasNamesSet<'_> 
             let alias_data = &item_tree[alias_loc.id(db)];
             names.insert(alias_data.name.clone());
         }
+    }
+
+    // Add stream.* type alias names from stream expansion
+    let stream_names = baml_compiler_hir::stream_expand::stream_type_names(db, project);
+    for name in stream_names.type_alias_names(db) {
+        names.insert(name.clone());
     }
 
     TypeAliasNamesSet::new(db, names)

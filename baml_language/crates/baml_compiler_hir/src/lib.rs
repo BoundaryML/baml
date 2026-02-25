@@ -38,6 +38,7 @@ pub mod pretty;
 pub mod reserved_names;
 mod signature;
 mod source_map;
+pub mod stream_expand;
 pub mod symbol_table;
 mod test;
 mod type_ref;

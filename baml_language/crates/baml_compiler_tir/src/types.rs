@@ -44,6 +44,10 @@ pub enum Ty {
     String,
     Bool,
     Null,
+    /// Bottom type: no values exist (uninhabited).
+    /// Identity element of union (`T | never → T`).
+    /// Used in streaming for absent fields.
+    Never,
 
     // Media types
     Media(baml_base::MediaKind),
@@ -173,6 +177,8 @@ impl Ty {
         match self {
             // Error recovery: don't emit additional errors when type inference failed
             Ty::Unknown | Ty::Error => true,
+            // Bottom type: no values exist
+            Ty::Never => true,
             // Empty union has no members, therefore no possible values
             Ty::Union(types) => types.is_empty(),
             // All other types are inhabited
@@ -243,6 +249,7 @@ impl fmt::Display for Ty {
             Ty::String => write!(f, "string"),
             Ty::Bool => write!(f, "bool"),
             Ty::Null => write!(f, "null"),
+            Ty::Never => write!(f, "never"),
             Ty::Media(kind) => write!(f, "{kind}"),
             Ty::Literal(val) => write!(f, "{val}"),
             Ty::Class(fqn) => write!(f, "{fqn}"),
@@ -290,6 +297,7 @@ mod tests {
     #[test]
     fn test_display() {
         assert_eq!(Ty::Int.to_string(), "int");
+        assert_eq!(Ty::Never.to_string(), "never");
         assert_eq!(Ty::Optional(Box::new(Ty::String)).to_string(), "string?");
         assert_eq!(Ty::List(Box::new(Ty::Int)).to_string(), "int[]");
         assert_eq!(
@@ -303,6 +311,9 @@ mod tests {
         // Unknown and Error are treated as uninhabited for error recovery
         assert!(Ty::Unknown.is_uninhabited());
         assert!(Ty::Error.is_uninhabited());
+
+        // Never is uninhabited (bottom type)
+        assert!(Ty::Never.is_uninhabited());
 
         // Empty union is uninhabited (no possible values)
         assert!(Ty::Union(vec![]).is_uninhabited());

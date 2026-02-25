@@ -82,6 +82,11 @@ pub enum Ty {
     String,
     Bool,
     Null,
+    /// Bottom type: no values exist (uninhabited). Identity element of union.
+    /// Used in streaming: fields whose stream type simplifies to `never` are
+    /// omitted from the `stream.*` class. Must survive to VIR/codegen so
+    /// downstream consumers can act on it.
+    Never,
     Media(MediaKind),
     Literal(Literal),
     Class(TypeName),
@@ -139,13 +144,13 @@ pub enum Ty {
     BuiltinUnknown,
 }
 
-// NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
-// - Unknown/Error are TIR-only error recovery types. They are mapped to `Null` during
-//   TIR→baml_type conversion in `convert_tir_ty`. All real type checking happens in TIR
-//   (which keeps its own Ty), so VIR+ stages don't need these for error recovery.
-// - Never is a VIR-only bottom type for diverging expressions (return/break/continue).
-//   MIR already collapsed Never→Void via control flow terminators. VIR lowering now
-//   produces `Void` directly instead of `Never`.
+// NOTE: `Unknown` and `Error` are intentionally excluded from this enum.
+// They are TIR-only error recovery types mapped to `Null` in convert_tir_ty.
+//
+// `Never` IS included because it appears in user-visible stream.* types
+// (e.g., a field with `@stream.type(never)` where stream type simplifies
+// to `never`, causing the field to be omitted from the stream.* class).
+// It must survive to VIR/codegen so downstream consumers can act on it.
 
 impl Ty {
     // --- Opaque type constructors ---
@@ -227,13 +232,14 @@ impl Ty {
     /// Returns true if `self` can be used where `other` is expected.
     /// Ported from VIR `ty.rs:93-140` with literal subtyping rules.
     ///
-    /// Note: Unknown/Error/Never handling is not needed here because:
-    /// - Unknown/Error are mapped to Null during TIR→baml_type conversion
-    /// - Never is mapped to Void during VIR lowering
-    /// - All real type checking (where those variants matter) happens in TIR
     pub fn is_subtype_of(&self, other: &Ty) -> bool {
         // Same types are subtypes
         if self == other {
+            return true;
+        }
+
+        // Bottom type: Never <: T for all T
+        if matches!(self, Ty::Never) {
             return true;
         }
 
@@ -283,7 +289,8 @@ impl Ty {
     pub fn is_compiler_only(&self) -> bool {
         matches!(
             self,
-            Ty::TypeAlias(_)
+            Ty::Never
+                | Ty::TypeAlias(_)
                 | Ty::Function { .. }
                 | Ty::Void
                 | Ty::WatchAccessor(_)
@@ -295,6 +302,7 @@ impl Ty {
     /// variants are found.
     pub fn validate_runtime(&self) -> Result<(), String> {
         match self {
+            Ty::Never => Err("Never type should not reach runtime".to_string()),
             Ty::TypeAlias(tn) => Err(format!(
                 "TypeAlias '{}' should be expanded before reaching runtime",
                 tn.display_name
@@ -344,6 +352,7 @@ impl fmt::Display for Ty {
             Ty::String => write!(f, "string"),
             Ty::Bool => write!(f, "bool"),
             Ty::Null => write!(f, "null"),
+            Ty::Never => write!(f, "never"),
             Ty::Media(kind) => write!(f, "{kind}"),
             Ty::Literal(lit) => match lit {
                 Literal::Int(i) => write!(f, "{i}"),
@@ -490,10 +499,46 @@ mod tests {
     #[test]
     fn test_validate_runtime_rejects_compiler_types() {
         assert!(Ty::Void.validate_runtime().is_err());
+        assert!(Ty::Never.validate_runtime().is_err());
         assert!(
             Ty::TypeAlias(TypeName::local(Name::new("MyAlias")))
                 .validate_runtime()
                 .is_err()
         );
+    }
+
+    #[test]
+    fn test_never_display() {
+        assert_eq!(Ty::Never.to_string(), "never");
+    }
+
+    #[test]
+    fn test_never_subtype_of_everything() {
+        // Never <: T for all T (bottom type rule)
+        assert!(Ty::Never.is_subtype_of(&Ty::Int));
+        assert!(Ty::Never.is_subtype_of(&Ty::String));
+        assert!(Ty::Never.is_subtype_of(&Ty::Bool));
+        assert!(Ty::Never.is_subtype_of(&Ty::Float));
+        assert!(Ty::Never.is_subtype_of(&Ty::Null));
+        assert!(Ty::Never.is_subtype_of(&Ty::List(Box::new(Ty::Int))));
+        assert!(Ty::Never.is_subtype_of(&Ty::Optional(Box::new(Ty::String))));
+    }
+
+    #[test]
+    fn test_nothing_subtype_of_never() {
+        // T NOT <: Never for inhabited T
+        assert!(!Ty::Int.is_subtype_of(&Ty::Never));
+        assert!(!Ty::String.is_subtype_of(&Ty::Never));
+        assert!(!Ty::Null.is_subtype_of(&Ty::Never));
+    }
+
+    #[test]
+    fn test_never_is_compiler_only() {
+        assert!(Ty::Never.is_compiler_only());
+    }
+
+    #[test]
+    fn test_never_is_not_primitive() {
+        assert!(!Ty::Never.is_primitive());
     }
 }

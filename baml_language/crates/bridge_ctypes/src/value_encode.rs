@@ -153,7 +153,8 @@ fn ty_to_field_type(ty: &Ty) -> CffiFieldTypeHolder {
         Ty::Opaque(tn) => {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
-        Ty::TypeAlias(_)
+        Ty::Never
+        | Ty::TypeAlias(_)
         | Ty::Function { .. }
         | Ty::Void
         | Ty::WatchAccessor(_)

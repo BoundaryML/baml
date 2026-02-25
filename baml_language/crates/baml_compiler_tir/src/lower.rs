@@ -118,6 +118,7 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::String => Ty::String,
         TypeRef::Bool => Ty::Bool,
         TypeRef::Null => Ty::Null,
+        TypeRef::Never => Ty::Never,
 
         // Media types
         TypeRef::Media(kind) => Ty::Media(*kind),

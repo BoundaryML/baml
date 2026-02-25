@@ -74,6 +74,7 @@ pub fn convert_tir_ty(
         baml_compiler_tir::Ty::String => Ok(Ty::String),
         baml_compiler_tir::Ty::Bool => Ok(Ty::Bool),
         baml_compiler_tir::Ty::Null => Ok(Ty::Null),
+        baml_compiler_tir::Ty::Never => Ok(Ty::Never),
         baml_compiler_tir::Ty::Media(kind) => Ok(Ty::Media(*kind)),
 
         baml_compiler_tir::Ty::Literal(lit) => Ok(Ty::Literal(convert_literal(lit))),
@@ -161,9 +162,8 @@ pub fn convert_tir_ty(
 /// Called after `convert_tir_ty` in the schema extraction path.
 pub fn sanitize_for_runtime(ty: Ty) -> Result<Ty, String> {
     match ty {
-        // Compiler-only → Null (preserves backwards compatibility)
-        // Note: Unknown/Error/Never don't exist in baml_type::Ty — they were
-        // already mapped to Null/Void during convert_tir_ty.
+        // Compiler-only → sanitize for runtime
+        Ty::Never => Err("Never type should not reach runtime".to_string()),
         Ty::Void => Ok(Ty::Null),
         Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
         Ty::Function { params, ret } => Ok(Ty::Function {

@@ -402,7 +402,7 @@ impl<'a> ExhaustivenessChecker<'a> {
             Ty::Map { .. } => vec![ValueSet::OfType(Name::new("<map>"))],
 
             // Special types
-            Ty::Unknown | Ty::Error | Ty::Void | Ty::BuiltinUnknown => Vec::new(),
+            Ty::Never | Ty::Unknown | Ty::Error | Ty::Void | Ty::BuiltinUnknown => Vec::new(),
             Ty::Function { .. } => vec![ValueSet::OfType(Name::new("<function>"))],
             Ty::WatchAccessor(_) => vec![ValueSet::OfType(Name::new("<$watch>"))],
         }

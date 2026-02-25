@@ -61,6 +61,7 @@ enum StructuralTy {
     },
     TyVar(Name),
     // Special
+    Never,
     Unknown,
     Error,
     Void,
@@ -93,6 +94,11 @@ impl StructuralTy {
         if matches!(self, StructuralTy::Unknown | StructuralTy::Error)
             || matches!(other, StructuralTy::Unknown | StructuralTy::Error)
         {
+            return true;
+        }
+
+        // Bottom type: Never <: T for all T
+        if matches!(self, StructuralTy::Never) {
             return true;
         }
 
@@ -287,6 +293,7 @@ fn is_valid_map_key_type(ty: &Ty, aliases: &HashMap<Name, Ty>) -> bool {
             StructuralTy::Function { .. } => false,
             StructuralTy::Mu { .. } => false,
             StructuralTy::TyVar(_) => false,
+            StructuralTy::Never => false,
             StructuralTy::Unknown => false,
             StructuralTy::Void => false,
             StructuralTy::Resource => false,
@@ -363,6 +370,7 @@ fn normalize_impl(
         Ty::Bool => StructuralTy::Bool,
         Ty::Null => StructuralTy::Null,
         Ty::Media(kind) => StructuralTy::Media(*kind),
+        Ty::Never => StructuralTy::Never,
         Ty::Unknown => StructuralTy::Unknown,
         Ty::Error => StructuralTy::Error,
         Ty::Void => StructuralTy::Void,
@@ -789,5 +797,64 @@ mod tests {
             &higher_order_float,
             &aliases
         ));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NEVER TYPE TESTS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_never_subtype_of_everything() {
+        let aliases = HashMap::new();
+
+        // Never <: T for all T
+        assert!(is_subtype_of(&Ty::Never, &Ty::Int, &aliases));
+        assert!(is_subtype_of(&Ty::Never, &Ty::String, &aliases));
+        assert!(is_subtype_of(&Ty::Never, &Ty::Bool, &aliases));
+        assert!(is_subtype_of(&Ty::Never, &Ty::Float, &aliases));
+        assert!(is_subtype_of(&Ty::Never, &Ty::Null, &aliases));
+        assert!(is_subtype_of(
+            &Ty::Never,
+            &Ty::List(Box::new(Ty::Int)),
+            &aliases
+        ));
+        assert!(is_subtype_of(
+            &Ty::Never,
+            &Ty::Optional(Box::new(Ty::String)),
+            &aliases
+        ));
+        assert!(is_subtype_of(
+            &Ty::Never,
+            &Ty::Union(vec![Ty::Int, Ty::String]),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_nothing_subtype_of_never() {
+        let aliases = HashMap::new();
+
+        // T NOT <: Never (for T ≠ Never)
+        assert!(!is_subtype_of(&Ty::Int, &Ty::Never, &aliases));
+        assert!(!is_subtype_of(&Ty::String, &Ty::Never, &aliases));
+        assert!(!is_subtype_of(&Ty::Null, &Ty::Never, &aliases));
+    }
+
+    #[test]
+    fn test_never_subtype_of_never() {
+        let aliases = HashMap::new();
+
+        // Never <: Never (reflexivity + bottom type rule)
+        assert!(is_subtype_of(&Ty::Never, &Ty::Never, &aliases));
+    }
+
+    #[test]
+    fn test_never_in_union_subtyping() {
+        let aliases = HashMap::new();
+
+        // Union(Never, String) <: String
+        // Because Never <: String and String <: String
+        let union_with_never = Ty::Union(vec![Ty::Never, Ty::String]);
+        assert!(is_subtype_of(&union_with_never, &Ty::String, &aliases));
     }
 }

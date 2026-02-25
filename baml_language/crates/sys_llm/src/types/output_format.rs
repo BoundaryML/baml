@@ -200,7 +200,8 @@ impl OutputFormatContent {
             Ty::Opaque(tn) => Err(RenderError::UnsupportedType(tn.to_string())),
 
             // Compiler-only variants should never reach runtime
-            Ty::TypeAlias(_)
+            Ty::Never
+            | Ty::TypeAlias(_)
             | Ty::Function { .. }
             | Ty::Void
             | Ty::WatchAccessor(_)

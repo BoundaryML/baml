@@ -50,6 +50,10 @@ pub enum TypeRef {
     String,
     Bool,
     Null,
+    /// Bottom type: no values exist. Identity element of union (`T | never → T`).
+    /// Used in streaming: `@stream.starts_as(never)` means the field is absent until
+    /// its streaming type starts arriving.
+    Never,
 
     Media(baml_base::MediaKind),
 
@@ -397,6 +401,7 @@ impl TypeRef {
             "string" => TypeRef::String,
             "bool" => TypeRef::Bool,
             "null" => TypeRef::Null,
+            "never" => TypeRef::Never,
             "unknown" => TypeRef::BuiltinUnknown,
             "type" => TypeRef::Type,
             "image" => TypeRef::Media(baml_base::MediaKind::Image),
