@@ -205,7 +205,7 @@ impl BexLspRequest for BexMulitProject {
         );
         let lsp_hints = hints
             .into_iter()
-            .filter(|h| h.offset >= range_start && h.offset <= range_end) // Constrict to the requested range
+            .filter(|h| h.offset >= range_start && h.offset < range_end) // Constrict to the requested range
             .map(|h| {
                 let label = lsp_types::InlayHintLabel::LabelParts(
                     h.label
