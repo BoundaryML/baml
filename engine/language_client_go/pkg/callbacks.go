@@ -294,6 +294,7 @@ func create_unique_id_for_object(ctx context.Context, runtime unsafe.Pointer) (u
 func safeSend(ch chan ResultCallback, res ResultCallback) (sent bool) {
 	defer func() {
 		if r := recover(); r != nil {
+			callbackLog("[CLIENT_GO_CALLBACK_PANIC] safeSend panic=%v", r)
 			sent = false
 		}
 	}()
@@ -304,8 +305,22 @@ func safeSend(ch chan ResultCallback, res ResultCallback) (sent bool) {
 // safeClose closes a callback channel, recovering from panic if it has
 // already been closed by a concurrent callback.
 func safeClose(ch chan ResultCallback) {
-	defer func() { recover() }()
+	defer func() {
+		if r := recover(); r != nil {
+			callbackLog("[CLIENT_GO_CALLBACK_PANIC] safeClose panic=%v", r)
+		}
+	}()
 	close(ch)
+}
+
+// cleanupCallback safely closes the channel and removes the callback entry.
+// Used by runtime.go when a C FFI call fails synchronously — the Rust side
+// won't invoke error_callback/trigger_callback, so we must clean up ourselves.
+func cleanupCallback(id uint32, ch chan ResultCallback) {
+	safeClose(ch)
+	callbackMutex.Lock()
+	defer callbackMutex.Unlock()
+	deleteCallback(id)
 }
 
 // Helper to log callback removal

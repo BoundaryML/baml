@@ -92,7 +92,7 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 
 	err := baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		safeClose(callback)
+		cleanupCallback(callback_id, callback)
 		return nil, err
 	}
 
@@ -105,7 +105,7 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 
 	err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		safeClose(callback)
+		cleanupCallback(callback_id, callback)
 		return nil, err
 	}
 
@@ -151,7 +151,7 @@ func (r *BamlRuntime) BuildRequest(ctx context.Context, functionName string, enc
 
 	err := baml_go.BuildRequestFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		safeClose(callback)
+		cleanupCallback(callback_id, callback)
 		return nil, err
 	}
 
@@ -195,7 +195,7 @@ func (r *BamlRuntime) CallFunctionParse(ctx context.Context, functionName string
 
 	err := baml_go.CallFunctionParseFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		safeClose(callback)
+		cleanupCallback(callback_id, callback)
 		return nil, err
 	}
 
