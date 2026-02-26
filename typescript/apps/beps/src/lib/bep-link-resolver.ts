@@ -14,6 +14,7 @@ export interface ResolvedBepLink {
 
 const EXTERNAL_PROTOCOL_PATTERN =
   /^(https?:\/\/|mailto:|tel:|sms:|data:|ftp:\/\/|\/\/)/i;
+const UNSAFE_PROTOCOL_PATTERN = /^(javascript:|vbscript:)/i;
 
 function isExternalHref(href: string): boolean {
   return EXTERNAL_PROTOCOL_PATTERN.test(href);
@@ -33,20 +34,33 @@ function normalizePath(path: string): string {
 }
 
 function extractPageSlug(path: string): string | null {
+  const safeDecode = (value: string): string | null => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return null;
+    }
+  };
+
   const cleaned = path.trim().replace(/^\.\/+/, "").replace(/^\/+/, "");
   const lower = cleaned.toLowerCase();
 
   const pagesPath = lower.match(/^pages\/([^/]+)\.md$/i);
-  if (pagesPath?.[1]) return decodeURIComponent(pagesPath[1]).toLowerCase();
+  if (pagesPath?.[1]) {
+    const decoded = safeDecode(pagesPath[1]);
+    return decoded ? decoded.toLowerCase() : null;
+  }
 
   const parentPagesPath = lower.match(/^\.\.\/pages\/([^/]+)\.md$/i);
   if (parentPagesPath?.[1]) {
-    return decodeURIComponent(parentPagesPath[1]).toLowerCase();
+    const decoded = safeDecode(parentPagesPath[1]);
+    return decoded ? decoded.toLowerCase() : null;
   }
 
   const directFile = lower.match(/^([^/]+)\.md$/i);
   if (directFile?.[1] && directFile[1] !== "readme") {
-    return decodeURIComponent(directFile[1]).toLowerCase();
+    const decoded = safeDecode(directFile[1]);
+    return decoded ? decoded.toLowerCase() : null;
   }
 
   return null;
@@ -54,7 +68,7 @@ function extractPageSlug(path: string): string | null {
 
 function isReadmePath(path: string): boolean {
   const cleaned = path.trim().replace(/^\.\/+/, "").replace(/^\/+/, "");
-  return /^readme\.md$/i.test(cleaned);
+  return /^(\.\.\/)?readme\.md$/i.test(cleaned);
 }
 
 export function resolveBepLink(
@@ -63,6 +77,10 @@ export function resolveBepLink(
 ): ResolvedBepLink {
   if (!href) {
     return { href: "", isExternal: false, isInternalBepLink: false };
+  }
+
+  if (UNSAFE_PROTOCOL_PATTERN.test(href.trim())) {
+    return { href: "#", isExternal: false, isInternalBepLink: false };
   }
 
   if (isExternalHref(href)) {
