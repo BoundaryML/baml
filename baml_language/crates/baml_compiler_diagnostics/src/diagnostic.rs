@@ -159,6 +159,9 @@ pub enum DiagnosticId {
     JinjaInvalidSyntax,
     JinjaInvalidTest,
 
+    // Catch binding errors (E0093)
+    InvalidCatchBindingType,
+
     // VIR lowering errors (E0089)
     LoweringError,
 }
@@ -275,6 +278,9 @@ impl DiagnosticId {
             DiagnosticId::JinjaUnsupportedFeature => "E0085",
             DiagnosticId::JinjaInvalidSyntax => "E0086",
             DiagnosticId::JinjaInvalidTest => "E0087",
+
+            // Catch binding errors
+            DiagnosticId::InvalidCatchBindingType => "E0093",
 
             // VIR lowering errors
             DiagnosticId::LoweringError => "E0089",

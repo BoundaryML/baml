@@ -29,23 +29,23 @@ function SingleCatchTyped(x: int) -> string {
 }
 
 // ============================================================================
-// CATCH_ALL WITH FALLBACK
+// CATCH WITH FALLBACK
 // ============================================================================
 
-// catch_all adds an implicit rethrow for unmatched errors
-function CatchAllWithFallback(x: int) -> string {
-    MayFail(x) catch_all (e) {
+// Additional catch clause for fallback behavior
+function CatchWithFallback(x: int) -> string {
+    MayFail(x) catch (e) {
         _: string => "caught string"
     }
 }
 
 // ============================================================================
-// CATCH_ALL_PANICS
+// CATCH WITH TYPED ARM
 // ============================================================================
 
-// catch_all_panics catches panics that would normally propagate
-function CatchAllPanics(x: int) -> string {
-    MayFail(x) catch_all_panics (e) {
+// Catch with typed arm pattern
+function CatchWithTypedArm(x: int) -> string {
+    MayFail(x) catch (e) {
         _: string => "caught string"
     }
 }

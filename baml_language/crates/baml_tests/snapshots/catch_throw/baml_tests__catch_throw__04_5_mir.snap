@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
-fn CatchAllPanics(x: int) -> string {
+fn CatchWithTypedArm(x: int) -> string {
     // Locals:
     let _0: string // return
     let _1: int // x // param
@@ -383,7 +383,7 @@ fn NestedCatch(x: int) -> string {
     }
 }
 
-fn CatchAllWithFallback(x: int) -> string {
+fn CatchWithFallback(x: int) -> string {
     // Locals:
     let _0: string // return
     let _1: int // x // param

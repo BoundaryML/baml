@@ -1444,7 +1444,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Emit a `PushUnwind` instruction for a MIR unwind edge.
     fn emit_push_unwind_handler(&mut self, unwind_block: BlockId) {
-        let error_local = self.infer_unwind_error_local(unwind_block);
+        let error_local = self.resolve_unwind_error_local(unwind_block);
         let error_slot = self.local_slot_or_panic(error_local, "PUSH_UNWIND error local");
         let target = self.resolve_pending_target(unwind_block);
         let inst = self.emit(Instruction::PushUnwind {
@@ -1458,12 +1458,21 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         });
     }
 
-    /// Infer the catch error local for a MIR unwind target block.
+    /// Look up the error local for a catch handler block.
     ///
-    /// Lowering guarantees that catch handler blocks read the synthetic
-    /// error local before that local is ever defined in MIR. We prefer locals
-    /// with no definition (excluding parameters), and fall back to the first
-    /// read local if needed.
+    /// Uses the explicit metadata from MIR lowering (`unwind_error_locals`).
+    /// Falls back to heuristic inference for backwards compatibility with
+    /// MIR produced without the metadata (should not happen in practice).
+    fn resolve_unwind_error_local(&self, unwind_block: BlockId) -> Local {
+        if let Some(&local) = self.mir.unwind_error_locals.get(&unwind_block) {
+            return local;
+        }
+
+        self.infer_unwind_error_local(unwind_block)
+    }
+
+    /// Heuristic fallback: infer the catch error local by scanning handler
+    /// block reads. Prefer locals with no definition (the synthetic error slot).
     fn infer_unwind_error_local(&self, unwind_block: BlockId) -> Local {
         let block = self.mir.block(unwind_block);
         let mut reads = Vec::new();

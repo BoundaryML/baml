@@ -2611,33 +2611,34 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         Expr::Catch { base, clauses } => {
-            // Infer the base expression type first
             let base_ty = infer_expr(ctx, *base, body);
 
-            // Each catch clause introduces a scope for its binding and arms
             let mut arm_types: Vec<Ty> = Vec::new();
 
             for clause in clauses {
                 ctx.push_scope();
 
-                // Bind the catch variable as Error type (opaque for now)
                 let binding_pat = &body.patterns[clause.binding];
-                if let Pattern::Binding(name) = binding_pat {
+                validate_catch_binding_type(ctx, binding_pat, clause.binding, body);
+                let (binding_name, binding_ty) =
+                    extract_pattern_binding(ctx, binding_pat, clause.binding, &Ty::String, body);
+                if let Some(name) = binding_name {
                     if name.as_str() != "_" {
-                        ctx.define(name.clone(), Ty::String);
+                        ctx.define(name, binding_ty);
                     }
                 }
 
-                // Infer each arm's body
                 for arm_id in &clause.arms {
                     let arm = &body.catch_arms[*arm_id];
                     ctx.push_scope();
 
-                    // Bind the arm pattern if it introduces a binding
                     let arm_pat = &body.patterns[arm.pattern];
-                    if let Pattern::Binding(name) = arm_pat {
+                    validate_catch_binding_type(ctx, arm_pat, arm.pattern, body);
+                    let (arm_name, arm_binding_ty) =
+                        extract_pattern_binding(ctx, arm_pat, arm.pattern, &Ty::String, body);
+                    if let Some(name) = arm_name {
                         if name.as_str() != "_" {
-                            ctx.define(name.clone(), Ty::String);
+                            ctx.define(name, arm_binding_ty);
                         }
                     }
 
@@ -2649,17 +2650,19 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 ctx.pop_scope();
             }
 
-            // Result type is union of base type and all arm types
-            // (the catch can either succeed with base_ty or recover with an arm type)
             let mut all_types = vec![base_ty];
             all_types.extend(arm_types);
 
-            // Deduplicate
-            all_types.dedup();
-            if all_types.len() == 1 {
-                all_types.into_iter().next().unwrap()
+            let mut seen = Vec::new();
+            for ty in all_types {
+                if !seen.contains(&ty) {
+                    seen.push(ty);
+                }
+            }
+            if seen.len() == 1 {
+                seen.into_iter().next().unwrap()
             } else {
-                Ty::Union(all_types)
+                Ty::Union(seen)
             }
         }
 
@@ -2998,6 +3001,34 @@ fn extract_pattern_binding(
         // Union patterns don't introduce bindings
         // (they're unions of literals or enum variants)
         Pattern::Union(_) => (None, scrutinee_ty.clone()),
+    }
+}
+
+/// Reject `any` and `unknown` type annotations in catch binding positions.
+fn validate_catch_binding_type(
+    ctx: &mut TypeContext<'_>,
+    pattern: &Pattern,
+    pattern_id: PatId,
+    _body: &ExprBody,
+) {
+    if let Pattern::TypedBinding { ty, .. } = pattern {
+        use baml_compiler_hir::TypeRef;
+        let banned_name = match ty {
+            TypeRef::BuiltinUnknown => Some("unknown"),
+            TypeRef::Path(path)
+                if path.is_simple()
+                    && path.first_segment().map(baml_base::Name::as_str) == Some("any") =>
+            {
+                Some("any")
+            }
+            _ => None,
+        };
+        if let Some(name) = banned_name {
+            ctx.push_error(TypeError::InvalidCatchBindingType {
+                type_name: name.to_string(),
+                location: ErrorLocation::Pattern(pattern_id),
+            });
+        }
     }
 }
 

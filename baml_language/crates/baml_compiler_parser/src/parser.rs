@@ -52,8 +52,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
-        TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
-        TokenKind::CatchAllPanics => SyntaxKind::KW_CATCH_ALL_PANICS,
         TokenKind::Assert => SyntaxKind::KW_ASSERT,
 
         // Literals
@@ -2567,8 +2565,6 @@ impl<'a> Parser<'a> {
 
     fn at_catch_clause_start(&self) -> bool {
         self.at(TokenKind::Catch)
-            || self.at(TokenKind::CatchAll)
-            || self.at(TokenKind::CatchAllPanics)
     }
 
     fn parse_catch_expr(&mut self, expr_start: usize) {
@@ -4324,16 +4320,16 @@ mod tests {
     }
 
     #[test]
-    fn parses_chained_catch_clauses_with_ordered_keywords_and_typed_arms() {
+    fn parses_chained_catch_clauses_with_typed_arms() {
         let source = r#"
 function Demo() -> int {
   foo() catch (e) {
     _ => { throw e; }
-  } catch_all (e) {
+  } catch (e2) {
     _: ValidationError => { 1 }
     other => { throw other; }
-  } catch_all_panics (e) {
-    _: Panic => { throw e; }
+  } catch (e3) {
+    _: Panic => { throw e3; }
     other => 2
   }
 }
@@ -4365,14 +4361,7 @@ function Demo() -> int {
                 clause
                     .children_with_tokens()
                     .filter_map(rowan::NodeOrToken::into_token)
-                    .find(|t| {
-                        matches!(
-                            t.kind(),
-                            SyntaxKind::KW_CATCH
-                                | SyntaxKind::KW_CATCH_ALL
-                                | SyntaxKind::KW_CATCH_ALL_PANICS
-                        )
-                    })
+                    .find(|t| t.kind() == SyntaxKind::KW_CATCH)
                     .map(|t| t.kind())
             })
             .collect();
@@ -4381,8 +4370,8 @@ function Demo() -> int {
             keywords,
             vec![
                 SyntaxKind::KW_CATCH,
-                SyntaxKind::KW_CATCH_ALL,
-                SyntaxKind::KW_CATCH_ALL_PANICS,
+                SyntaxKind::KW_CATCH,
+                SyntaxKind::KW_CATCH,
             ]
         );
 

@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
-  Function CatchAllPanics:
+  Function CatchWithTypedArm:
     Return: Union([String, Literal(String("caught string"))])
   Function CatchAndRethrow:
     Return: Union([String, Unknown])
@@ -20,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
     Return: Literal(String("also ok"))
   Function NestedCatch:
     Return: Union([String, Union([String, Literal(String("inner caught"))])])
-  Function CatchAllWithFallback:
+  Function CatchWithFallback:
     Return: Union([String, Literal(String("caught string"))])
   Function MultipleCatchArms:
     Return: Union([String, Literal(String("caught string")), Literal(String("caught int"))])

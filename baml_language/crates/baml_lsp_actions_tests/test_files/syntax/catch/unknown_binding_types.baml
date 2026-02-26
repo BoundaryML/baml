@@ -12,4 +12,30 @@ function UnknownBindingTypes(x: int) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Type `any` is not allowed in catch bindings
+//    ╭─[ catch_unknown_binding_types.baml:6:21 ]
+//    │
+//  6 │   MayFail(x) catch (e: any) {
+//    │                     ───┬──  
+//    │                        ╰──── Type `any` is not allowed in catch bindings
+//    │ 
+//    │ Note: Error code: E0093
+// ───╯
+// Error: Unknown type `any`
+//    ╭─[ catch_unknown_binding_types.baml:6:21 ]
+//    │
+//  6 │   MayFail(x) catch (e: any) {
+//    │                     ───┬──  
+//    │                        ╰──── Unknown type `any`
+//    │ 
+//    │ Note: Error code: E0002
+// ───╯
+// Error: Type `unknown` is not allowed in catch bindings
+//    ╭─[ catch_unknown_binding_types.baml:8:12 ]
+//    │
+//  8 │   } catch (other: unknown) {
+//    │            ───────┬──────  
+//    │                   ╰──────── Type `unknown` is not allowed in catch bindings
+//    │ 
+//    │ Note: Error code: E0093
+// ───╯

@@ -234,4 +234,10 @@ pub enum TypeError<C: ErrorContext> {
         suggestions: Vec<String>,
         location: C::Location,
     },
+
+    /// Invalid type annotation in catch binding (e.g., `any` or `unknown`).
+    InvalidCatchBindingType {
+        type_name: String,
+        location: C::Location,
+    },
 }

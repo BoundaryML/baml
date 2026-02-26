@@ -504,6 +504,7 @@ dependencies = [
  "baml_compiler_syntax",
  "baml_workspace",
  "indexmap",
+ "la-arena",
  "minijinja",
  "rowan 0.16.1",
  "salsa",

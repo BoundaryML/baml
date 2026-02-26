@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
-function CatchAllPanics(x: int) -> string {
-    MayFail(x) catch_all_panics (e) {
+function CatchWithTypedArm(x: int) -> string {
+    MayFail(x) catch (e) {
         _: string => "caught string",
     }
 }
@@ -56,8 +56,8 @@ function NestedCatch(x: int) -> string {
     }
 }
 
-function CatchAllWithFallback(x: int) -> string {
-    MayFail(x) catch_all (e) {
+function CatchWithFallback(x: int) -> string {
+    MayFail(x) catch (e) {
         _: string => "caught string",
     }
 }

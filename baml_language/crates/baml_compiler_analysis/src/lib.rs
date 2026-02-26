@@ -94,8 +94,7 @@ impl<N: Ord + Clone, F: Ord + Clone> AnalysisGraph<N, F> {
 
     /// Register a node with no direct facts.
     ///
-    /// Equivalent to `add_node(node, BTreeSet::new())` but avoids allocating
-    /// an empty set when the caller knows there are no direct facts.
+    /// Equivalent to `add_node(node, BTreeSet::new())`.
     pub fn add_node_empty(&mut self, node: N) {
         self.direct.entry(node.clone()).or_default();
         self.edges.entry(node).or_default();
@@ -185,10 +184,7 @@ impl<N: Ord, F: Ord> AnalysisResult<N, F> {
     /// Facts that are *only* transitive — present in the transitive set but
     /// not in the direct set.  Useful for diagnostics ("inherited from callee").
     #[must_use]
-    pub fn inherited(&self, node: &N) -> Option<BTreeSet<&F>>
-    where
-        F: Clone,
-    {
+    pub fn inherited(&self, node: &N) -> Option<BTreeSet<&F>> {
         let trans = self.transitive.get(node)?;
         let direct = self.direct.get(node);
         Some(
@@ -225,17 +221,10 @@ fn propagate<N: Ord + Clone, F: Ord + Clone>(
     // Per-SCC accumulated facts, indexed by SCC index.
     let mut scc_facts: Vec<BTreeSet<F>> = Vec::with_capacity(sccs.len());
 
-    // Process SCCs in reverse order. Tarjan produces SCCs in reverse
-    // topological order (leaves first), so iterating forward means
-    // dependencies are resolved before dependents.
-    //
-    // Wait — Tarjan's standard output is actually reverse topological
-    // (i.e., sinks/leaves appear first). So we iterate forward: when
-    // we process SCC `i`, every SCC it depends on (higher index in
-    // standard Tarjan) has already been computed. Actually, this depends
-    // on the implementation — our Tarjan below produces components in
-    // reverse-topological order (leaves first), so forward iteration is
-    // correct.
+    // Our Tarjan implementation emits SCCs in reverse-topological order
+    // (leaves/sinks first). Iterating forward therefore guarantees that
+    // every successor SCC has already been resolved when we visit a
+    // given SCC.
     for (scc_idx, component) in sccs.iter().enumerate() {
         // 1. Seed with direct facts from all nodes in this SCC.
         let mut facts = BTreeSet::new();

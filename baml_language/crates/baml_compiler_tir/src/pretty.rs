@@ -871,6 +871,9 @@ pub fn short_display(error: &TirTypeError) -> String {
         TypeError::JinjaUnsupportedFeature { feature, .. } => {
             format!("{feature} are not yet supported")
         }
+        TypeError::InvalidCatchBindingType { type_name, .. } => {
+            format!("Type `{type_name}` is not allowed in catch bindings")
+        }
         TypeError::JinjaInvalidSyntax { message, .. } => message.clone(),
         TypeError::JinjaInvalidTest {
             test_name,
@@ -891,5 +894,45 @@ pub fn short_display(error: &TirTypeError) -> String {
                 )
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_arena_and_ids() -> (la_arena::Arena<Expr>, ExprId, ExprId) {
+        let mut arena = la_arena::Arena::new();
+        let id0 = arena.alloc(Expr::Missing);
+        let id1 = arena.alloc(Expr::Missing);
+        (arena, id0, id1)
+    }
+
+    #[test]
+    fn describe_catch_expr_zero_clauses() {
+        let (_arena, base_id, _) = make_arena_and_ids();
+        let expr = Expr::Catch {
+            base: base_id,
+            clauses: vec![],
+        };
+        assert_eq!(
+            TreeRenderer::describe_expr(&expr, "string"),
+            "Catch(0 clauses): string"
+        );
+    }
+
+    #[test]
+    fn describe_throw_expr() {
+        let (_arena, val_id, _) = make_arena_and_ids();
+        let expr = Expr::Throw { value: val_id };
+        assert_eq!(TreeRenderer::describe_expr(&expr, "?"), "Throw: ?");
+    }
+
+    #[test]
+    fn describe_missing_expr() {
+        assert_eq!(
+            TreeRenderer::describe_expr(&Expr::Missing, "?"),
+            "<missing>: ?"
+        );
     }
 }

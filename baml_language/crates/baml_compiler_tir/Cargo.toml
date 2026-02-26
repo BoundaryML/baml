@@ -31,3 +31,6 @@ salsa = { workspace = true }
 smol_str = { workspace = true }
 strsim = { workspace = true }
 text-size = { workspace = true }
+
+[dev-dependencies]
+la-arena = { workspace = true }

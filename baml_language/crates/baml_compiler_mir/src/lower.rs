@@ -2018,11 +2018,11 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         let clause_data: Vec<(Local, BlockId)> = clauses
             .iter()
             .map(|_clause| {
-                // Error local — will hold the error value when the handler runs.
-                // BuiltinUnknown because errors can be of any type.
                 let error_local = self.builder.temp(Ty::BuiltinUnknown);
-                // Handler entry block.
                 let handler_entry = self.builder.create_block();
+                self.builder
+                    .unwind_error_locals
+                    .insert(handler_entry, error_local);
                 (error_local, handler_entry)
             })
             .collect();

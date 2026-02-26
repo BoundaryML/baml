@@ -461,6 +461,15 @@ impl<C: ErrorContext> TypeError<C> {
                 Diagnostic::warning(DiagnosticId::JinjaInvalidTest, msg)
                     .with_primary_span(loc_fn(location))
             }
+
+            TypeError::InvalidCatchBindingType {
+                type_name,
+                location,
+            } => Diagnostic::error(
+                DiagnosticId::InvalidCatchBindingType,
+                format!("Type `{type_name}` is not allowed in catch bindings"),
+            )
+            .with_primary_span(loc_fn(location)),
         };
         diag.with_phase(DiagnosticPhase::Type)
     }

@@ -29,6 +29,9 @@ pub struct MirFunction {
     pub span: Option<Span>,
     /// Visualization nodes for control flow visualization.
     pub viz_nodes: Vec<VizNode>,
+    /// Maps unwind handler block IDs to the error local that receives the error value.
+    /// Populated during catch lowering so the emitter doesn't have to infer it.
+    pub unwind_error_locals: std::collections::HashMap<BlockId, Local>,
 }
 
 impl MirFunction {

@@ -136,7 +136,7 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "CatchAllWithFallback"
+    WORD "CatchWithFallback"
     PARAMETER_LIST
       L_PAREN "("
       PARAMETER
@@ -159,7 +159,7 @@ SOURCE_FILE
               WORD "x"
               R_PAREN ")"
           CATCH_CLAUSE
-            KW_CATCH_ALL "catch_all"
+            KW_CATCH "catch"
             L_PAREN "("
             CATCH_PATTERN "e"
               WORD "e"
@@ -181,7 +181,7 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
-    WORD "CatchAllPanics"
+    WORD "CatchWithTypedArm"
     PARAMETER_LIST
       L_PAREN "("
       PARAMETER
@@ -204,7 +204,7 @@ SOURCE_FILE
               WORD "x"
               R_PAREN ")"
           CATCH_CLAUSE
-            KW_CATCH_ALL_PANICS "catch_all_panics"
+            KW_CATCH "catch"
             L_PAREN "("
             CATCH_PATTERN "e"
               WORD "e"
