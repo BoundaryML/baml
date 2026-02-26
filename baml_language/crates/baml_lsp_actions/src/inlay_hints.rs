@@ -61,20 +61,13 @@ pub struct InlayHint {
     pub text_edits: Vec<InlayHintTextEdit>,
 }
 
-/// Shared data passed to every [`HintCollector`] for a single function body.
+/// Shared data passed to every hint collector for a single function body.
 pub struct HintContext<'a> {
     pub body: &'a ExprBody,
     pub inference: &'a Arc<InferenceResult>,
     pub source_map: &'a HirSourceMap,
     pub sym_table: &'a SymbolTable<'a>,
     pub db: &'a ProjectDatabase,
-}
-
-/// A hint producer that runs once per **function body**.
-///
-/// Implement this to add hints for the contents of a function body.
-pub trait HintCollector {
-    fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>);
 }
 
 /// Returns the display type for a hint, or `None` if the type should be suppressed.
