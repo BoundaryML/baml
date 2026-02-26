@@ -1,0 +1,34 @@
+[package]
+name = "baml_sap"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+baml_db = { workspace = true }
+baml_project = { workspace = true }
+derive_more = { workspace = true }
+indexmap = { workspace = true }
+log = { workspace = true }
+ouroboros = { workspace = true }
+regex = { workspace = true }
+rowan = { workspace = true }
+salsa = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strsim = { workspace = true }
+thiserror = { workspace = true }
+unicode-normalization = { workspace = true }
