@@ -6,6 +6,7 @@ export const RESERVED_PAGE_SLUGS = new Set([
   "ai",
   "pages",
   "v",
+  "readme",
 ]);
 
 export type BepSectionType = "readme" | "page" | "issues" | "decisions" | "ai";

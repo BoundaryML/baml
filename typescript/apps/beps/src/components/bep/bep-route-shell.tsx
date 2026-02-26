@@ -35,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Edit, History, Pencil } from "lucide-react";
 import {
   MAIN_CONTENT_ID,
+  RESERVED_PAGE_SLUGS,
   buildBepPath,
   parseBepSegments,
   toNavSectionId,
@@ -943,11 +944,7 @@ export function BepRouteShell() {
         existingSlugs={[
           ...bep.pages.map((p) => p.slug),
           ...newPages.map((p) => p.slug),
-          "issues",
-          "decisions",
-          "ai",
-          "pages",
-          "v",
+          ...RESERVED_PAGE_SLUGS,
         ]}
       />
     </div>
