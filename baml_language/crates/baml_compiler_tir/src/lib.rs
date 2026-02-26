@@ -2573,6 +2573,14 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let (binding_name, narrowed_ty) =
                             extract_pattern_binding(ctx, pattern, arm.pattern, &scrutinee_ty, body);
 
+                        // Narrow the scrutinee variable itself within this arm scope,
+                        // so that e.g. `Ok => r.value` sees `r` as `Ok` not `Ok | Err`.
+                        if let Expr::Path(segments) = &body.exprs[*scrutinee] {
+                            if segments.len() == 1 && narrowed_ty != scrutinee_ty {
+                                ctx.define(segments[0].clone(), narrowed_ty.clone());
+                            }
+                        }
+
                         // Bind the pattern variable with the narrowed type.
                         // `_` is a discard binding
                         if let Some(name) = binding_name {
@@ -2623,6 +2631,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 validate_catch_binding_type(ctx, binding_pat, clause.binding, body);
                 let (binding_name, binding_ty) =
                     extract_pattern_binding(ctx, binding_pat, clause.binding, &Ty::String, body);
+
+                // Remember the clause binding name and type for per-arm narrowing
+                let clause_binding_name = match binding_pat {
+                    Pattern::Binding(name) => Some(name.clone()),
+                    Pattern::TypedBinding { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                let clause_binding_ty = binding_ty.clone();
+
                 if let Some(name) = binding_name {
                     if name.as_str() != "_" {
                         ctx.define(name, binding_ty);
@@ -2637,6 +2654,14 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     validate_catch_binding_type(ctx, arm_pat, arm.pattern, body);
                     let (arm_name, arm_binding_ty) =
                         extract_pattern_binding(ctx, arm_pat, arm.pattern, &Ty::String, body);
+
+                    // Narrow the clause binding variable within this arm
+                    if let Some(ref clause_name) = clause_binding_name {
+                        if clause_name.as_str() != "_" && arm_binding_ty != clause_binding_ty {
+                            ctx.define(clause_name.clone(), arm_binding_ty.clone());
+                        }
+                    }
+
                     if let Some(name) = arm_name {
                         if name.as_str() != "_" {
                             ctx.define(name, arm_binding_ty);
