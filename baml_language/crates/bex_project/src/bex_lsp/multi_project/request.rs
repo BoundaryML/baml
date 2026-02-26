@@ -186,11 +186,26 @@ impl BexLspRequest for BexMulitProject {
             return Ok(None);
         };
 
-        // Get hints and convert to LSP types
+        // Get hints and filter to the requested range before converting to LSP types.
         let hints = baml_lsp_actions::inlay_hints::inlay_hints(lsp_db, source_file, baml_project);
         let text = source_file.text(lsp_db);
+        let range_start = text_size::TextSize::from(
+            u32::try_from(baml_project::position::lsp_position_to_offset(
+                text,
+                &params.range.start,
+            ))
+            .unwrap_or(0),
+        );
+        let range_end = text_size::TextSize::from(
+            u32::try_from(baml_project::position::lsp_position_to_offset(
+                text,
+                &params.range.end,
+            ))
+            .unwrap_or(u32::MAX),
+        );
         let lsp_hints = hints
             .into_iter()
+            .filter(|h| h.offset >= range_start && h.offset <= range_end) // Constrict to the requested range
             .map(|h| {
                 let label = lsp_types::InlayHintLabel::LabelParts(
                     h.label
