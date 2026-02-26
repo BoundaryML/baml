@@ -1893,7 +1893,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         PathResolution::Function(qn) => {
                             ctx.set_expr_resolution(expr_id, ResolvedValue::Function(qn.clone()));
                             let path_name = qn.display_name();
-                            let ty = ctx.lookup(&path_name).cloned().unwrap_or(Ty::Unknown);
+                            let Some(ty) = ctx.lookup(&path_name).cloned() else {
+                                return Ty::Unknown;
+                            };
                             ctx.set_expr_type(expr_id, ty.clone());
                             return ty;
                         }
