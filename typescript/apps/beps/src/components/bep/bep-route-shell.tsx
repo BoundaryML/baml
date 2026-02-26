@@ -85,7 +85,7 @@ export function BepRouteShell() {
   const [showAddPageModal, setShowAddPageModal] = useState(false);
   const [hasConflict, setHasConflict] = useState(false);
   const [conflictVersion, setConflictVersion] = useState<number | undefined>();
-  const [, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const editorRef = useRef<MDXEditorHandle>(null);
   const newPages = useMemo(
     () =>
@@ -99,8 +99,14 @@ export function BepRouteShell() {
     [changes]
   );
 
-  const bepNumber = Number.parseInt(params.number as string, 10);
-  const bep = useQuery(api.beps.getByNumber, { number: bepNumber });
+  const rawBepNumber = Array.isArray(params.number) ? params.number[0] : params.number;
+  const parsedBepNumber = Number.parseInt(rawBepNumber ?? "", 10);
+  const hasValidBepNumber = Number.isFinite(parsedBepNumber);
+  const bepNumber = hasValidBepNumber ? parsedBepNumber : 0;
+  const bep = useQuery(
+    api.beps.getByNumber,
+    hasValidBepNumber ? { number: bepNumber } : "skip"
+  );
   const updateBep = useMutation(api.beps.update);
 
   const latestVersion = bep?.versions?.length
@@ -155,10 +161,14 @@ export function BepRouteShell() {
   }, [userLoading, userId, router]);
 
   useEffect(() => {
+    if (!hasValidBepNumber) {
+      router.replace("/");
+      return;
+    }
     if (!routeInfo.isValid) {
       router.replace(buildBepPath({ bepNumber, section: "readme" }));
     }
-  }, [routeInfo.isValid, bepNumber, router]);
+  }, [routeInfo.isValid, hasValidBepNumber, bepNumber, router]);
 
   useEffect(() => {
     if (!bep || !isViewingHistorical) return;
@@ -498,6 +508,7 @@ export function BepRouteShell() {
     editNote: string,
     versionMode: "new" | "current"
   ) => {
+    if (isSubmitting) return;
     if (!bep || !userId) return;
 
     setIsSubmitting(true);
@@ -612,6 +623,10 @@ export function BepRouteShell() {
   }
 
   if (!user) {
+    return null;
+  }
+
+  if (!hasValidBepNumber) {
     return null;
   }
 
