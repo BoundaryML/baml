@@ -26,6 +26,7 @@ pub mod find_references;
 pub mod goto_definition;
 pub mod hover;
 pub mod inlay_hints;
+pub mod semantic_tokens;
 pub mod utils;
 
 pub use code_action::{CodeAction, CodeActionKind};
@@ -35,6 +36,7 @@ pub use document_symbols::{DocumentSymbol, SymbolKind};
 pub use find_references::{Reference, find_all_references};
 pub use goto_definition::{NavigationTarget, find_word_at_offset, goto_definition};
 pub use hover::{Hover, HoverContent, hover};
+pub use semantic_tokens::{SemanticToken, SemanticTokenType, TOKEN_TYPES, semantic_tokens};
 
 /// Markup format for hover content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

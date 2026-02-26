@@ -295,6 +295,19 @@ impl SyntaxKind {
         )
     }
 
+    /// Check if this is a whitespace token.
+    pub fn is_whitespace(self) -> bool {
+        matches!(self, SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE)
+    }
+
+    /// Check if this is a comment token.
+    pub fn is_comment(self) -> bool {
+        matches!(
+            self,
+            SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT | SyntaxKind::HEADER_COMMENT
+        )
+    }
+
     /// Check if this is a literal token.
     pub fn is_literal(self) -> bool {
         matches!(
