@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, type KeyboardEvent, type ChangeEvent } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Check, AlertCircle, HelpCircle, ChevronDown, ChevronUp, MessageSquare, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Sheet,
   SheetContent,
@@ -105,17 +107,45 @@ function Avatar({ name, size = "sm" }: { name: string; size?: "sm" | "xs" }) {
   );
 }
 
-function CommentText({ content }: { content: string }) {
+function autoResize(el: HTMLTextAreaElement) {
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
+
+function stripQuoteLines(content: string): string {
   const lines = content.split('\n');
   const textLines: string[] = [];
-  
   for (const line of lines) {
-    if (!line.startsWith('> ') && line !== '>' && line.trim()) {
+    if (!line.startsWith('> ') && line !== '>') {
       textLines.push(line);
     }
   }
-  
-  return <>{textLines.join(' ')}</>;
+  while (textLines.length > 0 && !textLines[0].trim()) textLines.shift();
+  while (textLines.length > 0 && !textLines[textLines.length - 1].trim()) textLines.pop();
+  return textLines.join('\n');
+}
+
+function CommentText({ content }: { content: string }) {
+  return (
+    <Markdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p className="my-1 first:mt-0 last:mb-0">{children}</p>,
+        a: ({ href, children }) => (
+          <a href={href} className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>
+        ),
+        code: ({ children }) => (
+          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] font-mono">{children}</code>
+        ),
+        pre: ({ children }) => <pre className="my-1 overflow-x-auto rounded bg-muted p-2 text-[0.85em]">{children}</pre>,
+        ul: ({ children }) => <ul className="my-1 ml-4 list-disc">{children}</ul>,
+        ol: ({ children }) => <ol className="my-1 ml-4 list-decimal">{children}</ol>,
+        li: ({ children }) => <li className="my-0.5">{children}</li>,
+      }}
+    >
+      {stripQuoteLines(content)}
+    </Markdown>
+  );
 }
 
 function getQuotedText(content: string): string | null {
@@ -150,7 +180,7 @@ export function CommentSidebar({
   comments,
   readOnly = false,
 }: CommentSidebarProps) {
-  const { userId } = useUser();
+  const { userId, user } = useUser();
   const [newComment, setNewComment] = useState<NewCommentState | null>(null);
   const [selectionPopup, setSelectionPopup] = useState<SelectionPopup | null>(null);
   const [activeThread, setActiveThread] = useState<string | null>(null);
@@ -490,7 +520,7 @@ export function CommentSidebar({
       {selectionPopup && !newComment && (
         <button
           data-selection-popup
-          className="fixed z-50 flex items-center gap-1 px-2 py-1 bg-gray-900 text-white text-xs rounded shadow-lg hover:bg-gray-800 transition-colors"
+          className="fixed z-50 flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-md shadow-lg hover:opacity-90 transition-opacity"
           style={{ 
             left: selectionPopup.x,
             top: selectionPopup.y,
@@ -498,7 +528,7 @@ export function CommentSidebar({
           }}
           onClick={handleStartComment}
         >
-          <MessageSquare className="h-3 w-3" />
+          <MessageSquare className="h-3.5 w-3.5" />
           Comment
         </button>
       )}
@@ -622,31 +652,47 @@ export function CommentSidebar({
 
               {/* Actions */}
               {isActive && !readOnly && (
-                <div className="border-t px-2 py-1.5 bg-gray-50 dark:bg-gray-800/50">
+                <div className="border-t px-2 py-2 bg-gray-50 dark:bg-gray-800/50">
                   {isReplying ? (
-                    <div className="space-y-1.5 pl-6">
+                    <div className="space-y-2 pl-6">
                       <div className="flex gap-1.5">
-                        <Avatar name="You" size="xs" />
+                        <Avatar name={user?.name ?? "You"} size="xs" />
                         <Textarea
                           value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                          placeholder="Reply..."
-                          className="flex-1 min-h-[36px] text-[11px] resize-none p-1.5"
+                          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+                            setReplyContent(e.target.value);
+                            autoResize(e.target);
+                          }}
+                          onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
+                            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleAddReply(id);
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setReplyingTo(null);
+                              setReplyContent("");
+                            }
+                          }}
+                          placeholder="Write a reply..."
+                          className="flex-1 min-h-[48px] max-h-[160px] text-xs resize-none p-2"
                           autoFocus
                           onClick={(e) => e.stopPropagation()}
                         />
                       </div>
                       <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" className="h-5 text-[10px] px-2" onClick={(e) => { e.stopPropagation(); setReplyingTo(null); setReplyContent(""); }}>
+                        <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={(e) => { e.stopPropagation(); setReplyingTo(null); setReplyContent(""); }}>
                           Cancel
                         </Button>
-                        <Button size="sm" className="h-5 text-[10px] px-2" onClick={(e) => { e.stopPropagation(); handleAddReply(id); }} disabled={!replyContent.trim()}>
+                        <Button size="sm" className="h-6 text-[11px] px-2" onClick={(e) => { e.stopPropagation(); handleAddReply(id); }} disabled={!replyContent.trim()}>
                           Reply
                         </Button>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-[10px] pl-6">
+                    <div className="flex items-center gap-2 text-[11px] pl-6">
                       <button className="text-muted-foreground hover:text-foreground font-medium" onClick={(e) => { e.stopPropagation(); setReplyingTo(id); }}>
                         Reply
                       </button>
@@ -663,25 +709,39 @@ export function CommentSidebar({
 
         {/* New comment form */}
         {newComment && !readOnly && (
-          <div className="absolute left-0 right-0 bg-white dark:bg-gray-900 rounded border shadow-lg p-2 z-20 text-[12px]" style={{ top: newComment.top }}>
-            <div className="text-[10px] text-muted-foreground/60 italic border-l-2 border-amber-400 pl-1.5 mb-1.5 line-clamp-2">
-              "{newComment.selectedText}"
+          <div className="absolute left-0 right-0 bg-white dark:bg-gray-900 rounded-lg border shadow-lg p-3 z-20 text-[13px]" style={{ top: newComment.top }}>
+            <div className="text-xs text-muted-foreground/70 italic border-l-2 border-amber-400 pl-2 mb-2 line-clamp-2">
+              &ldquo;{newComment.selectedText}&rdquo;
             </div>
-            <div className="flex gap-1.5">
-              <Avatar name="You" size="xs" />
+            <div className="flex gap-2">
+              <Avatar name={user?.name ?? "You"} />
               <Textarea
                 value={newCommentContent}
-                onChange={(e) => setNewCommentContent(e.target.value)}
-                placeholder="Add comment..."
-                className="flex-1 min-h-[40px] text-[11px] resize-none p-1.5"
+                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+                  setNewCommentContent(e.target.value);
+                  autoResize(e.target);
+                }}
+                onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    handleAddComment();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setNewComment(null);
+                    setNewCommentContent("");
+                  }
+                }}
+                placeholder="Add a comment..."
+                className="flex-1 min-h-[60px] max-h-[200px] text-sm resize-none p-2"
                 autoFocus
               />
             </div>
-            <div className="flex justify-end gap-1 mt-1.5">
-              <Button size="sm" variant="ghost" className="h-5 text-[10px] px-2" onClick={() => { setNewComment(null); setNewCommentContent(""); }}>
+            <div className="flex justify-end gap-1.5 mt-2">
+              <Button size="sm" variant="ghost" className="h-7 text-xs px-3" onClick={() => { setNewComment(null); setNewCommentContent(""); }}>
                 Cancel
               </Button>
-              <Button size="sm" className="h-5 text-[10px] px-2" onClick={handleAddComment} disabled={!newCommentContent.trim()}>
+              <Button size="sm" className="h-7 text-xs px-3" onClick={handleAddComment} disabled={!newCommentContent.trim()}>
                 Comment
               </Button>
             </div>
@@ -719,16 +779,31 @@ export function CommentSidebar({
             {newComment && !readOnly && (
               <div className="border rounded-lg bg-card p-3 ring-2 ring-primary/20">
                 <div className="text-xs text-muted-foreground/70 italic border-l-2 border-amber-400 pl-2 mb-3 line-clamp-3">
-                  "{newComment.selectedText}"
+                  &ldquo;{newComment.selectedText}&rdquo;
                 </div>
                 <div className="flex gap-2">
-                  <Avatar name="You" />
+                  <Avatar name={user?.name ?? "You"} />
                   <div className="flex-1 space-y-2">
                     <Textarea
                       value={newCommentContent}
-                      onChange={(e) => setNewCommentContent(e.target.value)}
+                      onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+                        setNewCommentContent(e.target.value);
+                        autoResize(e.target);
+                      }}
+                      onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          handleAddComment();
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          setNewComment(null);
+                          setNewCommentContent("");
+                          if (threads.length === 0) setMobileSheetOpen(false);
+                        }
+                      }}
                       placeholder="Add your comment..."
-                      className="min-h-[80px] text-sm resize-none"
+                      className="min-h-[80px] max-h-[300px] text-sm resize-none"
                       autoFocus
                     />
                     <div className="flex justify-end gap-2">
@@ -747,9 +822,6 @@ export function CommentSidebar({
                         size="sm" 
                         onClick={async () => {
                           await handleAddComment();
-                          if (threads.length === 0) {
-                            // Keep sheet open to show the new comment
-                          }
                         }} 
                         disabled={!newCommentContent.trim()}
                       >
@@ -856,12 +928,26 @@ export function CommentSidebar({
                         {replyingTo === id ? (
                           <div className="p-3 space-y-2">
                             <div className="flex gap-2">
-                              <Avatar name="You" size="xs" />
+                              <Avatar name={user?.name ?? "You"} size="xs" />
                               <Textarea
                                 value={replyContent}
-                                onChange={(e) => setReplyContent(e.target.value)}
+                                onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+                                  setReplyContent(e.target.value);
+                                  autoResize(e.target);
+                                }}
+                                onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
+                                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                                    e.preventDefault();
+                                    handleAddReply(id);
+                                  }
+                                  if (e.key === "Escape") {
+                                    e.preventDefault();
+                                    setReplyingTo(null);
+                                    setReplyContent("");
+                                  }
+                                }}
                                 placeholder="Write a reply..."
-                                className="flex-1 min-h-[60px] text-sm resize-none"
+                                className="flex-1 min-h-[60px] max-h-[200px] text-sm resize-none"
                                 autoFocus
                               />
                             </div>
