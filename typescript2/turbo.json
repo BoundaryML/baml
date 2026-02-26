@@ -1,5 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "CMAKE_FRAMEWORK_PATH",
+    "NIX_*",
+    "CC",
+    "LD",
+    "MACOSX_DEPLOYMENT_TARGET"
+  ],
   "ui": "tui",
   "tasks": {
     "build": {

@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 
-use super::{build_children_map, node_depth, ControlFlowGraph, Edge, Node, NodeId, NodeType};
+use super::{ControlFlowGraph, Edge, Node, NodeId, NodeType, build_children_map, node_depth};
 
 // ---------------------------------------------------------------------------
 // Public pipeline entry point
@@ -54,12 +54,9 @@ fn compute_has_header(
         return *value;
     }
 
-    let node = match nodes.get(&node_id) {
-        Some(node) => node,
-        None => {
-            memo.insert(node_id, false);
-            return false;
-        }
+    let Some(node) = nodes.get(&node_id) else {
+        memo.insert(node_id, false);
+        return false;
     };
 
     let mut result = matches!(node.node_type, NodeType::HeaderContextEnter);
@@ -101,14 +98,14 @@ fn should_keep(
 
 fn filter_graph(graph: &ControlFlowGraph, keep: &HashSet<NodeId>) -> ControlFlowGraph {
     let mut nodes = IndexMap::new();
-    for (id, node) in graph.nodes.iter() {
+    for (id, node) in &graph.nodes {
         if keep.contains(id) {
             nodes.insert(*id, node.clone());
         }
     }
 
     let mut edges_by_src: IndexMap<NodeId, Vec<Edge>> = IndexMap::new();
-    for (src, edges) in graph.edges_by_src.iter() {
+    for (src, edges) in &graph.edges_by_src {
         if !keep.contains(src) {
             continue;
         }
@@ -122,7 +119,10 @@ fn filter_graph(graph: &ControlFlowGraph, keep: &HashSet<NodeId>) -> ControlFlow
         }
     }
 
-    ControlFlowGraph { nodes, edges_by_src }
+    ControlFlowGraph {
+        nodes,
+        edges_by_src,
+    }
 }
 
 // ===========================================================================
@@ -130,9 +130,6 @@ fn filter_graph(graph: &ControlFlowGraph, keep: &HashSet<NodeId>) -> ControlFlow
 // ===========================================================================
 
 fn hoist_branch_arms(graph: &ControlFlowGraph) -> ControlFlowGraph {
-    let children = build_children_map(&graph.nodes);
-    let mut next = graph.clone();
-
     struct BranchGroupInfo {
         node_id: NodeId,
         parent: Option<NodeId>,
@@ -140,6 +137,9 @@ fn hoist_branch_arms(graph: &ControlFlowGraph) -> ControlFlowGraph {
         branch_children: Vec<NodeId>,
         successors: Vec<NodeId>,
     }
+
+    let children = build_children_map(&graph.nodes);
+    let mut next = graph.clone();
 
     let mut groups: Vec<BranchGroupInfo> = graph
         .nodes
@@ -358,11 +358,7 @@ fn redirect_incoming_edges(graph: &mut ControlFlowGraph, old_target: NodeId, new
     }
 }
 
-fn fan_out_outgoing_edges(
-    graph: &mut ControlFlowGraph,
-    exits: &[NodeId],
-    outgoing: &[Edge],
-) {
+fn fan_out_outgoing_edges(graph: &mut ControlFlowGraph, exits: &[NodeId], outgoing: &[Edge]) {
     if exits.is_empty() || outgoing.is_empty() {
         return;
     }
@@ -534,26 +530,26 @@ mod tests {
         assert_eq!(dsts, vec![2, 3]);
 
         // Arms get successor edges
-        assert!(expanded
-            .edges_by_src
-            .get(&NodeId::new(2))
-            .unwrap()
-            .iter()
-            .any(|e| e.dst == NodeId::new(4)));
-        assert!(expanded
-            .edges_by_src
-            .get(&NodeId::new(3))
-            .unwrap()
-            .iter()
-            .any(|e| e.dst == NodeId::new(4)));
+        assert!(
+            expanded
+                .edges_by_src
+                .get(&NodeId::new(2))
+                .unwrap()
+                .iter()
+                .any(|e| e.dst == NodeId::new(4))
+        );
+        assert!(
+            expanded
+                .edges_by_src
+                .get(&NodeId::new(3))
+                .unwrap()
+                .iter()
+                .any(|e| e.dst == NodeId::new(4))
+        );
 
         // Arms reparented
         assert_eq!(
-            expanded
-                .nodes
-                .get(&NodeId::new(2))
-                .unwrap()
-                .parent_node_id,
+            expanded.nodes.get(&NodeId::new(2)).unwrap().parent_node_id,
             Some(NodeId::new(0))
         );
     }

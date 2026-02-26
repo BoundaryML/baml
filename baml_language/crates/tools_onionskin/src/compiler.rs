@@ -138,6 +138,8 @@ pub(crate) struct CompilerRunner {
     is_directory: bool,
     /// Source files currently in the database (path -> `SourceFile`)
     source_files: HashMap<PathBuf, SourceFile>,
+    /// Builtin BAML files (loaded once, always included in project file list)
+    builtin_files: Vec<SourceFile>,
     phase_outputs: HashMap<CompilerPhase, String>,
     phase_outputs_annotated: HashMap<CompilerPhase, Vec<(String, LineStatus)>>,
     // Track Salsa events to determine what's recomputed vs cached
@@ -274,6 +276,7 @@ impl CompilerRunner {
             db,
             is_directory,
             source_files: HashMap::new(),
+            builtin_files: Vec::new(),
             phase_outputs: HashMap::new(),
             phase_outputs_annotated: HashMap::new(),
             recomputed_queries,
@@ -342,6 +345,11 @@ impl CompilerRunner {
         };
         self.project_root = self.db.set_project_root(project_path);
 
+        // Capture builtin files (loaded by set_project_root) on first compilation
+        if self.builtin_files.is_empty() {
+            self.builtin_files = self.project_root.files(&self.db).to_vec();
+        }
+
         // Clear the source files list and modified tracking
         self.source_files.clear();
         self.modified_files.clear();
@@ -389,8 +397,9 @@ impl CompilerRunner {
             }
         }
 
-        // Update project root with the list of files for proper Salsa tracking
-        let file_list: Vec<_> = self.source_files.values().copied().collect();
+        // Update project root with user files + builtins for proper Salsa tracking
+        let mut file_list: Vec<_> = self.source_files.values().copied().collect();
+        file_list.extend(&self.builtin_files);
         self.project_root.set_files(&mut self.db).to(file_list);
 
         // Run all compiler phases
@@ -1151,9 +1160,7 @@ impl CompilerRunner {
                             &type_aliases_map,
                             &recursive_aliases,
                         ) {
-                            Ok(expr_body) => {
-                                Some(build_control_flow_graph(&func_name, &expr_body))
-                            }
+                            Ok(expr_body) => Some(build_control_flow_graph(&func_name, &expr_body)),
                             Err(_) => None,
                         }
                     }
@@ -1166,8 +1173,7 @@ impl CompilerRunner {
 
                 if !file_has_output {
                     writeln!(output, "File: {file_path}").ok();
-                    output_annotated
-                        .push((format!("File: {file_path}"), LineStatus::Unknown));
+                    output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
                     file_has_output = true;
                 }
 
@@ -1531,9 +1537,11 @@ impl CompilerRunner {
     }
 
     fn run_codegen(&mut self) {
-        // Use compile_files directly with our source files instead of generate_project_bytecode,
-        // because project_files(db, root) returns an empty vector (not yet implemented).
-        let files: Vec<_> = self.source_files.values().copied().collect();
+        // Include both user files and builtin files so codegen can compile
+        // builtin functions (e.g., baml.llm.render_prompt) that compiler-generated
+        // functions call.
+        let mut files: Vec<_> = self.source_files.values().copied().collect();
+        files.extend(&self.builtin_files);
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
@@ -1644,8 +1652,9 @@ impl CompilerRunner {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        // Compile the program
-        let files: Vec<_> = self.source_files.values().copied().collect();
+        // Compile the program (include builtins so codegen can resolve builtin functions)
+        let mut files: Vec<_> = self.source_files.values().copied().collect();
+        files.extend(&self.builtin_files);
         let program = match baml_compiler_emit::compile_files(
             &self.db,
             &files,

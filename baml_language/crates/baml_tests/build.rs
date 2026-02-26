@@ -208,13 +208,12 @@ fn generate_project_tests(
     let hir_test = generate_hir_test(project);
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
-    let control_flow_test = if project.name == "control_flow"
-        || project.name == "headers_edge_cases"
-    {
-        generate_control_flow_test(project)
-    } else {
-        quote! {}
-    };
+    let control_flow_test =
+        if project.name == "control_flow" || project.name == "headers_edge_cases" {
+            generate_control_flow_test(project)
+        } else {
+            quote! {}
+        };
     let diagnostics_test = generate_diagnostics_test(project);
     let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
 

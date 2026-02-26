@@ -101,7 +101,7 @@ fn LlmFunction(input: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "LlmFunction"
     let _4: map<string, unknown>
     let _5: "input"
@@ -392,7 +392,7 @@ fn LlmFunction.render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "LlmFunction"
     let _4: map<string, unknown>
     let _5: "input"
@@ -420,7 +420,7 @@ fn LlmFunction.build_request(input: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "LlmFunction"
     let _4: map<string, unknown>
     let _5: "input"

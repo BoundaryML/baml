@@ -9,16 +9,12 @@
 
 mod flatten;
 
-use std::collections::HashMap;
-use std::fmt;
-
-use indexmap::IndexMap;
-
-use crate::{
-    BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, Pattern, UnaryOp,
-};
+use std::{collections::HashMap, fmt};
 
 pub use flatten::flatten_control_flow_graph;
+use indexmap::IndexMap;
+
+use crate::{BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, Pattern, UnaryOp};
 
 // ---------------------------------------------------------------------------
 // Data structures (mirror engine's control_flow.rs:12-120)
@@ -98,12 +94,15 @@ impl Node {
         }
     }
 
-    fn root(
-        id: NodeId,
-        log_filter_key: impl Into<String>,
-        label: impl Into<String>,
-    ) -> Self {
-        Self::new(id, None, log_filter_key, label, None, NodeType::FunctionRoot)
+    fn root(id: NodeId, log_filter_key: impl Into<String>, label: impl Into<String>) -> Self {
+        Self::new(
+            id,
+            None,
+            log_filter_key,
+            label,
+            None,
+            NodeType::FunctionRoot,
+        )
     }
 }
 
@@ -190,7 +189,7 @@ enum CounterKind {
 }
 
 impl FrameCounters {
-    fn next(&mut self, kind: CounterKind) -> u16 {
+    fn next(&mut self, kind: &CounterKind) -> u16 {
         match kind {
             CounterKind::Header => {
                 let c = self.header;
@@ -255,7 +254,7 @@ impl Frame {
         }
     }
 
-    fn next_ordinal(&mut self, kind: CounterKind) -> u16 {
+    fn next_ordinal(&mut self, kind: &CounterKind) -> u16 {
         self.counters.next(kind)
     }
 }
@@ -265,10 +264,7 @@ impl Frame {
 // ---------------------------------------------------------------------------
 
 /// Build a control flow visualization graph from a VIR expression body.
-pub fn build_control_flow_graph(
-    function_name: &str,
-    body: &ExprBody,
-) -> ControlFlowGraph {
+pub fn build_control_flow_graph(function_name: &str, body: &ExprBody) -> ControlFlowGraph {
     let mut builder = GraphBuilder::new(function_name, body);
     builder.visit_expr(body.root);
     builder.finish()
@@ -277,10 +273,7 @@ pub fn build_control_flow_graph(
 /// Build a simple 2-node control flow graph for an LLM function.
 ///
 /// Produces: `FunctionRoot` -> `OtherScope("LLM client: <client_name>")`.
-pub fn build_llm_control_flow_graph(
-    function_name: &str,
-    client_name: &str,
-) -> ControlFlowGraph {
+pub fn build_llm_control_flow_graph(function_name: &str, client_name: &str) -> ControlFlowGraph {
     let mut graph = GraphAccumulator::default();
     let root_id = graph.allocate_id();
     let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
@@ -372,7 +365,10 @@ impl<'a> GraphBuilder<'a> {
             }
 
             Expr::Let {
-                value, body, pattern, ..
+                value,
+                body,
+                pattern,
+                ..
             } => {
                 // Check if value contains control flow worth wrapping
                 let value_expr = self.body.expr(*value).clone();
@@ -432,7 +428,7 @@ impl<'a> GraphBuilder<'a> {
                 .frames
                 .last_mut()
                 .expect("frame stack should not be empty");
-            frame.next_ordinal(CounterKind::BranchGroup)
+            frame.next_ordinal(&CounterKind::BranchGroup)
         };
         let label = format!("if ({})", render_expr_compact(self.body, condition));
         let slug = {
@@ -451,13 +447,13 @@ impl<'a> GraphBuilder<'a> {
             node_id,
             parent_id,
             log_filter_key,
-            label.clone(),
+            label,
             Some(expr_id),
             NodeType::BranchGroup,
         );
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
-        self.register_child_with_parent(parent_index, &node_id);
+        self.register_child_with_parent(parent_index, node_id);
         self.frames
             .push(Frame::new(FrameEntry::BranchGroup, node_id, Some(segment)));
 
@@ -475,10 +471,8 @@ impl<'a> GraphBuilder<'a> {
                     then_branch: else_then,
                     else_branch: else_else,
                 } => {
-                    let arm_label = format!(
-                        "else if ({})",
-                        render_expr_compact(self.body, else_cond)
-                    );
+                    let arm_label =
+                        format!("else if ({})", render_expr_compact(self.body, else_cond));
                     self.visit_branch_arm(arm_label, else_then, Some(else_then));
                     current_else = else_else;
                 }
@@ -497,19 +491,14 @@ impl<'a> GraphBuilder<'a> {
         self.pop_frames_to(parent_depth);
     }
 
-    fn visit_branch_arm(
-        &mut self,
-        label: String,
-        body_expr: ExprId,
-        source_expr: Option<ExprId>,
-    ) {
+    fn visit_branch_arm(&mut self, label: String, body_expr: ExprId, source_expr: Option<ExprId>) {
         let parent_depth = self.frames.len();
         let ordinal = {
             let frame = self
                 .frames
                 .last_mut()
                 .expect("branch group frame must exist");
-            frame.next_ordinal(CounterKind::BranchArm)
+            frame.next_ordinal(&CounterKind::BranchArm)
         };
         let slug_base = slugify(&label);
         let slug = if slug_base.is_empty() {
@@ -531,7 +520,7 @@ impl<'a> GraphBuilder<'a> {
         );
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
-        self.register_child_with_parent(parent_index, &node_id);
+        self.register_child_with_parent(parent_index, node_id);
         self.frames
             .push(Frame::new(FrameEntry::BranchArm, node_id, Some(segment)));
         self.visit_expr(body_expr);
@@ -539,17 +528,13 @@ impl<'a> GraphBuilder<'a> {
     }
 
     /// Create a branch arm node with no body traversal (for synthetic else arms).
-    fn emit_synthetic_branch_arm(
-        &mut self,
-        label: String,
-        source_expr: Option<ExprId>,
-    ) {
+    fn emit_synthetic_branch_arm(&mut self, label: String, source_expr: Option<ExprId>) {
         let ordinal = {
             let frame = self
                 .frames
                 .last_mut()
                 .expect("branch group frame must exist");
-            frame.next_ordinal(CounterKind::BranchArm)
+            frame.next_ordinal(&CounterKind::BranchArm)
         };
         let slug_base = slugify(&label);
         let slug = if slug_base.is_empty() {
@@ -571,25 +556,20 @@ impl<'a> GraphBuilder<'a> {
         );
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
-        self.register_child_with_parent(parent_index, &node_id);
+        self.register_child_with_parent(parent_index, node_id);
         // No body traversal — this arm is empty.
     }
 
     // -- Match expressions --
 
-    fn visit_match(
-        &mut self,
-        scrutinee: ExprId,
-        arms: &[MatchArm],
-        expr_id: ExprId,
-    ) {
+    fn visit_match(&mut self, scrutinee: ExprId, arms: &[MatchArm], expr_id: ExprId) {
         let parent_depth = self.frames.len();
         let ordinal = {
             let frame = self
                 .frames
                 .last_mut()
                 .expect("frame stack should not be empty");
-            frame.next_ordinal(CounterKind::BranchGroup)
+            frame.next_ordinal(&CounterKind::BranchGroup)
         };
         let label = format!("match ({})", render_expr_compact(self.body, scrutinee));
         let slug = {
@@ -614,7 +594,7 @@ impl<'a> GraphBuilder<'a> {
         );
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
-        self.register_child_with_parent(parent_index, &node_id);
+        self.register_child_with_parent(parent_index, node_id);
         self.frames
             .push(Frame::new(FrameEntry::BranchGroup, node_id, Some(segment)));
 
@@ -628,19 +608,14 @@ impl<'a> GraphBuilder<'a> {
 
     // -- While loops --
 
-    fn visit_loop(
-        &mut self,
-        condition: ExprId,
-        body: ExprId,
-        expr_id: ExprId,
-    ) {
+    fn visit_loop(&mut self, condition: ExprId, body: ExprId, expr_id: ExprId) {
         let parent_depth = self.frames.len();
         let ordinal = {
             let frame = self
                 .frames
                 .last_mut()
                 .expect("frame stack should not be empty");
-            frame.next_ordinal(CounterKind::Loop)
+            frame.next_ordinal(&CounterKind::Loop)
         };
         let label = format!("while ({})", render_expr_compact(self.body, condition));
         let slug_base = slugify(&label);
@@ -663,7 +638,7 @@ impl<'a> GraphBuilder<'a> {
         );
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
-        self.register_child_with_parent(parent_index, &node_id);
+        self.register_child_with_parent(parent_index, node_id);
         self.frames
             .push(Frame::new(FrameEntry::Loop, node_id, Some(segment)));
         self.visit_expr(body);
@@ -672,6 +647,7 @@ impl<'a> GraphBuilder<'a> {
 
     // -- Headers --
 
+    #[allow(clippy::cast_possible_truncation)]
     fn enter_header(&mut self, title: &str, level: usize, source_expr: Option<ExprId>) {
         let level = (level as u8).max(1);
         self.pop_headers_to_level(level - 1);
@@ -681,7 +657,7 @@ impl<'a> GraphBuilder<'a> {
                 .frames
                 .last_mut()
                 .expect("frame stack should not be empty");
-            frame.next_ordinal(CounterKind::Header)
+            frame.next_ordinal(&CounterKind::Header)
         };
 
         let mut slug = slugify(title);
@@ -704,7 +680,7 @@ impl<'a> GraphBuilder<'a> {
         self.graph.add_node(node);
 
         let parent_index = self.current_parent_index();
-        self.register_child_with_parent(parent_index, &node_id);
+        self.register_child_with_parent(parent_index, node_id);
         self.frames.push(Frame::new(
             FrameEntry::Header { level },
             node_id,
@@ -726,7 +702,7 @@ impl<'a> GraphBuilder<'a> {
                 .frames
                 .last_mut()
                 .expect("frame stack should not be empty");
-            frame.next_ordinal(CounterKind::OtherScope)
+            frame.next_ordinal(&CounterKind::OtherScope)
         };
         let label_ref = label.as_deref().unwrap_or("");
         let slug_base = slugify(label_ref);
@@ -750,7 +726,7 @@ impl<'a> GraphBuilder<'a> {
         );
         self.graph.add_node(node);
         let parent_index = self.current_parent_index();
-        self.register_child_with_parent(parent_index, &node_id);
+        self.register_child_with_parent(parent_index, node_id);
         self.frames
             .push(Frame::new(FrameEntry::OtherScope, node_id, Some(segment)));
         self.visit_expr(inner_expr);
@@ -759,15 +735,15 @@ impl<'a> GraphBuilder<'a> {
 
     // -- Helpers --
 
-    fn register_child_with_parent(&mut self, parent_index: usize, node_id: &NodeId) {
+    fn register_child_with_parent(&mut self, parent_index: usize, node_id: NodeId) {
         let parent_entry = self.frames[parent_index].entry.children_are_linear();
         if !parent_entry {
             return;
         }
         if let Some(prev) = self.frames[parent_index].last_linear_child {
-            self.graph.add_edge(prev, *node_id);
+            self.graph.add_edge(prev, node_id);
         }
-        self.frames[parent_index].last_linear_child = Some(*node_id);
+        self.frames[parent_index].last_linear_child = Some(node_id);
     }
 
     fn pop_headers_to_level(&mut self, desired_level: u8) {
@@ -1022,9 +998,10 @@ impl fmt::Display for ControlFlowGraph {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use la_arena::Arena;
-    use crate::{ExprBody, Expr, Pattern};
+
+    use super::*;
+    use crate::{Expr, ExprBody, Pattern};
 
     fn make_body(build: impl FnOnce(&mut Arena<Expr>, &mut Arena<Pattern>) -> ExprId) -> ExprBody {
         let mut exprs = Arena::new();
@@ -1033,10 +1010,10 @@ mod tests {
         ExprBody {
             exprs,
             patterns,
-            expr_types: Default::default(),
-            enum_variant_exprs: Default::default(),
-            resolutions: Default::default(),
-            source_spans: Default::default(),
+            expr_types: HashMap::default(),
+            enum_variant_exprs: HashMap::default(),
+            resolutions: HashMap::default(),
+            source_spans: HashMap::default(),
             root,
         }
     }
@@ -1242,10 +1219,7 @@ mod tests {
         // And they should be connected by an edge
         let root_edges = graph.edges_by_src.get(&NodeId::new(1));
         assert!(root_edges.is_some());
-        assert!(root_edges
-            .unwrap()
-            .iter()
-            .any(|e| e.dst == NodeId::new(2)));
+        assert!(root_edges.unwrap().iter().any(|e| e.dst == NodeId::new(2)));
     }
 
     #[test]

@@ -349,15 +349,15 @@ impl ProjectDatabase {
     /// Build the control flow visualization graph for a function.
     ///
     /// Returns `None` if the function is not found, is compiler-generated
-    /// (render_prompt, build_request, client_resolve), or has errors that
+    /// (`render_prompt`, `build_request`, `client_resolve`), or has errors that
     /// prevent VIR lowering.
     pub fn control_flow_graph(
         &self,
         function_name: &str,
     ) -> Option<baml_compiler_vir::control_flow::ControlFlowGraph> {
         use baml_compiler_hir::{
-            FunctionBody, file_item_tree, file_items, function_body, function_signature,
-            function_signature_source_map, ItemId,
+            FunctionBody, ItemId, file_item_tree, file_items, function_body, function_signature,
+            function_signature_source_map,
         };
         use baml_compiler_tir::{
             class_field_types, enum_variants, infer_function, type_aliases, typing_context,
@@ -372,10 +372,10 @@ impl ProjectDatabase {
         // Build typing context lazily (only if we find an expr function)
         let mut typing_ctx = None;
 
-        for source_file in files.iter() {
+        for source_file in files {
             let item_tree = file_item_tree(self, *source_file);
             let items_struct = file_items(self, *source_file);
-            for item in items_struct.items(self).iter() {
+            for item in items_struct.items(self) {
                 let ItemId::Function(func_loc) = item else {
                     continue;
                 };
@@ -396,7 +396,7 @@ impl ProjectDatabase {
                 }
 
                 let sig = function_signature(self, *func_loc);
-                if sig.name.to_string() != function_name {
+                if sig.name != function_name {
                     continue;
                 }
 
@@ -412,13 +412,11 @@ impl ProjectDatabase {
                     FunctionBody::Expr(_, _) => {
                         // Lazy-init typing context
                         let ctx = typing_ctx.get_or_insert_with(|| {
-                            let globals =
-                                typing_context(self, project).functions(self).clone();
+                            let globals = typing_context(self, project).functions(self).clone();
                             let class_fields =
                                 class_field_types(self, project).classes(self).clone();
                             let ta = type_aliases(self, project).aliases(self).clone();
-                            let recursive =
-                                baml_compiler_tir::find_recursive_aliases(&ta);
+                            let recursive = baml_compiler_tir::find_recursive_aliases(&ta);
                             let ev = enum_variants(self, project).enums(self).clone();
                             let resolution_ctx =
                                 baml_compiler_tir::TypeResolutionContext::new(self, project);
@@ -439,17 +437,10 @@ impl ProjectDatabase {
                         );
 
                         match baml_compiler_vir::lower_from_hir(
-                            &body,
-                            &inference,
-                            &ctx.5,
-                            &ctx.2,
-                            &ctx.3,
+                            &body, &inference, &ctx.5, &ctx.2, &ctx.3,
                         ) {
                             Ok(vir_body) => {
-                                return Some(build_control_flow_graph(
-                                    function_name,
-                                    &vir_body,
-                                ));
+                                return Some(build_control_flow_graph(function_name, &vir_body));
                             }
                             Err(baml_compiler_vir::LoweringError::LlmFunction) => {
                                 // Shouldn't happen since we check FunctionBody first,
