@@ -151,7 +151,8 @@ fn ChainedCatchClauses(x: int) -> string {
     }
 
     bb8: {
-        throw copy _2;
+        _3 = copy _2;
+        goto -> bb4;
     }
 
     bb9: {
