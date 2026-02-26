@@ -118,7 +118,6 @@ fn lower_type_ref_resolved_with_ctx(
         TypeRef::String => Ty::String,
         TypeRef::Bool => Ty::Bool,
         TypeRef::Null => Ty::Null,
-        TypeRef::Never => Ty::Never,
 
         // Media types
         TypeRef::Media(kind) => Ty::Media(*kind),
@@ -305,19 +304,16 @@ fn is_simple_type_name(name: &str) -> bool {
     !name.contains(['<', '>', '[', ']', '|', '?', ','])
 }
 
-/// Normalize a union type by flattening nested unions, removing duplicates,
-/// and filtering out `Never` variants (`T | never → T`).
+/// Normalize a union type by flattening nested unions and removing duplicates.
 fn normalize_union(types: Vec<Ty>) -> Ty {
     let mut normalized = Vec::new();
 
     for ty in types {
         match ty {
-            // Never is the identity element for unions: T | never → T
-            Ty::Never => { /* skip */ }
             // Flatten nested unions
             Ty::Union(inner) => {
                 for inner_ty in inner {
-                    if inner_ty != Ty::Never && !normalized.contains(&inner_ty) {
+                    if !normalized.contains(&inner_ty) {
                         normalized.push(inner_ty);
                     }
                 }
@@ -333,7 +329,7 @@ fn normalize_union(types: Vec<Ty>) -> Ty {
 
     // Simplify
     match normalized.len() {
-        0 => Ty::Never, // Empty union is uninhabited (bottom type)
+        0 => Ty::Unknown, // Empty union becomes Unknown (could be Never in a more complete type system)
         1 => normalized.pop().unwrap(),
         _ => Ty::Union(normalized),
     }
@@ -346,7 +342,7 @@ mod tests {
     #[test]
     fn test_normalize_union_empty() {
         let result = normalize_union(vec![]);
-        assert_eq!(result, Ty::Never);
+        assert_eq!(result, Ty::Unknown);
     }
 
     #[test]
@@ -366,24 +362,5 @@ mod tests {
         let inner = Ty::Union(vec![Ty::Int, Ty::Float]);
         let result = normalize_union(vec![inner, Ty::String]);
         assert_eq!(result, Ty::Union(vec![Ty::Int, Ty::Float, Ty::String]));
-    }
-
-    #[test]
-    fn test_normalize_union_filters_never() {
-        let result = normalize_union(vec![Ty::Int, Ty::Never]);
-        assert_eq!(result, Ty::Int);
-    }
-
-    #[test]
-    fn test_normalize_union_all_never() {
-        let result = normalize_union(vec![Ty::Never, Ty::Never]);
-        assert_eq!(result, Ty::Never);
-    }
-
-    #[test]
-    fn test_normalize_union_never_in_nested() {
-        let inner = Ty::Union(vec![Ty::Never, Ty::String]);
-        let result = normalize_union(vec![inner, Ty::Never]);
-        assert_eq!(result, Ty::String);
     }
 }

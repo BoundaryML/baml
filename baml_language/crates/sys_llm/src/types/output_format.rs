@@ -196,9 +196,6 @@ impl OutputFormatContent {
             // - Bool: true/false
             Ty::Literal(lit) => Ok(Some(render_literal(lit))),
 
-            // Never is uninhabited — no value to render in the output format.
-            Ty::Never => Ok(None),
-
             // Runtime-only variants that shouldn't appear in LLM prompts
             Ty::Opaque(tn) => Err(RenderError::UnsupportedType(tn.to_string())),
 
