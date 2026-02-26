@@ -112,6 +112,26 @@ body {
   text-decoration: var(--shiki-dark-text-decoration) !important;
 }
 
+/* Code blocks: improve Unicode diagram alignment with robust mono fallbacks */
+.bep-shiki-code pre,
+.bep-shiki-code code {
+  font-family:
+    var(--font-geist-mono),
+    "DejaVu Sans Mono",
+    "Noto Sans Mono",
+    "Liberation Mono",
+    Menlo,
+    Consolas,
+    Monaco,
+    monospace;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+.bep-shiki-code .line {
+  white-space: pre;
+}
+
 /* MDX Editor: ensure content area uses semantic colors in dark mode */
 .dark .mdxeditor-root-contenteditable,
 .dark .mdxeditor-root-contenteditable [contenteditable="true"] {

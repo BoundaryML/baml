@@ -682,6 +682,19 @@ Set your Anthropic API key in the Convex dashboard:
 
 Colors and dark mode are defined in `src/app/globals.css` with semantic tokens. See [docs/THEMING.md](docs/THEMING.md) for usage and extension guidelines.
 
+### Markdown Code Block Tips
+
+- Unlabeled fenced code blocks default to TypeScript highlighting (useful for BAML snippets).
+- For ASCII/Unicode diagrams, use `text` or `plaintext` fences to preserve spacing/alignment:
+
+  ````md
+  ```text
+  ┌───────┐
+  │ Box   │
+  └───────┘
+  ```
+  ````
+
 ### Available Scripts
 
 ```bash

@@ -117,7 +117,7 @@ export function ShikiCodeBlock({
   if (isLoading) {
     const lines = code.split("\n");
     return (
-      <div className="not-prose my-5 rounded-xl border border-code-border overflow-hidden">
+      <div className="bep-shiki-code not-prose my-5 rounded-xl border border-code-border overflow-hidden">
         {showLanguageBar && (
           <div className="bg-muted border-b border-code-border px-4 py-2 text-xs font-medium text-muted-foreground">
             {getDisplayName(normalizedLang)}
@@ -144,7 +144,7 @@ export function ShikiCodeBlock({
   }
 
   return (
-    <div className="not-prose my-5 rounded-xl border border-code-border overflow-hidden">
+    <div className="bep-shiki-code not-prose my-5 rounded-xl border border-code-border overflow-hidden">
       {showLanguageBar && (
         <div className="bg-muted border-b border-code-border px-4 py-2 text-xs font-medium text-muted-foreground">
           {getDisplayName(normalizedLang)}
@@ -175,4 +175,3 @@ export function ShikiCodeBlock({
     </div>
   );
 }
-
