@@ -389,11 +389,7 @@ function baml.llm.call_llm_function(function_name: string, args: map<string, unk
 
   L0:
     load_const "All orchestration steps failed"
-    dispatch_future baml.sys.panic
-    await
-    pop 1
-    load_const null
-    return
+    throw
 
   L1:
     load_var result

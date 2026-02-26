@@ -93,6 +93,12 @@ impl OpError {
     }
 }
 
+pub use bex_vm_types::{SysOpErrorCategory, SysOpPanicCategory};
+
+// ============================================================================
+// Operation Errors
+// ============================================================================
+
 /// Errors that can occur during external operation execution.
 #[derive(Debug, thiserror::Error)]
 pub enum OpErrorKind {
@@ -141,6 +147,67 @@ pub enum OpErrorKind {
 
     #[error("LLM client error: {message}")]
     LlmClientError { message: String },
+}
+
+impl OpErrorKind {
+    /// Map this rich error to its contract-level category.
+    pub fn category(&self) -> SysOpErrorCategory {
+        match self {
+            Self::InvalidArgumentCount { .. }
+            | Self::InvalidArgument { .. }
+            | Self::TypeError { .. }
+            | Self::ResourceTypeMismatch { .. } => SysOpErrorCategory::InvalidArgument,
+            Self::Other(_) => SysOpErrorCategory::DevOther,
+            Self::Unsupported => SysOpErrorCategory::Unsupported,
+            Self::RenderPrompt(_) => SysOpErrorCategory::RenderPrompt,
+            Self::AccessError(_) => SysOpErrorCategory::AccessError,
+            Self::Cancelled => SysOpErrorCategory::Io,
+            Self::Timeout { .. } => SysOpErrorCategory::Timeout,
+            Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
+            Self::LlmClientError { .. } => SysOpErrorCategory::LlmClient,
+        }
+    }
+}
+
+// ============================================================================
+// Contract Enforcement
+// ============================================================================
+
+/// A `sys_op` returned an error category not declared in its `#[throws(...)]` contract.
+#[derive(Debug)]
+pub struct ContractViolation {
+    pub op: SysOp,
+    pub actual_category: SysOpErrorCategory,
+}
+
+impl std::fmt::Display for ContractViolation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "sys_op contract violation: `{}` returned error category `{}` \
+             which is not in its declared #[throws(...)] contract (allowed: {:?})",
+            self.op,
+            self.actual_category,
+            self.op.allowed_error_categories()
+        )
+    }
+}
+
+/// Validate that a `sys_op` error conforms to its declared contract.
+///
+/// Returns `Ok(())` if the error category is in the allowed set, or
+/// `Err(ContractViolation)` with details for the implementer.
+pub fn validate_sys_op_error(op: SysOp, kind: &OpErrorKind) -> Result<(), ContractViolation> {
+    let category = kind.category();
+    let allowed = op.allowed_error_categories();
+    if allowed.is_empty() || allowed.contains(&category) {
+        Ok(())
+    } else {
+        Err(ContractViolation {
+            op,
+            actual_category: category,
+        })
+    }
 }
 
 impl From<sys_llm::LlmOpError> for OpErrorKind {
@@ -427,7 +494,7 @@ impl<T> FunctionRef<T> {
 /// let engine = BexEngine::new(program, sys_ops)?;
 /// ```
 macro_rules! define_sys_ops_struct {
-    ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr })*) => {
+    ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr, [$($throw_cat:ident),*], [$($panic_cat:ident),*] })*) => {
         #[derive(Clone)]
         pub struct SysOps {
             $( pub $snake: SysOpFn, )*
@@ -911,6 +978,99 @@ mod tests {
                 assert!(matches!(value, BexExternalValue::String(s) if s == "done"));
             }
             SysOpResult::Ready(_) => panic!("Expected Async result"),
+        }
+    }
+
+    // ========================================================================
+    // Contract enforcement tests
+    // ========================================================================
+
+    #[test]
+    fn contract_allows_declared_category() {
+        let op = bex_vm_types::sys_op_for_path("baml.http.fetch").unwrap();
+        let err = OpErrorKind::Timeout {
+            message: "timed out".into(),
+            duration: std::time::Duration::from_secs(30),
+        };
+        assert!(validate_sys_op_error(op, &err).is_ok());
+    }
+
+    #[test]
+    fn contract_rejects_undeclared_category() {
+        let op = bex_vm_types::sys_op_for_path("env.get").unwrap();
+        let err = OpErrorKind::LlmClientError {
+            message: "bad".into(),
+        };
+        let result = validate_sys_op_error(op, &err);
+        assert!(result.is_err());
+        let violation = result.unwrap_err();
+        assert_eq!(violation.actual_category, SysOpErrorCategory::LlmClient);
+    }
+
+    #[test]
+    fn contract_allows_devother_when_declared() {
+        let op = bex_vm_types::sys_op_for_path("baml.http.fetch").unwrap();
+        let err = OpErrorKind::Other("some debug detail".into());
+        let result = validate_sys_op_error(op, &err);
+        assert!(
+            result.is_err(),
+            "DevOther should be rejected when not in #[throws]"
+        );
+    }
+
+    #[test]
+    fn all_sys_ops_have_contract_metadata() {
+        use bex_vm_types::SysOp;
+        let ops = [
+            SysOp::BamlFsOpen,
+            SysOp::BamlHttpFetch,
+            SysOp::BamlSysPanic,
+            SysOp::EnvGet,
+        ];
+        for op in ops {
+            let cats = op.allowed_error_categories();
+            let panics = op.allowed_panic_categories();
+            assert!(
+                !cats.is_empty() || !panics.is_empty(),
+                "sys_op {op} should have at least one contract category",
+            );
+        }
+    }
+
+    #[test]
+    fn category_mapping_covers_all_variants() {
+        let variants = vec![
+            OpErrorKind::InvalidArgumentCount {
+                expected: 1,
+                actual: 2,
+            },
+            OpErrorKind::InvalidArgument {
+                position: 0,
+                expected: "string",
+                actual: "int".into(),
+            },
+            OpErrorKind::Other("test".into()),
+            OpErrorKind::TypeError {
+                expected: "int",
+                actual: "string".into(),
+            },
+            OpErrorKind::ResourceTypeMismatch { expected: "File" },
+            OpErrorKind::Unsupported,
+            OpErrorKind::RenderPrompt("err".into()),
+            OpErrorKind::Cancelled,
+            OpErrorKind::Timeout {
+                message: "t".into(),
+                duration: std::time::Duration::from_secs(1),
+            },
+            OpErrorKind::NotImplemented {
+                message: "n".into(),
+            },
+            OpErrorKind::LlmClientError {
+                message: "l".into(),
+            },
+        ];
+        for v in &variants {
+            let _ = v.category();
         }
     }
 }

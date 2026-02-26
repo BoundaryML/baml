@@ -387,7 +387,7 @@ impl TypeRef {
     }
 
     /// Create a `TypeRef` from a type name string (primitive or user-defined).
-    fn from_type_name(name: &str) -> Self {
+    pub fn from_type_name(name: &str) -> Self {
         // Use case-sensitive matching for type keywords.
         // This ensures that `Unknown` is treated as a user-defined type name,
         // not as the `unknown` builtin keyword.

@@ -290,7 +290,7 @@ function build_request(function_name: string, args: map<string, unknown>) -> bam
 /// at execution time (only when an attempt is actually reached), matching
 /// legacy behavior. Nested strategies and retries are handled recursively
 /// by `execute_client`.
-function call_llm_function(function_name: string, args: map<string, unknown>) -> unknown {
+function call_llm_function(function_name: string, args: map<string, unknown>) -> unknown throws string {
     let jinja_string = baml.llm.get_jinja_template(function_name);
     let llm_client = baml.llm.get_client(function_name);
 
@@ -306,7 +306,5 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
         return result.value;
     }
 
-    // TODO: This will have to be replaced by a "throw" when exceptions land.
-    // TODO: Also figure out panics in Baml.
-    baml.sys.panic("All orchestration steps failed");
+    throw "All orchestration steps failed";
 }

@@ -193,7 +193,7 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
     if (result.ok) {
         return result.value;
     };
-    baml.sys.panic("All orchestration steps failed");
+    throw "All orchestration steps failed";
 }
 
 function PlannerState.rr_local_offset(self: PlannerState, client_name: string) -> int {

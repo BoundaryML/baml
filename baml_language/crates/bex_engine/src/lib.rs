@@ -1388,7 +1388,29 @@ impl BexEngine {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
         let ctx = self.sys_op_ctx.with_cancel(cancel.clone());
-        fn_ptr(&self.heap, args, &ctx, call_id)
+        let result = fn_ptr(&self.heap, args, &ctx, call_id);
+
+        match result {
+            SysOpResult::Ready(Ok(v)) => SysOpResult::Ready(Ok(v)),
+            SysOpResult::Ready(Err(err)) => {
+                if let Err(violation) = sys_types::validate_sys_op_error(op, &err.kind) {
+                    tracing::warn!("{violation}");
+                }
+                SysOpResult::Ready(Err(err))
+            }
+            SysOpResult::Async(fut) => {
+                let boxed = Box::pin(async move {
+                    let res = fut.await;
+                    if let Err(err) = &res {
+                        if let Err(violation) = sys_types::validate_sys_op_error(op, &err.kind) {
+                            tracing::warn!("{violation}");
+                        }
+                    }
+                    res
+                });
+                SysOpResult::Async(boxed)
+            }
+        }
     }
 }
 

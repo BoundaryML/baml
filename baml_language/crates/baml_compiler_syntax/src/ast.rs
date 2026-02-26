@@ -699,6 +699,7 @@ ast_node!(CatchClause, CATCH_CLAUSE);
 ast_node!(CatchArm, CATCH_ARM);
 ast_node!(CatchPattern, CATCH_PATTERN);
 ast_node!(ThrowExpr, THROW_EXPR);
+ast_node!(ThrowsClause, THROWS_CLAUSE);
 
 // Implement accessor methods
 impl SourceFile {
@@ -753,6 +754,11 @@ impl FunctionDef {
     /// Check if this is an expression function.
     pub fn is_expr_function(&self) -> bool {
         self.expr_body().is_some()
+    }
+
+    /// Get the throws clause if present (BEP-007).
+    pub fn throws_clause(&self) -> Option<ThrowsClause> {
+        self.syntax.children().find_map(ThrowsClause::cast)
     }
 }
 
@@ -2633,6 +2639,13 @@ impl ThrowExpr {
     }
 }
 
+impl ThrowsClause {
+    /// Get the type expression for the throws clause.
+    pub fn type_expr(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
+    }
+}
+
 impl CatchExpr {
     /// Get the base expression before the first catch clause.
     pub fn base(&self) -> Option<SyntaxNode> {
@@ -2671,11 +2684,6 @@ impl CatchClause {
     /// Iterate over typed/fallback arm entries for this clause.
     pub fn arms(&self) -> impl Iterator<Item = CatchArm> + '_ {
         self.syntax.children().filter_map(CatchArm::cast)
-    }
-
-    /// Get the clause body when parsed as a plain block (non-arm form).
-    pub fn block_body(&self) -> Option<BlockExpr> {
-        self.syntax.children().find_map(BlockExpr::cast)
     }
 }
 

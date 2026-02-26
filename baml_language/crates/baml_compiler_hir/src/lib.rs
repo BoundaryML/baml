@@ -436,6 +436,7 @@ fn function_signature_with_source_map<'db>(
                     Name::new("llm"),
                     Name::new("PrimitiveClient"),
                 ])),
+                throws: None,
             }),
             SignatureSourceMap::default(),
         );
@@ -483,6 +484,7 @@ fn function_signature_with_source_map<'db>(
                     name: base_name.clone(),
                     params: vec![],
                     return_type: TypeRef::Unknown,
+                    throws: None,
                 }),
                 SignatureSourceMap::default(),
             ));
@@ -498,6 +500,7 @@ fn function_signature_with_source_map<'db>(
                 name: func_name,
                 params: base_sig.params.clone(),
                 return_type,
+                throws: base_sig.throws.clone(),
             }),
             source_map,
         );
@@ -511,6 +514,7 @@ fn function_signature_with_source_map<'db>(
             name: func.name.clone(),
             params: vec![],
             return_type: TypeRef::Unknown,
+            throws: None,
         }),
         SignatureSourceMap::default(),
     );
@@ -600,11 +604,17 @@ fn lower_method_signature(
         source_map.set_return_type_span(span);
     }
 
+    let throws = method_node
+        .throws_clause()
+        .and_then(|tc| tc.type_expr())
+        .map(|te| TypeRef::from_ast(&te));
+
     (
         Arc::new(FunctionSignature {
             name: method_name.clone(),
             params,
             return_type,
+            throws,
         }),
         source_map,
     )
@@ -1179,6 +1189,30 @@ pub fn function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Arc<Fu
     Arc::new(build_function_body(db, function))
 }
 
+/// Collect all known type names (primitives + user-defined classes, enums, type aliases)
+/// from the project for BEP-010 bare-type pattern sugar.
+fn collect_known_type_names(db: &dyn Db) -> std::collections::HashSet<String> {
+    let mut names: std::collections::HashSet<String> = body::PRIMITIVE_TYPE_NAMES
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+
+    let project = db.project();
+    for file in project.files(db) {
+        let item_tree = file_item_tree(db, *file);
+        for class in item_tree.classes.values() {
+            names.insert(class.name.to_string());
+        }
+        for enum_def in item_tree.enums.values() {
+            names.insert(enum_def.name.to_string());
+        }
+        for alias in item_tree.type_aliases.values() {
+            names.insert(alias.name.to_string());
+        }
+    }
+    names
+}
+
 /// Build a function body (pure syntactic lowering, no name resolution).
 fn build_function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> FunctionBody {
     let file = function.file(db);
@@ -1329,7 +1363,10 @@ fn build_function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Func
 
     // Lower the function with file_id for span tracking.
     let file_id = file.file_id(db);
-    function_def.map_or(FunctionBody::Missing, |f| FunctionBody::lower(&f, file_id))
+    let known_type_names = collect_known_type_names(db);
+    function_def.map_or(FunctionBody::Missing, |f| {
+        FunctionBody::lower(&f, file_id, known_type_names)
+    })
 }
 
 /// Returns `true` if this function is one of the expanded LLM pieces (`LlmCall`, `LlmRenderPrompt`, `LlmBuildRequest`).

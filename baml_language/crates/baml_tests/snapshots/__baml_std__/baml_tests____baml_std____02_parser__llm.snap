@@ -1895,6 +1895,10 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR "unknown"
       WORD "unknown"
+    THROWS_CLAUSE
+      KW_THROWS "throws"
+      TYPE_EXPR "string"
+        WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
@@ -1998,17 +2002,9 @@ SOURCE_FILE
                 WORD "value"
               SEMICOLON ";"
             R_BRACE "}"
-        CALL_EXPR
-          PATH_EXPR "// TODO: This will have to be replaced by a "throw" when exceptions land.
-    // TODO: Also figure out panics in Baml.
-    baml.sys.panic"
-            WORD "baml"
-            DOT "."
-            WORD "sys"
-            DOT "."
-            WORD "panic"
-          CALL_ARGS
-            L_PAREN "("
+        THROW_STMT
+          THROW_EXPR
+            KW_THROW "throw"
             STRING_LITERAL "All orchestration steps failed"
               QUOTE """
               WORD "All"
@@ -2016,8 +2012,7 @@ SOURCE_FILE
               WORD "steps"
               WORD "failed"
               QUOTE """
-            R_PAREN ")"
-        SEMICOLON ";"
+          SEMICOLON ";"
         R_BRACE "}"
 
 === ERRORS ===

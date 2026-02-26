@@ -42,6 +42,7 @@ mod narrowing;
 mod normalize;
 pub mod pretty;
 mod resolve;
+pub mod throw_inference;
 mod types;
 
 // Re-export HIR types that are part of TIR's public API (used in Ty variants).

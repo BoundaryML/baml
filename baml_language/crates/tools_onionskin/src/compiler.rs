@@ -2352,10 +2352,6 @@ fn format_catch_clause(
         for arm in arms {
             format_catch_arm(&arm, output, indent + 2);
         }
-    } else if let Some(block_body) = clause.block_body() {
-        write_indent(output, indent + 1);
-        writeln!(output, "BODY").ok();
-        format_block_expr(&block_body, output, indent + 2);
     }
 }
 

@@ -575,7 +575,7 @@ pub enum AssignOp {
 
 /// Patterns for let bindings and match arms.
 ///
-/// Following BEP-002, patterns can be:
+/// Patterns can be:
 /// - Simple bindings: `x`, `_` (wildcard is semantically dropped later)
 /// - Typed bindings: `s: Success`
 /// - Literals: `null`, `true`, `42`, `"hello"`
@@ -730,6 +730,7 @@ impl FunctionBody {
     pub fn lower(
         func_node: &baml_compiler_syntax::ast::FunctionDef,
         file_id: FileId,
+        known_type_names: std::collections::HashSet<String>,
     ) -> FunctionBody {
         // Collect parameter names to add to scope so gensym avoids them
         let param_names: Vec<String> = func_node
@@ -745,7 +746,8 @@ impl FunctionBody {
         if let Some(llm_body) = func_node.llm_body() {
             Self::lower_llm_body(&llm_body)
         } else if let Some(expr_body) = func_node.expr_body() {
-            let (body, source_map) = Self::lower_expr_body(&expr_body, file_id, &param_names);
+            let (body, source_map) =
+                Self::lower_expr_body(&expr_body, file_id, &param_names, known_type_names);
             FunctionBody::Expr(body, source_map)
         } else {
             FunctionBody::Missing
@@ -783,8 +785,9 @@ impl FunctionBody {
         expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
         file_id: FileId,
         param_names: &[String],
+        known_type_names: std::collections::HashSet<String>,
     ) -> (ExprBody, HirSourceMap) {
-        let mut ctx = LoweringContext::new(file_id);
+        let mut ctx = LoweringContext::new(file_id, known_type_names);
 
         // Add function parameters to scope so gensym avoids them
         for name in param_names {
@@ -818,7 +821,7 @@ impl FunctionBody {
         allowed_roles: &[String],
     ) -> (ExprBody, HirSourceMap) {
         use crate::Name;
-        let mut ctx = LoweringContext::new(file_id);
+        let mut ctx = LoweringContext::new(file_id, std::collections::HashSet::new());
         let range = config_block.syntax().text_range();
 
         // Build the options map expression
@@ -889,6 +892,11 @@ struct LoweringContext {
     /// All names used in this function, for generating unique synthetic variable names.
     names_in_scope: std::collections::HashSet<String>,
 
+    /// Known type names for bare-type pattern sugar.
+    /// When a single identifier in pattern position matches a known type,
+    /// it's desugared from `T` to `_: T`.
+    known_type_names: std::collections::HashSet<String>,
+
     /// Source map for tracking spans (separate from `ExprBody` for incrementality)
     source_map: HirSourceMap,
 
@@ -912,8 +920,12 @@ enum PatternElement {
     TypedBindingStart(Name, TextSize),
 }
 
+/// Primitive type names that are always recognized as types in pattern position.
+pub(crate) const PRIMITIVE_TYPE_NAMES: &[&str] =
+    &["int", "string", "bool", "float", "null", "unknown"];
+
 impl LoweringContext {
-    fn new(file_id: FileId) -> Self {
+    fn new(file_id: FileId, known_type_names: std::collections::HashSet<String>) -> Self {
         Self {
             exprs: Arena::new(),
             stmts: Arena::new(),
@@ -923,6 +935,7 @@ impl LoweringContext {
             types: Arena::new(),
             file_id,
             names_in_scope: std::collections::HashSet::new(),
+            known_type_names,
             source_map: HirSourceMap::new(),
             diagnostics: Vec::new(),
         }
@@ -2083,15 +2096,30 @@ impl LoweringContext {
     }
 
     /// Finalize a partially-built pattern element.
+    ///
+    /// When a single-segment name matches a known type (primitive, class,
+    /// enum, or type alias), it's desugared from `T` to `_: T` (type pattern).
     #[allow(clippy::cast_possible_truncation)]
     fn finalize_pattern_element(&mut self, element: PatternElement) -> PatId {
         match element {
             PatternElement::Segments(segs, start) => {
                 if segs.len() == 1 {
-                    // Single segment → binding
                     let name = segs.into_iter().next().unwrap();
                     let end = start + TextSize::new(name.as_str().len() as u32);
-                    self.alloc_pattern(Pattern::Binding(name), TextRange::new(start, end))
+
+                    if self.known_type_names.contains(name.as_str()) {
+                        // Bare type name → desugar to `_: T`
+                        let ty = crate::type_ref::TypeRef::from_type_name(name.as_str());
+                        self.alloc_pattern(
+                            Pattern::TypedBinding {
+                                name: Name::new("_"),
+                                ty,
+                            },
+                            TextRange::new(start, end),
+                        )
+                    } else {
+                        self.alloc_pattern(Pattern::Binding(name), TextRange::new(start, end))
+                    }
                 } else {
                     // Multi-segment → enum variant (all-but-last = enum name, last = variant)
                     // Compute span: total length is all segments + dots between them
@@ -2168,14 +2196,13 @@ impl LoweringContext {
     /// `CATCH_CLAUSE` structure (from parser):
     /// - Keyword token (`KW_CATCH`, `KW_CATCH_ALL`, `KW_CATCH_ALL_PANICS`)
     /// - `CATCH_PATTERN` node (the error binding)
-    /// - Either `CATCH_ARM` children (arm form) or `BLOCK_EXPR` child (plain block form)
+    /// - `CATCH_ARM` children (arm form with `pattern => body`)
     fn lower_catch_clause(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> CatchClause {
         use baml_compiler_syntax::SyntaxKind;
 
         let mut kind = CatchClauseKind::Catch;
         let mut binding = None;
         let mut arms = Vec::new();
-        let mut block_body = None;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -2185,46 +2212,17 @@ impl LoweringContext {
                     SyntaxKind::KW_CATCH_ALL_PANICS => kind = CatchClauseKind::CatchAllPanics,
                     _ => {}
                 },
-                rowan::NodeOrToken::Node(child) => {
-                    match child.kind() {
-                        SyntaxKind::CATCH_PATTERN => {
-                            binding = Some(self.lower_catch_pattern(&child));
-                        }
-                        SyntaxKind::CATCH_ARM => {
-                            let (arm, spans) = self.lower_catch_arm(&child);
-                            let arm_id = self.alloc_catch_arm(arm, spans);
-                            arms.push(arm_id);
-                        }
-                        SyntaxKind::BLOCK_EXPR => {
-                            // Plain block form: `catch (e) { ... }`
-                            // This is syntactic sugar for a single catch-all arm
-                            if let Some(block) =
-                                baml_compiler_syntax::ast::BlockExpr::cast(child.clone())
-                            {
-                                block_body = Some(self.lower_block_expr(&block));
-                            }
-                        }
-                        _ => {}
+                rowan::NodeOrToken::Node(child) => match child.kind() {
+                    SyntaxKind::CATCH_PATTERN => {
+                        binding = Some(self.lower_catch_pattern(&child));
                     }
-                }
-            }
-        }
-
-        // If we got a plain block body (not arms), wrap it as a single wildcard arm
-        if arms.is_empty() {
-            if let Some(body_expr) = block_body {
-                let wildcard_pat = self.patterns.alloc(Pattern::Binding(Name::new("_")));
-                let arm = CatchArm {
-                    pattern: wildcard_pat,
-                    body: body_expr,
-                };
-                let arm_span = self.span_from_node(node);
-                let spans = CatchArmSpans {
-                    arm_span,
-                    pattern_span: arm_span,
-                };
-                let arm_id = self.alloc_catch_arm(arm, spans);
-                arms.push(arm_id);
+                    SyntaxKind::CATCH_ARM => {
+                        let (arm, spans) = self.lower_catch_arm(&child);
+                        let arm_id = self.alloc_catch_arm(arm, spans);
+                        arms.push(arm_id);
+                    }
+                    _ => {}
+                },
             }
         }
 

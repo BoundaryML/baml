@@ -93,6 +93,10 @@ pub(crate) struct FunctionItem {
     pub(crate) is_sys_op: bool,
     /// Whether this `sys_op` needs engine context (marked with #[`uses(engine_ctx)`]).
     pub(crate) uses_engine_ctx: bool,
+    /// Contract error categories from `#[throws(Io, Timeout)]`.
+    pub(crate) throws: Vec<Ident>,
+    /// Contract panic categories from `#[panics(HostPanic)]`.
+    pub(crate) panics: Vec<Ident>,
 }
 
 impl ModuleItem {
@@ -245,6 +249,30 @@ impl FunctionItem {
         }
         let is_sys_op = attrs.iter().any(|attr| attr.path().is_ident("sys_op"));
 
+        let mut throws = Vec::new();
+        for attr in attrs.iter().filter(|a| a.path().is_ident("throws")) {
+            attr.parse_nested_meta(|meta| {
+                throws.push(
+                    meta.path.get_ident().cloned().ok_or_else(|| {
+                        syn::Error::new_spanned(&meta.path, "expected identifier")
+                    })?,
+                );
+                Ok(())
+            })?;
+        }
+
+        let mut panics = Vec::new();
+        for attr in attrs.iter().filter(|a| a.path().is_ident("panics")) {
+            attr.parse_nested_meta(|meta| {
+                panics.push(
+                    meta.path.get_ident().cloned().ok_or_else(|| {
+                        syn::Error::new_spanned(&meta.path, "expected identifier")
+                    })?,
+                );
+                Ok(())
+            })?;
+        }
+
         input.parse::<Token![fn]>()?;
         let name: Ident = input.parse()?;
         let generics: Generics = input.parse()?;
@@ -301,6 +329,8 @@ impl FunctionItem {
             uses_vm,
             is_sys_op,
             uses_engine_ctx,
+            throws,
+            panics,
         })
     }
 }

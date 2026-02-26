@@ -23,6 +23,9 @@ pub struct FunctionSignature {
 
     /// Return type
     pub return_type: TypeRef,
+
+    /// Declared throws type (BEP-007). `None` means inferred (no contract).
+    pub throws: Option<TypeRef>,
 }
 
 /// Function parameter.
@@ -81,11 +84,18 @@ impl FunctionSignature {
             source_map.set_return_type_span(span);
         }
 
+        // Extract throws clause (BEP-007)
+        let throws = func_node
+            .throws_clause()
+            .and_then(|tc| tc.type_expr())
+            .map(|te| TypeRef::from_ast(&te));
+
         (
             Arc::new(FunctionSignature {
                 name,
                 params,
                 return_type,
+                throws,
             }),
             source_map,
         )

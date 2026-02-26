@@ -107,6 +107,61 @@ impl Program {
 }
 
 // ============================================================================
+// SysOp Error/Panic Contract Categories
+// ============================================================================
+
+/// Contract-level error categories for `sys_op` throw contracts.
+///
+/// These are the finite set of categories that `#[throws(...)]` annotations
+/// reference. Each `OpErrorKind` variant maps to exactly one category via
+/// `OpErrorKind::category()`. Rich detail stays in `OpErrorKind`; this enum
+/// is purely for contract enforcement and compiler analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SysOpErrorCategory {
+    Io,
+    Timeout,
+    InvalidArgument,
+    Unsupported,
+    NotImplemented,
+    AccessError,
+    RenderPrompt,
+    LlmClient,
+    /// Wildcard for development convenience. Must be explicitly declared in
+    /// `#[throws(DevOther)]` and should be migrated to named categories.
+    DevOther,
+}
+
+impl std::fmt::Display for SysOpErrorCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io => write!(f, "Io"),
+            Self::Timeout => write!(f, "Timeout"),
+            Self::InvalidArgument => write!(f, "InvalidArgument"),
+            Self::Unsupported => write!(f, "Unsupported"),
+            Self::NotImplemented => write!(f, "NotImplemented"),
+            Self::AccessError => write!(f, "AccessError"),
+            Self::RenderPrompt => write!(f, "RenderPrompt"),
+            Self::LlmClient => write!(f, "LlmClient"),
+            Self::DevOther => write!(f, "DevOther"),
+        }
+    }
+}
+
+/// Contract-level panic categories for `sys_op` panic contracts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SysOpPanicCategory {
+    HostPanic,
+}
+
+impl std::fmt::Display for SysOpPanicCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::HostPanic => write!(f, "HostPanic"),
+        }
+    }
+}
+
+// ============================================================================
 // External Operations
 // ============================================================================
 
@@ -119,7 +174,7 @@ impl Program {
 /// and `snake_case` names. This enum, `path()`, `sys_op_for_path()`, and `Display`
 /// are all generated from it — no manual maintenance needed.
 macro_rules! define_sys_op_enum {
-    ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr })*) => {
+    ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr, [$($throw_cat:ident),*], [$($panic_cat:ident),*] })*) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum SysOp {
             $( $Variant, )*
@@ -130,6 +185,20 @@ macro_rules! define_sys_op_enum {
             pub const fn path(&self) -> &'static str {
                 match self {
                     $( SysOp::$Variant => $path, )*
+                }
+            }
+
+            /// Error categories this `sys_op` is allowed to throw per its contract.
+            pub fn allowed_error_categories(&self) -> &'static [SysOpErrorCategory] {
+                match self {
+                    $( SysOp::$Variant => &[$(SysOpErrorCategory::$throw_cat),*], )*
+                }
+            }
+
+            /// Panic categories this `sys_op` is allowed to surface per its contract.
+            pub fn allowed_panic_categories(&self) -> &'static [SysOpPanicCategory] {
+                match self {
+                    $( SysOp::$Variant => &[$(SysOpPanicCategory::$panic_cat),*], )*
                 }
             }
         }

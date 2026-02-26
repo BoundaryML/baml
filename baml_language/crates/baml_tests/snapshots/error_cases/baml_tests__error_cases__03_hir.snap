@@ -14,7 +14,7 @@ function Broken.Invalid() -> <unknown> {
 function Broken.BadUnionPattern(x: int | bool) -> string {
     match (x) {
         a: int | b => <missing>,
-        bool => "bad",
+        _: bool => "bad",
     }
 }
 

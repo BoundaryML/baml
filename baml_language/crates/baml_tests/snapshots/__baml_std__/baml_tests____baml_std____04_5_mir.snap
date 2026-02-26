@@ -1500,10 +1500,8 @@ fn call_llm_function(function_name: string, args: map<string, unknown>) -> unkno
     let _22: baml.llm.ExecutionResult
     let _23: void
     let _24: baml.llm.ExecutionResult
-    let _25: null
-    let _26: (string) -> null
-    let _27: "All orchestration steps failed"
-    let _28: null
+    let _25: void
+    let _26: "All orchestration steps failed"
 
     bb0: {
         _4 = const fn baml.llm.get_jinja_template;
@@ -1559,9 +1557,8 @@ fn call_llm_function(function_name: string, args: map<string, unknown>) -> unkno
     }
 
     bb9: {
-        _26 = const fn baml.sys.panic;
-        _27 = const "All orchestration steps failed";
-        _28 = dispatch_future copy _26(copy _27) -> bb11;
+        _26 = const "All orchestration steps failed";
+        throw copy _26;
     }
 
     bb10: {
@@ -1569,10 +1566,7 @@ fn call_llm_function(function_name: string, args: map<string, unknown>) -> unkno
     }
 
     bb11: {
-        _25 = await _28 -> [bb12];
-    }
-
-    bb12: {
+        _25 = const null;
         _0 = const null;
         goto -> bb1;
     }

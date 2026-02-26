@@ -35,6 +35,7 @@ pub enum SyntaxKind {
     KW_CATCH_ALL,
     KW_CATCH_ALL_PANICS,
     KW_ASSERT,
+    KW_THROWS,
 
     // Other keywords
     KW_WATCH,
@@ -240,6 +241,7 @@ pub enum SyntaxKind {
     CATCH_ARM,
     CATCH_PATTERN,
     THROW_EXPR,
+    THROWS_CLAUSE,
     WHILE_STMT,
     FOR_EXPR,
     LET_STMT,
@@ -366,6 +368,7 @@ impl SyntaxKind {
                 | Self::KW_CATCH_ALL
                 | Self::KW_CATCH_ALL_PANICS
                 | Self::KW_ASSERT
+                | Self::KW_THROWS
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_ENV

@@ -53,6 +53,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::Assert => SyntaxKind::KW_ASSERT,
+        TokenKind::Throws => SyntaxKind::KW_THROWS,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -1945,6 +1946,14 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("return type (->)".to_string());
             }
 
+            // Optional throws clause (BEP-007)
+            if p.at(TokenKind::Throws) {
+                p.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
+                    p.bump(); // throws
+                    p.parse_type();
+                });
+            }
+
             // Body
             if p.at(TokenKind::LBrace) {
                 p.parse_function_body();
@@ -2594,32 +2603,29 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            if p.expect(TokenKind::LParen) {
-                p.parse_catch_pattern();
-                p.expect(TokenKind::RParen);
+            if !p.expect(TokenKind::LParen) {
+                return;
             }
+            p.parse_catch_pattern();
+            p.expect(TokenKind::RParen);
 
             if !p.at(TokenKind::LBrace) {
                 p.error_unexpected_token("catch clause body".to_string());
                 return;
             }
 
-            if p.looks_like_catch_arm_block() {
-                p.bump(); // {
+            p.bump(); // {
 
-                if p.at(TokenKind::RBrace) {
-                    p.error_unexpected_token("at least one catch arm".to_string());
-                } else {
-                    p.parse_catch_arm();
-                    while !p.at(TokenKind::RBrace) && !p.at_end() {
-                        p.parse_catch_arm();
-                    }
-                }
-
-                p.expect(TokenKind::RBrace);
+            if p.at(TokenKind::RBrace) {
+                p.error_unexpected_token("at least one catch arm".to_string());
             } else {
-                p.parse_block_expr();
+                p.parse_catch_arm();
+                while !p.at(TokenKind::RBrace) && !p.at_end() {
+                    p.parse_catch_arm();
+                }
             }
+
+            p.expect(TokenKind::RBrace);
         });
     }
 
@@ -2722,77 +2728,6 @@ impl<'a> Parser<'a> {
 
             i += 1;
             scanned += 1;
-        }
-
-        false
-    }
-
-    fn looks_like_catch_arm_block(&self) -> bool {
-        let Some(open_brace_index) = self.current_non_trivia_index() else {
-            return false;
-        };
-
-        if self.tokens[open_brace_index].kind != TokenKind::LBrace {
-            return false;
-        }
-
-        let mut i = open_brace_index + 1;
-        let mut brace_depth = 1u32;
-        let mut paren_depth = 0u32;
-        let mut bracket_depth = 0u32;
-
-        while i < self.tokens.len() {
-            let new_i = self.skip_comment_at(i);
-            if new_i != i {
-                i = new_i;
-                continue;
-            }
-
-            let kind = self.tokens[i].kind;
-            if self.is_basic_trivia(kind) {
-                i += 1;
-                continue;
-            }
-
-            match kind {
-                TokenKind::LParen => paren_depth += 1,
-                TokenKind::RParen => paren_depth = paren_depth.saturating_sub(1),
-                TokenKind::LBracket => bracket_depth += 1,
-                TokenKind::RBracket => bracket_depth = bracket_depth.saturating_sub(1),
-                TokenKind::LBrace => brace_depth += 1,
-                TokenKind::RBrace => {
-                    brace_depth = brace_depth.saturating_sub(1);
-                    if brace_depth == 0 {
-                        return false;
-                    }
-                }
-                _ => {
-                    if brace_depth == 1 && paren_depth == 0 && bracket_depth == 0 {
-                        if kind == TokenKind::FatArrow {
-                            return true;
-                        }
-
-                        if kind == TokenKind::Semicolon
-                            || matches!(
-                                kind,
-                                TokenKind::Let
-                                    | TokenKind::Return
-                                    | TokenKind::Throw
-                                    | TokenKind::If
-                                    | TokenKind::While
-                                    | TokenKind::For
-                                    | TokenKind::Break
-                                    | TokenKind::Continue
-                                    | TokenKind::Assert
-                            )
-                        {
-                            return false;
-                        }
-                    }
-                }
-            }
-
-            i += 1;
         }
 
         false
