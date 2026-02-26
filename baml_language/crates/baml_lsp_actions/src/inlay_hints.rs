@@ -346,12 +346,9 @@ impl HintCollector for LetTypeAnnotations {
 /// Compute all inlay hints for the given file.
 ///
 /// To add new hint categories, implement [`HintCollector`] and add to `collectors`.
-pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, _project: Project) -> Vec<InlayHint> {
+pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, project: Project) -> Vec<InlayHint> {
     let collectors: &[&dyn HintCollector] = &[&CallArgNames, &LetTypeAnnotations];
     let mut hints = Vec::new();
-    let Some(project) = db.get_project() else {
-        return hints;
-    };
 
     // Collect all function bodies in the file.
     let file_items = file_items(db, file);
