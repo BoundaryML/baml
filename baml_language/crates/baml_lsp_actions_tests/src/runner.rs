@@ -173,6 +173,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         let db = lsp_db.db();
         let project = lsp_db.project().expect("Project should be set");
 
+        // Collect all inlay hints from all files.
         let mut all_hints: Vec<(String, InlayHint)> = Vec::new();
         for (filename, source_file) in &file_map {
             let hints = lsp_inlay_hints(db, *source_file, project);
@@ -180,6 +181,9 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
                 all_hints.push((filename.clone(), hint));
             }
         }
+
+        // Sort inlay hints by filename and offset so the order is consistent between runs.
+        all_hints.sort_by(|(fa, ha), (fb, hb)| fa.cmp(fb).then_with(|| ha.offset.cmp(&hb.offset)));
 
         Some(format_inlay_hints_results(&all_hints, &parsed.files))
     } else {
@@ -265,10 +269,18 @@ fn format_as_comment(text: &str) -> String {
 /// Convert a byte offset to a 1-indexed (line, column) pair.
 fn offset_to_line_col(content: &str, offset: u32) -> (usize, usize) {
     let offset = offset as usize;
-    let before = &content[..offset.min(content.len())];
+    let clamped = offset.min(content.len());
+
+    // Walk back to the nearest valid char boundary to avoid a possible panic.
+    let safe = (0..=clamped)
+        .rev()
+        .find(|&i| content.is_char_boundary(i))
+        .unwrap_or(0);
+    let before = &content[..safe];
     let line = before.matches('\n').count() + 1;
     let last_newline = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
-    let column = offset - last_newline + 1;
+    let column = safe - last_newline + 1;
+
     (line, column)
 }
 
@@ -282,7 +294,6 @@ fn format_inlay_hints_results(
     }
 
     let mut output = String::new();
-
     for (filename, hint) in hints {
         let file_content = &files[filename].content;
         let (line, col) = offset_to_line_col(file_content, u32::from(hint.offset));
@@ -307,8 +318,13 @@ fn format_inlay_hints_results(
                 {
                     offset_to_line_col(&target_vfile.content, u32::from(target.span.range.start()))
                 } else {
-                    // Fallback: show raw byte offset.
-                    (u32::from(target.span.range.start()) as usize, 0)
+                    // If something goes wrong and we can't find the file, show the raw offset.
+                    let raw = u32::from(target.span.range.start());
+                    output.push_str(&format!(
+                                            "//   target {:?} -> {target_filename}:+{raw} (raw offset, file not in test)\n",
+                                            part.value
+                                        ));
+                    continue;
                 };
                 output.push_str(&format!(
                     "//   target {:?} -> {target_filename}:{target_line}:{target_col}\n",

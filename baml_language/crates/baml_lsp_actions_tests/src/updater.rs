@@ -50,9 +50,10 @@ fn extract_completion_section(content: &str) -> Option<String> {
     let after_marker = &content[marker_pos + marker.len()..];
 
     // Find where the next section starts (or end of file)
-    let section_end = after_marker
-        .find("//- diagnostics")
-        .or_else(|| after_marker.find("//- on_hover"))
+    let section_end = ["//- diagnostics", "//- on_hover", "//- inlay_hints"]
+        .iter()
+        .filter_map(|marker| after_marker.find(marker))
+        .min()
         .unwrap_or(after_marker.len());
 
     let section = &after_marker[..section_end];
