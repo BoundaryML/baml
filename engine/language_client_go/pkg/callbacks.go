@@ -117,6 +117,8 @@ func SetTypeMap(t map[string]reflect.Type) {
 
 //export on_tick_callback
 func on_tick_callback(id C.uint32_t) {
+	defer func() { recover() }()
+
 	callbackMutex.RLock()
 	id_uint := uint32(id)
 	callback, exists := dynamicCallbacks[id_uint]
