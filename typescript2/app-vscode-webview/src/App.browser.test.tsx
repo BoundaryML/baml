@@ -4,39 +4,30 @@ import App from './App';
 
 describe('App (Browser)', () => {
   describe('initial render', () => {
-    it('should render the main app container', () => {
+    it('renders loading state or ExecutionPanel', async () => {
       render(<App />);
 
-      const main = screen.getByRole('main');
-      expect(main).toBeInTheDocument();
-      expect(main).toHaveClass('app');
+      await screen.findByText(/Select a function to run|Connecting to playground server/);
     });
 
-    it('should render the header with title', () => {
+    it('shows ENV section when ExecutionPanel is rendered', async () => {
       render(<App />);
 
-      const heading = screen.getByRole('heading', { level: 1 });
-      expect(heading).toBeInTheDocument();
-      expect(heading).toHaveTextContent('Standalone Playground');
+      await screen.findByText('ENV');
     });
 
-    it('should render the description paragraph', () => {
+    it('shows functions area (empty or list)', async () => {
       render(<App />);
 
-      const description = screen.getByText(
-        /shared ui components and state management come from the common package/i
-      );
-      expect(description).toBeInTheDocument();
+      expect(await screen.findByText('No functions yet')).toBeInTheDocument();
+      expect(screen.getByText('Select a function to run')).toBeInTheDocument();
     });
 
-    it('should render the app header section with correct class', () => {
+    it('renders a key/value input row in ENV bar', async () => {
       render(<App />);
 
-      // Use querySelector since there are multiple headers
-      const main = screen.getByRole('main');
-      const appHeader = main.querySelector('.app__header');
-      expect(appHeader).toBeInTheDocument();
-      expect(appHeader?.tagName.toLowerCase()).toBe('header');
+      await screen.findByPlaceholderText('KEY');
+      expect(screen.getByPlaceholderText('value')).toBeInTheDocument();
     });
   });
 });

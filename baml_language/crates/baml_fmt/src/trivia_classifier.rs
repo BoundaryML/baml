@@ -238,6 +238,24 @@ impl TriviaInfo {
         }
     }
 
+    /// Returns the leading trivia for [`Printable::leftmost_token`]
+    ///
+    /// Similar to [`Self::get_for_element`], but only returns the leading trivia.
+    #[must_use]
+    pub fn get_leading_for_element(&self, printable: &impl Printable) -> &[EmittableTrivia] {
+        let leftmost = printable.leftmost_token();
+        self.get_for_range_split(leftmost).0
+    }
+
+    /// Returns the trailing trivia for [`Printable::rightmost_token`]
+    ///
+    /// Similar to [`Self::get_for_element`], but only returns the trailing trivia.
+    #[must_use]
+    pub fn get_trailing_for_element(&self, printable: &impl Printable) -> &[EmittableTrivia] {
+        let rightmost = printable.rightmost_token();
+        self.get_for_range_split(rightmost).1
+    }
+
     /// Returns all trivia attached to EOF.
     #[must_use]
     pub fn get_for_eof(&self) -> &[EmittableTrivia] {
@@ -402,6 +420,55 @@ impl EmittableTrivia {
             | Self::CommentBeforeEOF { .. }
             | Self::EmptyLineBeforeEOF => None,
         }
+    }
+}
+
+pub(crate) trait TriviaSliceExt {
+    /// Returns the slice with all leading and trailing blanks removed.
+    fn trim_blanks(&self) -> &Self {
+        self.trim_leading_blanks().trim_trailing_blanks()
+    }
+    /// Returns the slice with all leading blanks removed.
+    fn trim_leading_blanks(&self) -> &Self;
+    /// Returns the slice with all trailing blanks removed.
+    fn trim_trailing_blanks(&self) -> &Self;
+
+    /// Length if printed with [`crate::printer::Printer::print_trivia_squished`].
+    fn squished_len(&self, input: &str) -> usize;
+    /// Length if printed with [`crate::printer::Printer::try_print_trivia_single_line_squished`].
+    fn try_squished_len(&self, input: &str) -> Option<usize>;
+}
+
+impl TriviaSliceExt for [EmittableTrivia] {
+    fn trim_leading_blanks(&self) -> &[EmittableTrivia] {
+        let mut slice = self;
+        while let Some((
+            EmittableTrivia::EmptyLine { .. } | EmittableTrivia::EmptyLineBeforeEOF,
+            rest,
+        )) = slice.split_first()
+        {
+            slice = rest;
+        }
+        slice
+    }
+    fn trim_trailing_blanks(&self) -> &[EmittableTrivia] {
+        let mut slice = self;
+        while let Some((
+            EmittableTrivia::EmptyLine { .. } | EmittableTrivia::EmptyLineBeforeEOF,
+            rest,
+        )) = slice.split_last()
+        {
+            slice = rest;
+        }
+        slice
+    }
+    fn squished_len(&self, input: &str) -> usize {
+        self.iter()
+            .map(|t| t.single_line_len(input).unwrap_or_default())
+            .sum()
+    }
+    fn try_squished_len(&self, input: &str) -> Option<usize> {
+        self.iter().map(|t| t.single_line_len(input)).sum()
     }
 }
 

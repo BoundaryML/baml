@@ -41,6 +41,17 @@ impl KnownKind for BlockAttribute {
     }
 }
 
+impl BlockAttribute {
+    pub fn name_parts_str<'s>(&self, input: &'s str) -> impl Iterator<Item = &'s str> {
+        std::iter::once(&self.name.first)
+            .chain(self.name.rest.iter().map(|(_, part)| part))
+            .map(|part| match part {
+                AttributeNamePart::Word(word) => &input[word.span()],
+                AttributeNamePart::Keyword(range) => &input[*range],
+            })
+    }
+}
+
 impl Printable for BlockAttribute {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
@@ -127,6 +138,25 @@ impl KnownKind for Attribute {
     }
 }
 
+impl Attribute {
+    /// The length of the `@`, name, and `(` (if present).
+    pub fn non_wrappable_len(&self) -> usize {
+        (const { "@".len() })
+            + self.name.first.len()
+            + self
+                .name
+                .rest
+                .iter()
+                .map(|(_, part)| const { ".".len() } + part.len())
+                .sum::<usize>()
+            + if self.args.is_some() {
+                const { "(".len() }
+            } else {
+                0
+            }
+    }
+}
+
 impl Printable for Attribute {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         printer.print_raw_token(&self.at);
@@ -169,6 +199,16 @@ impl FromCST for AttributeNamePart {
                 found: token.kind(),
                 at: token.text_range(),
             }),
+        }
+    }
+}
+
+impl AttributeNamePart {
+    #[allow(clippy::len_without_is_empty, reason = "should never be empty")]
+    pub fn len(&self) -> usize {
+        match self {
+            AttributeNamePart::Word(word) => word.span().len().into(),
+            AttributeNamePart::Keyword(range) => range.len().into(),
         }
     }
 }
@@ -343,28 +383,28 @@ impl AttributeArgs {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        printer.print_trivia_single_line_squished(open_trailing)?;
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (arg, comma)) in self.args.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
             let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
-            printer.print_trivia_single_line_squished(arg_leading)?;
+            printer.try_print_trivia_single_line_squished(arg_leading)?;
             if printer
                 .print(arg, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
             }
-            printer.print_trivia_single_line_squished(arg_trailing)?;
+            printer.try_print_trivia_single_line_squished(arg_trailing)?;
             if i + 1 < self.args.len() {
                 if let Some(comma) = comma {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
-                    printer.print_trivia_single_line_squished(comma_leading)?;
+                    printer.try_print_trivia_single_line_squished(comma_leading)?;
                     printer.print_raw_token(comma);
-                    printer.print_trivia_single_line_squished(comma_trailing)?;
+                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
                 } else {
                     printer.print_str(",");
                 }
@@ -373,13 +413,13 @@ impl AttributeArgs {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
                     printer.trivia.get_for_range_split(comma.span());
-                printer.print_trivia_single_line_squished(comma_leading)?;
-                printer.print_trivia_single_line_squished(comma_trailing)?;
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
             }
         }
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.print_trivia_single_line_squished(close_leading)?;
+        printer.try_print_trivia_single_line_squished(close_leading)?;
         printer.print_raw_token(&self.close_paren);
 
         if printer.output.len() > shape.width {

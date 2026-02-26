@@ -237,6 +237,10 @@ pub enum TokenKind {
     #[token("%")]
     Percent,
 
+    // Backslash is used for escaping quotes in strings
+    #[token("\\")]
+    Backslash,
+
     // ============ Whitespace (preserved for losslessness) ============
     #[regex(r"[ \t]+")]
     Whitespace,
@@ -349,6 +353,9 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Star => "'*'",
             TokenKind::Slash => "'/'",
             TokenKind::Percent => "'%'",
+
+            // Backslash
+            TokenKind::Backslash => "'\\'",
 
             // Whitespace
             TokenKind::Whitespace => "whitespace",
@@ -747,6 +754,34 @@ mod tests {
                 TokenKind::Word,  // google
                 TokenKind::Dot,
                 TokenKind::Word, // com
+                TokenKind::Quote,
+            ]
+        );
+
+        // Verify lossless
+        assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_escaped_quote_in_string() {
+        // Test that backslashes in strings are not treated as quotes
+        let source = r#""This is a \" string""#;
+        let tokens = lex_token_kinds(source);
+
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Quote,
+                TokenKind::Word, // This
+                TokenKind::Whitespace,
+                TokenKind::Word, // is
+                TokenKind::Whitespace,
+                TokenKind::Word, // a
+                TokenKind::Whitespace,
+                TokenKind::Backslash,
+                TokenKind::Quote,
+                TokenKind::Whitespace,
+                TokenKind::Word, // string
                 TokenKind::Quote,
             ]
         );

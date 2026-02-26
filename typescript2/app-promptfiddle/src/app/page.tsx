@@ -1,8 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
-import { SplitPreview } from '@b/pkg-playground';
+import { SplitPreview } from '../playground/SplitPreview';
 
 const DevTools = dynamic(async () => {
   const mod = await import('jotai-devtools');
@@ -14,17 +13,12 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
 }
 
 const Page = () => (
-  <main>
-    <header>
-      <h1>Web Playground</h1>
-      <p>
-        Shared logic lives in <code>pkg-playground</code>. Head over to the{' '}
-        <Link href="https://vitejs.dev/">Vite app</Link> to see it in action there too.
-      </p>
-    </header>
-    <SplitPreview />
+  <div className="flex flex-col h-screen">
+    <main className="flex-1 min-h-0">
+      <SplitPreview />
+    </main>
     {process.env.NODE_ENV !== 'production' ? <DevTools /> : null}
-  </main>
+  </div>
 );
 
 export default Page;

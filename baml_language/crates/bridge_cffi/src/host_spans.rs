@@ -24,18 +24,21 @@ struct HostSpanEntry {
 ///
 /// Each instance tracks a single async task or thread's span stack.
 /// `enter()` / `exit_ok()` / `exit_error()` drive the lifecycle and
-/// emit events to the global `bex_events::event_store`.
+/// emit events to the global `bex_events::event_store` and optionally
+/// to an injected `EventSink` for persistence (JSONL file, etc.).
 #[derive(Clone)]
 pub struct HostSpanManager {
     stack: Vec<HostSpanEntry>,
     tags: HashMap<String, String>,
+    sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
 }
 
 impl HostSpanManager {
-    pub fn new() -> Self {
+    pub fn new(sink: Option<std::sync::Arc<dyn bex_events::EventSink>>) -> Self {
         Self {
             stack: Vec::new(),
             tags: HashMap::new(),
+            sink,
         }
     }
 
@@ -75,7 +78,7 @@ impl HostSpanManager {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
-        event_store::emit(RuntimeEvent {
+        let event = RuntimeEvent {
             ctx: SpanContext {
                 span_id: span_id.clone(),
                 parent_span_id,
@@ -88,7 +91,11 @@ impl HostSpanManager {
                 args: args_external,
                 tags: inherited_tags,
             })),
-        });
+        };
+        event_store::emit(&event);
+        if let Some(sink) = &self.sink {
+            sink.send(event);
+        }
 
         self.stack.push(HostSpanEntry {
             span_id,
@@ -100,12 +107,12 @@ impl HostSpanManager {
 
     /// Exit the current span successfully.
     pub fn exit_ok(&mut self) {
-        self.exit_inner(bex_external_types::BexExternalValue::Null);
+        self.exit_inner(bex_project::BexExternalValue::Null);
     }
 
     /// Exit the current span with an error.
     pub fn exit_error(&mut self, error_message: String) {
-        self.exit_inner(bex_external_types::BexExternalValue::String(error_message));
+        self.exit_inner(bex_project::BexExternalValue::String(error_message));
     }
 
     /// Merge tags into the current span and emit a `SetTags` event.
@@ -118,7 +125,7 @@ impl HostSpanManager {
             let call_stack = self.call_stack();
             let trace_tags: TraceTags = tags.into_iter().collect();
 
-            event_store::emit(RuntimeEvent {
+            let event = RuntimeEvent {
                 ctx: SpanContext {
                     span_id: entry.span_id.clone(),
                     parent_span_id: self.stack.iter().rev().nth(1).map(|e| e.span_id.clone()),
@@ -127,7 +134,11 @@ impl HostSpanManager {
                 call_stack,
                 timestamp: std::time::SystemTime::now(),
                 event: EventKind::SetTags(trace_tags),
-            });
+            };
+            event_store::emit(&event);
+            if let Some(sink) = &self.sink {
+                sink.send(event);
+            }
         }
     }
 
@@ -148,7 +159,7 @@ impl HostSpanManager {
         })
     }
 
-    fn exit_inner(&mut self, result: bex_external_types::BexExternalValue) {
+    fn exit_inner(&mut self, result: bex_project::BexExternalValue) {
         let Some(entry) = self.stack.pop() else {
             #[cfg(debug_assertions)]
             eprintln!("HostSpanManager::exit_inner called with empty stack");
@@ -159,7 +170,7 @@ impl HostSpanManager {
         let mut call_stack = self.call_stack();
         call_stack.push(entry.span_id.clone());
 
-        event_store::emit(RuntimeEvent {
+        let event = RuntimeEvent {
             ctx: SpanContext {
                 span_id: entry.span_id,
                 parent_span_id: self.stack.last().map(|e| e.span_id.clone()),
@@ -172,13 +183,17 @@ impl HostSpanManager {
                 result,
                 duration: entry.started_at.elapsed(),
             })),
-        });
+        };
+        event_store::emit(&event);
+        if let Some(sink) = &self.sink {
+            sink.send(event);
+        }
     }
 }
 
 impl Default for HostSpanManager {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
@@ -187,7 +202,7 @@ impl Default for HostSpanManager {
 ///
 /// If the value is a JSON object, each key-value pair becomes a separate entry.
 /// Otherwise wraps the whole value as a single element.
-fn json_to_bex_values(value: &serde_json::Value) -> Vec<bex_external_types::BexExternalValue> {
+fn json_to_bex_values(value: &serde_json::Value) -> Vec<bex_project::BexExternalValue> {
     if let serde_json::Value::Object(map) = value {
         map.values().map(json_value_to_bex).collect()
     } else {
@@ -195,8 +210,8 @@ fn json_to_bex_values(value: &serde_json::Value) -> Vec<bex_external_types::BexE
     }
 }
 
-fn json_value_to_bex(value: &serde_json::Value) -> bex_external_types::BexExternalValue {
-    use bex_external_types::BexExternalValue;
+fn json_value_to_bex(value: &serde_json::Value) -> bex_project::BexExternalValue {
+    use bex_project::BexExternalValue;
 
     match value {
         serde_json::Value::Null => BexExternalValue::Null,
@@ -212,12 +227,12 @@ fn json_value_to_bex(value: &serde_json::Value) -> bex_external_types::BexExtern
         }
         serde_json::Value::String(s) => BexExternalValue::String(s.clone()),
         serde_json::Value::Array(items) => BexExternalValue::Array {
-            element_type: bex_external_types::Ty::Null,
+            element_type: bex_project::Ty::Null,
             items: items.iter().map(json_value_to_bex).collect(),
         },
         serde_json::Value::Object(map) => BexExternalValue::Map {
-            key_type: bex_external_types::Ty::String,
-            value_type: bex_external_types::Ty::Null,
+            key_type: bex_project::Ty::String,
+            value_type: bex_project::Ty::Null,
             entries: map
                 .iter()
                 .map(|(k, v)| (k.clone(), json_value_to_bex(v)))
@@ -232,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_enter_exit_depth() {
-        let mut mgr = HostSpanManager::new();
+        let mut mgr = HostSpanManager::new(None);
         assert_eq!(mgr.context_depth(), 0);
 
         mgr.enter("outer".into(), serde_json::json!({}));
@@ -250,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_deep_clone_independent() {
-        let mut mgr = HostSpanManager::new();
+        let mut mgr = HostSpanManager::new(None);
         mgr.enter("func".into(), serde_json::json!({}));
 
         let clone = mgr.deep_clone();
@@ -263,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_upsert_tags() {
-        let mut mgr = HostSpanManager::new();
+        let mut mgr = HostSpanManager::new(None);
         mgr.enter("func".into(), serde_json::json!({}));
 
         let mut tags = HashMap::new();

@@ -5,9 +5,8 @@
 
 use std::fmt;
 
-use baml_base::{Name, QualifiedName};
+use baml_base::{Name, QualifiedName, Span};
 use baml_type::Ty;
-use text_size::TextRange;
 
 // ============================================================================
 // Function
@@ -27,7 +26,7 @@ pub struct MirFunction {
     /// Local variable declarations.
     pub locals: Vec<LocalDecl>,
     /// Source span for error reporting.
-    pub span: Option<TextRange>,
+    pub span: Option<Span>,
     /// Visualization nodes for control flow visualization.
     pub viz_nodes: Vec<VizNode>,
 }
@@ -84,8 +83,13 @@ pub struct LocalDecl {
     pub name: Option<Name>,
     /// Type of this local.
     pub ty: Ty,
-    /// Source span (for diagnostics).
-    pub span: Option<TextRange>,
+    /// Source span where this local is declared.
+    pub span: Option<Span>,
+    /// Source span where this local is in scope.
+    ///
+    /// This is debugger metadata used to resolve in-scope variables from
+    /// source locations.
+    pub scope_span: Option<Span>,
     /// Whether this local is being watched for changes.
     pub is_watched: bool,
 }
@@ -107,7 +111,9 @@ pub struct BasicBlock {
     /// How this block exits (required after construction).
     pub terminator: Option<Terminator>,
     /// Source span covering this block.
-    pub span: Option<TextRange>,
+    pub span: Option<Span>,
+    /// Source span for the terminator.
+    pub terminator_span: Option<Span>,
 }
 
 impl BasicBlock {
@@ -118,6 +124,7 @@ impl BasicBlock {
             statements: Vec::new(),
             terminator: None,
             span: None,
+            terminator_span: None,
         }
     }
 
@@ -135,7 +142,7 @@ impl BasicBlock {
 #[derive(Debug, Clone)]
 pub struct Statement {
     pub kind: StatementKind,
-    pub span: Option<TextRange>,
+    pub span: Option<Span>,
 }
 
 /// The kind of a MIR statement.
@@ -220,6 +227,10 @@ pub enum Terminator {
         /// When true, the last arm's comparison can be skipped since if all
         /// other arms failed, the discriminant must match the last one.
         exhaustive: bool,
+        /// Symbolic names for arm values (debug metadata only).
+        /// Maps integer discriminant values to human-readable names like
+        /// `"DispatchState.Alpha"` or `"int"`.
+        arm_names: Vec<(i64, String)>,
     },
 
     /// Return from function.

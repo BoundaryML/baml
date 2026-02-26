@@ -26,9 +26,8 @@
 //! let mir = builder.build();
 //! ```
 
-use baml_base::Name;
+use baml_base::{Name, Span};
 use baml_type::Ty;
-use text_size::TextRange;
 
 use crate::{
     BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunction, Operand, Place, Rvalue,
@@ -42,8 +41,10 @@ pub(crate) struct MirBuilder {
     blocks: Vec<BasicBlock>,
     locals: Vec<LocalDecl>,
     current_block: Option<BlockId>,
-    span: Option<TextRange>,
+    span: Option<Span>,
     viz_nodes: Vec<VizNode>,
+    /// Current source span for tagging statements/terminators.
+    pub(crate) current_source_span: Option<Span>,
 }
 
 #[allow(dead_code)]
@@ -58,11 +59,12 @@ impl MirBuilder {
             current_block: None,
             span: None,
             viz_nodes: Vec::new(),
+            current_source_span: None,
         }
     }
 
     /// Set the source span for the function.
-    pub(crate) fn set_span(&mut self, span: TextRange) {
+    pub(crate) fn set_span(&mut self, span: Span) {
         self.span = Some(span);
     }
 
@@ -80,7 +82,7 @@ impl MirBuilder {
         &mut self,
         name: Option<Name>,
         ty: Ty,
-        span: Option<TextRange>,
+        span: Option<Span>,
         is_watched: bool,
     ) -> Local {
         let id = Local(self.locals.len());
@@ -88,6 +90,7 @@ impl MirBuilder {
             name,
             ty,
             span,
+            scope_span: None,
             is_watched,
         });
         id
@@ -151,7 +154,8 @@ impl MirBuilder {
     }
 
     /// Push a statement to the current block.
-    pub(crate) fn push_statement(&mut self, kind: StatementKind, span: Option<TextRange>) {
+    pub(crate) fn push_statement(&mut self, kind: StatementKind, span: Option<Span>) {
+        let span = span.or(self.current_source_span);
         let block = self.current_block_mut();
         assert!(
             block.terminator.is_none(),
@@ -166,7 +170,7 @@ impl MirBuilder {
     }
 
     /// Emit an assignment with span.
-    pub(crate) fn assign_with_span(&mut self, destination: Place, value: Rvalue, span: TextRange) {
+    pub(crate) fn assign_with_span(&mut self, destination: Place, value: Rvalue, span: Span) {
         self.push_statement(StatementKind::Assign { destination, value }, Some(span));
     }
 
@@ -195,6 +199,13 @@ impl MirBuilder {
         self.push_statement(StatementKind::WatchNotify(local), None);
     }
 
+    /// Set debug scope span for a local variable.
+    pub(crate) fn set_local_scope_span(&mut self, local: Local, scope_span: Option<Span>) {
+        if let Some(local_decl) = self.locals.get_mut(local.0) {
+            local_decl.scope_span = scope_span;
+        }
+    }
+
     /// Emit an assert statement.
     pub(crate) fn assert(&mut self, condition: Operand) {
         self.push_statement(StatementKind::Assert(condition), None);
@@ -205,9 +216,11 @@ impl MirBuilder {
     // ========================================================================
 
     fn set_terminator(&mut self, terminator: Terminator) {
+        let terminator_span = self.current_source_span;
         let block = self.current_block_mut();
         assert!(block.terminator.is_none(), "block already has a terminator");
         block.terminator = Some(terminator);
+        block.terminator_span = terminator_span;
     }
 
     /// Emit an unconditional goto.
@@ -234,12 +247,14 @@ impl MirBuilder {
         arms: Vec<(i64, BlockId)>,
         otherwise: BlockId,
         exhaustive: bool,
+        arm_names: Vec<(i64, String)>,
     ) {
         self.set_terminator(Terminator::Switch {
             discriminant,
             arms,
             otherwise,
             exhaustive,
+            arm_names,
         });
     }
 

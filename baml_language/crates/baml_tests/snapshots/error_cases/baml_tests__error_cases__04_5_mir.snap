@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn Broken.MixedLiteralAndTyped(x: int) -> string {
@@ -42,7 +41,6 @@ fn Broken.MixedLiteralAndTyped(x: int) -> string {
         _4 = copy _1;
         goto -> bb4;
     }
-
 }
 
 fn Broken.Invalid() -> null {
@@ -57,7 +55,6 @@ fn Broken.Invalid() -> null {
     bb1: {
         return;
     }
-
 }
 
 fn Broken.BadUnionPattern:

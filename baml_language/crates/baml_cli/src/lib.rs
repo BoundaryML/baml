@@ -12,6 +12,8 @@
 pub(crate) mod commands;
 pub(crate) mod format;
 pub(crate) mod lsp;
+pub(crate) mod test_command;
+pub(crate) mod test_filter;
 
 // TODO: These modules are disabled for now as they depend on baml_runtime
 // pub(crate) mod api_client;

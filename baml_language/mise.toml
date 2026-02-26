@@ -26,9 +26,21 @@ description = "List crates excluded from WASM builds (metadata.ci.wasm_support =
 run = "cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then false else (.metadata.ci.wasm_support | not) end) | .name' | sort"
 
 [tasks.clippy-wasm]
-description = "Run cargo clippy for wasm target"
-run = "cargo clippy $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | \"-p \\(.name)\"' | xargs) --target wasm32-unknown-unknown --all-features --locked -- -D warnings"
-sources = ["**/*.rs", "**/Cargo.toml"]
+description = "Run cargo clippy for wasm target (bans std::time::{SystemTime,Instant})"
+run = """
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Use checked-in clippy-wasm/clippy.toml via CLIPPY_CONF_DIR so we never overwrite workspace config.
+WASM_PKGS=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.source==null) | select(if .metadata.ci.wasm_support == null then true else .metadata.ci.wasm_support end) | "-p \\(.name)"' | xargs)
+if [ -z "$WASM_PKGS" ]; then
+  echo "No WASM-enabled packages found; nothing to check." >&2
+  exit 0
+fi
+CLIPPY_CONF_DIR="$MISE_CONFIG_ROOT/clippy-wasm" cargo clippy $WASM_PKGS --target wasm32-unknown-unknown --all-features --locked -- -D warnings -W clippy::disallowed-types
+
+"""
+sources = ["**/*.rs", "**/Cargo.toml", "clippy-wasm/clippy.toml"]
 
 [tasks.stow]
 description = "Run cargo stow"

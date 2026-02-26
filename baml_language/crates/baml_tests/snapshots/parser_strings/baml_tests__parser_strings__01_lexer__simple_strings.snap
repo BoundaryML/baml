@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-0fbde5d1c173768c/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 Slash "/"
 Slash "/"
@@ -49,9 +48,9 @@ Word "description"
 LParen "("
 Quote "\""
 Word "line1"
-Error "\\"
+Backslash "\\"
 Word "nline2"
-Error "\\"
+Backslash "\\"
 Word "ttab"
 Quote "\""
 RParen ")"
@@ -63,10 +62,10 @@ LParen "("
 Quote "\""
 Word "She"
 Word "said"
-Error "\\"
+Backslash "\\"
 Quote "\""
 Word "hello"
-Error "\\"
+Backslash "\\"
 Quote "\""
 Quote "\""
 RParen ")"

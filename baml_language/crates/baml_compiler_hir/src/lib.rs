@@ -423,7 +423,6 @@ fn function_signature_with_source_map<'db>(
     let func_name = func.name.clone();
 
     // Client resolve functions have synthetic signatures: no params, returns PrimitiveClient.
-    // LLM functions fall through to read their real signature from the CST.
     if matches!(
         &func.compiler_generated,
         Some(item_tree::CompilerGenerated::ClientResolve { .. })
@@ -439,6 +438,68 @@ fn function_signature_with_source_map<'db>(
                 ])),
             }),
             SignatureSourceMap::default(),
+        );
+    }
+
+    // Compiler-generated LLM functions: params from base LLM function in CST, return type per variant.
+    if let Some(ref cg) = func.compiler_generated {
+        let (base_name, return_type_override) = match cg {
+            item_tree::CompilerGenerated::LlmCall { base_name } => (base_name.clone(), None),
+            item_tree::CompilerGenerated::LlmRenderPrompt { base_name } => (
+                base_name.clone(),
+                Some(TypeRef::Path(path::Path::new(vec![
+                    Name::new("baml"),
+                    Name::new("llm"),
+                    Name::new("PromptAst"),
+                ]))),
+            ),
+            item_tree::CompilerGenerated::LlmBuildRequest { base_name } => (
+                base_name.clone(),
+                Some(TypeRef::Path(path::Path::new(vec![
+                    Name::new("baml"),
+                    Name::new("http"),
+                    Name::new("Request"),
+                ]))),
+            ),
+            item_tree::CompilerGenerated::ClientResolve { .. } => {
+                // Already handled above
+                unreachable!("ClientResolve returned earlier")
+            }
+        };
+        let tree = syntax_tree(db, file);
+        let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
+        let (base_sig, base_source_map) = source_file
+            .items()
+            .find_map(|item| {
+                if let baml_compiler_syntax::ast::Item::Function(f) = item {
+                    if f.name().as_ref().map(rowan::SyntaxToken::text) == Some(base_name.as_str()) {
+                        return Some(FunctionSignature::lower(&f));
+                    }
+                }
+                None
+            })
+            .unwrap_or((
+                Arc::new(FunctionSignature {
+                    name: base_name.clone(),
+                    params: vec![],
+                    return_type: TypeRef::Unknown,
+                }),
+                SignatureSourceMap::default(),
+            ));
+        let return_type = return_type_override.unwrap_or_else(|| base_sig.return_type.clone());
+        // Use base source map only for LlmCall so param/return type errors are reported once.
+        // For render_prompt/build_request, skip so we don't duplicate the same diagnostic.
+        let source_map = match cg {
+            item_tree::CompilerGenerated::LlmCall { .. } => base_source_map,
+            _ => SignatureSourceMap::default(),
+        };
+        return (
+            Arc::new(FunctionSignature {
+                name: func_name,
+                params: base_sig.params.clone(),
+                return_type,
+            }),
+            source_map,
         );
     }
 
@@ -1073,7 +1134,15 @@ pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(S
             let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
             let file_id = file.file_id(db);
 
-            // Find the function in the CST to get its name span
+            // Find the function in the CST to get its name span.
+            // For compiler-generated LLM helpers (Foo.render_prompt, Foo.build_request), use the base LLM function's span.
+            let name_to_find = match &func.compiler_generated {
+                Some(
+                    item_tree::CompilerGenerated::LlmRenderPrompt { base_name }
+                    | item_tree::CompilerGenerated::LlmBuildRequest { base_name },
+                ) => base_name.clone(),
+                _ => func_name.clone(),
+            };
             let span = source_file
                 .items()
                 .flat_map(|item| match item {
@@ -1084,7 +1153,8 @@ pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(S
                     _ => vec![],
                 })
                 .find(|function_def| {
-                    function_def.name().as_ref().map(SyntaxToken::text) == Some(&func_name)
+                    function_def.name().as_ref().map(SyntaxToken::text)
+                        == Some(name_to_find.as_str())
                 })
                 .and_then(|f| f.name())
                 .map(|name_token| Span::new(file_id, name_token.text_range()))
@@ -1199,17 +1269,30 @@ fn build_function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Func
         }
     }
 
-    // Check if this is a compiler-generated LLM function
-    if matches!(
-        &func.compiler_generated,
-        Some(item_tree::CompilerGenerated::LlmFunction)
-    ) {
-        // Create synthetic body: baml.llm.call_llm_function("FnName", {args})
+    // Compiler-generated LLM functions: synthetic body calling the appropriate builtin.
+    if let Some(ref cg) = func.compiler_generated {
         let sig = function_signature(db, function);
         let param_names: Vec<Name> = sig.params.iter().map(|p| p.name.clone()).collect();
-        let (expr_body, source_map) =
-            body::lower_llm_to_call_llm_function(func_name.as_str(), &param_names);
-        return FunctionBody::Expr(expr_body, source_map);
+        match cg {
+            item_tree::CompilerGenerated::LlmCall { base_name } => {
+                let (expr_body, source_map) =
+                    body::lower_llm_to_call_llm_function(base_name.as_str(), &param_names);
+                return FunctionBody::Expr(expr_body, source_map);
+            }
+            item_tree::CompilerGenerated::LlmRenderPrompt { base_name } => {
+                let (expr_body, source_map) =
+                    body::lower_llm_to_render_prompt(base_name.as_str(), &param_names);
+                return FunctionBody::Expr(expr_body, source_map);
+            }
+            item_tree::CompilerGenerated::LlmBuildRequest { base_name } => {
+                let (expr_body, source_map) =
+                    body::lower_llm_to_build_request(base_name.as_str(), &param_names);
+                return FunctionBody::Expr(expr_body, source_map);
+            }
+            item_tree::CompilerGenerated::ClientResolve { .. } => {
+                unreachable!("ClientResolve is handled by the early-return block above")
+            }
+        }
     }
 
     // Regular function - find it in the source file
@@ -1249,7 +1332,7 @@ fn build_function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Func
     function_def.map_or(FunctionBody::Missing, |f| FunctionBody::lower(&f, file_id))
 }
 
-/// Returns `true` if this function is an LLM function (has `CompilerGenerated::LlmFunction` marker).
+/// Returns `true` if this function is one of the expanded LLM pieces (`LlmCall`, `LlmRenderPrompt`, `LlmBuildRequest`).
 ///
 /// This is a cheap check that only reads the `ItemTree`.
 pub fn is_llm_function(db: &dyn Db, function: FunctionLoc<'_>) -> bool {
@@ -1258,7 +1341,11 @@ pub fn is_llm_function(db: &dyn Db, function: FunctionLoc<'_>) -> bool {
     let func = &item_tree[function.id(db)];
     matches!(
         &func.compiler_generated,
-        Some(item_tree::CompilerGenerated::LlmFunction)
+        Some(
+            item_tree::CompilerGenerated::LlmCall { .. }
+                | item_tree::CompilerGenerated::LlmRenderPrompt { .. }
+                | item_tree::CompilerGenerated::LlmBuildRequest { .. }
+        )
     )
 }
 
@@ -1274,15 +1361,14 @@ pub fn llm_function_meta<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Op
     let item_tree = file_item_tree(db, file);
     let func = &item_tree[function.id(db)];
 
-    if !matches!(
-        &func.compiler_generated,
-        Some(item_tree::CompilerGenerated::LlmFunction)
-    ) {
-        return None;
-    }
+    // Only the main-call function (LlmCall) has LLM metadata; render_prompt/build_request do not.
+    let base_name = match &func.compiler_generated {
+        Some(item_tree::CompilerGenerated::LlmCall { base_name }) => base_name.clone(),
+        _ => return None,
+    };
 
     // Go back to the CST to extract prompt template and client
-    let func_name = func.name.clone();
+    let func_name = base_name;
     let tree = syntax_tree(db, file);
     let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
 
@@ -1543,7 +1629,38 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
             }
         }
         SyntaxKind::FUNCTION_DEF => {
-            if let Some(func) = lower_function(node) {
+            use baml_compiler_syntax::ast::FunctionDef;
+            if let Some(func_def) = FunctionDef::cast(node.clone()) {
+                if func_def.llm_body().is_some() {
+                    // LLM function: expand into Foo, Foo.render_prompt, Foo.build_request
+                    if let Some(name_tok) = func_def.name() {
+                        let base_name: Name = name_tok.text().into();
+                        tree.alloc_function(item_tree::Function {
+                            name: base_name.clone(),
+                            compiler_generated: Some(item_tree::CompilerGenerated::LlmCall {
+                                base_name: base_name.clone(),
+                            }),
+                        });
+                        tree.alloc_function(item_tree::Function {
+                            name: Name::new(format!("{base_name}.render_prompt")),
+                            compiler_generated: Some(
+                                item_tree::CompilerGenerated::LlmRenderPrompt {
+                                    base_name: base_name.clone(),
+                                },
+                            ),
+                        });
+                        tree.alloc_function(item_tree::Function {
+                            name: Name::new(format!("{base_name}.build_request")),
+                            compiler_generated: Some(
+                                item_tree::CompilerGenerated::LlmBuildRequest { base_name },
+                            ),
+                        });
+                    }
+                    // Malformed LLM function with no name; skip expansion (matches lower_function behavior).
+                } else if let Some(func) = lower_function(node) {
+                    tree.alloc_function(func);
+                }
+            } else if let Some(func) = lower_function(node) {
                 tree.alloc_function(func);
             }
             // Validate: type_builder blocks are not allowed in functions
@@ -2096,23 +2213,16 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
 
 /// Extract function definition from CST - MINIMAL VERSION.
 /// Only extracts the name. Signature and body are in separate queries.
+/// LLM functions are not handled here; they are expanded into three functions in the `FUNCTION_DEF` branch.
 fn lower_function(node: &SyntaxNode) -> Option<Function> {
     use baml_compiler_syntax::ast::FunctionDef;
 
     let func = FunctionDef::cast(node.clone())?;
     let name = func.name()?.text().into();
 
-    // Check if this is an LLM function (marker only — no metadata stored here
-    // to preserve ItemTree early cutoff on body changes)
-    let compiler_generated = if func.llm_body().is_some() {
-        Some(item_tree::CompilerGenerated::LlmFunction)
-    } else {
-        None
-    };
-
     Some(Function {
         name,
-        compiler_generated,
+        compiler_generated: None,
     })
 }
 
@@ -3240,12 +3350,21 @@ fn validate_reserved_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<Hi
         }
     }
 
-    // Check function parameters
+    // Check function parameters (skip synthetic render_prompt/build_request variants)
     for item in items.items(db) {
         if let ItemId::Function(loc) = item {
             let file = loc.file(db);
             let item_tree = file_item_tree(db, file);
             let func = &item_tree[loc.id(db)];
+            if matches!(
+                &func.compiler_generated,
+                Some(
+                    item_tree::CompilerGenerated::LlmRenderPrompt { .. }
+                        | item_tree::CompilerGenerated::LlmBuildRequest { .. }
+                )
+            ) {
+                continue;
+            }
             let sig = function_signature(db, *loc);
 
             for param in &sig.params {

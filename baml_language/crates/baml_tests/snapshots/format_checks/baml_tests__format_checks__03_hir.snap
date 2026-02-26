@@ -1,0 +1,1939 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
+    a + b;
+    a - b;
+    a * b;
+    a / b;
+    a % b;
+    a == b;
+    a != b;
+    a < b;
+    a > b;
+    a <= b;
+    a >= b;
+    flag && true;
+    flag || false;
+    a & b;
+    a | b;
+    a ^ b;
+    a << b;
+    a >> b;
+    let mut_a = a;
+    mut_a += b;
+    mut_a -= b;
+    mut_a *= b;
+    mut_a /= b;
+    mut_a %= b;
+    mut_a &= b;
+    mut_a |= b;
+    mut_a ^= b;
+    mut_a <<= b;
+    mut_a >>= b;
+    a + b + c;
+    a + b + c + d;
+    a - b + c - d;
+    a * b * c;
+    a * b / c % d;
+    a > 0 && b > 0;
+    a > 0 || b > 0;
+    a > 0 && b > 0 && c > 0;
+    a > 0 || b > 0 || c > 0;
+    a > 0 && b > 0 || c > 0;
+    a + b * c;
+    a + b * c;
+    a * b + c * d;
+    a + b * c + d;
+    a + b * c + d;
+    a + b * c + d;
+    a + b * c + d;
+    a + b * c + d * a - b + c - d + a * b + c * d;
+    a + b * c + d + a - b * c - d * a * c * d + b * c * d - a * d + b * c * d;
+    a + b;
+    a + b;
+    a + b + c;
+    a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b;
+    a > 0 && b > 0 && c > 0 && d > 0 && a != b && b != c && c != d && a < 1000 * 8 + 1 * 2 && b < 1000 && c < 1000 && d < 1000 + 2 + 3;
+    a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d;
+    a + b + c + d > 0 && a * b * c * d < 10000 && a - b - c - d != 0 && a + b * c + d >= 100 || a * 1 < 2 && "aowiefjowiaj" == "jfeiowajpwoeifj";
+    "a very long string prefix that is already quite long" + " concatenated with " + "another very long string that together exceeds the line limit easily and comfortably";
+    mut_a += a * b + c * d + a * b + c * d + a * b + c * d + a * b + c * d + a * b + c * d + a;
+    a + b + c + d + a + b + c + d + a + b + c + d;
+    a + b + c + d + a + b + c + d + a + b + c + d;
+    a > 0 && b > 0 && c > 0 && d > 0 && a != b && b != c && c != d;
+    a + b;
+    1 + 2;
+    a > b;
+    a + b;
+    a * b + c;
+    a == b;
+    a == 2 && b != 3;
+    a + b
+}
+
+function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {
+    user;
+    user.name;
+    user.profile.bio;
+    user.profile.settings.theme;
+    user.profile.settings.preferences.color;
+    user.profile.items[0].metadata.tags[0];
+    user.profile.settings.preferences.font;
+    user.name;
+    user.name;
+    user.profile.settings.theme;
+    user.name.len();
+    items.len();
+    user.profile.items.get(0);
+    items.get(0);
+    items.get(0);
+    items[0];
+    items[0].label;
+    user.tags[0];
+    user.scores[0][1];
+    items[0];
+    items[0];
+    user.name.len().to_string();
+    user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+    user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+    user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+    user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+    user.profile.settings.preferences.color.len().to_string().len();
+    user.profile.settings.preferences.color.len().to_string().len();
+    user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2).label;
+    user.scores[0][0];
+    user.scores[0][1];
+    user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
+    user.name;
+    items[0];
+    items.get(0);
+    user.tags[0].len();
+    user.scores[0][0];
+    items[0].label.len();
+    env.get_or_panic("API_KEY");
+    env.get_or_panic("DATABASE_URL");
+    user.name
+}
+
+class ChainItem {
+  label: string
+  value: int
+  metadata: ChainMetadata
+}
+
+class ChainSettings {
+  theme: string
+  notifications: bool
+  preferences: ChainPreferences
+}
+
+class ChainProfile {
+  bio: string
+  settings: ChainSettings
+  items: ChainItem[]
+}
+
+class ChainUser {
+  name: string
+  profile: ChainProfile
+  tags: string[]
+  scores: int[][]
+}
+
+class ChainPreferences {
+  color: string
+  font: string
+  size: int
+}
+
+class ChainMetadata {
+  created_at: string
+  tags: string[]
+}
+
+function WithMethod.greet() -> string {
+    "hello"
+}
+
+function WithLongMethod.processData(first_input: map<string, int>, second_input: (int | string | bool)[], third_input: string) -> map<string, int | string | bool> {
+    { "result": 1 }
+}
+
+class WithLongMethod {
+  name: string
+}
+
+class TriviaMultiAttrBlock {
+  name: string
+}
+
+class TriviaFieldAttrs {
+  name: string
+}
+
+class TypeVariety {
+  simple: string
+  optional: string?
+  array: int[]
+  nested_array: int[][]
+  union_type: int | string
+  optional_union: (int | string)?
+  union_array: (int | string)[]
+  generic: map<string, int>
+  complex_generic: map<string, int | string | bool>
+  deep_generic: map<string, map<string, int[]>>
+  fn_type: (x: int, y: int) -> string
+  paren_union_array: (int | string | bool)[]
+  triple_nested: map<string, map<string, map<string, int>>>
+}
+
+class MultiBlockAttr {
+  name: string
+  @@dynamic
+}
+
+class MultiField {
+  name: string
+  age: int
+  active: bool
+}
+
+class ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
+  x: int
+}
+
+class TriviaClass {
+  name: string
+}
+
+class EmptyClass {
+}
+
+class SingleField {
+  name: string
+}
+
+class ExtraWhitespace {
+  name: string
+  age: int
+}
+
+class LongAttrField {
+  name: string
+  data: map<string, int | string | bool>
+  config: map<string, map<string, int | string | bool | null>>
+}
+
+class AttributeVariety {
+  a: string
+  b: string
+  c: string
+  d: string
+  e: string
+  f: string
+}
+
+class TriviaLongFieldType {
+  data: map<string, int | string | bool | float | null>
+}
+
+class SingleAttrField {
+  name: string
+}
+
+class InnerNested {
+  value: int
+}
+
+class TriviaMultiAttr {
+  name: string
+}
+
+class TriviaClassBlock {
+  name: string
+}
+
+class TriviaLongFieldTypeBlock {
+  data: map<string, int | string | bool | float | null>
+}
+
+class ManyFields {
+  field1: int
+  field2: int
+  field3: int
+  field4: int
+  field5: int
+  field6: int
+  field7: int
+  field8: int
+  field9: int
+  field10: int
+}
+
+class LongFieldTypes {
+  very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
+  another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
+  callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>
+  deeply_nested: (int | string | bool | float | null)[]?
+}
+
+class DeepLevel2 {
+  level3: DeepLevel3
+  value: int | string | bool | float | null
+}
+
+class ColonFields {
+  name: string
+  age: int
+}
+
+class WithMethod {
+  name: string
+}
+
+class DynamicClass {
+  name: string
+  @@dynamic
+}
+
+class Outer {
+  inner: InnerNested
+  list: InnerNested[]
+  optional: InnerNested?
+  mapping: map<string, InnerNested>
+}
+
+class DeepOuter {
+  level1: DeepLevel1
+}
+
+class A {
+  x: int
+}
+
+class MultiAttrField {
+  name: string
+  summary: string?
+}
+
+class DeepLevel3 {
+  data: string
+  nested: map<string, map<string, int>>
+}
+
+class DeepLevel1 {
+  level2: DeepLevel2
+  items: DeepLevel2[]
+  mapping: map<string, DeepLevel2>
+}
+
+class TriviaFieldAttrsBlock {
+  name: string
+}
+
+function ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("ManyOptionsClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": true, "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"], "api_key": env.get_or_panic("OPENAI_API_KEY"), "base_url": "https://api.openai.com/v1" })
+}
+
+function TestTarget() -> string {
+    baml.llm.call_llm_function("TestTarget", {  })
+}
+
+function TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("TriviaDeeplyNestedClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "headers": {  } })
+}
+
+function LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("LongArrayOfObjectsClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "tools": [{ "server_label": "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation", "server_url": "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2", "type": "mcp", "description": "A very long description of the tool server that explains what it does and how it should be used by the model" }, { "server_label": "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects", "server_url": "https://another-long-domain.internal.staging.example.com/tools/v1" }] })
+}
+
+function TestTarget.build_request() -> baml.http.Request {
+    baml.llm.build_request("TestTarget", {  })
+}
+
+function StringProviderClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("StringProviderClient", "unknown", "user", ["user", "assistant", "system"], { "base_url": "https://openrouter.ai/api/v1", "model": "mistralai/mistral-small-3.1-24b-instruct" })
+}
+
+function TriviaClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("TriviaClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
+function TypedValuesClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("TypedValuesClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "temperature": 0.5, "max_tokens": 2048, "stream": true })
+}
+
+function FullClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("FullClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 100, "temperature": 0.7, "top_p": 0.9 })
+}
+
+function SameLineClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("SameLineClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
+function LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("LongArrayClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_MARKER", "COMPLETION_FINISHED_SIGNAL", "TERMINATE_OUTPUT_HERE", "FINAL_ANSWER_DELIMITER"] })
+}
+
+function TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("TriviaLongValueClientBlock", "openai", "user", ["user", "assistant", "system"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
+}
+
+function EnvClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("EnvClient", "openai", "user", ["user", "assistant", "system"], { "api_key": env.get_or_panic("OPENAI_API_KEY"), "model": "gpt-4" })
+}
+
+function LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("LongNestedValuesClient", "openai", "user", ["user", "assistant", "system"], { "model": "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily", "base_url": "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", "headers": {  } })
+}
+
+function DeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("DeeplyNestedClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "headers": { "custom_config": { "retry_on_failure": true, "timeout_ms": 30000, "metadata": { "team": "platform", "environment": "production" } } } })
+}
+
+function TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("TriviaLongValueClient", "openai", "user", ["user", "assistant", "system"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
+}
+
+function BasicClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("BasicClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
+function ExtraWhitespaceClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("ExtraWhitespaceClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
+function CommaClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("CommaClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 100 })
+}
+
+function C.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("C", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
+function RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("RawStringConfigClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "system_prompt": "
+                You are a helpful assistant.
+                Always be concise.
+            " })
+}
+
+function ArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("ArrayOfObjectsClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "tools": [{ "server_label": "web_search", "server_url": "https://example.com", "type": "mcp" }, { "server_label": "calculator", "server_url": "https://calc.example.com" }] })
+}
+
+function NestedConfigClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("NestedConfigClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "headers": {  } })
+}
+
+function TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("TriviaDeeplyNestedClientBlock", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "headers": {  } })
+}
+
+function ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("ArrayConfigClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "stop_sequences": ["END", "STOP", "DONE"] })
+}
+
+function MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("MixedValuesClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 100, "temperature": 0.7, "stream": true, "stop": ["END"], "inline_string": "inline raw" })
+}
+
+function TestTarget.render_prompt() -> baml.llm.PromptAst {
+    baml.llm.render_prompt("TestTarget", {  })
+}
+
+function ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
+function LongOptionClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("LongOptionClient", "openai", "user", ["user", "assistant", "system"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
+}
+
+function TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("TriviaClientBlock", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+}
+
+client LongArrayOfObjectsClient {
+  provider: openai
+}
+
+client ExtraWhitespaceClient {
+  provider: openai
+}
+
+client LongOptionClient {
+  provider: openai
+}
+
+client NestedConfigClient {
+  provider: openai
+}
+
+client ArrayOfObjectsClient {
+  provider: openai
+}
+
+client LongNestedValuesClient {
+  provider: openai
+}
+
+client ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns {
+  provider: openai
+}
+
+client BasicClient {
+  provider: openai
+}
+
+client SameLineClient {
+  provider: openai
+}
+
+client TriviaDeeplyNestedClientBlock {
+  provider: openai
+}
+
+client TriviaClient {
+  provider: openai
+}
+
+client TriviaLongValueClient {
+  provider: openai
+}
+
+client FullClient {
+  provider: openai
+}
+
+client TriviaDeeplyNestedClient {
+  provider: openai
+}
+
+client TriviaClientBlock {
+  provider: openai
+}
+
+client ManyOptionsClient {
+  provider: openai
+}
+
+client LongArrayClient {
+  provider: openai
+}
+
+client RawStringConfigClient {
+  provider: openai
+}
+
+client MixedValuesClient {
+  provider: openai
+}
+
+client ArrayConfigClient {
+  provider: openai
+}
+
+client EnvClient {
+  provider: openai
+}
+
+client TypedValuesClient {
+  provider: openai
+}
+
+client CommaClient {
+  provider: openai
+}
+
+client C {
+  provider: openai
+}
+
+client TriviaLongValueClientBlock {
+  provider: openai
+}
+
+client DeeplyNestedClient {
+  provider: openai
+}
+
+client StringProviderClient {
+  provider: unknown
+}
+
+test LongTypeBuilderTest {
+  functions: ["TestTarget"]
+  type_builder {
+    class VeryLongClassNameThatExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation {
+      extremely_long_field_name_for_testing_wrapping: int
+      another_very_long_field_name: string
+    }
+    enum VeryLongEnumNameThatAlsoExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation {
+      VeryLongVariantNameThatExceedsLimit
+      AnotherVeryLongVariantName
+    }
+    type VeryLongTypeAliasNameThatExceedsLimit = int | string | bool | float | null | int[] | string[]
+  }
+}
+
+test BasicTest {
+  functions: ["TestTarget"]
+}
+
+test TriviaTest {
+  functions: ["TestTarget"]
+}
+
+test TriviaTypeBuilderTestBlock {
+  functions: ["TestTarget"]
+  type_builder {
+    class TbInnerClassBlock {
+      field_name: int
+    }
+    enum TbInnerEnumBlock {
+      X
+    }
+    type TbAliasBlock = string
+  }
+}
+
+test TriviaTestBlock {
+  functions: ["TestTarget"]
+}
+
+test TypeBuilderTest {
+  functions: ["TestTarget"]
+  type_builder {
+    class InnerClass {
+      b: int
+    }
+    enum InnerEnum {
+      X
+      Y
+    }
+    dynamic class DynamicInner {
+      c: string
+    }
+    dynamic enum DynamicInnerEnum {
+      P
+      Q
+    }
+    type InnerAlias = string | int
+  }
+}
+
+test TriviaTypeBuilderTest {
+  functions: ["TestTarget"]
+  type_builder {
+    class TbInnerClass {
+      field_name: int
+    }
+    enum TbInnerEnum {
+      X
+    }
+    type TbAlias = string
+  }
+}
+
+retry_policy TriviaRetry
+
+retry_policy BasicRetry
+
+retry_policy ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols
+
+retry_policy ExtraWhitespaceRetry
+
+retry_policy R
+
+retry_policy FullRetry
+
+retry_policy TriviaRetryBlock
+
+enum ThisIsAnExtremelyLongEnumNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
+  Value
+}
+
+enum DynamicEnum {
+  X
+  Y
+}
+
+enum TriviaEnum {
+  A
+  B
+}
+
+enum TriviaVariantAttr {
+  Active
+}
+
+enum E {
+  V
+}
+
+enum ExtraWhitespace {
+  A
+  B
+}
+
+enum TriviaWrapVariantAttrsBlock {
+  ConfiguredVariant
+}
+
+enum TriviaWrapVariantAttrs {
+  ConfiguredVariant
+}
+
+enum TriviaVariantAttrBlock {
+  Active
+}
+
+enum MultiVariant {
+  Red
+  Green
+  Blue
+  Yellow
+  Purple
+}
+
+enum ManyAttrsExceedingLimit {
+  ConfiguredVariant
+}
+
+enum LongVariantPlusAttrs {
+  ThisIsAnExtremelyLongVariantNameByItself
+  AnotherVeryLongVariantNameThatNeedsWrapping
+}
+
+enum LongVariantNames {
+  ThisIsAVeryLongVariantNameThatByItselfExceedsTheOneHundredCharacterLineLimitAllByItselfEasily
+  AnotherExtremelyLongVariantNameForTestingLineWrappingBehaviorInTheFormatterOutputDefinitely
+  Short
+}
+
+enum DottedAttrEnum {
+  X
+  Y
+}
+
+enum TwoVariants {
+  Yes
+  No
+}
+
+enum WithAttr {
+  Active
+  Inactive
+}
+
+enum Minimal {
+  A
+}
+
+enum LongAttr {
+  VeryImportantStatus
+}
+
+enum TriviaEnumBlock {
+  A
+  B
+}
+
+enum ManyVariants {
+  V1
+  V2
+  V3
+  V4
+  V5
+  V6
+  V7
+  V8
+  V9
+  V10
+  V11
+  V12
+}
+
+enum WithCommas {
+  A
+  B
+  C
+}
+
+enum MultiAttr {
+  Success
+  Failure
+}
+
+function TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+    "result"
+}
+
+function SingleParam(x: int) -> int {
+    x
+}
+
+function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+    "result"
+}
+
+function LlmMultiLine(text: string) -> string {
+    baml.llm.call_llm_function("LlmMultiLine", { "text": text })
+}
+
+function NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> {
+    { "a": { "b": { "c": 1 } } }
+}
+
+function LlmBasic.render_prompt(name: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("LlmBasic", { "name": name })
+}
+
+function MultiParamTrivia(a: int, b: string) -> int {
+    a
+}
+
+function F() -> int {
+    1
+}
+
+function LlmMultiLine.render_prompt(text: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("LlmMultiLine", { "text": text })
+}
+
+function MultipleParams(a: int, b: int, c: string) -> int {
+    a + b
+}
+
+function ConstrainedParams(name: string, score: int) -> string {
+    "done"
+}
+
+function ExtraWhitespace(a: int, b: int) -> int {
+    a + b
+}
+
+function ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
+    1
+}
+
+function NestedLoops(matrix: int[][]) -> int {
+    let total = 0;
+    {
+        let _iter = matrix;
+        let _len = _iter.length();
+        let _i = 0;
+        while (_i < _len) {
+            let row = _iter[_i];
+            _i += 1;
+            {
+                let _iter1 = row;
+                let _len1 = _iter1.length();
+                let _i1 = 0;
+                while (_i1 < _len1) {
+                    let val = _iter1[_i1];
+                    _i1 += 1;
+                    if (val < 0) {
+                        continue;
+                    };
+                    if (val > 1000) {
+                        break;
+                    };
+                    let processed = match (val % 3) {
+                        0 => val * 2,
+                        1 => val + 1,
+                        _ => val,
+                    };
+                    total += processed;
+                }
+            };
+        }
+    };
+    return total;
+}
+
+function TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
+    { "a": 1 }
+}
+
+function LlmBasic(name: string) -> string {
+    baml.llm.call_llm_function("LlmBasic", { "name": name })
+}
+
+function LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
+    "result"
+}
+
+function LlmBasic.build_request(name: string) -> baml.http.Request {
+    baml.llm.build_request("LlmBasic", { "name": name })
+}
+
+function LlmStringClient.render_prompt(text: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("LlmStringClient", { "text": text })
+}
+
+function TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
+    { "a": 1 }
+}
+
+function LlmWithLongSignature.build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+    baml.llm.build_request("LlmWithLongSignature", { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
+}
+
+function LlmReversedOrder(text: string) -> string {
+    baml.llm.call_llm_function("LlmReversedOrder", { "text": text })
+}
+
+function VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
+    "result"
+}
+
+function LlmStringClient(text: string) -> string {
+    baml.llm.call_llm_function("LlmStringClient", { "text": text })
+}
+
+function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string {
+    "done"
+}
+
+function NoColonParams(x: int, y: int) -> int {
+    x + y
+}
+
+function TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
+    x
+}
+
+function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+    baml.llm.call_llm_function("LlmWithLongSignature", { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
+}
+
+function ManyNestedExprs(items: int[]) -> int {
+    let a = items[0];
+    let b = items[1];
+    let c = if (a > b) {
+        a
+    } else {
+        b
+    };
+    let d = match (c) {
+        0 => 1,
+        _ => c * 2,
+    };
+    let e = {
+        let inner = d + a;
+        inner * inner
+    };
+    e + d + c + b + a
+}
+
+function LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
+    { "a": { "b": 1 } }
+}
+
+function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+    "result"
+}
+
+function Minimal() -> int {
+    1
+}
+
+function LlmReversedOrder.build_request(text: string) -> baml.http.Request {
+    baml.llm.build_request("LlmReversedOrder", { "text": text })
+}
+
+function TriviaWrapParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+    "result"
+}
+
+function LlmWithLongSignature.render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("LlmWithLongSignature", { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query })
+}
+
+function ComplexReturn(x: int) -> int | string | null {
+    x
+}
+
+function LlmMultiLine.build_request(text: string) -> baml.http.Request {
+    baml.llm.build_request("LlmMultiLine", { "text": text })
+}
+
+function LlmStringClient.build_request(text: string) -> baml.http.Request {
+    baml.llm.build_request("LlmStringClient", { "text": text })
+}
+
+function EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> {
+    { "a": 1 }
+}
+
+function TriviaFuncBlock(x: int) -> int {
+    x
+}
+
+function TriviaFunc(x: int) -> int {
+    x
+}
+
+function LlmReversedOrder.render_prompt(text: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("LlmReversedOrder", { "text": text })
+}
+
+function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
+    if (a > 0) {
+        if (b > 0) {
+            if (c > 0) {
+                return a * b * c * d + a * b * c + a * b + a + b * c * d + b * c + b + c * d + c + d;
+            } else {
+                return 0;
+            }
+        } else {
+            return 0;
+        }
+    } else {
+        return 0;
+    }
+}
+
+function MultiStatement(a: int, b: int) -> int {
+    let x = a + b;
+    let y = x * 2;
+    if (y > 10) {
+        return y;
+    };
+    return x;
+}
+
+function DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> {
+    1
+}
+
+function TriviaWrapReturnType(x: int) -> int | string | bool | null {
+    x
+}
+
+function DeeplyNestedBody(a: int, b: int, c: int) -> int {
+    if (a > 0) {
+        if (b > 0) {
+            if (c > 0) {
+                let x = a + b + c;
+                if (x > 100) {
+                    return x * 2;
+                } else {
+                    return x;
+                }
+            } else {
+                return a + b;
+            }
+        } else {
+            if (c > 0) {
+                return a + c;
+            } else {
+                return a;
+            }
+        }
+    } else {
+        return 0;
+    }
+}
+
+function FinalExpr(a: int, b: int) -> int {
+    a + b
+}
+
+function MultiParamTriviaBlock(a: int, b: string) -> int {
+    a
+}
+
+function MyFunction(a: int, b: int) -> int {
+    if (a > b) {
+        1;
+    } else {
+        1;
+    };
+    if (a > b) {
+        1;
+    } else {
+        1;
+    };
+    if (a > b) {
+        1;
+    } else {
+        1;
+    };
+    1
+}
+
+function AssertStmts(x: int, y: int) -> int {
+    assert x > 0;
+    assert x < 100;
+    assert x > 0;
+    assert x > 0;
+    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0;
+    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000;
+    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0;
+    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0;
+    x
+}
+
+function LoopStmts(items: int[], flag: bool) -> int {
+    let a = 0;
+    while (a < 10) {
+        a += 1;
+    }
+    while (a < 100 && flag) {
+        a += 1;
+    }
+    while (true) {
+        if (a > 50) {
+            break;
+        };
+        a += 1;
+    }
+    while (a < 100) {
+        a += 1;
+        if (a % 2 == 0) {
+            continue;
+        }
+    }
+    while (a < 10) {
+        a += 1;
+    }
+    while (a < 10) {
+        a += 1;
+    }
+    let result = 0;
+    {
+        let i = 0;
+        while (i < 10) {
+            result += i;
+            i += 1;
+        }
+    };
+    {
+        let i = 0;
+        while (i < 100 && flag) {
+            result += i;
+            i += 2;
+        }
+    };
+    {
+        let _iter = items;
+        let _len = _iter.length();
+        let _i = 0;
+        while (_i < _len) {
+            let item = _iter[_i];
+            _i += 1;
+            result += item;
+        }
+    };
+    {
+        let _iter1 = [1, 2, 3, 4, 5];
+        let _len1 = _iter1.length();
+        let _i1 = 0;
+        while (_i1 < _len1) {
+            let x = _iter1[_i1];
+            _i1 += 1;
+            result += x;
+        }
+    };
+    {
+        let _iter2 = [1, 2, 3];
+        let _len2 = _iter2.length();
+        let _i2 = 0;
+        while (_i2 < _len2) {
+            let i = _iter2[_i2];
+            _i2 += 1;
+            {
+                let _iter3 = [4, 5, 6];
+                let _len3 = _iter3.length();
+                let _i3 = 0;
+                while (_i3 < _len3) {
+                    let j = _iter3[_i3];
+                    _i3 += 1;
+                    result += i * j;
+                }
+            };
+        }
+    };
+    {
+        let i = 0;
+        while (i < 10) {
+            result += i;
+            i += 1;
+        }
+    };
+    {
+        let i = 0;
+        while (i < 10) {
+            result += i;
+            i += 1;
+        }
+    };
+    {
+        let _iter4 = items;
+        let _len4 = _iter4.length();
+        let _i4 = 0;
+        while (_i4 < _len4) {
+            let item = _iter4[_i4];
+            _i4 += 1;
+            result += item;
+        }
+    };
+    {
+        let _iter5 = items;
+        let _len5 = _iter5.length();
+        let _i5 = 0;
+        while (_i5 < _len5) {
+            let item = _iter5[_i5];
+            _i5 += 1;
+            result += item;
+        }
+    };
+    while (a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42) {
+        a += 1;
+    }
+    while (a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42 && a % 7 == 0 && result % 3 == 0 && a + result + a * result > 99999) {
+        a += 1;
+    }
+    {
+        let very_long_variable_name = 0;
+        while (very_long_variable_name < 1000 && flag) {
+            result += very_long_variable_name;
+            very_long_variable_name += 1;
+        }
+    };
+    {
+        let extremely_long_loop_counter_variable = a * a + result * result;
+        while (extremely_long_loop_counter_variable < 1000000 && flag && a > 0) {
+            result += extremely_long_loop_counter_variable;
+            extremely_long_loop_counter_variable += a + result;
+        }
+    };
+    {
+        let _iter6 = ["very long string one", "very long string two", "very long string three", "very long string four"];
+        let _len6 = _iter6.length();
+        let _i6 = 0;
+        while (_i6 < _len6) {
+            let item = _iter6[_i6];
+            _i6 += 1;
+            result += 1;
+        }
+    };
+    {
+        let _iter7 = ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"];
+        let _len7 = _iter7.length();
+        let _i7 = 0;
+        while (_i7 < _len7) {
+            let extremely_long_item_variable_name = _iter7[_i7];
+            _i7 += 1;
+            result += 1;
+        }
+    };
+    while (a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42) {
+        a += 1;
+    }
+    while (a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42) {
+        a += 1;
+    }
+    {
+        let extremely_long_loop_counter_variable = a * a + result * result;
+        while (extremely_long_loop_counter_variable < 1000000 && flag && a > 0) {
+            result += extremely_long_loop_counter_variable;
+            extremely_long_loop_counter_variable += a + result;
+        }
+    };
+    {
+        let extremely_long_loop_counter_variable = a * a + result * result;
+        while (extremely_long_loop_counter_variable < 1000000 && flag && a > 0) {
+            result += extremely_long_loop_counter_variable;
+            extremely_long_loop_counter_variable += a + result;
+        }
+    };
+    {
+        let _iter8 = ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"];
+        let _len8 = _iter8.length();
+        let _i8 = 0;
+        while (_i8 < _len8) {
+            let extremely_long_item_variable_name = _iter8[_i8];
+            _i8 += 1;
+            result += 1;
+        }
+    };
+    {
+        let _iter9 = ["alpha bravo charlie", "delta echo foxtrot", "golf hotel india", "juliet kilo lima", "mike november oscar", "papa quebec romeo"];
+        let _len9 = _iter9.length();
+        let _i9 = 0;
+        while (_i9 < _len9) {
+            let extremely_long_item_variable_name = _iter9[_i9];
+            _i9 += 1;
+            result += 1;
+        }
+    };
+    {
+        let _iter10 = [1, 2, 3];
+        let _len10 = _iter10.length();
+        let _i10 = 0;
+        while (_i10 < _len10) {
+            let i = _iter10[_i10];
+            _i10 += 1;
+            {
+                let _iter11 = [4, 5, 6];
+                let _len11 = _iter11.length();
+                let _i11 = 0;
+                while (_i11 < _len11) {
+                    let j = _iter11[_i11];
+                    _i11 += 1;
+                    {
+                        let _iter12 = [7, 8, 9];
+                        let _len12 = _iter12.length();
+                        let _i12 = 0;
+                        while (_i12 < _len12) {
+                            let k = _iter12[_i12];
+                            _i12 += 1;
+                            result += i * j * k;
+                        }
+                    };
+                }
+            };
+        }
+    };
+    let outer = 0;
+    while (outer < 3) {
+        let middle = 0;
+        while (middle < 3) {
+            let inner = 0;
+            while (inner < 3) {
+                result += outer + middle + inner;
+                inner += 1;
+            }
+            middle += 1;
+        }
+        outer += 1;
+    }
+    {
+        let _iter13 = [1, 2, 3, 4, 5];
+        let _len13 = _iter13.length();
+        let _i13 = 0;
+        while (_i13 < _len13) {
+            let i = _iter13[_i13];
+            _i13 += 1;
+            if (i == 3) {
+                continue;
+            };
+            {
+                let _iter14 = [10, 20, 30, 40, 50];
+                let _len14 = _iter14.length();
+                let _i14 = 0;
+                while (_i14 < _len14) {
+                    let j = _iter14[_i14];
+                    _i14 += 1;
+                    let val = match (i * j) {
+                        0 => {
+                            break;
+                            0
+                        },
+                        n: int if n > 100 => {
+                            continue;
+                            n
+                        },
+                        n: int => n,
+                    };
+                    result += val;
+                }
+            };
+        }
+    };
+    let lvl1 = 0;
+    while (lvl1 < 2) {
+        {
+            let _iter15 = [1, 2];
+            let _len15 = _iter15.length();
+            let _i15 = 0;
+            while (_i15 < _len15) {
+                let lvl2 = _iter15[_i15];
+                _i15 += 1;
+                {
+                    let lvl3 = 0;
+                    while (lvl3 < 2) {
+                        let lvl4 = 0;
+                        while (lvl4 < 2) {
+                            result += lvl1 + lvl2 + lvl3 + lvl4;
+                            lvl4 += 1;
+                        }
+                        lvl3 += 1;
+                    }
+                };
+            }
+        };
+        lvl1 += 1;
+    }
+    {
+        let _iter16 = items;
+        let _len16 = _iter16.length();
+        let _i16 = 0;
+        while (_i16 < _len16) {
+            let i = _iter16[_i16];
+            _i16 += 1;
+            {
+                let j = i * i + result * result;
+                while (j < 1000000 && flag && i > 0 && result > 0 && j != 42) {
+                    result += j;
+                    j += i + result + 1;
+                }
+            };
+        }
+    };
+    {
+        let _iter17 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let _len17 = _iter17.length();
+        let _i17 = 0;
+        while (_i17 < _len17) {
+            let i = _iter17[_i17];
+            _i17 += 1;
+            {
+                let _iter18 = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+                let _len18 = _iter18.length();
+                let _i18 = 0;
+                while (_i18 < _len18) {
+                    let j = _iter18[_i18];
+                    _i18 += 1;
+                    let computation = if (i * j > 500 && i + j < 100) {
+                        match (i % 3) {
+                            0 => i * j + result,
+                            1 => i * j - result,
+                            _ => i * j,
+                        }
+                    } else {
+                        0
+                    };
+                    result += computation;
+                }
+            };
+        }
+    };
+    while (a < 10) {
+        a += 1;
+    }
+    {
+        let i = 0;
+        while (i < 10) {
+            result += i;
+            i += 1;
+        }
+    };
+    {
+        let _iter19 = items;
+        let _len19 = _iter19.length();
+        let _i19 = 0;
+        while (_i19 < _len19) {
+            let item = _iter19[_i19];
+            _i19 += 1;
+            result += item;
+        }
+    };
+    let plain = 1;
+    let typed: int = 2;
+    let complex_init = a + result;
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = { "key": 42 };
+    let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result;
+    let deeply_typed: map<string, map<string, map<string, int | string | bool>>> = { "outer": { "inner": { "deep": 42 } } };
+    let trivia_var: int = 42;
+    let trivia_var_block: int = 42;
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = { "key": 42 };
+    let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = { "key": 42 };
+    let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result;
+    let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result;
+    return result;
+}
+
+function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
+    match (x) {
+        0 => "zero",
+        _ => "other",
+    };
+    match (x) {
+        0 => "zero",
+        1 => "one",
+        2 => "two",
+        3 => "three",
+        4 => "four",
+        _ => "other",
+    };
+    match (x) {
+        0 => {
+            "zero";
+        },
+        _ => {
+            let y = x + 1;
+            "other";
+        },
+    };
+    match (x) {
+        0 => "zero",
+        _ => "other",
+    };
+    match (x) {
+        0 => "zero",
+        _ => "other",
+    };
+    match (x) {
+        n: int if n > 0 => "positive",
+        _ => "other",
+    };
+    match (x) {
+        n: int if n > 0 => "positive",
+        _ => "other",
+    };
+    match (x) {
+        0 => "zero",
+        1 => "one",
+        42 => "the answer",
+        _ => "unknown",
+    };
+    match ("hello") {
+        "hello" => "greeting",
+        "bye" => "farewell",
+        _ => "other",
+    };
+    match (b) {
+        true => "yes",
+        false => "no",
+    };
+    match (x) {
+        0 => "zero",
+        n => "nonzero",
+    };
+    match (x) {
+        n: int => "an integer",
+    };
+    match (s) {
+        MatchStatus.Active => "active",
+        MatchStatus.Inactive => "inactive",
+        MatchStatus.Pending => "pending",
+    };
+    match (x) {
+        0 | 1 => "binary",
+        2 | 3 | 4 => "small",
+        _ => "big",
+    };
+    match (x) {
+        0 => "zero",
+        1 | 2 => "small",
+        _ => "other",
+    };
+    match (s) {
+        MatchStatus.Active | MatchStatus.Pending => "actionable",
+        MatchStatus.Inactive => "done",
+    };
+    match (r) {
+        s: MatchSuccess => s.data,
+        f: MatchFailure => f.reason,
+    };
+    match (r) {
+        x: MatchSuccess | MatchFailure => "something",
+    };
+    match (x) {
+        0 | 1 | 2 | 3 | 4 | 5 => "small",
+        _ => "big",
+    };
+    match (x) {
+        n: int if n > 0 => "positive",
+        n: int if n < 0 => "negative",
+        _ => "zero",
+    };
+    match (x) {
+        n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 && n != 99 => "acceptable small positive number that passes all the filters",
+        _ => "other",
+    };
+    match (x) {
+        0 => "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now",
+        1 => "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm",
+        _ => "short",
+    };
+    match (x) {
+        0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 => "lots of literals",
+        _ => "other",
+    };
+    match (s) {
+        MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending => "this arm has many long enum variant names that together push past the limit easily",
+    };
+    match (x) {
+        0 => {
+            let result = if (b) {
+                "this is the true branch with a very long string"
+            } else {
+                "this is the false branch also very long"
+            };
+            result
+        },
+        _ => "short",
+    };
+    match (x) {
+        n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 => "acceptable small positive number that passes all the defined filter conditions",
+        _ => "other",
+    };
+    match (x) {
+        n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 => "acceptable small positive number that passes all the defined filter conditions",
+        _ => "other",
+    };
+    match (x + 1) {
+        0 => "was minus one",
+        _ => "other",
+    };
+    match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+        0 => "zero polynomial",
+        _ => "nonzero",
+    };
+    match (x + 1) {
+        0 => "whitespace",
+        _ => "other",
+    };
+    match (x) {
+        0 => "zero",
+        _ => "other",
+    };
+    match (x) {
+        0 => match (b) {
+            true => "zero-true",
+            false => "zero-false",
+        },
+        _ => "nonzero",
+    };
+    match (x) {
+        0 => match (b) {
+            true => match (s) {
+                MatchStatus.Active => "zero-true-active",
+                MatchStatus.Inactive => "zero-true-inactive",
+                MatchStatus.Pending => "zero-true-pending",
+            },
+            false => "zero-false",
+        },
+        1 => match (r) {
+            s: MatchSuccess => match (b) {
+                true => s.data,
+                false => "one-success-false",
+            },
+            f: MatchFailure => f.reason,
+        },
+        _ => "other",
+    };
+    match (x) {
+        0 => if (b) {
+            match (s) {
+                MatchStatus.Active => "active",
+                MatchStatus.Inactive => "inactive",
+                MatchStatus.Pending => "pending",
+            }
+        } else {
+            "not bool"
+        },
+        _ => "other",
+    };
+    match (x) {
+        0 => "zero",
+        _ => "other",
+    }
+}
+
+class MatchSuccess {
+  data: string
+}
+
+class MatchFailure {
+  reason: string
+}
+
+enum MatchStatus {
+  Active
+  Inactive
+  Pending
+}
+
+type MatchResult = MatchSuccess | MatchFailure
+
+function OtherExprs(a: int, b: int) -> int {
+    0;
+    1;
+    42;
+    999999;
+    0.0;
+    3.14;
+    99.999;
+    "hello";
+    "a short string";
+    "a much longer string that contains quite a lot of text and definitely exceeds one hundred characters to test how the formatter handles longer string literals in expressions";
+    true;
+    false;
+    null;
+    "raw string";
+    "raw string with "quotes" inside";
+    "
+        multi-line raw string
+        with several lines
+        of content
+    ";
+    a;
+    a + b;
+    a;
+    a + b * a - b;
+    a + b * a - b + a * a + b * b * a + b * a + b - a - b * a - b;
+    a;
+    a;
+    -a;
+    !true;
+    --a;
+    !a > b;
+    -a;
+    -a;
+    [];
+    [1];
+    [1, 2, 3];
+    [1, 2, 3, 4, 5];
+    ["short", "array"];
+    ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"];
+    ["this is a long string element", "another long string value here", "yet another one that is quite long", "and one more string element here too"];
+    ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"];
+    [[1, 2], [3, 4]];
+    [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+    [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[13, 14], [15, 16]]];
+    [1, 2];
+    [1, 2];
+    ["this is a long string", "another long string value", "yet another that is quite long", "and one more string element"];
+    ["this is a long string", "another long string value", "yet another that is quite long", "and one more string element"];
+    { "key": 1 };
+    { "a": 1, "b": 2 };
+    { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 };
+    { "first_key": "first value", "second_key": "second value", "third_key": "third value", "fourth_key": "fourth value", "fifth_key": "fifth" };
+    { "outer": { "inner_a": 1, "inner_b": 2, "inner_c": 3 }, "other": { "inner_d": 4, "inner_e": 5, "inner_f": 6 } };
+    { "k": 1 };
+    { "k": 1 };
+    OtherPoint { x: 1, y: 2 };
+    OtherVec { p: OtherPoint { x: 1, y: 2 }, q: OtherPoint { x: 3, y: 4 } };
+    OtherVec { p: OtherPoint { x: 100000, y: 200000 }, q: OtherPoint { x: 300000, y: 400000 } };
+    OtherTriple { a: OtherVec { p: OtherPoint { x: 1, y: 2 }, q: OtherPoint { x: 3, y: 4 } }, b: OtherVec { p: OtherPoint { x: 5, y: 6 }, q: OtherPoint { x: 7, y: 8 } }, c: OtherVec { p: OtherPoint { x: 9, y: 10 }, q: OtherPoint { x: 11, y: 12 } } };
+    OtherPoint { x: 1, y: 2 };
+    OtherPoint { x: 1, y: 2 };
+    OtherVec { p: OtherPoint { x: 100000, y: 200000 }, q: OtherPoint { x: 300000, y: 400000 } };
+    {
+        let x = 1;
+        x + 1
+    };
+    {
+        let x = a + b;
+        let y = x * 2;
+        y
+    };
+    {
+        let x = {
+            let y = {
+                let z = a + b;
+                z * z
+            };
+            y + y
+        };
+        x * x
+    };
+    {
+        let x = if (a > b) {
+            match (a) {
+                0 => {
+                    let inner = b * 2;
+                    inner + 1
+                },
+                _ => a,
+            }
+        } else {
+            b
+        };
+        x
+    };
+    [1, 2, 3];
+    { "k": 1 };
+    OtherPoint { x: 1, y: 2 };
+    a + b
+}
+
+class OtherPoint {
+  x: int
+  y: int
+}
+
+class OtherTriple {
+  a: OtherVec
+  b: OtherVec
+  c: OtherVec
+}
+
+class OtherVec {
+  p: OtherPoint
+  q: OtherPoint
+}
+
+template_string TriviaVeryLongTemplateNameWithParameters(first_parameter: string, second_parameter: int, third_parameter: bool)
+template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>)
+template_string MultiParamTrivia(a: string, b: int)
+template_string WithControl(items: string[])
+template_string DeepGenericParams(data: map<string, map<string, map<string, int | string | bool | float | null>>>)
+template_string ConstrainedParams(value: int, name: string)
+template_string TriviaDeepGenericParamBlock(data: map<string, map<string, int | string>>)
+template_string TriviaWrappingParamsBlock(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>)
+template_string ExtraWhitespace(a: string, b: int)
+template_string BasicTemplate(name: string)
+template_string VeryLongTemplateNameWithManyParameters(first_parameter: string, second_parameter: int, third_parameter: bool, fourth_parameter: float)
+template_string TriviaTemplate(x: string)
+template_string TriviaTemplateBlock(x: string)
+template_string ExtremelyLongNamePlusComplexParameters(first_very_long_parameter_name: map<string, int | string | bool>, second_very_long_parameter_name: (int | string | bool | float | null)[])
+template_string ComplexParams(items: string[], config: map<string, int>)
+template_string FnTypeParams(transform: (x: int) -> int, combine: (a: string, b: string) -> string)
+template_string NoColonParams(name: string, age: int)
+template_string ThisIsAnExtremelyLongTemplateStringNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns(x: int)
+template_string VeryLongParams(extremely_long_parameter_name: string, another_very_long_parameter_name: int)
+template_string OptionalParams(name: string?, age: int?, items: string[]?)
+template_string UnionParams(result: string | int | bool | null, items: (string | int)[])
+template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool)
+template_string MultiParam(first: string, last: string, age: int)
+template_string TriviaVeryLongTemplateNameWithParametersBlock(first_parameter: string, second_parameter: int, third_parameter: bool)
+template_string SingleLine(x: int)
+template_string TriviaDeepGenericParam(data: map<string, map<string, int | string>>)
+template_string NoParams()
+template_string T(x: int)
+template_string WithComment(x: string)
+template_string ComplexTypesWrap(items: (int | string | bool)[], config: map<string, int | string>, callback: (x: int, y: int) -> string)
+template_string TriviaWrappingParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>)
+template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string)
+template_string MultiParamTriviaBlock(a: string, b: int)
+class TypeAliasFailure {
+  reason: string
+}
+
+class TypeAliasSuccess {
+  data: string
+}
+
+type Result = TypeAliasSuccess | TypeAliasFailure
+
+type ParenUnion = (int | string)[]
+
+type DeepParenUnion = (int | string | bool | float | null | int[])[]?
+
+type TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string
+
+type TriviaGenericBlock = map<string, int>
+
+type SuccessCode = 200 | 201 | 204
+
+type Curried = (x: int) -> (y: int) -> int
+
+type IntToInt = (x: int) -> int
+
+type TriviaLongUnionBlock = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
+
+type LongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
+
+type ExtraWhitespace = int | string | bool | float | null
+
+type FnFactory = (config: string) -> (int) -> int
+
+type MixedLiterals = 200 | "success" | true
+
+type Constrained = int
+
+type MaybeResult = Result?
+
+type SimpleAlias = int
+
+type TriviaFnTypeBlock = (x: int) -> string
+
+type Json = int | float | string | bool | null | Json[] | map<string, Json>
+
+type Producer = () -> string
+
+type ComplexFn = (items: int[], lookup: map<string, int>) -> string?
+
+type TriviaAliasBlock = int
+
+type TriviaLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
+
+type DoubleOptional = int?
+
+type ComplexPostfix = (int | string)[]
+
+type NestedMap = map<string, map<string, int[]>>
+
+type TriviaParen = (int | string)[]
+
+type Role = "user" | "assistant" | "system"
+
+type AliasChain = SimpleAlias
+
+type ArrayOptional = int[]?
+
+type OptionalUnion = (int | string)?
+
+type Matrix = int[][]
+
+type TriviaFnType = (x: int) -> string
+
+type UnionParamFn = (value: int | string) -> bool
+
+type TriviaUnion = int | string | bool
+
+type DeepGeneric = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
+
+type Name = string
+
+type OptionalArray = int[]
+
+type ConstrainedLong = map<string, int | string | bool>
+
+type TriviaOptional = int?
+
+type BinaryOp = (a: int, b: int) -> int
+
+type ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit = int | string | bool | float | null
+
+type VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
+
+type DeepPostfix = (int | string | bool | float)[][]?
+
+type HttpOk = 200
+
+type StringMap = map<string, int>
+
+type TriviaUnionBlock = int | string | bool
+
+type IntList = int[]
+
+type UnnamedParams = (int, int) -> int
+
+type TriviaDeepGeneric = map<string, map<string, map<string, int | string>>>
+
+type ComplexMap = map<string, int | string | bool>
+
+type TriviaArray = int[]
+
+type DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>
+
+type T = int
+
+type WideUnion = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>
+
+type MaybeInt = int?
+
+type DoubleArray = int[][]
+
+type Tree = string | map<string, Tree> | Tree[] | map<string, map<string, Tree | string | int | null>>
+
+type TriviaAlias = int
+
+type NestedParenUnion = (int | string | bool | float)[]
+
+type LongParamFn = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string
+
+type TriviaGeneric = map<string, int>
+
+type AlwaysTrue = true

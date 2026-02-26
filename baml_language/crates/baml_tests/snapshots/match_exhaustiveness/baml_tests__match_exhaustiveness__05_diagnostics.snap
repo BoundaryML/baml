@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === DIAGNOSTICS ===
   [type] Error: Unreachable match arm
@@ -296,14 +295,13 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:506:32 ]
+     ╭─[ match_exhaustiveness.baml:507:9 ]
      │
- 506 │ ╭─▶         "user" => "first user",
- 507 │ ├─▶         "user" => "second user",
-     │ │                                      
-     │ ╰────────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 507 │         "user" => "second user",
+     │         ───┬──  
+     │            ╰──── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Non-exhaustive match on `Status`: missing cases Status.Pending
@@ -375,14 +373,13 @@ expression: output
 ─────╯
 
   [type] Error: Unreachable match arm
-     ╭─[ match_exhaustiveness.baml:642:35 ]
+     ╭─[ match_exhaustiveness.baml:643:9 ]
      │
- 642 │ ╭─▶         x: string => "any string",
- 643 │ ├─▶         "hello" => "unreachable"
-     │ │                                      
-     │ ╰────────────────────────────────────── Unreachable match arm
-     │     
-     │     Note: Error code: E0063
+ 643 │         "hello" => "unreachable"
+     │         ───┬───  
+     │            ╰───── Unreachable match arm
+     │ 
+     │ Note: Error code: E0063
 ─────╯
 
   [type] Error: Non-exhaustive match on `FullResult`: missing cases Pending

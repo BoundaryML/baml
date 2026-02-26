@@ -3,8 +3,8 @@ import { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Web Playground',
-  description: 'Next.js frontend for the WASM playground'
+  title: 'BAML Playground',
+  description: 'Interactive playground for editing and running BAML programs',
 };
 
 const RootLayout = ({ children }: { children: ReactNode }) => (

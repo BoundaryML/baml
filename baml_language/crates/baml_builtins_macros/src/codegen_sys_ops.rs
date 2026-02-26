@@ -77,10 +77,10 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
 
                     let output_type = sys_op_output_type(d, &collected.builtin_types);
 
-                    // Clean method: &self + params. Implementors override this.
+                    // Clean method: &self + call_id + params. Implementors override this.
                     let clean_method = quote! {
                         #[allow(unused_variables)]
-                        fn #fn_name(&self, #clean_params #ctx_param) -> #output_type {
+                        fn #fn_name(&self, call_id: CallId, #clean_params #ctx_param) -> #output_type {
                             SysOpOutput::err(OpErrorKind::Unsupported)
                         }
                     };
@@ -93,6 +93,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                             heap: &::std::sync::Arc<BexHeap>,
                             args: Vec<bex_heap::BexValue<'_>>,
                             ctx: &SysOpContext,
+                            call_id: CallId,
                         ) -> SysOpResult {
                             if args.len() != #arg_count_lit {
                                 return SysOpResult::Ready(Err(OpError::new(
@@ -104,7 +105,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                                 )));
                             }
                             #extraction
-                            self.#fn_name(#clean_call_args #ctx_arg).into_result(SysOp::#variant_name)
+                            self.#fn_name(call_id, #clean_call_args #ctx_arg).into_result(SysOp::#variant_name)
                         }
                     };
 
@@ -139,7 +140,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
             let fn_name = &d.fn_name;
             let glue_fn_name = format_ident!("__{}", fn_name);
             quote! {
-                #fn_name: ::std::sync::Arc::new(move |heap, args, ctx| T::default().#glue_fn_name(heap, args, ctx)),
+                #fn_name: ::std::sync::Arc::new(move |heap, args, ctx, call_id| T::default().#glue_fn_name(heap, args, ctx, call_id)),
             }
         })
         .collect();
@@ -172,7 +173,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                     let fn_name = &d.fn_name;
                     let glue_fn_name = format_ident!("__{}", fn_name);
                     quote! {
-                        self.inner.#fn_name = ::std::sync::Arc::new(move |heap, args, ctx| T::default().#glue_fn_name(heap, args, ctx));
+                        self.inner.#fn_name = ::std::sync::Arc::new(move |heap, args, ctx, call_id| T::default().#glue_fn_name(heap, args, ctx, call_id));
                     }
                 })
                 .collect();
@@ -196,7 +197,7 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                     quote! {
                         self.inner.#fn_name = {
                             let __instance = ::std::sync::Arc::clone(&instance);
-                            ::std::sync::Arc::new(move |heap, args, ctx| __instance.#glue_fn_name(heap, args, ctx))
+                            ::std::sync::Arc::new(move |heap, args, ctx, call_id| __instance.#glue_fn_name(heap, args, ctx, call_id))
                         };
                     }
                 })

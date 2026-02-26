@@ -71,7 +71,7 @@ pub fn version() -> Result<String> {
 
     let result = if !buf.ptr.is_null() && buf.len > 0 {
         #[allow(unsafe_code)]
-        let bytes = unsafe { std::slice::from_raw_parts(buf.ptr as *const u8, buf.len) };
+        let bytes = unsafe { std::slice::from_raw_parts(buf.ptr.cast::<u8>(), buf.len) };
         String::from_utf8_lossy(bytes).into_owned()
     } else {
         "unknown".to_string()

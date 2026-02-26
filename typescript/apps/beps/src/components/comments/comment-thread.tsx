@@ -13,6 +13,7 @@ import { MDXEditorComponent, MDXEditorHandle } from "@/components/editor/mdx";
 import { DecisionForm } from "@/components/decisions/decision-form";
 import { IssueForm } from "@/components/issues/issue-form";
 import { CommentLinkedBadges } from "./comment-linked-badges";
+import { BepLinkContext } from "@/lib/bep-link-resolver";
 import { 
   MessageSquare, 
   ChevronDown, 
@@ -51,6 +52,7 @@ interface CommentThreadProps {
   pageId?: Id<"bepPages">;
   viewingVersionId?: Id<"bepVersions">;
   readOnly?: boolean;
+  linkContext?: BepLinkContext;
   onNavigateToIssue?: (issueId: string) => void;
   onNavigateToDecision?: (decisionId: string) => void;
 }
@@ -135,6 +137,7 @@ function SingleComment({
   depth = 0,
   readOnly,
   linkedItems,
+  linkContext,
   onNavigateToIssue,
   onNavigateToDecision,
 }: { 
@@ -143,6 +146,7 @@ function SingleComment({
   depth?: number;
   readOnly?: boolean;
   linkedItems?: { issues: LinkedItem[]; decisions: LinkedItem[] };
+  linkContext?: BepLinkContext;
   onNavigateToIssue?: (issueId: string) => void;
   onNavigateToDecision?: (decisionId: string) => void;
 }) {
@@ -242,8 +246,8 @@ function SingleComment({
           </div>
 
           {/* Content - rendered as markdown */}
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <BepContent content={comment.content} />
+          <div className="prose prose-sm dark:prose-invert max-w-none" data-comment-id={comment._id}>
+            <BepContent content={comment.content} linkContext={linkContext} />
           </div>
 
           {/* Linked Issues/Decisions */}
@@ -407,6 +411,7 @@ function SingleComment({
                   versionId={versionId}
                   depth={depth + 1}
                   readOnly={readOnly}
+                  linkContext={linkContext}
                 />
               ))}
             </div>
@@ -423,6 +428,7 @@ export function CommentThread({
   pageId,
   viewingVersionId,
   readOnly = false,
+  linkContext,
   onNavigateToIssue,
   onNavigateToDecision,
 }: CommentThreadProps) {
@@ -603,6 +609,7 @@ export function CommentThread({
               comment={comment as Comment}
               versionId={versionId}
               readOnly={readOnly}
+              linkContext={linkContext}
               linkedItems={linkedItemsBatch?.[comment._id]}
               onNavigateToIssue={onNavigateToIssue}
               onNavigateToDecision={onNavigateToDecision}

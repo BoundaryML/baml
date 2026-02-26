@@ -1,4 +1,4 @@
-//! `bridge_wasm` - WASM bindings for BAML using `bex_engine`.
+//! `bridge_wasm` - WASM bindings for BAML using `bex_project`.
 //!
 //! This crate only supports the `wasm32-unknown-unknown` target. Use
 //! `--target wasm32-unknown-unknown` when building.
@@ -29,7 +29,7 @@
 //!                 bodyPromise: response.text(),  // body is read when .text() is called in BAML
 //!             };
 //!         },
-//!         env: (variable) => process.env[variable],  // or (variable) => undefined to disable env lookups
+//!         env: (variable) => process.env[variable],  // may return Promise<string | undefined> for async lookups
 //!     }
 //! );
 //!
@@ -44,25 +44,37 @@
 //! ```
 
 mod error;
+mod handle;
 mod registry;
 mod send_wrapper;
 mod wasm_env;
+mod wasm_fs;
 mod wasm_http;
+mod wasm_lsp;
+mod wasm_playground;
+mod wasm_sys;
 
-use std::{cell::RefCell, collections::HashMap};
-
-use bex_factory::{BexIncremental, CancellationToken};
-pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
+pub use bridge_ctypes::{HANDLE_TABLE, baml, external_to_baml_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
 use wasm_bindgen::prelude::*;
+
+static LOGGER_INIT: std::sync::Once = std::sync::Once::new();
 
 /// Initialize the WASM module with panic hook (auto-called by wasm-bindgen).
 #[wasm_bindgen(start)]
 pub fn start() {
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
+    LOGGER_INIT.call_once(|| {
+        let level = if cfg!(debug_assertions) {
+            log::Level::Debug
+        } else {
+            log::Level::Info
+        };
+        wasm_logger::init(wasm_logger::Config::new(level));
+    });
 }
 
 /// Get the version of the `bridge_wasm` crate.
@@ -71,12 +83,10 @@ pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-/// Returns a test string for hot-reload testing (see app-vscode-webview hot-reload.hmr.test.ts).
-#[wasm_bindgen(js_name = hotReloadTestString)]
-pub fn hot_reload_test_string() -> String {
-    // BEGIN_VITE_HOT_RELOAD_TEST
-    "injected for hot reload test, see hot-reload.hmr.test.ts".to_string()
-    // END_VITE_HOT_RELOAD_TEST
+/// Returns the build timestamp (unix seconds) for hot-reload / build-identity checks.
+#[wasm_bindgen(js_name = getBuildTime)]
+pub fn get_build_time() -> String {
+    env!("BRIDGE_WASM_BUILD_TS").to_string()
 }
 
 // ============================================================================
@@ -86,13 +96,19 @@ pub fn hot_reload_test_string() -> String {
 #[wasm_bindgen(typescript_custom_section)]
 const TS_FETCH_TYPES: &str = r#"
 export type WasmFetchCallback = (
+  callId: number,
   method: string,
   url: string,
   headersJson: string,
   body: string,
 ) => Promise<{ status: number; headersJson: string; url: string; bodyPromise: Promise<string> }>;
 
-export type WasmEnvVarsCallback = (variable: string) => string | undefined;
+export type WasmEnvVarsCallback = (variable: string) => Promise<string | undefined> | string | undefined;
+
+export type WasmSendNotificationCallback = (notification: LspNotification) => void;
+export type WasmSendResponseCallback = (response: LspResponse) => void;
+export type WasmMakeRequestCallback = (request: LspRequest) => void;
+export type WasmPlaygroundNotificationCallback = (notification: PlaygroundNotification) => void;
 "#;
 
 #[wasm_bindgen]
@@ -100,7 +116,14 @@ extern "C" {
     /// Callback bundle passed to [`BamlWasmRuntime::create`].
     ///
     /// From JS, pass a plain object: `{ fetch: ..., env: ... }`.
-    #[wasm_bindgen(typescript_type = "{ fetch: WasmFetchCallback; env: WasmEnvVarsCallback }")]
+    #[wasm_bindgen(typescript_type = r#"{
+        fetch: WasmFetchCallback;
+        env: WasmEnvVarsCallback;
+        lsp_send_notification: WasmSendNotificationCallback;
+        lsp_send_response: WasmSendResponseCallback;
+        lsp_make_request: WasmMakeRequestCallback;
+        playground_send_notification: WasmPlaygroundNotificationCallback
+}"#)]
     pub type WasmCallbacks;
 
     #[wasm_bindgen(method, getter, structural)]
@@ -108,6 +131,18 @@ extern "C" {
 
     #[wasm_bindgen(method, getter, structural, js_name = "env")]
     fn env(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "lsp_send_notification")]
+    fn send_notification(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "lsp_send_response")]
+    fn send_response(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "lsp_make_request")]
+    fn make_request(this: &WasmCallbacks) -> Function;
+
+    #[wasm_bindgen(method, getter, structural, js_name = "playground_send_notification")]
+    fn playground_send_notification(this: &WasmCallbacks) -> Function;
 }
 
 /// A BAML runtime for WASM environments.
@@ -116,10 +151,13 @@ extern "C" {
 /// HTTP requests are performed via a JS callback provided at creation time.
 #[wasm_bindgen]
 pub struct BamlWasmRuntime {
-    bex: Box<dyn BexIncremental>,
-    /// Active calls keyed by caller-provided ID. WASM is single-threaded so `RefCell` suffices.
-    active_calls: RefCell<HashMap<u32, CancellationToken>>,
+    bex: Box<dyn bex_project::BexLsp>,
 }
+
+// SAFETY: wasm32-unknown-unknown is single-threaded, so unwind safety is
+// trivially satisfied — there is no concurrent observer of partially-unwound state.
+impl std::panic::UnwindSafe for BamlWasmRuntime {}
+impl std::panic::RefUnwindSafe for BamlWasmRuntime {}
 
 #[wasm_bindgen]
 impl BamlWasmRuntime {
@@ -132,40 +170,50 @@ impl BamlWasmRuntime {
     ///   e.g., `{"main.baml": "function Greet(name: string) -> string { ... }"}`
     /// * `callbacks` - Object containing callback functions (see `WasmCallbacks` interface).
     pub fn create(
-        root_path: &str,
-        src_files_json: &str,
         callbacks: &WasmCallbacks,
+        wasm_vfs: wasm_fs::WasmVfs,
     ) -> Result<BamlWasmRuntime, JsError> {
         let fetch_fn = callbacks.fetch();
         let env_vars_fn = callbacks.env();
+        let send_notification_fn = callbacks.send_notification();
+        let send_response_fn = callbacks.send_response();
+        let make_request_fn = callbacks.make_request();
+        let playground_send_notification_fn = callbacks.playground_send_notification();
 
-        // Parse source files
-        let src_files: HashMap<String, String> = serde_json::from_str(src_files_json)
-            .map_err(|e| JsError::new(&format!("Failed to parse src_files_json: {e}")))?;
-
-        // Build SysOps with WASM HTTP and env implementations
         let sys_ops = sys_types::SysOpsBuilder::new()
             .with_http_instance(std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)))
             .with_env_instance(std::sync::Arc::new(wasm_env::WasmEnv::new(env_vars_fn)))
+            .with_sys_instance(std::sync::Arc::new(wasm_sys::WasmSys::new()))
             .build();
+        let sys_ops = std::sync::Arc::new(sys_ops);
+        let sys_op_factory = std::sync::Arc::new(move |_path: &vfs::VfsPath| sys_ops.clone());
 
-        // Create the engine via factory
-        let bex = bex_factory::new_incremental(root_path, &src_files, sys_ops);
+        let lsp = wasm_lsp::WasmLsp::new(send_notification_fn, send_response_fn, make_request_fn);
+        let playground =
+            wasm_playground::WasmPlaygroundSender::new(playground_send_notification_fn);
 
-        Ok(BamlWasmRuntime {
-            bex,
-            active_calls: RefCell::new(HashMap::new()),
-        })
+        let vfs = wasm_fs::WasmFs::new(wasm_vfs);
+        let vfs = std::sync::Arc::new(vfs);
+
+        let bex = bex_project::new_lsp(
+            sys_op_factory,
+            std::sync::Arc::new(lsp),
+            std::sync::Arc::new(playground),
+            bex_project::BamlVFS::new(vfs),
+            None,
+        );
+
+        Ok(BamlWasmRuntime { bex: Box::new(bex) })
     }
 
-    /// Call a BAML function.
+    /// Call a BAML function for a specific project.
     ///
     /// # Arguments
     ///
+    /// * `id` - Unique call identifier
+    /// * `project` - Project root path (e.g. `"/workspace/baml_src"`)
     /// * `name` - The function name to call
     /// * `args_proto` - Protobuf-encoded `HostFunctionArguments`
-    /// * `call_id` - Optional caller-provided ID for cancellation. If provided,
-    ///   the call can be cancelled via `cancelCall(callId)`.
     ///
     /// # Returns
     ///
@@ -173,43 +221,37 @@ impl BamlWasmRuntime {
     #[wasm_bindgen(js_name = callFunction)]
     pub async fn call_function(
         &self,
+        id: u32,
+        project: String,
         name: &str,
         args_proto: &[u8],
-        call_id: Option<u32>,
     ) -> Result<Vec<u8>, JsValue> {
         // Decode protobuf arguments
-        let args = baml::cffi::HostFunctionArguments::decode(args_proto)
+        let args = baml::cffi::CallFunctionArgs::decode(args_proto)
             .map_err(|e| JsError::new(&format!("Failed to decode arguments: {e}")))?;
 
-        // Convert kwargs to BexExternalValue
-        let kwargs = kwargs_to_bex_values(args.kwargs)
+        let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)
             .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
 
-        // Create cancellation token and register if call_id is provided.
-        let cancel = CancellationToken::new();
-        if let Some(id) = call_id {
-            let mut calls = self.active_calls.borrow_mut();
-            if calls.contains_key(&id) {
-                return Err(JsError::new(&format!(
-                    "call_id {id} is already in use by an active call"
-                ))
-                .into());
-            }
-            calls.insert(id, cancel.clone());
-        }
+        let call_id = sys_types::CallId(u64::from(id));
+        let fs_path = bex_project::FsPath::from_str(project);
 
-        // Call the function (Bex trait)
-        let result = self.bex.call_function(name, kwargs.into(), cancel).await;
+        let function_call_ctx = bex_project::FunctionCallContextBuilder::new(call_id);
 
-        // Unregister from active calls.
-        if let Some(id) = call_id {
-            self.active_calls.borrow_mut().remove(&id);
-        }
+        // Call the function.
+        let bex = self
+            .bex
+            .get_bex_for_project(&fs_path)
+            .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
+        let result = bex
+            .call_function(name, kwargs.into(), function_call_ctx.build())
+            .await;
 
+        // Handle cancellation error.
         let result = result.map_err(|e| -> JsValue {
             if matches!(
                 e,
-                bex_factory::RuntimeError::Engine(bex_factory::EngineError::Cancelled)
+                bex_project::RuntimeError::Engine(bex_project::EngineError::Cancelled)
             ) {
                 let err = js_sys::Error::new("Operation cancelled");
                 err.set_name("BamlCancelledError");
@@ -219,11 +261,17 @@ impl BamlWasmRuntime {
             }
         })?;
 
-        // Encode result as protobuf
-        let cffi_value = external_to_cffi_value(&result)
+        let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+        let baml_value = external_to_baml_value(&result, &handle_options)
             .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
 
-        Ok(cffi_value.encode_to_vec())
+        Ok(baml_value.encode_to_vec())
+    }
+
+    /// Handle an LSP notification.
+    #[wasm_bindgen(js_name = handleLspNotification)]
+    pub fn handle_notification(&self, notification: wasm_lsp::LspNotification) {
+        self.bex.handle_notification(notification.into());
     }
 
     /// Cancel an in-flight function call by its ID.
@@ -232,37 +280,29 @@ impl BamlWasmRuntime {
     /// cancellation check point. If the call has already completed or the ID
     /// is unknown, this is a no-op.
     #[wasm_bindgen(js_name = cancelCall)]
-    pub fn cancel_call(&self, call_id: u32) {
-        if let Some(token) = self.active_calls.borrow_mut().remove(&call_id) {
-            token.cancel();
-        }
+    pub fn cancel_call(&self, project: String, call_id: u32) -> Result<(), JsError> {
+        let fs_path = bex_project::FsPath::from_str(project);
+        let bex = self
+            .bex
+            .get_bex_for_project(&fs_path)
+            .map_err(|e| JsError::new(&format!("Failed to get Bex for project: {e}")))?;
+        bex.cancel_function_call(sys_types::CallId(u64::from(call_id)))
+            .map_err(|e| JsError::new(&format!("Failed to cancel function call: {e}")))?;
+        Ok(())
     }
 
-    /// Add a source file to the runtime.
+    /// Handle an LSP request.
+    #[wasm_bindgen(js_name = handleLspRequest)]
+    pub fn handle_request(&self, request: wasm_lsp::LspRequest) {
+        self.bex.handle_request(request.into());
+    }
+
+    /// Request the current playground state.
     ///
-    /// # Arguments
-    ///
-    /// * `path` - The path to the source file
-    /// * `content` - The content of the source file
-    #[wasm_bindgen(js_name = addSource)]
-    pub fn add_source(&mut self, path: &str, content: &str) -> Result<(), JsError> {
-        let result = self.bex.add_source(path, content);
-        if result.engine_updated {
-            Ok(())
-        } else {
-            Err(JsError::new(&result.diagnostics))
-        }
-    }
-
-    /// Set the main file content (convenience for single-file). Equivalent to `addSource("main.baml", content)`.
-    #[wasm_bindgen(js_name = setSource)]
-    pub fn set_source(&mut self, content: &str) -> Result<(), JsError> {
-        self.add_source("main.baml", content)
-    }
-
-    /// Return the names of all functions defined in the current project.
-    #[wasm_bindgen(js_name = functionNames)]
-    pub fn function_names(&self) -> Vec<String> {
-        self.bex.function_names()
+    /// Triggers `playground_send_notification` callbacks with the current
+    /// list of projects and each project's state.
+    #[wasm_bindgen(js_name = requestPlaygroundState)]
+    pub fn request_playground_state(&self) {
+        self.bex.request_playground_state();
     }
 }

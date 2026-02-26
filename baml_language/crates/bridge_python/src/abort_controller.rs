@@ -1,6 +1,6 @@
 //! Python `AbortController` class for cancelling in-flight BAML function calls.
 
-use bex_factory::CancellationToken;
+use bex_project::CancellationToken;
 use pyo3::{prelude::pymethods, pyclass};
 
 /// An abort controller for cancelling BAML function calls.

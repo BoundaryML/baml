@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isReservedPageSlug } from "@/lib/bep-routes";
 
 interface BepAddPageModalProps {
   open: boolean;
@@ -41,7 +42,8 @@ export function BepAddPageModal({
   };
 
   const isSlugTaken = existingSlugs.includes(slug);
-  const isValid = title.trim() && slug.trim() && !isSlugTaken;
+  const isReservedSlug = isReservedPageSlug(slug);
+  const isValid = title.trim() && slug.trim() && !isSlugTaken && !isReservedSlug;
 
   const handleAdd = () => {
     if (isValid) {
@@ -89,6 +91,9 @@ export function BepAddPageModal({
             />
             {isSlugTaken && (
               <p className="text-sm text-destructive">This slug is already in use</p>
+            )}
+            {!isSlugTaken && isReservedSlug && (
+              <p className="text-sm text-destructive">This slug is reserved for app routes</p>
             )}
           </div>
         </div>

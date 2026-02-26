@@ -1,6 +1,7 @@
 "use client";
 
 import type { ForwardedRef } from "react";
+import { useIsDark } from "@/hooks/use-theme";
 import {
   MDXEditor,
   type MDXEditorMethods,
@@ -51,8 +52,10 @@ export default function InitializedMDXEditor({
   editable = true,
   showToolbar = true,
   diffMarkdown,
+  className,
   ...props
 }: InitializedMDXEditorProps) {
+  const isDark = useIsDark();
   const plugins = [
     headingsPlugin(),
     listsPlugin(),
@@ -134,9 +137,10 @@ export default function InitializedMDXEditor({
       {...props}
       ref={editorRef}
       readOnly={!editable}
+      className={[isDark && "dark-theme", className].filter(Boolean).join(" ")}
       contentEditableClassName={`
         prose prose-sm sm:prose-base lg:prose-lg dark:prose-invert max-w-none
-        min-h-[200px] focus:outline-none
+        min-h-[200px] focus:outline-none text-foreground
         prose-code:before:content-none prose-code:after:content-none
         ${!editable ? "cursor-default" : ""}
       `}

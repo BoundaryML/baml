@@ -2,18 +2,15 @@ pub mod ast;
 pub mod printer;
 mod trivia_classifier;
 
+use ast::FromCST as _;
 use baml_db::{
     baml_compiler_diagnostics::ParseError,
     baml_compiler_lexer, baml_compiler_parser,
     baml_compiler_syntax::{SyntaxElement, SyntaxNode},
 };
 use baml_project::ProjectDatabase;
+use printer::{Printer, Shape};
 pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
-
-use crate::{
-    ast::FromCST as _,
-    printer::{Printer, Shape},
-};
 
 /// Runs the formatter on the given source code.
 ///

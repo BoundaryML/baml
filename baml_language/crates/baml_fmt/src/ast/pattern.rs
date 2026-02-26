@@ -16,7 +16,7 @@ use crate::{
 pub enum MatchPattern {
     Literal(Literal),
     Binding(BindingPattern),
-    EnumVariant(EnumVariantPattern),
+    Path(PathPattern),
     Union(UnionPattern),
     /// This would be a top-level nested pattern, meaning there are parentheses around the whole thing
     Nested(NestedPattern),
@@ -55,7 +55,7 @@ impl FromCST for MatchPattern {
         let ty = if rest.is_empty() {
             match first_elem {
                 UnionPatternMember::Literal(lit) => MatchPattern::Literal(lit),
-                UnionPatternMember::EnumVariant(variant) => MatchPattern::EnumVariant(variant),
+                UnionPatternMember::PathVariant(variant) => MatchPattern::Path(variant),
                 UnionPatternMember::Word(word) => MatchPattern::Binding(BindingPattern {
                     name: word,
                     ty: None,
@@ -84,7 +84,7 @@ impl Printable for MatchPattern {
         match self {
             MatchPattern::Literal(lit) => printer.print(lit, shape),
             MatchPattern::Binding(binding) => binding.print(shape, printer),
-            MatchPattern::EnumVariant(variant) => variant.print(shape, printer),
+            MatchPattern::Path(variant) => variant.print(shape, printer),
             MatchPattern::Union(union) => union.print(shape, printer),
             MatchPattern::Nested(nested) => nested.print(shape, printer),
         }
@@ -93,7 +93,7 @@ impl Printable for MatchPattern {
         match self {
             MatchPattern::Literal(lit) => lit.leftmost_token(),
             MatchPattern::Binding(binding) => binding.leftmost_token(),
-            MatchPattern::EnumVariant(variant) => variant.leftmost_token(),
+            MatchPattern::Path(variant) => variant.leftmost_token(),
             MatchPattern::Union(union) => union.leftmost_token(),
             MatchPattern::Nested(nested) => nested.leftmost_token(),
         }
@@ -102,7 +102,7 @@ impl Printable for MatchPattern {
         match self {
             MatchPattern::Literal(lit) => lit.rightmost_token(),
             MatchPattern::Binding(binding) => binding.rightmost_token(),
-            MatchPattern::EnumVariant(variant) => variant.rightmost_token(),
+            MatchPattern::Path(variant) => variant.rightmost_token(),
             MatchPattern::Union(union) => union.rightmost_token(),
             MatchPattern::Nested(nested) => nested.rightmost_token(),
         }
@@ -120,8 +120,13 @@ impl Printable for BindingPattern {
         printer.print_raw_token(&self.name);
         if let Some((colon, ty)) = &self.ty {
             printer.print_raw_token(colon);
+            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
             printer.print_str(" ");
-            let new_overhead = usize::from(self.name.span().len() + colon.span().len()) + 1;
+            let mut trivia_len = printer.print_trivia_squished(colon_trailing);
+            let ty_leading = printer.trivia.get_leading_for_element(ty);
+            trivia_len += printer.print_trivia_squished(ty_leading);
+            let new_overhead =
+                usize::from(self.name.span().len() + colon.span().len()) + 1 + trivia_len;
             shape.width = shape.width.saturating_sub(new_overhead);
             shape.first_line_offset += new_overhead;
             printer.print(ty, shape)
@@ -142,24 +147,28 @@ impl Printable for BindingPattern {
 }
 
 #[derive(Debug)]
-pub struct EnumVariantPattern {
-    pub enum_name: t::Word,
-    pub dot: t::Dot,
-    pub variant_name: t::Word,
+pub struct PathPattern {
+    pub first: t::Word,
+    pub rest: Vec<(t::Dot, t::Word)>,
 }
 
-impl Printable for EnumVariantPattern {
+impl Printable for PathPattern {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print_raw_token(&self.enum_name);
-        printer.print_raw_token(&self.dot);
-        printer.print_raw_token(&self.variant_name);
+        printer.print_raw_token(&self.first);
+        for (dot, word) in &self.rest {
+            printer.print_raw_token(dot);
+            printer.print_raw_token(word);
+        }
         PrintInfo::default_single_line()
     }
     fn leftmost_token(&self) -> TextRange {
-        self.enum_name.span()
+        self.first.span()
     }
     fn rightmost_token(&self) -> TextRange {
-        self.variant_name.span()
+        self.rest
+            .last()
+            .map_or(&self.first, |(_, word)| word)
+            .span()
     }
 }
 
@@ -167,6 +176,13 @@ impl Printable for EnumVariantPattern {
 pub struct UnionPattern {
     pub first: Box<UnionPatternMember>,
     pub rest: Vec<(t::Pipe, UnionPatternMember)>,
+}
+
+impl UnionPattern {
+    /// Returns an iterator over the members in the union pattern, in order.
+    pub fn iter_patterns(&self) -> impl Iterator<Item = &UnionPatternMember> {
+        std::iter::once(&*self.first).chain(self.rest.iter().map(|(_, p)| p))
+    }
 }
 
 impl PrintMultiLine for UnionPattern {
@@ -181,72 +197,91 @@ impl PrintMultiLine for UnionPattern {
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut info = printer.print(&*self.first, shape.clone());
+        let inner_indent = shape.indent + printer.config.indent_width;
         printer.print_trivia_all_trailing_for(self.first.rightmost_token());
-        for (pipe, pattern) in &self.rest {
+        for (i, (pipe, pattern)) in self.rest.iter().enumerate() {
             info.multi_lined = true;
             printer.print_newline();
+            let (pipe_leading, pipe_trailing) = printer.trivia.get_for_range_split(pipe.span());
+            let (pattern_leading, pattern_trailing) = printer.trivia.get_for_element(pattern);
+
+            printer.print_trivia_with_newline(pipe_leading, inner_indent);
             printer.print_spaces(shape.indent + printer.config.indent_width);
+
             printer.print_raw_token(pipe);
-            printer.print_str(" ");
+            let mut post_pipe_len = printer.print_trivia_squished(pipe_trailing);
+            post_pipe_len += printer.print_trivia_squished(pattern_leading);
+            if post_pipe_len == 0 {
+                printer.print_spaces(1); // only add space if there are no block comments between
+            }
+
             printer.print(pattern, shape.clone());
-            printer.print_trivia_all_trailing_for(pattern.rightmost_token());
+            if i + 1 < self.rest.len() {
+                printer.print_trivia_trailing(pattern_trailing);
+            }
         }
         info
     }
 }
 
+impl UnionPattern {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the union pattern on a single line.
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        if self
+            .first
+            .print(Shape::unlimited_single_line(), printer)
+            .multi_lined
+        {
+            return None;
+        }
+        let first_trailing = printer.trivia.get_trailing_for_element(&*self.first);
+        let mut pre_pipe_len = printer.try_print_trivia_single_line_squished(first_trailing)?;
+
+        for (i, (pipe, pattern)) in self.rest.iter().enumerate() {
+            if printer.output.len() > shape.width {
+                return None; // early abort
+            }
+            let (pipe_leading, pipe_trailing) = printer.trivia.get_for_range_split(pipe.span());
+            let (pattern_leading, pattern_trailing) = printer.trivia.get_for_element(pattern);
+
+            pre_pipe_len += printer.try_print_trivia_single_line_squished(pipe_leading)?; // could be put on preceding lines
+            if pre_pipe_len == 0 {
+                printer.print_spaces(1); // only add space if there are no block comments between
+            }
+
+            printer.print_raw_token(pipe);
+
+            let mut post_pipe_len = printer.print_trivia_squished(pipe_trailing);
+            post_pipe_len += printer.print_trivia_squished(pattern_leading);
+            if post_pipe_len == 0 {
+                printer.print_spaces(1); // only add space if there are no block comments between
+            }
+
+            if pattern
+                .print(Shape::unlimited_single_line(), printer)
+                .multi_lined
+            {
+                return None;
+            }
+            if i + 1 < self.rest.len() {
+                pre_pipe_len = printer.try_print_trivia_single_line_squished(pattern_trailing)?;
+            }
+        }
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
 impl Printable for UnionPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        // Check if trailing trivia on any member forces multi-line
-        let (_, first_trailing) = printer
-            .trivia
-            .get_for_range_split(self.first.rightmost_token());
-        let mut has_line_trivia = first_trailing
-            .iter()
-            .any(|t| t.single_line_len(printer.input).is_none());
-
-        if !has_line_trivia {
-            for (_, pattern) in &self.rest {
-                let (_, trailing) = printer
-                    .trivia
-                    .get_for_range_split(pattern.rightmost_token());
-                if trailing
-                    .iter()
-                    .any(|t| t.single_line_len(printer.input).is_none())
-                {
-                    has_line_trivia = true;
-                    break;
-                }
-            }
-        }
-
-        if has_line_trivia {
-            return Self::print_multi_line(self, shape, printer);
-        }
-
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let mut multi_lined = false;
-        multi_lined |= single_line_printer
-            .print(&*self.first, shape.clone())
-            .multi_lined;
-        for (pipe, pattern) in &self.rest {
-            if multi_lined || single_line_printer.output.len() > shape.width {
-                return Self::print_multi_line(self, shape, printer);
-            }
-            single_line_printer.print_str(" ");
-            single_line_printer.print_raw_token(pipe);
-            single_line_printer.print_str(" ");
-            multi_lined |= single_line_printer
-                .print(pattern, shape.clone())
-                .multi_lined;
-        }
-        if multi_lined || single_line_printer.output.len() > shape.width {
-            return Self::print_multi_line(self, shape, printer);
-        }
-
-        printer.append_from_printer(single_line_printer);
-        PrintInfo::default_single_line()
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
         self.first.leftmost_token()
@@ -265,7 +300,7 @@ pub enum UnionPatternMember {
     /// Includes things like `null`, `true`, `false`.
     /// Should probably treat these as literals, but we can change if we have a use case.
     Word(t::Word),
-    EnumVariant(EnumVariantPattern),
+    PathVariant(PathPattern),
     Nested(NestedPattern),
 }
 
@@ -298,16 +333,17 @@ impl UnionPatternMember {
             }
         };
 
-        if let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
+        let mut rest = Vec::new();
+        while let Some(dot) = it.next_if_kind(SyntaxKind::DOT) {
             let dot = t::Dot::from_cst(dot)?;
-            let variant_name = it.expect_parse()?;
-            Ok(UnionPatternMember::EnumVariant(EnumVariantPattern {
-                enum_name: first,
-                dot,
-                variant_name,
-            }))
-        } else {
+            let word: t::Word = it.expect_parse()?;
+            rest.push((dot, word));
+        }
+
+        if rest.is_empty() {
             Ok(UnionPatternMember::Word(first))
+        } else {
+            Ok(UnionPatternMember::PathVariant(PathPattern { first, rest }))
         }
     }
 }
@@ -316,7 +352,7 @@ impl From<UnionPatternMember> for MatchPattern {
     fn from(member: UnionPatternMember) -> Self {
         match member {
             UnionPatternMember::Literal(lit) => MatchPattern::Literal(lit),
-            UnionPatternMember::EnumVariant(variant) => MatchPattern::EnumVariant(variant),
+            UnionPatternMember::PathVariant(variant) => MatchPattern::Path(variant),
             UnionPatternMember::Word(word) => MatchPattern::Binding(BindingPattern {
                 name: word,
                 ty: None,
@@ -334,7 +370,7 @@ impl Printable for UnionPatternMember {
                 printer.print_raw_token(word);
                 PrintInfo::default_single_line()
             }
-            UnionPatternMember::EnumVariant(variant) => variant.print(shape, printer),
+            UnionPatternMember::PathVariant(variant) => variant.print(shape, printer),
             UnionPatternMember::Nested(nested) => nested.print(shape, printer),
         }
     }
@@ -342,7 +378,7 @@ impl Printable for UnionPatternMember {
         match self {
             UnionPatternMember::Literal(lit) => lit.leftmost_token(),
             UnionPatternMember::Word(word) => word.span(),
-            UnionPatternMember::EnumVariant(variant) => variant.leftmost_token(),
+            UnionPatternMember::PathVariant(variant) => variant.leftmost_token(),
             UnionPatternMember::Nested(nested) => nested.leftmost_token(),
         }
     }
@@ -350,7 +386,7 @@ impl Printable for UnionPatternMember {
         match self {
             UnionPatternMember::Literal(lit) => lit.rightmost_token(),
             UnionPatternMember::Word(word) => word.span(),
-            UnionPatternMember::EnumVariant(variant) => variant.rightmost_token(),
+            UnionPatternMember::PathVariant(variant) => variant.rightmost_token(),
             UnionPatternMember::Nested(nested) => nested.rightmost_token(),
         }
     }
@@ -380,63 +416,41 @@ impl PrintMultiLine for NestedPattern {
     }
 }
 
+impl NestedPattern {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the nested pattern on a single line.
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+
+        let (pattern_leading, pattern_trailing) = printer.trivia.get_for_element(&*self.pattern);
+        printer.try_print_trivia_single_line_squished(pattern_leading)?;
+        if printer
+            .print(&*self.pattern, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        printer.try_print_trivia_single_line_squished(pattern_trailing)?;
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
 impl Printable for NestedPattern {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut inner_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let inner_shape = Shape {
-            width: shape.width.saturating_sub(2),
-            indent: shape.indent + printer.config.indent_width,
-            first_line_offset: 0,
-        };
-        let inner_info = inner_printer.print(&*self.pattern, inner_shape);
-        if inner_info.multi_lined {
-            return self.print_multi_line(shape, printer);
-        }
-
-        // Check trivia between parens and inner pattern
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        let (pattern_leading, _) = printer
-            .trivia
-            .get_for_range_split(self.pattern.leftmost_token());
-        let (_, pattern_trailing) = printer
-            .trivia
-            .get_for_range_split(self.pattern.rightmost_token());
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        let single_line_len: usize = open_trailing
-            .iter()
-            .chain(pattern_leading)
-            .chain(pattern_trailing)
-            .chain(close_leading)
-            .map(|t| t.single_line_len(printer.input))
-            .sum::<Option<usize>>()
-            .map_or(usize::MAX, |sum| {
-                sum + inner_printer.len() + const { "()".len() }
-            });
-
-        if single_line_len > shape.width {
-            self.print_multi_line(shape, printer)
-        } else {
-            printer.print_raw_token(&self.open_paren);
-            for t in open_trailing {
-                printer.print_trivia(t);
-            }
-            for t in pattern_leading {
-                if t.is_comment() {
-                    printer.print_trivia(t);
-                }
-            }
-            printer.append_from_printer(inner_printer);
-            for t in pattern_trailing {
-                printer.print_trivia(t);
-            }
-            for t in close_leading {
-                if t.is_comment() {
-                    printer.print_trivia(t);
-                }
-            }
-            printer.print_raw_token(&self.close_paren);
-            PrintInfo::default_single_line()
-        }
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
         self.open_paren.span()

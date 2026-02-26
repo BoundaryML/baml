@@ -97,6 +97,7 @@ ast_node!(Field, FIELD);
 ast_node!(EnumVariant, ENUM_VARIANT);
 ast_node!(ConfigBlock, CONFIG_BLOCK);
 ast_node!(ConfigItem, CONFIG_ITEM);
+ast_node!(ConfigValue, CONFIG_VALUE);
 ast_node!(ClientField, CLIENT_FIELD);
 ast_node!(PromptField, PROMPT_FIELD);
 ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
@@ -1227,32 +1228,16 @@ impl ConfigItem {
             .map(|config_value| config_value.text_range())
     }
 
+    /// Get the typed `ConfigValue` child, if present.
+    pub fn config_value(&self) -> Option<ConfigValue> {
+        self.syntax.children().find_map(ConfigValue::cast)
+    }
+
     /// Get the full config item value as a string.
     /// This handles compound values like "python/pydantic" that span multiple tokens.
     /// Returns the unquoted text of the value.
     pub fn value_str(&self) -> Option<String> {
-        self.syntax
-            .children()
-            .find(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
-            .map(|config_value| {
-                // Collect all non-whitespace, non-quote token text from nested tokens
-                config_value
-                    .descendants_with_tokens()
-                    .filter_map(rowan::NodeOrToken::into_token)
-                    .filter(|token| {
-                        !matches!(
-                            token.kind(),
-                            SyntaxKind::WHITESPACE
-                                | SyntaxKind::NEWLINE
-                                | SyntaxKind::LINE_COMMENT
-                                | SyntaxKind::BLOCK_COMMENT
-                                | SyntaxKind::QUOTE
-                        )
-                    })
-                    .map(|token| token.text().to_string())
-                    .collect::<String>()
-            })
-            .filter(|s| !s.is_empty())
+        self.config_value().and_then(|cv| cv.scalar_text())
     }
 
     /// Get a nested config block, if this item has one.
@@ -1409,6 +1394,22 @@ impl ConfigItem {
     /// Get attributes attached to this config item (e.g., `args { ... } @check(...)`).
     pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
         self.syntax.children().filter_map(Attribute::cast)
+    }
+}
+
+impl ConfigValue {
+    /// Extract the unquoted scalar text content, filtering trivia and quotes.
+    ///
+    /// Returns `None` if the node contains no significant tokens.
+    pub fn scalar_text(&self) -> Option<String> {
+        let text: String = self
+            .syntax
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| !token.kind().is_trivia() && token.kind() != SyntaxKind::QUOTE)
+            .map(|token| token.text().to_string())
+            .collect();
+        if text.is_empty() { None } else { Some(text) }
     }
 }
 

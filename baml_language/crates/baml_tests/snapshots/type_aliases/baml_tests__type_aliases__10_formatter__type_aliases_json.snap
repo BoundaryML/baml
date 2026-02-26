@@ -1,11 +1,10 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: first
+source: crates/baml_tests/src/generated_tests.rs
 ---
-type JSON = int | float | string | bool | JSON[] | map<string, json>
+type JSON = int | float | string | bool | JSON[] | map<string, json>;
 
 class NotJSON {
-    inner name
+    inner: name
 }
 
 // Should be type error.

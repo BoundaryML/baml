@@ -18,9 +18,9 @@ class Foo3 {
 }
 
 client<llm> GPT35 {
-  provider baml-openai-chat
+  provider "baml-openai-chat"
   options {
-    model gpt-3.5-turbo
+    model "gpt-3.5-turbo"
     max_tokens 100
   }
 }

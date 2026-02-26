@@ -13,13 +13,14 @@ use pyo3::{
 /// All core logic (span stack, event emission) lives in bridge_cffi.
 #[pyclass]
 pub struct HostSpanManager {
-    inner: baml_cffi::host_spans::HostSpanManager,
+    inner: bridge_cffi::host_spans::HostSpanManager,
 }
 
 impl HostSpanManager {
     pub fn new() -> Self {
+        let sink = bridge_cffi::get_event_sink();
         Self {
-            inner: baml_cffi::host_spans::HostSpanManager::new(),
+            inner: bridge_cffi::host_spans::HostSpanManager::new(sink),
         }
     }
 
@@ -112,5 +113,22 @@ fn py_to_json(obj: &Bound<'_, PyAny>) -> serde_json::Value {
     match obj.repr() {
         Ok(s) => serde_json::Value::String(s.to_string()),
         Err(_) => serde_json::Value::String("<unprintable>".to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_starts_with_zero_depth() {
+        let mgr = HostSpanManager::new();
+        assert_eq!(mgr.inner.context_depth(), 0);
+    }
+
+    #[test]
+    fn host_span_context_none_when_empty() {
+        let mgr = HostSpanManager::new();
+        assert!(mgr.host_span_context().is_none());
     }
 }

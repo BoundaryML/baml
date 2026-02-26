@@ -1,0 +1,1904 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "BasicClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      COMMA ","
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          COMMA ","
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "FullClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        KW_RETRY_POLICY "retry_policy"
+        CONFIG_VALUE "MyRetryPolicy"
+          WORD "MyRetryPolicy"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            COLON ":"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE "100"
+              INTEGER_LITERAL "100"
+          CONFIG_ITEM
+            WORD "temperature"
+            CONFIG_VALUE "0.7"
+              FLOAT_LITERAL "0.7"
+          COMMA ","
+          CONFIG_ITEM
+            WORD "top_p"
+            CONFIG_VALUE "0.9"
+              FLOAT_LITERAL "0.9"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "StringProviderClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE
+          STRING_LITERAL "openai-generic"
+            QUOTE """
+            WORD "openai-generic"
+            QUOTE """
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://openrouter.ai/api/v1"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "openrouter"
+                DOT "."
+                WORD "ai"
+                SLASH "/"
+                WORD "api"
+                SLASH "/"
+                WORD "v1"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "mistralai/mistral-small-3.1-24b-instruct"
+                QUOTE """
+                WORD "mistralai"
+                SLASH "/"
+                WORD "mistral-small-3"
+                DOT "."
+                INTEGER_LITERAL "1"
+                MINUS "-"
+                INTEGER_LITERAL "24"
+                WORD "b-instruct"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "NestedConfigClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "headers"
+            CONFIG_BLOCK
+              L_BRACE "{"
+              CONFIG_ITEM
+                STRING_LITERAL "X-API-Key"
+                  QUOTE """
+                  WORD "X-API-Key"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "my-key"
+                    QUOTE """
+                    WORD "my-key"
+                    QUOTE """
+              CONFIG_ITEM
+                STRING_LITERAL "Authorization"
+                  QUOTE """
+                  WORD "Authorization"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "Bearer token"
+                    QUOTE """
+                    WORD "Bearer"
+                    WORD "token"
+                    QUOTE """
+              R_BRACE "}"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "ArrayConfigClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          COMMA ","
+          CONFIG_ITEM
+            WORD "stop_sequences"
+            COLON ":"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE
+                  STRING_LITERAL "END"
+                    QUOTE """
+                    WORD "END"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "STOP"
+                    QUOTE """
+                    WORD "STOP"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "DONE"
+                    QUOTE """
+                    WORD "DONE"
+                    QUOTE """
+                R_BRACKET "]"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "LongOptionClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+                QUOTE """
+                WORD "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "some-really-long-domain-name-for-testing"
+                DOT "."
+                WORD "example"
+                DOT "."
+                WORD "com"
+                SLASH "/"
+                WORD "api"
+                SLASH "/"
+                WORD "v1"
+                SLASH "/"
+                WORD "chat"
+                SLASH "/"
+                WORD "completions"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TypedValuesClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "temperature"
+            COLON ":"
+            CONFIG_VALUE "0.5"
+              FLOAT_LITERAL "0.5"
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE "2048"
+              INTEGER_LITERAL "2048"
+          CONFIG_ITEM
+            WORD "stream"
+            CONFIG_VALUE "true"
+              WORD "true"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "EnvClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        COLON ":"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              ENV_ACCESS_EXPR "env.OPENAI_API_KEY"
+                KW_ENV "env"
+                DOT "."
+                WORD "OPENAI_API_KEY"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "ArrayOfObjectsClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        COLON ":"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          COMMA ","
+          CONFIG_ITEM
+            WORD "tools"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_BLOCK
+                  L_BRACE "{"
+                  CONFIG_ITEM
+                    WORD "server_label"
+                    CONFIG_VALUE
+                      STRING_LITERAL "web_search"
+                        QUOTE """
+                        WORD "web_search"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "server_url"
+                    CONFIG_VALUE
+                      STRING_LITERAL "https://example.com"
+                        QUOTE """
+                        WORD "https"
+                        COLON ":"
+                        SLASH "/"
+                        SLASH "/"
+                        WORD "example"
+                        DOT "."
+                        WORD "com"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "type"
+                    CONFIG_VALUE
+                      STRING_LITERAL "mcp"
+                        QUOTE """
+                        WORD "mcp"
+                        QUOTE """
+                  R_BRACE "}"
+                CONFIG_BLOCK
+                  L_BRACE "{"
+                  CONFIG_ITEM
+                    WORD "server_label"
+                    CONFIG_VALUE
+                      STRING_LITERAL "calculator"
+                        QUOTE """
+                        WORD "calculator"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "server_url"
+                    CONFIG_VALUE
+                      STRING_LITERAL "https://calc.example.com"
+                        QUOTE """
+                        WORD "https"
+                        COLON ":"
+                        SLASH "/"
+                        SLASH "/"
+                        WORD "calc"
+                        DOT "."
+                        WORD "example"
+                        DOT "."
+                        WORD "com"
+                        QUOTE """
+                  R_BRACE "}"
+                R_BRACKET "]"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "RawStringConfigClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      COMMA ","
+      CONFIG_ITEM
+        WORD "options"
+        COLON ":"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            COLON ":"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "system_prompt"
+            CONFIG_VALUE
+              RAW_STRING_LITERAL
+                HASH "#"
+                QUOTE """
+                PROMPT_TEXT "You are a helpful assistant.
+            Always be concise."
+                  WORD "You"
+                  WORD "are"
+                  WORD "a"
+                  WORD "helpful"
+                  WORD "assistant"
+                  DOT "."
+                  WORD "Always"
+                  WORD "be"
+                  WORD "concise"
+                  DOT "."
+                QUOTE """
+                HASH "#"
+          R_BRACE "}"
+      COMMA ","
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "MixedValuesClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE "100"
+              INTEGER_LITERAL "100"
+          CONFIG_ITEM
+            WORD "temperature"
+            CONFIG_VALUE "0.7"
+              FLOAT_LITERAL "0.7"
+          CONFIG_ITEM
+            WORD "stream"
+            CONFIG_VALUE "true"
+              WORD "true"
+          CONFIG_ITEM
+            WORD "stop"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE
+                  STRING_LITERAL "END"
+                    QUOTE """
+                    WORD "END"
+                    QUOTE """
+                R_BRACKET "]"
+          CONFIG_ITEM
+            WORD "inline_string"
+            CONFIG_VALUE
+              RAW_STRING_LITERAL
+                HASH "#"
+                QUOTE """
+                PROMPT_TEXT "inline raw"
+                  WORD "inline"
+                  WORD "raw"
+                QUOTE """
+                HASH "#"
+          CONFIG_ITEM
+            STRING_LITERAL "string key"
+              QUOTE """
+              WORD "string"
+              WORD "key"
+              QUOTE """
+            CONFIG_VALUE
+              STRING_LITERAL "value with spaces"
+                QUOTE """
+                WORD "value"
+                WORD "with"
+                WORD "spaces"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "// 2 client keyword trailing
+// 3 type angle leading
+< // 4 open angle trailing
+// 5 type leading
+llm // 6 type trailing
+// 7 close angle leading
+>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TriviaClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        COLON ":"
+        CONFIG_VALUE "// 14 provider key trailing
+    // 15 provider value leading
+    openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "/* 2 client keyword trailing */
+/* 3 type angle leading */
+< /* 4 open angle trailing */
+/* 5 type leading */
+llm /* 6 type trailing */
+/* 7 close angle leading */
+>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TriviaClientBlock"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "/* 14 provider key trailing */
+    /* 15 provider value leading */
+    openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        COLON ":"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "DeeplyNestedClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "headers"
+            CONFIG_BLOCK
+              L_BRACE "{"
+              CONFIG_ITEM
+                STRING_LITERAL "X-API-Key"
+                  QUOTE """
+                  WORD "X-API-Key"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "my-key"
+                    QUOTE """
+                    WORD "my-key"
+                    QUOTE """
+              CONFIG_ITEM
+                STRING_LITERAL "Authorization"
+                  QUOTE """
+                  WORD "Authorization"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "Bearer token"
+                    QUOTE """
+                    WORD "Bearer"
+                    WORD "token"
+                    QUOTE """
+              CONFIG_ITEM
+                WORD "custom_config"
+                CONFIG_BLOCK
+                  L_BRACE "{"
+                  CONFIG_ITEM
+                    WORD "retry_on_failure"
+                    CONFIG_VALUE "true"
+                      WORD "true"
+                  CONFIG_ITEM
+                    WORD "timeout_ms"
+                    CONFIG_VALUE "30000"
+                      INTEGER_LITERAL "30000"
+                  CONFIG_ITEM
+                    WORD "metadata"
+                    CONFIG_BLOCK
+                      L_BRACE "{"
+                      CONFIG_ITEM
+                        WORD "team"
+                        CONFIG_VALUE
+                          STRING_LITERAL "platform"
+                            QUOTE """
+                            WORD "platform"
+                            QUOTE """
+                      CONFIG_ITEM
+                        WORD "environment"
+                        CONFIG_VALUE
+                          STRING_LITERAL "production"
+                            QUOTE """
+                            WORD "production"
+                            QUOTE """
+                      R_BRACE "}"
+                  R_BRACE "}"
+              R_BRACE "}"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "LongNestedValuesClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
+                QUOTE """
+                WORD "anthropic"
+                SLASH "/"
+                WORD "claude-3"
+                DOT "."
+                INTEGER_LITERAL "5"
+                MINUS "-"
+                WORD "sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "some-extremely-long-api-gateway-subdomain"
+                DOT "."
+                WORD "internal"
+                DOT "."
+                WORD "production"
+                DOT "."
+                WORD "cluster"
+                DOT "."
+                WORD "example"
+                DOT "."
+                WORD "com"
+                SLASH "/"
+                WORD "api"
+                SLASH "/"
+                WORD "v2"
+                SLASH "/"
+                WORD "chat"
+                SLASH "/"
+                WORD "completions"
+                SLASH "/"
+                WORD "streaming"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "headers"
+            CONFIG_BLOCK
+              L_BRACE "{"
+              CONFIG_ITEM
+                STRING_LITERAL "Authorization"
+                  QUOTE """
+                  WORD "Authorization"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "Bearer some-extremely-long-api-token-value-that-is-used-for-authentication-and-exceeds-the-line-limit-easily-and-comfortably"
+                    QUOTE """
+                    WORD "Bearer"
+                    WORD "some-extremely-long-api-token-value-that-is-used-for-authentication-and-exceeds-the-line-limit-easily-and-comfortably"
+                    QUOTE """
+              CONFIG_ITEM
+                STRING_LITERAL "X-Custom-Header"
+                  QUOTE """
+                  WORD "X-Custom-Header"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "another-very-long-header-value-that-also-pushes-past-one-hundred-columns-for-testing-purposes"
+                    QUOTE """
+                    WORD "another-very-long-header-value-that-also-pushes-past-one-hundred-columns-for-testing-purposes"
+                    QUOTE """
+              R_BRACE "}"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "ManyOptionsClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE "4096"
+              INTEGER_LITERAL "4096"
+          CONFIG_ITEM
+            WORD "temperature"
+            CONFIG_VALUE "0.7"
+              FLOAT_LITERAL "0.7"
+          CONFIG_ITEM
+            WORD "top_p"
+            CONFIG_VALUE "0.95"
+              FLOAT_LITERAL "0.95"
+          CONFIG_ITEM
+            WORD "frequency_penalty"
+            CONFIG_VALUE "0.5"
+              FLOAT_LITERAL "0.5"
+          CONFIG_ITEM
+            WORD "presence_penalty"
+            CONFIG_VALUE "0.3"
+              FLOAT_LITERAL "0.3"
+          CONFIG_ITEM
+            WORD "stream"
+            CONFIG_VALUE "true"
+              WORD "true"
+          CONFIG_ITEM
+            WORD "stop_sequences"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE
+                  STRING_LITERAL "END"
+                    QUOTE """
+                    WORD "END"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "STOP"
+                    QUOTE """
+                    WORD "STOP"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "DONE"
+                    QUOTE """
+                    WORD "DONE"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "COMPLETE"
+                    QUOTE """
+                    WORD "COMPLETE"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "FINISHED"
+                    QUOTE """
+                    WORD "FINISHED"
+                    QUOTE """
+                R_BRACKET "]"
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              ENV_ACCESS_EXPR "env.OPENAI_API_KEY"
+                KW_ENV "env"
+                DOT "."
+                WORD "OPENAI_API_KEY"
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://api.openai.com/v1"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "api"
+                DOT "."
+                WORD "openai"
+                DOT "."
+                WORD "com"
+                SLASH "/"
+                WORD "v1"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "LongArrayClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "stop_sequences"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE
+                  STRING_LITERAL "STOP_GENERATION_NOW"
+                    QUOTE """
+                    WORD "STOP_GENERATION_NOW"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "END_OF_RESPONSE_MARKER"
+                    QUOTE """
+                    WORD "END_OF_RESPONSE_MARKER"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "COMPLETION_FINISHED_SIGNAL"
+                    QUOTE """
+                    WORD "COMPLETION_FINISHED_SIGNAL"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "TERMINATE_OUTPUT_HERE"
+                    QUOTE """
+                    WORD "TERMINATE_OUTPUT_HERE"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "FINAL_ANSWER_DELIMITER"
+                    QUOTE """
+                    WORD "FINAL_ANSWER_DELIMITER"
+                    QUOTE """
+                R_BRACKET "]"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "LongArrayOfObjectsClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "tools"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_BLOCK
+                  L_BRACE "{"
+                  CONFIG_ITEM
+                    WORD "server_label"
+                    CONFIG_VALUE
+                      STRING_LITERAL "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
+                        QUOTE """
+                        WORD "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "server_url"
+                    CONFIG_VALUE
+                      STRING_LITERAL "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2"
+                        QUOTE """
+                        WORD "https"
+                        COLON ":"
+                        SLASH "/"
+                        SLASH "/"
+                        WORD "some-extremely-long-domain-name-for-the-mcp-server"
+                        DOT "."
+                        WORD "internal"
+                        DOT "."
+                        WORD "production"
+                        DOT "."
+                        WORD "example"
+                        DOT "."
+                        WORD "com"
+                        SLASH "/"
+                        WORD "api"
+                        SLASH "/"
+                        WORD "v2"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "type"
+                    CONFIG_VALUE
+                      STRING_LITERAL "mcp"
+                        QUOTE """
+                        WORD "mcp"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "description"
+                    CONFIG_VALUE
+                      STRING_LITERAL "A very long description of the tool server that explains what it does and how it should be used by the model"
+                        QUOTE """
+                        WORD "A"
+                        WORD "very"
+                        WORD "long"
+                        WORD "description"
+                        WORD "of"
+                        WORD "the"
+                        WORD "tool"
+                        WORD "server"
+                        WORD "that"
+                        WORD "explains"
+                        WORD "what"
+                        WORD "it"
+                        WORD "does"
+                        WORD "and"
+                        WORD "how"
+                        WORD "it"
+                        WORD "should"
+                        WORD "be"
+                        WORD "used"
+                        WORD "by"
+                        WORD "the"
+                        WORD "model"
+                        QUOTE """
+                  R_BRACE "}"
+                CONFIG_BLOCK
+                  L_BRACE "{"
+                  CONFIG_ITEM
+                    WORD "server_label"
+                    CONFIG_VALUE
+                      STRING_LITERAL "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects"
+                        QUOTE """
+                        WORD "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects"
+                        QUOTE """
+                  CONFIG_ITEM
+                    WORD "server_url"
+                    CONFIG_VALUE
+                      STRING_LITERAL "https://another-long-domain.internal.staging.example.com/tools/v1"
+                        QUOTE """
+                        WORD "https"
+                        COLON ":"
+                        SLASH "/"
+                        SLASH "/"
+                        WORD "another-long-domain"
+                        DOT "."
+                        WORD "internal"
+                        DOT "."
+                        WORD "staging"
+                        DOT "."
+                        WORD "example"
+                        DOT "."
+                        WORD "com"
+                        SLASH "/"
+                        WORD "tools"
+                        SLASH "/"
+                        WORD "v1"
+                        QUOTE """
+                  R_BRACE "}"
+                R_BRACKET "]"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "// 2 client trailing
+< // 3 angle trailing
+llm // 4 type trailing
+>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TriviaDeeplyNestedClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "// 11 provider trailing
+    // 12 value leading
+    openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "headers"
+            CONFIG_BLOCK
+              L_BRACE "{"
+              CONFIG_ITEM
+                STRING_LITERAL "X-API-Key"
+                  QUOTE """
+                  WORD "X-API-Key"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "my-key"
+                    QUOTE """
+                    WORD "my-key"
+                    QUOTE """
+              CONFIG_ITEM
+                STRING_LITERAL "Authorization"
+                  QUOTE """
+                  WORD "Authorization"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "Bearer token"
+                    QUOTE """
+                    WORD "Bearer"
+                    WORD "token"
+                    QUOTE """
+              R_BRACE "}"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "/* 2 client trailing */
+< /* 3 angle trailing */
+llm /* 4 type trailing */
+>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TriviaDeeplyNestedClientBlock"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "/* 11 provider trailing */
+    /* 12 value leading */
+    openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "headers"
+            CONFIG_BLOCK
+              L_BRACE "{"
+              CONFIG_ITEM
+                STRING_LITERAL "X-API-Key"
+                  QUOTE """
+                  WORD "X-API-Key"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "my-key"
+                    QUOTE """
+                    WORD "my-key"
+                    QUOTE """
+              CONFIG_ITEM
+                STRING_LITERAL "Authorization"
+                  QUOTE """
+                  WORD "Authorization"
+                  QUOTE """
+                CONFIG_VALUE
+                  STRING_LITERAL "Bearer token"
+                    QUOTE """
+                    WORD "Bearer"
+                    WORD "token"
+                    QUOTE """
+              R_BRACE "}"
+          R_BRACE "}"
+      COMMA ","
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TriviaLongValueClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+                QUOTE """
+                WORD "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "some-really-long-domain-name-for-testing"
+                DOT "."
+                WORD "example"
+                DOT "."
+                WORD "com"
+                SLASH "/"
+                WORD "api"
+                SLASH "/"
+                WORD "v1"
+                SLASH "/"
+                WORD "chat"
+                SLASH "/"
+                WORD "completions"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "TriviaLongValueClientBlock"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+                QUOTE """
+                WORD "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "base_url"
+            CONFIG_VALUE
+              STRING_LITERAL "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
+                QUOTE """
+                WORD "https"
+                COLON ":"
+                SLASH "/"
+                SLASH "/"
+                WORD "some-really-long-domain-name-for-testing"
+                DOT "."
+                WORD "example"
+                DOT "."
+                WORD "com"
+                SLASH "/"
+                WORD "api"
+                SLASH "/"
+                WORD "v1"
+                SLASH "/"
+                WORD "chat"
+                SLASH "/"
+                WORD "completions"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  RETRY_POLICY_DEF
+    KW_RETRY_POLICY "retry_policy"
+    WORD "BasicRetry"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "max_retries"
+        CONFIG_VALUE "3"
+          INTEGER_LITERAL "3"
+      R_BRACE "}"
+  RETRY_POLICY_DEF
+    KW_RETRY_POLICY "retry_policy"
+    WORD "FullRetry"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "max_retries"
+        CONFIG_VALUE "5"
+          INTEGER_LITERAL "5"
+      CONFIG_ITEM
+        WORD "backoff_multiplier"
+        CONFIG_VALUE "2.0"
+          FLOAT_LITERAL "2.0"
+      CONFIG_ITEM
+        WORD "initial_delay_ms"
+        CONFIG_VALUE "1000"
+          INTEGER_LITERAL "1000"
+      R_BRACE "}"
+  RETRY_POLICY_DEF
+    KW_RETRY_POLICY "retry_policy"
+    WORD "ThisIsAnExtremelyLongRetryPolicyNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredCols"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "max_retries"
+        CONFIG_VALUE "10"
+          INTEGER_LITERAL "10"
+      CONFIG_ITEM
+        WORD "backoff_multiplier"
+        CONFIG_VALUE "3.0"
+          FLOAT_LITERAL "3.0"
+      CONFIG_ITEM
+        WORD "initial_delay_ms"
+        CONFIG_VALUE "5000"
+          INTEGER_LITERAL "5000"
+      R_BRACE "}"
+  RETRY_POLICY_DEF
+    KW_RETRY_POLICY "retry_policy"
+    WORD "TriviaRetry"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "max_retries"
+        CONFIG_VALUE "// 8 key trailing
+    // 9 value leading
+    3"
+          INTEGER_LITERAL "3"
+      R_BRACE "}"
+  RETRY_POLICY_DEF
+    KW_RETRY_POLICY "retry_policy"
+    WORD "TriviaRetryBlock"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "max_retries"
+        CONFIG_VALUE "/* 8 key trailing */
+    /* 9 value leading */
+    3"
+          INTEGER_LITERAL "3"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TestTarget"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client BasicClient"
+        KW_CLIENT "client"
+        WORD "BasicClient"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Hello"
+            WORD "Hello"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "BasicTest"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TestTarget"
+              WORD "TestTarget"
+            R_BRACKET "]"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK "{
+
+    }"
+          L_BRACE "{"
+          R_BRACE "}"
+      R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "TypeBuilderTest"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TestTarget"
+              WORD "TestTarget"
+            R_BRACKET "]"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "InnerClass"
+          L_BRACE "{"
+          FIELD
+            WORD "b"
+            TYPE_EXPR "int"
+              WORD "int"
+          R_BRACE "}"
+        DYNAMIC_TYPE_DEF
+          KW_DYNAMIC "dynamic"
+          CLASS_DEF
+            KW_CLASS "class"
+            WORD "DynamicInner"
+            L_BRACE "{"
+            FIELD
+              WORD "c"
+              TYPE_EXPR "string"
+                WORD "string"
+            R_BRACE "}"
+        ENUM_DEF
+          KW_ENUM "enum"
+          WORD "InnerEnum"
+          L_BRACE "{"
+          ENUM_VARIANT "X"
+            WORD "X"
+          ENUM_VARIANT "Y"
+            WORD "Y"
+          R_BRACE "}"
+        DYNAMIC_TYPE_DEF
+          KW_DYNAMIC "dynamic"
+          ENUM_DEF
+            KW_ENUM "enum"
+            WORD "DynamicInnerEnum"
+            L_BRACE "{"
+            ENUM_VARIANT "P"
+              WORD "P"
+            ENUM_VARIANT "Q"
+              WORD "Q"
+            R_BRACE "}"
+        TYPE_ALIAS_DEF
+          WORD "type"
+          WORD "InnerAlias"
+          EQUALS "="
+          TYPE_EXPR "string | int"
+            WORD "string"
+            PIPE "|"
+            WORD "int"
+        R_BRACE "}"
+      COMMA ","
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK "{
+
+    }"
+          L_BRACE "{"
+          R_BRACE "}"
+      R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "TriviaTest"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        COLON ":"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TestTarget"
+              WORD "TestTarget"
+            R_BRACKET "]"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK "// 12 args key trailing
+    // 13 args block leading
+    { // 14 args open brace trailing
+    // 15 args close brace leading
+    }"
+          L_BRACE "{"
+          R_BRACE "}"
+      R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "TriviaTestBlock"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TestTarget"
+              WORD "TestTarget"
+            R_BRACKET "]"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK "/* 12 args key trailing */
+    /* 13 args block leading */
+    { /* 14 args open brace trailing */
+    /* 15 args close brace leading */
+    }"
+          L_BRACE "{"
+          R_BRACE "}"
+      R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "LongTypeBuilderTest"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TestTarget"
+              WORD "TestTarget"
+            R_BRACKET "]"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "VeryLongClassNameThatExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation"
+          L_BRACE "{"
+          FIELD
+            WORD "extremely_long_field_name_for_testing_wrapping"
+            TYPE_EXPR "int"
+              WORD "int"
+          FIELD
+            WORD "another_very_long_field_name"
+            TYPE_EXPR "string"
+              WORD "string"
+          R_BRACE "}"
+        ENUM_DEF
+          KW_ENUM "enum"
+          WORD "VeryLongEnumNameThatAlsoExceedsTheLineLimitWhenCombinedWithTheTypeBuilderIndentation"
+          L_BRACE "{"
+          ENUM_VARIANT "VeryLongVariantNameThatExceedsLimit"
+            WORD "VeryLongVariantNameThatExceedsLimit"
+          ENUM_VARIANT "AnotherVeryLongVariantName"
+            WORD "AnotherVeryLongVariantName"
+          R_BRACE "}"
+        TYPE_ALIAS_DEF
+          WORD "type"
+          WORD "VeryLongTypeAliasNameThatExceedsLimit"
+          EQUALS "="
+          TYPE_EXPR "int | string | bool | float | null | int[] | string[]"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+            PIPE "|"
+            WORD "float"
+            PIPE "|"
+            WORD "null"
+            PIPE "|"
+            WORD "int"
+            L_BRACKET "["
+            R_BRACKET "]"
+            PIPE "|"
+            WORD "string"
+            L_BRACKET "["
+            R_BRACKET "]"
+        R_BRACE "}"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK "{
+
+    }"
+          L_BRACE "{"
+          R_BRACE "}"
+      R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "TriviaTypeBuilderTest"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TestTarget"
+              WORD "TestTarget"
+            R_BRACKET "]"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "TbInnerClass"
+          L_BRACE "{"
+          FIELD
+            WORD "field_name"
+            COLON ":"
+            TYPE_EXPR "// 22 field name trailing
+            // 23 type leading
+            int"
+              WORD "int"
+          R_BRACE "}"
+        ENUM_DEF
+          KW_ENUM "enum"
+          WORD "TbInnerEnum"
+          L_BRACE "{"
+          ENUM_VARIANT "// 32 enum brace trailing
+            // 33 variant leading
+            X"
+            WORD "X"
+          R_BRACE "}"
+        TYPE_ALIAS_DEF
+          WORD "type"
+          WORD "TbAlias"
+          EQUALS "="
+          TYPE_EXPR "// 42 equals trailing
+        // 43 rhs leading
+        string"
+            WORD "string"
+        R_BRACE "}"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK "// 48 args trailing
+    // 49 args brace leading
+    { // 50 args brace trailing
+    // 51 args close leading
+    }"
+          L_BRACE "{"
+          R_BRACE "}"
+      R_BRACE "}"
+  TEST_DEF
+    KW_TEST "test"
+    WORD "TriviaTypeBuilderTestBlock"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "functions"
+        CONFIG_VALUE
+          ARRAY_LITERAL
+            L_BRACKET "["
+            CONFIG_VALUE "TestTarget"
+              WORD "TestTarget"
+            R_BRACKET "]"
+      TYPE_BUILDER_BLOCK
+        KW_TYPE_BUILDER "type_builder"
+        L_BRACE "{"
+        CLASS_DEF
+          KW_CLASS "class"
+          WORD "TbInnerClassBlock"
+          L_BRACE "{"
+          FIELD
+            WORD "field_name"
+            COLON ":"
+            TYPE_EXPR "/* 22 field name trailing */
+            /* 23 type leading */
+            int"
+              WORD "int"
+          R_BRACE "}"
+        ENUM_DEF
+          KW_ENUM "enum"
+          WORD "TbInnerEnumBlock"
+          L_BRACE "{"
+          ENUM_VARIANT "/* 32 enum brace trailing */
+            /* 33 variant leading */
+            X"
+            WORD "X"
+          R_BRACE "}"
+        TYPE_ALIAS_DEF
+          WORD "type"
+          WORD "TbAliasBlock"
+          EQUALS "="
+          TYPE_EXPR "/* 42 equals trailing */
+        /* 43 rhs leading */
+        string"
+            WORD "string"
+        R_BRACE "}"
+      CONFIG_ITEM
+        WORD "args"
+        CONFIG_BLOCK "/* 48 args trailing */
+    /* 49 args brace leading */
+    { /* 50 args brace trailing */
+    /* 51 args close leading */
+    }"
+          L_BRACE "{"
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "C"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  RETRY_POLICY_DEF
+    KW_RETRY_POLICY "retry_policy"
+    WORD "R"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "max_retries"
+        CONFIG_VALUE "1"
+          INTEGER_LITERAL "1"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "ExtraWhitespaceClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  RETRY_POLICY_DEF
+    KW_RETRY_POLICY "retry_policy"
+    WORD "ExtraWhitespaceRetry"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "max_retries"
+        CONFIG_VALUE "3"
+          INTEGER_LITERAL "3"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "CommaClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      COMMA ","
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          COMMA ","
+          CONFIG_ITEM
+            WORD "max_tokens"
+            CONFIG_VALUE "100"
+              INTEGER_LITERAL "100"
+          COMMA ","
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "SameLineClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4"
+                QUOTE """
+                WORD "gpt-4"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+
+=== ERRORS ===
+None

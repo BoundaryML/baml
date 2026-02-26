@@ -1,9 +1,8 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: first
+source: crates/baml_tests/src/generated_tests.rs
 ---
-type foo = bar
-type bar = int
+type foo = bar;
+type bar = int;
 
 // Should pass.
 function Foo() -> foo {
@@ -15,7 +14,7 @@ function Bar() -> foo {
     true
 }
 
-type Json = int | float | string | Json[] | map<string, Json>
+type Json = int | float | string | Json[] | map<string, Json>;
 
 // Should pass.
 function Baz() -> Json {

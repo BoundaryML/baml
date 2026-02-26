@@ -3,8 +3,6 @@
 //! This module provides APIs for listing symbols (functions, classes, enums, etc.)
 //! in a BAML project.
 
-use std::path::PathBuf;
-
 use baml_db::{
     Name, Span,
     baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items},
@@ -38,7 +36,7 @@ pub struct Symbol {
     /// The kind of symbol.
     pub kind: SymbolKind,
     /// The file path containing the symbol.
-    pub file_path: PathBuf,
+    pub file_path: std::path::PathBuf,
     /// The span of the symbol in the source.
     pub span: Span,
 }

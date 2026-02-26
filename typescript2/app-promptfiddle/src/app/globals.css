@@ -1,40 +1,77 @@
-:root {
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
+/* Import only theme + utilities from Tailwind v4.
+   We deliberately skip preflight.css so its global reset
+   (* { margin:0; padding:0; border:0 solid; }) doesn't break the VS Code workbench. */
+@layer theme, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* ── Tell Tailwind to scan component source files ────────────────────── */
+@source "../playground/**/*.tsx";
+@source "../../../pkg-playground/src/**/*.tsx";
+
+/* ── Theme tokens ─────────────────────────────────────────────────────── */
+@theme {
+  /* VS Code workbench tokens — used by the playground panel (SplitPreview) */
+  --color-vsc-bg: var(--vscode-editor-background, #1f1f1f);
+  --color-vsc-surface: var(--vscode-sideBar-background, #181818);
+  --color-vsc-panel: var(--vscode-panel-background, var(--vscode-editor-background, #1f1f1f));
+  --color-vsc-border: var(--vscode-panel-border, var(--vscode-editorWidget-border, #2b2b2b));
+  --color-vsc-border-subtle: var(--vscode-widget-border, #2b2b2b);
+  --color-vsc-text: var(--vscode-editor-foreground, #cccccc);
+  --color-vsc-text-bright: var(--vscode-foreground, #cccccc);
+  --color-vsc-text-muted: var(--vscode-descriptionForeground, #858585);
+  --color-vsc-text-faint: var(--vscode-disabledForeground, #6b6b6b);
+  --color-vsc-accent: var(--vscode-button-background, #0078d4);
+  --color-vsc-accent-fg: var(--vscode-button-foreground, #ffffff);
+  --color-vsc-accent-hover: var(--vscode-button-hoverBackground, #026ec1);
+  --color-vsc-list-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+  --color-vsc-green: var(--vscode-testing-iconPassed, #3fb950);
+  --color-vsc-red: var(--vscode-errorForeground, #f85149);
+  --color-vsc-yellow: var(--vscode-editorWarning-foreground, #d29922);
+  --color-vsc-yellow-subtle: var(--vscode-inputValidation-warningBackground, rgba(210,153,34,0.15));
+  --color-vsc-input-bg: var(--vscode-input-background, #313131);
+  --color-vsc-input-fg: var(--vscode-input-foreground, #cccccc);
+  --color-vsc-input-border: var(--vscode-input-border, transparent);
+
+  /* App chrome tokens (GitHub Dark) — used by the page shell / header */
+  --color-app-bg: #0d1117;
+  --color-app-surface: #161b22;
+  --color-app-border: #30363d;
+  --color-app-text: #c9d1d9;
+  --color-app-text-bright: #e6edf3;
+  --color-app-text-muted: #8b949e;
+  --color-app-accent: #58a6ff;
+
+  /* Fonts */
+  --font-vsc: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif);
+  --font-vsc-mono: var(--vscode-editor-font-family, "SF Mono", "Fira Code", Consolas, monospace);
 }
 
-body {
+/* ── Minimal base styles ──────────────────────────────────────────────── */
+/* These target elements we can't add Tailwind classes to directly. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
   margin: 0;
-  min-height: 100vh;
-  background: #f8fafc;
-  color: #0f172a;
+  padding: 0;
+  overflow: hidden;
+  color-scheme: dark;
+  background: var(--color-app-bg);
+  color: var(--color-app-text);
+  font-family: var(--font-vsc);
 }
 
-a {
-  color: inherit;
-}
+a { color: var(--color-app-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
 
-main {
-  padding: 2rem;
-  display: grid;
-  gap: 1.5rem;
-}
-
-textarea {
-  width: 100%;
-  min-height: 200px;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  font-family: 'Fira Code', 'SFMono-Regular', Consolas, monospace;
-  font-size: 0.95rem;
-}
-
-pre {
-  margin: 0;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  background: #0f172a;
-  color: #e2e8f0;
-  overflow-x: auto;
-}
+/* ── Scrollbar ────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-app-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }

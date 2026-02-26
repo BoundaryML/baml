@@ -142,11 +142,12 @@ pub fn convert_tir_ty(
         // baml_type, these just mean "no meaningful type" → map to Null.
         baml_compiler_tir::Ty::Unknown => Ok(Ty::Null),
         baml_compiler_tir::Ty::Error => Ok(Ty::Null),
+        baml_compiler_tir::Ty::Never => Ok(Ty::Never),
         baml_compiler_tir::Ty::Void => Ok(Ty::Void),
         baml_compiler_tir::Ty::Resource => Ok(Ty::resource()),
         // BuiltinUnknown is preserved for VIR type checking at call sites.
         baml_compiler_tir::Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
-        baml_compiler_tir::Ty::Type => Ok(Ty::big_t_type()),
+        baml_compiler_tir::Ty::Type => Ok(Ty::type_type()),
 
         baml_compiler_tir::Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(
             convert_tir_ty(inner, aliases, recursive_aliases)?,
@@ -162,8 +163,9 @@ pub fn convert_tir_ty(
 pub fn sanitize_for_runtime(ty: Ty) -> Result<Ty, String> {
     match ty {
         // Compiler-only → Null (preserves backwards compatibility)
-        // Note: Unknown/Error/Never don't exist in baml_type::Ty — they were
-        // already mapped to Null/Void during convert_tir_ty.
+        // Note: Unknown/Error don't exist in baml_type::Ty — they were
+        // already mapped to Null during convert_tir_ty.
+        // Never passes through (it's a valid runtime type for streaming).
         Ty::Void => Ok(Ty::Null),
         Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
         Ty::Function { params, ret } => Ok(Ty::Function {

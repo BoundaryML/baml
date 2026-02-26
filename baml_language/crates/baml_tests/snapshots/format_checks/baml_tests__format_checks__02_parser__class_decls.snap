@@ -1,0 +1,1259 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF "// Testing all the formatter cases for class declarations
+
+// ===== Empty class =====
+class EmptyClass {
+}"
+    KW_CLASS "class"
+    WORD "EmptyClass"
+    L_BRACE "{"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "SingleField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MultiField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "active"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ColonFields"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      COLON ":"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "SingleAttrField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "The user's name"
+            QUOTE """
+            WORD "The"
+            WORD "user"
+            ERROR_TOKEN "'"
+            WORD "s"
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MultiAttrField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "The user's name"
+            QUOTE """
+            WORD "The"
+            WORD "user"
+            ERROR_TOKEN "'"
+            WORD "s"
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "user_name"
+            QUOTE """
+            WORD "user_name"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "summary"
+      TYPE_EXPR "string?"
+        WORD "string"
+        QUESTION "?"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "A summary"
+            QUOTE """
+            WORD "A"
+            WORD "summary"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "sum"
+            QUOTE """
+            WORD "sum"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "LongAttrField"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns"
+            QUOTE """
+            WORD "This"
+            WORD "is"
+            WORD "an"
+            WORD "extremely"
+            WORD "long"
+            WORD "description"
+            WORD "attribute"
+            WORD "value"
+            WORD "that"
+            WORD "should"
+            WORD "push"
+            WORD "the"
+            WORD "field"
+            WORD "definition"
+            WORD "well"
+            WORD "past"
+            WORD "the"
+            WORD "default"
+            WORD "line"
+            WORD "width"
+            WORD "limit"
+            WORD "of"
+            WORD "one"
+            WORD "hundred"
+            WORD "columns"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "data"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int | string | bool"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+          GREATER ">"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "complex data"
+            QUOTE """
+            WORD "complex"
+            WORD "data"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "payload"
+            QUOTE """
+            WORD "payload"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+    FIELD
+      WORD "config"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR "int | string | bool | null"
+                WORD "int"
+                PIPE "|"
+                WORD "string"
+                PIPE "|"
+                WORD "bool"
+                PIPE "|"
+                WORD "null"
+              GREATER ">"
+          GREATER ">"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "deeply nested config structure for testing wrapping"
+            QUOTE """
+            WORD "deeply"
+            WORD "nested"
+            WORD "config"
+            WORD "structure"
+            KW_FOR "for"
+            WORD "testing"
+            WORD "wrapping"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "LongFieldTypes"
+    L_BRACE "{"
+    FIELD
+      WORD "very_long_field_name_that_takes_up_space"
+      TYPE_EXPR "int | string | bool | float | null | int[] | string[]"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+        PIPE "|"
+        WORD "bool"
+        PIPE "|"
+        WORD "float"
+        PIPE "|"
+        WORD "null"
+        PIPE "|"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+        PIPE "|"
+        WORD "string"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "another_long_field"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR
+                WORD "map"
+                TYPE_ARGS
+                  LESS "<"
+                  TYPE_EXPR "string"
+                    WORD "string"
+                  COMMA ","
+                  TYPE_EXPR "int | string | bool | float | null"
+                    WORD "int"
+                    PIPE "|"
+                    WORD "string"
+                    PIPE "|"
+                    WORD "bool"
+                    PIPE "|"
+                    WORD "float"
+                    PIPE "|"
+                    WORD "null"
+                  GREATER ">"
+              GREATER ">"
+          GREATER ">"
+    FIELD
+      WORD "callback_field"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          WORD "first_param"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        COMMA ","
+        FUNCTION_TYPE_PARAM
+          WORD "second_param"
+          COLON ":"
+          TYPE_EXPR "string"
+            WORD "string"
+        COMMA ","
+        FUNCTION_TYPE_PARAM
+          WORD "third_param"
+          COLON ":"
+          TYPE_EXPR "bool"
+            WORD "bool"
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+    FIELD
+      WORD "deeply_nested"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "int"
+            PIPE "|"
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR
+                WORD "string"
+                PIPE "|"
+                L_PAREN "("
+                FUNCTION_TYPE_PARAM
+                  TYPE_EXPR
+                    WORD "bool"
+                    PIPE "|"
+                    L_PAREN "("
+                    FUNCTION_TYPE_PARAM
+                      TYPE_EXPR "float | null"
+                        WORD "float"
+                        PIPE "|"
+                        WORD "null"
+                    R_PAREN ")"
+                R_PAREN ")"
+            R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TypeVariety"
+    L_BRACE "{"
+    FIELD
+      WORD "simple"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "optional"
+      TYPE_EXPR "string?"
+        WORD "string"
+        QUESTION "?"
+    FIELD
+      WORD "array"
+      TYPE_EXPR "int[]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "nested_array"
+      COLON ":"
+      TYPE_EXPR "int[][]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "union_type"
+      COLON ":"
+      TYPE_EXPR "int | string"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+    FIELD
+      WORD "optional_union"
+      COLON ":"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "int | string"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+        R_PAREN ")"
+        QUESTION "?"
+    FIELD
+      WORD "union_array"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "int | string"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "generic"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int"
+            WORD "int"
+          GREATER ">"
+    FIELD
+      WORD "complex_generic"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int | string | bool"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+          GREATER ">"
+    FIELD
+      WORD "deep_generic"
+      COLON ":"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR "int[]"
+                WORD "int"
+                L_BRACKET "["
+                R_BRACKET "]"
+              GREATER ">"
+          GREATER ">"
+    FIELD
+      WORD "fn_type"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          WORD "x"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        COMMA ","
+        FUNCTION_TYPE_PARAM
+          WORD "y"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR "string"
+          WORD "string"
+    FIELD
+      WORD "paren_union_array"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "int | string | bool"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "triple_nested"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR
+                WORD "map"
+                TYPE_ARGS
+                  LESS "<"
+                  TYPE_EXPR "string"
+                    WORD "string"
+                  COMMA ","
+                  TYPE_EXPR "int"
+                    WORD "int"
+                  GREATER ">"
+              GREATER ">"
+          GREATER ">"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DynamicClass"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    BLOCK_ATTRIBUTE "@@dynamic"
+      AT_AT "@@"
+      KW_DYNAMIC "dynamic"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "MultiBlockAttr"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    BLOCK_ATTRIBUTE "@@dynamic"
+      AT_AT "@@"
+      KW_DYNAMIC "dynamic"
+    BLOCK_ATTRIBUTE "@@streaming"
+      AT_AT "@@"
+      WORD "streaming"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaClass"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "// 10 colon trailing
+    // 11 type leading
+    string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaClassBlock"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "/* 10 colon trailing */
+    /* 11 type leading */
+    string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaFieldAttrs"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "// 4 colon trailing
+    // 5 type leading
+    string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "the name"
+            QUOTE """
+            WORD "the"
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaFieldAttrsBlock"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "/* 4 colon trailing */
+    /* 5 type leading */
+    string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "the name"
+            QUOTE """
+            WORD "the"
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaLongFieldType"
+    L_BRACE "{"
+    FIELD
+      WORD "data"
+      COLON ":"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "// 7 open angle trailing
+    // 8 key type leading
+    string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "// 10 comma trailing
+    // 11 value type leading
+    int // 12 first trailing
+    | // 13 pipe trailing
+    // 14 second leading
+    string // 15 second trailing
+    | // 16 pipe trailing
+    // 17 third leading
+    bool // 18 third trailing
+    | // 19 pipe trailing
+    // 20 fourth leading
+    float // 21 fourth trailing
+    | // 22 pipe trailing
+    // 23 fifth leading
+    null"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+            PIPE "|"
+            WORD "float"
+            PIPE "|"
+            WORD "null"
+          GREATER ">"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "a long description"
+            QUOTE """
+            WORD "a"
+            WORD "long"
+            WORD "description"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaLongFieldTypeBlock"
+    L_BRACE "{"
+    FIELD
+      WORD "data"
+      COLON ":"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "/* 7 open angle trailing */
+    /* 8 key type leading */
+    string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "/* 10 comma trailing */
+    /* 11 value type leading */
+    int /* 12 first trailing */
+    | /* 13 pipe trailing */
+    /* 14 second leading */
+    string /* 15 second trailing */
+    | /* 16 pipe trailing */
+    /* 17 third leading */
+    bool /* 18 third trailing */
+    | /* 19 pipe trailing */
+    /* 20 fourth leading */
+    float /* 21 fourth trailing */
+    | /* 22 pipe trailing */
+    /* 23 fifth leading */
+    null"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+            PIPE "|"
+            WORD "float"
+            PIPE "|"
+            WORD "null"
+          GREATER ">"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "a long description"
+            QUOTE """
+            WORD "a"
+            WORD "long"
+            WORD "description"
+            QUOTE """
+          R_PAREN ")"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaMultiAttr"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "// 4 colon trailing
+    // 5 type leading
+    string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "name"
+            QUOTE """
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "user_name"
+            QUOTE """
+            WORD "user_name"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE "// 18 second attr close trailing
+    // 19 third attr leading    
+    @stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "TriviaMultiAttrBlock"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      COLON ":"
+      TYPE_EXPR "/* 4 colon trailing */
+    /* 5 type leading */
+    string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "name"
+            QUOTE """
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "user_name"
+            QUOTE """
+            WORD "user_name"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE "/* 18 second attr close trailing */
+    /* 19 third attr leading */
+    @stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "A"
+    L_BRACE "{"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself"
+    L_BRACE "{"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "AttributeVariety"
+    L_BRACE "{"
+    FIELD
+      WORD "a"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE "@skip"
+        AT "@"
+        WORD "skip"
+    FIELD
+      WORD "b"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "alt_name"
+            QUOTE """
+            WORD "alt_name"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "c"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "desc"
+            QUOTE """
+            WORD "desc"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "d"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "e"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "f"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.with_state"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "with_state"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ExtraWhitespace"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+      ATTRIBUTE
+        AT "@"
+        WORD "description"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "name"
+            QUOTE """
+            WORD "name"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "n"
+            QUOTE """
+            WORD "n"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "ManyFields"
+    L_BRACE "{"
+    FIELD
+      WORD "field1"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field2"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field3"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field4"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field5"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field6"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field7"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field8"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field9"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "field10"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Outer"
+    L_BRACE "{"
+    FIELD
+      WORD "inner"
+      TYPE_EXPR "InnerNested"
+        WORD "InnerNested"
+    FIELD
+      WORD "list"
+      TYPE_EXPR "InnerNested[]"
+        WORD "InnerNested"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "optional"
+      COLON ":"
+      TYPE_EXPR "InnerNested?"
+        WORD "InnerNested"
+        QUESTION "?"
+    FIELD
+      WORD "mapping"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "InnerNested"
+            WORD "InnerNested"
+          GREATER ">"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "InnerNested"
+    L_BRACE "{"
+    FIELD
+      WORD "value"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "WithMethod"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "greet"
+      PARAMETER_LIST "()"
+        L_PAREN "("
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR "string"
+        WORD "string"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          STRING_LITERAL "hello"
+            QUOTE """
+            WORD "hello"
+            QUOTE """
+          R_BRACE "}"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "WithLongMethod"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FUNCTION_DEF
+      KW_FUNCTION "function"
+      WORD "processData"
+      PARAMETER_LIST
+        L_PAREN "("
+        PARAMETER
+          WORD "first_input"
+          COLON ":"
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR "int"
+                WORD "int"
+              GREATER ">"
+        COMMA ","
+        PARAMETER
+          WORD "second_input"
+          COLON ":"
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              TYPE_EXPR "int | string | bool"
+                WORD "int"
+                PIPE "|"
+                WORD "string"
+                PIPE "|"
+                WORD "bool"
+            R_PAREN ")"
+            L_BRACKET "["
+            R_BRACKET "]"
+        COMMA ","
+        PARAMETER
+          WORD "third_input"
+          COLON ":"
+          TYPE_EXPR "string"
+            WORD "string"
+        R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "int | string | bool"
+            WORD "int"
+            PIPE "|"
+            WORD "string"
+            PIPE "|"
+            WORD "bool"
+          GREATER ">"
+      EXPR_FUNCTION_BODY
+        BLOCK_EXPR
+          L_BRACE "{"
+          MAP_LITERAL
+            L_BRACE "{"
+            OBJECT_FIELD
+              STRING_LITERAL "result"
+                QUOTE """
+                WORD "result"
+                QUOTE """
+              COLON ":"
+              INTEGER_LITERAL "1"
+            R_BRACE "}"
+          R_BRACE "}"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DeepOuter"
+    L_BRACE "{"
+    FIELD
+      WORD "level1"
+      TYPE_EXPR "DeepLevel1"
+        WORD "DeepLevel1"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DeepLevel1"
+    L_BRACE "{"
+    FIELD
+      WORD "level2"
+      TYPE_EXPR "DeepLevel2"
+        WORD "DeepLevel2"
+    FIELD
+      WORD "items"
+      COLON ":"
+      TYPE_EXPR "DeepLevel2[]"
+        WORD "DeepLevel2"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "mapping"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "DeepLevel2"
+            WORD "DeepLevel2"
+          GREATER ">"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DeepLevel2"
+    L_BRACE "{"
+    FIELD
+      WORD "level3"
+      TYPE_EXPR "DeepLevel3"
+        WORD "DeepLevel3"
+    FIELD
+      WORD "value"
+      TYPE_EXPR "int | string | bool | float | null"
+        WORD "int"
+        PIPE "|"
+        WORD "string"
+        PIPE "|"
+        WORD "bool"
+        PIPE "|"
+        WORD "float"
+        PIPE "|"
+        WORD "null"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DeepLevel3"
+    L_BRACE "{"
+    FIELD
+      WORD "data"
+      COLON ":"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "nested"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR "int"
+                WORD "int"
+              GREATER ">"
+          GREATER ">"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

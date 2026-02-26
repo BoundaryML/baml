@@ -45,6 +45,7 @@ interface Message {
 
 interface AIAssistantPanelProps {
   bepId: Id<"beps">;
+  bepNumber: number;
   versions: Version[];
   currentVersionId: Id<"bepVersions"> | null;
   convexSiteUrl: string;
@@ -52,6 +53,7 @@ interface AIAssistantPanelProps {
 
 export function AIAssistantPanel({
   bepId,
+  bepNumber,
   versions,
   currentVersionId,
   convexSiteUrl,
@@ -70,6 +72,9 @@ export function AIAssistantPanel({
 
   // Sort versions by version number (descending)
   const sortedVersions = [...versions].sort((a, b) => b.version - a.version);
+  const currentVersionNumber =
+    sortedVersions.find((version) => version._id === currentVersionId)?.version ??
+    null;
 
   // Auto-scroll to bottom as content streams
   useEffect(() => {
@@ -387,7 +392,14 @@ export function AIAssistantPanel({
                       <p className="text-sm">{message.content}</p>
                     ) : (
                       <>
-                        <BepContent content={message.content} />
+                        <BepContent
+                          content={message.content}
+                          linkContext={{
+                            bepNumber,
+                            isHistorical: false,
+                            versionNumber: currentVersionNumber,
+                          }}
+                        />
                         {isStreaming && idx === messages.length - 1 && (
                           <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
                         )}

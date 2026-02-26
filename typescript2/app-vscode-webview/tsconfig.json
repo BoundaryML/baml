@@ -9,7 +9,9 @@
     "paths": {
       "@/*": ["src/*"],
       "@b/pkg-playground": ["../pkg-playground/src"],
-      "@b/pkg-playground/*": ["../pkg-playground/src/*"]
+      "@b/pkg-playground/*": ["../pkg-playground/src/*"],
+      "@b/pkg-proto": ["../pkg-proto/src"],
+      "@b/pkg-proto/*": ["../pkg-proto/src/*"]
     }
   },
   "include": ["src", "src/**/*", "vite-env.d.ts"],

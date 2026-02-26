@@ -1,0 +1,31 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+// Testing all the formatter cases for if expressions
+
+function MyFunction(a: int, b: int) -> int {
+    if (a > b) {
+        1;
+    } else {
+        1;
+    }
+
+    // 1 if leading
+    if (a > b) { // 6 then inside
+        1;
+    } else { // 11 else then inside
+        1;
+    } // 12 else then trailing
+
+    ///////////////////
+
+    /* 1 if leading */
+    if (a > b) { /* 6 then inside */
+        1;
+    } else { /* 11 else then inside */
+        1;
+    } /* 12 else then trailing */
+
+    1
+}

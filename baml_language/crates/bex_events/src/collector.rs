@@ -257,9 +257,9 @@ impl FunctionLog {
 
 // ─────────────────────────── Helpers ─────────────────────────────────────
 
-fn system_time_to_epoch_ms(t: std::time::SystemTime) -> i64 {
+fn system_time_to_epoch_ms(t: web_time::SystemTime) -> i64 {
     i64::try_from(
-        t.duration_since(std::time::UNIX_EPOCH)
+        t.duration_since(web_time::UNIX_EPOCH)
             .unwrap_or(Duration::ZERO)
             .as_millis(),
     )
@@ -278,7 +278,7 @@ fn sum_option(a: Option<i64>, b: Option<i64>) -> Option<i64> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
+    use web_time::SystemTime;
 
     use super::*;
     use crate::{FunctionEnd, FunctionStart, SpanContext};
@@ -470,7 +470,7 @@ mod tests {
         let root = SpanId::new();
         collector.track(&root);
 
-        event_store::emit(make_start_event(
+        event_store::emit(&make_start_event(
             root.clone(),
             root.clone(),
             None,
@@ -478,7 +478,7 @@ mod tests {
             vec![BexExternalValue::Int(1)],
             vec![],
         ));
-        event_store::emit(make_end_event(
+        event_store::emit(&make_end_event(
             root.clone(),
             root,
             None,
@@ -501,7 +501,7 @@ mod tests {
         let root = SpanId::new();
         collector.track(&root);
 
-        event_store::emit(make_start_event(
+        event_store::emit(&make_start_event(
             root.clone(),
             root.clone(),
             None,
@@ -521,7 +521,7 @@ mod tests {
         {
             let collector = Collector::new("test".into());
             collector.track(&root);
-            event_store::emit(make_start_event(
+            event_store::emit(&make_start_event(
                 root.clone(),
                 root.clone(),
                 None,
@@ -543,7 +543,7 @@ mod tests {
         collector.track(&root1);
         collector.track(&root2);
 
-        event_store::emit(make_start_event(
+        event_store::emit(&make_start_event(
             root1.clone(),
             root1.clone(),
             None,
@@ -551,7 +551,7 @@ mod tests {
             vec![],
             vec![],
         ));
-        event_store::emit(make_end_event(
+        event_store::emit(&make_end_event(
             root1.clone(),
             root1,
             None,
@@ -559,7 +559,7 @@ mod tests {
             BexExternalValue::Null,
             Duration::from_millis(10),
         ));
-        event_store::emit(make_start_event(
+        event_store::emit(&make_start_event(
             root2.clone(),
             root2.clone(),
             None,
@@ -567,7 +567,7 @@ mod tests {
             vec![],
             vec![],
         ));
-        event_store::emit(make_end_event(
+        event_store::emit(&make_end_event(
             root2.clone(),
             root2,
             None,
@@ -592,7 +592,7 @@ mod tests {
         let root = SpanId::new();
         collector.track(&root);
 
-        event_store::emit(make_start_event(
+        event_store::emit(&make_start_event(
             root.clone(),
             root.clone(),
             None,
@@ -638,7 +638,7 @@ mod tests {
         c1.track(&root);
         c2.track(&root);
 
-        event_store::emit(make_start_event(
+        event_store::emit(&make_start_event(
             root.clone(),
             root.clone(),
             None,
@@ -667,7 +667,7 @@ mod tests {
 
         let root1 = SpanId::new();
         collector.track(&root1);
-        event_store::emit(make_start_event(
+        event_store::emit(&make_start_event(
             root1.clone(),
             root1,
             None,
@@ -683,7 +683,7 @@ mod tests {
         // Track a new span
         let root2 = SpanId::new();
         collector.track(&root2);
-        event_store::emit(make_start_event(
+        event_store::emit(&make_start_event(
             root2.clone(),
             root2,
             None,

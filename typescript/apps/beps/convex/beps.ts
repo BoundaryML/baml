@@ -190,9 +190,24 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const content = args.content ?? "";
+    const latestBep = await ctx.db
+      .query("beps")
+      .withIndex("by_number")
+      .order("desc")
+      .first();
+
+    let bepNumber = Math.max(args.number, (latestBep?.number ?? 0) + 1);
+    while (true) {
+      const existing = await ctx.db
+        .query("beps")
+        .withIndex("by_number", (q) => q.eq("number", bepNumber))
+        .unique();
+      if (!existing) break;
+      bepNumber += 1;
+    }
 
     const bepId = await ctx.db.insert("beps", {
-      number: args.number,
+      number: bepNumber,
       title: args.title,
       status: "draft",
       shepherds: args.shepherds,
@@ -242,7 +257,7 @@ export const create = mutation({
       createdAt: now,
     });
 
-    return bepId;
+    return { bepId, number: bepNumber };
   },
 });
 

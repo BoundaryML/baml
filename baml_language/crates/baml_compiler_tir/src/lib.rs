@@ -1167,11 +1167,10 @@ fn add_builtin_jinja_types(jinja_env: &mut jinja::JinjaTypeEnv) {
 /// preserving all error data while converting the span to an `ErrorLocation`.
 fn jinja_error_to_tir(error: jinja::TypeError) -> TirTypeError {
     let span = error.span();
-    // Minijinja spans are 0-based and point to the character *before* the actual token.
-    // We add 1 to both offsets to correct for this off-by-one.
+    // Minijinja spans are 0-based byte offsets into the template text.
     let location = ErrorLocation::JinjaTemplate {
-        start_offset: span.start_offset + 1,
-        end_offset: span.end_offset + 1,
+        start_offset: span.start_offset,
+        end_offset: span.end_offset,
     };
 
     match error {
@@ -1444,15 +1443,10 @@ pub fn function_type_inference<'db>(
     // type annotation, but they'll still point to the offending expression.
     let signature = baml_compiler_hir::function_signature(db, function);
 
-    // For LLM functions, use the original LlmBody for type inference.
-    // The synthetic Expr body (call_llm_function) is for compilation, not
-    // type-checking. TIR validates the Jinja template and returns the
-    // declared return type.
+    // For the main LLM-call function (Foo), use the original LlmBody for type inference.
+    // For Foo.render_prompt and Foo.build_request, use the synthetic Expr body.
     let body = if let Some(llm_meta) = baml_compiler_hir::llm_function_meta(db, function) {
         Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone()))
-    } else if baml_compiler_hir::is_llm_function(db, function) {
-        // Malformed LLM function - skip type-checking
-        Arc::new(baml_compiler_hir::FunctionBody::Missing)
     } else {
         baml_compiler_hir::function_body(db, function)
     };
@@ -2577,9 +2571,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let (binding_name, narrowed_ty) =
                             extract_pattern_binding(ctx, pattern, arm.pattern, &scrutinee_ty, body);
 
-                        // Bind the pattern variable with the narrowed type
+                        // Bind the pattern variable with the narrowed type.
+                        // `_` is a discard binding
                         if let Some(name) = binding_name {
-                            ctx.define(name, narrowed_ty);
+                            if name.as_str() != "_" {
+                                ctx.define(name, narrowed_ty);
+                            }
                         }
 
                         // Type-check the guard (if present)

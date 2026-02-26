@@ -61,7 +61,7 @@ export function BepNav({
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="truncate">{section.title}</span>
-                <span className="flex items-center gap-1 flex-shrink-0">
+                <span className="flex items-center gap-1 shrink-0">
                   {/* Edit mode status badge */}
                   {isEditMode && status && (
                     <span
@@ -146,11 +146,11 @@ export function BepNav({
           <div className="border-t mb-3" />
 
           <button
-            onClick={() => onSectionClick("ai-assistant")}
+            onClick={() => onSectionClick("ai")}
             className={cn(
               "w-full text-left px-3 py-2 rounded-md text-sm transition-colors",
               "hover:bg-accent hover:text-accent-foreground",
-              activeSection === "ai-assistant"
+              activeSection === "ai"
                 ? "bg-accent text-accent-foreground font-medium"
                 : "text-muted-foreground"
             )}

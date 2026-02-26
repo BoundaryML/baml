@@ -5,6 +5,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
 use clap::{Args, ValueEnum};
+use colored::Colorize;
 
 use crate::{cli::dotenv, BamlRuntime};
 
@@ -36,7 +37,7 @@ pub struct OptimizeArgs {
     #[arg(
         long,
         default_value_t = 50,
-        help = "Maximum number of test evaluations"
+        help = "Maximum number of test evaluations across all iterations"
     )]
     pub max_evals: usize,
 
@@ -382,6 +383,104 @@ impl OptimizeArgs {
                 feature_flags,
             },
         )?;
+
+        // Getting through the first optimization cycle requires at least `2 * num_tests` evaluations:
+        // one pass for the initial candidate and another for the first improved candidate.
+        let num_tests = orchestrator.num_tests();
+        if num_tests == 0 {
+            anyhow::bail!(
+                "\n{} No tests were found that can be run. Please add tests and try again.",
+                "error:".red().bold()
+            );
+        }
+
+        let min_evals_for_one_cycle = 2 * num_tests;
+        if self.max_evals < min_evals_for_one_cycle {
+            eprintln!(
+                "\n{} --max-evals ({}) is insufficient to run even a single optimization cycle.",
+                "error:".red().bold(),
+                self.max_evals.to_string().bold()
+            );
+            eprintln!(
+                "  Increase {} to at least {} and try again {}",
+                "--max-evals".bold(),
+                min_evals_for_one_cycle.to_string().bold(),
+                format!(
+                    "(Initial evaluation ({num_tests}) + first trial ({num_tests}) = {})",
+                    num_tests * 2
+                )
+                .dimmed()
+            );
+            eprintln!(
+                "  {}",
+                format!(
+                    "Recommended: --max-evals={} based on specified {trials} trials + initial evaluation and {num_tests} tests",
+                    (trials + 1) * num_tests
+                )
+                .dimmed()
+            );
+            return Ok(OptimizeRunResult::Cancelled);
+        }
+
+        // Check whether the budget allows at the target number of iterations
+        let possible_iterations = (self.max_evals - num_tests) / num_tests;
+        if possible_iterations < trials {
+            eprintln!(
+                "\n{} With --max-evals {} and {} tests, only ~{} optimization iterations can run \
+                 (target: {}).\n",
+                "warning:".yellow().bold(),
+                self.max_evals.to_string().bold(),
+                num_tests.to_string().bold(),
+                possible_iterations.to_string().yellow().bold(),
+                format!("{} iterations", trials).bold()
+            );
+            eprint!("  Do you want to continue? {} ", "[y/N]".dimmed());
+            std::io::Write::flush(&mut std::io::stderr()).ok();
+
+            let confirmed = if crossterm::terminal::enable_raw_mode().is_ok() {
+                use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+
+                let result = loop {
+                    let Ok(ev) = event::read() else {
+                        let _ = crossterm::terminal::disable_raw_mode();
+                        eprintln!("Failed to read user input");
+                        break false;
+                    };
+
+                    if let Event::Key(key) = ev {
+                        let _ = crossterm::terminal::disable_raw_mode();
+                        break match key.code {
+                            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                                eprintln!("y");
+                                true
+                            }
+                            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                eprintln!();
+                                false
+                            }
+                            _ => {
+                                eprintln!("n");
+                                false
+                            }
+                        };
+                    }
+                };
+                result
+            } else {
+                // Fallback: line-buffered stdin
+                let mut input = String::new();
+                std::io::stdin()
+                    .read_line(&mut input)
+                    .context("Failed to read user input")?;
+                let input = input.trim().to_lowercase();
+                input == "y" || input == "yes"
+            };
+
+            if !confirmed {
+                println!("Aborted.");
+                return Ok(OptimizeRunResult::Cancelled);
+            }
+        }
 
         // Launch live TUI in a separate thread (default behavior, unless --no-ui)
         let tui_handle = if !self.no_ui {

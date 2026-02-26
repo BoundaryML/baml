@@ -1,0 +1,380 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TYPE INFERENCE ===
+  Function BinaryExprs:
+    Return: Int
+  Function ChainExprs:
+    Return: String
+    Errors:
+      - string has no field len
+      - ChainItem[] has no field len
+      - ChainItem[] has no field get
+      - ChainItem[] has no field get
+      - ChainItem[] has no field get
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - ChainItem[] has no field get
+      - ChainItem[] has no field len
+      - ChainItem[] has no field len
+      - ChainItem[] has no field len
+      - ChainItem[] has no field slice
+      - ChainItem[] has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - string has no field len
+      - ChainItem[] has no field get
+      - ChainItem[] has no field len
+      - ChainItem[] has no field len
+      - int[][] has no field len
+      - int[] has no field len
+      - ChainItem[] has no field get
+      - string has no field len
+      - string has no field len
+  Function WithMethod.greet:
+    Return: Literal(String("hello"))
+  Function WithLongMethod.processData:
+    Return: Map { key: String, value: Union([Int, String, Bool]) }
+  Function ManyOptionsClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TestTarget:
+    Return: String
+  Function TriviaDeeplyNestedClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function LongArrayOfObjectsClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TestTarget.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function StringProviderClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TriviaClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TypedValuesClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function FullClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function SameLineClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function LongArrayClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TriviaLongValueClientBlock.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function EnvClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function LongNestedValuesClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function DeeplyNestedClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TriviaLongValueClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function BasicClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function ExtraWhitespaceClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function CommaClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function C.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function RawStringConfigClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function ArrayOfObjectsClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function NestedConfigClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TriviaDeeplyNestedClientBlock.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function ArrayConfigClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function MixedValuesClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TestTarget.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function LongOptionClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TriviaClientBlock.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+  Function TriviaWrapParamsBlock:
+    Return: Literal(String("result"))
+  Function SingleParam:
+    Return: Int
+  Function SixLongParams:
+    Return: Literal(String("result"))
+  Function LlmMultiLine:
+    Return: String
+  Function NestedGenericReturn:
+    Return: Map { key: String, value: Map { key: String, value: Map { key: String, value: Union([Int, String, Bool, Null, Float]) } } }
+  Function LlmBasic.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function MultiParamTrivia:
+    Return: Int
+  Function F:
+    Return: Literal(Int(1))
+  Function LlmMultiLine.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function MultipleParams:
+    Return: Int
+  Function ConstrainedParams:
+    Return: Literal(String("done"))
+  Function ExtraWhitespace:
+    Return: Int
+  Function ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded:
+    Return: Literal(Int(1))
+  Function NestedLoops:
+    Return: Int
+  Function TriviaEverythingLong_NameAndParamsAndReturn:
+    Return: Map { key: String, value: Union([Int, String, Bool, Float, Null]) }
+  Function LlmBasic:
+    Return: String
+  Function LongNameWithManyParameters_ThisFunctionExceedsLimit:
+    Return: Literal(String("result"))
+  Function LlmBasic.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function LlmStringClient.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function TriviaEverythingLong_NameAndParamsAndReturnBlock:
+    Return: Map { key: String, value: Union([Int, String, Bool, Float, Null]) }
+  Function LlmWithLongSignature.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function LlmReversedOrder:
+    Return: String
+  Function VeryLongParamList:
+    Return: Literal(String("result"))
+  Function LlmStringClient:
+    Return: String
+  Function DeepParamTypes:
+    Return: Literal(String("done"))
+  Function NoColonParams:
+    Return: Int
+  Function TriviaWrapReturnTypeBlock:
+    Return: Int
+  Function LlmWithLongSignature:
+    Return: String
+  Function ManyNestedExprs:
+    Return: Int
+  Function LongNameWithLongReturnType_ExceedsTheLineLimit:
+    Return: Map { key: String, value: Map { key: String, value: Union([Int, String, Bool, Float, Null]) } }
+  Function ManyParams:
+    Return: Literal(String("result"))
+  Function Minimal:
+    Return: Literal(Int(1))
+  Function LlmReversedOrder.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function TriviaWrapParams:
+    Return: Literal(String("result"))
+  Function LlmWithLongSignature.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function ComplexReturn:
+    Return: Int
+  Function LlmMultiLine.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function LlmStringClient.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function EverythingIsLong_NameParamsReturnType:
+    Return: Map { key: String, value: Union([Int, String, Bool, Float, Null]) }
+  Function TriviaFuncBlock:
+    Return: Int
+  Function TriviaFunc:
+    Return: Int
+  Function LlmReversedOrder.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function DeepNestLongExpr:
+    Return: Int
+  Function MultiStatement:
+    Return: Int
+  Function DeepFnReturn:
+    Return: Literal(Int(1))
+    Errors:
+      - Expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>. Found int
+  Function TriviaWrapReturnType:
+    Return: Int
+  Function DeeplyNestedBody:
+    Return: Int
+  Function FinalExpr:
+    Return: Int
+  Function MultiParamTriviaBlock:
+    Return: Int
+  Function MyFunction:
+    Return: Literal(Int(1))
+  Function AssertStmts:
+    Return: Int
+  Function LoopStmts:
+    Return: Int
+  Function MatchExprs:
+    Return: Union([Literal(String("zero")), Literal(String("other"))])
+    Errors:
+      - Unreachable match arm
+      - Unreachable match arm
+      - Invalid op Mul for bool and bool
+      - Invalid op Mul for int and bool
+      - Invalid op Mul for bool and bool
+      - Invalid op Mul for int and bool
+      - Invalid op Mul for bool and int
+  Function OtherExprs:
+    Return: Int

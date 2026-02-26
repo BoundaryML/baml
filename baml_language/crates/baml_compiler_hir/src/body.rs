@@ -92,34 +92,26 @@ pub fn lower_llm_to_call_llm_function(
     function_name: &str,
     param_names: &[Name],
 ) -> (ExprBody, HirSourceMap) {
-    use crate::Name;
+    lower_llm_builtin("call_llm_function", function_name, param_names)
+}
+
+/// Create a synthetic body that calls `baml.llm.<builtin_name>(base_name, args)`.
+fn lower_llm_builtin(
+    builtin_name: &str,
+    base_name: &str,
+    param_names: &[Name],
+) -> (ExprBody, HirSourceMap) {
     let mut exprs: Arena<Expr> = Arena::new();
     let source_map = HirSourceMap::new();
 
-    // Create the args map: {"param1": param1, "param2": param2, ...}
-    let entries: Vec<(ExprId, ExprId)> = param_names
-        .iter()
-        .map(|name| {
-            let key = exprs.alloc(Expr::Literal(Literal::String(name.to_string())));
-            let value = exprs.alloc(Expr::Path(vec![name.clone()]));
-            (key, value)
-        })
-        .collect();
-    let args_map = exprs.alloc(Expr::Map { entries });
-
-    // Create function name literal
-    let fn_name_expr = exprs.alloc(Expr::Literal(Literal::String(function_name.to_string())));
-
-    // Create the function call path: baml.llm.call_llm_function
-    let callee_expr = exprs.alloc(Expr::Path(vec![
+    let (fn_name_expr, args_map) = llm_builtin_call_args(&mut exprs, base_name, param_names);
+    let callee = exprs.alloc(Expr::Path(vec![
         Name::new("baml"),
         Name::new("llm"),
-        Name::new("call_llm_function"),
+        Name::new(builtin_name),
     ]));
-
-    // Create the call expression
     let call_expr = exprs.alloc(Expr::Call {
-        callee: callee_expr,
+        callee,
         args: vec![fn_name_expr, args_map],
     });
 
@@ -134,6 +126,41 @@ pub fn lower_llm_to_call_llm_function(
     };
 
     (body, source_map)
+}
+
+/// Create a synthetic body that calls `baml.llm.render_prompt(base_name, args)`.
+pub fn lower_llm_to_render_prompt(
+    base_name: &str,
+    param_names: &[Name],
+) -> (ExprBody, HirSourceMap) {
+    lower_llm_builtin("render_prompt", base_name, param_names)
+}
+
+/// Create a synthetic body that calls `baml.llm.build_request(base_name, args)`.
+pub fn lower_llm_to_build_request(
+    base_name: &str,
+    param_names: &[Name],
+) -> (ExprBody, HirSourceMap) {
+    lower_llm_builtin("build_request", base_name, param_names)
+}
+
+/// Shared args for LLM builtin calls: (`fn_name_literal`, `args_map`).
+fn llm_builtin_call_args(
+    exprs: &mut Arena<Expr>,
+    base_name: &str,
+    param_names: &[Name],
+) -> (ExprId, ExprId) {
+    let entries: Vec<(ExprId, ExprId)> = param_names
+        .iter()
+        .map(|name| {
+            let key = exprs.alloc(Expr::Literal(Literal::String(name.to_string())));
+            let value = exprs.alloc(Expr::Path(vec![name.clone()]));
+            (key, value)
+        })
+        .collect();
+    let args_map = exprs.alloc(Expr::Map { entries });
+    let fn_name_expr = exprs.alloc(Expr::Literal(Literal::String(base_name.to_string())));
+    (fn_name_expr, args_map)
 }
 
 pub fn strip_string_delimiters(text: &str) -> &str {
@@ -1568,29 +1595,34 @@ impl LoweringContext {
                                             SyntaxKind::KW_IF => continue, // skip the 'if' keyword
                                             SyntaxKind::WORD => {
                                                 let text = t.text();
+                                                let range = t.text_range();
                                                 let expr = match text {
-                                                    "true" => self
-                                                        .exprs
-                                                        .alloc(Expr::Literal(Literal::Bool(true))),
-                                                    "false" => self
-                                                        .exprs
-                                                        .alloc(Expr::Literal(Literal::Bool(false))),
-                                                    "null" => self
-                                                        .exprs
-                                                        .alloc(Expr::Literal(Literal::Null)),
-                                                    _ => self
-                                                        .exprs
-                                                        .alloc(Expr::Path(vec![Name::new(text)])),
+                                                    "true" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Bool(true)),
+                                                        range,
+                                                    ),
+                                                    "false" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Bool(false)),
+                                                        range,
+                                                    ),
+                                                    "null" => self.alloc_expr(
+                                                        Expr::Literal(Literal::Null),
+                                                        range,
+                                                    ),
+                                                    _ => self.alloc_expr(
+                                                        Expr::Path(vec![Name::new(text)]),
+                                                        range,
+                                                    ),
                                                 };
                                                 guard = Some(expr);
                                                 break;
                                             }
                                             SyntaxKind::INTEGER_LITERAL => {
                                                 let value = t.text().parse::<i64>().unwrap_or(0);
-                                                guard = Some(
-                                                    self.exprs
-                                                        .alloc(Expr::Literal(Literal::Int(value))),
-                                                );
+                                                guard = Some(self.alloc_expr(
+                                                    Expr::Literal(Literal::Int(value)),
+                                                    t.text_range(),
+                                                ));
                                                 break;
                                             }
                                             _ => {}
@@ -1621,11 +1653,17 @@ impl LoweringContext {
                         // Handle literal tokens as body (when body is a simple value)
                         SyntaxKind::INTEGER_LITERAL if seen_fat_arrow && body.is_none() => {
                             let value = token.text().parse::<i64>().unwrap_or(0);
-                            body = Some(self.exprs.alloc(Expr::Literal(Literal::Int(value))));
+                            body = Some(self.alloc_expr(
+                                Expr::Literal(Literal::Int(value)),
+                                token.text_range(),
+                            ));
                         }
                         SyntaxKind::FLOAT_LITERAL if seen_fat_arrow && body.is_none() => {
                             let text = token.text().to_string();
-                            body = Some(self.exprs.alloc(Expr::Literal(Literal::Float(text))));
+                            body = Some(self.alloc_expr(
+                                Expr::Literal(Literal::Float(text)),
+                                token.text_range(),
+                            ));
                         }
                         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
                             if seen_fat_arrow && body.is_none() =>
@@ -1638,18 +1676,23 @@ impl LoweringContext {
                             } else {
                                 text
                             };
-                            body = Some(
-                                self.exprs
-                                    .alloc(Expr::Literal(Literal::String(content.to_string()))),
-                            );
+                            body = Some(self.alloc_expr(
+                                Expr::Literal(Literal::String(content.to_string())),
+                                token.text_range(),
+                            ));
                         }
                         SyntaxKind::WORD if seen_fat_arrow && body.is_none() => {
                             let text = token.text();
+                            let range = token.text_range();
                             let expr = match text {
-                                "true" => self.exprs.alloc(Expr::Literal(Literal::Bool(true))),
-                                "false" => self.exprs.alloc(Expr::Literal(Literal::Bool(false))),
-                                "null" => self.exprs.alloc(Expr::Literal(Literal::Null)),
-                                _ => self.exprs.alloc(Expr::Path(vec![Name::new(text)])),
+                                "true" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(true)), range)
+                                }
+                                "false" => {
+                                    self.alloc_expr(Expr::Literal(Literal::Bool(false)), range)
+                                }
+                                "null" => self.alloc_expr(Expr::Literal(Literal::Null), range),
+                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), range),
                             };
                             body = Some(expr);
                         }
@@ -2776,6 +2819,9 @@ impl LoweringContext {
                     | SyntaxKind::PAREN_EXPR
                     | SyntaxKind::STRING_LITERAL
                     | SyntaxKind::RAW_STRING_LITERAL
+                    | SyntaxKind::OBJECT_LITERAL
+                    | SyntaxKind::ARRAY_LITERAL
+                    | SyntaxKind::MAP_LITERAL
             )
         }) {
             Some(self.lower_expr(&child_node))
@@ -3535,5 +3581,62 @@ impl LoweringContext {
             .collect();
 
         self.alloc_expr(Expr::Map { entries }, block.syntax().text_range())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Name;
+
+    fn check_llm_builtin_body(body: &ExprBody, expected_builtin: &str, expected_fn: &str) {
+        let call_id = body.root_expr.expect("root_expr must be Some");
+        let Expr::Call { callee, args } = &body.exprs[call_id] else {
+            panic!("root expr must be a Call");
+        };
+        let Expr::Path(segments) = &body.exprs[*callee] else {
+            panic!("callee must be a Path");
+        };
+        assert_eq!(
+            segments.iter().map(Name::as_str).collect::<Vec<_>>(),
+            vec!["baml", "llm", expected_builtin]
+        );
+        assert_eq!(args.len(), 2);
+        let Expr::Literal(Literal::String(fn_name)) = &body.exprs[args[0]] else {
+            panic!("first arg must be a string literal");
+        };
+        assert_eq!(fn_name, expected_fn);
+    }
+
+    #[test]
+    fn test_lower_llm_to_call_llm_function_callee_path() {
+        let (body, _) = lower_llm_to_call_llm_function("Greet", &[]);
+        check_llm_builtin_body(&body, "call_llm_function", "Greet");
+    }
+
+    #[test]
+    fn test_lower_llm_to_render_prompt_callee_path() {
+        let (body, _) = lower_llm_to_render_prompt("Greet", &[]);
+        check_llm_builtin_body(&body, "render_prompt", "Greet");
+    }
+
+    #[test]
+    fn test_lower_llm_to_build_request_callee_path() {
+        let (body, _) = lower_llm_to_build_request("Greet", &[]);
+        check_llm_builtin_body(&body, "build_request", "Greet");
+    }
+
+    #[test]
+    fn test_llm_builtin_args_map_contains_params() {
+        let params = vec![Name::new("name"), Name::new("lang")];
+        let (body, _) = lower_llm_to_render_prompt("Greet", &params);
+        let call_id = body.root_expr.unwrap();
+        let Expr::Call { args, .. } = &body.exprs[call_id] else {
+            panic!()
+        };
+        let Expr::Map { entries } = &body.exprs[args[1]] else {
+            panic!("second arg must be Map")
+        };
+        assert_eq!(entries.len(), 2);
     }
 }

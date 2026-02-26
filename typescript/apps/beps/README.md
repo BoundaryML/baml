@@ -678,6 +678,10 @@ Set your Anthropic API key in the Convex dashboard:
 
 ## Development
 
+### Theming
+
+Colors and dark mode are defined in `src/app/globals.css` with semantic tokens. See [docs/THEMING.md](docs/THEMING.md) for usage and extension guidelines.
+
 ### Available Scripts
 
 ```bash

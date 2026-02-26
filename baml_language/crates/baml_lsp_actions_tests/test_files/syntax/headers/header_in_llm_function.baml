@@ -3,9 +3,9 @@ class Hi {
 }
 
 client<llm> VertexGCP {
-    provider vertex-ai
+    provider "vertex-ai"
     options {
-        model gemini-2.0-flash
+        model "gemini-2.0-flash"
     }
 }
 

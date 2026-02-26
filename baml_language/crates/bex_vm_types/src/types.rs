@@ -48,6 +48,9 @@ pub struct Program {
     /// Client build metadata for constructing full client trees at runtime.
     /// Keyed by client name.
     pub client_metadata: HashMap<String, ClientBuildMeta>,
+
+    /// Compiled test cases.
+    pub test_cases: Vec<TestCase>,
 }
 
 /// Metadata for building a client tree at runtime.
@@ -245,10 +248,17 @@ pub struct Function {
     /// Type of function.
     pub kind: FunctionKind,
 
-    /// Local variable names.
+    /// Local variable names indexed by slot number.
     ///
-    /// This is basically debug info, VM doesn't need it all to run.
-    pub locals_in_scope: Vec<Vec<String>>,
+    /// Debug info: maps eval-stack slot indices to variable names.
+    /// Slot 0 is the function reference, slots 1..arity are parameters.
+    pub local_names: Vec<String>,
+
+    /// Lexical scope metadata for named locals.
+    ///
+    /// Used by debugger UIs to determine which variables are visible at a
+    /// given source location.
+    pub debug_locals: Vec<crate::bytecode::DebugLocalScope>,
 
     /// Span of the function as computed by the parser.
     pub span: baml_base::Span,
@@ -284,6 +294,29 @@ pub struct Function {
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<fn {}>", self.name)
+    }
+}
+
+impl Function {
+    /// Get the source span associated with a bytecode PC.
+    pub fn source_span_for_pc(&self, pc: usize) -> Option<baml_base::Span> {
+        self.bytecode.line_entry_for_pc(pc).map(|entry| entry.span)
+    }
+
+    /// Get named locals whose lexical scope contains the source span at `pc`.
+    pub fn debug_locals_in_scope(&self, pc: usize) -> Vec<&crate::bytecode::DebugLocalScope> {
+        let Some(span) = self.source_span_for_pc(pc) else {
+            return Vec::new();
+        };
+
+        self.debug_locals
+            .iter()
+            .filter(|local| {
+                local.scope_span.file_id == span.file_id
+                    && local.scope_span.range.start() <= span.range.start()
+                    && local.scope_span.range.end() >= span.range.end()
+            })
+            .collect()
     }
 }
 
@@ -433,6 +466,44 @@ impl std::fmt::Display for Value {
             Value::Object(ptr) => write!(f, "{ptr}"),
         }
     }
+}
+
+// ============================================================================
+// Test Cases
+// ============================================================================
+
+/// A constant value for test arguments.
+///
+/// Self-contained type with no dependency on HIR or external types.
+/// Converted from HIR's `TestArgValue` during emission, and converted
+/// to `BexExternalValue` in the engine for function calls.
+#[derive(Clone, Debug)]
+pub enum TestArgValue {
+    Null,
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    String(String),
+    Array {
+        element_type: Ty,
+        items: Vec<TestArgValue>,
+    },
+    Map {
+        key_type: Ty,
+        value_type: Ty,
+        entries: IndexMap<String, TestArgValue>,
+    },
+}
+
+/// A compiled test case, ready for execution.
+#[derive(Clone, Debug)]
+pub struct TestCase {
+    /// Test name (e.g., "`TestAddOne`").
+    pub name: String,
+    /// Function names this test targets.
+    pub function_names: Vec<String>,
+    /// Test arguments, keyed by parameter name.
+    pub args: IndexMap<String, TestArgValue>,
 }
 
 /// Compile-time constant values.

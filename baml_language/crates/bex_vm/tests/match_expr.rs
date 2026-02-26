@@ -195,6 +195,28 @@ fn match_typed_pattern_with_field_access() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn match_typed_discard_patterns_typetag_switch_path() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function classify(x int | string | bool | float) -> int {
+                match (x) {
+                    _: int => 1,
+                    _: string => 2,
+                    _: bool => 3,
+                    _: float => 4,
+                }
+            }
+
+            function main() -> int {
+                classify(true)
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(3)),
+    })
+}
+
 // ============================================================================
 // Guard Tests
 // ============================================================================

@@ -1,8 +1,8 @@
 """Protobuf encoder/decoder for BAML bridge_ctypes protocol.
 
 Uses generated protobuf classes from the .proto files in bridge_ctypes.
-  - Encoding: Python kwargs → HostFunctionArguments protobuf bytes
-  - Decoding: CFFIValueHolder protobuf bytes → Python values
+  - Encoding: Python kwargs → CallFunctionArgs protobuf bytes
+  - Decoding: BamlOutboundValue protobuf bytes → Python values
 """
 
 from __future__ import annotations
@@ -10,41 +10,46 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from baml.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
+from baml_py.baml_py import BamlHandle
 
 
 # ---------------------------------------------------------------------------
-# Encoding: Python kwargs → HostFunctionArguments
+# Encoding: Python kwargs → CallFunctionArgs
 # ---------------------------------------------------------------------------
 
 
-def _set_host_value(host_value, value: Any) -> None:
-    """Set a HostValue message from a Python value."""
+def _set_inbound_value(inbound_value, value: Any) -> None:
+    """Set an InboundValue message from a Python value."""
     if value is None:
         # Leave oneof unset → null
         return
-    if isinstance(value, bool):
+    if isinstance(value, BamlHandle):
+        handle = inbound_value.handle
+        handle.key = value.key
+        handle.handle_type = value.handle_type
+    elif isinstance(value, bool):
         # Must check bool before int since bool is a subclass of int
-        host_value.bool_value = value
+        inbound_value.bool_value = value
     elif isinstance(value, int):
-        host_value.int_value = value
+        inbound_value.int_value = value
     elif isinstance(value, float):
-        host_value.float_value = value
+        inbound_value.float_value = value
     elif isinstance(value, str):
-        host_value.string_value = value
+        inbound_value.string_value = value
     elif isinstance(value, (list, tuple)):
-        list_val = host_value.list_value
+        list_val = inbound_value.list_value
         for item in value:
-            _set_host_value(list_val.values.add(), item)
+            _set_inbound_value(list_val.values.add(), item)
     elif isinstance(value, dict):
-        map_val = host_value.map_value
+        map_val = inbound_value.map_value
         for k, v in value.items():
-            _set_host_map_entry(map_val.entries.add(), k, v)
+            _set_inbound_map_entry(map_val.entries.add(), k, v)
     else:
         raise TypeError(f"Cannot encode value of type {type(value).__name__} to protobuf")
 
 
-def _set_host_map_entry(entry, key: Any, value: Any) -> None:
-    """Set a HostMapEntry message from a key-value pair."""
+def _set_inbound_map_entry(entry, key: Any, value: Any) -> None:
+    """Set an InboundMapEntry message from a key-value pair."""
     if isinstance(key, str):
         entry.string_key = key
     elif isinstance(key, bool):
@@ -53,31 +58,31 @@ def _set_host_map_entry(entry, key: Any, value: Any) -> None:
         entry.int_key = key
     else:
         entry.string_key = str(key)
-    _set_host_value(entry.value, value)
+    _set_inbound_value(entry.value, value)
 
 
 def encode_call_args(kwargs: Dict[str, Any]) -> bytes:
-    """Encode function keyword arguments as HostFunctionArguments protobuf.
+    """Encode function keyword arguments as CallFunctionArgs protobuf.
 
     Args:
         kwargs: dict mapping argument names to Python values
 
     Returns:
-        Protobuf-encoded bytes for HostFunctionArguments
+        Protobuf-encoded bytes for CallFunctionArgs
     """
-    args = baml_inbound_pb2.HostFunctionArguments()
+    args = baml_inbound_pb2.CallFunctionArgs()
     for key, value in kwargs.items():
-        _set_host_map_entry(args.kwargs.add(), key, value)
+        _set_inbound_map_entry(args.kwargs.add(), key, value)
     return args.SerializeToString()
 
 
 # ---------------------------------------------------------------------------
-# Decoding: CFFIValueHolder → Python values
+# Decoding: BamlOutboundValue → Python values
 # ---------------------------------------------------------------------------
 
 
 def _decode_value_holder(holder) -> Any:
-    """Convert a CFFIValueHolder message to a Python value."""
+    """Convert a BamlOutboundValue message to a Python value."""
     which = holder.WhichOneof("value")
     if which is None:
         return None
@@ -108,8 +113,9 @@ def _decode_value_holder(holder) -> Any:
         if lit_which == "bool_literal":
             return lit.bool_literal.value
         return None
-    if which == "object_value":
-        return None
+    if which == "handle_value":
+        handle = holder.handle_value
+        return BamlHandle(handle.key, handle.handle_type)
     if which == "list_value":
         return [_decode_value_holder(item) for item in holder.list_value.items]
     if which == "map_value":
@@ -127,14 +133,14 @@ def _decode_value_holder(holder) -> Any:
 
 
 def decode_call_result(data: bytes) -> Any:
-    """Decode a CFFIValueHolder protobuf to a Python value.
+    """Decode a BamlOutboundValue protobuf to a Python value.
 
     Args:
-        data: Protobuf-encoded CFFIValueHolder bytes
+        data: Protobuf-encoded BamlOutboundValue bytes
 
     Returns:
-        Decoded Python value (None, bool, int, float, str, list, dict)
+        Decoded Python value (None, bool, int, float, str, list, dict, BamlHandle)
     """
-    holder = baml_outbound_pb2.CFFIValueHolder()
+    holder = baml_outbound_pb2.BamlOutboundValue()
     holder.ParseFromString(data)
     return _decode_value_holder(holder)

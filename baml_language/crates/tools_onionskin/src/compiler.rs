@@ -1366,7 +1366,14 @@ impl CompilerRunner {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        let program = match baml_compiler_emit::compile_files(&self.db, &files) {
+        let program = match baml_compiler_emit::compile_files(
+            &self.db,
+            &files,
+            baml_compiler_emit::OptLevel::One,
+            &baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
+        ) {
             Ok(p) => p,
             Err(err) => {
                 writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").ok();
@@ -1422,16 +1429,9 @@ impl CompilerRunner {
                 writeln!(output, "{}", func_header).ok();
                 output_annotated.push((func_header, LineStatus::Unknown));
 
-                // Use empty GlobalPool for compile-time display (no heap available)
-                // Pass ObjectPool and compile-time globals to resolve names
-                let empty_globals = bex_vm_types::indexable::GlobalPool::new();
-                let bytecode_table = bex_vm::debug::display_bytecode(
-                    func,
-                    &bex_vm::EvalStack::new(),
-                    &empty_globals,
-                    Some(&program.objects),
-                    Some(&program.globals),
-                    false, // no colors for static display
+                let bytecode_table = bex_vm::debug::display_program(
+                    &[(func_name.to_string(), func)],
+                    bex_vm::debug::BytecodeFormat::Textual,
                 );
 
                 if bytecode_table.is_empty() {
@@ -1474,7 +1474,14 @@ impl CompilerRunner {
 
         // Compile the program
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = match baml_compiler_emit::compile_files(&self.db, &files) {
+        let program = match baml_compiler_emit::compile_files(
+            &self.db,
+            &files,
+            baml_compiler_emit::OptLevel::One,
+            &baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
+        ) {
             Ok(p) => p,
             Err(err) => {
                 writeln!(output, "=== VM RUNNER ===").ok();
@@ -1622,7 +1629,14 @@ impl CompilerRunner {
         use bex_vm_types::Object;
 
         let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = match baml_compiler_emit::compile_files(&self.db, &files) {
+        let program = match baml_compiler_emit::compile_files(
+            &self.db,
+            &files,
+            baml_compiler_emit::OptLevel::One,
+            &baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
+        ) {
             Ok(p) => p,
             Err(err) => {
                 self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(format!(
@@ -1777,7 +1791,17 @@ impl CompilerRunner {
                     }
                 }
                 Err(err) => {
-                    let error_msg = format!("Error formatting: {:?}", err);
+                    let error_msg = match err {
+                        baml_fmt::FormatterError::ParseErrors(e) => {
+                            format!("Error parsing: {:?}", e)
+                        }
+                        baml_fmt::FormatterError::StrongAstError(e) => {
+                            format!(
+                                "Error formatting: {}",
+                                e.print_with_file_context(path, source_file.text(&self.db))
+                            )
+                        }
+                    };
                     writeln!(output, "{}", error_msg).ok();
                     output_annotated.push((error_msg, LineStatus::Recomputed));
                 }

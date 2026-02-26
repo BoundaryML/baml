@@ -1,0 +1,12 @@
+version: v2
+plugins:
+  - local: protoc-gen-ts_proto
+    out: src/generated
+    opt:
+      - esModuleInterop=true
+      - forceLong=number
+      - outputServices=false
+      - env=browser
+      - oneof=unions
+      - unrecognizedEnum=false
+      - removeEnumPrefix=true

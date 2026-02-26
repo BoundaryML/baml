@@ -1,0 +1,225 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
+---
+// Testing all the formatter cases for binary expressions
+// including chains and nested chains
+
+function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
+    // ===== Basic arithmetic =====
+    a + b;
+    a - b;
+    a * b;
+    a / b;
+    a % b;
+
+    // ===== Comparison operators =====
+    a == b;
+    a != b;
+    a < b;
+    a > b;
+    a <= b;
+    a >= b;
+
+    // ===== Logical operators =====
+    flag && true;
+    flag || false;
+
+    // ===== Bitwise operators =====
+    a & b;
+    a | b;
+    a ^ b;
+    a << b;
+    a >> b;
+
+    // ===== Assignment operators =====
+    let mut_a = a;
+    mut_a += b;
+    mut_a -= b;
+    mut_a *= b;
+    mut_a /= b;
+    mut_a %= b;
+    mut_a &= b;
+    mut_a |= b;
+    mut_a ^= b;
+    mut_a <<= b;
+    mut_a >>= b;
+
+    // ===== Chained arithmetic (same precedence group) =====
+    a + b + c;
+    a + b + c + d;
+    a - b + c - d;
+    a * b * c;
+    a * b / c % d;
+
+    // ===== Chained comparisons with logical =====
+    a > 0 && b > 0;
+    a > 0 || b > 0;
+    a > 0 && b > 0 && c > 0;
+    a > 0 || b > 0 || c > 0;
+    a > 0 && b > 0 || c > 0;
+
+    // ===== Mixed precedence =====
+    a + b * c;
+    (a + b) * c;
+    a * b + c * d;
+    a + b * c + d;
+
+    // ===== Nested parenthesized =====
+    (a + b) * (c + d);
+    ((a + b) * c) + d;
+    a + (b * (c + d));
+
+    // ===== Deeply nested parens =====
+    ((((a + b) * c) + d) * (((a - b) + c) - d)) + ((a * b) + (c * d));
+    (((a + b) * (c + d)) + ((a - b) * (c - d)))
+        * (((a * c * d) + (b * c * d)) - ((a * d) + (b * c * d)));
+
+    // ===== Trivia between operands (line comments) =====
+    // 1 left leading
+    a // 2 left trailing
+        + b;
+
+    // ===== Trivia between operands (block comments) =====
+    /* 1 left leading */
+    a/* 2 left trailing *//* 3 operator leading */+/* 4 operator trailing *//* 5 right leading */b/* 6 right trailing */;
+
+    // ===== Trivia in chained binary (line comments) =====
+    // 1 first leading
+    a // 2 first trailing
+        + b // 6 second trailing
+        + c;
+
+    // ===== Long arithmetic chain exceeding limit =====
+    a
+        + b
+        + c
+        + d
+        + a
+        + b
+        + c
+        + d
+        + a
+        + b
+        + c
+        + d
+        + a
+        + b
+        + c
+        + d
+        + a
+        + b
+        + c
+        + d
+        + a
+        + b
+        + c
+        + d
+        + a
+        + b;
+
+    // ===== Long logical chain exceeding limit =====
+    a > 0
+        && b > 0
+        && c > 0
+        && d > 0
+        && a != b
+        && b != c
+        && c != d
+        && a < 1000 * 8 + 1 * 2
+        && b < 1000
+        && c < 1000
+        && d < 1000 + 2 + 3;
+
+    // ===== Long mixed precedence chain exceeding limit =====
+    a * b
+        + c * d
+        - a * b
+        + c * d
+        - a * b
+        + c * d
+        - a * b
+        + c * d
+        - a * b
+        + c * d
+        - a * b
+        + c * d
+        - a * b
+        + c * d
+        - a * b
+        + c * d
+        - a * b
+        + c * d
+        - a * b
+        + c * d;
+
+    // ===== Long comparison chain exceeding limit =====
+    a + b + c + d > 0
+        && a * b * c * d < 10000
+        && a - b - c - d != 0
+        && (a + b) * (c + d) >= 100
+        || a * 1 < 2
+        && "aowiefjowiaj" == "jfeiowajpwoeifj";
+
+    // ===== Long string concatenation exceeding limit =====
+    "a very long string prefix that is already quite long"
+        + " concatenated with "
+        + "another very long string that together exceeds the line limit easily and comfortably";
+
+    // ===== Long assignment expression exceeding limit =====
+    mut_a += a * b + c * d + a * b + c * d + a * b + c * d + a * b + c * d + a * b + c * d + a;
+
+    // ===== Trivia in long wrapping chain (line comments) =====
+    // 1 leading
+    a // 2 trailing
+        + b // 6 trailing
+        + c // 10 trailing
+        + d // 14 trailing
+        + a // 18 trailing
+        + b // 22 trailing
+        + c // 26 trailing
+        + d // 30 trailing
+        + a // 34 trailing
+        + b // 38 trailing
+        + c // 42 trailing
+        + d;
+
+    // ===== Trivia in long wrapping chain (block comments) =====
+    /* 1 leading */
+    a /* 2 trailing */
+        + b /* 6 trailing */
+        + c /* 10 trailing */
+        + d /* 14 trailing */
+        + a /* 18 trailing */
+        + b /* 22 trailing */
+        + c /* 26 trailing */
+        + d /* 30 trailing */
+        + a /* 34 trailing */
+        + b /* 38 trailing */
+        + c /* 42 trailing */
+        + d/* 46 trailing */;
+
+    // ===== Trivia in long wrapping logical chain (line comments) =====
+    // 1 leading
+    a > 0 // 2 trailing
+        && b > 0 // 6 trailing
+        && c > 0 // 10 trailing
+        && d > 0 // 14 trailing
+        && a != b // 18 trailing
+        && b != c // 22 trailing
+        && c != d;
+
+    // ===== Short expressions (should stay single line) =====
+    a + b;
+    1 + 2;
+    a > b;
+
+    // ===== Extraneous whitespace =====
+    a + b;
+    a * b + c;
+    a == b;
+    a == 2 && b != 3;
+
+    // ===== Final expression =====
+    a + b
+}

@@ -1,10 +1,17 @@
 ---
-source: target/debug/build/baml_tests-d8c3d4c38f908488/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function FormatMessage(name: string) -> string {
     baml.llm.call_llm_function("FormatMessage", { "name": name })
+}
+
+function FormatMessage.render_prompt(name: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("FormatMessage", { "name": name })
+}
+
+function FormatMessage.build_request(name: string) -> baml.http.Request {
+    baml.llm.build_request("FormatMessage", { "name": name })
 }
 
 class NestedQuotes {
@@ -17,11 +24,15 @@ class NestedQuotes {
   quote: <unknown>
   is: here
   complex_nesting: string
-  really: <unknown>
-  complex: <unknown>
   json_like: string
-  key: <unknown>
-  value: <unknown>
+}
+
+function ProcessText.build_request(input: string) -> baml.http.Request {
+    baml.llm.build_request("ProcessText", { "input": input })
+}
+
+function ProcessText.render_prompt(input: string) -> baml.llm.PromptAst {
+    baml.llm.render_prompt("ProcessText", { "input": input })
 }
 
 function ProcessText(input: string) -> string {
@@ -36,7 +47,7 @@ class RawStrings {
 }
 
 function GetRole() -> "admin" | "user" | "guest" {
-      return "user";
+    return "user";
 }
 
 class Messages {
@@ -45,7 +56,6 @@ class Messages {
   with_spaces: string
   with_escapes: string
   with_quotes: string
-  hello: <unknown>
 }
 
 function GPT4.resolve() -> baml.llm.PrimitiveClient {

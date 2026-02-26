@@ -128,6 +128,9 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::PlusPlus => SyntaxKind::PLUS_PLUS,
         TokenKind::MinusMinus => SyntaxKind::MINUS_MINUS,
 
+        // Backslash
+        TokenKind::Backslash => SyntaxKind::BACKSLASH,
+
         // Whitespace
         TokenKind::Whitespace => SyntaxKind::WHITESPACE,
         TokenKind::Newline => SyntaxKind::NEWLINE,
@@ -880,6 +883,47 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Consume token if it is trivia. Returns true if trivia was consumed.
+    fn eat_trivia(&mut self) -> bool {
+        if self.at_line_comment_start() {
+            self.consume_line_comment();
+            true
+        } else if self.at_block_comment_start() {
+            self.consume_block_comment();
+            true
+        } else if let Some(token) = self.tokens.get(self.current)
+            && self.is_basic_trivia(token.kind)
+        {
+            let kind = token_kind_to_syntax_kind(token.kind);
+            self.events.push(Event::Token {
+                kind,
+                text: token.text.clone(),
+            });
+            self.current += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Eat a basic trivia token (whitespace or newline).
+    fn eat_basic_trivia(&mut self) -> bool {
+        let Some(token) = self.tokens.get(self.current) else {
+            return false;
+        };
+        let kind = match token.kind {
+            TokenKind::Whitespace => SyntaxKind::WHITESPACE,
+            TokenKind::Newline => SyntaxKind::NEWLINE,
+            _ => return false,
+        };
+        self.events.push(Event::Token {
+            kind,
+            text: token.text.clone(),
+        });
+        self.current += 1;
+        true
+    }
+
     /// Expect a token, emit error if not found
     fn expect(&mut self, kind: TokenKind) -> bool {
         if self.eat(kind) {
@@ -996,9 +1040,21 @@ impl<'a> Parser<'a> {
     // ============ String Parsing ============
 
     /// Count consecutive Hash tokens starting at current position (skipping basic trivia only)
+    /// Will skip *leading* trivia, but only basic trivia is allowed internally
     fn count_consecutive_hashes(&self) -> usize {
         let mut count = 0;
         let mut i = self.current;
+
+        // Skip all leading trivia (whitespace, newlines, AND comments)
+        while i < self.tokens.len() {
+            if self.is_basic_trivia(self.tokens[i].kind) {
+                i += 1;
+            } else if self.is_line_comment_at(i) || self.is_block_comment_at(i) {
+                i = self.skip_comment_at(i);
+            } else {
+                break;
+            }
+        }
 
         while i < self.tokens.len() {
             let token = &self.tokens[i];
@@ -1015,10 +1071,28 @@ impl<'a> Parser<'a> {
         count
     }
 
-    /// Find the token position after consuming N hashes (skipping basic trivia only)
+    /// Find the token position after consuming N hashes.
+    /// Skips all trivia (whitespace, newlines, and comments) before the first hash,
+    /// then only skips basic trivia (whitespace, newlines) between hashes.
+    ///
+    /// ## Returns
+    /// - `None` if a non-hash, non-basic-trivia token is encountered before the number of hashes is reached.
+    /// - `None` if the end has been reached
+    /// - `Some(i)` with the first non-basic-trivia token after the hashes. Will always be a valid index in [`Self::tokens`].
     fn find_token_after_hashes(&self, hash_count: usize) -> Option<usize> {
         let mut hashes_seen = 0;
         let mut i = self.current;
+
+        // Skip all leading trivia (whitespace, newlines, AND comments)
+        while i < self.tokens.len() {
+            if self.is_basic_trivia(self.tokens[i].kind) {
+                i += 1;
+            } else if self.is_line_comment_at(i) || self.is_block_comment_at(i) {
+                i = self.skip_comment_at(i);
+            } else {
+                break;
+            }
+        }
 
         while i < self.tokens.len() {
             let token = &self.tokens[i];
@@ -1078,6 +1152,9 @@ impl<'a> Parser<'a> {
             return false;
         }
 
+        // before starting the STRING_LITERAL node, handle all leading trivia
+        while self.eat_trivia() {}
+
         self.with_node(SyntaxKind::STRING_LITERAL, |p| {
             p.bump(); // Opening quote
 
@@ -1088,6 +1165,16 @@ impl<'a> Parser<'a> {
                 if loop_counter > 100_000 {
                     p.error_unexpected_token("String parsing exceeded iteration limit".to_string());
                     return;
+                }
+
+                if p.at_raw(TokenKind::Backslash) {
+                    p.bump_raw(); // Consume backslash
+                    if let Some(directly_after) = p.tokens.get(p.current)
+                        && directly_after.kind == TokenKind::Quote
+                    {
+                        p.bump_raw(); // Consume quote without ending string
+                    }
+                    continue;
                 }
 
                 // Check if next token is the closing quote
@@ -1130,6 +1217,9 @@ impl<'a> Parser<'a> {
             // Just hashes, not a raw string
             return false;
         }
+
+        // before starting the RAW_STRING_LITERAL node, handle all leading trivia
+        while self.eat_trivia() {}
 
         self.with_node(SyntaxKind::RAW_STRING_LITERAL, |p| {
             // Consume opening hashes
@@ -1307,6 +1397,8 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse plain text content between Jinja constructs
+    ///
+    /// Will consume trailing whitespace as well.
     fn parse_prompt_text(&mut self, opening_hashes: usize) {
         self.with_node(SyntaxKind::PROMPT_TEXT, |p| {
             // Collect tokens until we hit a Jinja construct or closing delimiter
@@ -1321,6 +1413,7 @@ impl<'a> Parser<'a> {
 
                 // Check for Jinja constructs
                 if p.at_jinja_expression() || p.at_jinja_statement() || p.at_jinja_comment() {
+                    while p.eat_basic_trivia() {} // make it part of the PROMPT_TEXT
                     break;
                 }
 
@@ -1345,7 +1438,16 @@ impl<'a> Parser<'a> {
     /// Parse a field attribute: @alias("name") or @stream.done
     pub(crate) fn parse_field_attribute(&mut self) {
         self.with_node(SyntaxKind::ATTRIBUTE, |p| {
+            let at_span = p.current().map(|t| t.span);
             p.expect(TokenKind::At);
+
+            if p.has_newline_ahead() {
+                // if the attribute name is not on the same line as the @, that's an error
+                if let Some(at_span) = at_span {
+                    p.error("Attribute is missing a name".to_string(), at_span);
+                }
+                return;
+            }
 
             // Attribute name (can be dotted like stream.done)
             // Allow keywords like 'assert' as attribute names (for @assert)
@@ -1430,7 +1532,7 @@ impl<'a> Parser<'a> {
         // - String: @alias("user_name")
         // - Raw string: @description(#"Multi-line\ndescription"#)
         // - Expression: @assert({{ this > 0 }})
-        // - Unquoted string: @description(User is happy) - consumes until ) or ,
+        // - Unquoted string: @alias(my_alias) - one WORD token
 
         if self.parse_any_string() {
             // String argument parsed
@@ -1443,11 +1545,9 @@ impl<'a> Parser<'a> {
             // Expression block: {{ }}
             self.parse_expression_block();
         } else if self.at(TokenKind::Word) {
-            // Unquoted string: consume all tokens until ) or ,
+            // Unquoted string: only permit one word
             self.with_node(SyntaxKind::UNQUOTED_STRING, |p| {
-                while !p.at(TokenKind::RParen) && !p.at(TokenKind::Comma) && !p.at_end() {
-                    p.bump();
-                }
+                p.bump();
             });
         } else {
             self.error_unexpected_token("attribute argument".to_string());
@@ -1504,6 +1604,21 @@ impl<'a> Parser<'a> {
                     // Union type: string | int | "user" | "assistant"
                     p.bump();
                     p.parse_type_primary();
+                } else if p.at(TokenKind::At) {
+                    // An attribute
+                    let Some(attr_name_first) = p.peek(1) else {
+                        break; // attribute goes on a parent node or something
+                    };
+                    if attr_name_first.kind == TokenKind::Word
+                        && matches!(
+                            attr_name_first.text.as_str(),
+                            "alias" | "description" | "skip"
+                        )
+                    {
+                        // attribute applies to a field, not the type
+                        break;
+                    }
+                    p.parse_field_attribute();
                 } else {
                     break;
                 }
@@ -1560,7 +1675,7 @@ impl<'a> Parser<'a> {
 
                     p.parse_type();
 
-                    while p.eat(TokenKind::Comma) {
+                    while p.pending_greaters == 0 && p.eat(TokenKind::Comma) {
                         p.parse_type();
                     }
 
@@ -1623,6 +1738,9 @@ impl<'a> Parser<'a> {
             had_named_param |= self.parse_function_type_param_inner();
 
             while self.eat(TokenKind::Comma) {
+                if self.at(TokenKind::RParen) {
+                    break;
+                }
                 had_named_param |= self.parse_function_type_param_inner();
             }
         }
@@ -1867,16 +1985,20 @@ impl<'a> Parser<'a> {
             let field_name_text = p.current().map(|t| t.text.clone());
             p.bump();
 
+            let has_colon = p.eat(TokenKind::Colon);
+
             // Check if there's a newline before the next token
             // (newline means the type is on a different line - the field is incomplete)
             let newline_before_type = p.has_newline_ahead();
 
-            // Field type - check if we're at a valid type start AND no newline separates them
-            let has_type = p.is_at_type_start() && !newline_before_type;
+            // Field type - check if we're at a valid type start
+            // If there was no colon, it must be on the same line
+            let has_type = p.is_at_type_start() && (!newline_before_type || has_colon);
             if has_type {
                 p.parse_type();
 
-                // Optional field attributes (@alias, @description, @assert, etc.)
+                // Optional field attributes (@alias, @description, @skip, etc.)
+                // `parse_type` has already consumed all the "field" attributes that aren't field-related
                 while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                     p.parse_field_attribute();
                 }
@@ -1887,6 +2009,7 @@ impl<'a> Parser<'a> {
                     p.error(format!("field '{name}' is missing a type annotation"), span);
                 }
             }
+            // TODO: once we decide which, parse optional comma or semicolon
         });
     }
 
@@ -1935,10 +2058,6 @@ impl<'a> Parser<'a> {
             // Return type
             if p.eat(TokenKind::Arrow) {
                 p.parse_type();
-                // Optional attributes on return type (e.g., @check)
-                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                    p.parse_field_attribute();
-                }
             } else {
                 p.error_unexpected_token("return type (->)".to_string());
             }
@@ -1995,11 +2114,6 @@ impl<'a> Parser<'a> {
                 p.parse_type();
             } else {
                 p.error_unexpected_token("type annotation".to_string());
-            }
-
-            // Optional attributes on parameter (e.g., @assert, @check)
-            while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
             }
         });
     }
@@ -2124,6 +2238,9 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::CLIENT_FIELD, |p| {
             p.expect(TokenKind::Client);
 
+            // Optional colon
+            p.eat(TokenKind::Colon);
+
             // Client name can be:
             // - A simple identifier: MyClient
             // - A quoted string: "openai/gpt-4o"
@@ -2153,6 +2270,9 @@ impl<'a> Parser<'a> {
             } else {
                 p.error_unexpected_token("'prompt' keyword".to_string());
             }
+
+            // Optional colon
+            p.eat(TokenKind::Colon);
 
             // Prompt value (usually a raw string)
             if !p.parse_any_string() {
@@ -3518,9 +3638,9 @@ impl<'a> Parser<'a> {
                     p.parse_block_attribute();
                 } else {
                     p.parse_config_item();
+                    // Allow optional comma after config items
+                    p.eat(TokenKind::Comma);
                 }
-                // Allow optional comma between config items
-                p.eat(TokenKind::Comma);
             }
 
             p.expect(TokenKind::RBrace);
@@ -3575,6 +3695,9 @@ impl<'a> Parser<'a> {
                 return;
             }
 
+            // Optional colon
+            p.eat(TokenKind::Colon);
+
             // Config value - can be nested block or simple value
             if p.at(TokenKind::LBrace) {
                 // Nested config block
@@ -3596,6 +3719,9 @@ impl<'a> Parser<'a> {
     fn parse_type_builder_block(&mut self) {
         self.with_node(SyntaxKind::TYPE_BUILDER_BLOCK, |p| {
             p.expect(TokenKind::TypeBuilder);
+
+            // Optional colon
+            p.eat(TokenKind::Colon);
 
             if !p.expect(TokenKind::LBrace) {
                 return;
@@ -3680,20 +3806,9 @@ impl<'a> Parser<'a> {
             // - `true` / `false` (boolean literals)
             if p.looks_like_config_expression() {
                 p.parse_expr();
-                return;
-            }
-
-            // Fall back to legacy unquoted string parsing - consume tokens until delimiter
-            while !p.at_end() {
-                if p.at(TokenKind::RBrace)
-                    || p.at(TokenKind::LBrace)
-                    || p.at(TokenKind::RBracket)
-                    || p.at(TokenKind::Comma)
-                    || p.has_newline_ahead()
-                {
-                    break;
-                }
-                p.bump();
+            } else {
+                // Unquoted string: multi-word is no longer allowed
+                p.expect(TokenKind::Word);
             }
         });
     }
@@ -3706,19 +3821,25 @@ impl<'a> Parser<'a> {
             return true;
         }
 
-        // Block strings start with #" - check for both tokens
+        // Block strings start with #", ##", etc.
         // (Just # alone like `#helloworld` is a legacy unquoted string)
         if self.at(TokenKind::Hash) {
-            if let Some(next) = self.peek(1) {
-                if next.kind == TokenKind::Quote {
-                    return true;
-                }
+            let num_hashes = self.count_consecutive_hashes();
+            if let Some(next) = self.find_token_after_hashes(num_hashes) {
+                return self.tokens[next].kind == TokenKind::Quote;
             }
             return false;
         }
 
         // Number literals
         if self.at(TokenKind::IntegerLiteral) || self.at(TokenKind::FloatLiteral) {
+            return true;
+        }
+        if self.at(TokenKind::Minus)
+            && self.peek(1).is_some_and(|t| {
+                matches!(t.kind, TokenKind::IntegerLiteral | TokenKind::FloatLiteral)
+            })
+        {
             return true;
         }
 
@@ -3939,10 +4060,13 @@ impl<'a> Parser<'a> {
             // Type definition
             p.parse_type();
 
-            // Optional attributes
+            // Optional attributes (not including those taken by the type)
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
                 p.parse_field_attribute();
             }
+
+            // Optional semicolon
+            p.eat(TokenKind::Semicolon);
         });
     }
 }

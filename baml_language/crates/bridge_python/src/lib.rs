@@ -5,6 +5,7 @@
 
 mod abort_controller;
 mod errors;
+pub mod handle;
 mod runtime;
 mod types;
 
@@ -21,16 +22,15 @@ fn get_version() -> &'static str {
 }
 
 /// Flush all buffered trace events to the JSONL file (if BAML_TRACE_FILE is set).
-///
-/// Delegates to `bex_events::event_store::flush()`.
 #[pyfunction]
 fn flush_events() {
-    bex_events::event_store::flush();
+    bridge_cffi::flush_event_sink();
 }
 
 #[pymodule]
 fn baml_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<abort_controller::AbortController>()?;
+    m.add_class::<handle::BamlHandle>()?;
     m.add_class::<runtime::BamlRuntime>()?;
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::HostSpanManager>()?;

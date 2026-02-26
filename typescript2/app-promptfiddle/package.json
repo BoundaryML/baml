@@ -8,21 +8,51 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:hmr": "vitest --project hmr",
+    "test:hmr:run": "vitest run --project hmr"
   },
   "dependencies": {
+    "@b/bridge_wasm": "link:../pkg-playground/wasm",
     "@b/pkg-playground": "workspace:*",
+    "@codingame/monaco-vscode-api": "^25.1.2",
+    "@codingame/monaco-vscode-environment-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-explorer-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-files-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-keybindings-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-lifecycle-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-localization-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-outline-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-remote-agent-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-search-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-secret-storage-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-storage-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-view-banner-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-view-status-bar-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-view-title-bar-service-override": "^25.1.2",
+    "@codingame/monaco-vscode-views-service-override": "^25.1.2",
+    "jotai": "^2.15.1",
+    "monaco-editor": "^0.55.1",
+    "monaco-languageclient": "^10.7.0",
     "next": "^14.2.33",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "vscode": "npm:@codingame/monaco-vscode-extension-api@^25.1.2",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-protocol": "^3.17.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20.19.24",
     "@types/react": "^18.3.26",
     "@types/react-dom": "^18.3.7",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.33",
     "jotai-devtools": "^0.13.0",
-    "typescript": "^5.9.3"
+    "playwright": "^1.57.0",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
   }
 }

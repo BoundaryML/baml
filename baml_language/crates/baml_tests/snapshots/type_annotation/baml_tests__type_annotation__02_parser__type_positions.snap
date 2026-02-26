@@ -1,0 +1,266 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_let_binding"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "function_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "t"
+          COLON ":"
+          TYPE_EXPR "type"
+            WORD "type"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.llm.get_return_type"
+              WORD "baml"
+              DOT "."
+              WORD "llm"
+              DOT "."
+              WORD "get_return_type"
+            CALL_ARGS "(function_name)"
+              L_PAREN "("
+              WORD "function_name"
+              R_PAREN ")"
+          SEMICOLON ";"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL "ok"
+            QUOTE """
+            WORD "ok"
+            QUOTE """
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_param"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "t"
+        COLON ":"
+        TYPE_EXPR "type"
+          WORD "type"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL "ok"
+            QUOTE """
+            WORD "ok"
+            QUOTE """
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_return_type"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "function_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "type"
+      WORD "type"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        RETURN_STMT
+          KW_RETURN "return"
+          CALL_EXPR
+            PATH_EXPR "baml.llm.get_return_type"
+              WORD "baml"
+              DOT "."
+              WORD "llm"
+              DOT "."
+              WORD "get_return_type"
+            CALL_ARGS "(function_name)"
+              L_PAREN "("
+              WORD "function_name"
+              R_PAREN ")"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_optional"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "function_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "t"
+          COLON ":"
+          TYPE_EXPR "type?"
+            WORD "type"
+            QUESTION "?"
+          EQUALS "="
+          WORD "null"
+          SEMICOLON ";"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL "ok"
+            QUOTE """
+            WORD "ok"
+            QUOTE """
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_list"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "function_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "ts"
+          COLON ":"
+          TYPE_EXPR "type[]"
+            WORD "type"
+            L_BRACKET "["
+            R_BRACKET "]"
+          EQUALS "="
+          ARRAY_LITERAL "[]"
+            L_BRACKET "["
+            R_BRACKET "]"
+          SEMICOLON ";"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL "ok"
+            QUOTE """
+            WORD "ok"
+            QUOTE """
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_union"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "function_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "t"
+          COLON ":"
+          TYPE_EXPR "type | string"
+            WORD "type"
+            PIPE "|"
+            WORD "string"
+          EQUALS "="
+          STRING_LITERAL "hello"
+            QUOTE """
+            WORD "hello"
+            QUOTE """
+          SEMICOLON ";"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL "ok"
+            QUOTE """
+            WORD "ok"
+            QUOTE """
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_map"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "function_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "m"
+          COLON ":"
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "string"
+                WORD "string"
+              COMMA ","
+              TYPE_EXPR "type"
+                WORD "type"
+              GREATER ">"
+          EQUALS "="
+          MAP_LITERAL "{}"
+            L_BRACE "{"
+            R_BRACE "}"
+          SEMICOLON ";"
+        RETURN_STMT
+          KW_RETURN "return"
+          STRING_LITERAL "ok"
+            QUOTE """
+            WORD "ok"
+            QUOTE """
+          SEMICOLON ";"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -1,7 +1,7 @@
 // Test: Generator declarations are properly parsed
 
 generator lang_python {
-  output_type python/pydantic
+  output_type "python/pydantic"
   output_dir "../python"
   version "0.68.0"
 }

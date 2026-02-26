@@ -1,7 +1,7 @@
 #![allow(unsafe_code)]
 use std::{
     collections::HashMap,
-    ffi::{c_void, CString},
+    ffi::{c_char, c_void, CString},
 };
 
 use prost::Message;
@@ -91,7 +91,7 @@ impl BamlRuntime {
             ffi::call_function_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
-                encoded.as_ptr().cast::<i8>(),
+                encoded.as_ptr().cast::<c_char>(),
                 encoded.len(),
                 id,
             )
@@ -155,7 +155,7 @@ impl BamlRuntime {
             ffi::call_function_stream_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
-                encoded.as_ptr().cast::<i8>(),
+                encoded.as_ptr().cast::<c_char>(),
                 encoded.len(),
                 id,
             )
@@ -201,7 +201,7 @@ impl BamlRuntime {
             ffi::call_function_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
-                encoded.as_ptr().cast::<i8>(),
+                encoded.as_ptr().cast::<c_char>(),
                 encoded.len(),
                 id,
             )
@@ -264,7 +264,7 @@ impl BamlRuntime {
             ffi::call_function_stream_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
-                encoded.as_ptr().cast::<i8>(),
+                encoded.as_ptr().cast::<c_char>(),
                 encoded.len(),
                 id,
             )
@@ -332,7 +332,7 @@ impl BamlRuntime {
             ffi::call_function_parse_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
-                encoded.as_ptr().cast::<i8>(),
+                encoded.as_ptr().cast::<c_char>(),
                 encoded.len(),
                 id,
             )
@@ -432,7 +432,7 @@ impl BamlRuntime {
             ffi::build_request_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
-                encoded.as_ptr().cast::<i8>(),
+                encoded.as_ptr().cast::<c_char>(),
                 encoded.len(),
                 id,
             )
@@ -478,7 +478,7 @@ impl BamlRuntime {
             ffi::build_request_from_c(
                 self.ptr,
                 name_cstr.as_ptr(),
-                encoded.as_ptr().cast::<i8>(),
+                encoded.as_ptr().cast::<c_char>(),
                 encoded.len(),
                 id,
             )

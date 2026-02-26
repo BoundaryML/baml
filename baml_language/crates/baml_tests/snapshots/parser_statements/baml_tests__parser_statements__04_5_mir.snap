@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-5f3cea2866046cb1/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn mul_assign() -> int {
@@ -31,7 +30,6 @@ fn mul_assign() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn assign_in_loop() -> int {
@@ -95,7 +93,6 @@ fn assign_in_loop() -> int {
     bb5: {
         return;
     }
-
 }
 
 fn multi_assign() -> int {
@@ -133,7 +130,6 @@ fn multi_assign() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn sub_assign() -> int {
@@ -164,7 +160,6 @@ fn sub_assign() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn add_assign() -> int {
@@ -195,7 +190,6 @@ fn add_assign() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn simple_assign() -> int {
@@ -222,7 +216,6 @@ fn simple_assign() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn block_with_tail() -> int {
@@ -252,7 +245,6 @@ fn block_with_tail() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn break_in_for() -> int {
@@ -298,7 +290,6 @@ fn break_in_for() -> int {
     bb5: {
         return;
     }
-
 }
 
 fn simple_continue() -> int {
@@ -336,7 +327,6 @@ fn simple_continue() -> int {
     bb5: {
         return;
     }
-
 }
 
 fn continue_with_locals() -> int {
@@ -395,7 +385,6 @@ fn continue_with_locals() -> int {
     bb8: {
         return;
     }
-
 }
 
 fn simple_break() -> int {
@@ -433,7 +422,6 @@ fn simple_break() -> int {
     bb5: {
         return;
     }
-
 }
 
 fn nested_break() -> int {
@@ -489,7 +477,6 @@ fn nested_break() -> int {
     bb8: {
         return;
     }
-
 }
 
 fn continue_in_for() -> int {
@@ -545,7 +532,6 @@ fn continue_in_for() -> int {
     bb5: {
         return;
     }
-
 }
 
 fn break_with_locals() -> int {
@@ -604,7 +590,6 @@ fn break_with_locals() -> int {
     bb8: {
         return;
     }
-
 }
 
 fn c_style_for_loop() -> int {
@@ -670,7 +655,6 @@ fn c_style_for_loop() -> int {
     bb5: {
         return;
     }
-
 }
 
 fn iterator_style_for_loop() -> int {
@@ -759,7 +743,6 @@ fn iterator_style_for_loop() -> int {
     bb6: {
         return;
     }
-
 }
 
 fn nested_for_loop() -> int {
@@ -910,7 +893,6 @@ fn nested_for_loop() -> int {
     bb10: {
         return;
     }
-
 }
 
 fn ConditionalLogic(age: int) -> string {
@@ -979,7 +961,6 @@ fn ConditionalLogic(age: int) -> string {
     bb10: {
         return;
     }
-
 }
 
 fn let_statements() -> int {
@@ -1025,7 +1006,6 @@ fn let_statements() -> int {
     bb2: {
         return;
     }
-
 }
 
 fn simple_while_loop() -> int {
@@ -1078,7 +1058,6 @@ fn simple_while_loop() -> int {
     bb5: {
         return;
     }
-
 }
 
 fn nested_while_loop() -> int {
@@ -1155,5 +1134,4 @@ fn nested_while_loop() -> int {
     bb8: {
         return;
     }
-
 }

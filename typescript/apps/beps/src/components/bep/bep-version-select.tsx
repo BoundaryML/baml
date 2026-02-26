@@ -21,14 +21,14 @@ interface Version {
 
 interface BepVersionSelectProps {
   versions: Version[];
-  currentVersionId: Id<"bepVersions"> | null; // null = viewing current (latest)
-  onVersionChange: (versionId: Id<"bepVersions"> | null) => void;
+  currentVersionNumber: number | null; // null = viewing current (latest)
+  onVersionChange: (versionNumber: number | null) => void;
   disabled?: boolean;
 }
 
 export function BepVersionSelect({
   versions,
-  currentVersionId,
+  currentVersionNumber,
   onVersionChange,
   disabled = false,
 }: BepVersionSelectProps) {
@@ -48,7 +48,10 @@ export function BepVersionSelect({
   };
 
   // Determine the display value
-  const selectedValue = currentVersionId ?? "current";
+  const selectedValue =
+    currentVersionNumber === null || currentVersionNumber === latestVersion.version
+      ? "current"
+      : `v-${currentVersionNumber}`;
 
   return (
     <div className="flex items-center gap-2">
@@ -59,7 +62,10 @@ export function BepVersionSelect({
           if (value === "current") {
             onVersionChange(null);
           } else {
-            onVersionChange(value as Id<"bepVersions">);
+            const parsed = Number.parseInt(value.replace("v-", ""), 10);
+            if (Number.isFinite(parsed) && parsed > 0) {
+              onVersionChange(parsed);
+            }
           }
         }}
         disabled={disabled}
@@ -78,7 +84,7 @@ export function BepVersionSelect({
 
           {/* Historical versions (skip the latest since it's the "current" option) */}
           {sortedVersions.slice(1).map((version) => (
-            <SelectItem key={version._id} value={version._id}>
+            <SelectItem key={version._id} value={`v-${version.version}`}>
               <div className="flex items-center gap-2">
                 <span>v{version.version}</span>
                 <span className="text-muted-foreground text-xs">

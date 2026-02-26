@@ -25,6 +25,7 @@ mod pull_semantics;
 mod stack_carry;
 mod verifier;
 
+pub use analysis::OptLevel;
 use bex_vm_types::ObjectPool;
 pub(crate) use emit::compile_mir_function;
 
@@ -62,6 +63,25 @@ pub use bex_vm_types::{
     type_tags,
 };
 
+// ============================================================================
+// Database Trait
+// ============================================================================
+
+/// Salsa database for the emit phase: compiles MIR to bytecode.
+/// Extends `baml_compiler_mir::Db` so a single `Db` can run the full pipeline through codegen.
+#[salsa::db]
+pub trait Db: baml_compiler_mir::Db {}
+
+/// Options for controlling bytecode compilation.
+#[derive(Debug, Clone, Copy)]
+pub struct CompileOptions {
+    /// Include test cases in the compiled program.
+    ///
+    /// When true, `test { ... }` blocks are compiled into `Program::test_cases`.
+    /// Only the CLI test runner needs this; SDK runtimes can leave it off.
+    pub emit_test_cases: bool,
+}
+
 /// Generate bytecode for all functions in a project.
 ///
 /// This is the main entry point for project-wide code generation.
@@ -69,9 +89,12 @@ pub use bex_vm_types::{
 /// lowers to MIR, and compiles to bytecode.
 ///
 /// Returns `Err` if any function contains unrecoverable errors (Missing nodes).
-pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Program, LoweringError> {
+pub fn generate_project_bytecode(
+    db: &dyn baml_compiler_mir::Db,
+    options: &CompileOptions,
+) -> Result<Program, LoweringError> {
     let project = db.project();
-    compile_files(db, project.files(db))
+    compile_files(db, project.files(db), OptLevel::One, options)
 }
 
 /// Generate bytecode for a list of source files.
@@ -82,6 +105,8 @@ pub fn generate_project_bytecode(db: &dyn baml_compiler_mir::Db) -> Result<Progr
 pub fn compile_files(
     db: &dyn baml_compiler_mir::Db,
     files: &[SourceFile],
+    opt: OptLevel,
+    options: &CompileOptions,
 ) -> Result<Program, LoweringError> {
     // Note: Builtin BAML files (like llm.baml) are now loaded at project setup time
     // in ProjectDatabase::set_project_root(), so they're already in the files list.
@@ -356,7 +381,8 @@ pub fn compile_files(
             real_local_count: 0,
             bytecode: Bytecode::default(),
             kind,
-            locals_in_scope: Vec::new(),
+            local_names: Vec::new(),
+            debug_locals: Vec::new(),
             span: baml_base::Span::fake(),
             block_notifications: Vec::new(),
             viz_nodes: Vec::new(),
@@ -372,6 +398,7 @@ pub fn compile_files(
 
     // Compile each user function using MIR
     for file in files {
+        let line_starts = build_line_starts(file.text(db));
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Function(func_loc) = item {
@@ -413,12 +440,11 @@ pub fn compile_files(
                             real_local_count: 0,
                             bytecode: Bytecode::new(),
                             kind: FunctionKind::Bytecode,
-                            locals_in_scope: vec![
-                                params
-                                    .iter()
-                                    .map(std::string::ToString::to_string)
-                                    .collect(),
-                            ],
+                            local_names: params
+                                .iter()
+                                .map(std::string::ToString::to_string)
+                                .collect(),
+                            debug_locals: Vec::new(),
                             span: baml_base::Span::fake(),
                             block_notifications: Vec::new(),
                             viz_nodes: Vec::new(),
@@ -478,7 +504,7 @@ pub fn compile_files(
                             enum_variants: &enum_variants,
                             objects: &mut program.objects,
                         };
-                        compile_mir_function(&mir, ctx)
+                        compile_mir_function(&mir, &line_starts, ctx, opt)
                     }
                 };
 
@@ -639,6 +665,65 @@ pub fn compile_files(
         }
     }
 
+    // --- Pass: Emit test cases (only when requested) ---
+    if options.emit_test_cases {
+        // Build a map of function name -> (param_name -> Ty) so we can
+        // annotate test arg values with their declared types.
+        let mut fn_param_types: HashMap<String, HashMap<String, baml_type::Ty>> = HashMap::new();
+        for file in files {
+            let items_struct = baml_compiler_hir::file_items(db, *file);
+            for item in items_struct.items(db) {
+                if let ItemId::Function(func_loc) = item {
+                    let signature = function_signature(db, *func_loc);
+                    let (param_names, param_types, _) = compute_function_metadata(
+                        &signature,
+                        &resolution_ctx,
+                        &type_aliases,
+                        &recursive_aliases,
+                    );
+                    let param_map: HashMap<String, baml_type::Ty> =
+                        param_names.into_iter().zip(param_types).collect();
+                    fn_param_types.insert(signature.name.to_string(), param_map);
+                }
+            }
+        }
+
+        for file in files {
+            let item_tree = baml_compiler_hir::file_item_tree(db, *file);
+            let items_struct = baml_compiler_hir::file_items(db, *file);
+            for item in items_struct.items(db) {
+                if let ItemId::Test(test_loc) = item {
+                    let test = &item_tree[test_loc.id(db)];
+                    // Use the first function ref to look up param types.
+                    let param_types = test
+                        .function_refs
+                        .first()
+                        .and_then(|name| fn_param_types.get(name.as_str()));
+                    let args = test
+                        .args
+                        .iter()
+                        .map(|(k, v)| {
+                            let ty = param_types
+                                .and_then(|m| m.get(k.as_str()))
+                                .cloned()
+                                .unwrap_or(baml_type::Ty::Null);
+                            (k.clone(), convert_hir_test_arg(v, &ty))
+                        })
+                        .collect();
+                    program.test_cases.push(bex_vm_types::TestCase {
+                        name: test.name.to_string(),
+                        function_names: test
+                            .function_refs
+                            .iter()
+                            .map(std::string::ToString::to_string)
+                            .collect(),
+                        args,
+                    });
+                }
+            }
+        }
+    }
+
     Ok(program)
 }
 
@@ -662,6 +747,48 @@ where
                 value: value.to_string(),
                 reason: e.to_string(),
             }),
+    }
+}
+
+/// Convert an HIR `TestArgValue` to a `bex_vm_types::TestArgValue`,
+/// using the declared parameter type to annotate arrays and maps.
+fn convert_hir_test_arg(
+    v: &baml_compiler_hir::TestArgValue,
+    ty: &baml_type::Ty,
+) -> bex_vm_types::TestArgValue {
+    match v {
+        baml_compiler_hir::TestArgValue::Null => bex_vm_types::TestArgValue::Null,
+        baml_compiler_hir::TestArgValue::Int(i) => bex_vm_types::TestArgValue::Int(*i),
+        baml_compiler_hir::TestArgValue::Float(f) => bex_vm_types::TestArgValue::Float(*f),
+        baml_compiler_hir::TestArgValue::Bool(b) => bex_vm_types::TestArgValue::Bool(*b),
+        baml_compiler_hir::TestArgValue::String(s) => bex_vm_types::TestArgValue::String(s.clone()),
+        baml_compiler_hir::TestArgValue::Array(arr) => {
+            let element_type = match ty {
+                baml_type::Ty::List(elem) => elem.as_ref().clone(),
+                _ => baml_type::Ty::Null,
+            };
+            bex_vm_types::TestArgValue::Array {
+                element_type: element_type.clone(),
+                items: arr
+                    .iter()
+                    .map(|item| convert_hir_test_arg(item, &element_type))
+                    .collect(),
+            }
+        }
+        baml_compiler_hir::TestArgValue::Map(map) => {
+            let (key_type, value_type) = match ty {
+                baml_type::Ty::Map { key, value } => (key.as_ref().clone(), value.as_ref().clone()),
+                _ => (baml_type::Ty::String, baml_type::Ty::Null),
+            };
+            bex_vm_types::TestArgValue::Map {
+                key_type,
+                value_type: value_type.clone(),
+                entries: map
+                    .iter()
+                    .map(|(k, v)| (k.clone(), convert_hir_test_arg(v, &value_type)))
+                    .collect(),
+            }
+        }
     }
 }
 
@@ -755,4 +882,18 @@ fn sys_op_for_builtin_path(path: &str) -> Option<SysOp> {
     // Delegate to the generated function from bex_vm_types, which is
     // derived from the same #[sys_op] definitions in with_builtins!.
     bex_vm_types::sys_op_for_path(path)
+}
+
+/// Build a table of byte offsets where each line starts in the source text.
+///
+/// Returns `[0, offset_of_line_2, offset_of_line_3, ...]`.
+#[allow(clippy::cast_possible_truncation)]
+fn build_line_starts(text: &str) -> Vec<u32> {
+    let mut starts = vec![0u32];
+    for (i, byte) in text.bytes().enumerate() {
+        if byte == b'\n' {
+            starts.push((i + 1) as u32);
+        }
+    }
+    starts
 }

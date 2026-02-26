@@ -50,10 +50,9 @@ fn fetch_as() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadGlobal(Value::function("baml.fetch_as")),
                 Instruction::LoadConst(Value::string("https://dummyjson.com/todos/1")),
                 Instruction::LoadConst(Value::class("DummyJsonTodo")),
-                Instruction::DispatchFuture(2),
+                Instruction::DispatchFuture("baml.fetch_as".to_string()),
                 Instruction::Await,
                 Instruction::Return,
             ],
@@ -88,7 +87,6 @@ fn fetch_as_with_request_param() -> anyhow::Result<()> {
         expected: vec![(
             "main",
             vec![
-                Instruction::LoadGlobal(Value::function("baml.fetch_as")),
                 Instruction::AllocInstance(Value::class("baml.HttpRequest")),
                 Instruction::Copy(0),
                 Instruction::LoadConst(Value::Int(1)), // Enum variant index for Post
@@ -108,7 +106,7 @@ fn fetch_as_with_request_param() -> anyhow::Result<()> {
                 Instruction::AllocMap(3),
                 Instruction::StoreField(4),
                 Instruction::LoadConst(Value::class("DummyJsonTodo")),
-                Instruction::DispatchFuture(2),
+                Instruction::DispatchFuture("baml.fetch_as".to_string()),
                 Instruction::Await,
                 Instruction::Return,
             ],

@@ -17,7 +17,7 @@ pub enum BridgeError {
     LockPoisoned,
 
     #[error("{0}")]
-    Runtime(#[from] bex_factory::RuntimeError),
+    Runtime(#[from] bex_project::RuntimeError),
 
     #[error("Null function name pointer")]
     NullFunctionName,
@@ -36,4 +36,7 @@ pub enum BridgeError {
 
     #[error("call_id {0} is already in use by an active call")]
     DuplicateCallId(u32),
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }

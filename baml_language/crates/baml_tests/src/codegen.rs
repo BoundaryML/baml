@@ -15,32 +15,13 @@ pub struct Program {
     pub expected: Vec<(&'static str, Vec<Instruction>)>,
 }
 
-/// Resolve a variable index to its name using scope information.
-fn resolve_var_name(
-    var_idx: usize,
-    inst_idx: usize,
-    function: &bex_vm_types::Function,
-) -> anyhow::Result<String> {
-    // Get the scope ID for this instruction
-    let scope_id = function
-        .bytecode
-        .scopes
-        .get(inst_idx)
-        .ok_or_else(|| anyhow::anyhow!("No scope ID for instruction at index {inst_idx}"))?;
-
-    // Get the locals for this scope
-    let scope_locals = function
-        .locals_in_scope
-        .get(*scope_id)
-        .ok_or_else(|| anyhow::anyhow!("No locals for scope {scope_id}"))?;
-
-    // Direct lookup: the Vec is indexed by variable index
-    scope_locals.get(var_idx).cloned().ok_or_else(|| {
+/// Resolve a variable index to its name.
+fn resolve_var_name(var_idx: usize, function: &bex_vm_types::Function) -> anyhow::Result<String> {
+    function.local_names.get(var_idx).cloned().ok_or_else(|| {
         anyhow::anyhow!(
-            "Variable index {} not found in scope {} (scope has {} variables)",
+            "Variable index {} not found (function has {} locals)",
             var_idx,
-            scope_id,
-            scope_locals.len()
+            function.local_names.len()
         )
     })
 }
@@ -48,7 +29,6 @@ fn resolve_var_name(
 /// Convert a runtime Instruction to a test Instruction by resolving indices to values.
 fn convert_instruction(
     inst: &bex_vm_types::Instruction,
-    inst_idx: usize,
     constants: &[bex_vm_types::ConstValue],
     objects: &bex_vm_types::ObjectPool,
     globals: &HashMap<String, usize>,
@@ -67,11 +47,11 @@ fn convert_instruction(
             Instruction::LoadConst(test_value)
         }
         bex_vm_types::Instruction::LoadVar(idx) => {
-            let var_name = resolve_var_name(*idx, inst_idx, function)?;
+            let var_name = resolve_var_name(*idx, function)?;
             Instruction::LoadVar(var_name)
         }
         bex_vm_types::Instruction::StoreVar(idx) => {
-            let var_name = resolve_var_name(*idx, inst_idx, function)?;
+            let var_name = resolve_var_name(*idx, function)?;
             Instruction::StoreVar(var_name)
         }
         bex_vm_types::Instruction::LoadGlobal(global_idx) => {
@@ -126,7 +106,6 @@ fn convert_instruction(
                 _ => anyhow::bail!("Expected Enum object for AllocVariant, got {obj:?}"),
             }
         }
-        bex_vm_types::Instruction::DispatchFuture(n) => Instruction::DispatchFuture(*n),
         bex_vm_types::Instruction::Await => Instruction::Await,
         bex_vm_types::Instruction::Watch(idx) => Instruction::Watch(*idx),
         bex_vm_types::Instruction::Unwatch(idx) => Instruction::Unwatch(*idx),
@@ -143,8 +122,10 @@ fn convert_instruction(
         bex_vm_types::Instruction::Discriminant => Instruction::Discriminant,
         bex_vm_types::Instruction::TypeTag => Instruction::TypeTag,
         bex_vm_types::Instruction::Unreachable => Instruction::Unreachable,
-        bex_vm_types::Instruction::Call(_) | bex_vm_types::Instruction::CallIndirect => {
-            anyhow::bail!("CALL instructions are handled by the caller")
+        bex_vm_types::Instruction::Call(_)
+        | bex_vm_types::Instruction::CallIndirect
+        | bex_vm_types::Instruction::DispatchFuture(_) => {
+            anyhow::bail!("Call-like instructions are handled by the caller")
         }
     })
 }
@@ -189,12 +170,19 @@ type CompileResult = (Vec<(String, CompiledFunction)>, HashMap<String, usize>);
 /// Uses the production `compile_files` function to ensure tests match real behavior.
 /// Also checks for diagnostic errors.
 fn compile_source(source: &str) -> CompileResult {
+    compile_source_with_opt(source, baml_compiler_emit::OptLevel::One)
+}
+
+fn compile_source_with_opt(source: &str, opt: baml_compiler_emit::OptLevel) -> CompileResult {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
 
     let project = db.get_project().unwrap();
     let all_files = project.files(&db).clone();
-    let program = baml_compiler_emit::compile_files(&db, &all_files)
+    let options = baml_compiler_emit::CompileOptions {
+        emit_test_cases: false,
+    };
+    let program = baml_compiler_emit::compile_files(&db, &all_files, opt, &options)
         .expect("compile_files should succeed for valid test source");
 
     // Extract functions from the program
@@ -275,8 +263,7 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
             .bytecode
             .instructions
             .iter()
-            .enumerate()
-            .map(|(inst_idx, inst)| match inst {
+            .map(|inst| match inst {
                 bex_vm_types::Instruction::Call(callee) => Ok(Instruction::Call(
                     globals_by_index
                         .get(&callee.raw())
@@ -284,9 +271,16 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
                         .unwrap_or_else(|| format!("global_{callee}")),
                 )),
                 bex_vm_types::Instruction::CallIndirect => Ok(Instruction::CallIndirect),
+                bex_vm_types::Instruction::DispatchFuture(callee) => {
+                    Ok(Instruction::DispatchFuture(
+                        globals_by_index
+                            .get(&callee.raw())
+                            .map(|s| (*s).to_string())
+                            .unwrap_or_else(|| format!("global_{callee}")),
+                    ))
+                }
                 _ => convert_instruction(
                     inst,
-                    inst_idx,
                     &function.bytecode.constants,
                     objects,
                     &globals,
@@ -302,4 +296,50 @@ pub fn assert_compiles(input: Program) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use bex_vm::debug::{BytecodeFormat, display_program};
+
+    use super::*;
+
+    fn compile_display_functions(
+        source: &str,
+        opt: baml_compiler_emit::OptLevel,
+    ) -> Vec<(String, bex_vm_types::types::Function)> {
+        let (mut functions, _globals) = compile_source_with_opt(source, opt);
+        functions.retain(|(name, _)| !name.starts_with("baml."));
+        functions.sort_by(|(a, _), (b, _)| a.cmp(b));
+        functions
+            .into_iter()
+            .map(|(name, compiled)| (name, compiled.function))
+            .collect()
+    }
+
+    #[test]
+    fn bytecode_display_formats() {
+        let source = include_str!("../fixtures/bytecode_display.baml");
+
+        // 1. Textual format (optimized)
+        let o1 = compile_display_functions(source, baml_compiler_emit::OptLevel::One);
+        let o1_refs: Vec<(String, &bex_vm_types::types::Function)> =
+            o1.iter().map(|(n, f)| (n.clone(), f)).collect();
+        let textual = display_program(&o1_refs, BytecodeFormat::Textual);
+
+        // 2. Expanded format (optimized)
+        let expanded = display_program(&o1_refs, BytecodeFormat::Expanded);
+
+        // 3. Expanded format (unoptimized)
+        let o0 = compile_display_functions(source, baml_compiler_emit::OptLevel::Zero);
+        let o0_refs: Vec<(String, &bex_vm_types::types::Function)> =
+            o0.iter().map(|(n, f)| (n.clone(), f)).collect();
+        let expanded_unopt = display_program(&o0_refs, BytecodeFormat::Expanded);
+
+        insta::with_settings!({omit_expression => true}, {
+            insta::assert_snapshot!("bytecode_display_textual", textual);
+            insta::assert_snapshot!("bytecode_display_expanded", expanded);
+            insta::assert_snapshot!("bytecode_display_expanded_unoptimized", expanded_unopt);
+        });
+    }
 }

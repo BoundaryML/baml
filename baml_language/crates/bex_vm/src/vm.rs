@@ -303,6 +303,8 @@ pub struct BytecodeProgram {
     pub template_strings_macros: String,
     /// Client build metadata, passed through to `SysOpContext`.
     pub client_metadata: HashMap<String, bex_vm_types::ClientBuildMeta>,
+    /// Compiled test cases.
+    pub test_cases: Vec<bex_vm_types::TestCase>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -348,6 +350,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         function_global_indices: program.function_global_indices,
         template_strings_macros: program.template_strings_macros,
         client_metadata: program.client_metadata,
+        test_cases: program.test_cases,
     })
 }
 
@@ -826,7 +829,9 @@ impl BexVm {
                 Ok(ErrorLocation {
                     function_name: function.name.clone(),
                     function_span: function.span,
-                    error_line: function.bytecode.source_lines[last_executed_instruction],
+                    error_line: function
+                        .bytecode
+                        .source_line_for_pc(last_executed_instruction),
                 })
             })
             .collect::<Result<Vec<_>, VmError>>()
@@ -1205,7 +1210,6 @@ impl BexVm {
                 let (instruction, metadata) = crate::debug::display_instruction(
                     instruction_ptr,
                     function,
-                    &self.stack,
                     &self.globals,
                     None,
                     None,
@@ -2100,31 +2104,19 @@ impl BexVm {
                     self.stack.push(Value::Object(variant_ptr));
                 }
 
-                Instruction::DispatchFuture(arg_count) => {
-                    let args_offset = self.stack.ensure_slot_from_top(arg_count)?;
-
+                Instruction::DispatchFuture(callee) => {
+                    let callee_value = self.globals[callee];
                     let expected_type = FunctionType::SysOp;
+                    let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
 
-                    let index =
-                        self.as_object_ptr(&self.stack[args_offset], expected_type.into())?;
-
-                    // Can't call a function if it's not a function ¯\_(ツ)_/¯
-                    let Object::Function(callable_future) = self.get_object(index) else {
+                    // Can't dispatch if it's not a function ¯\_(ツ)_/¯
+                    let Object::Function(callable_future) = self.get_object(callee_ptr) else {
                         return Err(InternalError::TypeError {
                             expected: expected_type.into(),
-                            got: ObjectType::of(self.get_object(index)).into(),
+                            got: ObjectType::of(self.get_object(callee_ptr)).into(),
                         }
                         .into());
                     };
-
-                    // Compiler should have already checked this so we could
-                    // skip it but it's an easy and fast check.
-                    if arg_count != callable_future.arity {
-                        return Err(VmError::from(InternalError::InvalidArgumentCount {
-                            expected: callable_future.arity,
-                            got: arg_count,
-                        }));
-                    }
 
                     // Must be a sys_op - extract the SysOp.
                     let FunctionKind::SysOp(sys_op) = callable_future.kind else {
@@ -2134,8 +2126,15 @@ impl BexVm {
                         }));
                     };
 
-                    // Collect the function call args and cleanup the call.
-                    let future_args: Vec<Value> = self.stack.drain(args_offset..).skip(1).collect();
+                    let args_offset = self
+                        .stack
+                        .len()
+                        .checked_sub(callable_future.arity)
+                        .ok_or(InternalError::NotEnoughItemsOnStack(callable_future.arity))?;
+                    let args_offset = StackIndex::from_raw(args_offset);
+
+                    // Collect function call args and cleanup consumed stack.
+                    let future_args: Vec<Value> = self.stack.drain(args_offset..).collect();
 
                     // Create the pending future with the SysOp enum.
                     let pending_future = PendingFuture {
@@ -2232,8 +2231,7 @@ impl BexVm {
                         },
                     );
 
-                    let watched_var_name =
-                        &function.locals_in_scope[function.bytecode.scopes[instruction_ptr]][index];
+                    let watched_var_name = &function.local_names[index];
                     // Track this so we can unregister on scope exit
                     self.watched_vars.insert(
                         local_var_index,

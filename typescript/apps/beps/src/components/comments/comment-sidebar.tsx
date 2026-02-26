@@ -520,7 +520,7 @@ export function CommentSidebar({
       {selectionPopup && !newComment && (
         <button
           data-selection-popup
-          className="fixed z-50 flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-md shadow-lg hover:opacity-90 transition-opacity"
+          className="fixed z-50 flex items-center gap-1 px-2 py-1 bg-popover text-popover-foreground border border-border text-xs rounded shadow-lg hover:bg-accent transition-colors"
           style={{ 
             left: selectionPopup.x,
             top: selectionPopup.y,
@@ -551,7 +551,7 @@ export function CommentSidebar({
               key={id}
               ref={(el) => { if (el) cardRefs.current.set(id, el); }}
               className={cn(
-                "absolute left-0 right-0 bg-white dark:bg-gray-900 rounded border text-[12px] leading-normal cursor-pointer",
+                "absolute left-0 right-0 bg-card rounded border border-border text-[12px] leading-normal cursor-pointer",
                 isActive ? "shadow-md ring-1 ring-blue-300 z-10" : "shadow-sm hover:shadow"
               )}
               style={{ top: adjustedTop }}
@@ -587,7 +587,7 @@ export function CommentSidebar({
                   className="px-2 pb-2"
                   onClick={(e) => { e.stopPropagation(); toggleExpanded(id); }}
                 >
-                  <div className="flex items-center gap-1.5 pl-6 py-1.5 bg-gray-50 dark:bg-gray-800/50 rounded text-[11px]">
+                  <div className="flex items-center gap-1.5 pl-6 py-1.5 bg-muted rounded text-[11px]">
                     <div className="flex -space-x-1.5">
                       {participants.slice(0, 3).map((name, i) => (
                         <Avatar key={i} name={name} size="xs" />
@@ -652,7 +652,7 @@ export function CommentSidebar({
 
               {/* Actions */}
               {isActive && !readOnly && (
-                <div className="border-t px-2 py-2 bg-gray-50 dark:bg-gray-800/50">
+                <div className="border-t px-2 py-1.5 bg-muted">
                   {isReplying ? (
                     <div className="space-y-2 pl-6">
                       <div className="flex gap-1.5">
@@ -709,9 +709,9 @@ export function CommentSidebar({
 
         {/* New comment form */}
         {newComment && !readOnly && (
-          <div className="absolute left-0 right-0 bg-white dark:bg-gray-900 rounded-lg border shadow-lg p-3 z-20 text-[13px]" style={{ top: newComment.top }}>
-            <div className="text-xs text-muted-foreground/70 italic border-l-2 border-amber-400 pl-2 mb-2 line-clamp-2">
-              &ldquo;{newComment.selectedText}&rdquo;
+          <div className="absolute left-0 right-0 bg-card rounded border border-border shadow-lg p-2 z-20 text-[12px]" style={{ top: newComment.top }}>
+            <div className="text-[10px] text-muted-foreground/60 italic border-l-2 border-amber-400 pl-1.5 mb-1.5 line-clamp-2">
+              "{newComment.selectedText}"
             </div>
             <div className="flex gap-2">
               <Avatar name={user?.name ?? "You"} />

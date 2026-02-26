@@ -1,10 +1,9 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: first
+source: crates/baml_tests/src/generated_tests.rs
 ---
 class JsonData {
-    field1 int
-    field2 int
+    field1: int
+    field2: int
 }
 
 function ProcessData(data: JsonData) -> string {

@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    ffi::c_int,
+    ffi::{c_char, c_int},
     sync::{mpsc, Mutex, OnceLock},
 };
 
@@ -127,7 +127,7 @@ pub fn remove_callback(id: u32) {
 }
 
 /// Result callback invoked by FFI
-extern "C" fn result_callback(call_id: u32, is_done: c_int, content: *const i8, length: usize) {
+extern "C" fn result_callback(call_id: u32, is_done: c_int, content: *const c_char, length: usize) {
     let data = if !content.is_null() && length > 0 {
         #[allow(unsafe_code)]
         let slice = unsafe { std::slice::from_raw_parts(content.cast::<u8>(), length) };
@@ -164,7 +164,7 @@ extern "C" fn result_callback(call_id: u32, is_done: c_int, content: *const i8, 
 }
 
 /// Error callback invoked by FFI
-extern "C" fn error_callback(call_id: u32, _is_done: c_int, content: *const i8, length: usize) {
+extern "C" fn error_callback(call_id: u32, _is_done: c_int, content: *const c_char, length: usize) {
     let error_msg = if !content.is_null() && length > 0 {
         #[allow(unsafe_code)]
         let slice = unsafe { std::slice::from_raw_parts(content.cast::<u8>(), length) };

@@ -2,7 +2,7 @@
 
 mod common;
 
-use bex_engine::{BexEngine, BexExternalValue, CancellationToken};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 use tokio::{io::AsyncWriteExt, net::TcpListener};
@@ -31,9 +31,17 @@ async fn net_connect_and_read() -> anyhow::Result<()> {
     );
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )?;
     let result = engine
-        .call_function("main", vec![], None, &[], CancellationToken::new())
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        )
         .await?;
 
     // Wait for server to finish
@@ -61,9 +69,17 @@ async fn net_connect_failure() -> anyhow::Result<()> {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )?;
     let result = engine
-        .call_function("main", vec![], None, &[], CancellationToken::new())
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        )
         .await;
 
     assert!(result.is_err());
@@ -104,9 +120,17 @@ async fn net_multiple_reads() -> anyhow::Result<()> {
     );
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native())?;
+    let engine = BexEngine::new(
+        snapshot,
+        std::sync::Arc::new(sys_types::SysOps::native()),
+        None,
+    )?;
     let result = engine
-        .call_function("main", vec![], None, &[], CancellationToken::new())
+        .call_function(
+            "main",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        )
         .await?;
 
     server.await?;

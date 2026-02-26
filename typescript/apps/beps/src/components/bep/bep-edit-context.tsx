@@ -9,6 +9,7 @@ interface PageChange {
   currentContent: string;
   status: "modified" | "new" | "deleted";
   title: string;
+  slug?: string;
 }
 
 interface EditContextValue {
@@ -63,7 +64,7 @@ export function BepEditProvider({ children }: { children: ReactNode }) {
   );
 
   const trackNewPage = useCallback(
-    (tempId: string, title: string, _slug: string, content: string) => {
+    (tempId: string, title: string, slug: string, content: string) => {
       setChanges((prev) => {
         const next = new Map(prev);
         next.set(tempId, {
@@ -72,6 +73,7 @@ export function BepEditProvider({ children }: { children: ReactNode }) {
           currentContent: content,
           status: "new",
           title,
+          slug,
         });
         return next;
       });

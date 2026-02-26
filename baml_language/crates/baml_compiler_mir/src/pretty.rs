@@ -78,9 +78,11 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
     writeln!(f)?;
 
     // Basic blocks
-    for block in &func.blocks {
+    for (i, block) in func.blocks.iter().enumerate() {
         write_block(f, block)?;
-        writeln!(f)?;
+        if i + 1 < func.blocks.len() {
+            writeln!(f)?;
+        }
     }
 
     writeln!(f, "}}")?;
@@ -176,7 +178,12 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
             arms,
             otherwise,
             exhaustive,
+            arm_names,
         } => {
+            // Build name lookup for symbolic display
+            let name_map: std::collections::HashMap<i64, &str> =
+                arm_names.iter().map(|(v, n)| (*v, n.as_str())).collect();
+
             write!(f, "switch ")?;
             write_operand(f, discriminant)?;
             write!(f, " [")?;
@@ -184,7 +191,11 @@ fn write_terminator(f: &mut impl Write, term: &Terminator) -> fmt::Result {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{val}: {target}")?;
+                if let Some(name) = name_map.get(val) {
+                    write!(f, "{name}: {target}")?;
+                } else {
+                    write!(f, "{val}: {target}")?;
+                }
             }
             if *exhaustive {
                 write!(f, ", otherwise: {otherwise}] (exhaustive);")

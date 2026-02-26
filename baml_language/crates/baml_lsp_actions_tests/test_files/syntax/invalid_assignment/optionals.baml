@@ -44,11 +44,11 @@ function OptionalAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected `int?`, found `string`
-//     ╭─[ invalid_assignment_optionals.baml:31:5 ]
+//     ╭─[ invalid_assignment_optionals.baml:31:6 ]
 //     │
 //  31 │     c = "not an int";
-//     │        ──────┬──────  
-//     │              ╰──────── Expected `int?`, found `string`
+//     │         ──────┬─────  
+//     │               ╰─────── Expected `int?`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

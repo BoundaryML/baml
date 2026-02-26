@@ -36,10 +36,10 @@ function Ok() -> int {
 //    │ Note: Error code: E0001
 // ───╯
 // Error: Expected `int`, found `string`
-//    ╭─[ expr_let_annotations.baml:6:15 ]
+//    ╭─[ expr_let_annotations.baml:6:16 ]
 //    │
 //  6 │   let c: int = "hello";
-//    │         ──┬─  ────┬───  
+//    │         ──┬─   ───┬───  
 //    │           ╰───────────── Type required here
 //    │                   │     
 //    │                   ╰───── Expected `int`, found `string`

@@ -7,15 +7,24 @@ authors.workspace = true
 license.workspace = true
 
 [lib]
-name = "baml_cffi"
+# Library name is bridge_cffi; baml-sys/integ-tests still look for baml_cffi. For release,
+# the artifact can be renamed (e.g. via mv) as needed when we switch to this bridge.
+name = "bridge_cffi"
 crate-type = [ "cdylib", "lib" ]
+
+[features]
+default = [ "bundle-http" ]
+native-tls = [ "sys_native/native-tls" ]
+rustls = [ "sys_native/rustls" ]
+bundle-http = [ "sys_native/bundle-http" ]
 
 [dependencies]
 bex_events = { workspace = true }
-bex_external_types = { workspace = true }
-bex_factory = { workspace = true }
+bex_events_native = { workspace = true }
+bex_project = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
+sys_types = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 libc = { workspace = true }
@@ -25,10 +34,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 tokio-util = { workspace = true }
-
-[features]
-default = [ "bundle-http" ]
-bundle-http = [ "sys_native/bundle-http" ]
+vfs = { workspace = true }
 
 [build-dependencies]
 cbindgen = { workspace = true }
