@@ -243,7 +243,7 @@ impl HintCollector for CallArgNames {
 
             for (i, arg_id) in args.iter().enumerate() {
                 let Some((Some(name), _)) = params.get(i) else {
-                    break;
+                    continue;
                 };
                 let Some(arg_span) = ctx.source_map.expr_span(*arg_id) else {
                     continue;
