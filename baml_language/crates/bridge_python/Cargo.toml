@@ -15,6 +15,7 @@ bex_project = { workspace = true }
 bridge_cffi = { workspace = true }
 bridge_ctypes = { workspace = true }
 sys_native = { workspace = true }
+log = { workspace = true }
 prost = { workspace = true }
 pyo3 = { workspace = true, features = [ "abi3-py38", "extension-module", "indexmap" ] }
 pyo3-async-runtimes = { workspace = true, features = [ "tokio-runtime" ] }

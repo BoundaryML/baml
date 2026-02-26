@@ -23,7 +23,7 @@ SOURCE_FILE
           SEMICOLON ";"
         WHILE_STMT
           KW_WHILE "while"
-          ERROR_TOKEN "\"
+          BACKSLASH "\"
           BLOCK_EXPR
             L_BRACE "{"
             BINARY_EXPR "x += 1"
@@ -45,12 +45,12 @@ Error: Expected expression, found error
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected expression, found error
+Error: Expected expression, found '\'
    ╭─[ very_invalid.baml:8:10 ]
    │
  8 │   while \ {
    │          ┬  
-   │          ╰── Expected expression, found error
+   │          ╰── Expected expression, found '\'
    │ 
    │ Note: Error code: E0010
 ───╯

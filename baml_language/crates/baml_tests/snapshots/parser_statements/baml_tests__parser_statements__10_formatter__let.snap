@@ -18,6 +18,6 @@ function let_statements() -> int {
 }
 
 class Point {
-    x int
-    y int
+    x: int
+    y: int
 }

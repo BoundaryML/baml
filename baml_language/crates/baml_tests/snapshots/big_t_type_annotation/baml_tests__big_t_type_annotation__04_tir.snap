@@ -1,6 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== TYPE INFERENCE ===
-  Function test_big_t_type:
-    Return: String

@@ -19,7 +19,8 @@ pub use ffi::{
         call_function_from_c, call_function_parse_from_c, call_function_stream_from_c,
         cancel_function_call,
     },
-    objects::{call_object_constructor, call_object_method, free_buffer},
+    handle::{clone_handle, release_handle},
+    objects::free_buffer,
     runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
 };
 

@@ -356,11 +356,19 @@ name = "baml_cli"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_db",
  "baml_fmt",
  "baml_lsp_server",
+ "baml_project",
+ "baml_workspace",
+ "bex_engine",
+ "bex_vm_types",
  "clap",
  "clap-cargo",
  "ctrlc",
+ "regex",
+ "sys_native",
+ "tokio",
 ]
 
 [[package]]
@@ -440,6 +448,7 @@ dependencies = [
  "baml_compiler_parser",
  "baml_compiler_syntax",
  "baml_workspace",
+ "indexmap",
  "la-arena",
  "rowan 0.16.1",
  "rustc-hash 2.1.1",
@@ -812,6 +821,7 @@ version = "0.0.0-beta"
 dependencies = [
  "async-trait",
  "baml_base",
+ "baml_builtins",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_db",
@@ -957,7 +967,9 @@ dependencies = [
 name = "bridge_ctypes"
 version = "0.1.0"
 dependencies = [
+ "baml_type",
  "bex_project",
+ "bex_resource_types",
  "indexmap",
  "prost",
  "prost-build",
@@ -973,6 +985,7 @@ dependencies = [
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
+ "log",
  "prost",
  "pyo3",
  "pyo3-async-runtimes",

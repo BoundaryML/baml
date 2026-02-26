@@ -1,5 +1,6 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -45,32 +46,32 @@ SOURCE_FILE
         WORD "skip"
     FIELD
       WORD "summary"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     FIELD
       WORD "details"
-      TYPE_EXPR "string?"
+      TYPE_EXPR
         WORD "string"
         QUESTION "?"
-      ATTRIBUTE "@stream.not_null"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "not_null"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
     FIELD
       WORD "state"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE "@stream.with_state"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "with_state"
+        ATTRIBUTE "@stream.with_state"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "with_state"
     FIELD
       WORD "multiple"
       TYPE_EXPR "string?"

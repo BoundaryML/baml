@@ -11,7 +11,7 @@
 
 import type { ChangeEvent, FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { encodeCallArgs, decodeCallResult } from '@b/pkg-proto';
+import { encodeCallArgs } from '@b/pkg-proto';
 import type { RuntimePort } from './runtime-port';
 import type {
   DiagnosticEntry,
@@ -102,7 +102,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   useEffect(() => { envVarsRef.current = envVars; }, [envVars]);
 
   const nextCallIdRef = useRef(0);
-  const pendingCallsRef = useRef<Map<number, { resolve: (v: Uint8Array) => void; reject: (e: Error) => void }>>(new Map());
+  const pendingCallsRef = useRef<Map<number, { resolve: (v: string) => void; reject: (e: Error) => void }>>(new Map());
 
   // ── Port message handler ─────────────────────────────────────────────
 
@@ -139,7 +139,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           const pending = pendingCallsRef.current.get(data.id);
           if (pending) {
             pendingCallsRef.current.delete(data.id);
-            pending.resolve(new Uint8Array(data.result));
+            pending.resolve(data.result);
           }
           break;
         }
@@ -276,15 +276,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       }
       const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
 
-      const resultBytes = await new Promise<Uint8Array>((resolve, reject) => {
+      const resultStr = await new Promise<string>((resolve, reject) => {
         pendingCallsRef.current.set(runId, { resolve, reject });
         port.postMessage(
           { type: 'callFunction', id: runId, name: selectedFn, argsProto: new Uint8Array(argsProto), project: selectedProject },
         );
       });
 
-      const decoded = decodeCallResult(resultBytes);
-      const resultStr = JSON.stringify(decoded, null, 2);
       const dur = Math.round(performance.now() - startTime);
       setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
     } catch (e) {
@@ -524,7 +522,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 </button>
                 {runs.length > 0 && !isRunning && (
                   <button
-                    onClick={() => setRuns([])}
+                    onClick={() => {
+                      const runIds = runs.map((r) => r.id);
+                      port.postMessage({ type: 'clearHandles', runIds });
+                      setRuns([]);
+                    }}
                     className="px-2 py-0.5 rounded ml-0.5 border border-vsc-border bg-transparent text-vsc-text-muted text-[10px] cursor-pointer"
                   >
                     Clear

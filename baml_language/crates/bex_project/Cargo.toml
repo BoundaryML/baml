@@ -19,6 +19,7 @@ workspace = true
 
 [dependencies]
 baml_base = { workspace = true }
+baml_builtins = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_emit = { workspace = true }
 baml_db = { workspace = true }

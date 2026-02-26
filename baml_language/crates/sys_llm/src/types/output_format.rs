@@ -196,6 +196,9 @@ impl OutputFormatContent {
             // - Bool: true/false
             Ty::Literal(lit) => Ok(Some(render_literal(lit))),
 
+            // Never is uninhabited — no value to render in the output format.
+            Ty::Never => Ok(None),
+
             // Runtime-only variants that shouldn't appear in LLM prompts
             Ty::Opaque(tn) => Err(RenderError::UnsupportedType(tn.to_string())),
 
@@ -562,8 +565,8 @@ mod tests {
 
     #[test]
     fn test_render_opaque_unsupported() {
-        let content = OutputFormatContent::new(Ty::big_t_type());
+        let content = OutputFormatContent::new(Ty::type_type());
         let err = content.render(&RenderOptions::default()).unwrap_err();
-        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "big_t_type"));
+        assert!(matches!(err, RenderError::UnsupportedType(s) if s == "type"));
     }
 }

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use bex_project::Bex;
-use bridge_ctypes::{external_to_cffi_value, kwargs_to_bex_values};
+use bridge_ctypes::{HANDLE_TABLE, external_to_baml_value, kwargs_to_bex_values};
 use prost::Message;
 use pyo3::{
     PyObject, Python,
@@ -86,13 +86,14 @@ impl BamlRuntime {
                 .await
                 .map_err(runtime_error_to_py)?;
 
-            let cffi_value = external_to_cffi_value(&result).map_err(|e| {
+            let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+            let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
                 pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
                     "Failed to encode result: {e}"
                 ))
             })?;
 
-            Ok(cffi_value.encode_to_vec())
+            Ok(baml_value.encode_to_vec())
         })
         .map(pyo3::Bound::into)
     }
@@ -144,24 +145,24 @@ impl BamlRuntime {
             })
             .map_err(runtime_error_to_py)?;
 
-        let cffi_value = external_to_cffi_value(&result).map_err(|e| {
+        let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+        let baml_value = external_to_baml_value(&result, &handle_options).map_err(|e| {
             pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!("Failed to encode result: {e}"))
         })?;
 
-        Ok(cffi_value.encode_to_vec())
+        Ok(baml_value.encode_to_vec())
     }
 }
 
 /// Decode protobuf-encoded function arguments into `BexArgs`.
 fn decode_args(args_proto: &[u8], function_name: &str) -> PyResult<bex_project::BexArgs> {
-    let args =
-        bridge_ctypes::baml::cffi::HostFunctionArguments::decode(args_proto).map_err(|e| {
-            pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
-                "Failed to decode arguments for function '{function_name}': {e}"
-            ))
-        })?;
+    let args = bridge_ctypes::baml::cffi::CallFunctionArgs::decode(args_proto).map_err(|e| {
+        pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
+            "Failed to decode arguments for function '{function_name}': {e}"
+        ))
+    })?;
 
-    let kwargs = kwargs_to_bex_values(args.kwargs).map_err(|e| {
+    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE).map_err(|e| {
         pyo3::PyErr::new::<BamlInvalidArgumentError, _>(format!(
             "Failed to convert arguments for function '{function_name}': {e}"
         ))

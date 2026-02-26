@@ -9,7 +9,9 @@ license.workspace = true
 doctest = false
 
 [dependencies]
+baml_type = { workspace = true }
 bex_project = { workspace = true }
+bex_resource_types = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }

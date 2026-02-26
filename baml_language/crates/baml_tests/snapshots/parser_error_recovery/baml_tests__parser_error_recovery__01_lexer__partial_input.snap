@@ -1,5 +1,6 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 Slash "/"
 Slash "/"
@@ -49,8 +50,18 @@ Slash "/"
 Slash "/"
 Word "This"
 Word "should"
-Word "parse"
-Word "correctly"
+Break "break"
+Word "as"
+Error "`"
+Word "field5"
+Error "`"
+Word "is"
+Word "treated"
+Word "as"
+Word "part"
+Word "of"
+Word "the"
+Word "attribute"
 RBrace "}"
 Function "function"
 Word "Incomplete"

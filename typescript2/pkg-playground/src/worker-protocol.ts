@@ -65,7 +65,7 @@ export type WorkerOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
-  | { type: 'callFunctionResult'; id: number; result: Uint8Array }
+  | { type: 'callFunctionResult'; id: number; result: string }
   | { type: 'callFunctionError'; id: number; error: string }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
@@ -80,6 +80,7 @@ export type WorkerOutMessage =
 
 export type WorkerInMessage =
   | { type: 'callFunction'; id: number; name: string; argsProto: Uint8Array; project: string }
+  | { type: 'clearHandles'; runIds: number[] }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
   | { type: 'setEnvVar'; key: string; value: string }
   | { type: 'deleteEnvVar'; key: string }

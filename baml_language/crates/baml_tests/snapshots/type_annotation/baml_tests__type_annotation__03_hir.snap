@@ -1,0 +1,61 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+type MetaUnion = type | string
+
+type MetaList = type[]
+
+type MetaAlias = type
+
+function test_type_annotation(function_name: string) -> string {
+    let t: type = baml.llm.get_return_type(function_name);
+    return "ok";
+}
+
+class RiskFactor {
+  type: string
+  severity: float
+}
+
+class MetaField {
+  type: type
+}
+
+enum Kind {
+  type
+  other
+}
+
+function test_optional(function_name: string) -> string {
+    let t: type? = null;
+    return "ok";
+}
+
+function test_let_binding(function_name: string) -> string {
+    let t: type = baml.llm.get_return_type(function_name);
+    return "ok";
+}
+
+function test_param(t: type) -> string {
+    return "ok";
+}
+
+function test_list(function_name: string) -> string {
+    let ts: type[] = [];
+    return "ok";
+}
+
+function test_union(function_name: string) -> string {
+    let t: type | string = "hello";
+    return "ok";
+}
+
+function test_return_type(function_name: string) -> type {
+    return baml.llm.get_return_type(function_name);
+}
+
+function test_map(function_name: string) -> string {
+    let m: map<string, type> = {  };
+    return "ok";
+}

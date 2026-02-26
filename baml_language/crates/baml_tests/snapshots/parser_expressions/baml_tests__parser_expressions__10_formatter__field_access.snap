@@ -18,16 +18,16 @@ function FieldAccess(user: User) -> string {
 }
 
 class User {
-    name string
-    profile Profile
-    tags string[]
+    name: string
+    profile: Profile
+    tags: string[]
 }
 
 class Profile {
-    bio string
-    settings Settings
+    bio: string
+    settings: Settings
 }
 
 class Settings {
-    theme string
+    theme: string
 }

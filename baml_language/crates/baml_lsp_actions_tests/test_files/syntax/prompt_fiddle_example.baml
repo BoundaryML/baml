@@ -371,7 +371,7 @@ test TestURLAudioInput{
   functions [AudioInput]
   args {
     audioInput {
-      url https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg
+      url "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg"
     }
   }
 }

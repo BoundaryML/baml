@@ -12,6 +12,7 @@ use std::{
     sync::{Arc, atomic::AtomicU32},
 };
 
+use baml_compiler_emit::CompileOptions;
 use baml_db::{FileId, SourceFile};
 use baml_workspace::Project;
 use salsa::Setter;
@@ -356,7 +357,10 @@ impl ProjectDatabase {
         {
             return Err(baml_compiler_emit::LoweringError::HasDiagnosticsErrors);
         }
-        baml_compiler_emit::generate_project_bytecode(self)
+        let opts = CompileOptions {
+            emit_test_cases: false,
+        };
+        baml_compiler_emit::generate_project_bytecode(self, &opts)
     }
 }
 

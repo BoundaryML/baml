@@ -55,7 +55,6 @@
 
 mod conversion;
 mod function_call_context;
-
 use std::{
     collections::HashMap,
     sync::{
@@ -74,6 +73,7 @@ use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
 use bex_vm::{BexVm, SpanNotification, VmExecState};
 use bex_vm_types::{FunctionMeta, GlobalPool, HeapPtr, Object, SysOp, Value};
+pub use conversion::test_arg_to_external;
 // Re-export CancellationToken for callers.
 pub use function_call_context::{FunctionCallContext, FunctionCallContextBuilder};
 use sys_types::{CallId, OpError, SysOpResult};
@@ -350,6 +350,8 @@ pub struct BexEngine {
     /// Optional event sink for persisting events (JSONL file, JS callback, etc.).
     /// If `None`, events are only stored in the `CollectorStore` for in-memory queries.
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
+    /// Compiled test cases from the BAML program.
+    test_cases: Vec<bex_vm_types::TestCase>,
 
     // --- Epoch-based GC coordination ---
     /// Current epoch counter (monotonically increasing).
@@ -406,6 +408,9 @@ impl BexEngine {
     ) -> Result<Self, EngineError> {
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode = bex_vm::convert_program(bytecode_program)?;
+
+        // Extract test cases before consuming other bytecode fields.
+        let test_cases = bytecode.test_cases;
 
         // Extract compile-time objects for the heap
         let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
@@ -552,6 +557,7 @@ impl BexEngine {
             sys_ops,
             sys_op_ctx,
             event_sink,
+            test_cases,
             // Initialize epoch tracking
             current_epoch: AtomicU64::new(0),
             epoch_states: [EpochState::new(), EpochState::new()],
@@ -963,6 +969,22 @@ impl BexEngine {
                 message: format!("Expected Function, got {other:?}"),
             }),
         }
+    }
+
+    /// Get all compiled test cases.
+    pub fn test_cases(&self) -> &[bex_vm_types::TestCase] {
+        &self.test_cases
+    }
+
+    /// Find a test case by name.
+    pub fn test_case(
+        &self,
+        function_name: &str,
+        test_name: &str,
+    ) -> Option<&bex_vm_types::TestCase> {
+        self.test_cases
+            .iter()
+            .find(|t| t.function_names.iter().any(|n| function_name == n) && t.name == test_name)
     }
 
     /// Collect roots from a yielded VM.

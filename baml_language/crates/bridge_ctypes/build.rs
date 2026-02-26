@@ -1,8 +1,6 @@
 fn main() -> std::io::Result<()> {
     println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_outbound.proto");
     println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_inbound.proto");
-    println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_object.proto");
-    println!("cargo:rerun-if-changed=types/baml/cffi/v1/baml_object_methods.proto");
     println!("cargo:rerun-if-changed=build.rs");
 
     #[allow(unsafe_code)]
@@ -19,8 +17,6 @@ fn main() -> std::io::Result<()> {
     let protos = [
         "types/baml/cffi/v1/baml_outbound.proto",
         "types/baml/cffi/v1/baml_inbound.proto",
-        "types/baml/cffi/v1/baml_object.proto",
-        "types/baml/cffi/v1/baml_object_methods.proto",
     ];
 
     prost_build::compile_protos(&protos, &["types"])?;

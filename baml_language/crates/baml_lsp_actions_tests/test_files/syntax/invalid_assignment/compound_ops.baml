@@ -36,11 +36,11 @@ function CompoundAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected `int`, found `string`
-//     ╭─[ invalid_assignment_compound_ops.baml:15:6 ]
+//     ╭─[ invalid_assignment_compound_ops.baml:15:7 ]
 //     │
 //  15 │     c += "five";
-//     │         ───┬───  
-//     │            ╰───── Expected `int`, found `string`
+//     │          ───┬──  
+//     │             ╰──── Expected `int`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
@@ -72,10 +72,10 @@ function CompoundAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `float`, found `string`
-//     ╭─[ invalid_assignment_compound_ops.baml:31:6 ]
+//     ╭─[ invalid_assignment_compound_ops.baml:31:7 ]
 //     │
 //  31 │     g += "add";
-//     │         ───┬──  
+//     │          ──┬──  
 //     │            ╰──── Expected `float`, found `string`
 //     │ 
 //     │ Note: Error code: E0001

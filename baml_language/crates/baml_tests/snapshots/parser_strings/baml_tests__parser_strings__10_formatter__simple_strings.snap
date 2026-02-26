@@ -1,5 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== FORMATTER ERROR ===
-[UnexpectedToken { expected: "')'", found: "identifier", span: Span { file_id: FileId(0), range: 275..280 } }, InvalidSyntax { message: "field 'hello' is missing a type annotation", span: Span { file_id: FileId(0), range: 275..280 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "error", span: Span { file_id: FileId(0), range: 280..281 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 281..282 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'\"'", span: Span { file_id: FileId(0), range: 282..283 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "')'", span: Span { file_id: FileId(0), range: 283..284 } }]
+// Test basic string parsing in attributes and types
+class Messages {
+    greeting: string @alias("hello")
+    empty: string @description("")
+    with_spaces: string @alias("hello world")
+    with_escapes: string @description("line1\nline2\ttab")
+    with_quotes: string @alias("She said \"hello\"")
+}
+
+// String literal union types
+function GetRole() -> "admin" | "user" | "guest" {
+    return "user";
+}

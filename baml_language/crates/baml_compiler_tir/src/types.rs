@@ -93,6 +93,10 @@ pub enum Ty {
     Error,
     /// The void/unit type for functions that return nothing.
     Void,
+    /// The bottom type — uninhabited, subtype of everything.
+    /// Used in streaming type expansion (e.g., `@stream.starts_as(never)`).
+    /// `T | never` simplifies to `T`.
+    Never,
 
     /// Opaque resource handle (file, socket, HTTP response body).
     Resource,
@@ -173,6 +177,8 @@ impl Ty {
         match self {
             // Error recovery: don't emit additional errors when type inference failed
             Ty::Unknown | Ty::Error => true,
+            // Bottom type is uninhabited by definition
+            Ty::Never => true,
             // Empty union has no members, therefore no possible values
             Ty::Union(types) => types.is_empty(),
             // All other types are inhabited
@@ -272,6 +278,7 @@ impl fmt::Display for Ty {
             Ty::Unknown => write!(f, "unknown"),
             Ty::Error => write!(f, "error"),
             Ty::Void => write!(f, "void"),
+            Ty::Never => write!(f, "never"),
             Ty::Resource => write!(f, "resource"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),

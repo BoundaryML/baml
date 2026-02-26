@@ -35,6 +35,7 @@ import {
   sanitizeSlug,
   hasContent,
 } from "@/lib/import-utils";
+import { isReservedPageSlug } from "@/lib/bep-routes";
 import type { VersionMode } from "@/lib/types";
 
 interface BepImportDialogProps {
@@ -169,6 +170,15 @@ export function BepImportDialog({ bepId, bepNumber }: BepImportDialogProps) {
                 type: "page",
                 content: result.content,
                 error: "Invalid filename for page slug",
+              });
+              continue;
+            }
+            if (isReservedPageSlug(slug)) {
+              parsed.push({
+                name: `pages/${file.name}`,
+                type: "page",
+                content: result.content,
+                error: `Slug "${slug}" is reserved for app routes`,
               });
               continue;
             }

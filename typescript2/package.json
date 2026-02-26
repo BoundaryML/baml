@@ -5,9 +5,9 @@
   "description": "BAML Playground v2 - VSCode extension and web app",
   "scripts": {
     "build:wasm": "wasm-pack build ../baml_language/crates/bridge_wasm --target web --out-dir ../../../typescript2/pkg-playground/wasm --release --scope b",
-    "dev:wasm": "BRIDGE_WASM_FORCE_RERUN=1 npx nodemon --watch ../baml_language --ext rs,toml --exec \"pnpm build:wasm\"",
+    "dev:wasm": "BRIDGE_WASM_FORCE_RERUN=1 npx nodemon --watch ../baml_language --ignore '**/target/**' --ext rs,toml --exec \"pnpm build:wasm\"",
     "dev:webview": "pnpm --filter app-vscode-webview dev",
-    "dev:cargo": "cargo watch -C ../baml_language --skip-local-deps --watch-when-idle -w crates -x 'build -p baml_cli'",
+    "dev:cargo": "cargo watch -C ../baml_language  --ignore '**/target/**' --skip-local-deps --watch-when-idle -w crates -x 'build -p baml_cli'",
     "dev:vscode": "turbo run dev --filter=app-vscode-ext --filter=app-vscode-webview --filter=@b/pkg-playground '//#dev:cargo'",
     "dev:promptfiddle": "turbo run dev --filter app-promptfiddle --filter @b/pkg-playground '//#dev:wasm'",
     "build": "turbo run build",

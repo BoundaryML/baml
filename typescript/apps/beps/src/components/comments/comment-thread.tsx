@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -13,6 +13,7 @@ import { MDXEditorComponent, MDXEditorHandle } from "@/components/editor/mdx";
 import { DecisionForm } from "@/components/decisions/decision-form";
 import { IssueForm } from "@/components/issues/issue-form";
 import { CommentLinkedBadges } from "./comment-linked-badges";
+import { BepLinkContext } from "@/lib/bep-link-resolver";
 import { 
   MessageSquare, 
   ChevronDown, 
@@ -51,6 +52,7 @@ interface CommentThreadProps {
   pageId?: Id<"bepPages">;
   viewingVersionId?: Id<"bepVersions">;
   readOnly?: boolean;
+  linkContext?: BepLinkContext;
   onNavigateToIssue?: (issueId: string) => void;
   onNavigateToDecision?: (decisionId: string) => void;
 }
@@ -135,6 +137,7 @@ function SingleComment({
   depth = 0,
   readOnly,
   linkedItems,
+  linkContext,
   onNavigateToIssue,
   onNavigateToDecision,
 }: { 
@@ -143,10 +146,11 @@ function SingleComment({
   depth?: number;
   readOnly?: boolean;
   linkedItems?: { issues: LinkedItem[]; decisions: LinkedItem[] };
+  linkContext?: BepLinkContext;
   onNavigateToIssue?: (issueId: string) => void;
   onNavigateToDecision?: (decisionId: string) => void;
 }) {
-  const { userId } = useUser();
+  const { userId, user } = useUser();
   const toggleReaction = useMutation(api.comments.toggleReaction);
   const resolveComment = useMutation(api.comments.resolve);
   const unresolveComment = useMutation(api.comments.unresolve);
@@ -185,7 +189,9 @@ function SingleComment({
     }
   };
 
-  const handleSubmitReply = async () => {
+  const replyContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleSubmitReply = useCallback(async () => {
     const content = replyEditorRef.current?.getMarkdown() || replyContent;
     if (!userId || !content.trim()) return;
     try {
@@ -203,7 +209,22 @@ function SingleComment({
     } catch (error) {
       console.error("Failed to add reply:", error);
     }
-  };
+  }, [userId, replyContent, addComment, comment.bepId, comment._id, versionId]);
+
+  useEffect(() => {
+    const container = replyContainerRef.current;
+    if (!container) return;
+    
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleSubmitReply();
+      }
+    };
+    
+    container.addEventListener("keydown", handleKeyDown);
+    return () => container.removeEventListener("keydown", handleKeyDown);
+  }, [handleSubmitReply]);
 
   const replyCount = replies?.length ?? 0;
 
@@ -225,8 +246,8 @@ function SingleComment({
           </div>
 
           {/* Content - rendered as markdown */}
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <BepContent content={comment.content} />
+          <div className="prose prose-sm dark:prose-invert max-w-none" data-comment-id={comment._id}>
+            <BepContent content={comment.content} linkContext={linkContext} />
           </div>
 
           {/* Linked Issues/Decisions */}
@@ -335,9 +356,9 @@ function SingleComment({
           {/* Reply form with MDX editor */}
           {showReplyForm && !readOnly && (
             <div className="mt-3 flex gap-2">
-              <Avatar name="You" size="sm" />
+              <Avatar name={user?.name ?? "You"} size="sm" />
               <div className="flex-1 space-y-2">
-                <div className="border rounded-lg overflow-hidden">
+                <div ref={replyContainerRef} className="border rounded-lg overflow-hidden">
                   <MDXEditorComponent
                     ref={replyEditorRef}
                     initialContent=""
@@ -390,6 +411,7 @@ function SingleComment({
                   versionId={versionId}
                   depth={depth + 1}
                   readOnly={readOnly}
+                  linkContext={linkContext}
                 />
               ))}
             </div>
@@ -406,10 +428,11 @@ export function CommentThread({
   pageId,
   viewingVersionId,
   readOnly = false,
+  linkContext,
   onNavigateToIssue,
   onNavigateToDecision,
 }: CommentThreadProps) {
-  const { userId } = useUser();
+  const { userId, user } = useUser();
   const [showResolved, setShowResolved] = useState(false);
   const [newCommentContent, setNewCommentContent] = useState("");
   const [commentType, setCommentType] = useState<"discussion" | "concern" | "question">("discussion");
@@ -425,7 +448,7 @@ export function CommentThread({
   const linkedItemsBatch = useQuery(api.comments.getLinkedItemsBatch, { bepId });
   const addComment = useMutation(api.comments.add);
 
-  const handleSubmitComment = async () => {
+  const handleSubmitComment = useCallback(async () => {
     const content = editorRef.current?.getMarkdown() || newCommentContent;
     if (!userId || !content.trim() || isSubmitting) return;
     
@@ -447,7 +470,24 @@ export function CommentThread({
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [userId, newCommentContent, isSubmitting, addComment, bepId, versionId, pageId, commentType]);
+
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const container = editorContainerRef.current;
+    if (!container) return;
+    
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        handleSubmitComment();
+      }
+    };
+    
+    container.addEventListener("keydown", handleKeyDown);
+    return () => container.removeEventListener("keydown", handleKeyDown);
+  }, [handleSubmitComment]);
 
   if (comments === undefined) {
     return (
@@ -502,7 +542,7 @@ export function CommentThread({
       {/* New comment form with MDX editor */}
       {!readOnly && (
         <div className="flex gap-3">
-          <Avatar name="You" />
+          <Avatar name={user?.name ?? "You"} />
           <div className="flex-1 space-y-3">
             <div className="flex gap-2">
               <Select
@@ -532,7 +572,7 @@ export function CommentThread({
                 </SelectContent>
               </Select>
             </div>
-            <div className="border rounded-lg overflow-hidden">
+            <div ref={editorContainerRef} className="border rounded-lg overflow-hidden">
               <MDXEditorComponent
                 ref={editorRef}
                 initialContent=""
@@ -569,6 +609,7 @@ export function CommentThread({
               comment={comment as Comment}
               versionId={versionId}
               readOnly={readOnly}
+              linkContext={linkContext}
               linkedItems={linkedItemsBatch?.[comment._id]}
               onNavigateToIssue={onNavigateToIssue}
               onNavigateToDecision={onNavigateToDecision}

@@ -793,7 +793,8 @@ fn generate_codegen_test(
             let mut output = String::new();
 
             // Pass all files (builtins + user) to compile_files
-            match baml_compiler_emit::compile_files(&db, &all_files, baml_compiler_emit::OptLevel::One) {
+            let options = baml_compiler_emit::CompileOptions { emit_test_cases: false };
+            match baml_compiler_emit::compile_files(&db, &all_files, baml_compiler_emit::OptLevel::One, &options) {
                 Ok(program) => {
                     // Collect sorted functions, excluding builtins (baml.*)
                     // which are snapshotted separately in baml_std.
@@ -929,7 +930,15 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
             let first = match baml_fmt::format(&content, &options) {
                 Ok(formatted) => formatted,
                 Err(e) => {
-                    let output = format!("=== FORMATTER ERROR ===\n{}", e);
+                    let output = match e {
+                        baml_fmt::FormatterError::ParseErrors(e) => {
+                            format!("=== PARSER ERROR ===\n{:?}", e)
+                        }
+                        baml_fmt::FormatterError::StrongAstError(e) => {
+                            let e = e.print_with_file_context(#relative_path, &content);
+                            format!("=== STRONG AST ERROR ===\n{}", e)
+                        }
+                    };
                     with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                         assert_snapshot!(#snapshot_name, output);
                     });
@@ -952,13 +961,16 @@ fn generate_formatter_test(baml_file: &BamlFile) -> TokenStream {
                 }
             };
 
-            assert_eq!(
-                first, second,
-                "Formatter is not idempotent for {}.\n\
-                 === first pass ===\n{}\n\
-                 === second pass ===\n{}",
-                #relative_path, first, second
-            );
+            if first != second {
+                std::fs::write(format!("{}/{}.new", SNAPSHOT_PATH, #relative_path), second.as_bytes()).unwrap();
+                panic!(
+                    "Formatter is not idempotent for {}.\n\
+                    Second pass output written to {}/{}.new",
+                    #relative_path,
+                    SNAPSHOT_PATH,
+                    #relative_path
+                );
+            }
         }
     }
 }

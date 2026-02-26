@@ -80,12 +80,12 @@ reason = "Use baml_db or baml_project to access compiler interfaces."
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
 pattern.exclude = ["bex_vm_types"]
-allowed_crates = ["bridge_cffi"]
+allowed_crates = ["bridge_cffi", "baml_cli"]
 reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_project"]
+allowed_crates = ["baml_compiler_emit", "baml_project", "baml_cli"]
 reason = "Only compiler_emit and baml_project crates should depend on bex_vm_types (pure data layer)."
 
 

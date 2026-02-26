@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function Fn() -> string {
-    client "openai/gpt-4o"
-    prompt #"Hi"#
+    client: "openai/gpt-4o"
+    prompt: #"Hi"#
 }
 
 class TopLevelClass {
-    a string
+    a: string
 }
 
 enum TopLevelEnum {
@@ -16,13 +16,13 @@ enum TopLevelEnum {
 }
 
 test MyTest {
-    functions [Fn],
+    functions: [Fn],
     type_builder {
         class InnerClass {
-            b int
+            b: int
         }
         dynamic class DynamicInner {
-            c string
+            c: string
         }
         enum InnerEnum {
             X,
@@ -32,9 +32,9 @@ test MyTest {
             P,
             Q,
         }
-        type MyAlias = string | int
+        type MyAlias = string | int;
     },
-    args {
-        from_text "test",
+    args: {
+        from_text: "test",
     },
 }

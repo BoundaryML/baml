@@ -2,15 +2,13 @@
 
 use std::{ffi::CStr, panic::AssertUnwindSafe};
 
-use bridge_ctypes::{DecodeFromBuffer, kwargs_to_bex_values};
+use bridge_ctypes::{DecodeFromBuffer, HANDLE_TABLE, kwargs_to_bex_values};
 use futures::future::FutureExt;
 use prost::Message;
 
 use crate::{
     Buffer,
-    baml::cffi::{
-        HostFunctionArguments, InvocationResponse, invocation_response::Response as CResponse,
-    },
+    baml::cffi::{CallAck, CallFunctionArgs, call_ack::Response as CResponse},
     engine::{get_runtime, get_tokio_runtime},
     error::BridgeError,
     ffi::callbacks::{send_error_to_callback, send_result_to_callback},
@@ -18,13 +16,13 @@ use crate::{
 
 /// Encode a success response (task spawned successfully).
 fn encode_success_response() -> Buffer {
-    let msg = InvocationResponse { response: None };
+    let msg = CallAck { response: None };
     Buffer::from(msg.encode_to_vec())
 }
 
 /// Encode an error response (failed to spawn task).
 fn encode_error_response(error: &BridgeError) -> Buffer {
-    let msg = InvocationResponse {
+    let msg = CallAck {
         response: Some(CResponse::Error(error.to_string())),
     };
     Buffer::from(msg.encode_to_vec())
@@ -74,10 +72,10 @@ fn call_function_inner(
     };
 
     // Decode protobuf arguments
-    let args = unsafe { HostFunctionArguments::from_c_buffer(encoded_args as *const u8, length) }?;
+    let args = unsafe { CallFunctionArgs::from_c_buffer(encoded_args as *const u8, length) }?;
 
     // Convert kwargs to BexValue
-    let kwargs = kwargs_to_bex_values(args.kwargs)?;
+    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
 
     // Silently ignore collectors and type_builder (not supported)
     let call_ctx = bex_project::FunctionCallContextBuilder::new(sys_types::CallId(id.into()));

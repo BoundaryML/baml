@@ -504,6 +504,7 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap_union: bool) -> String {
         TypeRef::String => "string".to_string(),
         TypeRef::Bool => "bool".to_string(),
         TypeRef::Null => "null".to_string(),
+        TypeRef::Never => "never".to_string(),
         TypeRef::Media(kind) => kind.to_string(),
         TypeRef::Optional(inner) => format!("{}?", type_ref_to_str_impl(inner, true)),
         TypeRef::List(inner) => format!("{}[]", type_ref_to_str_impl(inner, true)),
@@ -557,6 +558,6 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap_union: bool) -> String {
         TypeRef::Error => "<error>".to_string(),
         TypeRef::Unknown => "<unknown>".to_string(),
         TypeRef::BuiltinUnknown => "unknown".to_string(),
-        TypeRef::Type => "big_t_type".to_string(),
+        TypeRef::Type => "type".to_string(),
     }
 }

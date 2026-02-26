@@ -24,11 +24,7 @@ class NestedQuotes {
   quote: <unknown>
   is: here
   complex_nesting: string
-  really: <unknown>
-  complex: <unknown>
   json_like: string
-  key: <unknown>
-  value: <unknown>
 }
 
 function ProcessText.build_request(input: string) -> baml.http.Request {
@@ -60,7 +56,6 @@ class Messages {
   with_spaces: string
   with_escapes: string
   with_quotes: string
-  hello: <unknown>
 }
 
 function GPT4.resolve() -> baml.llm.PrimitiveClient {

@@ -1,5 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== FORMATTER ERROR ===
-[InvalidSyntax { message: "Header comments (//#) are not allowed inside LLM functions", span: Span { file_id: FileId(0), range: 180..207 } }]
+=== PARSER ERROR ===
+[UnexpectedToken { expected: "config key", found: "'.'", span: Span { file_id: FileId(0), range: 113..114 } }, UnexpectedToken { expected: "config key", found: "integer", span: Span { file_id: FileId(0), range: 114..115 } }, UnexpectedToken { expected: "config key", found: "'-'", span: Span { file_id: FileId(0), range: 115..116 } }, UnexpectedToken { expected: "identifier", found: "'}'", span: Span { file_id: FileId(0), range: 126..127 } }, InvalidSyntax { message: "Header comments (//#) are not allowed inside LLM functions", span: Span { file_id: FileId(0), range: 180..207 } }]

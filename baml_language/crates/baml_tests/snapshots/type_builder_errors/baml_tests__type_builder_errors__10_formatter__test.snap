@@ -1,5 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== FORMATTER ERROR ===
-An element at 208..312 was a token when it should have been a node.
+=== STRONG AST ERROR ===
+An element at test.baml:6:19 was a token when it should have been a node.

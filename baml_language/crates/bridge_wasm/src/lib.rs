@@ -44,6 +44,7 @@
 //! ```
 
 mod error;
+mod handle;
 mod registry;
 mod send_wrapper;
 mod wasm_env;
@@ -53,7 +54,7 @@ mod wasm_lsp;
 mod wasm_playground;
 mod wasm_sys;
 
-pub use bridge_ctypes::{baml, external_to_cffi_value, kwargs_to_bex_values};
+pub use bridge_ctypes::{HANDLE_TABLE, baml, external_to_baml_value, kwargs_to_bex_values};
 pub use error::BridgeError;
 use js_sys::Function;
 use prost::Message;
@@ -226,10 +227,10 @@ impl BamlWasmRuntime {
         args_proto: &[u8],
     ) -> Result<Vec<u8>, JsValue> {
         // Decode protobuf arguments
-        let args = baml::cffi::HostFunctionArguments::decode(args_proto)
+        let args = baml::cffi::CallFunctionArgs::decode(args_proto)
             .map_err(|e| JsError::new(&format!("Failed to decode arguments: {e}")))?;
 
-        let kwargs = kwargs_to_bex_values(args.kwargs)
+        let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)
             .map_err(|e| JsError::new(&format!("Failed to convert arguments: {e}")))?;
 
         let call_id = sys_types::CallId(u64::from(id));
@@ -260,10 +261,11 @@ impl BamlWasmRuntime {
             }
         })?;
 
-        let cffi_value = external_to_cffi_value(&result)
+        let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
+        let baml_value = external_to_baml_value(&result, &handle_options)
             .map_err(|e| JsError::new(&format!("Failed to encode result: {e}")))?;
 
-        Ok(cffi_value.encode_to_vec())
+        Ok(baml_value.encode_to_vec())
     }
 
     /// Handle an LSP notification.

@@ -1,7 +1,7 @@
 //! Callback registration and invocation.
 
 use bex_project::BexExternalValue;
-use bridge_ctypes::external_to_cffi_value;
+use bridge_ctypes::external_to_baml_value;
 use once_cell::sync::OnceCell;
 use prost::Message;
 
@@ -39,9 +39,11 @@ pub fn send_result_to_callback(id: u32, is_done: bool, value: &BexExternalValue)
         }
     };
 
-    match external_to_cffi_value(value) {
-        Ok(cffi_value) => {
-            let buf = cffi_value.encode_to_vec();
+    // Don't serialize media or prompt ast in the result callback.
+    let handle_options = bridge_ctypes::HandleTableOptions::for_in_process();
+    match external_to_baml_value(value, &handle_options) {
+        Ok(baml_value) => {
+            let buf = baml_value.encode_to_vec();
             let is_done_int = if is_done { 1 } else { 0 };
             tokio::task::block_in_place(|| {
                 callback_fn(id, is_done_int, buf.as_ptr() as *const i8, buf.len());

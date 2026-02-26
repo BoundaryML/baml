@@ -1,45 +1,6 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
-function FetchDatax(user_id: string) -> Hi {
-    load_const "FetchDatax"
-    load_var user_id
-    load_const "user_id"
-    alloc_map 1
-    call baml.llm.call_llm_function
-    return
-}
-
-function FetchDatax.build_request(user_id: string) -> baml.http.Request {
-    load_const "FetchDatax"
-    load_var user_id
-    load_const "user_id"
-    alloc_map 1
-    call baml.llm.build_request
-    return
-}
-
-function FetchDatax.render_prompt(user_id: string) -> baml.llm.PromptAst {
-    load_const "FetchDatax"
-    load_var user_id
-    load_const "user_id"
-    alloc_map 1
-    call baml.llm.render_prompt
-    return
-}
-
-function VertexGCP.resolve() -> baml.llm.PrimitiveClient {
-    load_const "VertexGCP"
-    load_const "vertex-ai"
-    load_const "user"
-    load_const "user"
-    load_const "assistant"
-    load_const "system"
-    alloc_array 3
-    load_const "gemini-2"
-    load_const "model"
-    alloc_map 1
-    dispatch_future baml.llm.build_primitive_client
-    await
-    return
-}
+=== NO CODEGEN DUE TO ERRORS ===
+Error: InFunction { function_name: "VertexGCP.resolve", error: MissingExpression { span: Span { file_id: FileId(1), range: 121..121 } } }

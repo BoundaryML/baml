@@ -1,0 +1,2089 @@
+---
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "Minimal"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "SingleParam"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    x
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MultipleParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "c"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR "a + b"
+          WORD "a"
+          PLUS "+"
+          WORD "b"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NoColonParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "y"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR "x + y"
+          WORD "x"
+          PLUS "+"
+          WORD "y"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ManyParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      COMMA ","
+      PARAMETER
+        WORD "fourth_parameter"
+        COLON ":"
+        TYPE_EXPR "float"
+          WORD "float"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "result"
+          QUOTE """
+          WORD "result"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "VeryLongParamList"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "extremely_long_parameter_name"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "another_very_long_parameter_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "yet_another_long_one"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "result"
+          QUOTE """
+          WORD "result"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "SixLongParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter_name"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter_name"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter_name"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "bool"
+              WORD "bool"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "fourth_parameter_name"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "fifth_parameter_name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "sixth_parameter_name"
+        COLON ":"
+        TYPE_EXPR "float"
+          WORD "float"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "result"
+          QUOTE """
+          WORD "result"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LongNameWithManyParameters_ThisFunctionExceedsLimit"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_argument"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "second_argument"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "third_argument"
+        COLON ":"
+        TYPE_EXPR "bool"
+          WORD "bool"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "result"
+          QUOTE """
+          WORD "result"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LongNameWithLongReturnType_ExceedsTheLineLimit"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int | string | bool | float | null"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+              PIPE "|"
+              WORD "float"
+              PIPE "|"
+              WORD "null"
+            GREATER ">"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "a"
+              QUOTE """
+              WORD "a"
+              QUOTE """
+            COLON ":"
+            MAP_LITERAL
+              L_BRACE "{"
+              OBJECT_FIELD
+                STRING_LITERAL "b"
+                  QUOTE """
+                  WORD "b"
+                  QUOTE """
+                COLON ":"
+                INTEGER_LITERAL "1"
+              R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "EverythingIsLong_NameParamsReturnType"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_long_param"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "second_long_param"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string | bool"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "int | string | bool | float | null"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+          PIPE "|"
+          WORD "bool"
+          PIPE "|"
+          WORD "float"
+          PIPE "|"
+          WORD "null"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "a"
+              QUOTE """
+              WORD "a"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "1"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ComplexReturn"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int | string | null"
+      WORD "int"
+      PIPE "|"
+      WORD "string"
+      PIPE "|"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    x
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NestedGenericReturn"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int | string | bool | null | float"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "string"
+                  PIPE "|"
+                  WORD "bool"
+                  PIPE "|"
+                  WORD "null"
+                  PIPE "|"
+                  WORD "float"
+                GREATER ">"
+            GREATER ">"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "a"
+              QUOTE """
+              WORD "a"
+              QUOTE """
+            COLON ":"
+            MAP_LITERAL
+              L_BRACE "{"
+              OBJECT_FIELD
+                STRING_LITERAL "b"
+                  QUOTE """
+                  WORD "b"
+                  QUOTE """
+                COLON ":"
+                MAP_LITERAL
+                  L_BRACE "{"
+                  OBJECT_FIELD
+                    STRING_LITERAL "c"
+                      QUOTE """
+                      WORD "c"
+                      QUOTE """
+                    COLON ":"
+                    INTEGER_LITERAL "1"
+                  R_BRACE "}"
+              R_BRACE "}"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "DeepFnReturn"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      L_PAREN "("
+      FUNCTION_TYPE_PARAM
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+      ARROW "->"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          WORD "y"
+          COLON ":"
+          TYPE_EXPR "int"
+            WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            WORD "z"
+            COLON ":"
+            TYPE_EXPR "int"
+              WORD "int"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              WORD "w"
+              COLON ":"
+              TYPE_EXPR "int"
+                WORD "int"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR "int | string | bool"
+                  WORD "int"
+                  PIPE "|"
+                  WORD "string"
+                  PIPE "|"
+                  WORD "bool"
+                GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "DeepParamTypes"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "nested"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR
+              WORD "map"
+              TYPE_ARGS
+                LESS "<"
+                TYPE_EXPR "string"
+                  WORD "string"
+                COMMA ","
+                TYPE_EXPR
+                  WORD "map"
+                  TYPE_ARGS
+                    LESS "<"
+                    TYPE_EXPR "string"
+                      WORD "string"
+                    COMMA ","
+                    TYPE_EXPR "int[]"
+                      WORD "int"
+                      L_BRACKET "["
+                      R_BRACKET "]"
+                    GREATER ">"
+                GREATER ">"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "callback"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            WORD "x"
+            COLON ":"
+            TYPE_EXPR "int"
+              WORD "int"
+          R_PAREN ")"
+          ARROW "->"
+          TYPE_EXPR
+            L_PAREN "("
+            FUNCTION_TYPE_PARAM
+              WORD "y"
+              COLON ":"
+              TYPE_EXPR "int"
+                WORD "int"
+            R_PAREN ")"
+            ARROW "->"
+            TYPE_EXPR
+              L_PAREN "("
+              FUNCTION_TYPE_PARAM
+                WORD "z"
+                COLON ":"
+                TYPE_EXPR "int"
+                  WORD "int"
+              R_PAREN ")"
+              ARROW "->"
+              TYPE_EXPR "string"
+                WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "done"
+          QUOTE """
+          WORD "done"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ConstrainedParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "score"
+        COLON ":"
+        TYPE_EXPR
+          WORD "int"
+          ATTRIBUTE
+            AT "@"
+            WORD "check"
+            ATTRIBUTE_ARGS
+              L_PAREN "("
+              EXPR "{{ this > 0 }}"
+                L_BRACE "{"
+                L_BRACE "{"
+                WORD "this"
+                GREATER ">"
+                INTEGER_LITERAL "0"
+                R_BRACE "}"
+                R_BRACE "}"
+              R_PAREN ")"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "done"
+          QUOTE """
+          WORD "done"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TriviaFunc"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "// 9 colon trailing
+// 10 type leading
+int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "// 15 arrow trailing
+// 16 return type leading
+int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "// 17 return type trailing
+// 18 body leading
+{ // 19 body open trailing
+    x
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TriviaFuncBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "/* 9 colon trailing */
+/* 10 type leading */
+int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "/* 15 arrow trailing */
+/* 16 return type leading */
+int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "/* 17 return type trailing */
+/* 18 body leading */
+{ /* 19 body open trailing */
+    x
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MultiParamTrivia"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "// 3 first colon trailing
+    // 4 first type leading
+    int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "// 9 second colon trailing
+    // 10 second type leading
+    string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    a
+}"
+        L_BRACE "{"
+        WORD "a"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MultiParamTriviaBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "/* 3 first colon trailing */
+    /* 4 first type leading */
+    int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "/* 9 second colon trailing */
+    /* 10 second type leading */
+    string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    a
+}"
+        L_BRACE "{"
+        WORD "a"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TriviaWrapParams"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR "// 8 trailing
+// 9 leading
+int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR "// 14 trailing
+// 15 leading
+string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR "// 20 trailing
+// 21 leading
+bool"
+          WORD "bool"
+      COMMA ","
+      PARAMETER
+        WORD "fourth_parameter"
+        COLON ":"
+        TYPE_EXPR "// 26 trailing
+// 27 leading
+float"
+          WORD "float"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "// 31 trailing
+// 32 leading
+string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "result"
+          QUOTE """
+          WORD "result"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TriviaWrapParamsBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_parameter"
+        COLON ":"
+        TYPE_EXPR "/* 8 trailing */
+/* 9 leading */
+int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "second_parameter"
+        COLON ":"
+        TYPE_EXPR "/* 14 trailing */
+/* 15 leading */
+string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "third_parameter"
+        COLON ":"
+        TYPE_EXPR "/* 20 trailing */
+/* 21 leading */
+bool"
+          WORD "bool"
+      COMMA ","
+      PARAMETER
+        WORD "fourth_parameter"
+        COLON ":"
+        TYPE_EXPR "/* 26 trailing */
+/* 27 leading */
+float"
+          WORD "float"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "/* 31 trailing */
+/* 32 leading */
+string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "result"
+          QUOTE """
+          WORD "result"
+          QUOTE """
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TriviaWrapReturnType"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "// 1 first member leading
+    int // 2 first trailing
+    // 3 pipe leading
+    | // 4 pipe trailing
+    // 5 second leading
+    string // 6 second trailing
+    // 7 pipe leading
+    | // 8 pipe trailing
+    // 9 third leading
+    bool // 10 third trailing
+    // 11 pipe leading
+    | // 12 pipe trailing
+    // 13 fourth leading
+    null"
+      WORD "int"
+      PIPE "|"
+      WORD "string"
+      PIPE "|"
+      WORD "bool"
+      PIPE "|"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "// 14 fourth trailing
+{
+    x
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TriviaWrapReturnTypeBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "/* 1 first member leading */
+    int /* 2 first trailing */
+    /* 3 pipe leading */
+    | /* 4 pipe trailing */
+    /* 5 second leading */
+    string /* 6 second trailing */
+    /* 7 pipe leading */
+    | /* 8 pipe trailing */
+    /* 9 third leading */
+    bool /* 10 third trailing */
+    /* 11 pipe leading */
+    | /* 12 pipe trailing */
+    /* 13 fourth leading */
+    null"
+      WORD "int"
+      PIPE "|"
+      WORD "string"
+      PIPE "|"
+      WORD "bool"
+      PIPE "|"
+      WORD "null"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "/* 14 fourth trailing */
+{
+    x
+
+
+}"
+        L_BRACE "{"
+        WORD "x"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TriviaEverythingLong_NameAndParamsAndReturn"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_long_param"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "second_long_param"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string | bool"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "int | string | bool | float | null"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+          PIPE "|"
+          WORD "bool"
+          PIPE "|"
+          WORD "float"
+          PIPE "|"
+          WORD "null"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "a"
+              QUOTE """
+              WORD "a"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "1"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "TriviaEverythingLong_NameAndParamsAndReturnBlock"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_long_param"
+        COLON ":"
+        TYPE_EXPR
+          WORD "map"
+          TYPE_ARGS
+            LESS "<"
+            TYPE_EXPR "string"
+              WORD "string"
+            COMMA ","
+            TYPE_EXPR "int"
+              WORD "int"
+            GREATER ">"
+      COMMA ","
+      PARAMETER
+        WORD "second_long_param"
+        COLON ":"
+        TYPE_EXPR
+          L_PAREN "("
+          FUNCTION_TYPE_PARAM
+            TYPE_EXPR "int | string | bool"
+              WORD "int"
+              PIPE "|"
+              WORD "string"
+              PIPE "|"
+              WORD "bool"
+          R_PAREN ")"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR
+      WORD "map"
+      TYPE_ARGS
+        LESS "<"
+        TYPE_EXPR "string"
+          WORD "string"
+        COMMA ","
+        TYPE_EXPR "int | string | bool | float | null"
+          WORD "int"
+          PIPE "|"
+          WORD "string"
+          PIPE "|"
+          WORD "bool"
+          PIPE "|"
+          WORD "float"
+          PIPE "|"
+          WORD "null"
+        GREATER ">"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MAP_LITERAL
+          L_BRACE "{"
+          OBJECT_FIELD
+            STRING_LITERAL "a"
+              QUOTE """
+              WORD "a"
+              QUOTE """
+            COLON ":"
+            INTEGER_LITERAL "1"
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MultiStatement"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "x"
+          EQUALS "="
+          BINARY_EXPR "a + b"
+            WORD "a"
+            PLUS "+"
+            WORD "b"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "y"
+          EQUALS "="
+          BINARY_EXPR "x * 2"
+            WORD "x"
+            STAR "*"
+            INTEGER_LITERAL "2"
+          SEMICOLON ";"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "y > 10"
+              WORD "y"
+              GREATER ">"
+              INTEGER_LITERAL "10"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return y;"
+              KW_RETURN "return"
+              WORD "y"
+              SEMICOLON ";"
+            R_BRACE "}"
+        RETURN_STMT "return x;"
+          KW_RETURN "return"
+          WORD "x"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "FinalExpr"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR "a + b"
+          WORD "a"
+          PLUS "+"
+          WORD "b"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "DeeplyNestedBody"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "c"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "a > 0"
+              WORD "a"
+              GREATER ">"
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            IF_EXPR
+              KW_IF "if"
+              PAREN_EXPR
+                L_PAREN "("
+                BINARY_EXPR "b > 0"
+                  WORD "b"
+                  GREATER ">"
+                  INTEGER_LITERAL "0"
+                R_PAREN ")"
+              BLOCK_EXPR
+                L_BRACE "{"
+                IF_EXPR
+                  KW_IF "if"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    BINARY_EXPR "c > 0"
+                      WORD "c"
+                      GREATER ">"
+                      INTEGER_LITERAL "0"
+                    R_PAREN ")"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    LET_STMT
+                      KW_LET "let"
+                      WORD "x"
+                      EQUALS "="
+                      BINARY_EXPR
+                        BINARY_EXPR "a + b"
+                          WORD "a"
+                          PLUS "+"
+                          WORD "b"
+                        PLUS "+"
+                        WORD "c"
+                      SEMICOLON ";"
+                    IF_EXPR
+                      KW_IF "if"
+                      PAREN_EXPR
+                        L_PAREN "("
+                        BINARY_EXPR "x > 100"
+                          WORD "x"
+                          GREATER ">"
+                          INTEGER_LITERAL "100"
+                        R_PAREN ")"
+                      BLOCK_EXPR
+                        L_BRACE "{"
+                        RETURN_STMT
+                          KW_RETURN "return"
+                          BINARY_EXPR "x * 2"
+                            WORD "x"
+                            STAR "*"
+                            INTEGER_LITERAL "2"
+                          SEMICOLON ";"
+                        R_BRACE "}"
+                      KW_ELSE "else"
+                      BLOCK_EXPR
+                        L_BRACE "{"
+                        RETURN_STMT "return x;"
+                          KW_RETURN "return"
+                          WORD "x"
+                          SEMICOLON ";"
+                        R_BRACE "}"
+                    R_BRACE "}"
+                  KW_ELSE "else"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    RETURN_STMT
+                      KW_RETURN "return"
+                      BINARY_EXPR "a + b"
+                        WORD "a"
+                        PLUS "+"
+                        WORD "b"
+                      SEMICOLON ";"
+                    R_BRACE "}"
+                R_BRACE "}"
+              KW_ELSE "else"
+              BLOCK_EXPR
+                L_BRACE "{"
+                IF_EXPR
+                  KW_IF "if"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    BINARY_EXPR "c > 0"
+                      WORD "c"
+                      GREATER ">"
+                      INTEGER_LITERAL "0"
+                    R_PAREN ")"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    RETURN_STMT
+                      KW_RETURN "return"
+                      BINARY_EXPR "a + c"
+                        WORD "a"
+                        PLUS "+"
+                        WORD "c"
+                      SEMICOLON ";"
+                    R_BRACE "}"
+                  KW_ELSE "else"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    RETURN_STMT "return a;"
+                      KW_RETURN "return"
+                      WORD "a"
+                      SEMICOLON ";"
+                    R_BRACE "}"
+                R_BRACE "}"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return 0;"
+              KW_RETURN "return"
+              INTEGER_LITERAL "0"
+              SEMICOLON ";"
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ManyNestedExprs"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "items"
+        COLON ":"
+        TYPE_EXPR "int[]"
+          WORD "int"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "a"
+          EQUALS "="
+          INDEX_EXPR "items[0]"
+            WORD "items"
+            L_BRACKET "["
+            INTEGER_LITERAL "0"
+            R_BRACKET "]"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "b"
+          EQUALS "="
+          INDEX_EXPR "items[1]"
+            WORD "items"
+            L_BRACKET "["
+            INTEGER_LITERAL "1"
+            R_BRACKET "]"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "c"
+          EQUALS "="
+          IF_EXPR
+            KW_IF "if"
+            PAREN_EXPR
+              L_PAREN "("
+              BINARY_EXPR "a > b"
+                WORD "a"
+                GREATER ">"
+                WORD "b"
+              R_PAREN ")"
+            BLOCK_EXPR "{ a }"
+              L_BRACE "{"
+              WORD "a"
+              R_BRACE "}"
+            KW_ELSE "else"
+            BLOCK_EXPR "{ b }"
+              L_BRACE "{"
+              WORD "b"
+              R_BRACE "}"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "d"
+          EQUALS "="
+          MATCH_EXPR
+            KW_MATCH "match"
+            L_PAREN "("
+            WORD "c"
+            R_PAREN ")"
+            L_BRACE "{"
+            MATCH_ARM
+              MATCH_PATTERN "0"
+                INTEGER_LITERAL "0"
+              FAT_ARROW "=>"
+              INTEGER_LITERAL "1"
+              COMMA ","
+            MATCH_ARM
+              MATCH_PATTERN "_"
+                WORD "_"
+              FAT_ARROW "=>"
+              BINARY_EXPR "c * 2"
+                WORD "c"
+                STAR "*"
+                INTEGER_LITERAL "2"
+            R_BRACE "}"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
+          WORD "e"
+          EQUALS "="
+          BLOCK_EXPR
+            L_BRACE "{"
+            LET_STMT
+              KW_LET "let"
+              WORD "inner"
+              EQUALS "="
+              BINARY_EXPR "d + a"
+                WORD "d"
+                PLUS "+"
+                WORD "a"
+              SEMICOLON ";"
+            BINARY_EXPR "inner * inner"
+              WORD "inner"
+              STAR "*"
+              WORD "inner"
+            R_BRACE "}"
+          SEMICOLON ";"
+        BINARY_EXPR
+          BINARY_EXPR
+            BINARY_EXPR
+              BINARY_EXPR "e + d"
+                WORD "e"
+                PLUS "+"
+                WORD "d"
+              PLUS "+"
+              WORD "c"
+            PLUS "+"
+            WORD "b"
+          PLUS "+"
+          WORD "a"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "NestedLoops"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "matrix"
+        COLON ":"
+        TYPE_EXPR "int[][]"
+          WORD "int"
+          L_BRACKET "["
+          R_BRACKET "]"
+          L_BRACKET "["
+          R_BRACKET "]"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT "let total = 0;"
+          KW_LET "let"
+          WORD "total"
+          EQUALS "="
+          INTEGER_LITERAL "0"
+          SEMICOLON ";"
+        FOR_EXPR
+          KW_FOR "for"
+          L_PAREN "("
+          LET_STMT "let row"
+            KW_LET "let"
+            WORD "row"
+          KW_IN "in"
+          WORD "matrix"
+          R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            FOR_EXPR
+              KW_FOR "for"
+              L_PAREN "("
+              LET_STMT "let val"
+                KW_LET "let"
+                WORD "val"
+              KW_IN "in"
+              WORD "row"
+              R_PAREN ")"
+              BLOCK_EXPR
+                L_BRACE "{"
+                IF_EXPR
+                  KW_IF "if"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    BINARY_EXPR "val < 0"
+                      WORD "val"
+                      LESS "<"
+                      INTEGER_LITERAL "0"
+                    R_PAREN ")"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    CONTINUE_STMT "continue;"
+                      KW_CONTINUE "continue"
+                      SEMICOLON ";"
+                    R_BRACE "}"
+                IF_EXPR
+                  KW_IF "if"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    BINARY_EXPR "val > 1000"
+                      WORD "val"
+                      GREATER ">"
+                      INTEGER_LITERAL "1000"
+                    R_PAREN ")"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    BREAK_STMT "break;"
+                      KW_BREAK "break"
+                      SEMICOLON ";"
+                    R_BRACE "}"
+                LET_STMT
+                  KW_LET "let"
+                  WORD "processed"
+                  EQUALS "="
+                  MATCH_EXPR
+                    KW_MATCH "match"
+                    L_PAREN "("
+                    BINARY_EXPR "val % 3"
+                      WORD "val"
+                      PERCENT "%"
+                      INTEGER_LITERAL "3"
+                    R_PAREN ")"
+                    L_BRACE "{"
+                    MATCH_ARM
+                      MATCH_PATTERN "0"
+                        INTEGER_LITERAL "0"
+                      FAT_ARROW "=>"
+                      BINARY_EXPR "val * 2"
+                        WORD "val"
+                        STAR "*"
+                        INTEGER_LITERAL "2"
+                      COMMA ","
+                    MATCH_ARM
+                      MATCH_PATTERN "1"
+                        INTEGER_LITERAL "1"
+                      FAT_ARROW "=>"
+                      BINARY_EXPR "val + 1"
+                        WORD "val"
+                        PLUS "+"
+                        INTEGER_LITERAL "1"
+                      COMMA ","
+                    MATCH_ARM
+                      MATCH_PATTERN "_"
+                        WORD "_"
+                      FAT_ARROW "=>"
+                      WORD "val"
+                    R_BRACE "}"
+                  SEMICOLON ";"
+                BINARY_EXPR "total += processed"
+                  WORD "total"
+                  PLUS_EQUALS "+="
+                  WORD "processed"
+                SEMICOLON ";"
+                R_BRACE "}"
+            SEMICOLON ";"
+            R_BRACE "}"
+        SEMICOLON ";"
+        RETURN_STMT "return total;"
+          KW_RETURN "return"
+          WORD "total"
+          SEMICOLON ";"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "DeepNestLongExpr"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "c"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "d"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        IF_EXPR
+          KW_IF "if"
+          PAREN_EXPR
+            L_PAREN "("
+            BINARY_EXPR "a > 0"
+              WORD "a"
+              GREATER ">"
+              INTEGER_LITERAL "0"
+            R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            IF_EXPR
+              KW_IF "if"
+              PAREN_EXPR
+                L_PAREN "("
+                BINARY_EXPR "b > 0"
+                  WORD "b"
+                  GREATER ">"
+                  INTEGER_LITERAL "0"
+                R_PAREN ")"
+              BLOCK_EXPR
+                L_BRACE "{"
+                IF_EXPR
+                  KW_IF "if"
+                  PAREN_EXPR
+                    L_PAREN "("
+                    BINARY_EXPR "c > 0"
+                      WORD "c"
+                      GREATER ">"
+                      INTEGER_LITERAL "0"
+                    R_PAREN ")"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    RETURN_STMT
+                      KW_RETURN "return"
+                      BINARY_EXPR
+                        BINARY_EXPR
+                          BINARY_EXPR
+                            BINARY_EXPR
+                              BINARY_EXPR
+                                BINARY_EXPR
+                                  BINARY_EXPR
+                                    BINARY_EXPR
+                                      BINARY_EXPR
+                                        BINARY_EXPR
+                                          BINARY_EXPR
+                                            BINARY_EXPR "a * b"
+                                              WORD "a"
+                                              STAR "*"
+                                              WORD "b"
+                                            STAR "*"
+                                            WORD "c"
+                                          STAR "*"
+                                          WORD "d"
+                                        PLUS "+"
+                                        BINARY_EXPR
+                                          BINARY_EXPR "a * b"
+                                            WORD "a"
+                                            STAR "*"
+                                            WORD "b"
+                                          STAR "*"
+                                          WORD "c"
+                                      PLUS "+"
+                                      BINARY_EXPR "a * b"
+                                        WORD "a"
+                                        STAR "*"
+                                        WORD "b"
+                                    PLUS "+"
+                                    WORD "a"
+                                  PLUS "+"
+                                  BINARY_EXPR
+                                    BINARY_EXPR "b * c"
+                                      WORD "b"
+                                      STAR "*"
+                                      WORD "c"
+                                    STAR "*"
+                                    WORD "d"
+                                PLUS "+"
+                                BINARY_EXPR "b * c"
+                                  WORD "b"
+                                  STAR "*"
+                                  WORD "c"
+                              PLUS "+"
+                              WORD "b"
+                            PLUS "+"
+                            BINARY_EXPR "c * d"
+                              WORD "c"
+                              STAR "*"
+                              WORD "d"
+                          PLUS "+"
+                          WORD "c"
+                        PLUS "+"
+                        WORD "d"
+                      SEMICOLON ";"
+                    R_BRACE "}"
+                  KW_ELSE "else"
+                  BLOCK_EXPR
+                    L_BRACE "{"
+                    RETURN_STMT "return 0;"
+                      KW_RETURN "return"
+                      INTEGER_LITERAL "0"
+                      SEMICOLON ";"
+                    R_BRACE "}"
+                R_BRACE "}"
+              KW_ELSE "else"
+              BLOCK_EXPR
+                L_BRACE "{"
+                RETURN_STMT "return 0;"
+                  KW_RETURN "return"
+                  INTEGER_LITERAL "0"
+                  SEMICOLON ";"
+                R_BRACE "}"
+            R_BRACE "}"
+          KW_ELSE "else"
+          BLOCK_EXPR
+            L_BRACE "{"
+            RETURN_STMT "return 0;"
+              KW_RETURN "return"
+              INTEGER_LITERAL "0"
+              SEMICOLON ";"
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LlmBasic"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "name"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client GPT4"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Say hello to"
+            WORD "Say"
+            WORD "hello"
+            WORD "to"
+          TEMPLATE_INTERPOLATION "{{name}}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "name"
+            R_BRACE "}"
+            R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LlmMultiLine"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "text"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client GPT4"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Analyze the following text:"
+            WORD "Analyze"
+            WORD "the"
+            WORD "following"
+            WORD "text"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ text }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "text"
+            R_BRACE "}"
+            R_BRACE "}"
+          PROMPT_TEXT "Return a summary."
+            WORD "Return"
+            WORD "a"
+            WORD "summary"
+            DOT "."
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LlmStringClient"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "text"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD
+        KW_CLIENT "client"
+        STRING_LITERAL "openai/gpt-4o"
+          QUOTE """
+          WORD "openai"
+          SLASH "/"
+          WORD "gpt-4o"
+          QUOTE """
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Summarize:"
+            WORD "Summarize"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ text }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "text"
+            R_BRACE "}"
+            R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LlmReversedOrder"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "text"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Summarize:"
+            WORD "Summarize"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ text }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "text"
+            R_BRACE "}"
+            R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      CLIENT_FIELD "client GPT4"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LlmWithLongSignature"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "first_context"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "second_context"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "third_context"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "user_query"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    LLM_FUNCTION_BODY
+      L_BRACE "{"
+      CLIENT_FIELD "client GPT4"
+        KW_CLIENT "client"
+        WORD "GPT4"
+      PROMPT_FIELD
+        WORD "prompt"
+        RAW_STRING_LITERAL
+          HASH "#"
+          QUOTE """
+          PROMPT_TEXT "Context:"
+            WORD "Context"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ first_context }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "first_context"
+            R_BRACE "}"
+            R_BRACE "}"
+          TEMPLATE_INTERPOLATION "{{ second_context }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "second_context"
+            R_BRACE "}"
+            R_BRACE "}"
+          TEMPLATE_INTERPOLATION "{{ third_context }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "third_context"
+            R_BRACE "}"
+            R_BRACE "}"
+          PROMPT_TEXT "Query:"
+            WORD "Query"
+            COLON ":"
+          TEMPLATE_INTERPOLATION "{{ user_query }}"
+            L_BRACE "{"
+            L_BRACE "{"
+            WORD "user_query"
+            R_BRACE "}"
+            R_BRACE "}"
+          QUOTE """
+          HASH "#"
+      R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "ExtraWhitespace"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "a"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      COMMA ","
+      PARAMETER
+        WORD "b"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        BINARY_EXPR "a + b"
+          WORD "a"
+          PLUS "+"
+          WORD "b"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "F"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR "{
+    1
+}"
+        L_BRACE "{"
+        INTEGER_LITERAL "1"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

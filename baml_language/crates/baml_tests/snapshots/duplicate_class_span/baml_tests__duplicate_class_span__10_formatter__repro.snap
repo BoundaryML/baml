@@ -2,11 +2,11 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class A {
-    field string
+    field: string
 }
 
 class A {
-    field string
+    field: string
 }
 
-type A = int
+type A = int;

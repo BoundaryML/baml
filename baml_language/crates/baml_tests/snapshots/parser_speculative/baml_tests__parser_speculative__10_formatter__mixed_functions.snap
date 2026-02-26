@@ -1,5 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== FORMATTER ERROR ===
-Expected token/node of kind PAREN_EXPR, but found BINARY_EXPR at 406..417
+=== STRONG AST ERROR ===
+Expected token/node of kind PAREN_EXPR, but found BINARY_EXPR at mixed_functions.baml:20:6

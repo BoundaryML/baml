@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PARSER ERROR ===
+[UnexpectedToken { expected: "'='", found: "identifier", span: Span { file_id: FileId(0), range: 183..186 } }, UnexpectedToken { expected: "type", found: "EOF", span: Span { file_id: FileId(0), range: 251..252 } }]

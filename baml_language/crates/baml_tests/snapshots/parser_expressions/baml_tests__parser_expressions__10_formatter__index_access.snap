@@ -4,9 +4,9 @@ source: crates/baml_tests/src/generated_tests.rs
 // Test index access expressions
 
 class IndexUser {
-    name string
-    age int
-    tags string[]
+    name: string
+    age: int
+    tags: string[]
 }
 
 function IndexAccess(users: IndexUser[]) -> string {

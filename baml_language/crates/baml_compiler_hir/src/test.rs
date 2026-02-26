@@ -7,12 +7,13 @@
 
 use baml_base::Name;
 use baml_compiler_diagnostics::HirDiagnostic;
-use baml_compiler_syntax::SyntaxNode;
+use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast::ConfigItem};
+use indexmap::IndexMap;
 use rowan::ast::AstNode;
 
 use crate::{
     Attribute, LoweringContext,
-    item_tree::{Test, TypeBuilderBlock, TypeBuilderEntry},
+    item_tree::{Test, TestArgValue, TypeBuilderBlock, TypeBuilderEntry},
     lower_class, lower_enum, lower_type_alias,
 };
 
@@ -33,6 +34,7 @@ pub(crate) fn lower_test(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
     // Track for required property check
     let mut has_functions = false;
     let mut has_args = false;
+    let mut args = IndexMap::new();
 
     // Process config block if present
     if let Some(config_block) = test.config_block() {
@@ -60,6 +62,14 @@ pub(crate) fn lower_test(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
                 }
                 "args" => {
                     has_args = true;
+                    if let Some(nested) = item.nested_block() {
+                        for arg_item in nested.items() {
+                            if let Some(arg_key) = arg_item.key() {
+                                let value = lower_config_item_to_test_arg(&arg_item);
+                                args.insert(arg_key.text().to_string(), value);
+                            }
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -136,8 +146,117 @@ pub(crate) fn lower_test(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
     Some(Test {
         name,
         function_refs,
+        args,
         type_builder,
     })
+}
+
+/// Convert a CST `ConfigItem` to a `TestArgValue`.
+fn lower_config_item_to_test_arg(item: &ConfigItem) -> TestArgValue {
+    // Nested block → Map
+    if let Some(nested) = item.nested_block() {
+        let mut entries = IndexMap::new();
+        for sub_item in nested.items() {
+            if let Some(key) = sub_item.key() {
+                let value = lower_config_item_to_test_arg(&sub_item);
+                entries.insert(key.text().to_string(), value);
+            }
+        }
+        return TestArgValue::Map(entries);
+    }
+
+    // Array
+    if item.is_array() {
+        if let Some(array_node) = item.array_node() {
+            let items = array_node
+                .children()
+                .filter(|child| child.kind() == SyntaxKind::CONFIG_VALUE)
+                .map(|child| lower_config_value_node(&child))
+                .collect();
+            return TestArgValue::Array(items);
+        }
+        return TestArgValue::Array(Vec::new());
+    }
+
+    // Integer
+    if let Some(int_val) = item.value_int() {
+        let val = if item.is_negative() {
+            -int_val
+        } else {
+            int_val
+        };
+        return TestArgValue::Int(val);
+    }
+
+    // String/word value
+    if let Some(s) = item.value_str() {
+        return parse_scalar_str(&s);
+    }
+
+    TestArgValue::Null
+}
+
+/// Parse a scalar string value into the appropriate `TestArgValue`.
+fn parse_scalar_str(s: &str) -> TestArgValue {
+    if s == "null" {
+        return TestArgValue::Null;
+    }
+    if s == "true" {
+        return TestArgValue::Bool(true);
+    }
+    if s == "false" {
+        return TestArgValue::Bool(false);
+    }
+    if s.contains('.') {
+        if let Ok(f) = s.parse::<f64>() {
+            return TestArgValue::Float(f);
+        }
+    }
+    TestArgValue::String(s.to_string())
+}
+
+/// Parse a raw `CONFIG_VALUE` syntax node into a `TestArgValue`.
+fn lower_config_value_node(node: &SyntaxNode) -> TestArgValue {
+    // Nested block
+    for child in node.children() {
+        if child.kind() == SyntaxKind::CONFIG_BLOCK {
+            if let Some(block) = baml_compiler_syntax::ast::ConfigBlock::cast(child.clone()) {
+                let mut entries = IndexMap::new();
+                for sub_item in block.items() {
+                    if let Some(key) = sub_item.key() {
+                        let value = lower_config_item_to_test_arg(&sub_item);
+                        entries.insert(key.text().to_string(), value);
+                    }
+                }
+                return TestArgValue::Map(entries);
+            }
+        }
+        // Nested array
+        if child.kind() == SyntaxKind::ARRAY_LITERAL {
+            let items = child
+                .children()
+                .filter(|c| c.kind() == SyntaxKind::CONFIG_VALUE)
+                .map(|c| lower_config_value_node(&c))
+                .collect();
+            return TestArgValue::Array(items);
+        }
+    }
+
+    // Extract scalar text, filtering trivia and quotes
+    let text = match baml_compiler_syntax::ast::ConfigValue::cast(node.clone()) {
+        Some(cv) => match cv.scalar_text() {
+            Some(t) => t,
+            None => return TestArgValue::Null,
+        },
+        None => return TestArgValue::Null,
+    };
+
+    // Try parsing as integer first
+    if let Ok(i) = text.parse::<i64>() {
+        return TestArgValue::Int(i);
+    }
+
+    parse_scalar_str(&text)
 }
 
 /// Lower a `type_builder` block to HIR.

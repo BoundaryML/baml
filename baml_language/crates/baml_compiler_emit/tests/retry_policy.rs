@@ -1,4 +1,4 @@
-use baml_compiler_emit::{LoweringError, compile_files};
+use baml_compiler_emit::{CompileOptions, LoweringError, compile_files};
 use baml_tests::bytecode::setup_test_db;
 
 #[test]
@@ -18,8 +18,11 @@ retry_policy Bad {
     let db = setup_test_db(source);
     let project = db.get_project().expect("project should be initialized");
     let files = project.files(&db).clone();
+    let options = CompileOptions {
+        emit_test_cases: false,
+    };
 
-    let err = compile_files(&db, &files, baml_compiler_emit::OptLevel::One)
+    let err = compile_files(&db, &files, baml_compiler_emit::OptLevel::One, &options)
         .expect_err("invalid retry_policy should fail compile");
 
     match err {

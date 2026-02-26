@@ -9,10 +9,11 @@
 //! - [`new`] — compile source files and return `Arc<dyn Bex>`.
 use std::{collections::HashMap, sync::Arc};
 
+pub use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::Bex;
 pub use bex_engine::{EngineError, FunctionCallContextBuilder};
 pub use bex_events::EventSink;
-pub use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, Ty};
+pub use bex_external_types::{BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty};
 pub use sys_types::{CallId, CancellationToken, SysOps};
 use thiserror::Error;
 

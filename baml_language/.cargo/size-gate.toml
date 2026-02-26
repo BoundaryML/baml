@@ -17,5 +17,5 @@ package = "bridge_wasm"
 target = "wasm32-unknown-unknown"
 no_default_features = true
 wasm = true
-policy.max_gzip_bytes = 1_800_000
+policy.max_gzip_bytes = 1_810_000
 policy.max_delta_pct = 10.0

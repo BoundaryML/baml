@@ -44,20 +44,20 @@ function FunctionName2(arg:string) -> "foo" {
 //----
 //- diagnostics
 // Warning: Failed to parse Jinja template: syntax error: unexpected identifier, expected end of variable block (in prompt:3)
-//     ╭─[ constraints_malformed_expression.baml:19:10 ]
+//     ╭─[ constraints_malformed_expression.baml:19:11 ]
 //     │
 //  19 │     {{ if foo }}
-//     │          ─┬─  
-//     │           ╰─── Failed to parse Jinja template: syntax error: unexpected identifier, expected end of variable block (in prompt:3)
+//     │           ─┬─  
+//     │            ╰─── Failed to parse Jinja template: syntax error: unexpected identifier, expected end of variable block (in prompt:3)
 //     │ 
 //     │ Note: Error code: E0084
 // ────╯
 // Warning: Failed to parse Jinja template: syntax error: unexpected `)` (in prompt:3)
-//     ╭─[ constraints_malformed_expression.baml:10:7 ]
+//     ╭─[ constraints_malformed_expression.baml:10:8 ]
 //     │
 //  10 │     {{ ) }}
-//     │       ┬  
-//     │       ╰── Failed to parse Jinja template: syntax error: unexpected `)` (in prompt:3)
+//     │        ┬  
+//     │        ╰── Failed to parse Jinja template: syntax error: unexpected `)` (in prompt:3)
 //     │ 
 //     │ Note: Error code: E0084
 // ────╯

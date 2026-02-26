@@ -1,0 +1,60 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function test_let_binding(function_name: string) -> string {
+    load_var function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    store_var t
+    load_const "ok"
+    return
+}
+
+function test_list(function_name: string) -> string {
+    alloc_array 0
+    store_var ts
+    load_const "ok"
+    return
+}
+
+function test_map(function_name: string) -> string {
+    alloc_map 0
+    store_var m
+    load_const "ok"
+    return
+}
+
+function test_optional(function_name: string) -> string {
+    load_const null
+    store_var t
+    load_const "ok"
+    return
+}
+
+function test_param(t: type) -> string {
+    load_const "ok"
+    return
+}
+
+function test_return_type(function_name: string) -> type {
+    load_var function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    return
+}
+
+function test_type_annotation(function_name: string) -> string {
+    load_var function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    store_var t
+    load_const "ok"
+    return
+}
+
+function test_union(function_name: string) -> string {
+    load_const "hello"
+    store_var t
+    load_const "ok"
+    return
+}

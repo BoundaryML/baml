@@ -30,49 +30,8 @@ fn FetchDatax(user_id: string) -> Hi {
     }
 }
 
-fn VertexGCP.resolve() -> baml.llm.PrimitiveClient {
-    // Locals:
-    let _0: baml.llm.PrimitiveClient // return
-    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
-    let _2: "VertexGCP"
-    let _3: "vertex-ai"
-    let _4: "user"
-    let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
-    let _9: map<string, unknown>
-    let _10: "model"
-    let _11: "gemini-2"
-    let _12: null
-
-    bb0: {
-        _1 = const fn baml.llm.build_primitive_client;
-        _2 = const "VertexGCP";
-        _3 = const "vertex-ai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
-        _5 = [copy _6, copy _7, copy _8];
-        _10 = const "model";
-        _11 = const "gemini-2";
-        _9 = { copy _10: copy _11 };
-        _12 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        _0 = await _12 -> [bb3];
-    }
-
-    bb3: {
-        goto -> bb1;
-    }
-}
+fn VertexGCP.resolve:
+  (no MIR due to errors: missing expression at file 1:121..121)
 
 fn FetchDatax.build_request(user_id: string) -> baml.http.Request {
     // Locals:

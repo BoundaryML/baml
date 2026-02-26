@@ -4,20 +4,20 @@ source: crates/baml_tests/src/generated_tests.rs
 // Test HIR validation for duplicate attributes
 
 class HasDuplicateDescription {
-    name string
+    name: string
     @@description("First description")
     @@alias("AKA")
     @@description("Second description")
 }
 
 class HasDuplicateField {
-    name string
-    age int
-    name int
+    name: string
+    age: int
+    name: int
 }
 
 class HasDuplicateFieldAttr {
-    name string @alias("n") @description("Name") @alias("nm")
+    name: string @alias("n") @description("Name") @alias("nm")
 }
 
 enum HasDuplicateVariant {

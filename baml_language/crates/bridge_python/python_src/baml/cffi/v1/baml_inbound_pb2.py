@@ -22,10 +22,9 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
-from baml.cffi.v1 import baml_object_pb2 as baml_dot_cffi_dot_v1_dot_baml__object__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1f\x62\x61ml/cffi/v1/baml_inbound.proto\x12\x0c\x62\x61ml.cffi.v1\x1a\x1e\x62\x61ml/cffi/v1/baml_object.proto\"\xec\x02\n\tHostValue\x12\x16\n\x0cstring_value\x18\x02 \x01(\tH\x00\x12\x13\n\tint_value\x18\x03 \x01(\x03H\x00\x12\x15\n\x0b\x66loat_value\x18\x04 \x01(\x01H\x00\x12\x14\n\nbool_value\x18\x05 \x01(\x08H\x00\x12\x31\n\nlist_value\x18\x06 \x01(\x0b\x32\x1b.baml.cffi.v1.HostListValueH\x00\x12/\n\tmap_value\x18\x07 \x01(\x0b\x32\x1a.baml.cffi.v1.HostMapValueH\x00\x12\x33\n\x0b\x63lass_value\x18\x08 \x01(\x0b\x32\x1c.baml.cffi.v1.HostClassValueH\x00\x12\x31\n\nenum_value\x18\t \x01(\x0b\x32\x1b.baml.cffi.v1.HostEnumValueH\x00\x12\x30\n\x06handle\x18\n \x01(\x0b\x32\x1e.baml.cffi.v1.BamlObjectHandleH\x00\x42\x07\n\x05value\"8\n\rHostListValue\x12\'\n\x06values\x18\x01 \x03(\x0b\x32\x17.baml.cffi.v1.HostValue\";\n\x0cHostMapValue\x12+\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1a.baml.cffi.v1.HostMapEntry\"\xab\x01\n\x0cHostMapEntry\x12\x14\n\nstring_key\x18\x01 \x01(\tH\x00\x12\x11\n\x07int_key\x18\x02 \x01(\x03H\x00\x12\x12\n\x08\x62ool_key\x18\x03 \x01(\x08H\x00\x12/\n\x08\x65num_key\x18\x05 \x01(\x0b\x32\x1b.baml.cffi.v1.HostEnumValueH\x00\x12&\n\x05value\x18\x06 \x01(\x0b\x32\x17.baml.cffi.v1.HostValueB\x05\n\x03key\"J\n\x0eHostClassValue\x12\x0c\n\x04name\x18\x01 \x01(\t\x12*\n\x06\x66ields\x18\x02 \x03(\x0b\x32\x1a.baml.cffi.v1.HostMapEntry\",\n\rHostEnumValue\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"\xb9\x02\n\x15HostFunctionArguments\x12*\n\x06kwargs\x18\x01 \x03(\x0b\x32\x1a.baml.cffi.v1.HostMapEntry\x12\x39\n\x0f\x63lient_registry\x18\x02 \x01(\x0b\x32 .baml.cffi.v1.HostClientRegistry\x12%\n\x03\x65nv\x18\x03 \x03(\x0b\x32\x18.baml.cffi.v1.HostEnvVar\x12\x32\n\ncollectors\x18\x04 \x03(\x0b\x32\x1e.baml.cffi.v1.BamlObjectHandle\x12\x34\n\x0ctype_builder\x18\x05 \x01(\x0b\x32\x1e.baml.cffi.v1.BamlObjectHandle\x12(\n\x04tags\x18\x06 \x03(\x0b\x32\x1a.baml.cffi.v1.HostMapEntry\"i\n\x12HostClientRegistry\x12\x14\n\x07primary\x18\x01 \x01(\tH\x00\x88\x01\x01\x12\x31\n\x07\x63lients\x18\x02 \x03(\x0b\x32 .baml.cffi.v1.HostClientPropertyB\n\n\x08_primary\"\x8d\x01\n\x12HostClientProperty\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x10\n\x08provider\x18\x02 \x01(\t\x12\x19\n\x0cretry_policy\x18\x03 \x01(\tH\x00\x88\x01\x01\x12+\n\x07options\x18\x04 \x03(\x0b\x32\x1a.baml.cffi.v1.HostMapEntryB\x0f\n\r_retry_policy\"(\n\nHostEnvVar\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\tB\x08Z\x06./cffib\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1f\x62\x61ml/cffi/v1/baml_inbound.proto\x12\x0c\x62\x61ml.cffi.v1\"L\n\nBamlHandle\x12\x0b\n\x03key\x18\x01 \x01(\x04\x12\x31\n\x0bhandle_type\x18\x02 \x01(\x0e\x32\x1c.baml.cffi.v1.BamlHandleType\"\xf5\x02\n\x0cInboundValue\x12\x16\n\x0cstring_value\x18\x02 \x01(\tH\x00\x12\x13\n\tint_value\x18\x03 \x01(\x03H\x00\x12\x15\n\x0b\x66loat_value\x18\x04 \x01(\x01H\x00\x12\x14\n\nbool_value\x18\x05 \x01(\x08H\x00\x12\x34\n\nlist_value\x18\x06 \x01(\x0b\x32\x1e.baml.cffi.v1.InboundListValueH\x00\x12\x32\n\tmap_value\x18\x07 \x01(\x0b\x32\x1d.baml.cffi.v1.InboundMapValueH\x00\x12\x36\n\x0b\x63lass_value\x18\x08 \x01(\x0b\x32\x1f.baml.cffi.v1.InboundClassValueH\x00\x12\x34\n\nenum_value\x18\t \x01(\x0b\x32\x1e.baml.cffi.v1.InboundEnumValueH\x00\x12*\n\x06handle\x18\n \x01(\x0b\x32\x18.baml.cffi.v1.BamlHandleH\x00\x42\x07\n\x05value\">\n\x10InboundListValue\x12*\n\x06values\x18\x01 \x03(\x0b\x32\x1a.baml.cffi.v1.InboundValue\"A\n\x0fInboundMapValue\x12.\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1d.baml.cffi.v1.InboundMapEntry\"\xb4\x01\n\x0fInboundMapEntry\x12\x14\n\nstring_key\x18\x01 \x01(\tH\x00\x12\x11\n\x07int_key\x18\x02 \x01(\x03H\x00\x12\x12\n\x08\x62ool_key\x18\x03 \x01(\x08H\x00\x12\x32\n\x08\x65num_key\x18\x05 \x01(\x0b\x32\x1e.baml.cffi.v1.InboundEnumValueH\x00\x12)\n\x05value\x18\x06 \x01(\x0b\x32\x1a.baml.cffi.v1.InboundValueB\x05\n\x03key\"P\n\x11InboundClassValue\x12\x0c\n\x04name\x18\x01 \x01(\t\x12-\n\x06\x66ields\x18\x02 \x03(\x0b\x32\x1d.baml.cffi.v1.InboundMapEntry\"/\n\x10InboundEnumValue\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"A\n\x10\x43\x61llFunctionArgs\x12-\n\x06kwargs\x18\x01 \x03(\x0b\x32\x1d.baml.cffi.v1.InboundMapEntry\"&\n\x07\x43\x61llAck\x12\x0f\n\x05\x65rror\x18\x01 \x01(\tH\x00\x42\n\n\x08response*\xb0\x02\n\x0e\x42\x61mlHandleType\x12\x16\n\x12HANDLE_UNSPECIFIED\x10\x00\x12\x12\n\x0eHANDLE_UNKNOWN\x10\x01\x12\x11\n\rRESOURCE_FILE\x10\x02\x12\x13\n\x0fRESOURCE_SOCKET\x10\x03\x12\x1a\n\x16RESOURCE_HTTP_RESPONSE\x10\x04\x12\x10\n\x0c\x46UNCTION_REF\x10\x05\x12\x13\n\x0f\x41\x44T_MEDIA_IMAGE\x10\x06\x12\x13\n\x0f\x41\x44T_MEDIA_AUDIO\x10\x07\x12\x13\n\x0f\x41\x44T_MEDIA_VIDEO\x10\x08\x12\x11\n\rADT_MEDIA_PDF\x10\t\x12\x15\n\x11\x41\x44T_MEDIA_GENERIC\x10\n\x12\x12\n\x0e\x41\x44T_PROMPT_AST\x10\x0b\x12\x11\n\rADT_COLLECTOR\x10\x0c\x12\x0c\n\x08\x41\x44T_TYPE\x10\rB\x08Z\x06./cffib\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,24 +32,24 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'baml.cffi.v1.baml_inbound_p
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\006./cffi'
-  _globals['_HOSTVALUE']._serialized_start=82
-  _globals['_HOSTVALUE']._serialized_end=446
-  _globals['_HOSTLISTVALUE']._serialized_start=448
-  _globals['_HOSTLISTVALUE']._serialized_end=504
-  _globals['_HOSTMAPVALUE']._serialized_start=506
-  _globals['_HOSTMAPVALUE']._serialized_end=565
-  _globals['_HOSTMAPENTRY']._serialized_start=568
-  _globals['_HOSTMAPENTRY']._serialized_end=739
-  _globals['_HOSTCLASSVALUE']._serialized_start=741
-  _globals['_HOSTCLASSVALUE']._serialized_end=815
-  _globals['_HOSTENUMVALUE']._serialized_start=817
-  _globals['_HOSTENUMVALUE']._serialized_end=861
-  _globals['_HOSTFUNCTIONARGUMENTS']._serialized_start=864
-  _globals['_HOSTFUNCTIONARGUMENTS']._serialized_end=1177
-  _globals['_HOSTCLIENTREGISTRY']._serialized_start=1179
-  _globals['_HOSTCLIENTREGISTRY']._serialized_end=1284
-  _globals['_HOSTCLIENTPROPERTY']._serialized_start=1287
-  _globals['_HOSTCLIENTPROPERTY']._serialized_end=1428
-  _globals['_HOSTENVVAR']._serialized_start=1430
-  _globals['_HOSTENVVAR']._serialized_end=1470
+  _globals['_BAMLHANDLETYPE']._serialized_start=1056
+  _globals['_BAMLHANDLETYPE']._serialized_end=1360
+  _globals['_BAMLHANDLE']._serialized_start=49
+  _globals['_BAMLHANDLE']._serialized_end=125
+  _globals['_INBOUNDVALUE']._serialized_start=128
+  _globals['_INBOUNDVALUE']._serialized_end=501
+  _globals['_INBOUNDLISTVALUE']._serialized_start=503
+  _globals['_INBOUNDLISTVALUE']._serialized_end=565
+  _globals['_INBOUNDMAPVALUE']._serialized_start=567
+  _globals['_INBOUNDMAPVALUE']._serialized_end=632
+  _globals['_INBOUNDMAPENTRY']._serialized_start=635
+  _globals['_INBOUNDMAPENTRY']._serialized_end=815
+  _globals['_INBOUNDCLASSVALUE']._serialized_start=817
+  _globals['_INBOUNDCLASSVALUE']._serialized_end=897
+  _globals['_INBOUNDENUMVALUE']._serialized_start=899
+  _globals['_INBOUNDENUMVALUE']._serialized_end=946
+  _globals['_CALLFUNCTIONARGS']._serialized_start=948
+  _globals['_CALLFUNCTIONARGS']._serialized_end=1013
+  _globals['_CALLACK']._serialized_start=1015
+  _globals['_CALLACK']._serialized_end=1053
 # @@protoc_insertion_point(module_scope)

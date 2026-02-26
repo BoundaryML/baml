@@ -1,10 +1,10 @@
 import type {
-  HostValue,
-  HostMapEntry,
-  HostFunctionArguments as HostFunctionArgumentsType,
+  InboundValue,
+  InboundMapEntry,
+  CallFunctionArgs as CallFunctionArgsType,
 } from './generated/baml/cffi/v1/baml_inbound';
 import {
-  HostFunctionArguments,
+  CallFunctionArgs,
 } from './generated/baml/cffi/v1/baml_inbound';
 import type { BamlSerializable } from './types';
 
@@ -17,7 +17,7 @@ function isBamlSerializable(val: unknown): val is BamlSerializable {
   );
 }
 
-function serializeValue(val: unknown): HostValue {
+function serializeValue(val: unknown): InboundValue {
   if (val === null || val === undefined) {
     return { value: undefined };
   }
@@ -58,7 +58,7 @@ function serializeValue(val: unknown): HostValue {
       return val.toBaml();
     }
     // Plain object → map with string keys
-    const entries: HostMapEntry[] = Object.entries(val).map(
+    const entries: InboundMapEntry[] = Object.entries(val).map(
       ([k, v]) => ({
         key: { $case: 'stringKey' as const, stringKey: k },
         value: serializeValue(v),
@@ -73,34 +73,21 @@ function serializeValue(val: unknown): HostValue {
   );
 }
 
-export interface EncodeCallArgsOptions {
-  env?: Record<string, string>;
-}
-
 export function encodeCallArgs(
   kwargs: Record<string, unknown>,
-  options?: EncodeCallArgsOptions,
 ): Uint8Array {
-  const entries: HostMapEntry[] = Object.entries(kwargs).map(
+  const entries: InboundMapEntry[] = Object.entries(kwargs).map(
     ([k, v]) => ({
       key: { $case: 'stringKey' as const, stringKey: k },
       value: serializeValue(v),
     }),
   );
 
-  const args: HostFunctionArgumentsType = {
+  const args: CallFunctionArgsType = {
     kwargs: entries,
-    clientRegistry: undefined,
-    env: Object.entries(options?.env ?? {}).map(([key, value]) => ({
-      key,
-      value,
-    })),
-    collectors: [],
-    typeBuilder: undefined,
-    tags: [],
   };
 
-  return HostFunctionArguments.encode(args).finish();
+  return CallFunctionArgs.encode(args).finish();
 }
 
 export { serializeValue };

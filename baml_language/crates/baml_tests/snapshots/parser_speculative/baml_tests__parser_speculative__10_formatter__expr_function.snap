@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class JsonData {
-    field1 int
-    field2 int
+    field1: int
+    field2: int
 }
 
 function ProcessData(data: JsonData) -> string {

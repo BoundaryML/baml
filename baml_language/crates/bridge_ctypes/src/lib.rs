@@ -5,6 +5,7 @@
 //! and `bridge_wasm`.
 
 mod error;
+mod handle_table;
 mod utils;
 mod value_decode;
 mod value_encode;
@@ -18,6 +19,7 @@ pub mod baml {
 }
 
 pub use error::CtypesError;
+pub use handle_table::{HANDLE_TABLE, HandleTable, HandleTableOptions, HandleTableValue};
 pub use utils::DecodeFromBuffer;
-pub use value_decode::{host_value_to_external, kwargs_to_bex_values};
-pub use value_encode::external_to_cffi_value;
+pub use value_decode::{inbound_to_external, kwargs_to_bex_values};
+pub use value_encode::external_to_baml_value;

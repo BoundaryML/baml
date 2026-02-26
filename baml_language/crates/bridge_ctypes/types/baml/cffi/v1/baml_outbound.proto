@@ -1,16 +1,15 @@
 syntax = "proto3";
 package baml.cffi.v1;
 
-import "baml/cffi/v1/baml_object.proto";
+import "baml/cffi/v1/baml_inbound.proto";
 
 option go_package = "./cffi";
 
 // -----------------------------------------------------------------------------
-// CFFIValue definition
+// Outbound values — engine to host (type-rich)
 // -----------------------------------------------------------------------------
 
-// The wrapper message for CFFIValue.
-message CFFIValueHolder {
+message BamlOutboundValue {
   // we must include this because we might be a "string"
   // but in a container type like (string | int) and some languages
   // require we decode this.
@@ -19,25 +18,26 @@ message CFFIValueHolder {
   // But not for CFFI -> BAML (BAML always does type validation again at
   // boundaries)
   oneof value {
-    CFFIValueNull null_value = 2;
+    BamlValueNull null_value = 2;
     string string_value = 3;
     int64 int_value = 4;
     double float_value = 5;
     bool bool_value = 6;
-    CFFIValueClass class_value = 7;
-    CFFIValueEnum enum_value = 8;
-    CFFIFieldTypeLiteral literal_value = 9;
-    CFFIValueRawObject object_value = 10;
-    // Container types
-    CFFIValueList list_value = 11;
-    CFFIValueMap map_value = 12;
-    CFFIValueUnionVariant union_variant_value = 13;
-    CFFIValueChecked checked_value = 14;
-    CFFIValueStreamingState streaming_state_value = 15;
+    BamlValueClass class_value = 7;
+    BamlValueEnum enum_value = 8;
+    BamlFieldTypeLiteral literal_value = 9;
+    BamlValueList list_value = 11;
+    BamlValueMap map_value = 12;
+    BamlValueUnionVariant union_variant_value = 13;
+    BamlValueChecked checked_value = 14;
+    BamlValueStreamingState streaming_state_value = 15;
+    BamlHandle handle_value = 16;
+    BamlValueMedia media_value = 17;
+    BamlValuePromptAst prompt_ast_value = 18;
   }
 }
 
-enum CFFITypeNamespace {
+enum BamlTypeNamespace {
   INTERNAL = 0;
   TYPES = 1;
   STREAM_TYPES = 2;
@@ -46,210 +46,245 @@ enum CFFITypeNamespace {
 }
 
 // wrapper for the name of a type
-message CFFITypeName {
-  CFFITypeNamespace namespace = 1;
+message BamlTypeName {
+  BamlTypeNamespace namespace = 1;
   // the name of the type
   string name = 2;
 }
 
-message CFFIValueNull {}
+message BamlValueNull {}
 
 // Each variant as a message.
-message CFFIValueList {
-  CFFIFieldTypeHolder item_type = 1;
-  repeated CFFIValueHolder items = 2;
+message BamlValueList {
+  BamlFieldType item_type = 1;
+  repeated BamlOutboundValue items = 2;
 }
 
 // A helper message to represent map entries (used also in Class).
-message CFFIMapEntry {
+message BamlOutboundMapEntry {
   string key = 1;
-  CFFIValueHolder value = 2;
+  BamlOutboundValue value = 2;
 }
 
-message CFFIValueMap {
-  CFFIFieldTypeHolder key_type = 1;
-  CFFIFieldTypeHolder value_type = 2;
-  repeated CFFIMapEntry entries = 3;
+message BamlValueMap {
+  BamlFieldType key_type = 1;
+  BamlFieldType value_type = 2;
+  repeated BamlOutboundMapEntry entries = 3;
 }
 
-message CFFIValueClass {
-  CFFITypeName name = 1;
-  repeated CFFIMapEntry fields = 2;
+message BamlValueClass {
+  BamlTypeName name = 1;
+  repeated BamlOutboundMapEntry fields = 2;
 }
 
-message CFFIValueEnum {
-  CFFITypeName name = 1;
+message BamlValueEnum {
+  BamlTypeName name = 1;
   string value = 2;
   bool is_dynamic = 3;
 }
 
-message CFFIValueRawObject {
-  oneof object {
-    BamlObjectHandle media = 1;
-    BamlObjectHandle type = 2;
+// For the Rust variant `Union(Vec<BamlFieldType>, Box<BamlOutboundValue>)`
+message BamlValueUnionVariant {
+  BamlTypeName name = 1;
+  bool is_optional = 2;
+  bool is_single_pattern = 3;
+  BamlFieldType self_type = 4;
+  string value_option_name = 5;
+  BamlOutboundValue value = 6;
+}
+
+message BamlValueChecked {
+  BamlTypeName name = 1;
+  BamlOutboundValue value = 2;
+  repeated BamlCheckValue checks = 3;
+}
+
+// -----------------------------------------------------------------------------
+// BamlMedia definitions
+// -----------------------------------------------------------------------------
+
+// We need to handle BamlMediaType. Since one variant is "Other(String)",
+// we represent it as a message with an enum tag and an optional string.
+enum MediaTypeEnum {
+  MEDIA_TYPE_UNSPECIFIED = 0;
+  IMAGE = 1;
+  AUDIO = 2;
+  PDF = 3;
+  VIDEO = 4;
+  OTHER = 5;
+}
+
+message BamlValueMedia {
+  MediaTypeEnum media = 1;
+  optional string mime_type = 2;
+  oneof value {
+    string url = 3;
+    string base64 = 4;
+    string file = 5;
   }
 }
 
-// For the Rust variant `Union(Vec<CFFIFieldType>, Box<CFFIValue>)`
-message CFFIValueUnionVariant {
-  CFFITypeName name = 1;
-  bool is_optional = 2;
-  bool is_single_pattern = 3;
-  CFFIFieldTypeHolder self_type = 4;
-  string value_option_name = 5;
-  CFFIValueHolder value = 6;
+message BamlValuePromptAst {
+  oneof value {
+    BamlValuePromptAstSimple simple = 1;
+    BamlValuePromptAstMessage message = 2;
+    BamlValuePromptAstMultiple multiple = 3;
+  }
 }
 
-message CFFIValueChecked {
-  CFFITypeName name = 1;
-  CFFIValueHolder value = 2;
-  repeated CFFICheckValue checks = 3;
+message BamlValuePromptAstMessage {
+  string role = 1;
+  BamlValuePromptAstSimple content = 2;
+  string metadata_as_json = 3;
+}
+
+message BamlValuePromptAstMultiple {
+  repeated BamlValuePromptAst items = 1;
+}
+
+message BamlValuePromptAstSimple {
+  oneof value {
+    string string = 1;
+    BamlValueMedia media = 2;
+    BamlValuePromptAstSimpleMultiple multiple = 3;
+  }
+}
+
+message BamlValuePromptAstSimpleMultiple {
+  repeated BamlValuePromptAstSimple items = 1;
 }
 
 // -----------------------------------------------------------------------------
-// CFFIMedia definitions
+// BamlFieldType definition
 // -----------------------------------------------------------------------------
 
-// We need to handle CFFIMediaType. Since one variant is "Other(String)",
-// we represent it as a message with an enum tag and an optional string.
-enum MediaTypeEnum {
-  IMAGE = 0;
-  AUDIO = 1;
-  PDF = 2;
-  VIDEO = 3;
-}
-
-// -----------------------------------------------------------------------------
-// CFFIFieldType definition
-// -----------------------------------------------------------------------------
-
-// The wrapper message for CFFIFieldType.
-message CFFIFieldTypeHolder {
+// The wrapper message for BamlFieldType.
+message BamlFieldType {
   oneof type {
-    CFFIFieldTypeString string_type = 1;
-    CFFIFieldTypeInt int_type = 2;
-    CFFIFieldTypeFloat float_type = 3;
-    CFFIFieldTypeBool bool_type = 4;
-    CFFIFieldTypeNull null_type = 5;
-    CFFIFieldTypeLiteral literal_type = 6;
-    CFFIFieldTypeMedia media_type = 7;
-    CFFIFieldTypeEnum enum_type = 8;
-    CFFIFieldTypeClass class_type = 9;
-    CFFIFieldTypeTypeAlias type_alias_type = 10;
-    CFFIFieldTypeList list_type = 11;
-    CFFIFieldTypeMap map_type = 12;
-    CFFIFieldTypeUnionVariant union_variant_type = 14;
-    CFFIFieldTypeOptional optional_type = 15;
-    CFFIFieldTypeChecked checked_type = 16;
-    CFFIFieldTypeStreamState stream_state_type = 17;
-    CFFIFieldTypeAny any_type = 18;
+    BamlFieldTypeString string_type = 1;
+    BamlFieldTypeInt int_type = 2;
+    BamlFieldTypeFloat float_type = 3;
+    BamlFieldTypeBool bool_type = 4;
+    BamlFieldTypeNull null_type = 5;
+    BamlFieldTypeLiteral literal_type = 6;
+    BamlFieldTypeMedia media_type = 7;
+    BamlFieldTypeEnum enum_type = 8;
+    BamlFieldTypeClass class_type = 9;
+    BamlFieldTypeTypeAlias type_alias_type = 10;
+    BamlFieldTypeList list_type = 11;
+    BamlFieldTypeMap map_type = 12;
+    BamlFieldTypeUnionVariant union_variant_type = 14;
+    BamlFieldTypeOptional optional_type = 15;
+    BamlFieldTypeChecked checked_type = 16;
+    BamlFieldTypeStreamState stream_state_type = 17;
+    BamlFieldTypeAny any_type = 18;
   }
 }
 
 // Simple marker messages for primitive types.
-message CFFIFieldTypeString {}
-message CFFIFieldTypeInt {}
-message CFFIFieldTypeFloat {}
-message CFFIFieldTypeBool {}
-message CFFIFieldTypeNull {}
-message CFFIFieldTypeAny {}
+message BamlFieldTypeString {}
+message BamlFieldTypeInt {}
+message BamlFieldTypeFloat {}
+message BamlFieldTypeBool {}
+message BamlFieldTypeNull {}
+message BamlFieldTypeAny {}
 
 // Literal: wraps a literal oneof.
-message CFFILiteralString {
+message BamlLiteralString {
   string value = 1;
 }
 
-message CFFILiteralInt {
+message BamlLiteralInt {
   int64 value = 1;
 }
 
-message CFFILiteralBool {
+message BamlLiteralBool {
   bool value = 1;
 }
 
-message CFFIFieldTypeLiteral {
+message BamlFieldTypeLiteral {
   oneof literal {
-    CFFILiteralString string_literal = 1;
-    CFFILiteralInt int_literal = 2;
-    CFFILiteralBool bool_literal = 3;
+    BamlLiteralString string_literal = 1;
+    BamlLiteralInt int_literal = 2;
+    BamlLiteralBool bool_literal = 3;
   }
 }
 
-// For Media, reuse the CFFIMediaType message.
-message CFFIFieldTypeMedia {
+// For Media, reuse the BamlMediaType message.
+message BamlFieldTypeMedia {
   MediaTypeEnum media = 1;
 }
 
-message CFFIFieldTypeEnum {
+message BamlFieldTypeEnum {
   string name = 1;
 }
 
-message CFFIFieldTypeClass {
-  CFFITypeName name = 1;
+message BamlFieldTypeClass {
+  BamlTypeName name = 1;
 }
 
-message CFFIFieldTypeTypeAlias {
-  CFFITypeName name = 1;
+message BamlFieldTypeTypeAlias {
+  BamlTypeName name = 1;
 }
 
-message CFFIFieldTypeList {
-  CFFIFieldTypeHolder item_type = 1;
+message BamlFieldTypeList {
+  BamlFieldType item_type = 1;
 }
 
-message CFFIFieldTypeMap {
-  CFFIFieldTypeHolder key_type = 1;
-  CFFIFieldTypeHolder value_type = 2;
+message BamlFieldTypeMap {
+  BamlFieldType key_type = 1;
+  BamlFieldType value_type = 2;
 }
 
-message CFFIFieldTypeUnionVariant {
-  CFFITypeName name = 1;
+message BamlFieldTypeUnionVariant {
+  BamlTypeName name = 1;
 }
 
-message CFFIFieldTypeOptional {
-  CFFIFieldTypeHolder value = 1;
+message BamlFieldTypeOptional {
+  BamlFieldType value = 1;
 }
 
-message CFFIFieldTypeChecked {
-  CFFIFieldTypeHolder value = 1;
-  repeated CFFICheckType checks = 2;
+message BamlFieldTypeChecked {
+  BamlFieldType value = 1;
+  repeated BamlCheckType checks = 2;
 }
 
-message CFFIFieldTypeStreamState {
-  CFFIFieldTypeHolder value = 1;
+message BamlFieldTypeStreamState {
+  BamlFieldType value = 1;
 }
 
 // -----------------------------------------------------------------------------
-// CFFICheck definitions
+// BamlCheck definitions
 // -----------------------------------------------------------------------------
 
-message CFFICheckType {
+message BamlCheckType {
   string name = 1;
 }
 
-message CFFICheckValue {
+message BamlCheckValue {
   string name = 1;
   string expression = 2;
   string status = 3;
-  CFFIValueHolder value = 4;
+  BamlOutboundValue value = 4;
 }
 
 // -----------------------------------------------------------------------------
 // Other Enums
 // -----------------------------------------------------------------------------
 
-enum CFFIStreamState {
+enum BamlStreamState {
   PENDING = 0;
   STARTED = 1;
   DONE = 2;
 }
 
 // -----------------------------------------------------------------------------
-// CFFIValue definitions
+// BamlOutboundValue definitions
 // -----------------------------------------------------------------------------
 
-// The wrapper message for CFFIValue.
-message CFFIValueStreamingState {
-  CFFIValueHolder value = 1;
-  CFFIStreamState state = 2;
-  CFFITypeName name = 3;
+// The wrapper message for BamlValueStreamingState.
+message BamlValueStreamingState {
+  BamlOutboundValue value = 1;
+  BamlStreamState state = 2;
+  BamlTypeName name = 3;
 }

@@ -38,6 +38,15 @@ test Foo {
 
 //----
 //- diagnostics
+// Error: Expected identifier, found ','
+//     ╭─[ misc_bad_syntax.baml:15:7 ]
+//     │
+//  15 │     },,
+//     │       ┬  
+//     │       ╰── Expected identifier, found ','
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
 // Error: Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
 //     ╭─[ misc_bad_syntax.baml:12:3 ]
 //     │

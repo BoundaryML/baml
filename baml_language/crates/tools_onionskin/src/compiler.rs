@@ -1370,6 +1370,9 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
+            &baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
         ) {
             Ok(p) => p,
             Err(err) => {
@@ -1475,6 +1478,9 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
+            &baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
         ) {
             Ok(p) => p,
             Err(err) => {
@@ -1627,6 +1633,9 @@ impl CompilerRunner {
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
+            &baml_compiler_emit::CompileOptions {
+                emit_test_cases: false,
+            },
         ) {
             Ok(p) => p,
             Err(err) => {
@@ -1782,7 +1791,17 @@ impl CompilerRunner {
                     }
                 }
                 Err(err) => {
-                    let error_msg = format!("Error formatting: {:?}", err);
+                    let error_msg = match err {
+                        baml_fmt::FormatterError::ParseErrors(e) => {
+                            format!("Error parsing: {:?}", e)
+                        }
+                        baml_fmt::FormatterError::StrongAstError(e) => {
+                            format!(
+                                "Error formatting: {}",
+                                e.print_with_file_context(path, source_file.text(&self.db))
+                            )
+                        }
+                    };
                     writeln!(output, "{}", error_msg).ok();
                     output_annotated.push((error_msg, LineStatus::Recomputed));
                 }

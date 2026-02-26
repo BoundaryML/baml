@@ -24,6 +24,7 @@ import {
 
 import initWasm, {
   BamlWasmRuntime,
+  BamlHandle,
   LspNotification,
   LspRequest,
   LspResponse,
@@ -37,6 +38,8 @@ import type {
   WorkerInMessage,
   WorkerInitMessage,
 } from "@b/pkg-playground";
+
+import { decodeCallResult } from "@b/pkg-proto";
 
 import { BamlVfs } from "./vfs";
 
@@ -73,6 +76,13 @@ let vfs: BamlVfs = new BamlVfs("/workspace");
 // ---------------------------------------------------------------------------
 // Env vars (worker-side store)
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Handle lifecycle (per-call registry keeps BamlHandle alive until cleared)
+// ---------------------------------------------------------------------------
+
+/** Keeps WASM BamlHandle objects alive so their Drop impl fires only when cleared. */
+const liveHandles = new Map<number, BamlHandle[]>();
 
 const envVars: Record<string, string> = {};
 let nextEnvReqId = 0;
@@ -456,10 +466,24 @@ self.onmessage = async (event: MessageEvent) => {
           msg.name,
           msg.argsProto,
         );
-        const result = new Uint8Array(resultBytes);
-        postOut({ type: "callFunctionResult", id: msg.id, result }, [
-          result.buffer,
-        ]);
+        const bytes = new Uint8Array(resultBytes);
+        const handles: BamlHandle[] = [];
+        const decoded = decodeCallResult(bytes, (key, handleType, typeName) => {
+          const h = new BamlHandle(key.toString(), handleType);
+          handles.push(h);
+          return h;
+        });
+        const existing = liveHandles.get(msg.id);
+        if (existing) {
+          for (const h of existing) h.free();
+        }
+        if (handles.length > 0) {
+          liveHandles.set(msg.id, handles);
+        } else {
+          liveHandles.delete(msg.id);
+        }
+        const result = JSON.stringify(decoded, null, 2);
+        postOut({ type: "callFunctionResult", id: msg.id, result });
       } catch (e) {
         postOut({
           type: "callFunctionError",
@@ -501,6 +525,16 @@ self.onmessage = async (event: MessageEvent) => {
     case "requestState":
       runtime?.requestPlaygroundState();
       postOut({ type: "buildTime", value: getBuildTime() });
+      return;
+
+    case "clearHandles":
+      for (const id of msg.runIds) {
+        const handles = liveHandles.get(id);
+        if (handles) {
+          for (const h of handles) h.free();
+        }
+        liveHandles.delete(id);
+      }
       return;
 
     case "dispose":

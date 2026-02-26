@@ -96,10 +96,26 @@ impl<'a> Printer<'a> {
         }
     }
 
-    /// Prints an emittable trivia, followed by a newline.
-    pub fn print_trivia_with_newline(&mut self, trivia: &EmittableTrivia) {
-        self.print_trivia(trivia);
-        self.print_newline();
+    /// Prints all the passed emitted trivia, each indented by `indent` spaces and followed by a newline.
+    ///
+    /// Example with indent 4:
+    /// ```baml
+    ///    // <-- added indent but not newline
+    ///    // second comment
+    ///
+    ///    // ^^ no indent on empty line
+    ///    /* multiline
+    /// comment */
+    ///    // includes trailing newline (if anything was printed) vvv
+    /// ```
+    pub fn print_trivia_with_newline(&mut self, trivia: &[EmittableTrivia], indent: usize) {
+        for trivia in trivia {
+            if trivia.is_comment() {
+                self.print_spaces(indent);
+            }
+            self.print_trivia(trivia);
+            self.print_newline();
+        }
     }
 
     /// Prints all leading emittable trivia for the given range.
@@ -126,22 +142,31 @@ impl<'a> Printer<'a> {
         indent: usize,
     ) -> usize {
         let (leading, _) = self.trivia.get_for_range_split(range);
-        if let Some((first, rest)) = leading.split_first() {
-            if first.is_comment() {
-                self.print_spaces(indent);
-            }
-            self.print_trivia(first);
-            self.print_newline();
-
-            for trivia in rest {
-                if trivia.is_comment() {
-                    self.print_spaces(indent);
-                }
-                self.print_trivia(trivia);
-                self.print_newline();
-            }
-        }
+        self.print_trivia_with_newline(leading, indent);
         leading.len()
+    }
+
+    /// Prints all the trivia as trailing comments
+    /// Each trivia gets one space before it.
+    ///
+    /// This is useful for printing trailing trivia at the end of a line.
+    ///
+    /// ```baml
+    /// let x; /* first trivia */ /* second trivia */ // third trivia
+    /// ```
+    ///
+    /// Returns `true` if there was a line comment.
+    #[allow(unused_must_use)]
+    pub fn print_trivia_trailing(&mut self, trivia: &[EmittableTrivia]) -> bool {
+        let mut has_line_comment = false;
+        for trivia in trivia {
+            if matches!(trivia, EmittableTrivia::TrailingLineComment { .. }) {
+                has_line_comment = true;
+            }
+            self.print_spaces(1);
+            self.print_trivia(trivia);
+        }
+        has_line_comment
     }
 
     /// Prints all trailing trivia attached to the given range.
@@ -152,12 +177,15 @@ impl<'a> Printer<'a> {
     /// ```baml
     /// let x; /* first trivia */ /* second trivia */ // third trivia
     /// ```
-    pub fn print_trivia_all_trailing_for(&mut self, range: TextRange) {
+    ///
+    /// Convenience method for [`Self::print_trivia_trailing`]
+    ///
+    /// Returns `(num_trivia, has_line_comment)`.
+    #[allow(unused_must_use)]
+    pub fn print_trivia_all_trailing_for(&mut self, range: TextRange) -> (usize, bool) {
         let (_, trailing) = self.trivia.get_for_range_split(range);
-        for trivia in trailing {
-            self.print_spaces(1);
-            self.print_trivia(trivia);
-        }
+        let has_line_comment = self.print_trivia_trailing(trailing);
+        (trailing.len(), has_line_comment)
     }
 
     /// For standalone items which are fully on their own line (and may be multiline), print them with all their trivia.
@@ -170,14 +198,15 @@ impl<'a> Printer<'a> {
     ///
     /// Example:
     /// ```baml
-    ///     // leading trivia
+    ///     // <-- adds indentation at start
     ///     // <- note the indent
     ///     let x = {
     ///         "printable may be multiline, or not"
     ///     }; // trailing trivia, no newline at end -->
     /// ```
     pub fn print_standalone_with_trivia(&mut self, printable: &impl Printable, indent: usize) {
-        self.print_trivia_all_leading_with_newline_for(printable.leftmost_token(), indent);
+        let (leading_trivia, trailing_trivia) = self.trivia.get_for_element(printable);
+        self.print_trivia_with_newline(leading_trivia, indent);
         self.print_spaces(indent);
         let shape = Shape {
             width: self.config.line_width.saturating_sub(indent),
@@ -185,7 +214,7 @@ impl<'a> Printer<'a> {
             first_line_offset: 0,
         };
         self.print(printable, shape);
-        self.print_trivia_all_trailing_for(printable.rightmost_token());
+        self.print_trivia_trailing(trailing_trivia);
     }
 
     /// Checks that all the trivia can fit on a single line (no line comments or block comments containing newlines).
@@ -193,9 +222,12 @@ impl<'a> Printer<'a> {
     ///
     /// Returns `None` if the trivia cannot fit on a single line.
     ///
+    /// Also see [`Self::print_trivia_squished`]. It should be used if we cannot multi-line to allow line comments,
+    /// (and so will skip them while still printing single-line trivia).
+    ///
     /// It uses [`EmittableTrivia::single_line_len`], and similarly does not count or print empty lines.
     #[allow(unused_must_use)]
-    pub fn print_trivia_single_line_squished(
+    pub fn try_print_trivia_single_line_squished(
         &mut self,
         trivia: &[EmittableTrivia],
     ) -> Option<usize> {
@@ -209,6 +241,30 @@ impl<'a> Printer<'a> {
             }
         }
         Some(trivia_len)
+    }
+
+    /// Prints only the single-line block trivia in the given slice,
+    /// each with no space between them.
+    ///
+    /// Will always print single-line.
+    ///
+    /// Similar to [`Self::try_print_trivia_single_line_squished`], but will just skip the non-single-line trivia.
+    /// It should be used instead if we could multi-line to allow line comments (instead of skipping them).
+    ///
+    /// ## Returns
+    /// The total length printed.
+    #[allow(unused_must_use)]
+    pub fn print_trivia_squished(&mut self, trivia: &[EmittableTrivia]) -> usize {
+        let mut trivia_len = 0;
+        for t in trivia {
+            if t.is_comment()
+                && let Some(len) = t.single_line_len(self.input)
+            {
+                self.print_trivia(t);
+                trivia_len += len;
+            }
+        }
+        trivia_len
     }
 
     /// Append the output and warnings from another printer to this one.
@@ -243,17 +299,29 @@ impl<'a> Printer<'a> {
     /// If the function returns `Some(info)`, the sub-printer
     /// is appended to the current printer and the info is returned. Otherwise, the sub-printer is
     /// not appended and `None` is returned.
+    ///
+    /// Like [`Self::try_in_sub_printer`], but directly appends the sub-printer to the current printer if successful.
     pub fn try_sub_printer(
         &mut self,
         f: impl FnOnce(&mut Printer<'a>) -> Option<PrintInfo>,
     ) -> Option<PrintInfo> {
-        let mut sub_printer = Printer::new_empty(self.input, self.config, self.trivia);
-        if let Some(info) = f(&mut sub_printer) {
+        if let Some((sub_printer, info)) = self.try_in_sub_printer(f) {
             self.append_from_printer(sub_printer);
             Some(info)
         } else {
             None
         }
+    }
+
+    /// Runs the function on a sub-printer (a copy of the current printer but with an empty output).
+    /// If the function returns `Some(info)`, the sub-printer is returned along with the info.
+    /// Otherwise, the sub-printer is not returned.
+    pub fn try_in_sub_printer(
+        &self,
+        f: impl FnOnce(&mut Printer<'a>) -> Option<PrintInfo>,
+    ) -> Option<(Printer<'a>, PrintInfo)> {
+        let mut sub_printer = Printer::new_empty(self.input, self.config, self.trivia);
+        f(&mut sub_printer).map(|info| (sub_printer, info))
     }
 
     /// The current line length of the current line.
@@ -391,6 +459,20 @@ impl Shape {
         Shape {
             width: usize::MAX,
             indent: 0,
+            first_line_offset: 0,
+        }
+    }
+
+    /// A shape that is suitable for a standalone line (or beginning of a multiline element) of text.
+    ///
+    /// - `width = line_width - indent`
+    /// - `indent = indent`
+    /// - `first_line_offset = 0`
+    #[must_use]
+    pub const fn standalone(line_width: usize, indent: usize) -> Self {
+        Shape {
+            width: line_width.saturating_sub(indent),
+            indent,
             first_line_offset: 0,
         }
     }

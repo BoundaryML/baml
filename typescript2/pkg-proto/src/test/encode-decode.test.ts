@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { encodeCallArgs, decodeCallResult, serializeValue, deserializeValue } from '../index';
-import { HostFunctionArguments } from '../generated/baml/cffi/v1/baml_inbound';
-import { CFFIValueHolder } from '../generated/baml/cffi/v1/baml_outbound';
+import { CallFunctionArgs, BamlHandleType } from '../generated/baml/cffi/v1/baml_inbound';
+import { BamlOutboundValue } from '../generated/baml/cffi/v1/baml_outbound';
 
 describe('encodeCallArgs', () => {
   it('encodes an unsorted array as function kwargs', () => {
@@ -10,7 +10,7 @@ describe('encodeCallArgs', () => {
     expect(bytes.length).toBeGreaterThan(0);
 
     // Decode back to proto to verify structure
-    const decoded = HostFunctionArguments.decode(bytes);
+    const decoded = CallFunctionArgs.decode(bytes);
     expect(decoded.kwargs).toHaveLength(1);
 
     const kwarg = decoded.kwargs[0];
@@ -37,7 +37,7 @@ describe('encodeCallArgs', () => {
       active: true,
       nothing: null,
     });
-    const decoded = HostFunctionArguments.decode(bytes);
+    const decoded = CallFunctionArgs.decode(bytes);
     expect(decoded.kwargs).toHaveLength(5);
 
     const byKey = new Map(
@@ -58,20 +58,9 @@ describe('encodeCallArgs', () => {
     const bytes = encodeCallArgs({
       user: { name: 'Bob', scores: [10, 20] },
     });
-    const decoded = HostFunctionArguments.decode(bytes);
+    const decoded = CallFunctionArgs.decode(bytes);
     const userVal = decoded.kwargs[0].value;
     expect(userVal?.value?.$case).toBe('mapValue');
-  });
-
-  it('encodes env vars', () => {
-    const bytes = encodeCallArgs(
-      { x: 1 },
-      { env: { OPENAI_API_KEY: 'sk-test' } },
-    );
-    const decoded = HostFunctionArguments.decode(bytes);
-    expect(decoded.env).toHaveLength(1);
-    expect(decoded.env[0].key).toBe('OPENAI_API_KEY');
-    expect(decoded.env[0].value).toBe('sk-test');
   });
 
   it('uses toBaml() when available', () => {
@@ -79,13 +68,13 @@ describe('encodeCallArgs', () => {
       toBaml() {
         return {
           value: {
-            $case: 'classValue' as const,
+            $case: 'classValue',
             classValue: {
               name: 'MyClass',
               fields: [
                 {
-                  key: { $case: 'stringKey' as const, stringKey: 'x' },
-                  value: { value: { $case: 'intValue' as const, intValue: 42 } },
+                  key: { $case: 'stringKey', stringKey: 'x' },
+                  value: { value: { $case: 'intValue', intValue: 42 } },
                 },
               ],
             },
@@ -94,7 +83,7 @@ describe('encodeCallArgs', () => {
       },
     };
     const bytes = encodeCallArgs({ obj: custom });
-    const decoded = HostFunctionArguments.decode(bytes);
+    const decoded = CallFunctionArgs.decode(bytes);
     const val = decoded.kwargs[0].value;
     expect(val?.value?.$case).toBe('classValue');
     if (val?.value?.$case === 'classValue') {
@@ -104,9 +93,11 @@ describe('encodeCallArgs', () => {
 });
 
 describe('decodeCallResult', () => {
-  function encodeResult(holder: Parameters<typeof CFFIValueHolder.encode>[0]): Uint8Array {
-    return CFFIValueHolder.encode(holder).finish();
+  function encodeResult(holder: Parameters<typeof BamlOutboundValue.encode>[0]): Uint8Array {
+    return BamlOutboundValue.encode(holder).finish();
   }
+
+  const defaultWrapHandle = (_key: bigint, _handleType: number, typeName: string) => ({ handle_type: typeName });
 
   it('decodes a sorted int array', () => {
     const bytes = encodeResult({
@@ -125,7 +116,7 @@ describe('decodeCallResult', () => {
       },
     });
 
-    const result = decodeCallResult(bytes);
+    const result = decodeCallResult(bytes, defaultWrapHandle);
     expect(result).toEqual([1, 2, 3, 4, 5]);
   });
 
@@ -133,14 +124,14 @@ describe('decodeCallResult', () => {
     const bytes = encodeResult({
       value: { $case: 'stringValue', stringValue: 'hello world' },
     });
-    expect(decodeCallResult(bytes)).toBe('hello world');
+    expect(decodeCallResult(bytes, defaultWrapHandle)).toBe('hello world');
   });
 
   it('decodes null', () => {
     const bytes = encodeResult({
       value: { $case: 'nullValue', nullValue: {} },
     });
-    expect(decodeCallResult(bytes)).toBeNull();
+    expect(decodeCallResult(bytes, defaultWrapHandle)).toBeNull();
   });
 
   it('decodes a class with $baml.type', () => {
@@ -162,7 +153,7 @@ describe('decodeCallResult', () => {
         },
       },
     });
-    const result = decodeCallResult(bytes);
+    const result = decodeCallResult(bytes, defaultWrapHandle);
     expect(result).toEqual({
       $baml: { type: 'Person' },
       name: 'Alice',
@@ -181,7 +172,7 @@ describe('decodeCallResult', () => {
         },
       },
     });
-    expect(decodeCallResult(bytes)).toBe('RED');
+    expect(decodeCallResult(bytes, defaultWrapHandle)).toBe('RED');
   });
 
   it('decodes a map', () => {
@@ -204,7 +195,7 @@ describe('decodeCallResult', () => {
         },
       },
     });
-    expect(decodeCallResult(bytes)).toEqual({ a: 1, b: 2 });
+    expect(decodeCallResult(bytes, defaultWrapHandle)).toEqual({ a: 1, b: 2 });
   });
 
   it('decodes literals to their primitive values', () => {
@@ -216,7 +207,7 @@ describe('decodeCallResult', () => {
         },
       },
     });
-    expect(decodeCallResult(strBytes)).toBe('fixed');
+    expect(decodeCallResult(strBytes, defaultWrapHandle)).toBe('fixed');
 
     const boolBytes = encodeResult({
       value: {
@@ -226,7 +217,7 @@ describe('decodeCallResult', () => {
         },
       },
     });
-    expect(decodeCallResult(boolBytes)).toBe(true);
+    expect(decodeCallResult(boolBytes, defaultWrapHandle)).toBe(true);
   });
 
   it('unwraps union variants', () => {
@@ -243,7 +234,26 @@ describe('decodeCallResult', () => {
         },
       },
     });
-    expect(decodeCallResult(bytes)).toBe('hi');
+    expect(decodeCallResult(bytes, defaultWrapHandle)).toBe('hi');
+  });
+
+  it('calls wrapHandle when handle value encountered', () => {
+    const bytes = encodeResult({
+      value: {
+        $case: 'handleValue',
+        handleValue: { key: 42, handleType: BamlHandleType.FUNCTION_REF },
+      },
+    });
+    const result = decodeCallResult(bytes, (key, handleType, typeName) => {
+      expect(key).toBe(42n);
+      expect(handleType).toBe(BamlHandleType.FUNCTION_REF);
+      expect(typeName).toBe('function_ref');
+      return { kind: 'functionRef', key: 42n };
+    });
+    expect(result).toEqual({
+      $baml: { type: '$handle' },
+      handle: { kind: 'functionRef', key: 42n },
+    });
   });
 });
 
@@ -253,11 +263,11 @@ describe('round-trip: encode bubble sort args', () => {
     const bytes = encodeCallArgs({ arr: unsorted });
 
     // Verify it's valid protobuf
-    const decoded = HostFunctionArguments.decode(bytes);
+    const decoded = CallFunctionArgs.decode(bytes);
     expect(decoded.kwargs).toHaveLength(1);
 
     // Simulate what the WASM runtime would return: a sorted array
-    const sortedResult = CFFIValueHolder.encode({
+    const sortedResult = BamlOutboundValue.encode({
       value: {
         $case: 'listValue',
         listValue: {
@@ -271,7 +281,7 @@ describe('round-trip: encode bubble sort args', () => {
       },
     }).finish();
 
-    const result = decodeCallResult(sortedResult);
+    const result = decodeCallResult(sortedResult, (_key, _ht, typeName) => ({ handle_type: typeName }));
     expect(result).toEqual([1, 2, 3, 4, 5]);
   });
 });

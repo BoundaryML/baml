@@ -50,6 +50,8 @@ pub enum TypeRef {
     String,
     Bool,
     Null,
+    /// The bottom type — uninhabited. No value has this type.
+    Never,
 
     Media(baml_base::MediaKind),
 
@@ -103,8 +105,8 @@ pub enum TypeRef {
     /// Maps to `Ty::BuiltinUnknown` in TIR.
     BuiltinUnknown,
 
-    /// The `big_t_type` type keyword — the meta-type for type values.
-    /// Used in type annotations like `let t: big_t_type = ...`.
+    /// The `type` type keyword — the meta-type for type values.
+    /// Used in type annotations like `let t: type = ...`.
     /// Maps to `tir::Ty::Type` during lowering.
     Type,
 }
@@ -397,8 +399,9 @@ impl TypeRef {
             "string" => TypeRef::String,
             "bool" => TypeRef::Bool,
             "null" => TypeRef::Null,
+            "never" => TypeRef::Never,
             "unknown" => TypeRef::BuiltinUnknown,
-            "big_t_type" => TypeRef::Type,
+            "type" => TypeRef::Type,
             "image" => TypeRef::Media(baml_base::MediaKind::Image),
             "audio" => TypeRef::Media(baml_base::MediaKind::Audio),
             "video" => TypeRef::Media(baml_base::MediaKind::Video),

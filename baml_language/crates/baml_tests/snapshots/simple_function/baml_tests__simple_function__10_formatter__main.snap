@@ -1,15 +1,16 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
 ---
 function HelloWorld(name: string) -> string {
-    client GPT4
-    prompt #"
+    client: GPT4
+    prompt: #"
         Say hello to {{name}}
     "#
 }
 
 class User {
-    name string
-    age int
+    name: string
+    age: int
 } // Added comment
 // Test comment

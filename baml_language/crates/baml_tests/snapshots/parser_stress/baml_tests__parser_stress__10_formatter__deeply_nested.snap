@@ -3,23 +3,23 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 // Deeply nested type references
 class Level5 {
-    value string
+    value: string
 }
 
 class Level4 {
-    field Level5
+    field: Level5
 }
 
 class Level3 {
-    field Level4
+    field: Level4
 }
 
 class Level2 {
-    field Level3
+    field: Level3
 }
 
 class Level1 {
-    field Level2
+    field: Level2
 }
 
 // Deeply nested expressions

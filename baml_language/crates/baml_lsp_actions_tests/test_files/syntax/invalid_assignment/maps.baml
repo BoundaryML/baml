@@ -67,10 +67,10 @@ function MapAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `map<string, int>`, found `string`
-//     ╭─[ invalid_assignment_maps.baml:36:5 ]
+//     ╭─[ invalid_assignment_maps.baml:36:6 ]
 //     │
 //  36 │     f = "not a map";
-//     │        ──────┬─────  
+//     │         ─────┬─────  
 //     │              ╰─────── Expected `map<string, int>`, found `string`
 //     │ 
 //     │ Note: Error code: E0001

@@ -2,8 +2,8 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 class Point {
-    x int
-    y int
+    x: int
+    y: int
 }
 
 function stringArray() -> string[] {

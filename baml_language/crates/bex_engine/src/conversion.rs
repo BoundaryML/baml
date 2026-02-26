@@ -591,3 +591,33 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
         }
     }
 }
+
+/// Convert a compiled `TestArgValue` to a `BexExternalValue` for function calls.
+pub fn test_arg_to_external(v: &bex_vm_types::TestArgValue) -> BexExternalValue {
+    match v {
+        bex_vm_types::TestArgValue::Null => BexExternalValue::Null,
+        bex_vm_types::TestArgValue::Int(i) => BexExternalValue::Int(*i),
+        bex_vm_types::TestArgValue::Float(f) => BexExternalValue::Float(*f),
+        bex_vm_types::TestArgValue::Bool(b) => BexExternalValue::Bool(*b),
+        bex_vm_types::TestArgValue::String(s) => BexExternalValue::String(s.clone()),
+        bex_vm_types::TestArgValue::Array {
+            element_type,
+            items,
+        } => BexExternalValue::Array {
+            element_type: element_type.clone(),
+            items: items.iter().map(test_arg_to_external).collect(),
+        },
+        bex_vm_types::TestArgValue::Map {
+            key_type,
+            value_type,
+            entries,
+        } => BexExternalValue::Map {
+            key_type: key_type.clone(),
+            value_type: value_type.clone(),
+            entries: entries
+                .iter()
+                .map(|(k, v)| (k.clone(), test_arg_to_external(v)))
+                .collect(),
+        },
+    }
+}

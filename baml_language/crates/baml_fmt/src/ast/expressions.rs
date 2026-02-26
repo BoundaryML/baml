@@ -9,6 +9,7 @@ use crate::{
         Token, UnaryOp, tokens as t,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
+    trivia_classifier::TriviaSliceExt,
 };
 
 #[derive(Debug)]
@@ -87,6 +88,38 @@ impl FromCST for Expression {
             _ => Expression::Unknown(elem.text_range()),
         };
         Ok(expr)
+    }
+}
+
+impl Expression {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        match self {
+            Expression::Literal(lit) => lit.single_line_width(input),
+            Expression::Path(path) => path.single_line_width(input),
+            Expression::Paren(paren) => paren.single_line_width(input),
+            Expression::Binary(binary) => binary.single_line_width(input),
+            Expression::Unary(unary) => unary.single_line_width(input),
+            Expression::If(_) => None,
+            Expression::Match(_) => None,
+            Expression::Call(call) => call.single_line_width(input),
+            Expression::Index(index) => index.single_line_width(input),
+            Expression::FieldAccess(fa) => fa.single_line_width(input),
+            Expression::EnvAccess(env) => env.single_line_width(input),
+            Expression::Block(_) => None,
+            Expression::ArrayInitializer(array) => array.single_line_width(input),
+            Expression::MapInitializer(map) => map.single_line_width(input),
+            Expression::ObjectInitializer(obj) => obj.single_line_width(input),
+            Expression::RawString(raw) => {
+                if input.input[raw.span()].contains('\n') {
+                    None
+                } else {
+                    Some(usize::from(raw.span().len()))
+                }
+            }
+            Expression::Unknown(_) => None,
+        }
     }
 }
 
@@ -185,6 +218,24 @@ impl FromCST for Literal {
     }
 }
 
+impl Literal {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        match self {
+            Literal::String(s) => {
+                if input.input[s.span()].contains('\n') {
+                    None
+                } else {
+                    Some(usize::from(s.span().len()))
+                }
+            }
+            Literal::Integer(i) => Some(usize::from(i.span().len())),
+            Literal::Float(f) => Some(usize::from(f.span().len())),
+        }
+    }
+}
+
 impl Printable for Literal {
     fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
@@ -255,9 +306,16 @@ impl FromCST for PathExpr {
     }
 }
 
-impl KnownKind for PathExpr {
-    fn kind() -> SyntaxKind {
-        SyntaxKind::PATH_EXPR
+impl PathExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    #[allow(clippy::unnecessary_wraps)]
+    pub(crate) fn single_line_width(&self, _input: &Printer<'_>) -> Option<usize> {
+        let mut len = usize::from(self.first.span().len());
+        for (dot, word) in &self.rest {
+            len += usize::from(dot.span().len()) + usize::from(word.span().len());
+        }
+        Some(len)
     }
 }
 
@@ -331,6 +389,25 @@ impl KnownKind for ParenExpr {
     }
 }
 
+impl ParenExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let inner = self.expr.single_line_width(input)?;
+        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_paren.span());
+        let (expr_leading, expr_trailing) = input.trivia.get_for_element(&*self.expr);
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_paren.span());
+        let trivia_len = open_trailing
+            .iter()
+            .chain(expr_leading)
+            .chain(expr_trailing)
+            .chain(close_leading)
+            .map(|t| t.single_line_len(input.input))
+            .sum::<Option<usize>>()?;
+        Some(const { "()".len() } + inner + trivia_len)
+    }
+}
+
 impl PrintMultiLine for ParenExpr {
     /// Multi-line layout: inner expression wraps to an indented new line,
     /// closing paren aligns with the opening context.
@@ -350,65 +427,56 @@ impl PrintMultiLine for ParenExpr {
         printer.print_trivia_all_trailing_for(self.open_paren.token_span);
         printer.print_newline();
 
-        printer.print_standalone_with_trivia(&*self.expr, inner_shape.indent);
-
-        printer
-            .print_trivia_all_leading_with_newline_for(self.close_paren.span(), inner_shape.indent);
+        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(&*self.expr);
+        printer.print_trivia_with_newline(expr_leading.trim_blanks(), inner_shape.indent);
+        printer.print_spaces(inner_shape.indent);
+        printer.print(&*self.expr, inner_shape.clone());
+        printer.print_trivia_trailing(expr_trailing);
         printer.print_newline();
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.print_trivia_with_newline(close_leading.trim_blanks(), inner_shape.indent);
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_paren);
         PrintInfo::default_multi_lined()
     }
 }
 
+impl ParenExpr {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the parenthesized expression on a single line.
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+
+        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(&*self.expr);
+        printer.try_print_trivia_single_line_squished(expr_leading)?;
+        if printer
+            .print(&*self.expr, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        printer.try_print_trivia_single_line_squished(expr_trailing)?;
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
 impl Printable for ParenExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut inner_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let inner_shape_single_line = Shape {
-            width: shape.width.saturating_sub(2),
-            indent: shape.indent,
-            first_line_offset: shape.first_line_offset + 1,
-        };
-        let inner_info = inner_printer.print(&*self.expr, inner_shape_single_line);
-
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        let (expr_leading, expr_trailing) = printer.trivia.get_for_element(&*self.expr);
-        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        let single_line_len: usize = open_trailing
-            .iter()
-            .chain(expr_leading)
-            .chain(expr_trailing)
-            .chain(close_leading)
-            .map(|t| t.single_line_len(printer.input))
-            .sum::<Option<usize>>()
-            .map_or(usize::MAX, |sum| {
-                sum + inner_printer.len() + const { "()".len() }
-            });
-
-        if inner_info.multi_lined || single_line_len > shape.width {
-            self.print_multi_line(shape, printer)
-        } else {
-            printer.print_raw_token(&self.open_paren);
-            for t in open_trailing {
-                printer.print_trivia(t);
-            }
-            for t in expr_leading {
-                if t.is_comment() {
-                    printer.print_trivia(t);
-                }
-            }
-            printer.append_from_printer(inner_printer);
-            for t in expr_trailing {
-                printer.print_trivia(t);
-            }
-            for t in close_leading {
-                if t.is_comment() {
-                    printer.print_trivia(t);
-                }
-            }
-            printer.print_raw_token(&self.close_paren);
-            PrintInfo::default_single_line()
-        }
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
         self.open_paren.span()
@@ -460,6 +528,30 @@ impl KnownKind for BinaryExpr {
 }
 
 impl BinaryExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let (left, right) = &*self.sides;
+        let left_width = left.single_line_width(input)?;
+        let right_width = right.single_line_width(input)?;
+        // Must match trivia handled by try_print_single_line
+        let mut trivia_len = 0usize;
+        let left_trailing = input.trivia.get_trailing_for_element(left);
+
+        let (op_leading, op_trailing) = input.trivia.get_for_range_split(self.op.span());
+        trivia_len += (op_leading.try_squished_len(input.input)?
+            + left_trailing.try_squished_len(input.input)?)
+        .max(const { " ".len() }); // basically, if not comments then we have the space
+
+        let right_leading = input.trivia.get_leading_for_element(right);
+        trivia_len += (right_leading.try_squished_len(input.input)?
+            + op_trailing.try_squished_len(input.input)?)
+        .max(const { " ".len() }); // basically, if not comments then we have the space
+
+        let len = left_width + usize::from(self.op.span().len()) + right_width + trivia_len;
+        Some(len)
+    }
+
     /// Recursively lifts binary expressions in the same chaining group to the top level.
     /// For ops that are not in any chaining groups, return will be the same as the original.
     ///
@@ -548,7 +640,8 @@ impl PrintMultiLine for BinaryExpr {
         let (first, chain_members) = self.get_chaining_members();
         printer.print(first, shape);
         printer.print_trivia_all_trailing_for(first.rightmost_token());
-        for (op, right) in chain_members {
+        let num_chain_members = chain_members.len();
+        for (i, (op, right)) in chain_members.into_iter().enumerate() {
             printer.print_newline();
             printer.print_spaces(inner_indent);
             printer.print(op, Shape::unlimited_single_line());
@@ -562,51 +655,64 @@ impl PrintMultiLine for BinaryExpr {
                 first_line_offset: usize::from(op.span().len()) + 1,
             };
             printer.print(right, inner_shape.clone());
-            printer.print_trivia_all_trailing_for(right.rightmost_token());
+            if i + 1 < num_chain_members {
+                printer.print_trivia_all_trailing_for(right.rightmost_token());
+            }
         }
         PrintInfo::default_multi_lined()
     }
 }
 
-impl Printable for BinaryExpr {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl BinaryExpr {
+    /// Should be passed a sub-printer to avoid printing trivia in the outer printer
+    /// in the event that the printer is unable to fit the binary expression on a single line.
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         let (left, right) = &*self.sides;
 
-        // Check trailing trivia on sub-expressions for single-line compatibility
-        let (_, left_trailing) = printer.trivia.get_for_range_split(left.rightmost_token());
-        let (_, right_trailing) = printer.trivia.get_for_range_split(right.rightmost_token());
-
-        let trivia_single_line_len = left_trailing
-            .iter()
-            .chain(right_trailing.iter())
-            .map(|t| t.single_line_len(printer.input))
-            .sum::<Option<usize>>();
-
-        if trivia_single_line_len.is_none() {
-            return Self::print_multi_line(self, shape, printer);
-        }
-
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let mut multi_lined = false;
-        multi_lined |= single_line_printer
+        if printer
             .print(left, Shape::unlimited_single_line())
-            .multi_lined;
-        single_line_printer.print_str(" ");
-        multi_lined |= single_line_printer
-            .print(&self.op, Shape::unlimited_single_line())
-            .multi_lined;
-        single_line_printer.print_str(" ");
-        multi_lined |= single_line_printer
-            .print(right, Shape::unlimited_single_line())
-            .multi_lined;
-
-        if multi_lined || single_line_printer.output.len() > shape.width {
-            Self::print_multi_line(self, shape, printer)
-        } else {
-            printer.append_from_printer(single_line_printer);
-            PrintInfo::default_single_line()
+            .multi_lined
+        {
+            return None;
         }
+        let left_trailing = printer.trivia.get_trailing_for_element(left);
+        let (op_leading, op_trailing) = printer.trivia.get_for_range_split(self.op.span());
+        let right_leading = printer.trivia.get_leading_for_element(right);
+
+        let mut left_trivia_len = printer.try_print_trivia_single_line_squished(left_trailing)?;
+        left_trivia_len += printer.print_trivia_squished(op_leading);
+        if left_trivia_len == 0 {
+            printer.print_spaces(1); // only add space if there are no block comments between
+        }
+
+        printer.print(&self.op, Shape::unlimited_single_line());
+
+        let mut right_trivia_len = printer.print_trivia_squished(op_trailing);
+        right_trivia_len += printer.print_trivia_squished(right_leading);
+        if right_trivia_len == 0 {
+            printer.print_spaces(1); // only add space if there are no block comments between
+        }
+        if printer
+            .print(right, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        // right trailing is the outermost trailing — not printed here
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
+impl Printable for BinaryExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
         self.sides.0.leftmost_token()
@@ -672,6 +778,15 @@ impl FromCST for UnaryExpr {
 impl KnownKind for UnaryExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::UNARY_EXPR
+    }
+}
+
+impl UnaryExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let expr = self.expr.single_line_width(input)?;
+        Some(usize::from(self.op.span().len()) + expr)
     }
 }
 
@@ -897,6 +1012,53 @@ impl KnownKind for MatchExpr {
     }
 }
 
+impl MatchExpr {
+    fn try_print_scrutinee_single_line(
+        &self,
+        shape: &Shape,
+        printer: &mut Printer,
+    ) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+
+        let (scrutinee_leading, scrutinee_trailing) =
+            printer.trivia.get_for_element(&*self.scrutinee);
+        printer.try_print_trivia_single_line_squished(scrutinee_leading)?;
+        if printer
+            .print(&*self.scrutinee, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        printer.try_print_trivia_single_line_squished(scrutinee_trailing)?;
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(&self.close_paren);
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+
+    fn print_scrutinee_multi_line(&self, shape: &Shape, printer: &mut Printer) {
+        let paren_inner_indent = shape.indent + printer.config.indent_width;
+        printer.print_raw_token(&self.open_paren);
+        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_newline();
+
+        printer.print_standalone_with_trivia(&*self.scrutinee, paren_inner_indent);
+        printer.print_newline();
+        printer
+            .print_trivia_all_leading_with_newline_for(self.close_paren.span(), paren_inner_indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+    }
+}
+
 impl Printable for MatchExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
@@ -905,76 +1067,12 @@ impl Printable for MatchExpr {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
 
-        // Handle scrutinee with ParenExpr-style trivia
-        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        let (scrutinee_leading, _) = printer
-            .trivia
-            .get_for_range_split(self.scrutinee.leftmost_token());
-        let (_, scrutinee_trailing) = printer
-            .trivia
-            .get_for_range_split(self.scrutinee.rightmost_token());
-        let (close_paren_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-
-        let scrutinee_trivia_single_line_len: Option<usize> = open_trailing
-            .iter()
-            .chain(scrutinee_leading)
-            .chain(scrutinee_trailing)
-            .chain(close_paren_leading)
-            .map(|t| t.single_line_len(printer.input))
-            .sum::<Option<usize>>();
-
-        // Try printing scrutinee on a single line
-        let mut scrutinee_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let scrutinee_info = scrutinee_printer.print(
-            &*self.scrutinee,
-            Shape {
-                width: shape.width.saturating_sub(2),
-                indent: shape.indent,
-                first_line_offset: shape.first_line_offset + 1,
-            },
-        );
-
-        let scrutinee_multi_line =
-            scrutinee_info.multi_lined || scrutinee_trivia_single_line_len.is_none();
-
-        if scrutinee_multi_line {
-            // Multi-line scrutinee: like ParenExpr::print_multi_line
-            let paren_inner_indent = shape.indent + printer.config.indent_width;
-            printer.print_raw_token(&self.open_paren);
-            printer.print_trivia_all_trailing_for(self.open_paren.span());
-            printer.print_newline();
-
-            printer.print_standalone_with_trivia(&*self.scrutinee, paren_inner_indent);
-
-            printer.print_trivia_all_leading_with_newline_for(
-                self.close_paren.span(),
-                paren_inner_indent,
-            );
-            printer.print_newline();
-            printer.print_spaces(shape.indent);
-            printer.print_raw_token(&self.close_paren);
-        } else {
-            // Single-line scrutinee
-            printer.print_raw_token(&self.open_paren);
-            for t in open_trailing {
-                printer.print_trivia(t);
-            }
-            for t in scrutinee_leading {
-                if t.is_comment() {
-                    printer.print_trivia(t);
-                }
-            }
-            printer.append_from_printer(scrutinee_printer);
-            for t in scrutinee_trailing {
-                printer.print_trivia(t);
-            }
-            for t in close_paren_leading {
-                if t.is_comment() {
-                    printer.print_trivia(t);
-                }
-            }
-            printer.print_raw_token(&self.close_paren);
+        // Print scrutinee: try single-line, fall back to multi-line
+        if printer
+            .try_sub_printer(|p| self.try_print_scrutinee_single_line(&shape, p))
+            .is_none()
+        {
+            self.print_scrutinee_multi_line(&shape, printer);
         }
 
         // Print body with block container pattern
@@ -1055,106 +1153,179 @@ impl KnownKind for MatchArm {
     }
 }
 
-impl Printable for MatchArm {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+impl MatchArm {
+    /// Prints all of the arm except the body/expression (prints up to and including the `=>`)
+    fn print_condition(&self, shape: &Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+
         let mut pattern_printer = printer.sub_printer();
         let pattern_info = pattern_printer.print(&self.pattern, shape.clone());
-
-        let condition_multi_lined;
+        multi_lined |= pattern_info.multi_lined;
+        let pattern_len = pattern_printer.len();
         printer.append_from_printer(pattern_printer);
 
         if let Some(guard) = &self.guard {
-            let guard_indent = shape.indent + printer.config.indent_width;
             if pattern_info.multi_lined {
-                // guard goes on new line
+                // Guard goes on new line
                 printer.print_newline();
-                printer.print_spaces(guard_indent);
+                printer.print_spaces(shape.indent + printer.config.indent_width);
                 let offset = usize::from(guard.keyword.token_span.len()) + const { " ".len() };
+                let guard_shape = Shape {
+                    width: printer.config.line_width.saturating_sub(
+                        shape.indent + printer.config.indent_width + offset + const { " =>".len() },
+                    ),
+                    indent: shape.indent + printer.config.indent_width,
+                    first_line_offset: offset,
+                };
+                guard.print(guard_shape, printer);
+            } else if matches!(guard.condition, Expression::Paren(_) | Expression::Block(_)) {
+                // we can delegate determining whether or not to multi-line to the guard expression
+                // since it will do so nicely
+                printer.print_spaces(1);
+                let offset = shape.first_line_offset + pattern_len + 1;
                 let guard_shape = Shape {
                     width: printer
                         .config
                         .line_width
-                        .saturating_sub(guard_indent + offset + const { " => ".len() }),
-                    indent: guard_indent,
+                        .saturating_sub(shape.indent + offset + const { " => ".len() }),
+                    indent: shape.indent,
                     first_line_offset: offset,
                 };
-                printer.print(guard, guard_shape);
-                printer.print_str(" => ");
-                condition_multi_lined = true;
+                let guard_info = guard.print(guard_shape, printer);
+                multi_lined |= guard_info.multi_lined;
             } else {
-                let mut single_line_guard_printer = printer.sub_printer();
-                single_line_guard_printer.print_str(" ");
-                single_line_guard_printer.print_raw_token(&guard.keyword);
-                single_line_guard_printer.print_str(" ");
-                let guard_info = single_line_guard_printer
-                    .print(&guard.condition, Shape::unlimited_single_line());
+                // try printing guard single-line
+                let mut guard_single_line = printer.sub_printer();
+                let guard_info =
+                    guard.print(Shape::unlimited_single_line(), &mut guard_single_line);
 
-                if guard_info.multi_lined
-                    || printer.current_line_len()
-                        + single_line_guard_printer.len()
-                        + const { " =>".len() }
-                        > printer.config.line_width
-                {
+                let single_line_len = pattern_len
+                    + const { " ".len() }
+                    + guard_single_line.len()
+                    + const { " =>".len() };
+                if guard_info.multi_lined || single_line_len > shape.width {
                     // Guard is too long to fit on a single line, so print it on the next line
                     printer.print_newline();
-                    printer.print_spaces(guard_indent);
-                    printer.print_raw_token(&guard.keyword);
-                    printer.print_str(" ");
+                    printer.print_spaces(shape.indent + printer.config.indent_width);
                     let guard_shape = Shape {
-                        width: printer.config.line_width.saturating_sub(
-                            guard_indent + usize::from(guard.keyword.span().len()) + 1,
-                        ),
-                        indent: guard_indent,
-                        first_line_offset: usize::from(guard.keyword.span().len()) + 1,
+                        width: printer
+                            .config
+                            .line_width
+                            .saturating_sub(shape.indent + const { " => {".len() }),
+                        indent: shape.indent,
+                        first_line_offset: 0,
                     };
-                    printer.print(&guard.condition, guard_shape);
-                    printer.print_str(" ");
-                    printer.print_raw_token(&self.fat_arrow);
-                    condition_multi_lined = true;
+                    guard.print(guard_shape, printer);
                 } else {
-                    printer.append_from_printer(single_line_guard_printer);
-                    printer.print_str(" ");
-                    printer.print_raw_token(&self.fat_arrow);
-                    printer.print_str(" ");
-                    condition_multi_lined = false;
+                    // guard goes on the same line after the pattern
+                    printer.print_spaces(1);
+                    printer.append_from_printer(guard_single_line);
                 }
             }
-        } else {
-            condition_multi_lined = pattern_info.multi_lined;
-            printer.print_str(" ");
-            printer.print_raw_token(&self.fat_arrow);
-            printer.print_str(" ");
         }
 
-        let body_info = if condition_multi_lined {
+        printer.print_str(" =>");
+
+        PrintInfo { multi_lined }
+    }
+}
+
+impl Printable for MatchArm {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let condition_info = self.print_condition(&shape, printer);
+        let condition_multi_lined = condition_info.multi_lined;
+
+        if condition_multi_lined {
+            // the body goes in a block expression on a new line
             printer.print_newline();
-            let body_shape = Shape {
-                width: printer.config.line_width.saturating_sub(shape.indent),
-                indent: shape.indent,
-                first_line_offset: 0,
-            };
+
             printer.print_spaces(shape.indent);
-            printer.print(&self.body, body_shape)
-        } else {
-            let remaining = printer.current_line_remaining_width();
+            if let Expression::Block(block) = &self.body {
+                // body is already a block expression
+                let body_shape = Shape {
+                    width: printer.config.line_width.saturating_sub(shape.indent),
+                    indent: shape.indent,
+                    first_line_offset: 0,
+                };
+                printer.print(block, body_shape);
+                printer.print_str(",");
+            } else {
+                // put the body in a block expression
+                printer.print_str("{");
+                printer.print_newline();
+                printer.print_standalone_with_trivia(
+                    &self.body,
+                    shape.indent + printer.config.indent_width,
+                );
+                printer.print_newline();
+                printer.print_spaces(shape.indent);
+                printer.print_str("},");
+            }
+            return PrintInfo::default_multi_lined();
+        }
+
+        // condition is single line, see if we can fit the body with it
+        // TODO: if the body is a block with only a tail expression, we might be able to un-nest it
+
+        printer.print_spaces(1);
+        let line_len_remaining = printer.current_line_remaining_width();
+        if let Expression::Block(block) = &self.body {
+            // If it is a block expression, we print it directly in front of the ` => `.
+            // Since the condition was single-line, the preceding line had no extra indent
+            // so we don't need to put the `{` on a new line.
             let body_shape = Shape {
-                width: remaining,
+                width: line_len_remaining,
                 indent: shape.indent,
                 first_line_offset: printer
                     .config
                     .line_width
-                    .saturating_sub(remaining + shape.indent),
+                    .saturating_sub(shape.indent + line_len_remaining),
             };
-            printer.print(&self.body, body_shape)
-        };
-
-        let multi_lined = condition_multi_lined || body_info.multi_lined;
-        if let Some(comma) = &self.comma {
-            printer.print_raw_token(comma);
-        } else {
+            let info = printer.print(block, body_shape);
             printer.print_str(",");
+            return info;
+        } else if let Expression::Match(match_expr) = &self.body
+            && let Some(match_scrutinee_len) = match_expr.scrutinee.single_line_width(printer)
+            && const { "match () {".len() } + match_scrutinee_len <= line_len_remaining
+        {
+            // Match expressions also may go directly on the same line if
+            // `match (...) {` fits. The arms can be multi-line.
+            let match_shape = Shape {
+                width: line_len_remaining,
+                indent: shape.indent,
+                first_line_offset: printer
+                    .config
+                    .line_width
+                    .saturating_sub(shape.indent + line_len_remaining),
+            };
+            let info = match_expr.print(match_shape, printer);
+            printer.print_str(",");
+            return info;
         }
-        PrintInfo { multi_lined }
+
+        // try and print the body single-line
+        let mut try_body = printer.sub_printer();
+        let try_body_info = self
+            .body
+            .print(Shape::unlimited_single_line(), &mut try_body);
+
+        if try_body_info.multi_lined || try_body.len() > line_len_remaining {
+            // create a block expression around it
+            printer.print_str("{");
+            printer.print_newline();
+            printer.print_standalone_with_trivia(
+                &self.body,
+                shape.indent + printer.config.indent_width,
+            );
+            printer.print_newline();
+            printer.print_spaces(shape.indent);
+            printer.print_str("},");
+            PrintInfo::default_multi_lined()
+        } else {
+            printer.append_from_printer(try_body);
+            printer.print_str(",");
+            PrintInfo::default_single_line()
+        }
     }
     fn leftmost_token(&self) -> TextRange {
         self.pattern.leftmost_token()
@@ -1248,6 +1419,16 @@ impl FromCST for CallExpr {
 impl KnownKind for CallExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::CALL_EXPR
+    }
+}
+
+impl CallExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let callee = self.callee.single_line_width(input)?;
+        let args = self.args.single_line_width(input)?;
+        Some(callee + args)
     }
 }
 
@@ -1358,33 +1539,84 @@ impl PrintMultiLine for CallArgs {
 }
 
 impl CallArgs {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let mut len = const { "()".len() };
+        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_paren.span());
+        for t in open_trailing {
+            len += t.single_line_len(input.input)?;
+        }
+        for (i, (arg, comma)) in self.args.iter().enumerate() {
+            let (arg_leading, arg_trailing) = input.trivia.get_for_element(arg);
+            for t in arg_leading {
+                len += t.single_line_len(input.input)?;
+            }
+            len += arg.single_line_width(input)?;
+            for t in arg_trailing {
+                len += t.single_line_len(input.input)?;
+            }
+            if i + 1 < self.args.len() {
+                if let Some(comma) = comma {
+                    let (comma_leading, comma_trailing) =
+                        input.trivia.get_for_range_split(comma.span());
+                    for t in comma_leading {
+                        len += t.single_line_len(input.input)?;
+                    }
+                    len += 1; // ","
+                    for t in comma_trailing {
+                        len += t.single_line_len(input.input)?;
+                    }
+                } else {
+                    len += 1; // ","
+                }
+                len += 1; // " "
+            } else if let Some(comma) = comma {
+                // Trailing comma is removed in single-line mode, but check trivia
+                let (comma_leading, comma_trailing) =
+                    input.trivia.get_for_range_split(comma.span());
+                for t in comma_leading {
+                    len += t.single_line_len(input.input)?;
+                }
+                for t in comma_trailing {
+                    len += t.single_line_len(input.input)?;
+                }
+            }
+        }
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_paren.span());
+        for t in close_leading {
+            len += t.single_line_len(input.input)?;
+        }
+        Some(len)
+    }
+
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the call args on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_paren);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
-        printer.print_trivia_single_line_squished(open_trailing)?;
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (arg, comma)) in self.args.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
             let (arg_leading, arg_trailing) = printer.trivia.get_for_element(arg);
-            printer.print_trivia_single_line_squished(arg_leading)?;
+            printer.try_print_trivia_single_line_squished(arg_leading)?;
             if printer
                 .print(arg, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
             }
-            printer.print_trivia_single_line_squished(arg_trailing)?;
+            printer.try_print_trivia_single_line_squished(arg_trailing)?;
             if i + 1 < self.args.len() {
                 if let Some(comma) = comma {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
-                    printer.print_trivia_single_line_squished(comma_leading)?;
+                    printer.try_print_trivia_single_line_squished(comma_leading)?;
                     printer.print_raw_token(comma);
-                    printer.print_trivia_single_line_squished(comma_trailing)?;
+                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
                 } else {
                     printer.print_str(",");
                 }
@@ -1393,13 +1625,13 @@ impl CallArgs {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
                     printer.trivia.get_for_range_split(comma.span());
-                printer.print_trivia_single_line_squished(comma_leading)?;
-                printer.print_trivia_single_line_squished(comma_trailing)?;
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
             }
         }
 
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
-        printer.print_trivia_single_line_squished(close_leading)?;
+        printer.try_print_trivia_single_line_squished(close_leading)?;
         printer.print_raw_token(&self.close_paren);
 
         if printer.output.len() > shape.width {
@@ -1421,6 +1653,98 @@ impl Printable for CallArgs {
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_paren.span()
+    }
+}
+
+/// Represents the bracket-enclosed portion of an index expression: `[expr]`.
+/// Analogous to [`CallArgs`] for call expressions.
+/// Used by both [`IndexExpr`] and [`PrintChain`].
+#[derive(Debug)]
+pub struct IndexArgs<'a> {
+    pub open_bracket: &'a t::LBracket,
+    pub index: &'a Expression,
+    pub close_bracket: &'a t::RBracket,
+}
+
+impl IndexArgs<'_> {
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let mut len = const { "[]".len() };
+        len += self.index.single_line_width(input)?;
+        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_bracket.span());
+        len += open_trailing.try_squished_len(input.input)?;
+        let (index_leading, index_trailing) = input.trivia.get_for_element(self.index);
+        len += index_leading.try_squished_len(input.input)?;
+        len += index_trailing.try_squished_len(input.input)?;
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_bracket.span());
+        len += close_leading.try_squished_len(input.input)?;
+        Some(len)
+    }
+
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(self.open_bracket);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_bracket.span());
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
+
+        let (index_leading, index_trailing) = printer.trivia.get_for_element(self.index);
+        printer.try_print_trivia_single_line_squished(index_leading)?;
+        if printer
+            .print(self.index, Shape::unlimited_single_line())
+            .multi_lined
+        {
+            return None;
+        }
+        printer.try_print_trivia_single_line_squished(index_trailing)?;
+
+        let (close_leading, _) = printer
+            .trivia
+            .get_for_range_split(self.close_bracket.span());
+        printer.try_print_trivia_single_line_squished(close_leading)?;
+        printer.print_raw_token(self.close_bracket);
+
+        if printer.output.len() > shape.width {
+            None
+        } else {
+            Some(PrintInfo::default_single_line())
+        }
+    }
+}
+
+impl PrintMultiLine for IndexArgs<'_> {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let inner_indent = shape.indent + printer.config.indent_width;
+        printer.print_raw_token(self.open_bracket);
+        printer.print_trivia_all_trailing_for(self.open_bracket.span());
+        printer.print_newline();
+
+        let (index_leading, index_trailing) = printer.trivia.get_for_element(self.index);
+        printer.print_trivia_with_newline(index_leading.trim_blanks(), inner_indent);
+        printer.print_spaces(inner_indent);
+        let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
+        printer.print(self.index, inner_shape);
+        printer.print_trivia_trailing(index_trailing);
+        printer.print_newline();
+
+        let (close_leading, _) = printer
+            .trivia
+            .get_for_range_split(self.close_bracket.span());
+        printer.print_trivia_with_newline(close_leading.trim_blanks(), inner_indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(self.close_bracket);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for IndexArgs<'_> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_bracket.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_bracket.span()
     }
 }
 
@@ -1471,38 +1795,61 @@ impl KnownKind for IndexExpr {
     }
 }
 
+impl IndexExpr {
+    fn args(&self) -> IndexArgs<'_> {
+        IndexArgs {
+            open_bracket: &self.open_bracket,
+            index: &self.index,
+            close_bracket: &self.close_bracket,
+        }
+    }
+
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let base = self.base.single_line_width(input)?;
+        Some(base + self.args().single_line_width(input)?)
+    }
+}
+
+impl PrintMultiLine for IndexExpr {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print(&*self.base, shape.clone());
+        self.args().print_multi_line(shape, printer)
+    }
+}
+
+impl IndexExpr {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        let base_len = self.base.single_line_width(printer)?;
+        let args_len = self.args().single_line_width(printer)?;
+        if base_len + args_len > shape.width {
+            return None;
+        }
+        if self
+            .base
+            .print(Shape::unlimited_single_line(), printer)
+            .multi_lined
+        {
+            return None;
+        }
+        if self
+            .args()
+            .print(Shape::unlimited_single_line(), printer)
+            .multi_lined
+        {
+            return None;
+        }
+        Some(PrintInfo::default_single_line())
+    }
+}
+
 impl Printable for IndexExpr {
     /// The main way to call this should be through [`PrintChain`]
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let multi_lined = printer.print(&*self.base, shape.clone()).multi_lined;
-
-        let mut index_printer = Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let index_info = index_printer.print(&*self.index, Shape::unlimited_single_line());
-
-        if index_info.multi_lined
-            || index_printer.output.len() + 2 > printer.current_line_remaining_width()
-        {
-            // We do not fit, switch to multi-line
-            printer.print_raw_token(&self.open_bracket);
-            printer.print_newline();
-            let inner_indent = shape.indent + printer.config.indent_width;
-            let inner_shape = Shape {
-                width: shape.width.saturating_sub(inner_indent),
-                indent: inner_indent,
-                first_line_offset: 0,
-            };
-            printer.print_spaces(inner_shape.indent);
-            printer.print(&*self.index, inner_shape);
-            printer.print_newline();
-            printer.print_spaces(shape.indent);
-            printer.print_raw_token(&self.close_bracket);
-            PrintInfo::default_multi_lined()
-        } else {
-            printer.print_raw_token(&self.open_bracket);
-            printer.append_from_printer(index_printer);
-            printer.print_raw_token(&self.close_bracket);
-            PrintInfo { multi_lined }
-        }
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
         self.base.leftmost_token()
@@ -1549,6 +1896,15 @@ impl KnownKind for FieldAccessExpr {
     }
 }
 
+impl FieldAccessExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let base = self.base.single_line_width(input)?;
+        Some(base + usize::from(self.dot.span().len()) + usize::from(self.field.span().len()))
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::ENV_ACCESS_EXPR`] node.
 #[derive(Debug)]
 pub struct EnvAccessExpr {
@@ -1583,6 +1939,19 @@ impl FromCST for EnvAccessExpr {
 impl KnownKind for EnvAccessExpr {
     fn kind() -> SyntaxKind {
         SyntaxKind::ENV_ACCESS_EXPR
+    }
+}
+
+impl EnvAccessExpr {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    #[allow(clippy::unnecessary_wraps)]
+    pub(crate) fn single_line_width(&self, _input: &Printer<'_>) -> Option<usize> {
+        Some(
+            usize::from(self.keyword.span().len())
+                + usize::from(self.dot.span().len())
+                + usize::from(self.field.span().len()),
+        )
     }
 }
 
@@ -1672,26 +2041,45 @@ impl KnownKind for BlockExpr {
 
 impl Printable for BlockExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_shape = Shape {
-            width: shape.width.saturating_sub(printer.config.indent_width),
-            indent: shape.indent + printer.config.indent_width,
-            first_line_offset: 0,
-        };
-
         printer.print_raw_token(&self.open_brace);
         printer.print_trivia_all_trailing_for(self.open_brace.span());
         printer.print_newline();
-        for stmt in &self.stmts {
-            printer.print_standalone_with_trivia(stmt, inner_shape.indent);
+
+        // body statements
+        let inner_indent = shape.indent + printer.config.indent_width;
+        if let Some((first, rest)) = self.stmts.split_first() {
+            let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
+            printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
+            printer.print_spaces(inner_indent);
+            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
+            printer.print(first, inner_shape);
+            printer.print_trivia_trailing(first_trailing);
             printer.print_newline();
+
+            for stmt in rest {
+                printer.print_standalone_with_trivia(stmt, inner_indent);
+                printer.print_newline();
+            }
         }
+
+        // tail expression
         if let Some(expr) = self.expr.as_deref() {
-            printer.print_standalone_with_trivia(expr, inner_shape.indent);
+            let (expr_leading, expr_trailing) = printer.trivia.get_for_element(expr);
+            let expr_leading = if self.stmts.is_empty() {
+                expr_leading.trim_leading_blanks()
+            } else {
+                expr_leading
+            };
+            printer.print_trivia_with_newline(expr_leading, inner_indent);
+            printer.print_spaces(inner_indent);
+            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
+            printer.print(expr, inner_shape);
+            printer.print_trivia_trailing(expr_trailing);
             printer.print_newline();
         }
 
-        printer
-            .print_trivia_all_leading_with_newline_for(self.close_brace.span(), inner_shape.indent);
+        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
+        printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_brace);
 
@@ -1773,37 +2161,33 @@ impl PrintMultiLine for ArrayInitializer {
     /// ]
     /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_shape = Shape {
-            width: shape.width.saturating_sub(printer.config.indent_width),
-            indent: shape.indent + printer.config.indent_width,
-            first_line_offset: 0,
-        };
-
         printer.print_raw_token(&self.open_bracket);
         printer.print_trivia_all_trailing_for(self.open_bracket.span());
         printer.print_newline();
 
+        let inner_indent = shape.indent + printer.config.indent_width;
         for (elem, comma) in &self.elements {
-            printer.print_trivia_all_leading_with_newline_for(
-                elem.leftmost_token(),
-                inner_shape.indent,
-            );
-            printer.print_spaces(inner_shape.indent);
-            printer.print(elem, inner_shape.clone());
+            let (elem_leading, elem_trailing) = printer.trivia.get_for_element(elem);
+            printer.print_trivia_with_newline(elem_leading.trim_blanks(), inner_indent);
+            printer.print_spaces(inner_indent);
+            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
+            printer.print(elem, inner_shape);
             if let Some(comma) = comma {
+                printer.print_trivia_squished(elem_trailing);
                 printer.print_raw_token(comma);
                 printer.print_trivia_all_trailing_for(comma.span());
             } else {
                 printer.print_str(",");
-                printer.print_trivia_all_trailing_for(elem.rightmost_token());
+                printer.print_trivia_trailing(elem_trailing);
             }
             printer.print_newline();
         }
 
-        printer.print_trivia_all_leading_with_newline_for(
-            self.close_bracket.span(),
-            inner_shape.indent,
-        );
+        let (close_bracket_leading, _) = printer
+            .trivia
+            .get_for_range_split(self.close_bracket.span());
+        printer
+            .print_trivia_with_newline(close_bracket_leading.trim_trailing_blanks(), inner_indent);
         printer.print_spaces(shape.indent);
         printer.print_raw_token(&self.close_bracket);
         PrintInfo::default_multi_lined()
@@ -1811,6 +2195,43 @@ impl PrintMultiLine for ArrayInitializer {
 }
 
 impl ArrayInitializer {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let mut len = const { "[".len() };
+        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_bracket.span());
+        len += open_trailing.try_squished_len(input.input)?;
+
+        for (i, (elem, comma)) in self.elements.iter().enumerate() {
+            let (el_leading, el_trailing) = input.trivia.get_for_element(elem);
+
+            len += el_leading.try_squished_len(input.input)?;
+            len += elem.single_line_width(input)?;
+
+            let is_last = i + 1 >= self.elements.len();
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    input.trivia.get_for_range_split(comma.span());
+                len += el_trailing.squished_len(input.input); // always squished before the comma
+                len += comma_leading.squished_len(input.input); // always squished before the comma
+                if !is_last {
+                    len += const { ", ".len() };
+                }
+                len += comma_trailing.try_squished_len(input.input)?;
+            } else {
+                len += el_trailing.try_squished_len(input.input)?; // if multilined would go after the added comma
+                if !is_last {
+                    len += const { ", ".len() };
+                }
+            }
+        }
+
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_bracket.span());
+        len += close_leading.try_squished_len(input.input)?;
+        len += const { "]".len() };
+        Some(len)
+    }
+
     /// Tries to print the array initializer as a single line.
     ///
     /// If successful, returns the info.
@@ -1820,7 +2241,7 @@ impl ArrayInitializer {
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_bracket);
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_bracket.span());
-        printer.print_trivia_single_line_squished(open_trailing)?;
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (elem, comma)) in self.elements.iter().enumerate() {
             if printer.output.len() > shape.width {
@@ -1828,38 +2249,36 @@ impl ArrayInitializer {
             }
 
             let (el_leading, el_trailing) = printer.trivia.get_for_element(elem);
-            printer.print_trivia_single_line_squished(el_leading)?;
+            printer.try_print_trivia_single_line_squished(el_leading)?;
             if printer
                 .print(elem, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
             }
-            printer.print_trivia_single_line_squished(el_trailing)?;
-            if i + 1 < self.elements.len() {
-                if let Some(comma) = comma {
-                    let (comma_leading, comma_trailing) =
-                        printer.trivia.get_for_range_split(comma.span());
-                    printer.print_trivia_single_line_squished(comma_leading)?;
-                    printer.print_raw_token(comma);
-                    printer.print_trivia_single_line_squished(comma_trailing)?;
-                } else {
-                    printer.print_str(",");
-                }
-                printer.print_str(" ");
-            } else if let Some(comma) = comma {
-                // Trailing comma is removed in single-line mode, but we still try the comments.
+
+            let is_last = i + 1 >= self.elements.len();
+            if let Some(comma) = comma {
                 let (comma_leading, comma_trailing) =
                     printer.trivia.get_for_range_split(comma.span());
-                printer.print_trivia_single_line_squished(comma_leading)?;
-                printer.print_trivia_single_line_squished(comma_trailing)?;
+                printer.print_trivia_squished(el_trailing); // always squished before the comma
+                printer.print_trivia_squished(comma_leading); // always squished before the comma
+                if !is_last {
+                    printer.print_str(", ");
+                }
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
+            } else {
+                printer.try_print_trivia_single_line_squished(el_trailing)?; // if multilined would go after the added comma and thus would not be squished
+                if !is_last {
+                    printer.print_str(", ");
+                }
             }
         }
 
         let (close_leading, _) = printer
             .trivia
             .get_for_range_split(self.close_bracket.span());
-        printer.print_trivia_single_line_squished(close_leading)?;
+        printer.try_print_trivia_single_line_squished(close_leading)?;
         printer.print_raw_token(&self.close_bracket);
 
         if printer.output.len() > shape.width {
@@ -1887,7 +2306,7 @@ impl Printable for ArrayInitializer {
 /// Corresponds to a [`SyntaxKind::OBJECT_LITERAL`] node.
 #[derive(Debug)]
 pub struct ObjectInitializer {
-    pub name: t::Word,
+    pub name: PathExpr,
     pub open_brace: t::LBrace,
     pub fields: Vec<(ObjectField, Option<t::Comma>)>,
     pub close_brace: t::RBrace,
@@ -1901,7 +2320,8 @@ impl FromCST for ObjectInitializer {
         let mut it = SyntaxNodeIter::new(&node);
 
         // WORD (object type name)
-        let name = it.expect_parse()?;
+        let name = it.expect_next("a WORD or PATH_EXPR")?;
+        let name = PathExpr::from_cst(name)?;
 
         let open_brace = it.expect_parse()?;
 
@@ -1967,7 +2387,7 @@ impl PrintMultiLine for ObjectInitializer {
             first_line_offset: 0,
         };
 
-        printer.print_raw_token(&self.name);
+        printer.print(&self.name, Shape::unlimited_single_line());
         printer.print_str(" ");
         printer.print_raw_token(&self.open_brace);
         printer.print_trivia_all_trailing_for(self.open_brace.span());
@@ -1998,6 +2418,42 @@ impl PrintMultiLine for ObjectInitializer {
 }
 
 impl ObjectInitializer {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        // Name { field1: v1, field2: v2 }
+        let mut len = self.name.single_line_width(input)? + const { " {  }".len() };
+        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
+        len += open_trailing.try_squished_len(input.input)?;
+        for (i, (field, comma)) in self.fields.iter().enumerate() {
+            let (fld_leading, fld_trailing) = input.trivia.get_for_element(field);
+            len += fld_leading.try_squished_len(input.input)?;
+            len += field.single_line_width(input)?;
+            len += fld_trailing.try_squished_len(input.input)?;
+            if i + 1 < self.fields.len() {
+                if let Some(comma) = comma {
+                    let (comma_leading, comma_trailing) =
+                        input.trivia.get_for_range_split(comma.span());
+                    len += comma_leading.try_squished_len(input.input)?;
+                    len += 1; // ","
+                    len += comma_trailing.try_squished_len(input.input)?;
+                } else {
+                    len += 1; // ","
+                }
+                len += 1; // " "
+            } else if let Some(comma) = comma {
+                // Trailing comma is removed in single-line mode, but check trivia
+                let (comma_leading, comma_trailing) =
+                    input.trivia.get_for_range_split(comma.span());
+                len += comma_leading.try_squished_len(input.input)?;
+                len += comma_trailing.try_squished_len(input.input)?;
+            }
+        }
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
+        len += close_leading.try_squished_len(input.input)?;
+        Some(len)
+    }
+
     /// Tries to print the object initializer as a single line.
     ///
     /// If successful, returns the info.
@@ -2005,33 +2461,33 @@ impl ObjectInitializer {
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the object initializer on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
-        printer.print_raw_token(&self.name);
+        printer.print(&self.name, Shape::unlimited_single_line());
         printer.print_str(" ");
         printer.print_raw_token(&self.open_brace);
         printer.print_str(" ");
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
-        printer.print_trivia_single_line_squished(open_trailing)?;
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (field, comma)) in self.fields.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
             let (fld_leading, fld_trailing) = printer.trivia.get_for_element(field);
-            printer.print_trivia_single_line_squished(fld_leading)?;
+            printer.try_print_trivia_single_line_squished(fld_leading)?;
             if printer
                 .print(field, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
             }
-            printer.print_trivia_single_line_squished(fld_trailing)?;
+            printer.try_print_trivia_single_line_squished(fld_trailing)?;
             if i + 1 < self.fields.len() {
                 if let Some(comma) = comma {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
-                    printer.print_trivia_single_line_squished(comma_leading)?;
+                    printer.try_print_trivia_single_line_squished(comma_leading)?;
                     printer.print_raw_token(comma);
-                    printer.print_trivia_single_line_squished(comma_trailing)?;
+                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
                 } else {
                     printer.print_str(",");
                 }
@@ -2040,12 +2496,12 @@ impl ObjectInitializer {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
                     printer.trivia.get_for_range_split(comma.span());
-                printer.print_trivia_single_line_squished(comma_leading)?;
-                printer.print_trivia_single_line_squished(comma_trailing)?;
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
             }
         }
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_single_line_squished(close_leading)?;
+        printer.try_print_trivia_single_line_squished(close_leading)?;
         printer.print_str(" ");
         printer.print_raw_token(&self.close_brace);
 
@@ -2064,7 +2520,7 @@ impl Printable for ObjectInitializer {
             .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
-        self.name.span()
+        self.name.leftmost_token()
     }
     fn rightmost_token(&self) -> TextRange {
         self.close_brace.span()
@@ -2178,34 +2634,86 @@ impl PrintMultiLine for MapLiteral {
 }
 
 impl MapLiteral {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        // { k1: v1, k2: v2 }
+        let mut len = const { "{  }".len() };
+        let (_, open_trailing) = input.trivia.get_for_range_split(self.open_brace.span());
+        for t in open_trailing {
+            len += t.single_line_len(input.input)?;
+        }
+        for (i, (field, comma)) in self.fields.iter().enumerate() {
+            let (fld_leading, fld_trailing) = input.trivia.get_for_element(field);
+            for t in fld_leading {
+                len += t.single_line_len(input.input)?;
+            }
+            len += field.single_line_width(input)?;
+            for t in fld_trailing {
+                len += t.single_line_len(input.input)?;
+            }
+            if i + 1 < self.fields.len() {
+                if let Some(comma) = comma {
+                    let (comma_leading, comma_trailing) =
+                        input.trivia.get_for_range_split(comma.span());
+                    for t in comma_leading {
+                        len += t.single_line_len(input.input)?;
+                    }
+                    len += 1; // ","
+                    for t in comma_trailing {
+                        len += t.single_line_len(input.input)?;
+                    }
+                } else {
+                    len += 1; // ","
+                }
+                len += 1; // " "
+            } else if let Some(comma) = comma {
+                // Trailing comma is removed in single-line mode, but check trivia
+                let (comma_leading, comma_trailing) =
+                    input.trivia.get_for_range_split(comma.span());
+                for t in comma_leading {
+                    len += t.single_line_len(input.input)?;
+                }
+                for t in comma_trailing {
+                    len += t.single_line_len(input.input)?;
+                }
+            }
+        }
+        let (close_leading, _) = input.trivia.get_for_range_split(self.close_brace.span());
+        for t in close_leading {
+            len += t.single_line_len(input.input)?;
+        }
+        Some(len)
+    }
+
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the map literal on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         printer.print_raw_token(&self.open_brace);
         printer.print_str(" ");
         let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_brace.span());
-        printer.print_trivia_single_line_squished(open_trailing)?;
+        printer.try_print_trivia_single_line_squished(open_trailing)?;
 
         for (i, (field, comma)) in self.fields.iter().enumerate() {
             if printer.output.len() > shape.width {
                 return None;
             }
             let (fld_leading, fld_trailing) = printer.trivia.get_for_element(field);
-            printer.print_trivia_single_line_squished(fld_leading)?;
+            printer.try_print_trivia_single_line_squished(fld_leading)?;
             if printer
                 .print(field, Shape::unlimited_single_line())
                 .multi_lined
             {
                 return None;
             }
-            printer.print_trivia_single_line_squished(fld_trailing)?;
+            printer.try_print_trivia_single_line_squished(fld_trailing)?;
             if i + 1 < self.fields.len() {
                 if let Some(comma) = comma {
                     let (comma_leading, comma_trailing) =
                         printer.trivia.get_for_range_split(comma.span());
-                    printer.print_trivia_single_line_squished(comma_leading)?;
+                    printer.try_print_trivia_single_line_squished(comma_leading)?;
                     printer.print_raw_token(comma);
-                    printer.print_trivia_single_line_squished(comma_trailing)?;
+                    printer.try_print_trivia_single_line_squished(comma_trailing)?;
                 } else {
                     printer.print_str(",");
                 }
@@ -2214,12 +2722,12 @@ impl MapLiteral {
                 // Trailing comma is removed in single-line mode, but we still try the comments.
                 let (comma_leading, comma_trailing) =
                     printer.trivia.get_for_range_split(comma.span());
-                printer.print_trivia_single_line_squished(comma_leading)?;
-                printer.print_trivia_single_line_squished(comma_trailing)?;
+                printer.try_print_trivia_single_line_squished(comma_leading)?;
+                printer.try_print_trivia_single_line_squished(comma_trailing)?;
             }
         }
         let (close_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_single_line_squished(close_leading)?;
+        printer.try_print_trivia_single_line_squished(close_leading)?;
         printer.print_str(" ");
         printer.print_raw_token(&self.close_brace);
 
@@ -2280,12 +2788,36 @@ impl KnownKind for ObjectField {
     }
 }
 
+impl ObjectField {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let name = self.name.single_line_width(input)?;
+        let value = self.value.single_line_width(input)?;
+        // Must match trivia handled by print: colon_trailing + value_leading
+        let mut trivia_len = 0usize;
+        let (_, colon_trailing) = input.trivia.get_for_range_split(self.colon.span());
+        for t in colon_trailing {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        let value_leading = input.trivia.get_leading_for_element(&self.value);
+        for t in value_leading {
+            trivia_len += t.single_line_len(input.input)?;
+        }
+        Some(name + const { ": ".len() } + value + trivia_len)
+    }
+}
+
 impl Printable for ObjectField {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let mut multi_lined = false;
         multi_lined |= printer.print(&self.name, shape.clone()).multi_lined;
         printer.print_raw_token(&self.colon);
+        let (_, colon_trailing) = printer.trivia.get_for_range_split(self.colon.span());
         printer.print_str(" ");
+        printer.print_trivia_squished(colon_trailing);
+        let value_leading = printer.trivia.get_leading_for_element(&self.value);
+        printer.print_trivia_squished(value_leading);
         multi_lined |= printer.print(&self.value, shape).multi_lined;
         PrintInfo { multi_lined }
     }
@@ -2316,6 +2848,23 @@ impl FromCST for ObjectFieldKey {
                 found: elem.kind(),
                 at: elem.text_range(),
             }),
+        }
+    }
+}
+
+impl ObjectFieldKey {
+    /// Returns the width of the expression if it fits on a single line.
+    /// Returns `None` if it can never be single-lined.
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        match self {
+            ObjectFieldKey::Word(word) => Some(usize::from(word.span().len())),
+            ObjectFieldKey::String(s) => {
+                if input.input[s.span()].contains('\n') {
+                    None
+                } else {
+                    Some(usize::from(s.span().len()))
+                }
+            }
         }
     }
 }
@@ -2389,11 +2938,9 @@ impl<'a> PrintChain<'a> {
                         chain_members: Vec::new(),
                     }
                 } else {
-                    chain.chain_members.push(PrintChainItem::Index(
-                        &index_expr.open_bracket,
-                        &index_expr.index,
-                        &index_expr.close_bracket,
-                    ));
+                    chain
+                        .chain_members
+                        .push(PrintChainItem::Index(index_expr.args()));
                     chain
                 }
             }
@@ -2471,8 +3018,8 @@ impl PrintMultiLine for PrintChain<'_> {
             }
         }
         for item in it {
-            match *item {
-                PrintChainItem::FieldAccess(dot, word) => {
+            match item {
+                &PrintChainItem::FieldAccess(dot, word) => {
                     printer.print_newline();
                     printer.print_spaces(chain_indent);
                     printer.print_raw_token(dot);
@@ -2481,61 +3028,23 @@ impl PrintMultiLine for PrintChain<'_> {
                         chain_indent + usize::from(dot.span().len() + word.span().len()),
                     );
                 }
-                PrintChainItem::Index(lbracket, expression, rbracket) => {
-                    let mut single_line_printer =
-                        Printer::new_empty(printer.input, printer.config, printer.trivia);
-                    let single_line_info =
-                        single_line_printer.print(expression, Shape::unlimited_single_line());
-                    let single_line_len = single_line_printer.output.len()
-                        + usize::from(lbracket.span().len() + rbracket.span().len());
-                    if single_line_info.multi_lined || single_line_len > line_remaining_width {
-                        // Print multi-line
-                        printer.print_raw_token(lbracket);
-                        printer.print_newline();
-                        let inner_expr_indent = chain_indent + printer.config.indent_width;
-                        let inner_expr_shape = Shape {
-                            width: printer.config.line_width.saturating_sub(inner_expr_indent),
-                            indent: inner_expr_indent,
-                            first_line_offset: 0,
-                        };
-                        printer.print_spaces(inner_expr_indent);
-                        printer.print(expression, inner_expr_shape);
-                        printer.print_newline();
-                        printer.print_spaces(chain_indent);
-                        printer.print_raw_token(rbracket);
-                        line_remaining_width = printer
-                            .config
-                            .line_width
-                            .saturating_sub(chain_indent + usize::from(rbracket.span().len()));
-                    } else {
-                        // Print on end of line
-                        line_remaining_width = line_remaining_width.saturating_sub(single_line_len);
-                        printer.print_raw_token(lbracket);
-                        printer.append_from_printer(single_line_printer);
-                        printer.print_raw_token(rbracket);
-                    }
+                PrintChainItem::Index(index_args) => {
+                    let index_shape = Shape {
+                        width: line_remaining_width,
+                        indent: chain_indent,
+                        first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
+                    };
+                    printer.print(index_args, index_shape);
+                    line_remaining_width = printer.current_line_remaining_width();
                 }
-                PrintChainItem::Call(call_args) => {
-                    let mut single_line_printer =
-                        Printer::new_empty(printer.input, printer.config, printer.trivia);
-                    let single_line_info =
-                        single_line_printer.print(call_args, Shape::unlimited_single_line());
-                    if single_line_info.multi_lined
-                        || single_line_printer.output.len() > line_remaining_width
-                    {
-                        // Print multi-line
-                        let call_args_shape = Shape {
-                            width: 0, // not single-lined
-                            indent: chain_indent,
-                            first_line_offset: line_remaining_width.saturating_sub(chain_indent),
-                        };
-                        call_args.print_multi_line(call_args_shape, printer);
-                    } else {
-                        // Print on end of line
-                        line_remaining_width =
-                            line_remaining_width.saturating_sub(single_line_printer.output.len());
-                        printer.append_from_printer(single_line_printer);
-                    }
+                &PrintChainItem::Call(call_args) => {
+                    let call_shape = Shape {
+                        width: line_remaining_width,
+                        indent: chain_indent,
+                        first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
+                    };
+                    printer.print(call_args, call_shape);
+                    line_remaining_width = printer.current_line_remaining_width();
                 }
             }
         }
@@ -2544,61 +3053,73 @@ impl PrintMultiLine for PrintChain<'_> {
     }
 }
 
-impl Printable for PrintChain<'_> {
-    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let mut single_line_printer =
-            Printer::new_empty(printer.input, printer.config, printer.trivia);
-        let mut multi_lined = false;
-
+impl PrintChain<'_> {
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         match self.first {
             Expression::Path(path_expr) => {
-                single_line_printer.print_raw_token(&path_expr.first);
+                printer.print_raw_token(&path_expr.first);
+            }
+            Expression::FieldAccess(..) => {
+                unreachable!("Should have been unwrapped when the PrintChain was created")
             }
             Expression::Call(call_expr) => {
-                multi_lined |= single_line_printer
+                if printer
                     .print(call_expr, Shape::unlimited_single_line())
-                    .multi_lined;
+                    .multi_lined
+                {
+                    return None;
+                }
             }
             Expression::Index(index_expr) => {
-                multi_lined |= single_line_printer
+                if printer
                     .print(index_expr, Shape::unlimited_single_line())
-                    .multi_lined;
+                    .multi_lined
+                {
+                    return None;
+                }
             }
             _ => {
-                multi_lined |= single_line_printer
+                if self.first.single_line_width(printer)? > shape.width {
+                    return None;
+                }
+                if printer
                     .print(self.first, Shape::unlimited_single_line())
-                    .multi_lined;
+                    .multi_lined
+                {
+                    return None;
+                }
             }
         }
         for item in &self.chain_members {
-            if multi_lined || single_line_printer.output.len() > shape.width {
-                return Self::print_multi_line(self, shape, printer);
+            if printer.output.len() > shape.width {
+                return None;
             }
-            match *item {
-                PrintChainItem::FieldAccess(dot, word) => {
-                    single_line_printer.print_raw_token(dot);
-                    single_line_printer.print_raw_token(word);
+            match item {
+                &PrintChainItem::FieldAccess(dot, word) => {
+                    printer.print_raw_token(dot);
+                    printer.print_raw_token(word);
                 }
-                PrintChainItem::Index(open_bracket, index, close_bracket) => {
-                    single_line_printer.print_raw_token(open_bracket);
-                    multi_lined |= single_line_printer
-                        .print(index, Shape::unlimited_single_line())
-                        .multi_lined;
-                    single_line_printer.print_raw_token(close_bracket);
+                PrintChainItem::Index(index_args) => {
+                    index_args.try_print_single_line(shape, printer)?;
                 }
-                PrintChainItem::Call(call_args) => {
-                    multi_lined |= single_line_printer
-                        .print(call_args, Shape::unlimited_single_line())
-                        .multi_lined;
+                &PrintChainItem::Call(call_args) => {
+                    call_args.try_print_single_line(shape, printer)?;
                 }
             }
         }
-        if multi_lined || single_line_printer.output.len() > shape.width {
-            Self::print_multi_line(self, shape, printer)
+        if printer.output.len() > shape.width {
+            None
         } else {
-            printer.append_from_printer(single_line_printer);
-            PrintInfo::default_single_line()
+            Some(PrintInfo::default_single_line())
         }
+    }
+}
+
+impl Printable for PrintChain<'_> {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
     }
     fn leftmost_token(&self) -> TextRange {
         self.first.leftmost_token()
@@ -2606,7 +3127,7 @@ impl Printable for PrintChain<'_> {
     fn rightmost_token(&self) -> TextRange {
         match self.chain_members.last() {
             Some(PrintChainItem::FieldAccess(_, word)) => word.span(),
-            Some(PrintChainItem::Index(_, _, close_bracket)) => close_bracket.span(),
+            Some(PrintChainItem::Index(index_args)) => index_args.close_bracket.span(),
             Some(PrintChainItem::Call(call_args)) => call_args.rightmost_token(),
             None => self.first.rightmost_token(),
         }
@@ -2616,6 +3137,6 @@ impl Printable for PrintChain<'_> {
 /// Only used for printing chained expressions. See [`PrintChain`].
 enum PrintChainItem<'a> {
     FieldAccess(&'a t::Dot, &'a t::Word),
-    Index(&'a t::LBracket, &'a Expression, &'a t::RBracket),
+    Index(IndexArgs<'a>),
     Call(&'a CallArgs),
 }

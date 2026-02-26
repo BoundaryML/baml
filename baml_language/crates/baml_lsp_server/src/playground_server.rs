@@ -216,9 +216,8 @@ async fn handle_ws_in_message(
                 }
             };
 
-            let args = match bridge_ctypes::baml::cffi::HostFunctionArguments::decode(
-                decoded.as_slice(),
-            ) {
+            let args = match bridge_ctypes::baml::cffi::CallFunctionArgs::decode(decoded.as_slice())
+            {
                 Ok(a) => a,
                 Err(e) => {
                     let err_msg = WsOutMessage::CallFunctionError {
@@ -232,7 +231,10 @@ async fn handle_ws_in_message(
                 }
             };
 
-            let kwargs = match bridge_ctypes::kwargs_to_bex_values(args.kwargs) {
+            let kwargs = match bridge_ctypes::kwargs_to_bex_values(
+                args.kwargs,
+                &bridge_ctypes::HANDLE_TABLE,
+            ) {
                 Ok(k) => k,
                 Err(e) => {
                     let err_msg = WsOutMessage::CallFunctionError {
@@ -268,21 +270,24 @@ async fn handle_ws_in_message(
             };
 
             tokio::spawn(async move {
+                let handle_options = bridge_ctypes::HandleTableOptions::for_wire();
                 let out = match bex
                     .call_function(&name, kwargs.into(), function_call_ctx.build())
                     .await
                 {
-                    Ok(result) => match bridge_ctypes::external_to_cffi_value(&result) {
-                        Ok(cffi) => {
-                            let b64 = base64::engine::general_purpose::STANDARD
-                                .encode(cffi.encode_to_vec());
-                            WsOutMessage::CallFunctionResult { id, result: b64 }
+                    Ok(result) => {
+                        match bridge_ctypes::external_to_baml_value(&result, &handle_options) {
+                            Ok(baml_val) => {
+                                let b64 = base64::engine::general_purpose::STANDARD
+                                    .encode(baml_val.encode_to_vec());
+                                WsOutMessage::CallFunctionResult { id, result: b64 }
+                            }
+                            Err(e) => WsOutMessage::CallFunctionError {
+                                id,
+                                error: format!("Failed to encode result: {e}"),
+                            },
                         }
-                        Err(e) => WsOutMessage::CallFunctionError {
-                            id,
-                            error: format!("Failed to encode result: {e}"),
-                        },
-                    },
+                    }
                     Err(e) => WsOutMessage::CallFunctionError {
                         id,
                         error: format!("{e}"),

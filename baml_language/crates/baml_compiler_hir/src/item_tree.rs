@@ -7,6 +7,7 @@
 use std::ops::Index;
 
 use baml_base::Name;
+use indexmap::IndexMap;
 use rowan::TextRange;
 use rustc_hash::FxHashMap;
 
@@ -325,6 +326,40 @@ pub struct RetryPolicy {
     pub max_delay_ms: Option<String>,
 }
 
+/// A test argument value, extracted from the CST during HIR lowering.
+///
+/// These are untyped constant values — type checking against function
+/// signatures happens at a later stage (during emission or at runtime).
+#[derive(Debug, Clone)]
+pub enum TestArgValue {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    String(String),
+    Null,
+    Array(Vec<TestArgValue>),
+    Map(IndexMap<String, TestArgValue>),
+}
+
+// Manual PartialEq/Eq implementation to handle f64 comparison via bit pattern.
+// This satisfies ItemTree's Eq requirement (needed for salsa early cutoff).
+impl PartialEq for TestArgValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Int(a), Self::Int(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => a.to_bits() == b.to_bits(),
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Null, Self::Null) => true,
+            (Self::Array(a), Self::Array(b)) => a == b,
+            (Self::Map(a), Self::Map(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for TestArgValue {}
+
 /// Test definition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Test {
@@ -332,6 +367,9 @@ pub struct Test {
 
     /// Unresolved function references.
     pub function_refs: Vec<Name>,
+
+    /// Test arguments, keyed by parameter name.
+    pub args: IndexMap<String, TestArgValue>,
 
     /// Type builder block containing dynamic type definitions.
     pub type_builder: Option<TypeBuilderBlock>,

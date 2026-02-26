@@ -1,12 +1,13 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: first
 ---
 // Test raw string parsing in prompts and descriptions
 class RawStrings {
-    simple string @description(#"raw string"#)
-    with_quotes string @description(#"contains "quotes" easily"#)
-    multi_hash string @description(##"contains #"hash"# inside"##)
-    multiline string
+    simple: string @description(#"raw string"#)
+    with_quotes: string @description(#"contains "quotes" easily"#)
+    multi_hash: string @description(##"contains #"hash"# inside"##)
+    multiline: string
         @description(
             ###"
                 This is a multiline
@@ -17,8 +18,8 @@ class RawStrings {
 }
 
 function ProcessText(input: string) -> string {
-    client GPT4
-    prompt #"
+    client: GPT4
+    prompt: #"
         Process the following text:
         {{ input }}
 

@@ -16,7 +16,7 @@ function GreetBaz(n: string) -> string {
 }
 
 class Baz {
-    name string
+    name: string
 
     function Greeting(self) -> string {
         "Hello, " + self.name + "!"

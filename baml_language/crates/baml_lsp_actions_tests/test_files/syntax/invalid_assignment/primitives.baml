@@ -50,11 +50,11 @@ function PrimitiveAssignments() -> int {
 //----
 //- diagnostics
 // Error: Expected `int`, found `string`
-//     ╭─[ invalid_assignment_primitives.baml:21:5 ]
+//     ╭─[ invalid_assignment_primitives.baml:21:6 ]
 //     │
 //  21 │     e = "oops";
-//     │        ───┬───  
-//     │           ╰───── Expected `int`, found `string`
+//     │         ───┬──  
+//     │            ╰──── Expected `int`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
@@ -86,20 +86,20 @@ function PrimitiveAssignments() -> int {
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `float`, found `string`
-//     ╭─[ invalid_assignment_primitives.baml:37:5 ]
+//     ╭─[ invalid_assignment_primitives.baml:37:6 ]
 //     │
 //  37 │     i = "pi";
-//     │        ──┬──  
-//     │          ╰──── Expected `float`, found `string`
+//     │         ──┬─  
+//     │           ╰─── Expected `float`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: Expected `bool`, found `string`
-//     ╭─[ invalid_assignment_primitives.baml:41:5 ]
+//     ╭─[ invalid_assignment_primitives.baml:41:6 ]
 //     │
 //  41 │     j = "true";
-//     │        ───┬───  
-//     │           ╰───── Expected `bool`, found `string`
+//     │         ───┬──  
+//     │            ╰──── Expected `bool`, found `string`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

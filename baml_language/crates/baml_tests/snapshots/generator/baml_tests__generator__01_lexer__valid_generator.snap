@@ -1,5 +1,6 @@
 ---
-source: crates/baml_tests/src/generated_tests.rs
+source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
+expression: output
 ---
 Slash "/"
 Slash "/"
@@ -14,9 +15,11 @@ Generator "generator"
 Word "lang_python"
 LBrace "{"
 Word "output_type"
+Quote "\""
 Word "python"
 Slash "/"
 Word "pydantic"
+Quote "\""
 Word "output_dir"
 Quote "\""
 Dot "."

@@ -1,17 +1,17 @@
 // High-level API
 export { encodeCallArgs, serializeValue } from './encode';
-export type { EncodeCallArgsOptions } from './encode';
-export { decodeCallResult, deserializeValue } from './decode';
-export type { BamlJsValue, BamlJsClass, BamlJsMap, BamlSerializable } from './types';
+export { decodeCallResult, deserializeValue, handleTypeName } from './decode';
+export type { WrapHandleFn } from './decode';
+export type { BamlJsValue, BamlJsClass, BamlJsMap, BamlJsHandle, BamlJsMedia, BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage, BamlSerializable } from './types';
 
 // Proto types (for .toBaml() implementors)
 export type {
-  HostValue,
-  HostClassValue,
-  HostEnumValue,
-  HostMapEntry,
-  HostListValue,
-  HostMapValue,
-  HostFunctionArguments,
+  InboundValue,
+  InboundClassValue,
+  InboundEnumValue,
+  InboundMapEntry,
+  InboundListValue,
+  InboundMapValue,
+  CallFunctionArgs,
 } from './generated/baml/cffi/v1/baml_inbound';
-export type { CFFIValueHolder } from './generated/baml/cffi/v1/baml_outbound';
+export type { BamlOutboundValue } from './generated/baml/cffi/v1/baml_outbound';

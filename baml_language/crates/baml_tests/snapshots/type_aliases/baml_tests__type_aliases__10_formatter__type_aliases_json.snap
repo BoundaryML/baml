@@ -1,10 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-type JSON = int | float | string | bool | JSON[] | map<string, json>
+type JSON = int | float | string | bool | JSON[] | map<string, json>;
 
 class NotJSON {
-    inner name
+    inner: name
 }
 
 // Should be type error.
