@@ -92,7 +92,7 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 
 	err := baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		close(callback)
+		safeClose(callback)
 		return nil, err
 	}
 
@@ -150,7 +150,7 @@ func (r *BamlRuntime) BuildRequest(ctx context.Context, functionName string, enc
 
 	err := baml_go.BuildRequestFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		close(callback)
+		safeClose(callback)
 		return nil, err
 	}
 
