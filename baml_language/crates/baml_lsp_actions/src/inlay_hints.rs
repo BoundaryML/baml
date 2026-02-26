@@ -222,42 +222,39 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 }
 
 /// Emits `param_name:` labels before positional call arguments.
-pub struct CallArgNames;
-impl HintCollector for CallArgNames {
-    fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
-        use baml_db::baml_compiler_hir::Expr;
+fn collect_call_arg_names(ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
+    use baml_db::baml_compiler_hir::Expr;
 
-        for (_, expr) in ctx.body.exprs.iter() {
-            let Expr::Call { callee, args } = expr else {
+    for (_, expr) in ctx.body.exprs.iter() {
+        let Expr::Call { callee, args } = expr else {
+            continue;
+        };
+
+        if args.is_empty() {
+            continue;
+        }
+
+        // Get parameter names from the callee's inferred function type.
+        let Some(Ty::Function { params, .. }) = ctx.inference.expr_types.get(callee) else {
+            continue;
+        };
+
+        for (i, arg_id) in args.iter().enumerate() {
+            let Some((Some(name), _)) = params.get(i) else {
+                continue;
+            };
+            let Some(arg_span) = ctx.source_map.expr_span(*arg_id) else {
                 continue;
             };
 
-            if args.is_empty() {
-                continue;
-            }
-
-            // Get parameter names from the callee's inferred function type.
-            let Some(Ty::Function { params, .. }) = ctx.inference.expr_types.get(callee) else {
-                continue;
-            };
-
-            for (i, arg_id) in args.iter().enumerate() {
-                let Some((Some(name), _)) = params.get(i) else {
-                    continue;
-                };
-                let Some(arg_span) = ctx.source_map.expr_span(*arg_id) else {
-                    continue;
-                };
-
-                hints.push(InlayHint {
-                    offset: arg_span.range.start(),
-                    label: plain_label(format!("{name}:")),
-                    kind: Some(InlayHintKind::Parameter),
-                    padding_left: false,
-                    padding_right: true,
-                    text_edits: vec![],
-                });
-            }
+            hints.push(InlayHint {
+                offset: arg_span.range.start(),
+                label: plain_label(format!("{name}:")),
+                kind: Some(InlayHintKind::Parameter),
+                padding_left: false,
+                padding_right: true,
+                text_edits: vec![],
+            });
         }
     }
 }
@@ -268,78 +265,75 @@ impl HintCollector for CallArgNames {
 /// annotation, or when the inferred type is `unknown` / `error`.
 /// This works for let statements in both types of for loops as well, with extra
 /// logic to prevent suggesting inserting type annotations in for-in loops.
-pub struct LetTypeAnnotations;
-impl HintCollector for LetTypeAnnotations {
-    fn collect(&self, ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
-        for (stmt_id, stmt) in ctx.body.stmts.iter() {
-            let Stmt::Let {
-                pattern,
-                type_annotation,
-                initializer,
-                origin,
-                ..
-            } = stmt
-            else {
-                continue;
-            };
+fn collect_let_type_annotations(ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
+    for (stmt_id, stmt) in ctx.body.stmts.iter() {
+        let Stmt::Let {
+            pattern,
+            type_annotation,
+            initializer,
+            origin,
+            ..
+        } = stmt
+        else {
+            continue;
+        };
 
-            // Skip if the user already wrote an explicit type annotation.
-            if type_annotation.is_some() {
-                continue;
-            }
-
-            // Skip if there is no initializer.
-            let Some(init_id) = initializer else {
-                continue;
-            };
-
-            // Get the inferred type of the initializer.
-            let Some(raw_ty) = ctx.inference.expr_types.get(init_id) else {
-                continue;
-            };
-
-            // Pretty print the type with goto definition support.
-            let Some(ty) = display_ty(raw_ty) else {
-                continue;
-            };
-
-            // Build label parts: ": " (plain) + type (with links).
-            let mut label = plain_label(": ");
-            label.extend(ty_to_label_parts(ctx.db, &ty));
-
-            // Place the hint at the end of the bound pattern, falling back to
-            // the statement start when no pattern span is available.
-            let offset = if let Some(pat_span) = ctx.source_map.pattern_span(*pattern) {
-                pat_span.range.end()
-            } else if let Some(stmt_span) = ctx.source_map.stmt_span(stmt_id) {
-                stmt_span.range.start()
-            } else {
-                continue;
-            };
-
-            // Concatenate label parts into the text to insert on double-click.
-            // Only allow this if the let statement was written in the source code.
-            // This is to prevent suggesting inserting type annotations in for-in loops.
-            let insert_text: Option<String> = if *origin == LetOrigin::Source {
-                Some(label.iter().map(|p| p.value.as_str()).collect())
-            } else {
-                None
-            };
-
-            hints.push(InlayHint {
-                offset,
-                label,
-                kind: Some(InlayHintKind::Type),
-                padding_left: false,
-                padding_right: false,
-                text_edits: insert_text.map_or(Vec::new(), |text| {
-                    vec![InlayHintTextEdit {
-                        offset,
-                        new_text: text,
-                    }]
-                }),
-            });
+        // Skip if the user already wrote an explicit type annotation.
+        if type_annotation.is_some() {
+            continue;
         }
+
+        // Skip if there is no initializer.
+        let Some(init_id) = initializer else {
+            continue;
+        };
+
+        // Get the inferred type of the initializer.
+        let Some(raw_ty) = ctx.inference.expr_types.get(init_id) else {
+            continue;
+        };
+
+        // Pretty print the type with goto definition support.
+        let Some(ty) = display_ty(raw_ty) else {
+            continue;
+        };
+
+        // Build label parts: ": " (plain) + type (with links).
+        let mut label = plain_label(": ");
+        label.extend(ty_to_label_parts(ctx.db, &ty));
+
+        // Place the hint at the end of the bound pattern, falling back to
+        // the statement start when no pattern span is available.
+        let offset = if let Some(pat_span) = ctx.source_map.pattern_span(*pattern) {
+            pat_span.range.end()
+        } else if let Some(stmt_span) = ctx.source_map.stmt_span(stmt_id) {
+            stmt_span.range.start()
+        } else {
+            continue;
+        };
+
+        // Concatenate label parts into the text to insert on double-click.
+        // Only allow this if the let statement was written in the source code.
+        // This is to prevent suggesting inserting type annotations in for-in loops.
+        let insert_text: Option<String> = if *origin == LetOrigin::Source {
+            Some(label.iter().map(|p| p.value.as_str()).collect())
+        } else {
+            None
+        };
+
+        hints.push(InlayHint {
+            offset,
+            label,
+            kind: Some(InlayHintKind::Type),
+            padding_left: false,
+            padding_right: false,
+            text_edits: insert_text.map_or(Vec::new(), |text| {
+                vec![InlayHintTextEdit {
+                    offset,
+                    new_text: text,
+                }]
+            }),
+        });
     }
 }
 
@@ -347,7 +341,6 @@ impl HintCollector for LetTypeAnnotations {
 ///
 /// To add new hint categories, implement [`HintCollector`] and add to `collectors`.
 pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, project: Project) -> Vec<InlayHint> {
-    let collectors: &[&dyn HintCollector] = &[&CallArgNames, &LetTypeAnnotations];
     let mut hints = Vec::new();
 
     // Collect all function bodies in the file.
@@ -373,9 +366,9 @@ pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, project: Project) -> 
             db,
         };
 
-        for collector in collectors {
-            collector.collect(&ctx, &mut hints);
-        }
+        // Run all hint collectors.
+        collect_call_arg_names(&ctx, &mut hints);
+        collect_let_type_annotations(&ctx, &mut hints);
     }
 
     hints
