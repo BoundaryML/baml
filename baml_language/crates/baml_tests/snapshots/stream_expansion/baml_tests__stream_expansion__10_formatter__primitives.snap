@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Test stream expansion for primitive types.
+// Expected: each field in stream_Primitives gets null | T.
+
+class Primitives {
+    name: string
+    count: int
+    flag: bool
+    score: float
+}

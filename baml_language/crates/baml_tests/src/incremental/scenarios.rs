@@ -360,15 +360,17 @@ class ClassB {
 "#,
     );
 
-    // Query both files initially
+    // Query both files initially.
+    // Querying file_a triggers ppir_names which scans ALL user files,
+    // caching lex_file and parse_result for file_b as a side effect.
     let _ = baml_compiler_hir::file_items(test_db.db(), file_a);
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_b);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
+            ("lex_file", 0),     // Cached: ppir_names already lexed file_b during file_a query
+            ("parse_result", 0), // Cached: ppir_names already parsed file_b during file_a query
             ("file_lowering", 1),
             ("file_items", 1),
         ],
@@ -383,29 +385,31 @@ class ClassA {
 "#
     .to_string());
 
-    // Query file_b - should be fully cached (file_a's change doesn't affect it)
+    // Query file_b - file_b's own queries are cached, but ppir_names
+    // re-verifies (file_a's CST changed), causing file_a to be re-lexed/parsed.
+    // ppir_names returns same name sets → early cutoff → file_b result unchanged.
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_b);
         },
         &[
-            ("lex_file", 0),
-            ("parse_result", 0),
-            ("file_lowering", 0),
-            ("file_items", 0),
+            ("lex_file", 1),      // file_a re-lexed during ppir_names re-verification
+            ("parse_result", 1),  // file_a re-parsed during ppir_names re-verification
+            ("file_lowering", 0), // file_b unchanged
+            ("file_items", 0),    // file_b item tree unchanged (early cutoff from ppir_names)
         ],
     );
 
-    // Query file_a - should re-execute
+    // Query file_a - lex/parse already cached from ppir_names re-verification above
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_a);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
-            ("file_lowering", 1),
-            ("file_items", 1),
+            ("lex_file", 0),      // Cached: already re-lexed during file_b query
+            ("parse_result", 0),  // Cached: already re-parsed during file_b query
+            ("file_lowering", 1), // Must re-run: file_a CST changed
+            ("file_items", 1),    // Must re-run: item tree changed (new field)
         ],
     );
 }

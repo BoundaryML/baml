@@ -1,0 +1,22 @@
+// Test stream expansion for lists, maps, and nested collections.
+// Expected: list fields get never[] | expanded_element_type[].
+// Expected: map fields get map<K, never> | map<K, expanded_value_type>.
+// Note: the never[] and map<K,never> are sentinels for empty containers.
+
+class WithLists {
+  strings string[]
+  ints int[]
+  classes Inner[]
+}
+
+class WithMaps {
+  simple map<string, int>
+  complex map<string, Inner>
+}
+
+class WithNested {
+  matrix int[][]
+  class_matrix Inner[][]
+  nested_map map<string, int[]>
+  class_nested_map map<string, Inner[]>
+}

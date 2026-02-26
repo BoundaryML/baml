@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// File B: defines Resume that references Education (from file_a.baml).
+// Tests cross-file name classification for stream expansion.
+// Expected: stream_Resume.education field type is stream_Education[]
+//           (stream_ prefix on class reference, not on enum).
+
+class Resume {
+    name: string
+    education: Education[]
+    highest_degree: Degree
+    aliases: EducationList
+}

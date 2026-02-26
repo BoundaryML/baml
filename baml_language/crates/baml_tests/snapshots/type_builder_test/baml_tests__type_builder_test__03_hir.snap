@@ -14,6 +14,10 @@ function Fn() -> string {
     baml.llm.call_llm_function("Fn", {  })
 }
 
+class stream_TopLevelClass {
+  a: null | string
+}
+
 class TopLevelClass {
   a: string
 }

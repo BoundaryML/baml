@@ -18,6 +18,10 @@ class Resume {
   name: string
 }
 
+class stream_Resume {
+  name: null | string
+}
+
 test MultipleTypeBuilderBlocks {
   functions: ["TypeBuilderFn"]
   type_builder {

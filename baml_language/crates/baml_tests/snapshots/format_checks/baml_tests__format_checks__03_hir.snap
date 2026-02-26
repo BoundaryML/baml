@@ -123,6 +123,12 @@ class ChainItem {
   metadata: ChainMetadata
 }
 
+class stream_ChainProfile {
+  bio: null | string
+  settings: null | stream_ChainSettings
+  items: never[] | stream_ChainItem[]
+}
+
 class ChainSettings {
   theme: string
   notifications: bool
@@ -142,15 +148,45 @@ class ChainUser {
   scores: int[][]
 }
 
+class stream_ChainUser {
+  name: null | string
+  profile: null | stream_ChainProfile
+  tags: never[] | string[]
+  scores: never[] | int[][]
+}
+
+class stream_ChainSettings {
+  theme: null | string
+  notifications: null | bool
+  preferences: null | stream_ChainPreferences
+}
+
 class ChainPreferences {
   color: string
   font: string
   size: int
 }
 
+class stream_ChainItem {
+  label: null | string
+  value: null | int
+  metadata: null | stream_ChainMetadata
+}
+
 class ChainMetadata {
   created_at: string
   tags: string[]
+}
+
+class stream_ChainMetadata {
+  created_at: null | string
+  tags: never[] | string[]
+}
+
+class stream_ChainPreferences {
+  color: null | string
+  font: null | string
+  size: null | int
 }
 
 function WithMethod.greet() -> string {
@@ -163,6 +199,10 @@ function WithLongMethod.processData(first_input: map<string, int>, second_input:
 
 class WithLongMethod {
   name: string
+}
+
+class stream_SingleField {
+  name: null | string
 }
 
 class TriviaMultiAttrBlock {
@@ -189,6 +229,13 @@ class TypeVariety {
   triple_nested: map<string, map<string, map<string, int>>>
 }
 
+class stream_Outer {
+  inner: null | stream_InnerNested
+  list: never[] | stream_InnerNested[]
+  optional: null | stream_InnerNested | null
+  mapping: map<string, never> | map<string, stream_InnerNested>
+}
+
 class MultiBlockAttr {
   name: string
   @@dynamic
@@ -204,8 +251,35 @@ class ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterL
   x: int
 }
 
+class stream_A {
+  x: null | int
+}
+
+class stream_TriviaFieldAttrsBlock {
+  name: null | string
+}
+
+class stream_ColonFields {
+  name: null | string
+  age: null | int
+}
+
+class stream_TriviaMultiAttr {
+  name: null | string
+}
+
+class stream_DeepLevel2 {
+  level3: null | stream_DeepLevel3
+  value: null | int | string | bool | float | null
+}
+
 class TriviaClass {
   name: string
+}
+
+class stream_DynamicClass {
+  name: null | string
+  @@dynamic
 }
 
 class EmptyClass {
@@ -213,6 +287,18 @@ class EmptyClass {
 
 class SingleField {
   name: string
+}
+
+class stream_InnerNested {
+  value: null | int
+}
+
+class stream_TriviaLongFieldType {
+  data: map<string, never> | map<string, int | string | bool | float | null>
+}
+
+class stream_TriviaLongFieldTypeBlock {
+  data: map<string, never> | map<string, int | string | bool | float | null>
 }
 
 class ExtraWhitespace {
@@ -226,6 +312,28 @@ class LongAttrField {
   config: map<string, map<string, int | string | bool | null>>
 }
 
+class stream_AttributeVariety {
+  a: null | string
+  b: null | string
+  c: null | string
+  d: null | string
+  e: string
+  f: null | string
+}
+
+class stream_ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
+  x: null | int
+}
+
+class stream_SingleAttrField {
+  name: null | string
+}
+
+class stream_MultiBlockAttr {
+  name: null | string
+  @@dynamic
+}
+
 class AttributeVariety {
   a: string
   b: string
@@ -233,6 +341,12 @@ class AttributeVariety {
   d: string
   e: string
   f: string
+}
+
+class stream_DeepLevel1 {
+  level2: null | stream_DeepLevel2
+  items: never[] | stream_DeepLevel2[]
+  mapping: map<string, never> | map<string, stream_DeepLevel2>
 }
 
 class TriviaLongFieldType {
@@ -243,6 +357,14 @@ class SingleAttrField {
   name: string
 }
 
+class stream_TriviaClass {
+  name: null | string
+}
+
+class stream_DeepOuter {
+  level1: null | stream_DeepLevel1
+}
+
 class InnerNested {
   value: int
 }
@@ -251,12 +373,27 @@ class TriviaMultiAttr {
   name: string
 }
 
+class stream_TriviaMultiAttrBlock {
+  name: null | string
+}
+
 class TriviaClassBlock {
   name: string
 }
 
+class stream_MultiField {
+  name: null | string
+  age: null | int
+  active: null | bool
+}
+
 class TriviaLongFieldTypeBlock {
   data: map<string, int | string | bool | float | null>
+}
+
+class stream_DeepLevel3 {
+  data: null | string
+  nested: map<string, never> | map<string, map<string, int>>
 }
 
 class ManyFields {
@@ -293,6 +430,9 @@ class WithMethod {
   name: string
 }
 
+class stream_EmptyClass {
+}
+
 class DynamicClass {
   name: string
   @@dynamic
@@ -309,8 +449,53 @@ class DeepOuter {
   level1: DeepLevel1
 }
 
+class stream_ManyFields {
+  field1: null | int
+  field2: null | int
+  field3: null | int
+  field4: null | int
+  field5: null | int
+  field6: null | int
+  field7: null | int
+  field8: null | int
+  field9: null | int
+  field10: null | int
+}
+
+class stream_MultiAttrField {
+  name: null | string
+  summary: string?
+}
+
+class stream_TypeVariety {
+  simple: null | string
+  optional: null | string | null
+  array: never[] | int[]
+  nested_array: never[] | int[][]
+  union_type: null | int | string
+  optional_union: null | int | string | null
+  union_array: never[] | (int | string)[]
+  generic: map<string, never> | map<string, int>
+  complex_generic: map<string, never> | map<string, int | string | bool>
+  deep_generic: map<string, never> | map<string, map<string, int[]>>
+  fn_type: null | <error>
+  paren_union_array: never[] | (int | string | bool)[]
+  triple_nested: map<string, never> | map<string, map<string, map<string, int>>>
+}
+
 class A {
   x: int
+}
+
+class stream_LongAttrField {
+  name: null | string
+  data: map<string, never> | map<string, int | string | bool>
+  config: map<string, never> | map<string, map<string, int | string | bool | null>>
+}
+
+class stream_ExtraWhitespace {
+  name: null | string
+  age: null | int
 }
 
 class MultiAttrField {
@@ -323,14 +508,37 @@ class DeepLevel3 {
   nested: map<string, map<string, int>>
 }
 
+class stream_TriviaFieldAttrs {
+  name: null | string
+}
+
 class DeepLevel1 {
   level2: DeepLevel2
   items: DeepLevel2[]
   mapping: map<string, DeepLevel2>
 }
 
+class stream_WithLongMethod {
+  name: null | string
+}
+
+class stream_TriviaClassBlock {
+  name: null | string
+}
+
+class stream_LongFieldTypes {
+  very_long_field_name_that_takes_up_space: null | int | string | bool | float | null | int[] | string[]
+  another_long_field: map<string, never> | map<string, map<string, map<string, int | string | bool | float | null>>>
+  callback_field: null | <error>
+  deeply_nested: null | (int | string | bool | float | null)[] | null
+}
+
 class TriviaFieldAttrsBlock {
   name: string
+}
+
+class stream_WithMethod {
+  name: null | string
 }
 
 function ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
@@ -1643,6 +1851,14 @@ class MatchSuccess {
   data: string
 }
 
+class stream_MatchFailure {
+  reason: null | string
+}
+
+class stream_MatchSuccess {
+  data: null | string
+}
+
 class MatchFailure {
   reason: string
 }
@@ -1652,6 +1868,8 @@ enum MatchStatus {
   Inactive
   Pending
 }
+
+type stream_MatchResult = stream_MatchSuccess | stream_MatchFailure
 
 type MatchResult = MatchSuccess | MatchFailure
 
@@ -1762,15 +1980,31 @@ class OtherPoint {
   y: int
 }
 
+class stream_OtherTriple {
+  a: null | stream_OtherVec
+  b: null | stream_OtherVec
+  c: null | stream_OtherVec
+}
+
 class OtherTriple {
   a: OtherVec
   b: OtherVec
   c: OtherVec
 }
 
+class stream_OtherVec {
+  p: null | stream_OtherPoint
+  q: null | stream_OtherPoint
+}
+
 class OtherVec {
   p: OtherPoint
   q: OtherPoint
+}
+
+class stream_OtherPoint {
+  x: null | int
+  y: null | int
 }
 
 template_string TriviaVeryLongTemplateNameWithParameters(first_parameter: string, second_parameter: int, third_parameter: bool)
@@ -1806,6 +2040,14 @@ template_string ComplexTypesWrap(items: (int | string | bool)[], config: map<str
 template_string TriviaWrappingParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>)
 template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string)
 template_string MultiParamTriviaBlock(a: string, b: int)
+class stream_TypeAliasSuccess {
+  data: null | string
+}
+
+class stream_TypeAliasFailure {
+  reason: null | string
+}
+
 class TypeAliasFailure {
   reason: string
 }
@@ -1816,7 +2058,11 @@ class TypeAliasSuccess {
 
 type Result = TypeAliasSuccess | TypeAliasFailure
 
+type stream_NestedParenUnion = (int | string | bool | float)[]
+
 type ParenUnion = (int | string)[]
+
+type stream_NestedMap = map<string, map<string, int[]>>
 
 type DeepParenUnion = (int | string | bool | float | null | int[])[]?
 
@@ -1824,11 +2070,27 @@ type TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: (i
 
 type TriviaGenericBlock = map<string, int>
 
+type stream_FnFactory = <error>
+
+type stream_LongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
+
 type SuccessCode = 200 | 201 | 204
+
+type stream_DeepFnType = <error>
 
 type Curried = (x: int) -> (y: int) -> int
 
+type stream_Matrix = int[][]
+
+type stream_Constrained = int
+
+type stream_TriviaOptional = int | null
+
+type stream_ArrayOptional = int[] | null
+
 type IntToInt = (x: int) -> int
+
+type stream_ComplexMap = map<string, int | string | bool>
 
 type TriviaLongUnionBlock = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
 
@@ -1836,19 +2098,43 @@ type LongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | 
 
 type ExtraWhitespace = int | string | bool | float | null
 
+type stream_SuccessCode = 200 | 201 | 204
+
+type stream_ParenUnion = (int | string)[]
+
 type FnFactory = (config: string) -> (int) -> int
+
+type stream_DeepGeneric = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
+
+type stream_DeepParenUnion = (int | string | bool | float | null | int[])[] | null
+
+type stream_DeepPostfix = (int | string | bool | float)[][] | null
 
 type MixedLiterals = 200 | "success" | true
 
 type Constrained = int
 
+type stream_T = int
+
 type MaybeResult = Result?
+
+type stream_ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit = int | string | bool | float | null
+
+type stream_TriviaUnionBlock = int | string | bool
 
 type SimpleAlias = int
 
+type stream_StringMap = map<string, int>
+
+type stream_HttpOk = 200
+
 type TriviaFnTypeBlock = (x: int) -> string
 
+type stream_Json = int | float | string | bool | null | stream_Json[] | map<string, stream_Json>
+
 type Json = int | float | string | bool | null | Json[] | map<string, Json>
+
+type stream_TriviaGenericBlock = map<string, int>
 
 type Producer = () -> string
 
@@ -1860,19 +2146,61 @@ type TriviaLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtr
 
 type DoubleOptional = int?
 
+type stream_ComplexPostfix = (int | string)[]
+
+type stream_TriviaLongFnType = <error>
+
 type ComplexPostfix = (int | string)[]
+
+type stream_ConstrainedLong = map<string, int | string | bool>
+
+type stream_VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
+
+type stream_TriviaFnTypeBlock = <error>
+
+type stream_Name = string
+
+type stream_OptionalUnion = int | string | null
+
+type stream_DoubleArray = int[][]
 
 type NestedMap = map<string, map<string, int[]>>
 
 type TriviaParen = (int | string)[]
 
+type stream_MixedLiterals = 200 | "success" | true
+
+type stream_BinaryOp = <error>
+
+type stream_OptionalArray = int[]
+
+type stream_TriviaFnType = <error>
+
+type stream_TriviaUnion = int | string | bool
+
 type Role = "user" | "assistant" | "system"
 
 type AliasChain = SimpleAlias
 
+type stream_WideUnion = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>
+
 type ArrayOptional = int[]?
 
+type stream_Tree = string | map<string, stream_Tree> | stream_Tree[] | map<string, map<string, stream_Tree | string | int | null>>
+
+type stream_AlwaysTrue = true
+
+type stream_SimpleAlias = int
+
+type stream_Result = stream_TypeAliasSuccess | stream_TypeAliasFailure
+
 type OptionalUnion = (int | string)?
+
+type stream_TriviaAlias = int
+
+type stream_TriviaLongUnionBlock = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
+
+type stream_MaybeInt = int | null
 
 type Matrix = int[][]
 
@@ -1886,6 +2214,8 @@ type DeepGeneric = map<string, map<string, map<string, map<string, int | string 
 
 type Name = string
 
+type stream_DoubleOptional = int | null
+
 type OptionalArray = int[]
 
 type ConstrainedLong = map<string, int | string | bool>
@@ -1894,15 +2224,35 @@ type TriviaOptional = int?
 
 type BinaryOp = (a: int, b: int) -> int
 
+type stream_ComplexFn = <error>
+
+type stream_TriviaLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
+
 type ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit = int | string | bool | float | null
+
+type stream_UnionParamFn = <error>
+
+type stream_TriviaGeneric = map<string, int>
 
 type VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
 
+type stream_LongParamFn = <error>
+
+type stream_TriviaArray = int[]
+
 type DeepPostfix = (int | string | bool | float)[][]?
+
+type stream_AliasChain = stream_SimpleAlias
+
+type stream_UnnamedParams = <error>
+
+type stream_TriviaParen = (int | string)[]
 
 type HttpOk = 200
 
 type StringMap = map<string, int>
+
+type stream_TriviaDeepGeneric = map<string, map<string, map<string, int | string>>>
 
 type TriviaUnionBlock = int | string | bool
 
@@ -1918,19 +2268,35 @@ type TriviaArray = int[]
 
 type DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>
 
+type stream_MaybeResult = stream_Result | null
+
+type stream_Role = "user" | "assistant" | "system"
+
 type T = int
 
 type WideUnion = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>
 
 type MaybeInt = int?
 
+type stream_Producer = <error>
+
+type stream_Curried = <error>
+
+type stream_ExtraWhitespace = int | string | bool | float | null
+
 type DoubleArray = int[][]
 
+type stream_TriviaAliasBlock = int
+
 type Tree = string | map<string, Tree> | Tree[] | map<string, map<string, Tree | string | int | null>>
+
+type stream_IntList = int[]
 
 type TriviaAlias = int
 
 type NestedParenUnion = (int | string | bool | float)[]
+
+type stream_IntToInt = <error>
 
 type LongParamFn = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string
 

@@ -2,9 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+type stream_MetaUnion = type | string
+
 type MetaUnion = type | string
 
 type MetaList = type[]
+
+type stream_MetaList = type[]
+
+type stream_MetaAlias = type
 
 type MetaAlias = type
 
@@ -13,9 +19,18 @@ function test_type_annotation(function_name: string) -> string {
     return "ok";
 }
 
+class stream_MetaField {
+  type: null | type
+}
+
 class RiskFactor {
   type: string
   severity: float
+}
+
+class stream_RiskFactor {
+  type: null | string
+  severity: null | float
 }
 
 class MetaField {

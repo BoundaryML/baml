@@ -135,6 +135,9 @@ pub enum DiagnosticId {
     IncompleteDynamicDefinition,
     TypeBuilderSyntaxError,
 
+    // Reserved prefix diagnostics
+    ReservedStreamPrefix,
+
     // Cycle detection diagnostics (E0068-E0069)
     AliasCycle,
     ClassCycle,
@@ -275,6 +278,9 @@ impl DiagnosticId {
             DiagnosticId::JinjaUnsupportedFeature => "E0085",
             DiagnosticId::JinjaInvalidSyntax => "E0086",
             DiagnosticId::JinjaInvalidTest => "E0087",
+
+            // Reserved prefix errors
+            DiagnosticId::ReservedStreamPrefix => "E0090",
 
             // VIR lowering errors
             DiagnosticId::LoweringError => "E0089",

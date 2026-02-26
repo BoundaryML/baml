@@ -40,6 +40,7 @@ mod signature;
 mod source_map;
 pub mod symbol_table;
 mod test;
+mod ppir_convert;
 mod type_ref;
 
 // Re-exports
@@ -66,10 +67,11 @@ pub use type_ref::*;
 
 /// Database trait for HIR queries.
 ///
-/// Extends `baml_workspace::Db`. Use the free functions in this crate
-/// (e.g., `project_items`, `file_items`) for HIR queries.
+/// Extends `baml_compiler_ppir::Db` (which itself extends `baml_workspace::Db`).
+/// Use the free functions in this crate (e.g., `project_items`, `file_items`)
+/// for HIR queries.
 #[salsa::db]
-pub trait Db: baml_workspace::Db {}
+pub trait Db: baml_compiler_ppir::Db {}
 
 //
 // ───────────────────────────────────────────────────── TRACKED STRUCTS ─────
@@ -170,13 +172,41 @@ pub fn file_lowering(db: &dyn Db, file: SourceFile) -> LoweringResult<'_> {
     LoweringResult::new(db, Arc::new(item_tree), diagnostics)
 }
 
-/// Extract `ItemTree` from a file's syntax tree.
+/// Extract `ItemTree` from a file's syntax tree, merging in PPIR-generated
+/// `stream_*` classes and type aliases.
 ///
-/// This is a convenience wrapper around `file_lowering` for callers that
-/// only need the `ItemTree`. Not tracked separately since `file_lowering`
-/// already caches the result - this just clones the Arc (O(1)).
+/// Tracked: calls PPIR expansion, converts results to HIR types, and merges
+/// them into the lowered `ItemTree`. Salsa memoizes the result; `ItemTree`
+/// derives `Eq` so early cutoff works.
+#[salsa::tracked]
 pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
-    file_lowering(db, file).item_tree(db).clone()
+    let raw = file_lowering(db, file).item_tree(db).clone();
+    let stream = baml_compiler_ppir::ppir_stream_items(db, file);
+    let stream_classes = stream.classes(db);
+    let stream_aliases = stream.type_aliases(db);
+
+    if stream_classes.is_empty() && stream_aliases.is_empty() {
+        return raw;
+    }
+
+    let mut tree = (*raw).clone();
+    for sc in stream_classes {
+        tree.alloc_class(convert_ppir_class(sc));
+    }
+    for sta in stream_aliases {
+        tree.alloc_type_alias(convert_ppir_type_alias(sta));
+    }
+    Arc::new(tree)
+}
+
+use ppir_convert::{convert_ppir_class, convert_ppir_type_alias};
+
+/// Strip the `stream_` prefix for CST lookup.
+///
+/// Generated `stream_*` items don't exist in user source. When resolving
+/// spans, we strip the prefix so `stream_Resume` looks up `Resume` in the CST.
+fn resolve_name_for_cst_lookup(name: &str) -> &str {
+    name.strip_prefix("stream_").unwrap_or(name)
 }
 
 // Future: When we add modules, we'll need a function like this:
@@ -749,9 +779,10 @@ pub fn project_type_item_spans(
                 let item_tree = file_item_tree(db, file);
                 let class = &item_tree[loc.id(db)];
                 let name = class.name.clone();
+                let cst_name = resolve_name_for_cst_lookup(&name);
 
                 if let Some(span) =
-                    get_item_name_span(db, file, "class", name.as_str(), loc.id(db).index())
+                    get_item_name_span(db, file, "class", cst_name, loc.id(db).index())
                 {
                     spans.insert(name, span);
                 }
@@ -761,9 +792,10 @@ pub fn project_type_item_spans(
                 let item_tree = file_item_tree(db, file);
                 let alias = &item_tree[loc.id(db)];
                 let name = alias.name.clone();
+                let cst_name = resolve_name_for_cst_lookup(&name);
 
                 if let Some(span) =
-                    get_item_name_span(db, file, "type alias", name.as_str(), loc.id(db).index())
+                    get_item_name_span(db, file, "type alias", cst_name, loc.id(db).index())
                 {
                     spans.insert(name, span);
                 }
@@ -798,10 +830,13 @@ pub fn project_class_field_type_spans(
             let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
             let file_id = file.file_id(db);
 
+            // For generated stream_* classes, look up the original class in the CST
+            let cst_class_name = resolve_name_for_cst_lookup(&class_name);
+
             // Find the class in the CST
             if let Some(class_node) = source_file.items().find_map(|item| {
                 if let baml_compiler_syntax::ast::Item::Class(c) = item {
-                    if c.name().as_ref().map(SyntaxToken::text) == Some(&class_name) {
+                    if c.name().as_ref().map(SyntaxToken::text) == Some(cst_class_name) {
                         return Some(c);
                     }
                 }
@@ -852,10 +887,13 @@ pub fn project_type_alias_type_spans(
             let source_file = baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
             let file_id = file.file_id(db);
 
+            // For generated stream_* aliases, look up the original alias in the CST
+            let cst_alias_name = resolve_name_for_cst_lookup(&alias_name);
+
             // Find the type alias in the CST
             if let Some(alias_node) = source_file.items().find_map(|item| {
                 if let baml_compiler_syntax::ast::Item::TypeAlias(a) = item {
-                    if a.name().as_ref().map(SyntaxToken::text) == Some(&alias_name) {
+                    if a.name().as_ref().map(SyntaxToken::text) == Some(cst_alias_name) {
                         return Some(a);
                     }
                 }
@@ -1879,6 +1917,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 alias: field_alias,
                 description: field_description,
                 skip: field_skip,
+                starts_as: None,
             });
         }
     }
@@ -2362,6 +2401,7 @@ pub struct HirValidationResult {
 pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidationResult {
     let mut hir_diagnostics = validate_reserved_names(db, root);
     hir_diagnostics.extend(validate_retry_policy_refs(db, root));
+    hir_diagnostics.extend(validate_stream_prefix(db, root));
     let mut name_errors = validate_duplicate_names(db, root);
     name_errors.extend(validate_test_functions(db, root));
 
@@ -3198,6 +3238,59 @@ pub fn get_item_name_span(
     None
 }
 
+/// Validate that user-defined items don't use the reserved `stream_` prefix.
+///
+/// The `stream_` prefix is reserved for compiler-generated streaming types.
+/// This checks the raw lowered items (before PPIR injection) so we only
+/// flag user-authored items, not generated ones.
+fn validate_stream_prefix(db: &dyn Db, root: baml_workspace::Project) -> Vec<HirDiagnostic> {
+    let mut errors = Vec::new();
+
+    for file in root.files(db) {
+        // Check raw lowered items (without stream_* injection)
+        let lowering = file_lowering(db, *file);
+        let raw_tree = lowering.item_tree(db);
+
+        for (id, class) in raw_tree.iter_classes() {
+            if class.name.starts_with("stream_") {
+                let span = get_item_name_span(db, *file, "class", &class.name, id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                errors.push(HirDiagnostic::ReservedStreamPrefix {
+                    item_kind: "class",
+                    item_name: class.name.to_string(),
+                    span,
+                });
+            }
+        }
+
+        for (id, alias) in raw_tree.iter_type_aliases() {
+            if alias.name.starts_with("stream_") {
+                let span = get_item_name_span(db, *file, "type alias", &alias.name, id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                errors.push(HirDiagnostic::ReservedStreamPrefix {
+                    item_kind: "type alias",
+                    item_name: alias.name.to_string(),
+                    span,
+                });
+            }
+        }
+
+        for (id, enum_def) in raw_tree.iter_enums() {
+            if enum_def.name.starts_with("stream_") {
+                let span = get_item_name_span(db, *file, "enum", &enum_def.name, id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                errors.push(HirDiagnostic::ReservedStreamPrefix {
+                    item_kind: "enum",
+                    item_name: enum_def.name.to_string(),
+                    span,
+                });
+            }
+        }
+    }
+
+    errors
+}
+
 /// Validate that field names and function parameters don't use reserved keywords.
 ///
 /// This checks:
@@ -3488,7 +3581,8 @@ pub fn definition_name_span(db: &dyn Db, def: Definition<'_>) -> Span {
         }
     };
 
-    get_item_name_span(db, file, kind, name.as_str(), index)
+    let cst_name = resolve_name_for_cst_lookup(&name);
+    get_item_name_span(db, file, kind, cst_name, index)
         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())))
 }
 
@@ -3508,6 +3602,7 @@ pub fn class_field_name_span(
     let item_tree = file_item_tree(db, file);
     let class_data = &item_tree[class_loc.id(db)];
     let class_name = class_data.name.as_str();
+    let cst_class_name = resolve_name_for_cst_lookup(class_name);
     let occurrence = class_loc.id(db).index();
 
     let tree = baml_compiler_parser::syntax_tree(db, file);
@@ -3517,7 +3612,7 @@ pub fn class_field_name_span(
         if node.kind() == SyntaxKind::CLASS_DEF {
             if let Some(class) = ClassDef::cast(node) {
                 if let Some(name_token) = class.name() {
-                    if name_token.text() == class_name {
+                    if name_token.text() == cst_class_name {
                         if matches_found == occurrence {
                             // Found the right class, now find the field
                             for field in class.fields() {

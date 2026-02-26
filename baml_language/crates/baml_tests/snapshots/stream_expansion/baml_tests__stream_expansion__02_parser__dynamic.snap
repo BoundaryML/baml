@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "DynamicClass"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    BLOCK_ATTRIBUTE "@@dynamic"
+      AT_AT "@@"
+      KW_DYNAMIC "dynamic"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -191,6 +191,18 @@ impl ItemTree {
     pub fn iter_classes(&self) -> impl Iterator<Item = (&LocalItemId<ClassMarker>, &Class)> {
         self.classes.iter()
     }
+
+    /// Iterate over all enums in the item tree.
+    pub fn iter_enums(&self) -> impl Iterator<Item = (&LocalItemId<EnumMarker>, &Enum)> {
+        self.enums.iter()
+    }
+
+    /// Iterate over all type aliases in the item tree.
+    pub fn iter_type_aliases(
+        &self,
+    ) -> impl Iterator<Item = (&LocalItemId<TypeAliasMarker>, &TypeAlias)> {
+        self.type_aliases.iter()
+    }
 }
 
 /// Metadata for compiler-generated functions.
@@ -255,6 +267,8 @@ pub struct Field {
     pub description: Attribute<String>,
     /// @skip - exclude field from serialization
     pub skip: Attribute<()>,
+    /// Raw @stream.starts_as(...) value expression from PPIR (compiler-generated fields only).
+    pub starts_as: Option<String>,
 }
 
 /// An enum definition.

@@ -1,0 +1,160 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class stream_Outer {
+  inner: null | stream_Inner
+}
+
+class stream_Inner {
+  value: null | string
+}
+
+class Outer {
+  inner: Inner
+}
+
+class Inner {
+  value: string
+}
+
+class stream_WithMaps {
+  simple: map<string, never> | map<string, int>
+  complex: map<string, never> | map<string, stream_Inner>
+}
+
+class WithNested {
+  matrix: int[][]
+  class_matrix: Inner[][]
+  nested_map: map<string, int[]>
+  class_nested_map: map<string, Inner[]>
+}
+
+class stream_WithLists {
+  strings: never[] | string[]
+  ints: never[] | int[]
+  classes: never[] | stream_Inner[]
+}
+
+class WithLists {
+  strings: string[]
+  ints: int[]
+  classes: Inner[]
+}
+
+class WithMaps {
+  simple: map<string, int>
+  complex: map<string, Inner>
+}
+
+class stream_WithNested {
+  matrix: never[] | int[][]
+  class_matrix: never[] | stream_Inner[][]
+  nested_map: map<string, never> | map<string, int[]>
+  class_nested_map: map<string, never> | map<string, stream_Inner[]>
+}
+
+class stream_WithDesugaring {
+  done_string: null | string
+  not_null_string: string
+  not_null_class: stream_Inner
+  done_and_not_null: string
+}
+
+class WithDesugaring {
+  done_string: string
+  not_null_string: string
+  not_null_class: Inner
+  done_and_not_null: string
+  type_never: string
+  type_never_literal: "resume"
+}
+
+class stream_DynamicClass {
+  name: null | string
+  @@dynamic
+}
+
+class DynamicClass {
+  name: string
+  @@dynamic
+}
+
+class WithEnum {
+  status: Status
+}
+
+class stream_WithEnum {
+  status: null | Status
+}
+
+enum Status {
+  Active
+  Inactive
+}
+
+class WithLiterals {
+  type: "resume"
+  version: 1
+  enabled: true
+}
+
+class stream_WithLiterals {
+  type: "resume"
+  version: 1
+  enabled: true
+}
+
+class stream_Primitives {
+  name: null | string
+  count: null | int
+  flag: null | bool
+  score: null | float
+}
+
+class Primitives {
+  name: string
+  count: int
+  flag: bool
+  score: float
+}
+
+type UnionAlias = int | Inner
+
+type SimpleAlias = string
+
+type OptionalAlias = Inner?
+
+type ClassAlias = Inner
+
+type stream_UnionAlias = int | stream_Inner
+
+type stream_SimpleAlias = string
+
+type stream_OptionalAlias = stream_Inner | null
+
+type stream_ClassAlias = stream_Inner
+
+class stream_WithOptionals {
+  name: null | string | null
+  inner: null | stream_Inner | null
+  items: null | int[] | null
+}
+
+class stream_WithUnions {
+  simple: null | int | string
+  with_class: null | stream_Inner | stream_Primitives
+  mixed: null | int | stream_Inner
+}
+
+class WithUnions {
+  simple: int | string
+  with_class: Inner | Primitives
+  mixed: int | Inner
+}
+
+class WithOptionals {
+  name: string?
+  inner: Inner?
+  items: int[]?
+}

@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "SimpleAlias"
+    EQUALS "="
+    TYPE_EXPR "string"
+      WORD "string"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "ClassAlias"
+    EQUALS "="
+    TYPE_EXPR "Inner"
+      WORD "Inner"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "UnionAlias"
+    EQUALS "="
+    TYPE_EXPR "int | Inner"
+      WORD "int"
+      PIPE "|"
+      WORD "Inner"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "OptionalAlias"
+    EQUALS "="
+    TYPE_EXPR "Inner?"
+      WORD "Inner"
+      QUESTION "?"
+
+=== ERRORS ===
+None

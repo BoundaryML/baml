@@ -973,7 +973,7 @@ function IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
 function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     load_var pet
     type_tag
-    jump_table [L0, L1, L3, L2], default L5
+    jump_table [L0, _, L1, _, _, L3, L2], default L5
 
   L0: Fish
     load_const "fish"

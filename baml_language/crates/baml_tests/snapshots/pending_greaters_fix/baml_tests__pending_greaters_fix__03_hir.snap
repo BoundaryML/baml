@@ -26,6 +26,17 @@ function BadParam(x: map<string, int>) -> string {
     baml.llm.call_llm_function("BadParam", { "x": x })
 }
 
+class stream_NestedGenerics {
+  nested: map<string, never> | map<string, map<string, int>>
+  simple: map<string, never> | map<string, int>
+}
+
+class stream_MalformedClass {
+  bad_field: map<string, never> | map<string, int>
+  good_field: map<string, never> | map<string, int>
+  another_field: null | string
+}
+
 class MalformedClass {
   bad_field: map<string, int>
   good_field: map<string, int>
@@ -36,5 +47,7 @@ class NestedGenerics {
   nested: map<string, map<string, int>>
   simple: map<string, int>
 }
+
+type stream_BadAlias = map<string, int>
 
 type BadAlias = map<string, int>
