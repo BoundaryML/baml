@@ -945,9 +945,9 @@ impl BexVm {
 
     fn unhandled_exception_error(exception: VmException) -> VmError {
         match exception {
-            VmException::Thrown(value) => {
-                VmError::RuntimeError(RuntimeError::UnhandledThrow { value })
-            }
+            VmException::Thrown(value) => VmError::RuntimeError(RuntimeError::UnhandledThrow {
+                value: crate::debug::display_value(&value),
+            }),
             VmException::Runtime(error) => error,
         }
     }

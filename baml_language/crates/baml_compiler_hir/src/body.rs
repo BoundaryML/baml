@@ -2373,12 +2373,45 @@ impl LoweringContext {
     fn lower_throw_stmt(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> StmtId {
         use baml_compiler_syntax::SyntaxKind;
 
-        // THROW_STMT wraps a THROW_EXPR
-        let value = node
-            .children()
-            .find(|c| c.kind() == SyntaxKind::THROW_EXPR)
+        let expr_child = node.children().find(|c| {
+            matches!(
+                c.kind(),
+                SyntaxKind::THROW_EXPR
+                    | SyntaxKind::CATCH_EXPR
+                    | SyntaxKind::EXPR
+                    | SyntaxKind::BINARY_EXPR
+                    | SyntaxKind::UNARY_EXPR
+                    | SyntaxKind::CALL_EXPR
+                    | SyntaxKind::PATH_EXPR
+                    | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::ENV_ACCESS_EXPR
+                    | SyntaxKind::INDEX_EXPR
+                    | SyntaxKind::IF_EXPR
+                    | SyntaxKind::MATCH_EXPR
+                    | SyntaxKind::BLOCK_EXPR
+                    | SyntaxKind::PAREN_EXPR
+                    | SyntaxKind::STRING_LITERAL
+                    | SyntaxKind::RAW_STRING_LITERAL
+                    | SyntaxKind::OBJECT_LITERAL
+                    | SyntaxKind::ARRAY_LITERAL
+                    | SyntaxKind::MAP_LITERAL
+            )
+        });
+
+        // `throw expr;` is a statement form. If this statement was parsed as a
+        // richer expression starting with `throw` (e.g. `throw e catch (...)`),
+        // lower it as an expression statement so catch semantics are preserved.
+        if let Some(child) = expr_child.clone() {
+            if child.kind() != SyntaxKind::THROW_EXPR {
+                let expr_id = self.lower_expr(&child);
+                return self.alloc_stmt(Stmt::Expr(expr_id), node.text_range());
+            }
+        }
+
+        // Standard throw statement wrapping a THROW_EXPR.
+        let value = expr_child
+            .filter(|c| c.kind() == SyntaxKind::THROW_EXPR)
             .map(|throw_expr_node| {
-                // The THROW_EXPR has the value as its child
                 if let Some(child) = throw_expr_node.children().next() {
                     self.lower_expr(&child)
                 } else {
@@ -3247,6 +3280,8 @@ impl LoweringContext {
                     | SyntaxKind::OBJECT_LITERAL
                     | SyntaxKind::ARRAY_LITERAL
                     | SyntaxKind::MAP_LITERAL
+                    | SyntaxKind::CATCH_EXPR
+                    | SyntaxKind::THROW_EXPR
             )
         }) {
             Some(self.lower_expr(&child_node))

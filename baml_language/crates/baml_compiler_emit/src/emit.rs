@@ -1860,7 +1860,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
-        // Emit instanceof check using CmpOp::InstanceOf for class aliases.
+        // Emit instanceof check for nominal class checks.
         if let Ty::Class(tn) | Ty::TypeAlias(tn) = ty {
             let class_name_str = tn.display_name.as_str();
             if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
@@ -1878,6 +1878,43 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const("false".to_string()));
             }
+            return Ok(());
+        }
+
+        // Primitive and builtin runtime kinds use type tags.
+        let type_tag = match ty {
+            Ty::Int => Some(baml_type::typetag::INT),
+            Ty::String => Some(baml_type::typetag::STRING),
+            Ty::Bool => Some(baml_type::typetag::BOOL),
+            Ty::Null => Some(baml_type::typetag::NULL),
+            Ty::Float => Some(baml_type::typetag::FLOAT),
+            Ty::Enum(_) => Some(baml_type::typetag::ENUM),
+            Ty::List(_) => Some(baml_type::typetag::LIST),
+            Ty::Map { .. } => Some(baml_type::typetag::MAP),
+            Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
+            Ty::Media(_) => Some(baml_type::typetag::MEDIA),
+            Ty::Literal(lit) => Some(match lit {
+                baml_base::Literal::Int(_) => baml_type::typetag::INT,
+                baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
+                baml_base::Literal::String(_) => baml_type::typetag::STRING,
+                baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
+            }),
+            Ty::Opaque(_) if ty.is_opaque("baml.llm.Resource") => {
+                Some(baml_type::typetag::RESOURCE)
+            }
+            Ty::Opaque(_) if ty.is_opaque("baml.llm.PromptAst") => {
+                Some(baml_type::typetag::PROMPT_AST)
+            }
+            Ty::Opaque(_) if ty.is_opaque("baml.reflect.Type") => Some(baml_type::typetag::TYPE),
+            _ => None,
+        };
+
+        if let Some(tag) = type_tag {
+            self.emit(Instruction::TypeTag);
+            let idx = self.add_constant(ConstValue::Int(tag));
+            let inst = self.emit(Instruction::LoadConst(idx));
+            self.set_operand(inst, OperandMeta::Const(tag.to_string()));
+            self.emit(Instruction::CmpOp(CmpOp::Eq));
         } else {
             self.emit(Instruction::Pop(1));
             let idx = self.add_constant(ConstValue::Bool(false));

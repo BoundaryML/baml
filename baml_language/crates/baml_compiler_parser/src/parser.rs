@@ -175,6 +175,10 @@ pub(crate) struct Parser<'a> {
     /// Track nesting depth of generic type arguments (`TYPE_ARGS`, `GENERIC_ARGS`).
     /// Used to detect unmatched '>' when exiting the outermost generic.
     type_args_depth: u32,
+    /// Track contexts where postfix `catch` is not allowed to bind.
+    /// Used so `throw x catch (...)` parses as `(throw x) catch (...)`, not
+    /// `throw (x catch (...))`.
+    suppress_catch_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -186,6 +190,7 @@ impl<'a> Parser<'a> {
             pending_greaters: 0,
             pending_greater_span: None,
             type_args_depth: 0,
+            suppress_catch_depth: 0,
         }
     }
 
@@ -2305,7 +2310,9 @@ impl<'a> Parser<'a> {
 
     fn parse_throw_stmt(&mut self) {
         self.with_node(SyntaxKind::THROW_STMT, |p| {
-            p.parse_throw_expr();
+            // Parse as a full expression so `throw x catch (...)` is handled
+            // as one throw statement with catch attached to the throw.
+            p.parse_expr();
             p.eat(TokenKind::Semicolon);
         });
     }
@@ -2325,7 +2332,11 @@ impl<'a> Parser<'a> {
                 return;
             }
 
+            // Parse throw payload without allowing postfix catch to bind to it.
+            // This ensures `throw x catch (...)` binds catch to the throw expression.
+            p.suppress_catch_depth += 1;
             p.parse_expr_bp(0);
+            p.suppress_catch_depth -= 1;
         });
     }
 
@@ -2578,15 +2589,6 @@ impl<'a> Parser<'a> {
 
     fn parse_catch_expr(&mut self, expr_start: usize) {
         let lhs_start = self.find_previous_expr_start_after(expr_start);
-        if !self.expression_contains_call(lhs_start) {
-            if let Some(token) = self.current() {
-                self.error(
-                    "catch clauses can only be attached to callable expressions".to_string(),
-                    token.span,
-                );
-            }
-        }
-
         self.wrap_events_in_node(lhs_start, SyntaxKind::CATCH_EXPR);
         while self.at_catch_clause_start() {
             self.parse_catch_clause();
@@ -2731,17 +2733,6 @@ impl<'a> Parser<'a> {
         }
 
         false
-    }
-
-    fn expression_contains_call(&self, start_index: usize) -> bool {
-        self.events[start_index..].iter().any(|event| {
-            matches!(
-                event,
-                Event::StartNode {
-                    kind: SyntaxKind::CALL_EXPR,
-                }
-            )
-        })
     }
 
     fn parse_while_stmt(&mut self) {
@@ -2936,7 +2927,7 @@ impl<'a> Parser<'a> {
             }
 
             // Check for special cases first
-            if self.at_catch_clause_start() {
+            if self.suppress_catch_depth == 0 && self.at_catch_clause_start() {
                 self.parse_catch_expr(expr_start);
                 continue;
             } else if op == TokenKind::Less && self.looks_like_generic_args() {
@@ -4384,23 +4375,52 @@ function Demo() -> int {
     }
 
     #[test]
-    fn reports_catch_on_non_callable_expression() {
+    fn parses_catch_on_throw_expression_with_expected_binding() {
         let source = r#"
 function Demo() -> int {
-  value catch (e) {
-    other => 1
+  throw 1 catch (e) {
+    _ => 1
   }
 }
 "#;
 
-        let (_, errors) = parse_source(source);
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
 
-        assert!(errors.iter().any(|error| {
-            matches!(
-                error,
-                ParseError::InvalidSyntax { message, .. }
-                    if message == "catch clauses can only be attached to callable expressions"
-            )
-        }));
+        let catch_expr = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CATCH_EXPR)
+            .expect("expected CATCH_EXPR node");
+        let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
+        assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
+        assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+    }
+
+    #[test]
+    fn parses_return_throw_catch_expression() {
+        let source = r#"
+function Demo() -> int {
+  return throw 1 catch (e) {
+    _ => 2
+  };
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let return_stmt = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::RETURN_STMT)
+            .expect("expected RETURN_STMT node");
+
+        let catch_expr = return_stmt
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::CATCH_EXPR)
+            .expect("expected CATCH_EXPR under RETURN_STMT");
+
+        let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
+        assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
+        assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
     }
 }

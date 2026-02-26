@@ -64,8 +64,8 @@ pub enum RuntimeError {
     #[error("division by zero: {left:?} / {right:?}")]
     DivisionByZero { left: Value, right: Value },
 
-    #[error("uncaught throw: {value:?}")]
-    UnhandledThrow { value: Value },
+    #[error("uncaught throw: {value}")]
+    UnhandledThrow { value: String },
 
     #[error("{0}")]
     Other(String),

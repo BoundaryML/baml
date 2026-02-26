@@ -2458,7 +2458,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             let result = if let Some(tail) = tail_expr {
                 infer_expr(ctx, *tail, body)
             } else {
-                Ty::Void
+                block_without_tail_type(stmts, body)
             };
 
             ctx.pop_scope();
@@ -2754,9 +2754,8 @@ fn check_expr_with_info_location(
             let result = if let Some(tail) = tail_expr {
                 check_expr(ctx, *tail, body, expected)
             } else {
-                // No tail expression means the block evaluates to void
-                // This is fine - the function might return via explicit return statements
-                Ty::Void
+                // A tail-less block can still diverge (e.g. `{ throw e }`).
+                block_without_tail_type(stmts, body)
             };
 
             ctx.pop_scope();
@@ -2982,6 +2981,61 @@ fn check_expr_with_info_location(
 
     ctx.set_expr_type(expr_id, ty.clone());
     ty
+}
+
+/// Infer the type of a block with no tail expression.
+///
+/// `{ throw e }` and similar blocks do not complete normally and should not
+/// be treated as `void`.
+fn block_without_tail_type(stmts: &[StmtId], body: &ExprBody) -> Ty {
+    if stmts
+        .last()
+        .is_some_and(|stmt_id| stmt_definitely_diverges(*stmt_id, body))
+    {
+        // We use Unknown as a stand-in for "never" until the type system has
+        // an explicit bottom type.
+        Ty::Unknown
+    } else {
+        Ty::Void
+    }
+}
+
+/// Return true when this statement definitely does not fall through.
+fn stmt_definitely_diverges(stmt_id: StmtId, body: &ExprBody) -> bool {
+    use baml_compiler_hir::Stmt;
+
+    match &body.stmts[stmt_id] {
+        Stmt::Return(_) | Stmt::Break | Stmt::Continue | Stmt::Throw { .. } => true,
+        Stmt::Expr(expr_id) => expr_definitely_diverges(*expr_id, body),
+        _ => false,
+    }
+}
+
+/// Return true when this expression definitely does not produce a value.
+fn expr_definitely_diverges(expr_id: ExprId, body: &ExprBody) -> bool {
+    use baml_compiler_hir::Expr;
+
+    match &body.exprs[expr_id] {
+        Expr::Throw { .. } => true,
+        Expr::Block { stmts, tail_expr } => {
+            if tail_expr.is_some() {
+                false
+            } else {
+                stmts
+                    .last()
+                    .is_some_and(|stmt_id| stmt_definitely_diverges(*stmt_id, body))
+            }
+        }
+        Expr::If {
+            then_branch,
+            else_branch: Some(else_branch),
+            ..
+        } => {
+            expr_definitely_diverges(*then_branch, body)
+                && expr_definitely_diverges(*else_branch, body)
+        }
+        _ => false,
+    }
 }
 
 /// Extract binding name and narrowed type from a match pattern.

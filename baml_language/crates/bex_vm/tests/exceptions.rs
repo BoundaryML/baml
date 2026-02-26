@@ -4,7 +4,6 @@ use baml_tests::bytecode::{
     ExecState, FailingProgram, Program, Value, assert_vm_executes, assert_vm_fails,
 };
 use bex_vm::RuntimeError;
-use bex_vm_types::Value as VmValue;
 
 #[test]
 fn handled_runtime_error_continues_execution() -> anyhow::Result<()> {
@@ -57,7 +56,46 @@ fn unhandled_throw_fails_predictably() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: RuntimeError::UnhandledThrow {
-            value: VmValue::Int(42),
+            value: "42".to_string(),
+        }
+        .into(),
+    })
+}
+
+#[test]
+fn unhandled_throw_string_shows_value() -> anyhow::Result<()> {
+    assert_vm_fails(FailingProgram {
+        source: r#"
+            function main() -> string {
+                throw "something went wrong";
+                ""
+            }
+        "#,
+        function: "main",
+        expected: RuntimeError::UnhandledThrow {
+            value: "something went wrong".to_string(),
+        }
+        .into(),
+    })
+}
+
+#[test]
+fn unhandled_throw_string_in_match_shows_value() -> anyhow::Result<()> {
+    assert_vm_fails(FailingProgram {
+        source: r#"
+            function main() -> string {
+                let a = 1;
+                match (a) {
+                    int => {
+                        throw "string"
+                    }
+                }
+                return "..."
+            }
+        "#,
+        function: "main",
+        expected: RuntimeError::UnhandledThrow {
+            value: "string".to_string(),
         }
         .into(),
     })
@@ -104,5 +142,78 @@ fn panic_only_catch_handles_panic_error() -> anyhow::Result<()> {
         "#,
         function: "main",
         expected: ExecState::Complete(Value::string("panic")),
+    })
+}
+
+#[test]
+fn typed_catch_arm_matches_primitive_throw_value() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function throws_now() -> string {
+                throw "boom";
+                "ok"
+            }
+
+            function main() -> string {
+                throws_now() catch (e) {
+                    string => "typed catch",
+                    _ => "fallback"
+                }
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("typed catch")),
+    })
+}
+
+#[test]
+fn catch_binds_to_throw_expression_not_throw_payload() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> int {
+                return throw 1 catch (e) {
+                    _ => 2
+                };
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::Int(2)),
+    })
+}
+
+#[test]
+fn match_arm_block_with_throw_is_not_typed_as_void() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let a = 1;
+                return match (a) {
+                    1 => "1",
+                    int => {
+                        throw 1
+                    },
+                };
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("1")),
+    })
+}
+
+#[test]
+fn throw_catch_inside_match_arm_returns_catch_value() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                return match (2) {
+                    1 => "1",
+                    int => throw 1 catch (e) {
+                        _ => ".."
+                    },
+                };
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("..")),
     })
 }
