@@ -58,7 +58,7 @@ export function BepCreateModal({ userId }: BepCreateModalProps) {
     const bepNumber = nextNumber;
 
     try {
-      await createBep({
+      const created = await createBep({
         number: bepNumber,
         title: title.trim(),
         shepherds: [userId],
@@ -67,7 +67,7 @@ export function BepCreateModal({ userId }: BepCreateModalProps) {
       });
 
       setOpen(false);
-      router.push(`/beps/${bepNumber}`);
+      router.push(`/beps/${created.number}`);
     } catch (createError) {
       setError(
         createError instanceof Error
