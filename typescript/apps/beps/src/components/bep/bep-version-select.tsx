@@ -49,7 +49,9 @@ export function BepVersionSelect({
 
   // Determine the display value
   const selectedValue =
-    currentVersionNumber !== null ? `v-${currentVersionNumber}` : "current";
+    currentVersionNumber === null || currentVersionNumber === latestVersion.version
+      ? "current"
+      : `v-${currentVersionNumber}`;
 
   return (
     <div className="flex items-center gap-2">
