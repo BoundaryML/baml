@@ -55,11 +55,12 @@ function slugifyHeading(value: string): string {
 
 function createHeadingComponent(
   tag: "h1" | "h2" | "h3" | "h4",
-  className: string
+  className: string,
+  getId: (headingText: string) => string | undefined
 ): Components["h1"] {
   const Heading = ({ children }: { children?: ReactNode }) => {
     const headingText = getHeadingText(children);
-    const id = headingText ? slugifyHeading(headingText) : undefined;
+    const id = headingText ? getId(headingText) : undefined;
     const Tag = tag;
     return (
       <Tag id={id} className={className}>
@@ -71,17 +72,36 @@ function createHeadingComponent(
 }
 
 function createComponents(linkContext?: BepLinkContext): Components {
+  const slugCounts = new Map<string, number>();
+  const getUniqueId = (headingText: string) => {
+    const base = slugifyHeading(headingText);
+    if (!base) return undefined;
+    const count = (slugCounts.get(base) ?? 0) + 1;
+    slugCounts.set(base, count);
+    return count === 1 ? base : `${base}-${count}`;
+  };
+
   return {
     h1: createHeadingComponent(
       "h1",
-      "text-3xl font-bold mt-8 mb-4 first:mt-0 scroll-mt-24"
+      "text-3xl font-bold mt-8 mb-4 first:mt-0 scroll-mt-24",
+      getUniqueId
     ),
     h2: createHeadingComponent(
       "h2",
-      "text-2xl font-semibold mt-6 mb-3 pb-2 border-b border-border scroll-mt-24"
+      "text-2xl font-semibold mt-6 mb-3 pb-2 border-b border-border scroll-mt-24",
+      getUniqueId
     ),
-    h3: createHeadingComponent("h3", "text-xl font-semibold mt-5 mb-2 scroll-mt-24"),
-    h4: createHeadingComponent("h4", "text-lg font-medium mt-4 mb-2 scroll-mt-24"),
+    h3: createHeadingComponent(
+      "h3",
+      "text-xl font-semibold mt-5 mb-2 scroll-mt-24",
+      getUniqueId
+    ),
+    h4: createHeadingComponent(
+      "h4",
+      "text-lg font-medium mt-4 mb-2 scroll-mt-24",
+      getUniqueId
+    ),
     pre: ({ children, node }) => {
       const codeElement = node?.children?.find(
         (child): child is typeof child & { tagName: string } =>
