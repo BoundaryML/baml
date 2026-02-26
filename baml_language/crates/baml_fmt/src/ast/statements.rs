@@ -73,7 +73,7 @@ impl Printable for Statement {
                 PrintInfo::default_single_line()
             }
             Statement::Unknown(range) => {
-                printer.print_input_range(*range);
+                printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
             }
         }

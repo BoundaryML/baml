@@ -32,8 +32,9 @@ function CatchWithFallback(x: int) -> string {
     load_var _2
     store_var e
     load_var _2
-    pop 1
-    load_const false
+    type_tag
+    load_const 1
+    cmp_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -59,8 +60,9 @@ function CatchWithTypedArm(x: int) -> string {
     load_var _2
     store_var e
     load_var _2
-    pop 1
-    load_const false
+    type_tag
+    load_const 1
+    cmp_op ==
     pop_jump_if_false L1
     jump L2
 
@@ -86,8 +88,9 @@ function ChainedCatchClauses(x: int) -> string {
     load_var _2
     store_var e
     load_var _2
-    pop 1
-    load_const false
+    type_tag
+    load_const 1
+    cmp_op ==
     pop_jump_if_false L1
     jump L4
 
@@ -97,8 +100,9 @@ function ChainedCatchClauses(x: int) -> string {
     load_var _3
     store_var e2
     load_var _3
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L2
     jump L3
 
@@ -133,15 +137,17 @@ function MultipleCatchArms(x: int) -> string {
     load_var _2
     store_var e
     load_var _2
-    pop 1
-    load_const false
+    type_tag
+    load_const 1
+    cmp_op ==
     pop_jump_if_false L1
     jump L4
 
   L1:
     load_var _2
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L2
     jump L3
 
@@ -201,8 +207,9 @@ function SingleCatchTyped(x: int) -> string {
     load_var _2
     store_var e
     load_var _2
-    pop 1
-    load_const false
+    type_tag
+    load_const 1
+    cmp_op ==
     pop_jump_if_false L1
     jump L2
 

@@ -2507,14 +2507,19 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             // Generalize literal types for the result, similar to arrays.
             // This ensures `if (c) { 1 } else { 2 }` is `int` not `1 | 2`.
             let then_ty = generalize(&then_ty);
-            let else_ty = generalize(&else_ty);
+            let else_ty = if else_branch.is_none() {
+                // An if-without-else implicitly produces null on the false path.
+                Ty::Null
+            } else {
+                generalize(&else_ty)
+            };
 
-            // Result is union of branches (simplified)
-            if then_ty == else_ty {
+            // Never is the bottom type: never | T = T, so a diverging
+            // branch doesn't contribute to the result type.
+            if then_ty == Ty::Never {
+                else_ty
+            } else if else_ty == Ty::Never || then_ty == else_ty {
                 then_ty
-            } else if else_branch.is_none() {
-                // if without else returns optional
-                Ty::Union(vec![then_ty, Ty::Null])
             } else {
                 Ty::Union(vec![then_ty, else_ty])
             }
@@ -2798,16 +2803,14 @@ fn check_expr_with_info_location(
                     check_expr(ctx, *else_expr, body, expected)
                 }
             } else {
-                Ty::Void
+                Ty::Null
             };
 
-            // In checking mode, don't generalize - the branches were checked against
-            // the expected type, so return the union of actual types (or expected if they match)
-            if then_ty == else_ty {
+            // Never is the bottom type: never | T = T.
+            if then_ty == Ty::Never {
+                else_ty
+            } else if else_ty == Ty::Never || then_ty == else_ty {
                 then_ty
-            } else if else_branch.is_none() {
-                // if without else returns optional
-                Ty::Union(vec![then_ty, Ty::Null])
             } else {
                 Ty::Union(vec![then_ty, else_ty])
             }
@@ -2991,9 +2994,7 @@ fn block_without_tail_type(stmts: &[StmtId], body: &ExprBody) -> Ty {
         .last()
         .is_some_and(|stmt_id| stmt_definitely_diverges(*stmt_id, body))
     {
-        // We use Unknown as a stand-in for "never" until the type system has
-        // an explicit bottom type.
-        Ty::Unknown
+        Ty::Never
     } else {
         Ty::Void
     }

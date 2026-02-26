@@ -3,8 +3,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function BoolLiteralAfterTypedBool(b: bool) -> string {
     load_var b
-    pop 1
-    load_const false
+    type_tag
+    load_const 2
+    cmp_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -211,8 +212,9 @@ function DuplicateStringLiteral(role: "user" | "assistant" | "system") -> string
 
 function EnumVariantAfterTypedEnum(s: Status) -> string {
     load_var s
-    pop 1
-    load_const false
+    type_tag
+    load_const 5
+    cmp_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -629,8 +631,9 @@ function ExhaustiveNullableEnum(s: Status?) -> string {
 
 function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     load_var s
-    pop 1
-    load_const false
+    type_tag
+    load_const 5
+    cmp_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -647,8 +650,9 @@ function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
 
 function ExhaustiveOptional(x: int?) -> string {
     load_var x
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -854,8 +858,9 @@ function GetStatus() -> Status {
 
 function GuardedOnlyNonExhaustive(x: int) -> int {
     load_var x
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L0
     load_var x
     load_const 0
@@ -865,8 +870,9 @@ function GuardedOnlyNonExhaustive(x: int) -> int {
 
   L0:
     load_var x
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L2
     load_var x
     load_const 0
@@ -889,8 +895,9 @@ function GuardedOnlyNonExhaustive(x: int) -> int {
 
 function GuardedWithFallback(x: int) -> int {
     load_var x
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L0
     load_var x
     load_const 0
@@ -1053,8 +1060,9 @@ function JumpTableTypeTag(value: int | string | bool | float) -> string {
 
 function LiteralAfterTypedPattern(x: int) -> string {
     load_var x
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L0
     jump L1
 
@@ -1244,8 +1252,9 @@ function MixedPatterns(x: int) -> string {
 
   L1:
     load_var x
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L2
     load_var x
     load_const 0
@@ -2095,8 +2104,9 @@ function PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
 
 function StringLiteralAfterStringType(s: string) -> string {
     load_var s
-    pop 1
-    load_const false
+    type_tag
+    load_const 1
+    cmp_op ==
     pop_jump_if_false L0
     jump L1
 

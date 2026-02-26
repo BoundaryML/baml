@@ -179,7 +179,7 @@ fn ProcessData(data: JsonData) -> string {
     let _4: JsonData
     let _5: int
     let _6: JsonData
-    let _7: void
+    let _7: null
     let _8: bool
     let _9: int
     let _10: 100

@@ -336,7 +336,7 @@ fn continue_with_locals() -> int {
     let _2: bool
     let _3: void
     let _4: 1 // x
-    let _5: void
+    let _5: null
     let _6: bool
     let _7: 2 // y
     let _8: void
@@ -541,7 +541,7 @@ fn break_with_locals() -> int {
     let _2: bool
     let _3: void
     let _4: 1 // x
-    let _5: void
+    let _5: null
     let _6: bool
     let _7: 2 // y
     let _8: void

@@ -80,6 +80,17 @@ impl<'a> Printer<'a> {
         self.output.push_str(text);
     }
 
+    /// Prints a text range with leading whitespace stripped from the first line.
+    ///
+    /// Continuation lines are printed verbatim at their original absolute
+    /// positions, which keeps the output idempotent: the caller already
+    /// provides indentation for the first line, and subsequent lines are
+    /// stable across formatting passes.
+    pub fn print_input_range_trimmed_start(&mut self, range: TextRange) {
+        let text = &self.input[range];
+        self.output.push_str(text.trim_start());
+    }
+
     /// Prints an emittable trivia, without a newline.
     ///
     /// Empty lines print nothing, while the comments print their comment.

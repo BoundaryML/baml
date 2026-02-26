@@ -3456,8 +3456,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
   L211:
     load_var _782
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L212
     load_var _782
     load_const 100
@@ -4076,8 +4077,9 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
   L5:
     pop 1
     load_var x
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L6
     load_var x
     load_const 0
@@ -4086,8 +4088,9 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
 
   L6:
     load_var x
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L7
     load_var x
     load_const 0
@@ -4232,8 +4235,9 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
 
   L26:
     load_var r
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L27
     load_var r
     load_const 0
@@ -4243,8 +4247,9 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
 
   L27:
     load_var r
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L28
     load_var r
     load_const 0
@@ -4253,8 +4258,9 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
 
   L28:
     load_var r
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L44
     load_var r
     store_var n
@@ -4391,8 +4397,9 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
 
   L53:
     load_var r
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L66
     load_var r
     store_var n
@@ -4455,8 +4462,9 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
 
   L66:
     load_var r
-    pop 1
-    load_const false
+    type_tag
+    load_const 0
+    cmp_op ==
     pop_jump_if_false L79
     load_var r
     store_var n

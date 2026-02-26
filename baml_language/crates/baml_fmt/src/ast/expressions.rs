@@ -147,7 +147,7 @@ impl Printable for Expression {
             Expression::ObjectInitializer(obj) => obj.print(shape, printer),
             Expression::RawString(raw) => raw.print(shape, printer),
             Expression::Unknown(range) => {
-                printer.print_input_range(*range);
+                printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
             }
         }

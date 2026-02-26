@@ -1,6 +1,3 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
 // Test: Catch/throw MIR lowering
 // Each function exercises a specific catch/throw pattern.
 
@@ -72,8 +69,8 @@ function MultipleCatchArms(x: int) -> string {
 // Nested catch: inner catch wraps one call, outer catch wraps a different call
 function NestedCatch(x: int) -> string {
     let inner = MayFail(x) catch (e) {
-        _ => "inner caught"
-    };
+              _ => "inner caught"
+          };
     AlsoMayFail(x) catch (e) {
         _ => inner
     }
@@ -96,6 +93,8 @@ function CatchAndRethrow(x: int) -> string {
 
 // Throw as a statement
 function ThrowStatement(x: int) -> string {
+
+
     throw "error"
     "unreachable"
 }

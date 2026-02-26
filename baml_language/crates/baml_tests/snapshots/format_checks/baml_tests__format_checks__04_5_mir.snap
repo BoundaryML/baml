@@ -4479,12 +4479,12 @@ fn NestedLoops(matrix: int[][]) -> int {
     let _36: int
     let _37: 1
     let _38: int
-    let _39: void
+    let _39: null
     let _40: bool
     let _41: int
     let _42: 0
     let _43: void
-    let _44: void
+    let _44: null
     let _45: bool
     let _46: int
     let _47: 1000
@@ -5570,7 +5570,7 @@ fn MultiStatement(a: int, b: int) -> int {
     let _6: int // y
     let _7: int
     let _8: 2
-    let _9: void
+    let _9: null
     let _10: bool
     let _11: int
     let _12: 10
@@ -6811,7 +6811,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _23: void
     let _24: bool
     let _25: void
-    let _26: void
+    let _26: null
     let _27: bool
     let _28: int
     let _29: 50
@@ -7538,7 +7538,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _750: int
     let _751: 1
     let _752: int
-    let _753: void
+    let _753: null
     let _754: bool
     let _755: int
     let _756: 3
