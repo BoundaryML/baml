@@ -9,10 +9,10 @@ import "C"
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -68,6 +68,7 @@ type OnTickCallbackData interface {
 var (
 	dynamicCallbacks  = make(map[uint32]CallbackData)
 	callbackMutex     sync.RWMutex
+	nextCallbackID    atomic.Uint32
 	typeMap           serde.TypeMap
 	callbackLogFile   *os.File
 	callbackLogFileMu sync.Mutex
@@ -257,12 +258,9 @@ func trigger_callback_object_handle(id uint32, callback CallbackData, content_by
 }
 
 func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, chan ResultCallback) {
+	id := nextCallbackID.Add(1)
 	callbackMutex.Lock()
 	defer callbackMutex.Unlock()
-	id := uint32(rand.Intn(1000000))
-	for _, exists := dynamicCallbacks[id]; exists; {
-		id = uint32(rand.Intn(1000000))
-	}
 	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx, onTick: onTick, responseType: responseTypeValue}
 	callbackLog("[CLIENT_GO_CALLBACK_ADD] id=%d map_size=%d", id, len(dynamicCallbacks))
 	return id, dynamicCallbacks[id].channel
@@ -271,12 +269,9 @@ func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, c
 // create_unique_id_for_object creates a callback ID for object-handle responses (e.g. build_request).
 // The runtime pointer is needed to decode the object handle on the Go side.
 func create_unique_id_for_object(ctx context.Context, runtime unsafe.Pointer) (uint32, chan ResultCallback) {
+	id := nextCallbackID.Add(1)
 	callbackMutex.Lock()
 	defer callbackMutex.Unlock()
-	id := uint32(rand.Intn(1000000))
-	for _, exists := dynamicCallbacks[id]; exists; {
-		id = uint32(rand.Intn(1000000))
-	}
 	dynamicCallbacks[id] = CallbackData{
 		channel:      make(chan ResultCallback),
 		ctx:          ctx,
