@@ -339,7 +339,7 @@ fn collect_let_type_annotations(ctx: &HintContext<'_>, hints: &mut Vec<InlayHint
 
 /// Compute all inlay hints for the given file.
 ///
-/// To add new hint categories, implement [`HintCollector`] and add to `collectors`.
+/// To add new hint categories, add a new collector function and call it in this function.
 pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, project: Project) -> Vec<InlayHint> {
     let mut hints = Vec::new();
 
