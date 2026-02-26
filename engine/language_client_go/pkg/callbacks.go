@@ -117,7 +117,11 @@ func SetTypeMap(t map[string]reflect.Type) {
 
 //export on_tick_callback
 func on_tick_callback(id C.uint32_t) {
-	defer func() { recover() }()
+	defer func() {
+		if r := recover(); r != nil {
+			callbackLog("[CLIENT_GO_CALLBACK_PANIC] on_tick id=%d panic=%v", uint32(id), r)
+		}
+	}()
 
 	callbackMutex.RLock()
 	id_uint := uint32(id)

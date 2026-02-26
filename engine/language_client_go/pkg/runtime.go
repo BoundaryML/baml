@@ -105,6 +105,7 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 
 	err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
+		safeClose(callback)
 		return nil, err
 	}
 
@@ -194,6 +195,7 @@ func (r *BamlRuntime) CallFunctionParse(ctx context.Context, functionName string
 
 	err := baml_go.CallFunctionParseFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
+		safeClose(callback)
 		return nil, err
 	}
 
