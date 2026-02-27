@@ -5,8 +5,8 @@ use std::sync::Arc;
 use baml_db::{
     SourceFile,
     baml_compiler_hir::{
-        ExprBody, FunctionBody, HirSourceMap, ItemId, LetOrigin, Stmt, SymbolTable, file_items,
-        function_body, symbol_table,
+        ExprBody, FunctionBody, HirSourceMap, ItemId, LetOrigin, Stmt, SymbolTable, file_item_tree,
+        file_items, function_body, symbol_table,
     },
     baml_compiler_tir::{self, InferenceResult, Ty},
     baml_workspace::Project,
@@ -236,6 +236,20 @@ fn collect_call_arg_names(ctx: &HintContext<'_>, hints: &mut Vec<InlayHint>) {
             let Some((Some(name), _)) = params.get(i) else {
                 continue;
             };
+
+            // Skip hint when the argument's final path segment matches or
+            // contains the parameter name (e.g. `foo(bar)` or `foo(obj.bar)`
+            // where the param is `bar`, or `foo(my_bar)` containing `bar`).
+            if let Expr::Path(segments) = &ctx.body.exprs[*arg_id] {
+                if let Some(last) = segments.last() {
+                    let last = last.as_str();
+                    let param = name.as_str();
+                    if last.contains(param) {
+                        continue;
+                    }
+                }
+            }
+
             let Some(arg_span) = ctx.source_map.expr_span(*arg_id) else {
                 continue;
             };
@@ -344,6 +358,14 @@ pub fn inlay_hints(db: &ProjectDatabase, file: SourceFile, project: Project) -> 
         let ItemId::Function(func_loc) = item_id else {
             continue;
         };
+
+        // Skip compiler-generated functions (e.g. client resolve, LLM helpers).
+        let file = func_loc.file(db);
+        let item_tree = file_item_tree(db, file);
+        let func = &item_tree[func_loc.id(db)];
+        if func.compiler_generated.is_some() {
+            continue;
+        }
 
         let body = function_body(db, *func_loc);
         let FunctionBody::Expr(expr_body, source_map) = &*body else {

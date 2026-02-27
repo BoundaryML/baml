@@ -2229,7 +2229,10 @@ impl LoweringContext {
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new(""));
 
-        self.alloc_expr(Expr::FieldAccess { base, field }, node.text_range())
+        self.alloc_expr(
+            Expr::FieldAccess { base, field },
+            Self::text_range_skip_trivia(node),
+        )
     }
 
     /// Lower an `ENV_ACCESS_EXPR` to a desugared call.
@@ -2372,7 +2375,7 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
-        self.alloc_expr(Expr::Path(segments), node.text_range())
+        self.alloc_expr(Expr::Path(segments), Self::text_range_skip_trivia(node))
     }
 
     fn lower_string_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
