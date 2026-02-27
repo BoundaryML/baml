@@ -695,6 +695,7 @@ pub fn short_display(error: &TirTypeError) -> String {
             format!("Non-exhaustive match on {scrutinee_type}: missing {missing}")
         }
         TypeError::UnreachableArm { .. } => "Unreachable match arm".to_string(),
+        TypeError::UnreachableCatchArm { .. } => "Unreachable catch arm".to_string(),
         TypeError::UnknownEnumVariant {
             enum_name,
             variant_name,
@@ -709,6 +710,14 @@ pub fn short_display(error: &TirTypeError) -> String {
         TypeError::MissingReturnExpression { expected, .. } => {
             format!(
                 "Missing return expression. Function expects `{expected}` but body has no final expression."
+            )
+        }
+        TypeError::NonExhaustiveCatch {
+            unhandled_types, ..
+        } => {
+            format!(
+                "Non-exhaustive catch chain: unhandled throw types {}",
+                unhandled_types.join(", ")
             )
         }
         TypeError::InvalidMapKeyType { ty, .. } => {

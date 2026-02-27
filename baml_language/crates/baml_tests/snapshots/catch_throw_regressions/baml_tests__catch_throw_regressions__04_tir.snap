@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TYPE INFERENCE ===
+  Function AlwaysThrowsStatus:
+    Return: Never
+  Function ThrowsAllStatusVariants:
+    Return: Never
+  Function CatchAlwaysThrows:
+    Return: Union([Literal(String("http!")), Literal(String("index!"))])
+  Function RecA:
+    Return: Union([Never, String])
+  Function WrapperAlwaysThrows:
+    Return: Never
+  Function UnreachableTailStillChecked:
+    Return: Never
+    Errors:
+      - int has no field missing
+  Function RecB:
+    Return: String
+  Function CatchAllStatusVariants:
+    Return: Union([Literal(String("http!")), Literal(String("index!")), Literal(String("auth!")), Literal(String("other!"))])
+  Function CatchRecursiveThrow:
+    Return: Union([String, Literal(String("handled"))])

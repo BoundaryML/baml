@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== DIAGNOSTICS ===
+  [type] Error: Type `int` has no field `missing`
+    ╭─[ regressions.baml:77:21 ]
+    │
+ 77 │ ╭─▶         let x = 123;
+ 78 │ ├─▶         x.missing
+    │ │                       
+    │ ╰─────────────────────── Type `int` has no field `missing`
+    │     
+    │     Note: Error code: E0007
+────╯

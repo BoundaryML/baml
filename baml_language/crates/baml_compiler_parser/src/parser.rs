@@ -179,8 +179,8 @@ pub(crate) struct Parser<'a> {
     /// Used to detect unmatched '>' when exiting the outermost generic.
     type_args_depth: u32,
     /// Track contexts where postfix `catch` is not allowed to bind.
-    /// Used so `throw x catch (...)` parses as `(throw x) catch (...)`, not
-    /// `throw (x catch (...))`.
+    /// Managed by [`Self::parse_expr_bp_no_catch`]; prefer that helper over
+    /// manually incrementing/decrementing this counter.
     suppress_catch_depth: u32,
 }
 
@@ -2452,11 +2452,7 @@ impl<'a> Parser<'a> {
                 return;
             }
 
-            // Parse throw payload without allowing postfix catch to bind to it.
-            // This ensures `throw x catch (...)` binds catch to the throw expression.
-            p.suppress_catch_depth += 1;
-            p.parse_expr_bp(0);
-            p.suppress_catch_depth -= 1;
+            p.parse_expr_bp_no_catch(0);
         });
     }
 
@@ -3022,6 +3018,17 @@ impl<'a> Parser<'a> {
     /// Parse an expression with operator precedence
     fn parse_expr(&mut self) {
         self.parse_expr_bp(0);
+    }
+
+    /// Parse an expression where postfix `catch` must not bind to the payload.
+    ///
+    /// Used by prefix expression forms (e.g. `throw`) whose payload should not
+    /// consume a trailing `catch` clause.  For example, `throw x catch (...)`
+    /// must parse as `(throw x) catch (...)`, not `throw (x catch (...))`.
+    fn parse_expr_bp_no_catch(&mut self, min_bp: u8) {
+        self.suppress_catch_depth += 1;
+        self.parse_expr_bp(min_bp);
+        self.suppress_catch_depth -= 1;
     }
 
     /// Parse expression with binding power (Pratt parsing)

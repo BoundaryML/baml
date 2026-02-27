@@ -1,13 +1,27 @@
 // Test: Catch/throw MIR lowering
 // Each function exercises a specific catch/throw pattern.
 
-// Helper function used as call target
+// Helper functions used as call targets
 function MayFail(x: int) -> string {
-    "ok"
+    match (x) {
+        0 => throw "string error",
+        _ => "ok"
+    }
+}
+
+function MayFailIntOrString(x: int) -> string {
+    match (x) {
+        0 => throw "string error",
+        1 => throw 1,
+        _ => "ok"
+    }
 }
 
 function AlsoMayFail(x: int) -> string {
-    "also ok"
+    match (x) {
+        0 => throw "secondary error",
+        _ => "also ok"
+    }
 }
 
 // ============================================================================
@@ -34,8 +48,10 @@ function SingleCatchTyped(x: int) -> string {
 
 // Additional catch clause for fallback behavior
 function CatchWithFallback(x: int) -> string {
-    MayFail(x) catch (e) {
+    MayFailIntOrString(x) catch (e) {
         _: string => "caught string"
+    } catch (e2) {
+        _: int => "caught int fallback"
     }
 }
 
@@ -56,7 +72,7 @@ function CatchWithTypedArm(x: int) -> string {
 
 // Multiple typed arms in a single catch
 function MultipleCatchArms(x: int) -> string {
-    MayFail(x) catch (e) {
+    MayFailIntOrString(x) catch (e) {
         _: string => "caught string",
         _: int => "caught int"
     }
@@ -103,7 +119,7 @@ function ThrowStatement(x: int) -> string {
 
 // Multiple catch clauses on the same expression
 function ChainedCatchClauses(x: int) -> string {
-    MayFail(x) catch (e) {
+    MayFailIntOrString(x) catch (e) {
         _: string => "first handler"
     } catch (e2) {
         _: int => "second handler"

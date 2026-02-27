@@ -217,3 +217,85 @@ fn throw_catch_inside_match_arm_returns_catch_value() -> anyhow::Result<()> {
         expected: ExecState::Complete(Value::string("..")),
     })
 }
+
+#[test]
+fn throw_followed_by_dead_code_still_diverges_in_match_arm() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let a = 1;
+                return match (a) {
+                    1 => "one",
+                    int => {
+                        throw "error";
+                        let dead = 2;
+                    },
+                };
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("one")),
+    })
+}
+
+#[test]
+fn return_followed_by_dead_code_still_diverges_in_block() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                return "hello";
+                let x = 1;
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("hello")),
+    })
+}
+
+#[test]
+fn throw_with_multiple_dead_stmts_still_diverges() -> anyhow::Result<()> {
+    assert_vm_fails(FailingProgram {
+        source: r#"
+            function main() -> string {
+                let a = 2;
+                return match (a) {
+                    1 => "one",
+                    int => {
+                        throw "boom";
+                        let x = 1;
+                        let y = 2;
+                    },
+                };
+            }
+        "#,
+        function: "main",
+        expected: RuntimeError::UnhandledThrow {
+            value: "boom".to_string(),
+        }
+        .into(),
+    })
+}
+
+#[test]
+fn if_else_both_throw_followed_by_dead_code_diverges() -> anyhow::Result<()> {
+    assert_vm_executes(Program {
+        source: r#"
+            function main() -> string {
+                let a = 1;
+                return match (a) {
+                    1 => "one",
+                    int => {
+                        if (true) {
+                            throw "a"
+                        } else {
+                            throw "b"
+                        };
+                        let dead = 0;
+                    },
+                };
+            }
+        "#,
+        function: "main",
+        expected: ExecState::Complete(Value::string("one")),
+    })
+}

@@ -15,7 +15,7 @@ function CatchAndRethrow(x: int) -> string {
 }
 
 function ChainedCatchClauses(x: int) -> string {
-    MayFail(x) catch (e) {
+    MayFailIntOrString(x) catch (e) {
         _: string => "first handler",
     } catch (e2) {
         _: int => "second handler",
@@ -33,8 +33,19 @@ function ThrowStatement(x: int) -> string {
     "unreachable"
 }
 
+function MayFailIntOrString(x: int) -> string {
+    match (x) {
+        0 => throw "string error",
+        1 => throw 1,
+        _ => "ok",
+    }
+}
+
 function MayFail(x: int) -> string {
-    "ok"
+    match (x) {
+        0 => throw "string error",
+        _ => "ok",
+    }
 }
 
 function SingleCatchTyped(x: int) -> string {
@@ -44,7 +55,10 @@ function SingleCatchTyped(x: int) -> string {
 }
 
 function AlsoMayFail(x: int) -> string {
-    "also ok"
+    match (x) {
+        0 => throw "secondary error",
+        _ => "also ok",
+    }
 }
 
 function NestedCatch(x: int) -> string {
@@ -57,13 +71,15 @@ function NestedCatch(x: int) -> string {
 }
 
 function CatchWithFallback(x: int) -> string {
-    MayFail(x) catch (e) {
+    MayFailIntOrString(x) catch (e) {
         _: string => "caught string",
+    } catch (e2) {
+        _: int => "caught int fallback",
     }
 }
 
 function MultipleCatchArms(x: int) -> string {
-    MayFail(x) catch (e) {
+    MayFailIntOrString(x) catch (e) {
         _: string => "caught string",
         _: int => "caught int",
     }

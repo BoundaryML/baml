@@ -1,0 +1,253 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function AlwaysThrowsStatus(n: int) -> Status {
+    load_var n
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L1
+
+  L0:
+    pop 1
+    load_const 404
+    throw
+
+  L1:
+    load_const "http_error"
+    throw
+}
+
+function CatchAllStatusVariants(n: int) -> string {
+    push_unwind L0, slot 2
+    load_var n
+    call ThrowsAllStatusVariants
+    pop_unwind
+    jump L9
+
+  L0:
+    load_var _2
+    store_var e
+    load_var _2
+    load_const 0 /* Status.HttpError */
+    alloc_variant Status
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L8
+
+  L1:
+    load_var _2
+    store_var _3
+    load_var _3
+    store_var e
+    load_var _3
+    load_const 1 /* Status.IndexError */
+    alloc_variant Status
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L7
+
+  L2:
+    load_var _3
+    store_var _4
+    load_var _4
+    store_var e
+    load_var _4
+    load_const 2 /* Status.AuthError */
+    alloc_variant Status
+    cmp_op ==
+    pop_jump_if_false L3
+    jump L6
+
+  L3:
+    load_var _4
+    store_var _5
+    load_var _5
+    store_var e
+    load_var _5
+    load_const 3 /* Status.SomeOtherError */
+    alloc_variant Status
+    cmp_op ==
+    pop_jump_if_false L4
+    jump L5
+
+  L4:
+    load_var _5
+    throw
+
+  L5:
+    load_const "other!"
+    jump L9
+
+  L6:
+    load_const "auth!"
+    jump L9
+
+  L7:
+    load_const "index!"
+    jump L9
+
+  L8:
+    load_const "http!"
+
+  L9:
+    return
+}
+
+function CatchAlwaysThrows(n: int) -> string {
+    push_unwind L0, slot 2
+    load_var n
+    call WrapperAlwaysThrows
+    pop_unwind
+    jump L5
+
+  L0:
+    load_var _2
+    store_var e
+    load_var _2
+    type_tag
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _2
+    store_var _3
+    load_var _3
+    store_var e2
+    load_var _3
+    type_tag
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _3
+    throw
+
+  L3:
+    load_const "index!"
+    jump L5
+
+  L4:
+    load_const "http!"
+
+  L5:
+    return
+}
+
+function CatchRecursiveThrow(n: int) -> string {
+    push_unwind L0, slot 2
+    load_var n
+    call RecB
+    pop_unwind
+    jump L3
+
+  L0:
+    load_var _2
+    store_var e
+    load_var _2
+    type_tag
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _2
+    throw
+
+  L2:
+    load_const "handled"
+
+  L3:
+    return
+}
+
+function RecA(n: int) -> string {
+    load_var n
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L1
+
+  L0:
+    pop 1
+    load_var n
+    call RecB
+    return
+
+  L1:
+    load_const "boom"
+    throw
+}
+
+function RecB(n: int) -> string {
+    load_var n
+    call RecA
+    return
+}
+
+function ThrowsAllStatusVariants(n: int) -> Status {
+    load_var n
+    copy 0
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L5
+
+  L0:
+    copy 0
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L4
+
+  L1:
+    copy 0
+    load_const 3
+    cmp_op ==
+    pop_jump_if_false L2
+    pop 1
+    jump L3
+
+  L2:
+    pop 1
+    load_const 3 /* Status.SomeOtherError */
+    alloc_variant Status
+    throw
+
+  L3:
+    load_const 2 /* Status.AuthError */
+    alloc_variant Status
+    throw
+
+  L4:
+    load_const 1 /* Status.IndexError */
+    alloc_variant Status
+    throw
+
+  L5:
+    load_const 0 /* Status.HttpError */
+    alloc_variant Status
+    throw
+}
+
+function UnreachableTailStillChecked() -> string {
+    load_const "error"
+    throw
+}
+
+function WrapperAlwaysThrows(n: int) -> Status {
+    load_var n
+    call AlwaysThrowsStatus
+    return
+}

@@ -128,6 +128,11 @@ where
                 span,
                 UNREACHABLE_ARM,
             ),
+            TypeError::UnreachableCatchArm { span } => simple_error(
+                "Unreachable catch arm: it cannot match any remaining throw type".to_string(),
+                span,
+                UNREACHABLE_ARM,
+            ),
             TypeError::UnknownEnumVariant {
                 enum_name,
                 variant_name,
@@ -148,6 +153,17 @@ where
                 ),
                 span,
                 WATCH_ON_UNWATCHED_VARIABLE,
+            ),
+            TypeError::NonExhaustiveCatch {
+                unhandled_types,
+                span,
+            } => simple_error(
+                format!(
+                    "Non-exhaustive catch chain: unhandled throw types {}",
+                    unhandled_types.join(", ")
+                ),
+                span,
+                NON_EXHAUSTIVE_MATCH,
             ),
         },
         CompilerError::NameError(name_error) => match name_error {

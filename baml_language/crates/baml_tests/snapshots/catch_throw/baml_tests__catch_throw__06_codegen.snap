@@ -2,8 +2,22 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function AlsoMayFail(x: int) -> string {
+    load_var x
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L1
+
+  L0:
+    pop 1
     load_const "also ok"
     return
+
+  L1:
+    load_const "secondary error"
+    throw
 }
 
 function CatchAndRethrow(x: int) -> string {
@@ -24,9 +38,9 @@ function CatchAndRethrow(x: int) -> string {
 function CatchWithFallback(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFail
+    call MayFailIntOrString
     pop_unwind
-    jump L3
+    jump L5
 
   L0:
     load_var _2
@@ -36,16 +50,32 @@ function CatchWithFallback(x: int) -> string {
     load_const 1
     cmp_op ==
     pop_jump_if_false L1
-    jump L2
+    jump L4
 
   L1:
     load_var _2
-    throw
+    store_var _3
+    load_var _3
+    store_var e2
+    load_var _3
+    type_tag
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
 
   L2:
-    load_const "caught string"
+    load_var _3
+    throw
 
   L3:
+    load_const "caught int fallback"
+    jump L5
+
+  L4:
+    load_const "caught string"
+
+  L5:
     return
 }
 
@@ -80,7 +110,7 @@ function CatchWithTypedArm(x: int) -> string {
 function ChainedCatchClauses(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFail
+    call MayFailIntOrString
     pop_unwind
     jump L5
 
@@ -122,14 +152,59 @@ function ChainedCatchClauses(x: int) -> string {
 }
 
 function MayFail(x: int) -> string {
+    load_var x
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L1
+
+  L0:
+    pop 1
     load_const "ok"
     return
+
+  L1:
+    load_const "string error"
+    throw
+}
+
+function MayFailIntOrString(x: int) -> string {
+    load_var x
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L3
+
+  L0:
+    copy 0
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L2
+
+  L1:
+    pop 1
+    load_const "ok"
+    return
+
+  L2:
+    load_const 1
+    throw
+
+  L3:
+    load_const "string error"
+    throw
 }
 
 function MultipleCatchArms(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFail
+    call MayFailIntOrString
     pop_unwind
     jump L5
 

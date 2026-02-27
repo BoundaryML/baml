@@ -165,6 +165,11 @@ impl<C: ErrorContext> TypeError<C> {
                     .with_primary_span(loc_fn(location))
             }
 
+            TypeError::UnreachableCatchArm { location } => {
+                Diagnostic::error(DiagnosticId::UnreachableCatchArm, "Unreachable catch arm")
+                    .with_primary_span(loc_fn(location))
+            }
+
             TypeError::UnknownEnumVariant {
                 enum_name,
                 variant_name,
@@ -197,6 +202,18 @@ impl<C: ErrorContext> TypeError<C> {
                 ),
             )
             .with_primary_span(loc_fn(location)),
+
+            TypeError::NonExhaustiveCatch {
+                unhandled_types,
+                location,
+            } => {
+                let unhandled = unhandled_types.join(", ");
+                Diagnostic::error(
+                    DiagnosticId::NonExhaustiveCatch,
+                    format!("Non-exhaustive catch chain: unhandled throw types {unhandled}"),
+                )
+                .with_primary_span(loc_fn(location))
+            }
 
             TypeError::InvalidMapKeyType { ty, location } => Diagnostic::error(
                 DiagnosticId::InvalidMapKeyType,

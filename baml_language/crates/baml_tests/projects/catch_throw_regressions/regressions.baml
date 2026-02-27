@@ -1,0 +1,80 @@
+// Regression tests for catch/throw typing around divergence and throw propagation.
+
+enum Status {
+    HttpError
+    IndexError
+    AuthError
+    SomeOtherError
+}
+
+// Always-diverging function: all code paths throw.
+function AlwaysThrowsStatus(n: int) -> Status {
+    match (n) {
+        0 => throw "http_error",
+        _ => throw 404
+    }
+}
+
+// Wrapper should also be inferred as always-diverging via call-site refinement.
+function WrapperAlwaysThrows(n: int) -> Status {
+    AlwaysThrowsStatus(n)
+}
+
+// Catch chain should not include phantom `Status` in result type.
+function CatchAlwaysThrows(n: int) -> string {
+    WrapperAlwaysThrows(n) catch (e) {
+        _: string => "http!"
+    } catch (e2) {
+        _: int => "index!"
+    }
+}
+
+// Enum-variant catch chain should track residual variants, not collapse to enum type.
+function ThrowsAllStatusVariants(n: int) -> Status {
+    match (n) {
+        1 => throw Status.HttpError,
+        2 => throw Status.IndexError,
+        3 => throw Status.AuthError,
+        _ => throw Status.SomeOtherError
+    }
+}
+
+function CatchAllStatusVariants(n: int) -> string {
+    ThrowsAllStatusVariants(n) catch (e) {
+        Status.HttpError => "http!"
+    } catch (e) {
+        Status.IndexError => "index!"
+    } catch (e) {
+        Status.AuthError => "auth!"
+    } catch (e) {
+        Status.SomeOtherError => "other!"
+    }
+}
+
+// SCC throw propagation: RecB has no direct throw but transitively throws via RecA.
+function RecA(n: int) -> string {
+    match (n) {
+        0 => throw "boom",
+        _ => RecB(n)
+    }
+}
+
+function RecB(n: int) -> string {
+    RecA(n)
+}
+
+function CatchRecursiveThrow(n: int) -> string {
+    RecB(n) catch (e) {
+        _: string => "handled"
+    }
+}
+
+// Diverging statement before tail forces block type to never,
+// but unreachable tail is still checked for diagnostics.
+function UnreachableTailStillChecked() -> string {
+    {
+        throw "error"
+        let x = 123;
+        x.missing
+    }
+}

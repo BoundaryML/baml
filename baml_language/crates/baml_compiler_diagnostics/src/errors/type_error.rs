@@ -92,6 +92,8 @@ pub enum TypeError<C: ErrorContext> {
     },
     /// Match arm is unreachable - it can never match because previous arms cover all cases.
     UnreachableArm { location: C::Location },
+    /// Catch arm is unreachable - it can never match the current residual throw set.
+    UnreachableCatchArm { location: C::Location },
     /// Reference to an unknown enum variant.
     UnknownEnumVariant {
         enum_name: String,
@@ -105,6 +107,11 @@ pub enum TypeError<C: ErrorContext> {
     /// Function body has no return expression but requires a non-void return type.
     MissingReturnExpression {
         expected: C::Ty,
+        location: C::Location,
+    },
+    /// Catch chain does not handle all possible throw types.
+    NonExhaustiveCatch {
+        unhandled_types: Vec<String>,
         location: C::Location,
     },
     /// Map has keys that aren't valid. Only string, literal string, and enum are

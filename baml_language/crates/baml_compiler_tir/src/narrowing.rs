@@ -15,65 +15,9 @@ use crate::{TypeContext, types::Ty};
 
 // ── Divergence detection ────────────────────────────────────────────────
 
-/// Check if an expression definitely diverges (return/break/continue).
-///
-/// An expression definitely diverges if:
-/// - It is a Block whose last statement is Return/Break/Continue
-/// - It is a Block whose last statement is an if where BOTH branches diverge
-/// - It is a Block whose last statement is a match where ALL arms diverge
-///
-/// This is intentionally conservative — only checks the last statement.
+/// Check if an expression definitely diverges (return/break/continue/throw).
 fn definitely_diverges(expr_id: ExprId, body: &ExprBody) -> bool {
-    use baml_compiler_hir::Expr;
-
-    let expr = &body.exprs[expr_id];
-    match expr {
-        Expr::Block { stmts, tail_expr } => {
-            // A block with a tail expression produces a value, doesn't diverge
-            if tail_expr.is_some() {
-                return false;
-            }
-            if let Some(&last_stmt_id) = stmts.last() {
-                stmt_definitely_diverges(last_stmt_id, body)
-            } else {
-                false
-            }
-        }
-        _ => false,
-    }
-}
-
-/// Check if a statement definitely diverges.
-fn stmt_definitely_diverges(stmt_id: StmtId, body: &ExprBody) -> bool {
-    use baml_compiler_hir::Stmt;
-
-    let stmt = &body.stmts[stmt_id];
-    match stmt {
-        Stmt::Return(_) | Stmt::Break | Stmt::Continue => true,
-        Stmt::Expr(expr_id) => {
-            match &body.exprs[*expr_id] {
-                // An if where both branches diverge
-                baml_compiler_hir::Expr::If {
-                    then_branch,
-                    else_branch: Some(else_branch),
-                    ..
-                } => {
-                    definitely_diverges(*then_branch, body)
-                        && definitely_diverges(*else_branch, body)
-                }
-                // A match where all arms diverge
-                baml_compiler_hir::Expr::Match { arms, .. } => {
-                    !arms.is_empty()
-                        && arms.iter().all(|arm_id| {
-                            let arm = &body.match_arms[*arm_id];
-                            definitely_diverges(arm.body, body)
-                        })
-                }
-                _ => false,
-            }
-        }
-        _ => false,
-    }
+    crate::divergence::expr_definitely_diverges(expr_id, body, &|_| false)
 }
 
 // ── Type manipulation helpers ───────────────────────────────────────────

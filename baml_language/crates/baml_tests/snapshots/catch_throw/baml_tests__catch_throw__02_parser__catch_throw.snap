@@ -20,10 +20,86 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        STRING_LITERAL "ok"
-          QUOTE """
-          WORD "ok"
-          QUOTE """
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "0"
+              INTEGER_LITERAL "0"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              STRING_LITERAL "string error"
+                QUOTE """
+                WORD "string"
+                WORD "error"
+                QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "ok"
+              QUOTE """
+              WORD "ok"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MayFailIntOrString"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "0"
+              INTEGER_LITERAL "0"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              STRING_LITERAL "string error"
+                QUOTE """
+                WORD "string"
+                WORD "error"
+                QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "1"
+              INTEGER_LITERAL "1"
+            FAT_ARROW "=>"
+            THROW_EXPR "throw 1"
+              KW_THROW "throw"
+              INTEGER_LITERAL "1"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "ok"
+              QUOTE """
+              WORD "ok"
+              QUOTE """
+          R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -42,11 +118,34 @@ SOURCE_FILE
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
-        STRING_LITERAL "also ok"
-          QUOTE """
-          WORD "also"
-          WORD "ok"
-          QUOTE """
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "0"
+              INTEGER_LITERAL "0"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              STRING_LITERAL "secondary error"
+                QUOTE """
+                WORD "secondary"
+                WORD "error"
+                QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "also ok"
+              QUOTE """
+              WORD "also"
+              WORD "ok"
+              QUOTE """
+          R_BRACE "}"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
@@ -153,7 +252,7 @@ SOURCE_FILE
         L_BRACE "{"
         CATCH_EXPR
           CALL_EXPR
-            WORD "MayFail"
+            WORD "MayFailIntOrString"
             CALL_ARGS "(x)"
               L_PAREN "("
               WORD "x"
@@ -176,6 +275,27 @@ SOURCE_FILE
                 QUOTE """
                 WORD "caught"
                 WORD "string"
+                QUOTE """
+            R_BRACE "}"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e2"
+              WORD "e2"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "int"
+                  WORD "int"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught int fallback"
+                QUOTE """
+                WORD "caught"
+                WORD "int"
+                WORD "fallback"
                 QUOTE """
             R_BRACE "}"
         R_BRACE "}"
@@ -243,7 +363,7 @@ SOURCE_FILE
         L_BRACE "{"
         CATCH_EXPR
           CALL_EXPR
-            WORD "MayFail"
+            WORD "MayFailIntOrString"
             CALL_ARGS "(x)"
               L_PAREN "("
               WORD "x"
@@ -437,7 +557,7 @@ SOURCE_FILE
         L_BRACE "{"
         CATCH_EXPR
           CALL_EXPR
-            WORD "MayFail"
+            WORD "MayFailIntOrString"
             CALL_ARGS "(x)"
               L_PAREN "("
               WORD "x"

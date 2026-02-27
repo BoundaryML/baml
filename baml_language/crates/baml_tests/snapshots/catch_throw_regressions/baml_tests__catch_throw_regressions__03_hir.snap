@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+function AlwaysThrowsStatus(n: int) -> Status {
+    match (n) {
+        0 => throw "http_error",
+        _ => throw 404,
+    }
+}
+
+function ThrowsAllStatusVariants(n: int) -> Status {
+    match (n) {
+        1 => throw Status.HttpError,
+        2 => throw Status.IndexError,
+        3 => throw Status.AuthError,
+        _ => throw Status.SomeOtherError,
+    }
+}
+
+function CatchAlwaysThrows(n: int) -> string {
+    WrapperAlwaysThrows(n) catch (e) {
+        _: string => "http!",
+    } catch (e2) {
+        _: int => "index!",
+    }
+}
+
+function RecA(n: int) -> string {
+    match (n) {
+        0 => throw "boom",
+        _ => RecB(n),
+    }
+}
+
+function WrapperAlwaysThrows(n: int) -> Status {
+    AlwaysThrowsStatus(n)
+}
+
+function UnreachableTailStillChecked() -> string {
+    {
+        throw "error";
+        let x = 123;
+        x.missing
+    }
+}
+
+function RecB(n: int) -> string {
+    RecA(n)
+}
+
+function CatchAllStatusVariants(n: int) -> string {
+    ThrowsAllStatusVariants(n) catch (e) {
+        Status.HttpError => "http!",
+    } catch (e) {
+        Status.IndexError => "index!",
+    } catch (e) {
+        Status.AuthError => "auth!",
+    } catch (e) {
+        Status.SomeOtherError => "other!",
+    }
+}
+
+function CatchRecursiveThrow(n: int) -> string {
+    RecB(n) catch (e) {
+        _: string => "handled",
+    }
+}
+
+enum Status {
+  HttpError
+  IndexError
+  AuthError
+  SomeOtherError
+}
