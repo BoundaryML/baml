@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Test @stream.done, @stream.not_null, and @@stream.done desugaring.
+
+class Education {
+    school: string
+    year: int
+}
+
+class WithDone {
+    // @stream.done on a literal: D="resume" with in_progress_never, S=never (literal default)
+    type: "resume" @stream.done
+
+    // @stream.done on a primitive: D=string with in_progress_never, S=null (primitive default)
+    name: string @stream.done
+
+    // @stream.done + @stream.not_null: D=string with in_progress_never, S=never
+    id: string @stream.done @stream.not_null
+}
+
+class AtomicCoordinate {
+    @@stream.done
+    // Each field gets: @stream.done (D=T with in_progress_never) + @stream.starts_as(never)
+    x: float
+    y: float
+}
+
+class AtomicWithOverride {
+    @@stream.done
+    // @@stream.done distributes @stream.starts_as(never) at lower priority
+    // This field's explicit @stream.starts_as(null) wins
+    x: float
+    y: float @stream.starts_as(null)
+}

@@ -1,9 +1,13 @@
-//! Unit tests for PPIR stream expansion.
+//! Unit tests for PPIR stream expansion and normalization.
 
 use smol_str::SmolStr;
 
 use crate::{
     expand::{default_starts_as, desugar_stream_attrs, expand_stream_class, make_union},
+    normalize::{
+        StartsAs, StartsAsLiteral, default_starts_as_semantic, infer_typeof_s, normalize_field,
+        parse_starts_as_value,
+    },
     ty::{ClassifiedField, Ty, PpirTypeRef},
 };
 
@@ -566,4 +570,443 @@ fn expand_class_carries_through_attributes() {
     assert_eq!(result.fields[0].alias, Some("my_alias".to_string()));
     assert_eq!(result.fields[0].description, Some("my desc".to_string()));
     assert!(result.fields[0].skip);
+}
+
+// ─────────────────────────────── parse_starts_as_value tests ─────────────────
+
+#[test]
+fn parse_starts_as_never() {
+    assert_eq!(parse_starts_as_value("never"), StartsAs::Never);
+}
+
+#[test]
+fn parse_starts_as_null() {
+    assert_eq!(parse_starts_as_value("null"), StartsAs::Null);
+}
+
+#[test]
+fn parse_starts_as_true() {
+    assert_eq!(
+        parse_starts_as_value("true"),
+        StartsAs::Literal(StartsAsLiteral::Bool(true))
+    );
+}
+
+#[test]
+fn parse_starts_as_false() {
+    assert_eq!(
+        parse_starts_as_value("false"),
+        StartsAs::Literal(StartsAsLiteral::Bool(false))
+    );
+}
+
+#[test]
+fn parse_starts_as_int() {
+    assert_eq!(
+        parse_starts_as_value("42"),
+        StartsAs::Literal(StartsAsLiteral::Int(42))
+    );
+}
+
+#[test]
+fn parse_starts_as_negative_int() {
+    assert_eq!(
+        parse_starts_as_value("-1"),
+        StartsAs::Literal(StartsAsLiteral::Int(-1))
+    );
+}
+
+#[test]
+fn parse_starts_as_float() {
+    assert_eq!(
+        parse_starts_as_value("3.14"),
+        StartsAs::Literal(StartsAsLiteral::Float("3.14".to_string()))
+    );
+}
+
+#[test]
+fn parse_starts_as_empty_list() {
+    assert_eq!(parse_starts_as_value("[]"), StartsAs::EmptyList);
+}
+
+#[test]
+fn parse_starts_as_empty_map() {
+    assert_eq!(parse_starts_as_value("{}"), StartsAs::EmptyMap);
+}
+
+#[test]
+fn parse_starts_as_string() {
+    assert_eq!(
+        parse_starts_as_value("Loading..."),
+        StartsAs::Literal(StartsAsLiteral::String("Loading...".to_string()))
+    );
+}
+
+// ─────────────────────────────── default_starts_as_semantic tests ─────────────
+
+#[test]
+fn default_starts_as_semantic_primitive() {
+    assert_eq!(default_starts_as_semantic(&PpirTypeRef::Int), StartsAs::Null);
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::String),
+        StartsAs::Null
+    );
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::Bool),
+        StartsAs::Null
+    );
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::Float),
+        StartsAs::Null
+    );
+}
+
+#[test]
+fn default_starts_as_semantic_literal() {
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::StringLiteral("foo".to_string())),
+        StartsAs::Never
+    );
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::IntLiteral(42)),
+        StartsAs::Never
+    );
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::BoolLiteral(true)),
+        StartsAs::Never
+    );
+}
+
+#[test]
+fn default_starts_as_semantic_list() {
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::list(PpirTypeRef::Int)),
+        StartsAs::EmptyList
+    );
+}
+
+#[test]
+fn default_starts_as_semantic_map() {
+    let d = PpirTypeRef::Map {
+        key: Box::new(PpirTypeRef::String),
+        value: Box::new(PpirTypeRef::Int),
+    };
+    assert_eq!(default_starts_as_semantic(&d), StartsAs::EmptyMap);
+}
+
+#[test]
+fn default_starts_as_semantic_named() {
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::named("stream_Resume")),
+        StartsAs::Null
+    );
+}
+
+#[test]
+fn default_starts_as_semantic_never() {
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::Never),
+        StartsAs::Never
+    );
+}
+
+#[test]
+fn default_starts_as_semantic_null() {
+    assert_eq!(
+        default_starts_as_semantic(&PpirTypeRef::Null),
+        StartsAs::Null
+    );
+}
+
+// ─────────────────────────────── infer_typeof_s tests ─────────────────────────
+
+#[test]
+fn infer_typeof_s_never() {
+    assert_eq!(infer_typeof_s(&StartsAs::Never), Some(PpirTypeRef::Never));
+}
+
+#[test]
+fn infer_typeof_s_null() {
+    assert_eq!(infer_typeof_s(&StartsAs::Null), Some(PpirTypeRef::Null));
+}
+
+#[test]
+fn infer_typeof_s_string_literal() {
+    assert_eq!(
+        infer_typeof_s(&StartsAs::Literal(StartsAsLiteral::String(
+            "Loading...".to_string()
+        ))),
+        Some(PpirTypeRef::StringLiteral("Loading...".to_string()))
+    );
+}
+
+#[test]
+fn infer_typeof_s_int_literal() {
+    assert_eq!(
+        infer_typeof_s(&StartsAs::Literal(StartsAsLiteral::Int(0))),
+        Some(PpirTypeRef::IntLiteral(0))
+    );
+}
+
+#[test]
+fn infer_typeof_s_bool_literal() {
+    assert_eq!(
+        infer_typeof_s(&StartsAs::Literal(StartsAsLiteral::Bool(false))),
+        Some(PpirTypeRef::BoolLiteral(false))
+    );
+}
+
+#[test]
+fn infer_typeof_s_float_literal() {
+    assert_eq!(
+        infer_typeof_s(&StartsAs::Literal(StartsAsLiteral::Float(
+            "3.14".to_string()
+        ))),
+        Some(PpirTypeRef::Float)
+    );
+}
+
+#[test]
+fn infer_typeof_s_empty_list() {
+    assert_eq!(infer_typeof_s(&StartsAs::EmptyList), None);
+}
+
+#[test]
+fn infer_typeof_s_empty_map() {
+    assert_eq!(infer_typeof_s(&StartsAs::EmptyMap), None);
+}
+
+// ─────────────────────────────── normalize_field tests ────────────────────────
+
+#[test]
+fn normalize_primitive_field_defaults() {
+    // name string → D=string, S=null, typeof_s=null
+    let f = make_field(None, None, false, false);
+    let n = normalize_field(&f);
+    assert_eq!(n.stream_type, PpirTypeRef::String);
+    assert_eq!(n.starts_as, StartsAs::Null);
+    assert_eq!(n.typeof_s, Some(PpirTypeRef::Null));
+    assert!(!n.in_progress_never);
+}
+
+#[test]
+fn normalize_class_field_defaults() {
+    // edu Education → D=stream_Education, S=null
+    let f = make_field_with_ty(
+        Ty::Class(SmolStr::new("Education")),
+        PpirTypeRef::named("Education"),
+        None,
+        None,
+        false,
+        false,
+    );
+    let n = normalize_field(&f);
+    assert_eq!(
+        n.stream_type,
+        PpirTypeRef::named(SmolStr::new("stream_Education"))
+    );
+    assert_eq!(n.starts_as, StartsAs::Null);
+    assert_eq!(n.typeof_s, Some(PpirTypeRef::Null));
+}
+
+#[test]
+fn normalize_list_field_defaults() {
+    // scores int[] → D=int[], S=[]
+    let f = make_field_with_ty(
+        Ty::List(Box::new(Ty::Primitive(PpirTypeRef::Int))),
+        PpirTypeRef::list(PpirTypeRef::Int),
+        None,
+        None,
+        false,
+        false,
+    );
+    let n = normalize_field(&f);
+    assert_eq!(n.stream_type, PpirTypeRef::list(PpirTypeRef::Int));
+    assert_eq!(n.starts_as, StartsAs::EmptyList);
+    assert_eq!(n.typeof_s, None); // deferred
+}
+
+#[test]
+fn normalize_map_field_defaults() {
+    // m map<string, Education> → D=map<string, stream_Education>, S={}
+    let f = make_field_with_ty(
+        Ty::Map {
+            key: PpirTypeRef::String,
+            value: Box::new(Ty::Class(SmolStr::new("Education"))),
+        },
+        PpirTypeRef::Map {
+            key: Box::new(PpirTypeRef::String),
+            value: Box::new(PpirTypeRef::named("Education")),
+        },
+        None,
+        None,
+        false,
+        false,
+    );
+    let n = normalize_field(&f);
+    assert_eq!(
+        n.stream_type,
+        PpirTypeRef::Map {
+            key: Box::new(PpirTypeRef::String),
+            value: Box::new(PpirTypeRef::named(SmolStr::new("stream_Education"))),
+        }
+    );
+    assert_eq!(n.starts_as, StartsAs::EmptyMap);
+    assert_eq!(n.typeof_s, None); // deferred
+}
+
+#[test]
+fn normalize_literal_field_defaults() {
+    // type "resume" → D="resume", S=never
+    let f = make_field_with_ty(
+        Ty::Literal(PpirTypeRef::StringLiteral("resume".to_string())),
+        PpirTypeRef::StringLiteral("resume".to_string()),
+        None,
+        None,
+        false,
+        false,
+    );
+    let n = normalize_field(&f);
+    assert_eq!(
+        n.stream_type,
+        PpirTypeRef::StringLiteral("resume".to_string())
+    );
+    assert_eq!(n.starts_as, StartsAs::Never);
+    assert_eq!(n.typeof_s, Some(PpirTypeRef::Never));
+}
+
+#[test]
+fn normalize_stream_done() {
+    // name string @stream.done → D=string (original), in_progress_never=true, S=null
+    let f = make_field(None, None, true, false);
+    let n = normalize_field(&f);
+    assert_eq!(n.stream_type, PpirTypeRef::String);
+    assert!(n.in_progress_never);
+    assert_eq!(n.starts_as, StartsAs::Null);
+}
+
+#[test]
+fn normalize_stream_not_null() {
+    // gpa float @stream.not_null → D=float, S=never
+    let f = make_field_with_ty(
+        Ty::Primitive(PpirTypeRef::Float),
+        PpirTypeRef::Float,
+        None,
+        None,
+        false,
+        true,
+    );
+    let n = normalize_field(&f);
+    assert_eq!(n.stream_type, PpirTypeRef::Float);
+    assert_eq!(n.starts_as, StartsAs::Never);
+    assert_eq!(n.typeof_s, Some(PpirTypeRef::Never));
+}
+
+#[test]
+fn normalize_stream_done_and_not_null() {
+    // id string @stream.done @stream.not_null → D=string, in_progress_never=true, S=never
+    let f = make_field(None, None, true, true);
+    let n = normalize_field(&f);
+    assert_eq!(n.stream_type, PpirTypeRef::String);
+    assert!(n.in_progress_never);
+    assert_eq!(n.starts_as, StartsAs::Never);
+}
+
+#[test]
+fn normalize_explicit_stream_type() {
+    // certifications Education[] @stream.type(Education[])
+    // → D=Education[] (explicit, no stream_ prefix), S=[] (list default)
+    let f = make_field_with_ty(
+        Ty::List(Box::new(Ty::Class(SmolStr::new("Education")))),
+        PpirTypeRef::list(PpirTypeRef::named("Education")),
+        Some(PpirTypeRef::list(PpirTypeRef::named("Education"))),
+        None,
+        false,
+        false,
+    );
+    let n = normalize_field(&f);
+    assert_eq!(
+        n.stream_type,
+        PpirTypeRef::list(PpirTypeRef::named("Education"))
+    );
+    assert_eq!(n.starts_as, StartsAs::EmptyList);
+}
+
+#[test]
+fn normalize_explicit_starts_as_string() {
+    // name string @stream.starts_as("Loading...")
+    // → D=string (default), S="Loading..."
+    let f = make_field(None, Some("Loading...".to_string()), false, false);
+    let n = normalize_field(&f);
+    assert_eq!(n.stream_type, PpirTypeRef::String);
+    assert_eq!(
+        n.starts_as,
+        StartsAs::Literal(StartsAsLiteral::String("Loading...".to_string()))
+    );
+    assert_eq!(
+        n.typeof_s,
+        Some(PpirTypeRef::StringLiteral("Loading...".to_string()))
+    );
+}
+
+#[test]
+fn normalize_explicit_starts_as_never() {
+    // title string @stream.type(string) @stream.starts_as(never)
+    // → D=string, S=never
+    let f = make_field(Some(PpirTypeRef::String), Some("never".to_string()), false, false);
+    let n = normalize_field(&f);
+    assert_eq!(n.stream_type, PpirTypeRef::String);
+    assert_eq!(n.starts_as, StartsAs::Never);
+    assert_eq!(n.typeof_s, Some(PpirTypeRef::Never));
+}
+
+#[test]
+fn normalize_optional_field_defaults() {
+    // maybe string? → D=string | null, S=null
+    let f = make_field_with_ty(
+        Ty::Optional(Box::new(Ty::Primitive(PpirTypeRef::String))),
+        PpirTypeRef::optional(PpirTypeRef::String),
+        None,
+        None,
+        false,
+        false,
+    );
+    let n = normalize_field(&f);
+    // Optional stream_expand: inner.stream_expand() | null
+    assert_eq!(
+        n.stream_type,
+        PpirTypeRef::union(vec![PpirTypeRef::String, PpirTypeRef::Null])
+    );
+    assert_eq!(n.starts_as, StartsAs::Null);
+}
+
+#[test]
+fn normalize_optional_list_field_defaults() {
+    // maybe_list int[]? → D=int[] | null, S=null (NOT [])
+    let f = make_field_with_ty(
+        Ty::Optional(Box::new(Ty::List(Box::new(Ty::Primitive(PpirTypeRef::Int))))),
+        PpirTypeRef::optional(PpirTypeRef::list(PpirTypeRef::Int)),
+        None,
+        None,
+        false,
+        false,
+    );
+    let n = normalize_field(&f);
+    // Optional: D = int[] | null (union, not a list)
+    assert_eq!(
+        n.stream_type,
+        PpirTypeRef::union(vec![PpirTypeRef::list(PpirTypeRef::Int), PpirTypeRef::Null])
+    );
+    // Top-level is a union, not a list → S=null, NOT []
+    assert_eq!(n.starts_as, StartsAs::Null);
+}
+
+#[test]
+fn normalize_stream_type_never() {
+    // internal string @stream.type(never) → D=never, S=never
+    let f = make_field(Some(PpirTypeRef::Never), None, false, false);
+    let n = normalize_field(&f);
+    assert_eq!(n.stream_type, PpirTypeRef::Never);
+    assert_eq!(n.starts_as, StartsAs::Never);
+    assert_eq!(n.typeof_s, Some(PpirTypeRef::Never));
 }

@@ -6,10 +6,6 @@ class stream_A {
   field: null | string
 }
 
-class stream_A {
-  field: null | string
-}
-
 class A {
   field: string
 }

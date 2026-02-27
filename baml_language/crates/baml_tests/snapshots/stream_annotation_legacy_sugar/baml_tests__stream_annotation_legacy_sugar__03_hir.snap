@@ -1,0 +1,45 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class stream_Education {
+  school: null | string
+  year: null | int
+}
+
+class stream_AtomicCoordinate {
+  x: null | float
+  y: null | float
+}
+
+class stream_WithDone {
+  type: "resume"
+  name: null | string
+  id: string
+}
+
+class AtomicWithOverride {
+  x: float
+  y: float
+}
+
+class Education {
+  school: string
+  year: int
+}
+
+class stream_AtomicWithOverride {
+  x: null | float
+  y: null | float
+}
+
+class WithDone {
+  type: "resume"
+  name: string
+  id: string
+}
+
+class AtomicCoordinate {
+  x: float
+  y: float
+}

@@ -173,7 +173,8 @@ pub fn file_lowering(db: &dyn Db, file: SourceFile) -> LoweringResult<'_> {
 }
 
 /// Extract `ItemTree` from a file's syntax tree, merging in PPIR-generated
-/// `stream_*` classes and type aliases.
+/// `stream_*` classes and type aliases, and enriching user class fields with
+/// normalized streaming annotations.
 ///
 /// Tracked: calls PPIR expansion, converts results to HIR types, and merges
 /// them into the lowered `ItemTree`. Salsa memoizes the result; `ItemTree`
@@ -184,22 +185,34 @@ pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let stream = baml_compiler_ppir::ppir_stream_items(db, file);
     let stream_classes = stream.classes(db);
     let stream_aliases = stream.type_aliases(db);
+    let normalized = stream.normalized(db);
 
-    if stream_classes.is_empty() && stream_aliases.is_empty() {
+    let has_stream_items = !stream_classes.is_empty() || !stream_aliases.is_empty();
+    let has_normalized = !normalized.is_empty();
+
+    if !has_stream_items && !has_normalized {
         return raw;
     }
 
     let mut tree = (*raw).clone();
+
+    // Merge PPIR-generated stream_* classes and type aliases
     for sc in stream_classes {
         tree.alloc_class(convert_ppir_class(sc));
     }
     for sta in stream_aliases {
         tree.alloc_type_alias(convert_ppir_type_alias(sta));
     }
+
+    // Enrich user class fields with normalized streaming annotations
+    if has_normalized {
+        tree.enrich_with_normalized_stream(normalized, convert_ppir_normalized);
+    }
+
     Arc::new(tree)
 }
 
-use ppir_convert::{convert_ppir_class, convert_ppir_type_alias};
+use ppir_convert::{convert_ppir_class, convert_ppir_normalized, convert_ppir_type_alias};
 
 /// Strip the `stream_` prefix for CST lookup.
 ///
@@ -1917,7 +1930,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 alias: field_alias,
                 description: field_description,
                 skip: field_skip,
-                starts_as: None,
+                stream: None,
             });
         }
     }
@@ -2523,6 +2536,11 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let class = &item_tree[local_id];
+                // Skip generated stream_* classes — duplicates are artifacts of
+                // expansion, not user errors.
+                if class.name.starts_with("stream_") {
+                    continue;
+                }
                 let name_key = item_name_key(db, file, &class.name);
                 let span =
                     get_item_name_span(db, file, "class", class.name.as_str(), local_id.index())
@@ -2547,6 +2565,11 @@ fn validate_duplicate_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<N
                 let item_tree = file_item_tree(db, file);
                 let local_id = loc.id(db);
                 let alias = &item_tree[local_id];
+                // Skip generated stream_* type aliases — duplicates are artifacts
+                // of expansion, not user errors.
+                if alias.name.starts_with("stream_") {
+                    continue;
+                }
                 let name_key = item_name_key(db, file, &alias.name);
                 let span = get_item_name_span(
                     db,

@@ -64,6 +64,13 @@ pub(crate) fn extract_stream_attrs_from_cst(
             let mut attrs = StreamAttrs {
                 stream_done: class_stream_done,
                 stream_not_null: class_stream_not_null,
+                // @@stream.done distributes @stream.starts_as(never) at low priority.
+                // Field-level @stream.starts_as overwrites this.
+                stream_starts_as: if class_stream_done {
+                    Some("never".to_string())
+                } else {
+                    None
+                },
                 ..Default::default()
             };
 

@@ -20,9 +20,15 @@ use smol_str::SmolStr;
 
 mod cst_extract;
 mod expand;
+pub mod normalize;
 mod ty;
 
 pub use expand::{Class, Field, TypeAlias, default_starts_as, desugar_stream_attrs};
+pub use normalize::{
+    NormalizedStreamClass, NormalizedStreamField, StartsAs, StartsAsLiteral,
+    default_starts_as_semantic, infer_typeof_s, normalize_class_fields, normalize_field,
+    parse_starts_as_value,
+};
 pub use ty::{ClassifiedField, PpirTypeRef, Ty};
 
 //
@@ -55,15 +61,22 @@ pub struct PpirNames<'db> {
     pub type_alias_names: FxHashSet<Name>,
 }
 
-/// Per-file result of PPIR stream expansion.
+/// Per-file result of PPIR stream expansion and normalization.
 #[salsa::tracked]
 pub struct PpirStreamItems<'db> {
+    /// Generated `stream_*` classes.
     #[tracked]
     #[returns(ref)]
     pub classes: Vec<Class>,
+    /// Generated `stream_*` type aliases.
     #[tracked]
     #[returns(ref)]
     pub type_aliases: Vec<TypeAlias>,
+    /// Normalized per-field streaming annotations for each user class.
+    /// Keyed by original class name (e.g., "Foo", not "stream_Foo").
+    #[tracked]
+    #[returns(ref)]
+    pub normalized: Vec<NormalizedStreamClass>,
 }
 
 //
@@ -144,7 +157,7 @@ pub fn ppir_stream_items(db: &dyn Db, file: SourceFile) -> PpirStreamItems<'_> {
         .to_str()
         .is_some_and(|p| p.starts_with("<builtin>/"))
     {
-        return PpirStreamItems::new(db, Vec::new(), Vec::new());
+        return PpirStreamItems::new(db, Vec::new(), Vec::new(), Vec::new());
     }
 
     let cst = syntax_tree(db, file);
@@ -156,6 +169,9 @@ pub fn ppir_stream_items(db: &dyn Db, file: SourceFile) -> PpirStreamItems<'_> {
 
     let mut stream_classes = Vec::new();
     let mut stream_aliases = Vec::new();
+    let mut normalized_classes = Vec::new();
+    let mut seen_class_names = FxHashSet::default();
+    let mut seen_alias_names = FxHashSet::default();
 
     for child in cst.children() {
         match child.kind() {
@@ -169,6 +185,10 @@ pub fn ppir_stream_items(db: &dyn Db, file: SourceFile) -> PpirStreamItems<'_> {
                 };
                 let class_name: Name = SmolStr::new(name_tok.text());
                 if class_name.starts_with("stream_") {
+                    continue;
+                }
+                // Skip duplicate class names within the same file
+                if !seen_class_names.insert(class_name.clone()) {
                     continue;
                 }
 
@@ -186,6 +206,13 @@ pub fn ppir_stream_items(db: &dyn Db, file: SourceFile) -> PpirStreamItems<'_> {
                 let stream_class =
                     expand::expand_stream_class(&class_name, is_dynamic, &ppir_fields);
                 stream_classes.push(stream_class);
+
+                // Normalize per-field streaming annotations for the user class
+                let normalized_fields = normalize::normalize_class_fields(&ppir_fields);
+                normalized_classes.push(NormalizedStreamClass {
+                    name: class_name,
+                    fields: normalized_fields,
+                });
             }
 
             SyntaxKind::TYPE_ALIAS_DEF => {
@@ -198,6 +225,10 @@ pub fn ppir_stream_items(db: &dyn Db, file: SourceFile) -> PpirStreamItems<'_> {
                 };
                 let alias_name: Name = SmolStr::new(name_tok.text());
                 if alias_name.starts_with("stream_") {
+                    continue;
+                }
+                // Skip duplicate alias names within the same file
+                if !seen_alias_names.insert(alias_name.clone()) {
                     continue;
                 }
 
@@ -217,7 +248,7 @@ pub fn ppir_stream_items(db: &dyn Db, file: SourceFile) -> PpirStreamItems<'_> {
         }
     }
 
-    PpirStreamItems::new(db, stream_classes, stream_aliases)
+    PpirStreamItems::new(db, stream_classes, stream_aliases, normalized_classes)
 }
 
 #[cfg(test)]

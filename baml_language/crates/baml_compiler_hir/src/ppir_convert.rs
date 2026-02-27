@@ -4,7 +4,7 @@
 //! `ppir::TypeAlias` into their HIR equivalents. Called from
 //! `file_item_tree` when merging PPIR-generated `stream_*` items.
 
-use crate::{Attribute, Class, Field, Path, TypeAlias, TypeRef};
+use crate::{Attribute, Class, Field, NormalizedStreamAnnotations, Path, TypeAlias, TypeRef};
 
 /// Convert a `ppir::PpirTypeRef` to an `hir::TypeRef`.
 pub(crate) fn convert_ppir_type_ref(ppir_ty: &baml_compiler_ppir::PpirTypeRef) -> TypeRef {
@@ -53,7 +53,9 @@ pub(crate) fn convert_ppir_class(ppir_class: &baml_compiler_ppir::Class) -> Clas
             } else {
                 Attribute::Unset
             },
-            starts_as: pf.starts_as.clone(),
+            // Stream annotations are not set on generated stream_* class fields;
+            // they live on the original user class fields.
+            stream: None,
         })
         .collect();
 
@@ -75,5 +77,17 @@ pub(crate) fn convert_ppir_type_alias(ppir_alias: &baml_compiler_ppir::TypeAlias
     TypeAlias {
         name: ppir_alias.name.clone(),
         type_ref: convert_ppir_type_ref(&ppir_alias.type_ref),
+    }
+}
+
+/// Convert a `ppir::NormalizedStreamField` to an `hir::NormalizedStreamAnnotations`.
+pub(crate) fn convert_ppir_normalized(
+    ppir_field: &baml_compiler_ppir::NormalizedStreamField,
+) -> NormalizedStreamAnnotations {
+    NormalizedStreamAnnotations {
+        stream_type: convert_ppir_type_ref(&ppir_field.stream_type),
+        in_progress_never: ppir_field.in_progress_never,
+        starts_as: ppir_field.starts_as.clone(),
+        typeof_s: ppir_field.typeof_s.as_ref().map(convert_ppir_type_ref),
     }
 }

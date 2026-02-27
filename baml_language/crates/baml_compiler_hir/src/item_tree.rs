@@ -203,6 +203,36 @@ impl ItemTree {
     ) -> impl Iterator<Item = (&LocalItemId<TypeAliasMarker>, &TypeAlias)> {
         self.type_aliases.iter()
     }
+
+    /// Enrich user class fields with normalized streaming annotations from PPIR.
+    ///
+    /// For each `NormalizedStreamClass`, find the matching user class and set
+    /// `field.stream` on each field that has a matching name.
+    pub fn enrich_with_normalized_stream<F>(
+        &mut self,
+        normalized: &[baml_compiler_ppir::NormalizedStreamClass],
+        convert: F,
+    ) where
+        F: Fn(&baml_compiler_ppir::NormalizedStreamField) -> NormalizedStreamAnnotations,
+    {
+        for norm_class in normalized {
+            // Find the user class by name
+            for class in self.classes.values_mut() {
+                if class.name == norm_class.name {
+                    for (field, norm_field) in
+                        class.fields.iter_mut().zip(norm_class.fields.iter())
+                    {
+                        debug_assert_eq!(
+                            field.name, norm_field.name,
+                            "Field name mismatch during stream normalization"
+                        );
+                        field.stream = Some(convert(norm_field));
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /// Metadata for compiler-generated functions.
@@ -267,8 +297,25 @@ pub struct Field {
     pub description: Attribute<String>,
     /// @skip - exclude field from serialization
     pub skip: Attribute<()>,
-    /// Raw @stream.starts_as(...) value expression from PPIR (compiler-generated fields only).
-    pub starts_as: Option<String>,
+    /// Normalized streaming annotations. Set after PPIR normalization pass.
+    /// None for fields not yet normalized (e.g., during initial lowering).
+    pub stream: Option<NormalizedStreamAnnotations>,
+}
+
+/// Fully normalized streaming annotations for a field.
+///
+/// Computed by the PPIR normalization pass and stored on each field.
+/// Phase 3+ reads these — they never need to compute defaults or run stream_expand.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NormalizedStreamAnnotations {
+    /// The during-streaming type D (always explicit after normalization).
+    pub stream_type: TypeRef,
+    /// Whether D carries `@sap.in_progress(never)` (from `@stream.done`).
+    pub in_progress_never: bool,
+    /// The before-streaming value S (always explicit after normalization).
+    pub starts_as: baml_compiler_ppir::StartsAs,
+    /// The inferred type of S. None for EmptyList/EmptyMap (deferred to Phase 3).
+    pub typeof_s: Option<TypeRef>,
 }
 
 /// An enum definition.
