@@ -1,9 +1,10 @@
 use lsp_types::{
     CodeLens, CodeLensOptions, CompletionOptions, DiagnosticOptions, DiagnosticServerCapabilities,
-    HoverProviderCapability, SaveOptions, SemanticTokensFullOptions, SemanticTokensLegend,
-    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
+    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, SaveOptions,
+    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
+    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
+    WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 
 use super::{BexMulitProject, LspError, WithDiagnostics, commands, wasm_helpers};
@@ -43,7 +44,35 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
                 legend: SemanticTokensLegend {
                     token_types: baml_lsp_actions::TOKEN_TYPES
                         .iter()
-                        .map(|t| lsp_types::SemanticTokenType::new(t.as_str()))
+                        .map(|t| {
+                            lsp_types::SemanticTokenType::new(match t {
+                                baml_lsp_actions::SemanticTokenType::Namespace => "namespace",
+                                baml_lsp_actions::SemanticTokenType::Type => "type",
+                                baml_lsp_actions::SemanticTokenType::Class => "class",
+                                baml_lsp_actions::SemanticTokenType::Enum => "enum",
+                                baml_lsp_actions::SemanticTokenType::Interface => "interface",
+                                baml_lsp_actions::SemanticTokenType::Struct => "struct",
+                                baml_lsp_actions::SemanticTokenType::TypeParameter => {
+                                    "typeParameter"
+                                }
+                                baml_lsp_actions::SemanticTokenType::Parameter => "parameter",
+                                baml_lsp_actions::SemanticTokenType::Variable => "variable",
+                                baml_lsp_actions::SemanticTokenType::Property => "property",
+                                baml_lsp_actions::SemanticTokenType::EnumMember => "enumMember",
+                                baml_lsp_actions::SemanticTokenType::Event => "event",
+                                baml_lsp_actions::SemanticTokenType::Function => "function",
+                                baml_lsp_actions::SemanticTokenType::Method => "method",
+                                baml_lsp_actions::SemanticTokenType::Macro => "macro",
+                                baml_lsp_actions::SemanticTokenType::Keyword => "keyword",
+                                baml_lsp_actions::SemanticTokenType::Modifier => "modifier",
+                                baml_lsp_actions::SemanticTokenType::Comment => "comment",
+                                baml_lsp_actions::SemanticTokenType::String => "string",
+                                baml_lsp_actions::SemanticTokenType::Number => "number",
+                                baml_lsp_actions::SemanticTokenType::Regexp => "regexp",
+                                baml_lsp_actions::SemanticTokenType::Operator => "operator",
+                                baml_lsp_actions::SemanticTokenType::Decorator => "decorator",
+                            })
+                        })
                         .collect(),
                     token_modifiers: vec![],
                 },
