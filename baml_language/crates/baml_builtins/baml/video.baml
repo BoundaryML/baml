@@ -1,0 +1,16 @@
+// BAML Builtin: Video constructors
+// Namespace: baml.video
+//
+// Thin wrappers around baml.Media.from_* with kind="video".
+
+function from_url(url: string, mime_type: string?) -> video {
+    baml.Media.from_url("video", url, mime_type)
+}
+
+function from_base64(base64: string, mime_type: string) -> video {
+    baml.Media.from_base64("video", base64, mime_type)
+}
+
+function from_file(file: string, mime_type: string?) -> video {
+    baml.Media.from_file("video", file, mime_type)
+}

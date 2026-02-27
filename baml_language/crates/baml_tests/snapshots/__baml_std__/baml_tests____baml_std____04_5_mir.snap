@@ -2,6 +2,168 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
+fn from_url(url: string, mime_type: string?) -> audio {
+    // Locals:
+    let _0: audio // return
+    let _1: string // url // param
+    let _2: string? // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string?) -> image | audio | video | pdf
+    let _4: "audio"
+    let _5: string
+    let _6: string?
+
+    bb0: {
+        _3 = const fn baml.Media.from_url;
+        _4 = const "audio";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_file(file: string, mime_type: string?) -> audio {
+    // Locals:
+    let _0: audio // return
+    let _1: string // file // param
+    let _2: string? // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string?) -> image | audio | video | pdf
+    let _4: "audio"
+    let _5: string
+    let _6: string?
+
+    bb0: {
+        _3 = const fn baml.Media.from_file;
+        _4 = const "audio";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_base64(base64: string, mime_type: string) -> audio {
+    // Locals:
+    let _0: audio // return
+    let _1: string // base64 // param
+    let _2: string // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string) -> image | audio | video | pdf
+    let _4: "audio"
+    let _5: string
+    let _6: string
+
+    bb0: {
+        _3 = const fn baml.Media.from_base64;
+        _4 = const "audio";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_url(url: string, mime_type: string?) -> image {
+    // Locals:
+    let _0: image // return
+    let _1: string // url // param
+    let _2: string? // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string?) -> image | audio | video | pdf
+    let _4: "image"
+    let _5: string
+    let _6: string?
+
+    bb0: {
+        _3 = const fn baml.Media.from_url;
+        _4 = const "image";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_file(file: string, mime_type: string?) -> image {
+    // Locals:
+    let _0: image // return
+    let _1: string // file // param
+    let _2: string? // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string?) -> image | audio | video | pdf
+    let _4: "image"
+    let _5: string
+    let _6: string?
+
+    bb0: {
+        _3 = const fn baml.Media.from_file;
+        _4 = const "image";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_base64(base64: string, mime_type: string) -> image {
+    // Locals:
+    let _0: image // return
+    let _1: string // base64 // param
+    let _2: string // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string) -> image | audio | video | pdf
+    let _4: "image"
+    let _5: string
+    let _6: string
+
+    bb0: {
+        _3 = const fn baml.Media.from_base64;
+        _4 = const "image";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
 fn build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     // Locals:
     let _0: baml.llm.OrchestrationStep[] // return
@@ -1578,15 +1740,15 @@ fn call_llm_function(function_name: string, args: map<string, unknown>) -> unkno
     }
 }
 
-fn PlannerState.rr_local_offset(self: PlannerState, client_name: string) -> int {
+fn PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
     // Locals:
     let _0: int // return
-    let _1: PlannerState // self // param
+    let _1: baml.llm.PlannerState // self // param
     let _2: string // client_name // param
     let _3: 0 // offset
     let _4: void
     let _5: string[] // _iter
-    let _6: PlannerState
+    let _6: baml.llm.PlannerState
     let _7: int // _len
     let _8: string[]
     let _9: (string[]) -> int
@@ -1680,19 +1842,19 @@ fn PlannerState.rr_local_offset(self: PlannerState, client_name: string) -> int 
     }
 }
 
-fn PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub_client_count: int) -> int {
+fn PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int {
     // Locals:
     let _0: int // return
-    let _1: PlannerState // self // param
+    let _1: baml.llm.PlannerState // self // param
     let _2: string // client_name // param
     let _3: int // sub_client_count // param
     let _4: int // local_offset
-    let _5: PlannerState
+    let _5: baml.llm.PlannerState
     let _6: string
-    let _7: (PlannerState, string) -> int
+    let _7: (baml.llm.PlannerState, string) -> int
     let _8: null
     let _9: string[]
-    let _10: PlannerState
+    let _10: baml.llm.PlannerState
     let _11: string
     let _12: (string[], string) -> null
     let _13: int // base
@@ -1707,7 +1869,7 @@ fn PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub_clien
     bb0: {
         _5 = copy _1;
         _6 = copy _2;
-        _7 = const fn PlannerState.rr_local_offset;
+        _7 = const fn baml.llm.PlannerState.rr_local_offset;
         _4 = call copy _7(copy _5, copy _6) -> [bb2];
     }
 
@@ -1739,6 +1901,168 @@ fn PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub_clien
         _17 = copy _18 + copy _19;
         _20 = copy _3;
         _0 = copy _17 % copy _20;
+        goto -> bb1;
+    }
+}
+
+fn from_url(url: string, mime_type: string?) -> pdf {
+    // Locals:
+    let _0: pdf // return
+    let _1: string // url // param
+    let _2: string? // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string?) -> image | audio | video | pdf
+    let _4: "pdf"
+    let _5: string
+    let _6: string?
+
+    bb0: {
+        _3 = const fn baml.Media.from_url;
+        _4 = const "pdf";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_file(file: string, mime_type: string?) -> pdf {
+    // Locals:
+    let _0: pdf // return
+    let _1: string // file // param
+    let _2: string? // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string?) -> image | audio | video | pdf
+    let _4: "pdf"
+    let _5: string
+    let _6: string?
+
+    bb0: {
+        _3 = const fn baml.Media.from_file;
+        _4 = const "pdf";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_base64(base64: string, mime_type: string) -> pdf {
+    // Locals:
+    let _0: pdf // return
+    let _1: string // base64 // param
+    let _2: string // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string) -> image | audio | video | pdf
+    let _4: "pdf"
+    let _5: string
+    let _6: string
+
+    bb0: {
+        _3 = const fn baml.Media.from_base64;
+        _4 = const "pdf";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_url(url: string, mime_type: string?) -> video {
+    // Locals:
+    let _0: video // return
+    let _1: string // url // param
+    let _2: string? // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string?) -> image | audio | video | pdf
+    let _4: "video"
+    let _5: string
+    let _6: string?
+
+    bb0: {
+        _3 = const fn baml.Media.from_url;
+        _4 = const "video";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_file(file: string, mime_type: string?) -> video {
+    // Locals:
+    let _0: video // return
+    let _1: string // file // param
+    let _2: string? // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string?) -> image | audio | video | pdf
+    let _4: "video"
+    let _5: string
+    let _6: string?
+
+    bb0: {
+        _3 = const fn baml.Media.from_file;
+        _4 = const "video";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn from_base64(base64: string, mime_type: string) -> video {
+    // Locals:
+    let _0: video // return
+    let _1: string // base64 // param
+    let _2: string // mime_type // param
+    let _3: ("image" | "video" | "audio" | "pdf" | "media", string, string) -> image | audio | video | pdf
+    let _4: "video"
+    let _5: string
+    let _6: string
+
+    bb0: {
+        _3 = const fn baml.Media.from_base64;
+        _4 = const "video";
+        _5 = copy _1;
+        _6 = copy _2;
+        _0 = call copy _3(copy _4, copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
         goto -> bb1;
     }
 }

@@ -2,6 +2,18 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
+  Function from_url:
+    Return: Media(Generic)
+  Function from_file:
+    Return: Media(Generic)
+  Function from_base64:
+    Return: Media(Generic)
+  Function from_url:
+    Return: Media(Generic)
+  Function from_file:
+    Return: Media(Generic)
+  Function from_base64:
+    Return: Media(Generic)
   Function build_attempt_with_state:
     Return: Union([List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" })), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" })), Union([List(Unknown), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }))])])
   Function build_plan_with_state:
@@ -26,3 +38,15 @@ source: crates/baml_tests/src/generated_tests.rs
     Return: Int
   Function PlannerState.rr_pick_index:
     Return: Int
+  Function from_url:
+    Return: Media(Generic)
+  Function from_file:
+    Return: Media(Generic)
+  Function from_base64:
+    Return: Media(Generic)
+  Function from_url:
+    Return: Media(Generic)
+  Function from_file:
+    Return: Media(Generic)
+  Function from_base64:
+    Return: Media(Generic)

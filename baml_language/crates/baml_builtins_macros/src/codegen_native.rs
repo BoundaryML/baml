@@ -548,6 +548,7 @@ fn generate_result_conversion(d: &NativeFnDef) -> TokenStream2 {
         },
         t if t.starts_with("Array") => quote!(Ok(vm.alloc_array(result))),
         t if t.starts_with("Map") => quote!(Ok(vm.alloc_map(result))),
+        "Media" => quote!(Ok(vm.alloc_media(result))),
         "PromptAst" => quote!(Ok(vm.alloc_prompt_ast(result))),
         "PrimitiveClient" => quote!(Ok(vm.alloc_primitive_client(result))),
         _ => quote!(Ok(result)),

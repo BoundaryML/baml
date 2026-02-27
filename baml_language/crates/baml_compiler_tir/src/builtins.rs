@@ -130,6 +130,15 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         // BuiltinUnknown accepts any type (for builtins that need heterogeneous values)
         (TypePattern::BuiltinUnknown, _) => true,
 
+        // String literal: matches Ty::String (a string literal is a string at runtime)
+        (TypePattern::StringLiteral(v), Ty::Literal(crate::LiteralValue::String(v2))) => v == v2,
+        (TypePattern::StringLiteral(_), Ty::String) => true,
+
+        // Union: matches if any variant matches
+        (TypePattern::Union(patterns), ty) => patterns
+            .iter()
+            .any(|p| match_pattern_inner(p, ty, bindings)),
+
         // No match
         _ => false,
     }
@@ -189,6 +198,10 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
         TypePattern::Enum(path) => Ty::Enum(parse_builtin_path(path)),
         TypePattern::Type => Ty::Type,
+        TypePattern::StringLiteral(v) => Ty::Literal(crate::LiteralValue::String(v.to_string())),
+        TypePattern::Union(patterns) => {
+            Ty::Union(patterns.iter().map(|p| substitute(p, bindings)).collect())
+        }
     }
 }
 
@@ -223,6 +236,10 @@ pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
         TypePattern::Enum(path) => Ty::Enum(parse_builtin_path(path)),
         TypePattern::Type => Ty::Type,
+        TypePattern::StringLiteral(v) => Ty::Literal(crate::LiteralValue::String(v.to_string())),
+        TypePattern::Union(patterns) => {
+            Ty::Union(patterns.iter().map(substitute_unknown).collect())
+        }
     }
 }
 

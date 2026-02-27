@@ -508,7 +508,6 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         receiver_type,
                         method_name,
                     } => {
-                        // Static method call like `image.from_url`
                         let qn = QualifiedName::builtin_method(
                             receiver_type.clone(),
                             method_name.clone(),

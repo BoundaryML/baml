@@ -785,6 +785,19 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
         return quote! {};
     }
 
+    // Prefix relative paths with "<builtin>/baml/" so that when the test
+    // calls db.add_file(), the path matches the one already loaded by
+    // set_project_root() → load_builtin_baml_files(). This avoids creating
+    // duplicate file entries that trigger false "Duplicate function" errors
+    // for functions with the same local name in different builtin namespaces.
+    let files: Vec<BamlFile> = files
+        .into_iter()
+        .map(|mut f| {
+            f.relative_path = Path::new("<builtin>/baml").join(&f.relative_path);
+            f
+        })
+        .collect();
+
     let project = TestProject {
         name: "__baml_std__".to_string(),
         path: builtins_dir,

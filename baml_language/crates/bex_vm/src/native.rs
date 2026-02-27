@@ -200,11 +200,53 @@ impl NativeFunctions for VmNatives {
     fn baml_media_mime_type(media: &MediaValue) -> Option<String> {
         media.mime_type.clone()
     }
+
+    fn baml_media_from_url(kind: &str, url: &str, mime_type: Option<&str>) -> MediaValue {
+        std::sync::Arc::new(baml_builtins::MediaValue::new(
+            media_kind_from_str(kind),
+            baml_builtins::MediaContent::Url {
+                url: url.to_string(),
+                base64_data: None,
+            },
+            mime_type.map(ToString::to_string),
+        ))
+    }
+
+    fn baml_media_from_base64(kind: &str, base64: &str, mime_type: &str) -> MediaValue {
+        std::sync::Arc::new(baml_builtins::MediaValue::new(
+            media_kind_from_str(kind),
+            baml_builtins::MediaContent::Base64 {
+                base64_data: base64.to_string(),
+            },
+            Some(mime_type.to_string()),
+        ))
+    }
+
+    fn baml_media_from_file(kind: &str, file: &str, mime_type: Option<&str>) -> MediaValue {
+        std::sync::Arc::new(baml_builtins::MediaValue::new(
+            media_kind_from_str(kind),
+            baml_builtins::MediaContent::File {
+                file: file.to_string(),
+                base64_data: None,
+            },
+            mime_type.map(ToString::to_string),
+        ))
+    }
 }
 
 // =============================================================================
 // Helper functions
 // =============================================================================
+
+fn media_kind_from_str(s: &str) -> MediaKind {
+    match s {
+        "image" => MediaKind::Image,
+        "video" => MediaKind::Video,
+        "audio" => MediaKind::Audio,
+        "pdf" => MediaKind::Pdf,
+        _ => MediaKind::Generic,
+    }
+}
 
 /// Recursively deep copy a value, handling nested objects.
 fn deep_copy_value_recursive(

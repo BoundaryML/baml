@@ -2,6 +2,30 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+function from_url(url: string, mime_type: string?) -> audio {
+    baml.Media.from_url("audio", url, mime_type)
+}
+
+function from_file(file: string, mime_type: string?) -> audio {
+    baml.Media.from_file("audio", file, mime_type)
+}
+
+function from_base64(base64: string, mime_type: string) -> audio {
+    baml.Media.from_base64("audio", base64, mime_type)
+}
+
+function from_url(url: string, mime_type: string?) -> image {
+    baml.Media.from_url("image", url, mime_type)
+}
+
+function from_file(file: string, mime_type: string?) -> image {
+    baml.Media.from_file("image", file, mime_type)
+}
+
+function from_base64(base64: string, mime_type: string) -> image {
+    baml.Media.from_base64("image", base64, mime_type)
+}
+
 function build_attempt_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     match (llm_client.client_type) {
         baml.llm.ClientType.Primitive => {
@@ -196,7 +220,7 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
     baml.sys.panic("All orchestration steps failed");
 }
 
-function PlannerState.rr_local_offset(self: PlannerState, client_name: string) -> int {
+function PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
     let offset = 0;
     {
         let _iter = self.rr_client_names;
@@ -213,7 +237,7 @@ function PlannerState.rr_local_offset(self: PlannerState, client_name: string) -
     offset
 }
 
-function PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub_client_count: int) -> int {
+function PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int {
     let local_offset = self.rr_local_offset(client_name);
     self.rr_client_names.push(client_name);
     let base = baml.llm.round_robin_peek(client_name);
@@ -238,4 +262,28 @@ class PlannerState {
 class OrchestrationStep {
   primitive_client: baml.llm.PrimitiveClient
   delay_ms: int
+}
+
+function from_url(url: string, mime_type: string?) -> pdf {
+    baml.Media.from_url("pdf", url, mime_type)
+}
+
+function from_file(file: string, mime_type: string?) -> pdf {
+    baml.Media.from_file("pdf", file, mime_type)
+}
+
+function from_base64(base64: string, mime_type: string) -> pdf {
+    baml.Media.from_base64("pdf", base64, mime_type)
+}
+
+function from_url(url: string, mime_type: string?) -> video {
+    baml.Media.from_url("video", url, mime_type)
+}
+
+function from_file(file: string, mime_type: string?) -> video {
+    baml.Media.from_file("video", file, mime_type)
+}
+
+function from_base64(base64: string, mime_type: string) -> video {
+    baml.Media.from_base64("video", base64, mime_type)
 }

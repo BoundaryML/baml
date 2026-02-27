@@ -1,6 +1,54 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function baml.audio.from_base64(base64: string, mime_type: string) -> audio {
+    load_const "audio"
+    load_var base64
+    load_var mime_type
+    call baml.Media.from_base64
+    return
+}
+
+function baml.audio.from_file(file: string, mime_type: string?) -> audio {
+    load_const "audio"
+    load_var file
+    load_var mime_type
+    call baml.Media.from_file
+    return
+}
+
+function baml.audio.from_url(url: string, mime_type: string?) -> audio {
+    load_const "audio"
+    load_var url
+    load_var mime_type
+    call baml.Media.from_url
+    return
+}
+
+function baml.image.from_base64(base64: string, mime_type: string) -> image {
+    load_const "image"
+    load_var base64
+    load_var mime_type
+    call baml.Media.from_base64
+    return
+}
+
+function baml.image.from_file(file: string, mime_type: string?) -> image {
+    load_const "image"
+    load_var file
+    load_var mime_type
+    call baml.Media.from_file
+    return
+}
+
+function baml.image.from_url(url: string, mime_type: string?) -> image {
+    load_const "image"
+    load_var url
+    load_var mime_type
+    call baml.Media.from_url
+    return
+}
+
 function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
     load_const 0
     store_var offset
@@ -715,5 +763,53 @@ function baml.llm.resolve_primitive(function_name: string) -> baml.llm.Primitive
     dispatch_future baml.llm.resolve_client
     await
     call_indirect
+    return
+}
+
+function baml.pdf.from_base64(base64: string, mime_type: string) -> pdf {
+    load_const "pdf"
+    load_var base64
+    load_var mime_type
+    call baml.Media.from_base64
+    return
+}
+
+function baml.pdf.from_file(file: string, mime_type: string?) -> pdf {
+    load_const "pdf"
+    load_var file
+    load_var mime_type
+    call baml.Media.from_file
+    return
+}
+
+function baml.pdf.from_url(url: string, mime_type: string?) -> pdf {
+    load_const "pdf"
+    load_var url
+    load_var mime_type
+    call baml.Media.from_url
+    return
+}
+
+function baml.video.from_base64(base64: string, mime_type: string) -> video {
+    load_const "video"
+    load_var base64
+    load_var mime_type
+    call baml.Media.from_base64
+    return
+}
+
+function baml.video.from_file(file: string, mime_type: string?) -> video {
+    load_const "video"
+    load_var file
+    load_var mime_type
+    call baml.Media.from_file
+    return
+}
+
+function baml.video.from_url(url: string, mime_type: string?) -> video {
+    load_const "video"
+    load_var url
+    load_var mime_type
+    call baml.Media.from_url
     return
 }

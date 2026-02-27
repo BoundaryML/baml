@@ -1,0 +1,136 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "from_url"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "url"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "mime_type"
+        COLON ":"
+        TYPE_EXPR "string?"
+          WORD "string"
+          QUESTION "?"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "audio"
+      WORD "audio"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "baml.Media.from_url"
+            WORD "baml"
+            DOT "."
+            WORD "Media"
+            DOT "."
+            WORD "from_url"
+          CALL_ARGS
+            L_PAREN "("
+            STRING_LITERAL "audio"
+              QUOTE """
+              WORD "audio"
+              QUOTE """
+            COMMA ","
+            WORD "url"
+            COMMA ","
+            WORD "mime_type"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "from_base64"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "base64"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "mime_type"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "audio"
+      WORD "audio"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "baml.Media.from_base64"
+            WORD "baml"
+            DOT "."
+            WORD "Media"
+            DOT "."
+            WORD "from_base64"
+          CALL_ARGS
+            L_PAREN "("
+            STRING_LITERAL "audio"
+              QUOTE """
+              WORD "audio"
+              QUOTE """
+            COMMA ","
+            WORD "base64"
+            COMMA ","
+            WORD "mime_type"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "from_file"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "file"
+        COLON ":"
+        TYPE_EXPR "string"
+          WORD "string"
+      COMMA ","
+      PARAMETER
+        WORD "mime_type"
+        COLON ":"
+        TYPE_EXPR "string?"
+          WORD "string"
+          QUESTION "?"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "audio"
+      WORD "audio"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CALL_EXPR
+          PATH_EXPR "baml.Media.from_file"
+            WORD "baml"
+            DOT "."
+            WORD "Media"
+            DOT "."
+            WORD "from_file"
+          CALL_ARGS
+            L_PAREN "("
+            STRING_LITERAL "audio"
+              QUOTE """
+              WORD "audio"
+              QUOTE """
+            COMMA ","
+            WORD "file"
+            COMMA ","
+            WORD "mime_type"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

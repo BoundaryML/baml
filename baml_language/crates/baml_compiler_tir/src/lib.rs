@@ -96,6 +96,11 @@ fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bin
         TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
         TypePattern::Enum(path) => Ty::Enum(builtins::parse_builtin_path(path)),
         TypePattern::Type => Ty::Type,
+        TypePattern::StringLiteral(val) => Ty::Literal(LiteralValue::String(val.to_string())),
+        TypePattern::Union(patterns) => substitute_with_fallback(
+            patterns.first().expect("empty union in TypePattern"),
+            bindings,
+        ),
     }
 }
 
@@ -2098,29 +2103,32 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     (callee_ty, effective_args)
                 }
                 Expr::Path(segments) if segments.len() >= 2 => {
-                    // First, check if this is a direct builtin function call
-                    // (e.g., baml.Array.length(arr), baml.deep_copy(x))
                     let full_path = segments
                         .iter()
                         .map(smol_str::SmolStr::as_str)
                         .collect::<Vec<_>>()
                         .join(".");
-                    if let Some(def) = builtins::lookup_builtin_by_path(&full_path) {
-                        // It's a builtin function called via Path (e.g., baml.Array.length(arr)).
-                        // For Path-based calls, the receiver (if any) is passed as an explicit
-                        // argument, unlike FieldAccess where it's implicit.
+                    let prefixed_path = if !full_path.starts_with("baml.") {
+                        Some(format!("baml.{full_path}"))
+                    } else {
+                        None
+                    };
+                    if let Some(def) = builtins::lookup_builtin_by_path(&full_path).or_else(|| {
+                        prefixed_path
+                            .as_deref()
+                            .and_then(builtins::lookup_builtin_by_path)
+                    }) {
+                        // Builtin function via Path (e.g., baml.Array.length(arr)).
+                        // Receiver (if any) is an explicit argument.
                         //
-                        // Use bidirectional type checking:
-                        // 1. First infer argument types to extract type variable bindings
+                        // Bidirectional type checking:
+                        // 1. Infer argument types to extract type variable bindings
                         // 2. Compute expected parameter types using bindings
-                        // 3. Re-check arguments with expected types (bidirectional checking)
+                        // 3. Re-check arguments with expected types
 
-                        // Phase 1: Infer argument types for type variable binding
                         let inferred_arg_types: Vec<Ty> =
                             args.iter().map(|arg| infer_expr(ctx, *arg, body)).collect();
 
-                        // Build all parameter patterns including receiver (for Path-based calls,
-                        // the receiver is passed as an explicit argument)
                         let mut all_param_patterns: Vec<&baml_builtins::TypePattern> = Vec::new();
                         if let Some(ref receiver_pattern) = def.receiver {
                             all_param_patterns.push(receiver_pattern);
@@ -2129,7 +2137,6 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             all_param_patterns.push(pattern);
                         }
 
-                        // Try to match each argument against its parameter pattern to extract bindings
                         let mut bindings = builtins::Bindings::new();
                         for (arg_ty, param_pattern) in
                             inferred_arg_types.iter().zip(all_param_patterns.iter())
@@ -2137,14 +2144,12 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             if let Some(new_bindings) =
                                 builtins::match_pattern(param_pattern, arg_ty)
                             {
-                                // Merge bindings (first binding wins for consistency)
                                 for (name, ty) in new_bindings {
                                     bindings.entry(name).or_insert(ty);
                                 }
                             }
                         }
 
-                        // Phase 2: Compute expected parameter types using bindings
                         let param_types_only: Vec<Ty> = all_param_patterns
                             .iter()
                             .map(|p| {
@@ -2156,8 +2161,6 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             })
                             .collect();
 
-                        // Phase 3: Re-check arguments with expected types (bidirectional checking)
-                        // This allows empty maps/arrays to pick up their expected types
                         let arg_types_with_spans: Vec<(Ty, Option<ErrorLocation>)> = args
                             .iter()
                             .zip(param_types_only.iter())
@@ -2174,7 +2177,6 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             substitute_with_fallback(&def.returns, &bindings)
                         };
 
-                        // Build params with names for Ty::Function
                         let mut params: Vec<(Option<Name>, Ty)> = Vec::new();
                         let mut ty_iter = param_types_only.into_iter();
                         if def.receiver.is_some() {
@@ -2190,9 +2192,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             params,
                             ret: Box::new(return_type),
                         };
-                        // Store the callee type so downstream passes (VIR, MIR) can find it
                         ctx.set_expr_type(*callee, callee_ty.clone());
-                        // Store the resolution for the callee expression (needed by MIR)
                         ctx.set_expr_resolution(
                             *callee,
                             ResolvedValue::BuiltinFunction(
@@ -2200,14 +2200,14 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             ),
                         );
                         (callee_ty, arg_types_with_spans)
-                    } else if ctx.lookup(&Name::new(&full_path)).is_some() {
+                    } else if ctx.lookup(&Name::new(&full_path)).is_some()
+                        || prefixed_path
+                            .as_ref()
+                            .is_some_and(|p| ctx.lookup(&Name::new(p)).is_some())
+                    {
                         // BAML-defined function in a namespace (e.g., baml.llm.call_llm_function).
-                        // These are stored in globals with their qualified name.
-                        // Treat as a regular function call (no implicit receiver).
                         let callee_ty = infer_expr(ctx, *callee, body);
 
-                        // Use bidirectional typing: check args against expected param types
-                        // so empty maps/arrays pick up their expected types.
                         let param_types: Vec<Ty> = match &callee_ty {
                             Ty::Function { params, .. } => {
                                 params.iter().map(|(_, ty)| ty.clone()).collect()
@@ -2230,21 +2230,13 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         (callee_ty, arg_types_with_spans)
                     } else {
                         // Method call via Path: `receiver.method(args)`
-                        // For multi-segment paths like `baz.Greeting()`, the first segment(s)
-                        // form the receiver and the last segment is the method name.
-                        //
-                        // We infer the receiver type from all segments except the last,
-                        // then look up the method on that type.
                         let receiver_segments = &segments[..segments.len() - 1];
 
-                        // Infer receiver type (could be single var or nested field access)
                         let receiver_ty = if receiver_segments.len() == 1 {
-                            // Simple receiver: `baz.method()`
                             ctx.lookup(&receiver_segments[0])
                                 .cloned()
                                 .unwrap_or(Ty::Unknown)
                         } else {
-                            // Nested receiver: `obj.field.method()`
                             let first = &receiver_segments[0];
                             let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
                             for field in &receiver_segments[1..] {
@@ -2255,7 +2247,6 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
                         let callee_ty = infer_expr(ctx, *callee, body);
 
-                        // Build effective args: [(receiver_type, None), ...explicit_args with spans]
                         let mut effective_args = vec![(receiver_ty, None)];
                         for arg in args {
                             let arg_ty = infer_expr(ctx, *arg, body);

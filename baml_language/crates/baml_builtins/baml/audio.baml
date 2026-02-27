@@ -1,0 +1,16 @@
+// BAML Builtin: Audio constructors
+// Namespace: baml.audio
+//
+// Thin wrappers around baml.Media.from_* with kind="audio".
+
+function from_url(url: string, mime_type: string?) -> audio {
+    baml.Media.from_url("audio", url, mime_type)
+}
+
+function from_base64(base64: string, mime_type: string) -> audio {
+    baml.Media.from_base64("audio", base64, mime_type)
+}
+
+function from_file(file: string, mime_type: string?) -> audio {
+    baml.Media.from_file("audio", file, mime_type)
+}

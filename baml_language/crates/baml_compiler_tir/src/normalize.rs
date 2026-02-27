@@ -165,6 +165,11 @@ impl StructuralTy {
             // Int <: Float
             (StructuralTy::Int, StructuralTy::Float) => true,
 
+            // Media(Generic) is a subtype of any specific media kind.
+            // At runtime, the kind is just metadata; the wrapper functions
+            // (e.g., image.from_url) ensure the correct kind is set.
+            (StructuralTy::Media(_), StructuralTy::Media(_)) => true,
+
             // Literal types are subtypes of their base types
             (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Int) => true,
             (StructuralTy::Literal(LiteralValue::Int(_)), StructuralTy::Float) => true,

@@ -7,6 +7,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use syn::{GenericArgument, Ident, PathArguments, ReturnType, Type};
 
+use crate::parse::DslType;
+
 /// Convert an identifier from camelCase/PascalCase to `SCREAMING_SNAKE_CASE`.
 pub(crate) fn to_screaming_snake_case(s: &str) -> String {
     let mut result = String::with_capacity(s.len() + 4);
@@ -268,4 +270,74 @@ pub(crate) fn unwrap_result_type(ty: &Type) -> (&Type, bool) {
         }
     }
     (ty, false)
+}
+
+// ============================================================================
+// DslType-aware wrappers
+// ============================================================================
+
+/// Convert a `DslType` to a `TypePattern` token stream.
+pub(crate) fn dsl_type_to_pattern(
+    dsl_ty: &DslType,
+    generic_params: &[String],
+    builtin_types: &HashMap<String, String>,
+    builtin_enums: &HashMap<String, String>,
+) -> TokenStream2 {
+    match dsl_ty {
+        DslType::Syn(ty) => type_to_pattern(ty, generic_params, builtin_types, builtin_enums),
+        DslType::StringLiteral(s) => {
+            quote!(TypePattern::StringLiteral(#s))
+        }
+        DslType::Union(variants) => {
+            let patterns: Vec<TokenStream2> = variants
+                .iter()
+                .map(|v| dsl_type_to_pattern(v, generic_params, builtin_types, builtin_enums))
+                .collect();
+            quote!(TypePattern::Union(vec![#(#patterns),*]))
+        }
+    }
+}
+
+/// Get the simple type name from a `DslType` (for native fn generation).
+pub(crate) fn dsl_type_to_simple_name(dsl_ty: &DslType) -> String {
+    match dsl_ty {
+        DslType::Syn(ty) => type_to_simple_name(ty),
+        DslType::StringLiteral(_) => "String".to_string(),
+        DslType::Union(variants) => {
+            if variants
+                .iter()
+                .all(|v| matches!(v, DslType::StringLiteral(_)))
+            {
+                "String".to_string()
+            } else {
+                dsl_type_to_simple_name(variants.first().expect("empty union"))
+            }
+        }
+    }
+}
+
+/// Check if a `DslType` is a generic type parameter.
+pub(crate) fn dsl_is_generic_type(dsl_ty: &DslType, generic_params: &[String]) -> bool {
+    match dsl_ty {
+        DslType::Syn(ty) => is_generic_type(ty, generic_params),
+        DslType::StringLiteral(_) | DslType::Union(_) => false,
+    }
+}
+
+/// Check if a `DslType` is `Result<T>` and return the inner type if so.
+///
+/// String literal and union types are never `Result`.
+/// Returns owned values since the inner type may need wrapping.
+pub(crate) fn dsl_unwrap_result_type(dsl_ty: &DslType) -> (DslType, bool) {
+    match dsl_ty {
+        DslType::Syn(ty) => {
+            let (inner, is_result) = unwrap_result_type(ty);
+            if is_result {
+                (DslType::Syn(inner.clone()), true)
+            } else {
+                (dsl_ty.clone(), false)
+            }
+        }
+        DslType::StringLiteral(_) | DslType::Union(_) => (dsl_ty.clone(), false),
+    }
 }

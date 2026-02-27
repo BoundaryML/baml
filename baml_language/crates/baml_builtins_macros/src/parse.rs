@@ -4,9 +4,52 @@
 //! collection and codegen passes.
 
 use syn::{
-    Attribute, Generics, Ident, Result, ReturnType, Token, Type, braced, parenthesized,
+    Attribute, Generics, Ident, LitStr, Result, ReturnType, Token, Type, braced, parenthesized,
     parse::{Parse, ParseStream},
 };
+
+/// A type in the DSL that extends `syn::Type` with string literal and union types.
+///
+/// Supports `"image" | "video" | "audio"` syntax in parameter/return type position.
+#[derive(Clone)]
+pub(crate) enum DslType {
+    /// A standard Rust type parsed by `syn`.
+    Syn(Type),
+    /// A string literal type (e.g., `"image"`).
+    StringLiteral(String),
+    /// A union of types (e.g., `"image" | "video" | "audio"`).
+    Union(Vec<DslType>),
+}
+
+impl DslType {
+    /// Parse a DSL type: string literal, syn type, or a `|`-separated union of either.
+    pub(crate) fn parse_dsl_type(input: ParseStream) -> Result<Self> {
+        let first = if input.peek(LitStr) {
+            let lit: LitStr = input.parse()?;
+            DslType::StringLiteral(lit.value())
+        } else {
+            let ty: Type = input.parse()?;
+            DslType::Syn(ty)
+        };
+
+        if input.peek(Token![|]) {
+            let mut variants = vec![first];
+            while input.peek(Token![|]) {
+                input.parse::<Token![|]>()?;
+                if input.peek(LitStr) {
+                    let lit: LitStr = input.parse()?;
+                    variants.push(DslType::StringLiteral(lit.value()));
+                } else {
+                    let ty: Type = input.parse()?;
+                    variants.push(DslType::Syn(ty));
+                }
+            }
+            Ok(DslType::Union(variants))
+        } else {
+            Ok(first)
+        }
+    }
+}
 
 /// The root input to the macro: a list of modules.
 pub(crate) struct BuiltinsInput {
@@ -83,10 +126,10 @@ pub(crate) struct FunctionItem {
     /// First parameter if it's `self: Type` or `self: mut Type`.
     /// The bool indicates whether it's mutable.
     pub(crate) receiver: Option<(Type, bool)>,
-    /// Other parameters.
-    pub(crate) params: Vec<(Ident, Type)>,
-    /// Return type.
-    pub(crate) return_type: Type,
+    /// Other parameters (supports string literal and union types via `DslType`).
+    pub(crate) params: Vec<(Ident, DslType)>,
+    /// Return type (supports string literal and union types via `DslType`).
+    pub(crate) return_type: DslType,
     /// Whether this function uses the VM (marked with #[uses(vm)]).
     pub(crate) uses_vm: bool,
     /// Whether this function is a `sys_op` (marked with #[`sys_op`]).
@@ -280,14 +323,14 @@ impl FunctionItem {
             } else {
                 let param_name: Ident = params_content.parse()?;
                 params_content.parse::<Token![:]>()?;
-                let param_type: Type = params_content.parse()?;
+                let param_type = DslType::parse_dsl_type(&params_content)?;
                 params.push((param_name, param_type));
             }
         }
 
         let return_type = match input.parse::<ReturnType>()? {
-            ReturnType::Default => syn::parse_quote!(()),
-            ReturnType::Type(_, ty) => *ty,
+            ReturnType::Default => DslType::Syn(syn::parse_quote!(())),
+            ReturnType::Type(_, ty) => DslType::Syn(*ty),
         };
 
         input.parse::<Token![;]>()?;

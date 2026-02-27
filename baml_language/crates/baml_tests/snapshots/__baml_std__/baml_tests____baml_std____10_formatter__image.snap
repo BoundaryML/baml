@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// BAML Builtin: Image constructors
+// Namespace: baml.image
+//
+// Thin wrappers around baml.Media.from_* with kind="image".
+
+function from_url(url: string, mime_type: string?) -> image {
+    baml.Media.from_url("image", url, mime_type)
+}
+
+function from_base64(base64: string, mime_type: string) -> image {
+    baml.Media.from_base64("image", base64, mime_type)
+}
+
+function from_file(file: string, mime_type: string?) -> image {
+    baml.Media.from_file("image", file, mime_type)
+}

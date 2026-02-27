@@ -58,6 +58,13 @@ pub enum TypePattern {
     /// Meta-type — the type of type values.
     /// A value of type `Type` wraps a `baml_type::Ty` at runtime.
     Type,
+    /// String literal type — matches exactly one string value at compile time.
+    /// At runtime this is just `Ty::String`.
+    /// E.g., `StringLiteral("image")` in `from_url(kind: "image" | "video", ...)`.
+    StringLiteral(&'static str),
+    /// Union of type patterns — matches if any variant matches.
+    /// E.g., `Union(vec![StringLiteral("image"), StringLiteral("video")])`.
+    Union(Vec<TypePattern>),
 }
 
 /// How a builtin type is represented at runtime on the VM heap.
@@ -233,6 +240,9 @@ macro_rules! with_builtins {
                     fn as_base64(self: Media) -> Option<String>;
                     fn as_file(self: Media) -> Option<String>;
                     fn mime_type(self: Media) -> Option<String>;
+                    fn from_url(kind: "image" | "video" | "audio" | "pdf" | "media", url: String, mime_type: Option<String>) -> Media;
+                    fn from_base64(kind: "image" | "video" | "audio" | "pdf" | "media", base64: String, mime_type: String) -> Media;
+                    fn from_file(kind: "image" | "video" | "audio" | "pdf" | "media", file: String, mime_type: Option<String>) -> Media;
                 }
 
                 // =====================================================================

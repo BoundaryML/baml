@@ -221,6 +221,14 @@ pub fn resolve_path(
         return resolve_enum_variant(db, loc, &fqn, &segments[1..]);
     }
 
+    // Fallback: try with "baml" prefix for short-name builtin access.
+    // e.g., image.from_url -> baml.image.from_url
+    if first.as_str() != "baml" {
+        let mut prefixed = vec![Name::new("baml")];
+        prefixed.extend(segments.iter().cloned());
+        return resolve_path(db, project, &prefixed);
+    }
+
     None
 }
 
@@ -467,7 +475,9 @@ fn walk_builtin(
 
             // BAML-defined item in this namespace (O(1) symbol table lookup).
             let fqn = QualifiedName {
-                namespace: Namespace::BamlStd { path: ns_path },
+                namespace: Namespace::BamlStd {
+                    path: ns_path.clone(),
+                },
                 name: next.clone(),
             };
             let sym = symbol_table(db, project);
@@ -480,6 +490,28 @@ fn walk_builtin(
 
             if let Some(Definition::Enum(loc)) = sym.lookup_type(db, &fqn) {
                 return resolve_enum_variant(db, loc, &fqn, &remaining[1..]);
+            }
+
+            // The next segment may be a sub-namespace containing BAML-defined
+            // items (e.g., "image" in baml.image.from_url). Walk deeper using
+            // the symbol table for resolution.
+            if remaining.len() > 1 {
+                let mut deeper = ns_path;
+                deeper.push(next.clone());
+                let sub_fqn = QualifiedName {
+                    namespace: Namespace::BamlStd {
+                        path: deeper.clone(),
+                    },
+                    name: remaining[1].clone(),
+                };
+                if sym.lookup_value(db, &sub_fqn).is_some() {
+                    return remaining[2..]
+                        .is_empty()
+                        .then_some(PathResolution::Function(sub_fqn));
+                }
+                if let Some(Definition::Enum(loc)) = sym.lookup_type(db, &sub_fqn) {
+                    return resolve_enum_variant(db, loc, &sub_fqn, &remaining[2..]);
+                }
             }
 
             None

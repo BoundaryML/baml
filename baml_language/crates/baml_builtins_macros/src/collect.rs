@@ -10,8 +10,9 @@ use syn::Ident;
 use crate::{
     parse::{EnumItem, FunctionItem, ModuleContent, ModuleItem, StructItem, StructMember},
     util::{
+        dsl_is_generic_type, dsl_type_to_pattern, dsl_type_to_simple_name, dsl_unwrap_result_type,
         is_generic_type, path_to_rust_ident, to_screaming_snake_case, to_snake_case,
-        type_to_pattern, type_to_simple_name, unwrap_result_type,
+        type_to_pattern, type_to_simple_name,
     },
 };
 
@@ -503,14 +504,14 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             .map(|(name, ty)| {
                 (
                     name.to_string(),
-                    type_to_pattern(ty, &all_generics, ctx.builtin_types, ctx.builtin_enums),
+                    dsl_type_to_pattern(ty, &all_generics, ctx.builtin_types, ctx.builtin_enums),
                 )
             })
             .collect();
 
-        let (inner_return_ty, _) = unwrap_result_type(&method.return_type);
-        let returns = type_to_pattern(
-            inner_return_ty,
+        let (inner_return_dsl, _) = dsl_unwrap_result_type(&method.return_type);
+        let returns = dsl_type_to_pattern(
+            &inner_return_dsl,
             &all_generics,
             ctx.builtin_types,
             ctx.builtin_enums,
@@ -540,16 +541,16 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             .iter()
             .map(|(name, ty)| ParamInfo {
                 name: name.to_string(),
-                type_name: type_to_simple_name(ty),
-                is_generic: is_generic_type(ty, &all_generics),
+                type_name: dsl_type_to_simple_name(ty),
+                is_generic: dsl_is_generic_type(ty, &all_generics),
             })
             .collect();
 
         let native_returns = {
-            let (inner_ty, is_fallible) = unwrap_result_type(&method.return_type);
+            let (inner_dsl, is_fallible) = dsl_unwrap_result_type(&method.return_type);
             ReturnInfo {
-                type_name: type_to_simple_name(inner_ty),
-                is_generic: is_generic_type(inner_ty, &all_generics),
+                type_name: dsl_type_to_simple_name(&inner_dsl),
+                is_generic: dsl_is_generic_type(&inner_dsl, &all_generics),
                 is_fallible,
             }
         };
@@ -629,14 +630,14 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         .map(|(name, ty)| {
             (
                 name.to_string(),
-                type_to_pattern(ty, &fn_generics, ctx.builtin_types, ctx.builtin_enums),
+                dsl_type_to_pattern(ty, &fn_generics, ctx.builtin_types, ctx.builtin_enums),
             )
         })
         .collect();
 
-    let (inner_return_ty, _) = unwrap_result_type(&f.return_type);
-    let returns = type_to_pattern(
-        inner_return_ty,
+    let (inner_return_dsl, _) = dsl_unwrap_result_type(&f.return_type);
+    let returns = dsl_type_to_pattern(
+        &inner_return_dsl,
         &fn_generics,
         ctx.builtin_types,
         ctx.builtin_enums,
@@ -665,16 +666,16 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         .iter()
         .map(|(name, ty)| ParamInfo {
             name: name.to_string(),
-            type_name: type_to_simple_name(ty),
-            is_generic: is_generic_type(ty, &fn_generics),
+            type_name: dsl_type_to_simple_name(ty),
+            is_generic: dsl_is_generic_type(ty, &fn_generics),
         })
         .collect();
 
     let native_returns = {
-        let (inner_ty, is_fallible) = unwrap_result_type(&f.return_type);
+        let (inner_dsl, is_fallible) = dsl_unwrap_result_type(&f.return_type);
         ReturnInfo {
-            type_name: type_to_simple_name(inner_ty),
-            is_generic: is_generic_type(inner_ty, &fn_generics),
+            type_name: dsl_type_to_simple_name(&inner_dsl),
+            is_generic: dsl_is_generic_type(&inner_dsl, &fn_generics),
             is_fallible,
         }
     };

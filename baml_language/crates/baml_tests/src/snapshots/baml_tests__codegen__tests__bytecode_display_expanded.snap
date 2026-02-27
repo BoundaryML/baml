@@ -11,7 +11,7 @@ function User.promote(self: User, bonus: int) -> Report {
 
   10   6    load_var 1          (self)
        7    load_var 2          (bonus)
-       8    call 62             (score)
+       8    call 65             (score)
        9    store_var 3         (base)
 
   12   10   alloc_instance 12   (Report)
