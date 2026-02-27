@@ -29,10 +29,12 @@ pub fn update_test_file(
         result.actual_hovers.as_deref(),
         completion_section.as_deref(),
         result.actual_inlay_hints.as_deref(),
+        result.actual_semantic_tokens.as_deref(),
         &result.diagnostics_comments,
         &result.hovers_comments,
         &result.completions_comments,
         &result.inlay_hints_comments,
+        &result.semantic_tokens_comments,
     );
 
     // Combine source and new expectations
@@ -50,11 +52,16 @@ fn extract_completion_section(content: &str) -> Option<String> {
     let after_marker = &content[marker_pos + marker.len()..];
 
     // Find where the next section starts (or end of file)
-    let section_end = ["//- diagnostics", "//- on_hover", "//- inlay_hints"]
-        .iter()
-        .filter_map(|marker| after_marker.find(marker))
-        .min()
-        .unwrap_or(after_marker.len());
+    let section_end = [
+        "//- diagnostics",
+        "//- on_hover",
+        "//- inlay_hints",
+        "//- semantic_tokens",
+    ]
+    .iter()
+    .filter_map(|marker| after_marker.find(marker))
+    .min()
+    .unwrap_or(after_marker.len());
 
     let section = &after_marker[..section_end];
 
@@ -82,10 +89,12 @@ fn generate_expectations_section(
     hovers: Option<&str>,
     completions: Option<&str>,
     inlay_hints: Option<&str>,
+    semantic_tokens: Option<&str>,
     diagnostics_comments: &[String],
     hovers_comments: &[String],
     completions_comments: &[String],
     inlay_hints_comments: &[String],
+    semantic_tokens_comments: &[String],
 ) -> String {
     let mut section = String::new();
     section.push_str("\n\n//----\n");
@@ -142,6 +151,20 @@ fn generate_expectations_section(
         section.push('\n');
     }
 
+    if let Some(semantic_tokens) = semantic_tokens {
+        section.push_str("//\n");
+        section.push_str("//- semantic_tokens\n");
+
+        // Add preserved semantic tokens comments first
+        for comment in semantic_tokens_comments {
+            section.push_str(comment);
+            section.push('\n');
+        }
+
+        section.push_str(semantic_tokens);
+        section.push('\n');
+    }
+
     section
 }
 
@@ -152,8 +175,18 @@ mod tests {
     #[test]
     fn test_generate_expectations_section() {
         let diagnostics = "// <no-diagnostics-expected>";
-        let section =
-            generate_expectations_section(diagnostics, None, None, None, &[], &[], &[], &[]);
+        let section = generate_expectations_section(
+            diagnostics,
+            None,
+            None,
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+        );
 
         assert!(section.contains("//----"));
         assert!(section.contains("//- diagnostics"));
@@ -170,6 +203,8 @@ mod tests {
             Some(hovers),
             None,
             None,
+            None,
+            &[],
             &[],
             &[],
             &[],
@@ -191,7 +226,9 @@ mod tests {
             None,
             None,
             None,
+            None,
             &diagnostics_comments,
+            &[],
             &[],
             &[],
             &[],
@@ -217,8 +254,10 @@ mod tests {
             Some(hovers),
             None,
             None,
+            None,
             &[],
             &hovers_comments,
+            &[],
             &[],
             &[],
         );
@@ -242,6 +281,8 @@ mod tests {
             None,
             Some(completions),
             None,
+            None,
+            &[],
             &[],
             &[],
             &[],

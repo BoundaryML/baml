@@ -10,6 +10,7 @@ use baml_lsp_actions::{
     MarkupKind,
     hover::hover as lsp_ide_hover,
     inlay_hints::{InlayHint, InlayHintKind, inlay_hints as lsp_inlay_hints},
+    semantic_tokens::{SemanticToken, semantic_tokens as lsp_semantic_tokens},
 };
 use baml_project::ProjectDatabase;
 use text_size::TextSize;
@@ -29,6 +30,8 @@ pub struct TestResult {
     pub completion_result: Option<CompletionTestResult>,
     /// Actual inlay hints output.
     pub actual_inlay_hints: Option<String>,
+    /// Actual semantic tokens output.
+    pub actual_semantic_tokens: Option<String>,
     /// Diff between expected and actual (if failed).
     pub diff: Option<String>,
     /// Preserved comments from diagnostics section.
@@ -39,6 +42,8 @@ pub struct TestResult {
     pub completions_comments: Vec<String>,
     /// Preserved comments from inlay hints section.
     pub inlay_hints_comments: Vec<String>,
+    /// Preserved comments from semantic tokens section.
+    pub semantic_tokens_comments: Vec<String>,
 }
 
 /// Result of completion testing.
@@ -190,13 +195,42 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         None
     };
 
+    // 7. Handle semantic tokens
+    let actual_semantic_tokens = if parsed.expected_semantic_tokens.is_some() {
+        let db = lsp_db.db();
+
+        // Collect all semantic tokens from all files.
+        let mut all_tokens: Vec<(String, SemanticToken)> = Vec::new();
+        for (filename, source_file) in &file_map {
+            let tokens = lsp_semantic_tokens(db, *source_file);
+            for token in tokens {
+                all_tokens.push((filename.clone(), token));
+            }
+        }
+
+        // Sort by filename and then by range start for deterministic output.
+        all_tokens.sort_by(|(fa, ta), (fb, tb)| {
+            fa.cmp(fb)
+                .then_with(|| ta.range.start().cmp(&tb.range.start()))
+        });
+
+        Some(format_semantic_tokens_results(&all_tokens, &parsed.files))
+    } else {
+        None
+    };
+
     // Compare against expectations
     let diagnostics_passed = parsed.expected_diagnostics == actual_diagnostics;
     let hovers_passed = parsed.expected_hovers == actual_hovers;
     let completions_passed = completion_result.as_ref().map(|r| r.passed).unwrap_or(true);
     let inlay_hints_passed = parsed.expected_inlay_hints == actual_inlay_hints;
+    let semantic_tokens_passed = parsed.expected_semantic_tokens == actual_semantic_tokens;
 
-    let passed = diagnostics_passed && hovers_passed && completions_passed && inlay_hints_passed;
+    let passed = diagnostics_passed
+        && hovers_passed
+        && completions_passed
+        && inlay_hints_passed
+        && semantic_tokens_passed;
 
     let diff = if !passed {
         Some(generate_full_diff(
@@ -207,6 +241,8 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
             completion_result.as_ref(),
             parsed.expected_inlay_hints.as_deref(),
             actual_inlay_hints.as_deref(),
+            parsed.expected_semantic_tokens.as_deref(),
+            actual_semantic_tokens.as_deref(),
         ))
     } else {
         None
@@ -218,11 +254,13 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         actual_hovers,
         completion_result,
         actual_inlay_hints,
+        actual_semantic_tokens,
         diff,
         diagnostics_comments: parsed.diagnostics_comments.clone(),
         hovers_comments: parsed.hovers_comments.clone(),
         completions_comments: parsed.completions_comments.clone(),
         inlay_hints_comments: parsed.inlay_hints_comments.clone(),
+        semantic_tokens_comments: parsed.semantic_tokens_comments.clone(),
     }
 }
 
@@ -346,7 +384,34 @@ fn format_inlay_hints_results(
     output.trim_end().to_string()
 }
 
-/// Generate a full diff including diagnostics, hovers, completions, and inlay hints.
+/// Format semantic tokens for output (used in expectations section).
+fn format_semantic_tokens_results(
+    tokens: &[(String, SemanticToken)],
+    files: &HashMap<String, VirtualFile>,
+) -> String {
+    if tokens.is_empty() {
+        return "// <no-semantic-tokens>".to_string();
+    }
+
+    let mut output = String::new();
+    for (filename, token) in tokens {
+        let file_content = &files[filename].content;
+        let start_offset: usize = token.range.start().into();
+        let end_offset: usize = token.range.end().into();
+        let (line, col) = offset_to_line_col(file_content, token.range.start().into());
+        let len = end_offset - start_offset;
+        let text = &file_content[start_offset..end_offset];
+        let token_type_str = token.token_type.as_str();
+
+        output.push_str(&format!(
+            "// {filename}:{line}:{col} ({token_type_str}) len={len} {text:?}\n"
+        ));
+    }
+
+    output.trim_end().to_string()
+}
+
+/// Generate a full diff including diagnostics, hovers, completions, inlay hints, and semantic tokens.
 #[allow(clippy::too_many_arguments)]
 fn generate_full_diff(
     expected_diag: &str,
@@ -356,6 +421,8 @@ fn generate_full_diff(
     completion_result: Option<&CompletionTestResult>,
     expected_inlay_hints: Option<&str>,
     actual_inlay_hints: Option<&str>,
+    expected_semantic_tokens: Option<&str>,
+    actual_semantic_tokens: Option<&str>,
 ) -> String {
     let mut diff = String::new();
 
@@ -395,6 +462,14 @@ fn generate_full_diff(
         diff.push_str(expected_inlay_hints.unwrap_or("<none>"));
         diff.push_str("\n\nActual:\n");
         diff.push_str(actual_inlay_hints.unwrap_or("<none>"));
+    }
+
+    if expected_semantic_tokens.is_some() || actual_semantic_tokens.is_some() {
+        diff.push_str("\n\n=== SEMANTIC TOKENS ===\n");
+        diff.push_str("Expected:\n");
+        diff.push_str(expected_semantic_tokens.unwrap_or("<none>"));
+        diff.push_str("\n\nActual:\n");
+        diff.push_str(actual_semantic_tokens.unwrap_or("<none>"));
     }
 
     diff

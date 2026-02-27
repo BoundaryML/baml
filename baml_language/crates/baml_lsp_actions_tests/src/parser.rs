@@ -52,6 +52,9 @@ pub struct ParsedTestFile {
     /// Expected inlay hints section (after `//- inlay_hints`).
     /// None if section is omitted.
     pub expected_inlay_hints: Option<String>,
+    /// Expected semantic tokens section (after `//- semantic_tokens`).
+    /// None if section is omitted.
+    pub expected_semantic_tokens: Option<String>,
     /// User comments in the diagnostics section that should be preserved.
     /// Lines starting with `// (` are treated as preserved comments.
     pub diagnostics_comments: Vec<String>,
@@ -61,6 +64,8 @@ pub struct ParsedTestFile {
     pub completions_comments: Vec<String>,
     /// User comments in the inlay hints section that should be preserved.
     pub inlay_hints_comments: Vec<String>,
+    /// User comments in the semantic tokens section that should be preserved.
+    pub semantic_tokens_comments: Vec<String>,
 }
 
 /// Expected completions for a cursor position.
@@ -116,10 +121,12 @@ pub fn parse_test_file(content: &str, default_filename: &str) -> ParsedTestFile 
         expected_hovers: expectations.hovers,
         expected_completions: expectations.completions,
         expected_inlay_hints: expectations.inlay_hints,
+        expected_semantic_tokens: expectations.semantic_tokens,
         diagnostics_comments: expectations.diagnostics_comments,
         hovers_comments: expectations.hovers_comments,
         completions_comments: expectations.completions_comments,
         inlay_hints_comments: expectations.inlay_hints_comments,
+        semantic_tokens_comments: expectations.semantic_tokens_comments,
     }
 }
 
@@ -273,10 +280,12 @@ struct ParsedExpectations {
     hovers: Option<String>,
     completions: Option<CompletionExpectation>,
     inlay_hints: Option<String>,
+    semantic_tokens: Option<String>,
     diagnostics_comments: Vec<String>,
     hovers_comments: Vec<String>,
     completions_comments: Vec<String>,
     inlay_hints_comments: Vec<String>,
+    semantic_tokens_comments: Vec<String>,
 }
 
 /// Parse the expectations section (after `//----`).
@@ -287,10 +296,12 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
             hovers: None,
             completions: None,
             inlay_hints: None,
+            semantic_tokens: None,
             diagnostics_comments: Vec::new(),
             hovers_comments: Vec::new(),
             completions_comments: Vec::new(),
             inlay_hints_comments: Vec::new(),
+            semantic_tokens_comments: Vec::new(),
         };
     }
 
@@ -298,10 +309,12 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
     let mut hovers: Option<String> = None;
     let mut completions: Option<CompletionExpectation> = None;
     let mut inlay_hints: Option<String> = None;
+    let mut semantic_tokens: Option<String> = None;
     let mut diagnostics_comments: Vec<String> = Vec::new();
     let mut hovers_comments: Vec<String> = Vec::new();
     let mut completions_comments: Vec<String> = Vec::new();
     let mut inlay_hints_comments: Vec<String> = Vec::new();
+    let mut semantic_tokens_comments: Vec<String> = Vec::new();
 
     // Find the subsection markers
     let lines: Vec<&str> = section.lines().collect();
@@ -313,30 +326,22 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
         let trimmed = line.trim();
 
         // Check for section markers
-        if trimmed == "//- diagnostics" || trimmed.starts_with("//- diagnostics ") {
-            // Save previous section if any
-            if let Some(section_name) = current_section {
-                save_section_with_comments(
-                    section_name,
-                    &current_content,
-                    &current_comments,
-                    &mut diagnostics,
-                    &mut hovers,
-                    &mut completions,
-                    &mut inlay_hints,
-                    &mut diagnostics_comments,
-                    &mut hovers_comments,
-                    &mut completions_comments,
-                    &mut inlay_hints_comments,
-                );
-            }
-            current_section = Some("diagnostics");
-            current_content = String::new();
-            current_comments = Vec::new();
-            continue;
-        }
+        let new_section = if trimmed == "//- diagnostics" || trimmed.starts_with("//- diagnostics ")
+        {
+            Some("diagnostics")
+        } else if trimmed == "//- on_hover expressions" {
+            Some("hovers")
+        } else if trimmed == "//- completions" {
+            Some("completions")
+        } else if trimmed == "//- inlay_hints" {
+            Some("inlay_hints")
+        } else if trimmed == "//- semantic_tokens" {
+            Some("semantic_tokens")
+        } else {
+            None
+        };
 
-        if trimmed == "//- on_hover expressions" {
+        if let Some(new_section_name) = new_section {
             // Save previous section if any
             if let Some(section_name) = current_section {
                 save_section_with_comments(
@@ -347,59 +352,15 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
                     &mut hovers,
                     &mut completions,
                     &mut inlay_hints,
+                    &mut semantic_tokens,
                     &mut diagnostics_comments,
                     &mut hovers_comments,
                     &mut completions_comments,
                     &mut inlay_hints_comments,
+                    &mut semantic_tokens_comments,
                 );
             }
-            current_section = Some("hovers");
-            current_content = String::new();
-            current_comments = Vec::new();
-            continue;
-        }
-
-        if trimmed == "//- completions" {
-            // Save previous section if any
-            if let Some(section_name) = current_section {
-                save_section_with_comments(
-                    section_name,
-                    &current_content,
-                    &current_comments,
-                    &mut diagnostics,
-                    &mut hovers,
-                    &mut completions,
-                    &mut inlay_hints,
-                    &mut diagnostics_comments,
-                    &mut hovers_comments,
-                    &mut completions_comments,
-                    &mut inlay_hints_comments,
-                );
-            }
-            current_section = Some("completions");
-            current_content = String::new();
-            current_comments = Vec::new();
-            continue;
-        }
-
-        if trimmed == "//- inlay_hints" {
-            // Save previous section if any
-            if let Some(section_name) = current_section {
-                save_section_with_comments(
-                    section_name,
-                    &current_content,
-                    &current_comments,
-                    &mut diagnostics,
-                    &mut hovers,
-                    &mut completions,
-                    &mut inlay_hints,
-                    &mut diagnostics_comments,
-                    &mut hovers_comments,
-                    &mut completions_comments,
-                    &mut inlay_hints_comments,
-                );
-            }
-            current_section = Some("inlay_hints");
+            current_section = Some(new_section_name);
             current_content = String::new();
             current_comments = Vec::new();
             continue;
@@ -435,10 +396,12 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
             &mut hovers,
             &mut completions,
             &mut inlay_hints,
+            &mut semantic_tokens,
             &mut diagnostics_comments,
             &mut hovers_comments,
             &mut completions_comments,
             &mut inlay_hints_comments,
+            &mut semantic_tokens_comments,
         );
     }
 
@@ -447,10 +410,12 @@ fn parse_expectations_section(section: &str) -> ParsedExpectations {
         hovers: hovers.map(|s| s.trim().to_string()),
         completions,
         inlay_hints: inlay_hints.map(|s| s.trim().to_string()),
+        semantic_tokens: semantic_tokens.map(|s| s.trim().to_string()),
         diagnostics_comments,
         hovers_comments,
         completions_comments,
         inlay_hints_comments,
+        semantic_tokens_comments,
     }
 }
 
@@ -489,10 +454,12 @@ fn save_section_with_comments(
     hovers: &mut Option<String>,
     completions: &mut Option<CompletionExpectation>,
     inlay_hints: &mut Option<String>,
+    semantic_tokens: &mut Option<String>,
     diagnostics_comments: &mut Vec<String>,
     hovers_comments: &mut Vec<String>,
     completions_comments: &mut Vec<String>,
     inlay_hints_comments: &mut Vec<String>,
+    semantic_tokens_comments: &mut Vec<String>,
 ) {
     let content_trimmed = content.trim().to_string();
     match section_name {
@@ -511,6 +478,10 @@ fn save_section_with_comments(
         "inlay_hints" => {
             *inlay_hints = Some(content_trimmed);
             *inlay_hints_comments = comments.to_vec();
+        }
+        "semantic_tokens" => {
+            *semantic_tokens = Some(content_trimmed);
+            *semantic_tokens_comments = comments.to_vec();
         }
         _ => {}
     }
