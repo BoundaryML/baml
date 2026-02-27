@@ -2794,15 +2794,15 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     let arm_pat = &body.patterns[arm.pattern];
                     validate_catch_binding_type(ctx, arm_pat, arm.pattern, body);
 
-                    let matched_throw_types =
+                    let match_sets =
                         match_throw_types_for_pattern(ctx, arm.pattern, &clause_residual, body);
-                    if matched_throw_types.is_empty() {
+                    if match_sets.may_match.is_empty() {
                         ctx.push_error(TypeError::UnreachableCatchArm {
                             location: ErrorLocation::Pattern(arm.pattern),
                         });
                     }
 
-                    let arm_scrutinee_ty = throw_types_to_ty(ctx, &matched_throw_types);
+                    let arm_scrutinee_ty = throw_types_to_ty(ctx, &match_sets.may_match);
                     let (arm_name, arm_binding_ty) =
                         extract_pattern_binding(ctx, arm_pat, arm.pattern, &arm_scrutinee_ty, body);
 
@@ -2823,7 +2823,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     arm_types.push(arm_ty);
                     ctx.pop_scope();
 
-                    for handled in matched_throw_types {
+                    for handled in match_sets.definitely_handled {
                         clause_residual.remove(&handled);
                     }
                 }
@@ -3229,6 +3229,29 @@ fn literal_throw_fact(lit: &baml_compiler_hir::Literal) -> &'static str {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ThrowPatternMatch {
+    No,
+    Maybe,
+    Definite,
+}
+
+impl ThrowPatternMatch {
+    fn is_match(self) -> bool {
+        !matches!(self, ThrowPatternMatch::No)
+    }
+
+    fn is_definite(self) -> bool {
+        matches!(self, ThrowPatternMatch::Definite)
+    }
+}
+
+#[derive(Debug, Default)]
+struct ThrowPatternMatchSets {
+    may_match: BTreeSet<String>,
+    definitely_handled: BTreeSet<String>,
+}
+
 fn throw_fact_matches_named_type(throw_fact: &str, type_name: &str) -> bool {
     throw_fact == type_name
         || throw_fact
@@ -3266,29 +3289,64 @@ fn ty_matches_throw_fact(ty: &Ty, throw_fact: &str) -> bool {
     }
 }
 
-fn pattern_matches_throw_fact(
+fn pattern_match_strength(
     ctx: &mut TypeContext<'_>,
     pattern_id: PatId,
     throw_fact: &str,
     body: &ExprBody,
-) -> bool {
+) -> ThrowPatternMatch {
     let pattern = &body.patterns[pattern_id];
     match pattern {
-        Pattern::Binding(_) => true,
+        Pattern::Binding(_) => ThrowPatternMatch::Definite,
         Pattern::TypedBinding { ty, .. } => {
             let span = ctx.pattern_span(pattern_id);
             let lowered = ctx.lower_type(ty, span);
-            ty_matches_throw_fact(&lowered, throw_fact)
+            if !ty_matches_throw_fact(&lowered, throw_fact) {
+                ThrowPatternMatch::No
+            } else if throw_fact == "unknown" {
+                ThrowPatternMatch::Maybe
+            } else {
+                let throw_ty = throw_fact_to_ty(ctx, throw_fact);
+                if !throw_ty.is_unknown() && ctx.is_subtype_of(&throw_ty, &lowered) {
+                    ThrowPatternMatch::Definite
+                } else {
+                    ThrowPatternMatch::Maybe
+                }
+            }
         }
-        Pattern::Literal(lit) => literal_throw_fact(lit) == throw_fact || throw_fact == "unknown",
+        Pattern::Literal(lit) => {
+            if throw_fact == "unknown" || literal_throw_fact(lit) == throw_fact {
+                ThrowPatternMatch::Maybe
+            } else {
+                ThrowPatternMatch::No
+            }
+        }
         Pattern::EnumVariant { enum_name, variant } => {
             let enum_name = enum_name.as_str();
             let variant_fact = format!("{enum_name}.{}", variant.as_str());
-            throw_fact == variant_fact || throw_fact == enum_name || throw_fact == "unknown"
+            if throw_fact == variant_fact {
+                ThrowPatternMatch::Definite
+            } else if throw_fact == enum_name || throw_fact == "unknown" {
+                ThrowPatternMatch::Maybe
+            } else {
+                ThrowPatternMatch::No
+            }
         }
-        Pattern::Union(parts) => parts
-            .iter()
-            .any(|part| pattern_matches_throw_fact(ctx, *part, throw_fact, body)),
+        Pattern::Union(parts) => {
+            let mut saw_maybe = false;
+            for part in parts {
+                match pattern_match_strength(ctx, *part, throw_fact, body) {
+                    ThrowPatternMatch::Definite => return ThrowPatternMatch::Definite,
+                    ThrowPatternMatch::Maybe => saw_maybe = true,
+                    ThrowPatternMatch::No => {}
+                }
+            }
+            if saw_maybe {
+                ThrowPatternMatch::Maybe
+            } else {
+                ThrowPatternMatch::No
+            }
+        }
     }
 }
 
@@ -3297,12 +3355,216 @@ fn match_throw_types_for_pattern(
     pattern_id: PatId,
     residual_throw_types: &BTreeSet<String>,
     body: &ExprBody,
-) -> BTreeSet<String> {
-    residual_throw_types
-        .iter()
-        .filter(|throw_fact| pattern_matches_throw_fact(ctx, pattern_id, throw_fact, body))
-        .cloned()
-        .collect()
+) -> ThrowPatternMatchSets {
+    let mut out = ThrowPatternMatchSets::default();
+    for throw_fact in residual_throw_types {
+        let strength = pattern_match_strength(ctx, pattern_id, throw_fact, body);
+        if strength.is_match() {
+            out.may_match.insert(throw_fact.clone());
+        }
+        if strength.is_definite() {
+            out.definitely_handled.insert(throw_fact.clone());
+        }
+    }
+    out
+}
+
+fn collect_throw_facts_from_value(
+    ctx: &TypeContext<'_>,
+    value_expr_id: ExprId,
+    _body: &ExprBody,
+    out: &mut BTreeSet<String>,
+) {
+    if let Some((enum_name, variant_name)) = ctx.enum_variant_exprs.get(&value_expr_id) {
+        out.insert(format!("{}.{}", enum_name.as_str(), variant_name.as_str()));
+        return;
+    }
+
+    let thrown_ty = ctx.expr_types.get(&value_expr_id).unwrap_or(&Ty::Unknown);
+    match thrown_ty {
+        Ty::Literal(lit) => {
+            out.insert(match lit {
+                LiteralValue::Int(_) => "int".to_string(),
+                LiteralValue::Float(_) => "float".to_string(),
+                LiteralValue::String(_) => "string".to_string(),
+                LiteralValue::Bool(_) => "bool".to_string(),
+            });
+        }
+        Ty::Int => {
+            out.insert("int".to_string());
+        }
+        Ty::Float => {
+            out.insert("float".to_string());
+        }
+        Ty::String => {
+            out.insert("string".to_string());
+        }
+        Ty::Bool => {
+            out.insert("bool".to_string());
+        }
+        Ty::Null => {
+            out.insert("null".to_string());
+        }
+        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => {
+            out.insert(qn.display_name().as_str().to_string());
+        }
+        Ty::Union(members) => {
+            for member in members {
+                if let Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) = member {
+                    out.insert(qn.display_name().as_str().to_string());
+                }
+            }
+        }
+        _ => {
+            out.insert("unknown".to_string());
+        }
+    }
+}
+
+fn collect_throw_facts_from_stmt(
+    ctx: &TypeContext<'_>,
+    stmt_id: StmtId,
+    body: &ExprBody,
+    out: &mut BTreeSet<String>,
+) {
+    use baml_compiler_hir::Stmt;
+
+    match &body.stmts[stmt_id] {
+        Stmt::Expr(expr_id) => collect_throw_facts_from_expr(ctx, *expr_id, body, out),
+        Stmt::Let { initializer, .. } => {
+            if let Some(initializer) = initializer {
+                collect_throw_facts_from_expr(ctx, *initializer, body, out);
+            }
+        }
+        Stmt::While {
+            condition,
+            body: loop_body,
+            after,
+            ..
+        } => {
+            collect_throw_facts_from_expr(ctx, *condition, body, out);
+            collect_throw_facts_from_expr(ctx, *loop_body, body, out);
+            if let Some(after) = after {
+                collect_throw_facts_from_stmt(ctx, *after, body, out);
+            }
+        }
+        Stmt::Return(expr) => {
+            if let Some(expr) = expr {
+                collect_throw_facts_from_expr(ctx, *expr, body, out);
+            }
+        }
+        Stmt::Assign { target, value } => {
+            collect_throw_facts_from_expr(ctx, *target, body, out);
+            collect_throw_facts_from_expr(ctx, *value, body, out);
+        }
+        Stmt::AssignOp { target, value, .. } => {
+            collect_throw_facts_from_expr(ctx, *target, body, out);
+            collect_throw_facts_from_expr(ctx, *value, body, out);
+        }
+        Stmt::Assert { condition } => collect_throw_facts_from_expr(ctx, *condition, body, out),
+        Stmt::Throw { value } => {
+            collect_throw_facts_from_expr(ctx, *value, body, out);
+            collect_throw_facts_from_value(ctx, *value, body, out);
+        }
+        Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
+    }
+}
+
+fn collect_throw_facts_from_expr(
+    ctx: &TypeContext<'_>,
+    expr_id: ExprId,
+    body: &ExprBody,
+    out: &mut BTreeSet<String>,
+) {
+    use baml_compiler_hir::Expr;
+
+    match &body.exprs[expr_id] {
+        Expr::Throw { value } => {
+            collect_throw_facts_from_expr(ctx, *value, body, out);
+            collect_throw_facts_from_value(ctx, *value, body, out);
+        }
+        Expr::Call { callee, args } => {
+            collect_throw_facts_from_expr(ctx, *callee, body, out);
+            for arg in args {
+                collect_throw_facts_from_expr(ctx, *arg, body, out);
+            }
+
+            if let Some(function_name) = divergence::call_target_from_callee_expr(*callee, body) {
+                let throws = function_throw_sets(ctx.db(), ctx.db().project());
+                if let Some(transitive) = throws.transitive(ctx.db()).get(&function_name) {
+                    out.extend(transitive.iter().cloned());
+                } else if is_function_always_diverging(ctx, &function_name) {
+                    out.insert("unknown".to_string());
+                }
+            }
+        }
+        Expr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_throw_facts_from_expr(ctx, *condition, body, out);
+            collect_throw_facts_from_expr(ctx, *then_branch, body, out);
+            if let Some(else_branch) = else_branch {
+                collect_throw_facts_from_expr(ctx, *else_branch, body, out);
+            }
+        }
+        Expr::Match {
+            scrutinee, arms, ..
+        } => {
+            collect_throw_facts_from_expr(ctx, *scrutinee, body, out);
+            for arm_id in arms {
+                let arm = &body.match_arms[*arm_id];
+                if let Some(guard) = arm.guard {
+                    collect_throw_facts_from_expr(ctx, guard, body, out);
+                }
+                collect_throw_facts_from_expr(ctx, arm.body, body, out);
+            }
+        }
+        Expr::Binary { lhs, rhs, .. } => {
+            collect_throw_facts_from_expr(ctx, *lhs, body, out);
+            collect_throw_facts_from_expr(ctx, *rhs, body, out);
+        }
+        Expr::Unary { expr, .. } => collect_throw_facts_from_expr(ctx, *expr, body, out),
+        Expr::Object {
+            fields, spreads, ..
+        } => {
+            for (_, value) in fields {
+                collect_throw_facts_from_expr(ctx, *value, body, out);
+            }
+            for spread in spreads {
+                collect_throw_facts_from_expr(ctx, spread.expr, body, out);
+            }
+        }
+        Expr::Array { elements } => {
+            for elem in elements {
+                collect_throw_facts_from_expr(ctx, *elem, body, out);
+            }
+        }
+        Expr::Map { entries } => {
+            for (key, value) in entries {
+                collect_throw_facts_from_expr(ctx, *key, body, out);
+                collect_throw_facts_from_expr(ctx, *value, body, out);
+            }
+        }
+        Expr::Block { stmts, tail_expr } => {
+            for stmt_id in stmts {
+                collect_throw_facts_from_stmt(ctx, *stmt_id, body, out);
+            }
+            if let Some(tail_expr) = tail_expr {
+                collect_throw_facts_from_expr(ctx, *tail_expr, body, out);
+            }
+        }
+        Expr::FieldAccess { base, .. } => collect_throw_facts_from_expr(ctx, *base, body, out),
+        Expr::Index { base, index } => {
+            collect_throw_facts_from_expr(ctx, *base, body, out);
+            collect_throw_facts_from_expr(ctx, *index, body, out);
+        }
+        Expr::Catch { base, .. } => {
+            collect_throw_facts_from_expr(ctx, *base, body, out);
+        }
+        Expr::Literal(_) | Expr::Path(_) | Expr::Missing => {}
+    }
 }
 
 fn catch_base_throw_types(
@@ -3311,83 +3573,16 @@ fn catch_base_throw_types(
     base_ty: &Ty,
     body: &ExprBody,
 ) -> BTreeSet<String> {
-    use baml_compiler_hir::Expr;
+    let mut throw_types = BTreeSet::new();
+    collect_throw_facts_from_expr(ctx, base_expr_id, body, &mut throw_types);
+    if !throw_types.is_empty() {
+        return throw_types;
+    }
 
-    match &body.exprs[base_expr_id] {
-        Expr::Throw { value } => {
-            let mut throw_types = BTreeSet::new();
-            if let Some((enum_name, variant_name)) = ctx.enum_variant_exprs.get(value) {
-                throw_types.insert(format!("{}.{}", enum_name.as_str(), variant_name.as_str()));
-                return throw_types;
-            }
-
-            let thrown_ty = ctx.expr_types.get(value).unwrap_or(&Ty::Unknown);
-            match thrown_ty {
-                Ty::Literal(lit) => {
-                    throw_types.insert(match lit {
-                        LiteralValue::Int(_) => "int".to_string(),
-                        LiteralValue::Float(_) => "float".to_string(),
-                        LiteralValue::String(_) => "string".to_string(),
-                        LiteralValue::Bool(_) => "bool".to_string(),
-                    });
-                }
-                Ty::Int => {
-                    throw_types.insert("int".to_string());
-                }
-                Ty::Float => {
-                    throw_types.insert("float".to_string());
-                }
-                Ty::String => {
-                    throw_types.insert("string".to_string());
-                }
-                Ty::Bool => {
-                    throw_types.insert("bool".to_string());
-                }
-                Ty::Null => {
-                    throw_types.insert("null".to_string());
-                }
-                Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => {
-                    throw_types.insert(qn.display_name().as_str().to_string());
-                }
-                Ty::Union(members) => {
-                    for member in members {
-                        if let Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) = member {
-                            throw_types.insert(qn.display_name().as_str().to_string());
-                        }
-                    }
-                }
-                _ => {
-                    throw_types.insert("unknown".to_string());
-                }
-            }
-            throw_types
-        }
-        Expr::Call { callee, .. } => {
-            if let Some(function_name) = divergence::call_target_from_callee_expr(*callee, body) {
-                let throws = function_throw_sets(ctx.db(), ctx.db().project());
-                if let Some(transitive) = throws.transitive(ctx.db()).get(&function_name) {
-                    if !transitive.is_empty() {
-                        return transitive.clone();
-                    }
-                }
-                if is_function_always_diverging(ctx, &function_name) {
-                    return BTreeSet::from(["unknown".to_string()]);
-                }
-            }
-
-            if *base_ty == Ty::Never {
-                BTreeSet::from(["unknown".to_string()])
-            } else {
-                BTreeSet::new()
-            }
-        }
-        _ => {
-            if *base_ty == Ty::Never {
-                BTreeSet::from(["unknown".to_string()])
-            } else {
-                BTreeSet::new()
-            }
-        }
+    if *base_ty == Ty::Never {
+        BTreeSet::from(["unknown".to_string()])
+    } else {
+        BTreeSet::new()
     }
 }
 
