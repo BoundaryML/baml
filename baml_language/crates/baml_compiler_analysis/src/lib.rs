@@ -334,7 +334,6 @@ impl<'g, N: Ord + Clone> Tarjan<'g, N> {
         self.state.insert(node_id.clone(), node);
         self.stack.push(node_id.clone());
 
-        // BTreeSet iteration is already deterministic.
         if let Some(successors) = self.edges.get(node_id) {
             for succ_id in successors {
                 let succ = self.state[succ_id];
@@ -350,7 +349,6 @@ impl<'g, N: Ord + Clone> Tarjan<'g, N> {
 
         self.state.insert(node_id.clone(), node);
 
-        // Root of an SCC.
         if node.low_link == node.index {
             let mut component = Vec::new();
             while let Some(top) = self.stack.pop() {
@@ -363,7 +361,6 @@ impl<'g, N: Ord + Clone> Tarjan<'g, N> {
                     break;
                 }
             }
-            // Reverse so the component is in DFS discovery order.
             component.reverse();
             self.components.push(component);
         }

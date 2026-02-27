@@ -3369,6 +3369,12 @@ fn match_throw_types_for_pattern(
     out
 }
 
+/// TIR-level counterpart to `throw_inference::throw_fact_from_expr`.
+///
+/// Operates on fully inferred types (`ctx.expr_types`) rather than raw syntax,
+/// so it can resolve variables, function results, and other expressions that the
+/// HIR-level pre-pass records as `"unknown"`. Used for local catch-base analysis
+/// during type inference.
 fn collect_throw_facts_from_value(
     ctx: &TypeContext<'_>,
     value_expr_id: ExprId,

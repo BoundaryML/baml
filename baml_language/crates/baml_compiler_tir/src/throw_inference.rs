@@ -1,14 +1,44 @@
-//! BEP-007: Throw inference and contract checking.
+//! HIR-level throw inference (BEP-007).
 //!
-//! Scans HIR function bodies for `throw` expressions to compute direct throw
-//! facts, builds a call graph, and uses `AnalysisGraph` to propagate throw
-//! types transitively. Checks declared `throws` contracts against inferred sets.
+//! # Two-phase throw analysis
+//!
+//! Throw-fact collection happens in two phases, at two compiler layers:
+//!
+//! 1. **HIR-level (this module)** — syntax-only, pre-type-inference.
+//!    Scans raw HIR expression/statement trees to extract throw type names
+//!    from `Expr::Throw` / `Stmt::Throw` nodes, builds a call graph, and
+//!    uses `AnalysisGraph` (Tarjan SCC + topological propagation) to compute
+//!    transitive throw sets across functions.
+//!
+//! 2. **TIR-level** (`collect_throw_facts_from_value` in `lib.rs`) — uses
+//!    fully inferred `Ty` from the type context. Provides precise facts for
+//!    local catch-base analysis during type inference.
+//!
+//! ## Why two phases?
+//!
+//! Type inference for function A needs callee throw facts (for catch
+//! exhaustiveness), but computing precise throw facts for callees requires
+//! type-checking them — creating a potential cycle with mutual recursion.
+//! This HIR pre-pass breaks the cycle: it runs before type inference and
+//! supplies conservative cross-function facts via the `function_throw_sets`
+//! salsa query.
+//!
+//! ## Limitations
+//!
+//! Operating on syntax alone, this module can resolve type names for:
+//! - Literals (`throw "err"` → `"string"`)
+//! - Paths (`throw Errors.NotFound` → `"Errors.NotFound"`)
+//! - Typed object constructors (`throw AuthError {}` → `"AuthError"`)
+//!
+//! Anything requiring type resolution (variables, function call results)
+//! falls back to `"unknown"`. The TIR-level pass fills in the precision
+//! for local analysis.
 
 use std::collections::BTreeSet;
 
 use baml_base::Name;
 use baml_compiler_analysis::{AnalysisGraph, AnalysisResult};
-use baml_compiler_hir::{Expr, ExprBody, FunctionSignature, Literal, Stmt, TypeRef};
+use baml_compiler_hir::{Expr, ExprBody, Literal, Stmt};
 
 use crate::divergence::call_target_from_callee_expr;
 
@@ -21,43 +51,49 @@ pub struct ThrowAnalysisInput<'a> {
     pub body: Option<&'a ExprBody>,
 }
 
-/// Result of throw inference for a single function.
-#[derive(Debug, Clone)]
-pub struct FunctionThrowInfo {
-    /// Types directly thrown by this function.
-    pub direct: BTreeSet<ThrowFact>,
-    /// Types transitively thrown (direct + propagated from callees).
-    pub transitive: BTreeSet<ThrowFact>,
+/// Extract a throw fact from a thrown expression's HIR representation.
+///
+/// Total function: always returns a fact. Expression forms that carry an
+/// obvious type name produce that name; everything else yields `"unknown"`.
+fn throw_fact_from_expr(expr: &Expr) -> ThrowFact {
+    match expr {
+        Expr::Literal(Literal::String(_)) => "string".into(),
+        Expr::Literal(Literal::Int(_)) => "int".into(),
+        Expr::Literal(Literal::Float(_)) => "float".into(),
+        Expr::Literal(Literal::Bool(_)) => "bool".into(),
+        Expr::Literal(Literal::Null) => "null".into(),
+        Expr::Path(segments) if !segments.is_empty() => segments
+            .iter()
+            .map(Name::as_str)
+            .collect::<Vec<_>>()
+            .join("."),
+        Expr::Object {
+            type_name: Some(name),
+            ..
+        } => name.as_str().into(),
+        _ => "unknown".into(),
+    }
 }
 
 /// Collect direct throw types from a function body's HIR.
 ///
-/// Walks all expressions and statements looking for `Expr::Throw` and
-/// `Stmt::Throw`, recording the inferred type name of the thrown value.
+/// Flat-scans all expressions and statements for `Throw` nodes, recording a
+/// throw fact for each.
 pub fn collect_direct_throws(body: &ExprBody) -> BTreeSet<ThrowFact> {
-    let mut throws = BTreeSet::new();
+    let mut facts = BTreeSet::new();
 
-    for (_id, expr) in body.exprs.iter() {
+    for (_, expr) in body.exprs.iter() {
         if let Expr::Throw { value } = expr {
-            if let Some(type_name) = infer_throw_type_name(&body.exprs[*value]) {
-                throws.insert(type_name);
-            } else {
-                throws.insert("unknown".to_string());
-            }
+            facts.insert(throw_fact_from_expr(&body.exprs[*value]));
         }
     }
-
-    for (_id, stmt) in body.stmts.iter() {
+    for (_, stmt) in body.stmts.iter() {
         if let Stmt::Throw { value } = stmt {
-            if let Some(type_name) = infer_throw_type_name(&body.exprs[*value]) {
-                throws.insert(type_name);
-            } else {
-                throws.insert("unknown".to_string());
-            }
+            facts.insert(throw_fact_from_expr(&body.exprs[*value]));
         }
     }
 
-    throws
+    facts
 }
 
 /// Collect function call targets from a function body's HIR.
@@ -75,35 +111,6 @@ pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
     }
 
     targets
-}
-
-/// Try to infer the type name of a thrown expression from its HIR representation.
-fn infer_throw_type_name(expr: &Expr) -> Option<String> {
-    match expr {
-        Expr::Literal(Literal::String(_)) => Some("string".to_string()),
-        Expr::Literal(Literal::Int(_)) => Some("int".to_string()),
-        Expr::Literal(Literal::Float(_)) => Some("float".to_string()),
-        Expr::Literal(Literal::Bool(_)) => Some("bool".to_string()),
-        Expr::Literal(Literal::Null) => Some("null".to_string()),
-        // Preserve path precision for thrown values:
-        // - `Status.HttpError` -> `Status.HttpError`
-        // - `pkg.Status.HttpError` -> `pkg.Status.HttpError`
-        // - `Status` -> `Status`
-        Expr::Path(segments) if !segments.is_empty() => {
-            if segments.len() == 1 {
-                Some(segments[0].as_str().to_string())
-            } else {
-                Some(
-                    segments
-                        .iter()
-                        .map(Name::as_str)
-                        .collect::<Vec<_>>()
-                        .join("."),
-                )
-            }
-        }
-        _ => None,
-    }
 }
 
 /// Build a throw analysis graph from a set of function signatures and bodies.
@@ -130,100 +137,6 @@ pub fn analyze_throws(functions: &[ThrowAnalysisInput<'_>]) -> AnalysisResult<Na
     graph.analyze()
 }
 
-/// Check a function's throws contract against its inferred throw set.
-///
-/// Returns `None` if the contract is satisfied or there is no contract.
-/// Returns `Some(violation)` with a description of the violation.
-pub fn check_throws_contract(
-    sig: &FunctionSignature,
-    inferred: &BTreeSet<ThrowFact>,
-) -> Option<ThrowsViolation> {
-    let declared = sig.throws.as_ref()?;
-    let declared_types = extract_type_names(declared);
-
-    // Check if all inferred types are covered by the declared set
-    let uncovered: BTreeSet<&String> = inferred
-        .iter()
-        .filter(|t| !declared_types.contains(t.as_str()))
-        .collect();
-
-    if uncovered.is_empty() {
-        return None;
-    }
-
-    Some(ThrowsViolation {
-        function_name: sig.name.to_string(),
-        declared_types,
-        uncovered_types: uncovered.into_iter().cloned().collect(),
-    })
-}
-
-/// A throws contract violation.
-#[derive(Debug, Clone)]
-pub struct ThrowsViolation {
-    pub function_name: String,
-    pub declared_types: BTreeSet<String>,
-    pub uncovered_types: BTreeSet<String>,
-}
-
-impl std::fmt::Display for ThrowsViolation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Function '{}' declares `throws {}` but may also throw: {}",
-            self.function_name,
-            self.declared_types
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(" | "),
-            self.uncovered_types
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(", "),
-        )
-    }
-}
-
-/// Extract the set of type names from a `TypeRef` (handling unions).
-fn extract_type_names(ty: &TypeRef) -> BTreeSet<String> {
-    let mut names = BTreeSet::new();
-    match ty {
-        TypeRef::Union(members) => {
-            for member in members {
-                names.extend(extract_type_names(member));
-            }
-        }
-        TypeRef::Int => {
-            names.insert("int".to_string());
-        }
-        TypeRef::Float => {
-            names.insert("float".to_string());
-        }
-        TypeRef::String => {
-            names.insert("string".to_string());
-        }
-        TypeRef::Bool => {
-            names.insert("bool".to_string());
-        }
-        TypeRef::Null => {
-            names.insert("null".to_string());
-        }
-        TypeRef::Path(path) => {
-            let full_name = path
-                .segments
-                .iter()
-                .map(Name::as_str)
-                .collect::<Vec<_>>()
-                .join(".");
-            names.insert(full_name);
-        }
-        _ => {}
-    }
-    names
-}
-
 #[cfg(test)]
 mod tests {
     use la_arena::Arena;
@@ -231,46 +144,63 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extract_type_names_primitives() {
-        assert_eq!(
-            extract_type_names(&TypeRef::Int),
-            ["int".to_string()].into()
-        );
-        assert_eq!(
-            extract_type_names(&TypeRef::String),
-            ["string".to_string()].into()
-        );
-    }
-
-    #[test]
-    fn extract_type_names_union() {
-        let union_ty = TypeRef::Union(vec![TypeRef::Int, TypeRef::String]);
-        let names = extract_type_names(&union_ty);
-        assert!(names.contains("int"));
-        assert!(names.contains("string"));
-        assert_eq!(names.len(), 2);
-    }
-
-    #[test]
-    fn infer_throw_type_name_preserves_variant_path_for_variants() {
+    fn throw_fact_from_expr_paths() {
         let single = Expr::Path(vec![Name::new("Status")]);
-        assert_eq!(infer_throw_type_name(&single), Some("Status".to_string()));
+        assert_eq!(throw_fact_from_expr(&single), "Status");
 
-        let two = Expr::Path(vec![Name::new("Status"), Name::new("HttpError")]);
-        assert_eq!(
-            infer_throw_type_name(&two),
-            Some("Status.HttpError".to_string())
-        );
+        let dotted = Expr::Path(vec![Name::new("Status"), Name::new("HttpError")]);
+        assert_eq!(throw_fact_from_expr(&dotted), "Status.HttpError");
 
-        let three = Expr::Path(vec![
+        let deep = Expr::Path(vec![
             Name::new("pkg"),
             Name::new("Status"),
             Name::new("HttpError"),
         ]);
+        assert_eq!(throw_fact_from_expr(&deep), "pkg.Status.HttpError");
+    }
+
+    #[test]
+    fn throw_fact_from_expr_object_constructor() {
+        let with_name = Expr::Object {
+            type_name: Some(Name::new("AuthenticationError")),
+            fields: Vec::new(),
+            spreads: Vec::new(),
+        };
+        assert_eq!(throw_fact_from_expr(&with_name), "AuthenticationError");
+
+        let without_name = Expr::Object {
+            type_name: None,
+            fields: Vec::new(),
+            spreads: Vec::new(),
+        };
+        assert_eq!(throw_fact_from_expr(&without_name), "unknown");
+    }
+
+    #[test]
+    fn throw_fact_from_expr_literals() {
         assert_eq!(
-            infer_throw_type_name(&three),
-            Some("pkg.Status.HttpError".to_string())
+            throw_fact_from_expr(&Expr::Literal(Literal::String("x".into()))),
+            "string"
         );
+        assert_eq!(
+            throw_fact_from_expr(&Expr::Literal(Literal::Int(42))),
+            "int"
+        );
+        assert_eq!(
+            throw_fact_from_expr(&Expr::Literal(Literal::Float("1.0".into()))),
+            "float"
+        );
+        assert_eq!(
+            throw_fact_from_expr(&Expr::Literal(Literal::Bool(true))),
+            "bool"
+        );
+        assert_eq!(throw_fact_from_expr(&Expr::Literal(Literal::Null)), "null");
+    }
+
+    #[test]
+    fn throw_fact_from_expr_unknown_fallback() {
+        assert_eq!(throw_fact_from_expr(&Expr::Missing), "unknown");
+        assert_eq!(throw_fact_from_expr(&Expr::Path(vec![])), "unknown");
     }
 
     fn make_throw_body(value: Literal) -> ExprBody {
@@ -327,6 +257,36 @@ mod tests {
             root_expr: Some(throw_id),
             diagnostics: Vec::new(),
         }
+    }
+
+    #[test]
+    fn collect_direct_throws_object_constructor() {
+        let mut exprs = Arena::new();
+        let obj = exprs.alloc(Expr::Object {
+            type_name: Some(Name::new("AuthenticationError")),
+            fields: Vec::new(),
+            spreads: Vec::new(),
+        });
+        let throw_expr = exprs.alloc(Expr::Throw { value: obj });
+        let body = ExprBody {
+            exprs,
+            stmts: Arena::new(),
+            patterns: Arena::new(),
+            match_arms: Arena::new(),
+            catch_arms: Arena::new(),
+            types: Arena::new(),
+            root_expr: Some(throw_expr),
+            diagnostics: Vec::new(),
+        };
+        let throws = collect_direct_throws(&body);
+        assert!(
+            throws.contains("AuthenticationError"),
+            "throw of object constructor should use type name, got: {throws:?}",
+        );
+        assert!(
+            !throws.contains("unknown"),
+            "throw of typed object constructor should NOT be 'unknown', got: {throws:?}",
+        );
     }
 
     #[test]
