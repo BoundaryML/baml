@@ -3,11 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === DIAGNOSTICS ===
   [type] Error: Type `int` has no field `to_string`
-    ╭─[ main.baml:16:2 ]
+    ╭─[ main.baml:16:7 ]
     │
  16 │     z.to_string()
-    │  ────────┬───────  
-    │          ╰───────── Type `int` has no field `to_string`
+    │       ─────┬─────  
+    │            ╰─────── Type `int` has no field `to_string`
     │ 
     │ Note: Error code: E0007
 ────╯

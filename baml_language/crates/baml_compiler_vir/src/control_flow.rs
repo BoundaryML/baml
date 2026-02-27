@@ -230,6 +230,8 @@ enum FrameEntry {
 }
 
 impl FrameEntry {
+    // The types of children that, if peers in a code sequence,
+    // are "linear" (follow one another).
     fn children_are_linear(&self) -> bool {
         !matches!(self, FrameEntry::BranchGroup)
     }
