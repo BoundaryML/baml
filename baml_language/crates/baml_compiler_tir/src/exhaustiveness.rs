@@ -500,7 +500,15 @@ impl<'a> ExhaustivenessChecker<'a> {
 /// `Union` would be semantically misleading and would leave a dead entry
 /// in the coverage list via `add_to_coverage`'s catch-all arm.
 fn values_into_value_set(values: Vec<ValueSet>) -> ValueSet {
-    let mut iter = values.into_iter().filter(|v| v != &ValueSet::Empty);
+    let mut union = Vec::new();
+    for value in values.into_iter().filter(|v| v != &ValueSet::Empty) {
+        if matches!(value, ValueSet::All) {
+            return ValueSet::All;
+        }
+        union.push(value);
+    }
+
+    let mut iter = union.into_iter();
     match (iter.next(), iter.next()) {
         (None, _) => ValueSet::Empty,
         (Some(only), None) => only,
@@ -852,10 +860,7 @@ mod tests {
     }
 
     impl TestCtx {
-        fn new(
-            enum_variants: HashMap<Name, Vec<Name>>,
-            type_aliases: HashMap<Name, Ty>,
-        ) -> Self {
+        fn new(enum_variants: HashMap<Name, Vec<Name>>, type_aliases: HashMap<Name, Ty>) -> Self {
             Self {
                 enum_variants,
                 type_aliases,
@@ -980,7 +985,10 @@ mod tests {
         let values = ctx.checker().expand_type_to_values(&ty_alias("A"));
         assert_eq!(
             values,
-            vec![ValueSet::OfType(make_name("A")), ValueSet::OfType(make_name("int"))],
+            vec![
+                ValueSet::OfType(make_name("A")),
+                ValueSet::OfType(make_name("int"))
+            ],
             "cyclic alias should expand to [OfType(A), OfType(int)]"
         );
     }
@@ -1025,7 +1033,11 @@ mod tests {
 
         // Scrutinee: MyStatus alias → expands to [Active, Inactive]
         let required = checker.expand_type_to_values(&ty_alias("MyStatus"));
-        assert_eq!(required.len(), 2, "alias scrutinee should expand to 2 variants");
+        assert_eq!(
+            required.len(),
+            2,
+            "alias scrutinee should expand to 2 variants"
+        );
 
         // Pattern `x: MyStatus` → must also expand through the alias
         let pattern_coverage = checker.ty_to_value_set(&ty_alias("MyStatus"));
