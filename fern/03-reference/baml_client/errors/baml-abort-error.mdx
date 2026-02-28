@@ -57,12 +57,33 @@ description: "Error thrown when a BAML operation is cancelled"
     ```
   </Tab>
   
+  <Tab title="Rust" language="rust">
+    ```rust
+    // In Rust, cancellation errors are returned as Result::Err
+    // Check the error message for cancellation/timeout indicators
+    use baml::CancellationToken;
+    use myproject::baml_client::sync_client::B;
+
+    let input = input(); // Your input data
+    let token = CancellationToken::new();
+    match B.FunctionName.with_cancellation_token(Some(token)).call(input) {
+        Ok(result) => { /* success */ }
+        Err(e) => {
+            let err = format!("{:?}", e).to_lowercase();
+            if err.contains("cancel") || err.contains("timeout") {
+                // Operation was cancelled or timed out
+            }
+        }
+    }
+    ```
+  </Tab>
+
   <Tab title="Ruby" language="ruby">
     ```ruby
     module Baml
       class AbortError < StandardError
         attr_reader :reason, :detailed_message
-        
+
         def initialize(message, reason = nil, detailed_message = '')
           super(message)
           @reason = reason

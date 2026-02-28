@@ -140,6 +140,34 @@ other_collector = Baml::Collector.new(name: "other-collector")
 result2 = my_b.ExtractResume(input: "...", baml_options: { collector: other_collector })
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+<Note>
+Rust doesn't have a `with_options` method. Instead, use builder methods like `.with_client()`, `.with_collector()`, `.with_client_registry()`, and `.with_env_var()` directly on function calls.
+</Note>
+
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+use baml::ClientRegistry;
+use std::collections::HashMap;
+
+fn main() {
+    let collector = new_collector("my-collector");
+
+    let mut registry = ClientRegistry::new();
+    registry.set_primary_client("openai/gpt-5-mini");
+
+    // Pass options per call using builder methods
+    let result = B.ExtractResume
+        .with_collector(&collector)
+        .with_client_registry(&registry)
+        .with_env_var("BAML_LOG", "DEBUG")
+        .call("...")
+        .unwrap();
+}
+```
+</Tab>
 </Tabs>
 
 ## Common Use Cases
@@ -275,6 +303,38 @@ print(collector.logs)
 print(collector.last.usage)
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+use baml::ClientRegistry;
+
+fn main() {
+    let collector = new_collector("my-collector");
+
+    let mut registry = ClientRegistry::new();
+    registry.set_primary_client("openai/gpt-5-mini");
+
+    // Pass options per call using builder methods
+    let res = B.ExtractResume
+        .with_collector(&collector)
+        .with_client_registry(&registry)
+        .call("...")
+        .unwrap();
+
+    let invoice = B.ExtractInvoice
+        .with_collector(&collector)
+        .with_client_registry(&registry)
+        .call("...")
+        .unwrap();
+
+    // Access logs from collector
+    let logs = collector.logs();
+    println!("{:?}", logs);
+}
+```
+</Tab>
 </Tabs>
 
 ### Per-call Tags
@@ -321,6 +381,26 @@ logs, _ := collector.Logs()
 if len(logs) > 0 {
     t, _ := logs[0].Tags()
     fmt.Println(t)
+}
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+
+let collector = new_collector("tags-collector");
+let result = B.TestOpenAIGPT4oMini
+    .with_collector(&collector)
+    .with_tag("call_id", "first")
+    .with_tag("version", "v1")
+    .call("hello")
+    .unwrap();
+
+let logs = collector.logs();
+if let Some(log) = logs.last() {
+    println!("{:?}", log.tags());
 }
 ```
 </Tab>
@@ -444,6 +524,27 @@ end
 result = stream.get_final_result
 # Use tags or collector.last / collector.logs for usage
 print(collector.last.usage)
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+
+let collector = new_collector("my-collector");
+
+let mut stream = B.ExtractResume
+    .with_collector(&collector)
+    .stream("...")?;
+
+for partial in stream.partials() {
+    println!("{:?}", partial?);
+}
+
+let result = stream.get_final_response()?;
+// Access usage from collector
+println!("{:?}", collector.usage());
 ```
 </Tab>
 </Tabs>

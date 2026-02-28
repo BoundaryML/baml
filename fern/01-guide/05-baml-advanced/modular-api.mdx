@@ -79,6 +79,18 @@ func main() {
     fmt.Printf("Resume: %+v\n", resume)
 }
 ```
+
+```rust Rust
+use myproject::baml_client::sync_client::B;
+
+fn main() {
+    // HTTP request + LLM response parsing.
+    let resume = B.ExtractResume
+        .call("John Doe | Software Engineer | BSc in CS")
+        .unwrap();
+    println!("{:?}", resume);
+}
+```
 </CodeBlocks>
 
 However, sometimes we may want to execute a function without so much abstraction
@@ -188,6 +200,20 @@ func main() {
     fmt.Printf("Parsed: %+v\n", parsed)
 }
 ```
+
+```rust Rust
+use myproject::baml_client::sync_client::B;
+
+fn main() {
+    // Parse an LLM response string into the typed Resume struct.
+    let parsed = B.ExtractResume
+        .parse("{ \"name\": \"John Doe\", \"experience\": [\"Software Engineer\"], \"education\": [\"BSc in CS\"] }")
+        .unwrap();
+
+    // Fully parsed Resume type.
+    println!("{:?}", parsed);
+}
+```
 </CodeBlocks>
 
 Note that `request.body.json()` returns an object (dict in Python, hash in Ruby)
@@ -213,6 +239,10 @@ req.body = baml_req.body.raw.pack("C*")
 
 ```go Go
 // Go modular API coming soon!
+```
+
+```rust Rust
+// Rust modular API coming soon!
 ```
 </CodeBlocks>
 

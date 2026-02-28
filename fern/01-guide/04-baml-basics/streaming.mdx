@@ -558,6 +558,48 @@ end
 ```
 
 </Tab>
+
+<Tab title="Rust" language="rust">
+BAML will generate `B.ExtractReceiptInfo.stream()` for you, which you can use like so:
+
+```rust main.rs
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::types::*;
+
+// Using both partials and get_final_response() from a stream
+fn example1(receipt: &str) {
+    let mut stream = B.ExtractReceiptInfo.stream(receipt).unwrap();
+
+    // partial is a Partial type with all Optional fields
+    for partial in stream.partials() {
+        let partial = partial.unwrap();
+        println!("partial: {} items", partial.items.len());
+    }
+
+    // final is the full, original, validated ReceiptInfo type
+    let final_result = stream.get_final_response().unwrap();
+    println!("final: {} items", final_result.items.len());
+}
+
+// Using only get_final_response() of a stream
+//
+// In this case, you should just use B.ExtractReceiptInfo.call(receipt) instead,
+// which is slightly faster and more efficient.
+fn example2(receipt: &str) {
+    let stream = B.ExtractReceiptInfo.stream(receipt).unwrap();
+    let final_result = stream.get_final_response().unwrap();
+    println!("final: {} items", final_result.items.len());
+}
+
+fn main() {
+    let receipt = "04/14/2024 1:05 pm\n\nTicket: 220000082489\nRegister: Shop Counter\nEmployee: Connor\nCustomer: Sam\nItem\t#\tPrice\nGuide leash (1 Pair) uni UNI\n1\t$34.95\nThe Index Town Walls\n1\t$35.00\nBoot Punch\n3\t$60.00\nSubtotal\t$129.95\nTax ($129.95 @ 9%)\t$11.70\nTotal Tax\t$11.70\nTotal\t$141.65";
+
+    example1(receipt);
+    example2(receipt);
+}
+```
+</Tab>
+
 <Tab title="OpenAPI" language="openapi">
 
 <Tip>
@@ -712,6 +754,40 @@ Thread.new do
   controller.abort
   puts "Stream cancelled due to timeout"
 end
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use baml::CancellationToken;
+use myproject::baml_client::sync_client::B;
+use std::time::Duration;
+
+// Cancel a stream after a timeout
+let token = CancellationToken::new_with_timeout(Duration::from_secs(5));
+
+let mut stream = B.ExtractReceiptInfo
+    .with_cancellation_token(Some(token))
+    .stream(receipt)
+    .unwrap();
+
+for partial in stream.partials() {
+    match partial {
+        Ok(partial) => {
+            println!("Received {} items so far", partial.items.len());
+
+            // Stop consuming the stream if we have enough items
+            if partial.items.len() >= 5 {
+                println!("Stopping stream - got enough items");
+                break;
+            }
+        }
+        Err(e) => {
+            eprintln!("Stream error: {}", e);
+            break;
+        }
+    }
+}
 ```
 </Tab>
 </Tabs>

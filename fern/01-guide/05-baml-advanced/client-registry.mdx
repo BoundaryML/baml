@@ -165,6 +165,36 @@ func main() {
 ```
 </Tab>
 
+<Tab title="Rust" language="rust">
+
+```rust
+use baml::ClientRegistry;
+use myproject::baml_client::sync_client::B;
+use std::collections::HashMap;
+
+fn main() {
+    let mut registry = ClientRegistry::new();
+
+    // Creates a new client
+    let mut options = HashMap::new();
+    options.insert("model".to_string(), serde_json::json!("gpt-5-mini"));
+    options.insert("temperature".to_string(), serde_json::json!(0.7));
+    registry.add_llm_client("MyAmazingClient", "openai", options);
+
+    // Sets MyAmazingClient as the client
+    registry.set_primary_client("MyAmazingClient");
+
+    // ExtractResume will now use MyAmazingClient as the calling client
+    let res = B.ExtractResume
+        .with_client_registry(&registry)
+        .call("...")
+        .unwrap();
+
+    println!("Result: {:?}", res);
+}
+```
+</Tab>
+
 <Tab title="OpenAPI" language="openapi">
 
 The API supports passing client registry as a field on `__baml_options__` in the request body.
@@ -277,6 +307,17 @@ res = Baml.Client.extract_resume(input: "...", baml_options: { client_registry: 
 cr := baml.NewClientRegistry()
 cr.SetPrimary("GptOpusFallback")
 res, err := b.ExtractResume(ctx, "...", b.WithClientRegistry(cr))
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use baml::ClientRegistry;
+use myproject::baml_client::sync_client::B;
+
+let mut registry = ClientRegistry::new();
+registry.set_primary_client("GptOpusFallback");
+let res = B.ExtractResume.with_client_registry(&registry).call("...").unwrap();
 ```
 </Tab>
 

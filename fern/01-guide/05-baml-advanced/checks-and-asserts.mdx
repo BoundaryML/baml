@@ -206,13 +206,13 @@ package main
 import (
     "context"
     "fmt"
-    
+
     "github.com/boundaryml/baml"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     citation, err := baml.GetCitation(ctx, "SpaceX, is an American spacecraft manufacturer, launch service provider...", nil)
     if err != nil {
         // Handle validation errors
@@ -223,9 +223,32 @@ func main() {
         fmt.Printf("An unexpected error occurred: %v\n", err)
         return
     }
-    
+
     // Access the citation fields
     fmt.Printf("Quote: %s from %s\n", citation.Quote, citation.WebsiteLink)
+}
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+
+fn main() {
+    match B.GetCitation.call("SpaceX, is an American spacecraft manufacturer, launch service provider...") {
+        Ok(citation) => {
+            // Access the citation fields
+            println!("Quote: {} from {}", citation.quote, citation.website_link);
+        }
+        Err(e) => {
+            let err_str = format!("{:?}", e).to_lowercase();
+            if err_str.contains("validation") {
+                println!("Validation error: {}", e);
+            } else {
+                eprintln!("An unexpected error occurred: {}", e);
+            }
+        }
+    }
 }
 ```
 </Tab>
@@ -260,6 +283,14 @@ type Bar = Checked<int,"less_than_zero">[]
 ```go
 // Go type signature for checked fields:
 type Bar = []baml.Checked[int, map[string]baml.CheckResult]
+// where the map contains "less_than_zero" as a key
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+// Rust type signature for checked fields:
+// Vec<Checked<i64, HashMap<String, CheckResult>>>
 // where the map contains "less_than_zero" as a key
 ```
 </Tab>
@@ -350,29 +381,54 @@ package main
 import (
     "context"
     "fmt"
-    
+
     "github.com/boundaryml/baml"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     citation, err := baml.GetCitation(ctx, "SpaceX, is an American spacecraft manufacturer, launch service provider...", nil)
     if err != nil {
         panic(fmt.Sprintf("Failed to get citation: %v", err))
     }
-    
+
     // Access the value of the quote field
     quote := citation.Quote.Value
     fmt.Printf("Quote: %s\n", quote)
-    
+
     // Access a particular check
     exactCitationMatch := citation.Quote.Checks["exact_citation_match"].Status
     fmt.Printf("Citation match status: %s\n", exactCitationMatch)
-    
+
     // Access each check and its status
     for name, check := range citation.Quote.Checks {
         fmt.Printf("Check %s: %s\n", name, check.Status)
+    }
+}
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+
+fn main() {
+    let citation = B.GetCitation
+        .call("SpaceX, is an American spacecraft manufacturer, launch service provider...")
+        .unwrap();
+
+    // Access the value of the quote field
+    let quote = &citation.quote.value;
+    println!("Quote: {}", quote);
+
+    // Access a particular check
+    let exact_citation_match = &citation.quote.checks["exact_citation_match"].status;
+    println!("Citation match status: {}", exact_citation_match);
+
+    // Access each check and its status
+    for (name, check) in &citation.quote.checks {
+        println!("Check {}: {}", name, check.status);
     }
 }
 ```

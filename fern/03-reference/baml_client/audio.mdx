@@ -110,6 +110,20 @@ func stringPtr(s string) *string {
 }
 ```
 
+```rust Rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_audio_from_url;
+
+fn test_audio_input() {
+    // Create an Audio from a URL
+    let audio = new_audio_from_url(
+        "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg",
+        None,
+    );
+    let res = B.TestAudioInput.call(&audio).unwrap();
+}
+```
+
 ```ruby
 # Ruby implementation is in development.
 ```
@@ -286,6 +300,25 @@ func stringPtr(s string) *string {
   type="() (map[string]interface{}, error)"
 >
   Convert the audio to a map representation. Returns either `{"url": string}` or `{"base64": string, "media_type": string}`.
+</ParamField>
+
+</Tab>
+<Tab title="Rust" language="rust">
+
+### Static Methods
+
+<ParamField
+  path="new_audio_from_url"
+  type="(url: &str, media_type: Option<&str>) -> BamlAudio"
+>
+  Creates an Audio from a URL. Optionally specify the media type.
+</ParamField>
+
+<ParamField
+  path="new_audio_from_base64"
+  type="(base64: &str, media_type: Option<&str>) -> BamlAudio"
+>
+  Creates an Audio from Base64 encoded data with an optional MIME type.
 </ParamField>
 
 </Tab>

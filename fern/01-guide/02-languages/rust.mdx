@@ -1,0 +1,165 @@
+---
+title: Rust
+subtitle: Set up BAML with Rust
+---
+
+To set up BAML with Rust do the following:
+
+<Steps>
+  ### Install BAML VSCode/Cursor Extension
+      https://marketplace.visualstudio.com/items?itemName=boundary.baml-extension
+
+      - syntax highlighting
+      - testing playground
+      - prompt previews
+
+  ### Install BAML CLI and Initialize Project
+      ```bash rust
+      cargo install baml-cli && baml-cli init
+      ```
+
+      This command will:
+      1. Install the BAML CLI tool globally
+      2. Create starter BAML code in a `baml_src` directory
+      3. Set up the basic project structure
+
+  ### Install BAML Rust Runtime
+      After initializing your project, add the BAML runtime library:
+
+      ```bash rust
+      cargo add baml
+      ```
+
+  ### Generate the `baml_client` Rust module from `.baml` files
+
+    One of the files in your `baml_src` directory will have a [generator block](/ref/baml/generator). This tells BAML how to generate the `baml_client` module, which will have auto-generated Rust code to call your BAML functions.
+
+    Any types defined in .baml files will be converted into Rust structs and enums in the `baml_client` module.
+
+    ```bash
+    baml-cli generate
+    ```
+
+    You can modify your build process to always call baml-cli generate before building.
+
+    ```makefile Makefile
+    .PHONY: generate build
+
+    generate:
+    	baml-cli generate
+
+    build: generate
+    	cargo build
+
+    test: generate
+    	cargo test
+    ```
+
+    See [What is baml_client](/guide/introduction/baml_client) to learn more about how this works.
+
+    <Tip>
+      If you set up the [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension), it will automatically run `baml-cli generate` on saving a BAML file.
+    </Tip>
+
+  ### Use a BAML function in Rust!
+    <Error>If `baml_client` doesn't exist, make sure to run the previous step! </Error>
+
+    ```rust main.rs
+    use myproject::baml_client::sync_client::B;
+    use myproject::baml_client::types::*;
+
+    fn main() {
+        let raw_resume = "..."; // Your resume text
+
+        // BAML's internal parser guarantees ExtractResume
+        // to always return a Resume type or an error
+        let resume = B.ExtractResume.call(raw_resume).unwrap();
+
+        println!("Extracted resume: {:?}", resume);
+    }
+
+    fn example_stream(raw_resume: &str) -> Result<Resume, baml_client::Error> {
+        let mut stream = B.ExtractResume.stream(raw_resume)?;
+
+        for partial in stream.partials() {
+            let partial = partial?;
+            println!("Partial: {:?}", partial); // This will be a partial Resume type
+        }
+
+        let final_result = stream.get_final_response()?;
+        Ok(final_result) // This will be a complete Resume type
+    }
+    ```
+</Steps>
+
+## Working with Cargo
+
+BAML integrates seamlessly with Cargo. Make sure your `Cargo.toml` includes the BAML dependency:
+
+```toml Cargo.toml
+[package]
+name = "myproject"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+baml = "0.203.1"
+```
+
+The generated `baml_client` module lives inside your crate, so you can import it as:
+
+```rust
+// Choose one:
+use myproject::baml_client::sync_client::B;   // Sync API
+// or:
+// use myproject::baml_client::async_client::B;   // Async API
+use myproject::baml_client::types::*;          // Generated types
+```
+
+## Error Handling
+
+All BAML Rust function calls return `Result<T, baml_client::Error>`, allowing idiomatic error handling:
+
+```rust
+use myproject::baml_client::sync_client::B;
+
+fn main() {
+    let raw_resume = "..."; // Your resume text
+    match B.ExtractResume.call(raw_resume) {
+        Ok(resume) => println!("Extracted: {:?}", resume),
+        Err(e) => eprintln!("Error: {}", e),
+    }
+}
+```
+
+## Cancellation and Timeouts
+
+Rust uses `CancellationToken` for cancellation and timeouts instead of a context parameter:
+
+```rust
+use baml::CancellationToken;
+use std::time::Duration;
+
+// Set timeouts
+let resume = "..."; // Your resume text
+
+let token = CancellationToken::new_with_timeout(Duration::from_secs(30));
+let result = B.ExtractResume
+    .with_cancellation_token(Some(token))
+    .call(resume);
+
+// Manual cancellation
+let token = CancellationToken::new();
+let token_clone = token.clone();
+
+std::thread::spawn(move || {
+    std::thread::sleep(Duration::from_secs(5));
+    token_clone.cancel(); // Cancel the request after 5 seconds
+});
+
+let result = B.ExtractResume
+    .with_cancellation_token(Some(token))
+    .call(resume);
+```
+
+You're all set! Continue on to the [Deployment Guides](/guide/development/deploying/docker) for your language to learn how to deploy your BAML code or check out the [Interactive Examples](https://baml-examples.vercel.app/) to see more examples.

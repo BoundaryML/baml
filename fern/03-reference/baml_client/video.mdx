@@ -89,6 +89,17 @@ export function TestVideoInput() {
 }
 ```
 
+```rust Rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_video_from_url;
+
+fn test_video_input() {
+    // Create a Video from a URL
+    let video = new_video_from_url("https://example.com/sample.mp4", None);
+    let res = B.TestVideoInput.call(&video).unwrap();
+}
+```
+
 ```ruby
 # Ruby implementation is in development.
 ```
@@ -265,6 +276,25 @@ export function TestVideoInput() {
   type="() (map[string]interface{}, error)"
 >
   Convert the video to a map representation. Returns either `{"url": string}` or `{"base64": string, "media_type": string}`.
+</ParamField>
+
+</Tab>
+<Tab title="Rust" language="rust">
+
+### Static Methods
+
+<ParamField
+  path="new_video_from_url"
+  type="(url: &str, media_type: Option<&str>) -> BamlVideo"
+>
+  Creates a Video from a URL. Optionally specify the media type for better model compatibility.
+</ParamField>
+
+<ParamField
+  path="new_video_from_base64"
+  type="(base64: &str, media_type: Option<&str>) -> BamlVideo"
+>
+  Creates a Video from Base64 encoded data with an optional MIME type.
 </ParamField>
 
 </Tab>

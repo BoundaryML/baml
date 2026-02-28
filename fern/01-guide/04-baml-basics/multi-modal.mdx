@@ -141,8 +141,28 @@ func stringPtr(s string) *string {
 we're working on it!
 ```
 
+```rust Rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_image_from_url;
+use myproject::baml_client::new_image_from_base64;
+
+fn test_image_input() {
+    // From URL
+    let image = new_image_from_url(
+        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
+        None,
+    );
+    let res = B.TestImageInput.call(&image).unwrap();
+
+    // Base64 image
+    let image_b64 = "iVBORw0K....";
+    let image = new_image_from_base64(image_b64, Some("image/png"));
+    let res = B.TestImageInput.call(&image).unwrap();
+}
+```
+
 </CodeBlocks>
- 
+
 ### Audio
 Calling functions that have `audio` types. See [audio types](/ref/baml/types#audio)
 
@@ -229,6 +249,21 @@ func testAudioInput() error {
 ```ruby Ruby (beta)
 we're working on it!
 ```
+
+```rust Rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_audio_from_url;
+
+fn test_audio_input() {
+    // From URL
+    let audio = new_audio_from_url(
+        "https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg",
+        None,
+    );
+    let res = B.TestAudioInput.call(&audio).unwrap();
+}
+```
+
 </CodeBlocks>
 
 ### Pdf
@@ -293,6 +328,19 @@ func testPdfInput() error {
 ```ruby Ruby (beta)
 we're working on it!
 ```
+
+```rust Rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_pdf_from_base64;
+
+fn test_pdf_input() {
+    // Base64 data
+    let b64 = "JVBERi0K....";
+    let pdf = new_pdf_from_base64(b64, None);
+    let res = B.TestPdfInput.call(&pdf).unwrap();
+}
+```
+
 </CodeBlocks>
 
 ### Video
@@ -380,6 +428,18 @@ func testVideoInput() error {
 ```ruby Ruby (beta)
 we're working on it!
 ```
+
+```rust Rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_video_from_url;
+
+fn test_video_input() {
+    // From URL
+    let video = new_video_from_url("https://example.com/sample.mp4", None);
+    let res = B.TestVideoInput.call(&video).unwrap();
+}
+```
+
 </CodeBlocks>
 
 
