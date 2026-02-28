@@ -43,6 +43,10 @@ where
 }
 
 /// Return true when this statement definitely does not fall through.
+///
+/// This treats `return`, `break`, `continue`, `throw` all as diverging —
+/// the statement prevents subsequent code in the block from executing.
+/// Use `stmt_never_returns` for the stricter "never returns to caller" check.
 pub(crate) fn stmt_definitely_diverges<F>(
     stmt_id: StmtId,
     body: &ExprBody,
@@ -54,6 +58,22 @@ where
     match &body.stmts[stmt_id] {
         Stmt::Return(_) | Stmt::Break | Stmt::Continue | Stmt::Throw { .. } => true,
         Stmt::Expr(expr_id) => expr_definitely_diverges(*expr_id, body, call_diverges),
+        _ => false,
+    }
+}
+
+/// Return true when this statement never returns to the caller.
+///
+/// Unlike `stmt_definitely_diverges`, `Stmt::Return` is NOT considered
+/// "never returns" — it completes normally by returning a value.
+/// Only `throw` and calls to always-diverging functions qualify.
+fn stmt_never_returns<F>(stmt_id: StmtId, body: &ExprBody, call_diverges: &F) -> bool
+where
+    F: Fn(&Name) -> bool,
+{
+    match &body.stmts[stmt_id] {
+        Stmt::Throw { .. } => true,
+        Stmt::Expr(expr_id) => expr_never_returns(*expr_id, body, call_diverges),
         _ => false,
     }
 }
@@ -96,6 +116,51 @@ where
                 && arms.iter().all(|arm_id| {
                     let arm = &body.match_arms[*arm_id];
                     expr_definitely_diverges(arm.body, body, call_diverges)
+                })
+        }
+        _ => false,
+    }
+}
+
+/// Return true when this expression never returns to the caller.
+///
+/// Unlike `expr_definitely_diverges`, `return` statements are NOT diverging
+/// here — they complete normally. Only `throw` and always-diverging calls
+/// cause a function to "never return." Used by `function_divergence_set`.
+pub(crate) fn expr_never_returns<F>(expr_id: ExprId, body: &ExprBody, call_diverges: &F) -> bool
+where
+    F: Fn(&Name) -> bool,
+{
+    match &body.exprs[expr_id] {
+        Expr::Throw { .. } => true,
+        Expr::Call { callee, .. } => call_target_from_callee_expr(*callee, body)
+            .as_ref()
+            .is_some_and(call_diverges),
+        Expr::Block { stmts, tail_expr } => {
+            let any_stmt_never_returns = stmts
+                .iter()
+                .any(|stmt_id| stmt_never_returns(*stmt_id, body, call_diverges));
+            if any_stmt_never_returns {
+                true
+            } else if let Some(tail_expr) = tail_expr {
+                expr_never_returns(*tail_expr, body, call_diverges)
+            } else {
+                false
+            }
+        }
+        Expr::If {
+            then_branch,
+            else_branch: Some(else_branch),
+            ..
+        } => {
+            expr_never_returns(*then_branch, body, call_diverges)
+                && expr_never_returns(*else_branch, body, call_diverges)
+        }
+        Expr::Match { arms, .. } => {
+            !arms.is_empty()
+                && arms.iter().all(|arm_id| {
+                    let arm = &body.match_arms[*arm_id];
+                    expr_never_returns(arm.body, body, call_diverges)
                 })
         }
         _ => false,

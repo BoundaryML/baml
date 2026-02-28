@@ -411,7 +411,7 @@ pub fn function_divergence_set(db: &dyn Db, project: Project) -> FunctionDiverge
             let Some(root_expr) = expr_body.root_expr else {
                 return false;
             };
-            divergence::expr_definitely_diverges(root_expr, expr_body, &|callee| {
+            divergence::expr_never_returns(root_expr, expr_body, &|callee| {
                 known_diverging.contains(callee)
             })
         },
@@ -2859,9 +2859,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 };
                 let clause_binding_ty = binding_ty.clone();
 
-                if let Some(name) = binding_name {
+                if let Some(ref name) = binding_name {
                     if name.as_str() != "_" {
-                        ctx.define(name, binding_ty);
+                        ctx.define(name.clone(), binding_ty);
                     }
                 }
 
@@ -3611,6 +3611,11 @@ fn collect_throw_facts_from_value(
                     out.insert(qn.display_name().as_str().to_string());
                 }
             }
+        }
+        Ty::Never => {
+            // Uninhabited — no value of this type exists, so no fact to record.
+            // This arises when `throw e` appears inside an unreachable catch arm
+            // (the catch binding has type Never because the base never throws).
         }
         _ => {
             out.insert("unknown".to_string());
@@ -4707,10 +4712,7 @@ fn check_stmt_with_return(
         }
 
         Stmt::Throw { value } => {
-            // Infer the thrown value (should be a string/error, but we accept any for now)
             infer_expr(ctx, *value, body);
-            // Throw diverges — subsequent statements are unreachable.
-            // No return type to record; this is a diverging statement.
         }
     }
 }
