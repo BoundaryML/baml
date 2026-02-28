@@ -11,7 +11,7 @@ use crate::jsonish::{
     value::Fixes,
 };
 
-pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) -> Result<Value> {
+pub(super) fn parse_func<'s>(str: &'s str, mut options: ParseOptions, is_done: bool) -> Result<Value<'s>> {
     log::debug!("Parsing:\n{options:?}\n-------\n{str}\n-------");
 
     options.depth += 1;
@@ -46,7 +46,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                     unreachable!("Serde deserializes into concrete values, not AnyOf")
                 }
             }
-            return Ok(Value::AnyOf(vec![v], str.to_string()));
+            return Ok(Value::AnyOf(vec![v], str.to_string().into()));
         }
         Err(e) => {
             log::debug!("Invalid JSON: {e:?}");
@@ -63,11 +63,11 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                         Some(MarkdownResult::CodeBlock(s, v)) => {
                             return Ok(Value::AnyOf(
                                 vec![Value::Markdown(
-                                    s.to_string(),
+                                    s.to_string().into(),
                                     Box::new(v),
                                     CompletionState::Incomplete,
                                 )],
-                                str.to_string(),
+                                str.to_string().into(),
                             ));
                         }
                         _ => {
@@ -103,6 +103,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                                 e
                             })
                             .ok()
+                            .map(|v| v.to_static())
                         })
                         .collect::<Vec<_>>();
 
@@ -114,7 +115,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                         })
                         .map(|(s, v)| {
                             Value::Markdown(
-                                s.to_string(),
+                                s.to_string().into(),
                                 Box::new(v.clone()),
                                 v.completion_state().clone(),
                             )
@@ -126,7 +127,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                         .chain(std::iter::once(array))
                         .chain(others)
                         .collect::<Vec<_>>();
-                    return Ok(Value::AnyOf(items, str.to_string()));
+                    return Ok(Value::AnyOf(items, str.to_string().into()));
                 }
             },
             Err(e) => {
@@ -150,20 +151,20 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                                     Box::new(first),
                                     vec![Fixes::GreppedForJSON],
                                 )],
-                                str.to_string(),
+                                str.to_string().into(),
                             );
                             return Ok(ret);
                         }
                     }
                 }
-                n => {
+                _n => {
                     let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(items_clone))
                         .map(|v| Value::FixedJson(v.into(), vec![Fixes::GreppedForJSON]))
                         .collect::<Vec<_>>();
-                    return Ok(Value::AnyOf(items, str.to_string()));
+                    return Ok(Value::AnyOf(items, str.to_string().into()));
                 }
             },
             Err(e) => {
@@ -188,7 +189,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                         } else {
                             return Ok(Value::AnyOf(
                                 vec![Value::FixedJson(v.into(), fixes)],
-                                str.to_string(),
+                                str.to_string().into(),
                             ));
                         }
                     }
@@ -212,7 +213,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
                             .into_iter()
                             .chain(std::iter::once(items_clone))
                             .collect::<Vec<_>>();
-                        return Ok(Value::AnyOf(items, str.to_string()));
+                        return Ok(Value::AnyOf(items, str.to_string().into()));
                     }
                 }
             }
@@ -224,7 +225,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
 
     if options.allow_as_string {
         return Ok(Value::String(
-            str.to_string(),
+            str.to_string().into(),
             if is_done {
                 CompletionState::Complete
             } else {
@@ -236,7 +237,7 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
     Err(anyhow::anyhow!("Failed to parse JSON"))
 }
 
-pub fn parse(str: &str, options: ParseOptions, is_done: bool) -> Result<Value> {
+pub fn parse<'s>(str: &'s str, options: ParseOptions, is_done: bool) -> Result<Value<'s>> {
     let res = parse_func(str, options, is_done)?;
     Ok(res.simplify(is_done))
 }
@@ -246,11 +247,11 @@ mod tests {
     use super::*;
     use crate::jsonish::{CompletionState, Value};
 
-    fn to_any_of(inner: Value, s: &str) -> Value {
-        Value::AnyOf(vec![inner], s.to_string())
+    fn to_any_of<'s>(inner: Value<'s>, s: &str) -> Value<'s> {
+        Value::AnyOf(vec![inner], s.to_string().into())
     }
 
-    fn to_fixed(inner: Value, fixes: &[Fixes]) -> Value {
+    fn to_fixed<'s>(inner: Value<'s>, fixes: &[Fixes]) -> Value<'s> {
         Value::FixedJson(Box::new(inner), fixes.to_vec())
     }
 

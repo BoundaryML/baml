@@ -1,9 +1,11 @@
-use std::collections::HashSet;
+use std::{borrow::Cow, collections::HashSet};
 
 use crate::{
     baml_value::{BamlValue, BamlValueWithMeta, ValueWithMeta},
-    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName},
+    deserializer::coercer::ParsingContext,
+    sap_model::{Literal, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName},
 };
+use serde::Deserializer;
 use serde_json::json;
 
 use super::{
@@ -14,16 +16,31 @@ use super::{
 
 /// Metadata on values produced by the deserializer.
 #[derive(Clone)]
-pub struct DeserializerMeta<'t, N: TypeIdent> {
-    pub flags: DeserializerConditions<'t, N>,
+pub struct DeserializerMeta<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
+    pub flags: DeserializerConditions<'s, 'v, 't, N>,
     /// The type that was deserialized to produce this value.
     pub ty: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
 }
+impl<'s, 'v, 't, N: TypeIdent> DeserializerMeta<'s, 'v, 't, N> {
+    pub fn new(
+        ty: TyWithMeta<impl Into<TyResolvedRef<'t, N>>, &'t TypeAnnotations<'t, N>>,
+    ) -> Self {
+        Self {
+            flags: DeserializerConditions::new(),
+            ty: ty.map_ty(Into::into),
+        }
+    }
+}
 
-pub type ValueWithFlags<'t, T, N: TypeIdent> = ValueWithMeta<T, DeserializerMeta<'t, N>>;
-pub type BamlValueWithFlags<'t, N> = ValueWithFlags<'t, BamlValue<'t, N>, N>;
+pub type ValueWithFlags<'s, 'v, 't, T, N: TypeIdent> =
+    ValueWithMeta<T, DeserializerMeta<'s, 'v, 't, N>>;
+pub type BamlValueWithFlags<'s, 'v, 't, N> =
+    ValueWithFlags<'s, 'v, 't, BamlValue<'s, 'v, 't, N>, N>;
 
-impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, N> {
+impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, '_, '_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value {
             BamlValue::String(s) => f.debug_tuple("String").field(&s.value).finish(),
@@ -70,9 +87,9 @@ impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, N> {
     }
 }
 
-impl<'t, N: TypeIdent> BamlValueWithFlags<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     #[cfg(test)]
-    pub fn as_list(&self) -> Option<&[BamlValueWithFlags<'t, N>]> {
+    pub fn as_list(&self) -> Option<&[BamlValueWithFlags<'s, 'v, 't, N>]> {
         match &self.value {
             BamlValue::Array(arr) => Some(&arr.value),
             _ => None,
@@ -96,15 +113,15 @@ impl<'t, N: TypeIdent> BamlValueWithFlags<'t, N> {
         }
     }
 
-    pub fn conditions(&self) -> &DeserializerConditions<'t, N> {
+    pub fn conditions(&self) -> &DeserializerConditions<'s, 'v, 't, N> {
         &self.meta.flags
     }
 }
 
-impl<'t, N: TypeIdent> From<BamlValueWithFlags<'t, N>>
-    for BamlValueWithMeta<'t, Vec<Flag<'t, N>>, N>
+impl<'s, 'v, 't, N: TypeIdent> From<BamlValueWithFlags<'s, 'v, 't, N>>
+    for BamlValueWithMeta<'s, 'v, 't, Vec<Flag<'s, 'v, 't, N>>, N>
 {
-    fn from(baml_value: BamlValueWithFlags<'t, N>) -> Self {
+    fn from(baml_value: BamlValueWithFlags<'s, 'v, 't, N>) -> Self {
         baml_value.map_meta(|meta| meta.flags.flags)
     }
 }
@@ -126,7 +143,7 @@ impl ParsingErrorToUiJson for ParsingError {
     }
 }
 
-impl<'t, N: TypeIdent> BamlValueWithFlags<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     pub fn explanation_json(&self) -> Vec<serde_json::Value> {
         let mut expl = vec![];
         self.explanation_impl(vec!["<root>".to_string()], &mut expl);
@@ -183,7 +200,7 @@ impl<'t, N: TypeIdent> BamlValueWithFlags<'t, N> {
     }
 }
 
-impl<'t, T, N: TypeIdent> ValueWithFlags<'t, T, N> {
+impl<'s, 'v, 't, T, N: TypeIdent> ValueWithFlags<'s, 'v, 't, T, N> {
     pub fn with_target(
         mut self,
         target: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
@@ -192,40 +209,50 @@ impl<'t, T, N: TypeIdent> ValueWithFlags<'t, T, N> {
         self
     }
 
-    pub(super) fn add_flag(&mut self, flag: Flag<'t, N>) {
+    pub fn with_flag(mut self, flag: Flag<'s, 'v, 't, N>) -> Self {
+        self.meta.flags.add_flag(flag);
+        self
+    }
+
+    pub fn with_flags(mut self, flags: impl IntoIterator<Item = Flag<'s, 'v, 't, N>>) -> Self {
+        self.meta.flags.flags.extend(flags);
+        self
+    }
+
+    pub fn add_flag(&mut self, flag: Flag<'s, 'v, 't, N>) {
         self.meta.flags.add_flag(flag);
     }
 }
 
-impl<'t, N: TypeIdent> BamlValueWithFlags<'t, N> {
-    pub(super) fn r#type(&self) -> String {
+impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
+    pub(super) fn r#type(&self) -> Cow<'static, str> {
         match &self.value {
-            BamlValue::String(..) => "String".to_string(),
-            BamlValue::Int(..) => "Int".to_string(),
-            BamlValue::Float(..) => "Float".to_string(),
-            BamlValue::Bool(..) => "Bool".to_string(),
+            BamlValue::String(..) => Cow::Borrowed("String"),
+            BamlValue::Int(..) => Cow::Borrowed("Int"),
+            BamlValue::Float(..) => Cow::Borrowed("Float"),
+            BamlValue::Bool(..) => Cow::Borrowed("Bool"),
             BamlValue::Array(arr) => {
                 let inner = arr
                     .value
                     .iter()
                     .map(|i| i.r#type())
-                    .collect::<HashSet<String>>()
+                    .collect::<HashSet<_>>()
                     .into_iter()
                     .collect::<Vec<_>>()
                     .join(" | ");
-                format!("List[{}:{inner}]", arr.value.len())
+                Cow::Owned(format!("List[{}:{inner}]", arr.value.len()))
             }
-            BamlValue::Map(..) => "Map".to_string(),
-            BamlValue::Enum(e) => format!("Enum {}", e.name),
-            BamlValue::Class(c) => format!("Class {}", c.name),
-            BamlValue::Null(..) => "Null".to_string(),
-            BamlValue::Media(..) => "Image".to_string(),
-            BamlValue::StreamState(..) => "StreamState".to_string(),
+            BamlValue::Map(..) => Cow::Borrowed("Map"),
+            BamlValue::Enum(e) => Cow::Owned(format!("Enum {}", e.name)),
+            BamlValue::Class(c) => Cow::Owned(format!("Class {}", c.name)),
+            BamlValue::Null(..) => Cow::Borrowed("Null"),
+            BamlValue::Media(..) => Cow::Borrowed("Image"),
+            BamlValue::StreamState(..) => Cow::Borrowed("StreamState"),
         }
     }
 }
 
-impl<'t, N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'s, 'v, 't, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} (Score: {}): ", self.r#type(), self.score())?;
         match &self.value {

@@ -6,13 +6,18 @@ use super::{ParsingContext, ParsingError};
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 
 /// Tries to pick one of the items in the array and returns it.
-pub fn coerce_array_to_singular<'t, N: TypeIdent>(
-    ctx: &ParsingContext<'t, N>,
+pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
+    ctx: &ParsingContext<'s, 'v, 't, N>,
     target: TyWithMeta<TyResolvedRef<'t, N>, &TypeAnnotations<'t, N>>,
-    items: &[&crate::jsonish::Value],
-    coercion: &dyn Fn(&crate::jsonish::Value) -> Result<BamlValueWithFlags<'t, N>, ParsingError>,
-) -> Result<BamlValueWithFlags<'t, N>, ParsingError> {
-    let parsed = items.iter().map(|item| coercion(item)).collect::<Vec<_>>();
+    items: &[&'v crate::jsonish::Value<'s>],
+    coercion: &dyn Fn(
+        &'v crate::jsonish::Value<'s>,
+    ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>,
+) -> Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError> {
+    let parsed = items
+        .iter()
+        .filter_map(|item| coercion(item).transpose())
+        .collect::<Vec<_>>();
 
     let mut best = pick_best(ctx, target, parsed);
 
@@ -27,12 +32,12 @@ pub fn coerce_array_to_singular<'t, N: TypeIdent>(
 }
 
 /// Picks the best value to return for the target type+annotations.
-pub(super) fn pick_best<'t, 'a, N: TypeIdent>(
-    ctx: &ParsingContext<'t, N>,
+pub(super) fn pick_best<'s, 'v, 't, 'a, N: TypeIdent>(
+    ctx: &ParsingContext<'s, 'v, 't, N>,
     target: TyWithMeta<TyResolvedRef<'t, N>, &TypeAnnotations<'t, N>>,
-    res: Vec<Result<BamlValueWithFlags<'t, N>, ParsingError>>,
-) -> Result<BamlValueWithFlags<'t, N>, ParsingError> {
-    let Some(first) = res.first() else {
+    res: Vec<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>,
+) -> Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError> {
+    if res.is_empty() {
         return Err(ctx.error_unexpected_empty_array(&target.ty));
     };
     if res.len() == 1 {

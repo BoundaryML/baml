@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use derive_more::From;
 use indexmap::IndexMap;
 
@@ -42,31 +44,31 @@ impl<T, M> ValueWithMeta<T, M> {
 }
 
 #[derive(Clone, From)]
-pub enum BamlValue<'t, N: TypeIdent> {
-    String(BamlString),
+pub enum BamlValue<'s, 'v, 't, N: TypeIdent> {
+    String(BamlString<'s>),
     Int(BamlInt),
     Float(BamlFloat),
     Bool(BamlBool),
     Null(BamlNull),
     Media(BamlMedia),
-    Array(BamlArray<'t, N>),
-    Map(BamlMap<'t, N>),
+    Array(BamlArray<'s, 'v, 't, N>),
+    Map(BamlMap<'s, 'v, 't, N>),
     Enum(BamlEnum<'t, N>),
-    Class(BamlClass<'t, N>),
-    StreamState(BamlStreamState<'t, N>),
+    Class(BamlClass<'s, 'v, 't, N>),
+    StreamState(BamlStreamState<'s, 'v, 't, N>),
 }
 
 #[derive(Clone, From)]
-pub enum BamlPrimitive {
-    String(BamlString),
+pub enum BamlPrimitive<'s> {
+    String(BamlString<'s>),
     Int(BamlInt),
     Float(BamlFloat),
     Bool(BamlBool),
     Null(BamlNull),
     Media(BamlMedia),
 }
-impl<'t, N: TypeIdent> From<BamlPrimitive> for BamlValue<'t, N> {
-    fn from(value: BamlPrimitive) -> Self {
+impl<'s, N: TypeIdent> From<BamlPrimitive<'s>> for BamlValue<'s, '_, '_, N> {
+    fn from(value: BamlPrimitive<'s>) -> Self {
         match value {
             BamlPrimitive::String(s) => BamlValue::String(s),
             BamlPrimitive::Int(i) => BamlValue::Int(i),
@@ -79,52 +81,64 @@ impl<'t, N: TypeIdent> From<BamlPrimitive> for BamlValue<'t, N> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BamlString {
-    pub value: String,
+pub struct BamlString<'s> {
+    pub value: Cow<'s, str>,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BamlInt {
     pub value: i64,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BamlFloat {
     pub value: f64,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BamlBool {
     pub value: bool,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BamlNull;
 #[derive(Debug, Clone)]
 pub struct BamlMedia;
 #[derive(Clone)]
-pub struct BamlArray<'t, N: TypeIdent> {
-    pub value: Vec<BamlValueWithFlags<'t, N>>,
+pub struct BamlArray<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
+    pub value: Vec<BamlValueWithFlags<'s, 'v, 't, N>>,
 }
 #[derive(Clone)]
-pub struct BamlMap<'t, N: TypeIdent> {
-    pub value: IndexMap<String, BamlValueWithFlags<'t, N>>,
+pub struct BamlMap<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
+    pub value: IndexMap<Cow<'s, str>, BamlValueWithFlags<'s, 'v, 't, N>>,
 }
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct BamlEnum<'t, N: TypeIdent + 't> {
     pub name: &'t N,
-    pub value: String,
+    pub value: &'t str,
 }
 #[derive(Clone)]
-pub struct BamlClass<'t, N: TypeIdent> {
+pub struct BamlClass<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
     pub name: &'t N,
-    pub value: IndexMap<String, BamlValueWithFlags<'t, N>>,
+    pub value: IndexMap<&'t str, BamlValueWithFlags<'s, 'v, 't, N>>,
 }
 #[derive(Clone)]
-pub enum BamlStreamState<'t, N: TypeIdent> {
-    Incomplete(Box<BamlValueWithFlags<'t, N>>),
-    Complete(Box<BamlValueWithFlags<'t, N>>),
+pub enum BamlStreamState<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
+    Incomplete(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
+    Complete(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
 }
 
 /// A BAML value with associated metadata. Can be used to represent various kinds of metadata.
 ///
 /// ## Generics
-/// - `T`: The type of metadata.
+/// - `M`: The type of metadata.
 /// - `N`: the type used by the host to identify a type reference (i.e. enum or class name).
-pub type BamlValueWithMeta<'t, T, N: TypeIdent> = ValueWithMeta<BamlValue<'t, N>, T>;
+pub type BamlValueWithMeta<'s, 'v, 't, M, N> = ValueWithMeta<BamlValue<'s, 'v, 't, N>, M>;

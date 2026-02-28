@@ -1,12 +1,13 @@
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::ops::Deref;
 
-use crate::baml_value::BamlMap;
+use crate::baml_value::{BamlMap, BamlValue};
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::CompletionState;
 use crate::sap_model::{
-    LiteralTy, MapTy, PrimitiveTy, Ty, TyResolved, TyResolvedRef, TyWithMeta, TypeAnnotations,
-    TypeIdent,
+    FromLiteral as _, Literal, LiteralTy, MapTy, PrimitiveTy, Ty, TyResolved, TyResolvedRef,
+    TyWithMeta, TypeAnnotations, TypeIdent,
 };
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -20,14 +21,18 @@ use crate::{
     jsonish,
 };
 
-impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for MapTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
     fn try_cast(
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: Option<&crate::jsonish::Value>,
-    ) -> Option<ValueWithFlags<'t, Self::Value, N>> {
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>> {
         // Only handle object values
-        let Some(crate::jsonish::Value::Object(obj, _)) = value else {
+        let crate::jsonish::Value::Object(obj, _) = value else {
             return None;
         };
 
@@ -37,21 +42,17 @@ impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
         // For empty objects, we can return immediately
         if obj.is_empty() {
             let mut flags = DeserializerConditions::new();
-            if let Some(v) = value {
-                flags.add_flag(Flag::ObjectToMap(v.clone()));
-            }
+            flags.add_flag(Flag::ObjectToMap(value));
 
             let map = BamlMap {
                 value: IndexMap::new(),
             };
 
             // Check completion state
-            if let Some(v) = value {
-                match v.completion_state() {
-                    CompletionState::Complete => {}
-                    CompletionState::Incomplete => {
-                        flags.add_flag(Flag::Incomplete);
-                    }
+            match value.completion_state() {
+                CompletionState::Complete => {}
+                CompletionState::Incomplete => {
+                    flags.add_flag(Flag::Incomplete);
                 }
             }
 
@@ -70,19 +71,17 @@ impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
             .ok()?;
 
         // Try to cast all values
-        let items: IndexMap<String, BamlValueWithFlags<'t, N>> = obj
+        let items: IndexMap<Cow<'s, str>, BamlValueWithFlags<'s, 'v, 't, N>> = obj
             .iter()
             .map(|(key, value)| {
                 let target_ref = TyWithMeta::new(value_ty_with_meta.ty, value_ty_with_meta.meta);
-                TyResolvedRef::try_cast(ctx, target_ref, Some(value))
-                    .map(|cast_value| (key.to_string(), cast_value))
+                TyResolvedRef::try_cast(ctx, target_ref, value)
+                    .map(|cast_value| (key.clone(), cast_value))
             })
             .collect::<Option<_>>()?;
 
         let mut flags = DeserializerConditions::new();
-        if let Some(v) = value {
-            flags.add_flag(Flag::ObjectToMap(v.clone()));
-        }
+        flags.add_flag(Flag::ObjectToMap(value));
 
         let map = BamlMap { value: items };
         let mut result = ValueWithFlags::new(
@@ -94,12 +93,10 @@ impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
         );
 
         // Check completion state
-        if let Some(v) = value {
-            match v.completion_state() {
-                CompletionState::Complete => {}
-                CompletionState::Incomplete => {
-                    result.add_flag(Flag::Incomplete);
-                }
+        match value.completion_state() {
+            CompletionState::Complete => {}
+            CompletionState::Incomplete => {
+                result.add_flag(Flag::Incomplete);
             }
         }
 
@@ -107,10 +104,10 @@ impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
     }
 
     fn coerce(
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: Option<&crate::jsonish::Value>,
-    ) -> Result<ValueWithFlags<'t, Self::Value, N>, ParsingError> {
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
         let map_ty = target.ty;
         let meta = target.meta;
 
@@ -118,12 +115,12 @@ impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
             "scope: {scope} :: coercing to: {name} (current: {current})",
             name = target,
             scope = ctx.display_scope(),
-            current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
+            current = value.r#type()
         );
 
-        let Some(value) = value else {
+        if matches!(value, crate::jsonish::Value::Null) {
             return Err(ctx.error_unexpected_null(&target));
-        };
+        }
 
         let key_type = ctx
             .db
@@ -168,16 +165,27 @@ impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
         }
 
         let mut flags = DeserializerConditions::new();
-        flags.add_flag(Flag::ObjectToMap(value.clone()));
+        flags.add_flag(Flag::ObjectToMap(value));
 
-        match &value {
-            jsonish::Value::Object(obj, completion_state) => {
+        let ret = match (&value, target.meta.in_progress.as_ref()) {
+            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+                return Ok(None);
+            }
+            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(value));
+                target.ty.from_literal(lit, ctx)
+            }
+            (jsonish::Value::Object(obj, completion_state), _) => {
                 let mut items = IndexMap::new();
                 for (idx, (key, value)) in obj.iter().enumerate() {
                     let vt_ref = TyWithMeta::new(value_type.ty, value_type.meta);
                     let coerced_value =
-                        match TyResolvedRef::coerce(&ctx.enter_scope(key), vt_ref, Some(value)) {
-                            Ok(v) => v,
+                        match TyResolvedRef::coerce(&ctx.enter_scope(key), vt_ref, value) {
+                            Ok(Some(v)) => v,
+                            Ok(None) => {
+                                // Value type with `in_progress = never` means we ignore this entry until it is complete.
+                                continue;
+                            }
                             Err(e) => {
                                 flags.add_flag(Flag::MapValueParseError(key.clone(), e));
                                 // Could not coerce value, nothing else to do here.
@@ -197,18 +205,14 @@ impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
                     let key_as_jsonish =
                         jsonish::Value::String(key.to_owned(), CompletionState::Complete);
                     let kt_ref = TyWithMeta::new(key_type.ty, key_type.meta);
-                    match TyResolvedRef::coerce(ctx, kt_ref, Some(&key_as_jsonish)) {
-                        Ok(_) => {
-                            // Hack to avoid cloning the key twice.
-                            let jsonish::Value::String(owned_key, CompletionState::Complete) =
-                                key_as_jsonish
-                            else {
-                                unreachable!("key_as_jsonish is defined as jsonish::Value::String");
-                            };
-
+                    match TyResolvedRef::coerce(ctx, kt_ref, &key_as_jsonish) {
+                        Ok(None) => {
+                            unreachable!("key_as_jsonish is defined to be complete");
+                        }
+                        Ok(Some(_)) => {
                             // Both the value and the key were successfully
                             // coerced, add the key to the map.
-                            items.insert(owned_key, coerced_value);
+                            items.insert(key.clone(), coerced_value);
                         }
                         // Couldn't coerce key, this is either not a valid enum
                         // variant or it doesn't match any of the literal values
@@ -219,17 +223,44 @@ impl<'t, N: TypeIdent> TypeCoercer<'t, N> for MapTy<'t, N> {
                 if *completion_state == CompletionState::Incomplete {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let map_items = items;
-                Ok(ValueWithFlags::new(
-                    BamlMap { value: map_items },
-                    DeserializerMeta {
-                        flags,
-                        ty: TyWithMeta::new(TyResolvedRef::Map(map_ty), meta),
-                    },
-                ))
+                Ok(BamlMap { value: items })
             }
             // TODO: first map in an array that matches
             _ => Err(ctx.error_unexpected_type(&target, value)),
+        };
+
+        let ret = ret.and_then(|ret| {
+            let ret = BamlValue::Map(ret);
+            target.meta.expect_asserts(&ret, ctx).and_then(|()| {
+                let BamlValue::Map(ret) = ret else {
+                    unreachable!("we just wrapped it in a BamlValue::Map");
+                };
+                Ok(ret)
+            })
+        });
+        match (ret, &target.meta.on_error) {
+            // Happy path: we have a value. Just return it.
+            (Ok(ret), _) => Ok(Some(ValueWithFlags::new(
+                ret,
+                DeserializerMeta {
+                    flags,
+                    ty: TyWithMeta::new(TyResolvedRef::Map(map_ty), meta),
+                },
+            ))),
+            // Error path: we have an error and no on_error. Return the error.
+            (Err(e), Literal::Never) => Err(e),
+            // Error correction path: we have an error and an on_error. Try to use the literal.
+            (Err(e), lit) => match target.ty.from_literal(&lit, ctx) {
+                Ok(ret) => {
+                    let meta = DeserializerMeta {
+                        flags: DeserializerConditions::new()
+                            .with_flag(Flag::DefaultButHadUnparseableValue(e)),
+                        ty: target.map_ty(|_| TyResolvedRef::Map(map_ty)),
+                    };
+                    Ok(Some(ValueWithFlags::new(ret, meta)))
+                }
+                Err(lit_err) => Err(lit_err.with_cause(e)),
+            },
         }
     }
 }

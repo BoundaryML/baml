@@ -1,9 +1,10 @@
-pub struct DedentedString {
-    pub content: String,
-    pub indent_size: usize,
+pub(super) struct DedentedString {
+    pub(super) content: String,
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(super) indent_size: usize,
 }
 
-pub fn dedent(s: &str) -> DedentedString {
+pub(super) fn dedent(s: &str) -> DedentedString {
     let mut prefix = "";
     let mut lines = s.lines();
 

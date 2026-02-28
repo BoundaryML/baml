@@ -1,3 +1,5 @@
+pub use crate::jsonish::parse;
+
 pub mod baml_value;
 pub mod deserializer;
 mod helpers;

@@ -1,9 +1,9 @@
-use crate::baml_value::{BamlEnum, BamlString, BamlValue};
+use crate::baml_value::{BamlEnum, BamlValue};
 use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
-    AnnotatedEnumVariant, EnumTy, FromLiteral, TyResolvedRef, TyWithMeta, TypeAnnotations,
+    AnnotatedEnumVariant, EnumTy, FromLiteral, Literal, TyResolvedRef, TyWithMeta, TypeAnnotations,
     TypeIdent,
 };
 use anyhow::Result;
@@ -14,27 +14,35 @@ use crate::deserializer::{
     deserialize_flags::Flag,
 };
 
-fn enum_match_candidates<'t, N: TypeIdent>(enm: &EnumTy<'t, N>) -> Vec<(&'t str, Vec<String>)> {
-    // TODO: Extract variant names from EnumTy.variants (Vec<AnnotatedTy>).
-    // The old code extracted (name, aliases) from each enum variant Name + description.
-    // With the new model, variants are AnnotatedTy values whose names need to be
-    // extracted differently.
-    todo!("Extract variant names from EnumTy variants")
+/// Produces a list of (name, aliases) tuples for each enum variant (name is included in aliases).
+///
+fn enum_match_candidates<'t, N: TypeIdent>(ty: &'t EnumTy<'t, N>) -> Vec<(&'t str, Vec<&'t str>)> {
+    ty.variants
+        .iter()
+        .map(|v| {
+            let aliases = std::iter::once(v.name.trim())
+                .chain(v.aliases.iter().map(|a| a.trim()))
+                .collect();
+            (v.name.as_ref(), aliases)
+        })
+        .collect()
 }
 
-impl<'t, N: TypeIdent + 't> TypeCoercer<'t, N> for EnumTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent + 't> TypeCoercer<'s, 'v, 't, N> for EnumTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
+    /// Strict: does not use aliases, just the name.
     fn try_cast(
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: Option<&jsonish::Value>,
-    ) -> Option<ValueWithFlags<'t, Self::Value, N>> {
+        value: &'v jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>> {
         let enum_ty = target.ty;
         let meta = target.meta;
 
         // Enums can only be cast from string values
-        let Some(value) = value else {
-            return None;
-        };
         let jsonish::Value::String(s, completion) = value else {
             return None;
         };
@@ -46,7 +54,7 @@ impl<'t, N: TypeIdent + 't> TypeCoercer<'t, N> for EnumTy<'t, N> {
                     in_progress,
                     DeserializerMeta {
                         flags: DeserializerConditions::new()
-                            .with_flag(Flag::DefaultFromInProgress(value.clone())),
+                            .with_flag(Flag::DefaultFromInProgress(value)),
                         ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
                     },
                 ))
@@ -56,11 +64,11 @@ impl<'t, N: TypeIdent + 't> TypeCoercer<'t, N> for EnumTy<'t, N> {
         }
 
         // assumes no name or alias can have the same value as another name or alias
-        for AnnotatedEnumVariant { name, aliases } in enum_ty.variants.iter() {
+        for AnnotatedEnumVariant { name, .. } in enum_ty.variants.iter() {
             if name == s {
                 let value = BamlEnum {
                     name: &enum_ty.name,
-                    value: name.to_string(),
+                    value: &*name,
                 };
                 if !meta
                     .check_asserts(&BamlValue::Enum(value.clone()), ctx)
@@ -82,61 +90,78 @@ impl<'t, N: TypeIdent + 't> TypeCoercer<'t, N> for EnumTy<'t, N> {
     }
 
     fn coerce(
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: Option<&jsonish::Value>,
-    ) -> Result<ValueWithFlags<'t, Self::Value, N>, ParsingError> {
+        value: &'v jsonish::Value<'s>,
+    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
         log::debug!(
             "scope: {scope} :: coercing to: {name} (current: {current})",
             name = target.ty.name,
             scope = ctx.display_scope(),
-            current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
+            current = value.r#type()
         );
 
         // Enums can only be cast from string values
-        let value = match value {
-            None | Some(jsonish::Value::Null) => {
-                return Err(ctx.error_unexpected_null(&target));
-            }
-            Some(v) => v,
-        };
+        if matches!(value, jsonish::Value::Null) {
+            return Err(ctx.error_unexpected_null(&target));
+        }
 
         let enum_ty = target.ty;
         let meta = target.meta;
+        let mut add_flags = Vec::new();
 
-        if value.completion_state() == &CompletionState::Incomplete
-            && let Some(ref in_progress) = meta.in_progress
-        {
-            let in_progress = enum_ty.from_literal(in_progress, ctx)?;
-            return Ok(ValueWithFlags::new(
-                in_progress,
-                DeserializerMeta {
-                    flags: DeserializerConditions::new()
-                        .with_flag(Flag::DefaultFromInProgress(value.clone())),
-                    ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
-                },
-            ));
+        if value.completion_state() == &CompletionState::Incomplete {
+            match &meta.in_progress {
+                Some(Literal::Never) => return Ok(None),
+                Some(lit) => {
+                    let in_progress = enum_ty.from_literal(lit, ctx)?;
+                    return Ok(Some(ValueWithFlags::new(
+                        in_progress,
+                        DeserializerMeta {
+                            flags: DeserializerConditions::new()
+                                .with_flag(Flag::DefaultFromInProgress(value)),
+                            ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
+                        },
+                    )));
+                }
+                None => {
+                    add_flags.push(Flag::DefaultFromInProgress(value));
+                }
+            }
         }
 
-        let variant_match = match_string(
+        match_string(
             ctx,
             TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
-            Some(value),
+            value,
             &enum_match_candidates(enum_ty),
             true,
-        )?;
-
-        let value = BamlEnum {
-            name: &enum_ty.name,
-            value: variant_match.value.value.clone(),
-        };
-        if !meta.check_asserts(&BamlValue::Enum(value), ctx)? {
-            return Err(ctx.error_assertion_failure());
-        }
-
-        Ok(variant_match.map_value(|BamlString { value }| BamlEnum {
-            name: &enum_ty.name,
-            value,
-        }))
+        )
+        .map(|v| {
+            v.map_value(|val| BamlEnum {
+                name: &enum_ty.name,
+                value: val,
+            })
+            .with_flags(add_flags)
+        })
+        .and_then(|v| {
+            target
+                .meta
+                .expect_asserts(&BamlValue::Enum(v.value.clone()), ctx)?;
+            Ok(v)
+        })
+        .or_else(|err| match &meta.on_error {
+            Literal::Never => Err(err),
+            lit => {
+                let ret = target.ty.from_literal(lit, ctx)?;
+                let meta = DeserializerMeta {
+                    flags: DeserializerConditions::new()
+                        .with_flag(Flag::DefaultButHadUnparseableValue(err)),
+                    ty: target.map_ty(TyResolvedRef::Enum),
+                };
+                return Ok(ValueWithFlags::new(ret, meta));
+            }
+        })
+        .map(Some)
     }
 }

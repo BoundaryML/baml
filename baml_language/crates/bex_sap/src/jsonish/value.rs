@@ -1,11 +1,12 @@
 use std::{
+    borrow::Cow,
     collections::HashSet,
     hash::{Hash, Hasher},
 };
 
 use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum CompletionState {
     Incomplete,
     Complete,
@@ -19,9 +20,9 @@ pub enum Fixes {
 
 /// A parsed value from the input. May have multiple interpretations.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Value {
+pub enum Value<'s> {
     // Primitive Types
-    String(String, CompletionState),
+    String(Cow<'s, str>, CompletionState),
     Number(serde_json::Number, CompletionState),
     Boolean(bool),
     Null,
@@ -31,16 +32,16 @@ pub enum Value {
     // During parsing, if we hare an incomplete key, does the parser
     // complete it and set its value to null? Or drop it?
     // If the parser drops it, we don't need to carry CompletionState.
-    Object(Vec<(String, Value)>, CompletionState),
-    Array(Vec<Value>, CompletionState),
+    Object(Vec<(Cow<'s, str>, Value<'s>)>, CompletionState),
+    Array(Vec<Value<'s>>, CompletionState),
 
     // Fixed types
-    Markdown(String, Box<Value>, CompletionState),
-    FixedJson(Box<Value>, Vec<Fixes>),
-    AnyOf(Vec<Value>, String),
+    Markdown(Cow<'s, str>, Box<Value<'s>>, CompletionState),
+    FixedJson(Box<Value<'s>>, Vec<Fixes>),
+    AnyOf(Vec<Value<'s>>, Cow<'s, str>),
 }
 
-impl Hash for Value {
+impl Hash for Value<'_> {
     // Hashing a Value ignores CompletationState.
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
@@ -75,11 +76,11 @@ impl Hash for Value {
     }
 }
 
-impl Value {
+impl<'s> Value<'s> {
     pub(super) fn simplify(self, is_done: bool) -> Self {
         match self {
             Value::AnyOf(items, s) => {
-                let as_simple_str = |s: String| {
+                let as_simple_str = |s: Cow<'s, str>| {
                     Value::String(
                         s,
                         if is_done {
@@ -191,15 +192,52 @@ impl Value {
                 elems.iter_mut().for_each(|v| v.complete_deeply());
             }
             Value::Markdown(_, _, s) => *s = CompletionState::Complete,
-            Value::FixedJson(val, fixes) => {
+            Value::FixedJson(val, _fixes) => {
                 val.complete_deeply();
             }
             Value::AnyOf(choices, _) => choices.iter_mut().for_each(|v| v.complete_deeply()),
         }
     }
+
+    /// Converts all `Cow::Borrowed` values to `Cow::Owned` and returns the result.
+    /// The result will always be `Value<'static>`.
+    pub fn to_static(&self) -> Value<'static> {
+        match self {
+            Value::String(s, completion_state) => {
+                Value::String(Cow::Owned(s.clone().into_owned()), *completion_state)
+            }
+            Value::Number(n, completion_state) => Value::Number(n.to_owned(), *completion_state),
+            Value::Boolean(b) => Value::Boolean(*b),
+            Value::Null => Value::Null,
+            Value::Object(o, completion_state) => {
+                let o: Vec<_> = o
+                    .iter()
+                    .map(|(k, v)| (Cow::Owned(k.clone().into_owned()), v.to_static()))
+                    .collect();
+                Value::Object(o, *completion_state)
+            }
+            Value::Array(a, completion_state) => {
+                let a: Vec<_> = a.iter().map(|v| v.to_static()).collect();
+                Value::Array(a, *completion_state)
+            }
+            Value::Markdown(s, v, completion_state) => Value::Markdown(
+                Cow::Owned(s.clone().into_owned()),
+                Box::new(v.to_static()),
+                *completion_state,
+            ),
+            Value::FixedJson(v, fixes) => {
+                let v = v.to_static();
+                Value::FixedJson(Box::new(v), fixes.clone())
+            }
+            Value::AnyOf(choices, s) => {
+                let choices: Vec<_> = choices.iter().map(|v| v.to_static()).collect();
+                Value::AnyOf(choices, Cow::Owned(s.clone().into_owned()))
+            }
+        }
+    }
 }
 
-impl std::fmt::Display for Value {
+impl std::fmt::Display for Value<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::String(s, _) => write!(f, "{s}"),
@@ -258,7 +296,7 @@ impl std::fmt::Display for Value {
 struct ValueVisitor;
 
 impl<'de> serde::de::Visitor<'de> for ValueVisitor {
-    type Value = Value;
+    type Value = Value<'de>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         formatter.write_str("any valid JSON value")
@@ -289,12 +327,15 @@ impl<'de> serde::de::Visitor<'de> for ValueVisitor {
         }
     }
 
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
-        Ok(Value::String(v.to_owned(), CompletionState::Complete))
+    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E> {
+        Ok(Value::String(Cow::Borrowed(v), CompletionState::Complete))
     }
 
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
-        Ok(Value::String(v, CompletionState::Complete))
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
+        Ok(Value::String(
+            Cow::Owned(v.to_owned()),
+            CompletionState::Complete,
+        ))
     }
 
     fn visit_none<E>(self) -> Result<Self::Value, E> {
@@ -321,14 +362,14 @@ impl<'de> serde::de::Visitor<'de> for ValueVisitor {
         A: serde::de::MapAccess<'de>,
     {
         let mut object = Vec::with_capacity(map.size_hint().unwrap_or(0));
-        while let Some((key, value)) = map.next_entry::<String, Value>()? {
+        while let Some((key, value)) = map.next_entry::<Cow<'de, str>, Value<'de>>()? {
             object.push((key, value));
         }
         Ok(Value::Object(object, CompletionState::Complete))
     }
 }
 
-impl<'de> serde::Deserialize<'de> for Value {
+impl<'de> serde::Deserialize<'de> for Value<'de> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

@@ -4,7 +4,7 @@ use crate::sap_model::TypeIdent;
 
 use super::{
     deserialize_flags::{DeserializerConditions, Flag},
-    types::{BamlValueWithFlags, ValueWithFlags},
+    types::ValueWithFlags,
 };
 
 // Lower is better
@@ -33,7 +33,7 @@ pub trait WithScore {
 //     }
 // }
 
-impl<N: TypeIdent> WithScore for Flag<'_, N> {
+impl<N: TypeIdent> WithScore for Flag<'_, '_, '_, N> {
     fn score(&self) -> i32 {
         match self {
             Flag::InferedObject(_) => 0, // Dont penalize for this but instead handle it at the top level
@@ -44,6 +44,7 @@ impl<N: TypeIdent> WithScore for Flag<'_, N> {
             Flag::ObjectFromFixedJson(_) => 0,
             Flag::ObjectFromMarkdown(s) => *s,
             Flag::DefaultButHadUnparseableValue(_) => 2,
+            Flag::OptionalFieldError(_, _) => 10,
             Flag::ObjectToMap(_) => 1,
             Flag::ObjectToString(_) => 2,
             Flag::ObjectToPrimitive(_) => 2,
@@ -55,8 +56,8 @@ impl<N: TypeIdent> WithScore for Flag<'_, N> {
             Flag::SingleToArray => 1,
             // Parsing errors are bad.
             Flag::ArrayItemParseError(x, _) => 1 + (*x as i32),
-            Flag::MapKeyParseError(x, _) => 1,
-            Flag::MapValueParseError(x, _) => 1,
+            Flag::MapKeyParseError(_x, _) => 1,
+            Flag::MapValueParseError(_x, _) => 1,
             // Harmless to drop additional matches
             Flag::FirstMatch(_, _) => 1,
             // No penalty for picking an option from a union
@@ -64,6 +65,7 @@ impl<N: TypeIdent> WithScore for Flag<'_, N> {
             Flag::StrMatchOneFromMany(values) => {
                 values.iter().map(|(_, count)| *count as i32).sum::<i32>()
             }
+            Flag::StringToInt(_) => 1,
             Flag::StringToBool(_) => 1,
             Flag::StringToNull(_) => 1,
             Flag::StringToChar(_) => 1,
@@ -77,19 +79,19 @@ impl<N: TypeIdent> WithScore for Flag<'_, N> {
     }
 }
 
-impl<T, N: TypeIdent> WithScore for ValueWithFlags<'_, T, N> {
+impl<T, N: TypeIdent> WithScore for ValueWithFlags<'_, '_, '_, T, N> {
     fn score(&self) -> i32 {
         self.meta.flags.score()
     }
 }
 
-impl<N: TypeIdent> WithScore for DeserializerConditions<'_, N> {
+impl<N: TypeIdent> WithScore for DeserializerConditions<'_, '_, '_, N> {
     fn score(&self) -> i32 {
         self.flags.iter().map(WithScore::score).sum()
     }
 }
 
-impl<N: TypeIdent> WithScore for Vec<Flag<'_, N>> {
+impl<N: TypeIdent> WithScore for Vec<Flag<'_, '_, '_, N>> {
     fn score(&self) -> i32 {
         self.iter().map(WithScore::score).sum()
     }

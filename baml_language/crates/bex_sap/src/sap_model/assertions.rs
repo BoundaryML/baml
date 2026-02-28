@@ -18,8 +18,8 @@ impl<'t, N: TypeIdent> Assertion<'t, N> {
     /// Assertion failures will be returned as `Ok(false)`.
     pub fn evaluate(
         &self,
-        _value: &BamlValue<'t, N>,
-        _ctx: &ParsingContext<'t, N>,
+        _value: &BamlValue<'_, '_, 't, N>,
+        _ctx: &ParsingContext<'_, '_, 't, N>,
     ) -> Result<bool, ParsingError> {
         todo!()
     }

@@ -1,59 +1,99 @@
+use std::borrow::Cow;
+
 use crate::sap_model::TypeIdent;
 
 use super::{coercer::ParsingError, types::BamlValueWithFlags};
 
+/// ## Lifetimes
+/// `'s`: the lifetime of the input string
+/// `'v`: the lifetime of the parsed [`crate::jsonish::Value`]
+/// `'t`: the lifetime of the type being parsed
 #[derive(Clone, Debug)]
-pub enum Flag<'t, N: TypeIdent> {
+pub enum Flag<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
     // SingleFromMultiple,
     ObjectFromMarkdown(i32),
     ObjectFromFixedJson(Vec<crate::jsonish::Fixes>),
 
     DefaultButHadUnparseableValue(ParsingError),
-    ObjectToString(crate::jsonish::Value),
-    ObjectToPrimitive(crate::jsonish::Value),
-    ObjectToMap(crate::jsonish::Value),
-    ExtraKey(String, crate::jsonish::Value),
-    StrippedNonAlphaNumeric(String),
-    SubstringMatch(String),
+    ObjectToString(&'v crate::jsonish::Value<'s>),
+    /// When we were expecting a primitive but got a single-field object so used the first field as the value.
+    /// If combined with a `Default*` flag, it means the unused json value was an object (not that the default value was an object).
+    ObjectToPrimitive(&'v crate::jsonish::Value<'s>),
+    ObjectToMap(&'v crate::jsonish::Value<'s>),
+    ExtraKey(Cow<'s, str>, &'v crate::jsonish::Value<'s>),
+    StrippedNonAlphaNumeric(Cow<'s, str>),
+    SubstringMatch(Cow<'s, str>),
     SingleToArray,
     ArrayItemParseError(usize, ParsingError),
     MapKeyParseError(usize, ParsingError),
-    MapValueParseError(String, ParsingError),
+    MapValueParseError(Cow<'s, str>, ParsingError),
+    /// When an optional field's value is present but parsing failed.
+    /// The field will be set to `null` and this flag will be added to the class object.
+    /// 
+    /// (In the case that a required field is errored, it is an error on the parent object so no flag is added.)
+    OptionalFieldError(Cow<'s, str>, ParsingError),
 
-    JsonToString(crate::jsonish::Value),
-    ImpliedKey(String),
-    InferedObject(crate::jsonish::Value),
+    JsonToString(&'v crate::jsonish::Value<'s>),
+    
+    /// This key was not present and was inferred from the input (e.g. type was class but input was an array).
+    ImpliedKey(Cow<'t, str>),
+    InferedObject(&'v crate::jsonish::Value<'s>),
 
     // Values here are all the possible matches.
-    FirstMatch(usize, Vec<Result<BamlValueWithFlags<'t, N>, ParsingError>>),
-    UnionMatch(usize, Vec<Result<BamlValueWithFlags<'t, N>, ParsingError>>),
+    FirstMatch(
+        usize,
+        Vec<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>,
+    ),
+    UnionMatch(
+        usize,
+        Vec<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>,
+    ),
 
     /// `[(value, count)]`
-    StrMatchOneFromMany(Vec<(String, usize)>),
+    StrMatchOneFromMany(Vec<(Cow<'t, str>, usize)>),
 
+    /// When a field is missing (in complete objects) or not yet started (in incomplete objects)
+    /// and has been filled with a default value.
+    ///
+    /// The value used is either [`crate::sap_model::AnnotatedField::missing`] or [`crate::sap_model::AnnotatedField::before_started`].
     DefaultFromNoValue,
     /// When a value is incomplete and the [`crate::sap_model::TypeAnnotations::in_progress`] is set.
     /// The type of `in_progress` should match the expected type.
     ///
     /// Includes the partial value that was present in the input.
-    DefaultFromInProgress(crate::jsonish::Value),
-    DefaultButHadValue(crate::jsonish::Value),
+    DefaultFromInProgress(&'v crate::jsonish::Value<'s>),
+    DefaultButHadValue(&'v crate::jsonish::Value<'s>),
     OptionalDefaultFromNoValue,
 
+    /// `int` value was converted from a parsed string value
+    ///
+    /// If combined with a `Default*` flag, it means the unused json value was a string (not that the default value was a string).
+    StringToInt(Cow<'s, str>),
     /// `bool` value was converted from a parsed string value
-    StringToBool(String),
+    ///
+    /// If combined with a `Default*` flag, it means the unused json value was a string (not that the default value was a string).
+    StringToBool(Cow<'s, str>),
     /// `null` value was converted from a parsed string value
-    StringToNull(String),
+    ///
+    /// If combined with a `Default*` flag, it means the unused json value was a string (not that the default value was a string).
+    StringToNull(Cow<'s, str>),
     /// char value was converted from a parsed string value
-    StringToChar(String),
+    ///
+    /// If combined with a `Default*` flag, it means the unused json value was a string (not that the default value was a string).
+    StringToChar(Cow<'s, str>),
     /// `float` value was converted from a parsed string value
-    StringToFloat(String),
+    ///
+    /// If combined with a `Default*` flag, it means the unused json value was a string (not that the default value was a string).
+    StringToFloat(Cow<'s, str>),
 
     /// `int` value was converted from a parsed non-integer number
     FloatToInt(f64),
 
     // X -> Object convertions.
-    NoFields(Option<crate::jsonish::Value>),
+    NoFields(Option<&'v crate::jsonish::Value<'s>>),
 
     // /// Constraint results (only contains checks)
     // ConstraintResults(Vec<(String, JinjaExpression, bool)>),
@@ -62,12 +102,16 @@ pub enum Flag<'t, N: TypeIdent> {
     Pending,
 }
 
+/// A set of flags that describe the conditions under which a value was produced.
 #[derive(Clone)]
-pub struct DeserializerConditions<'t, N: TypeIdent> {
-    pub flags: Vec<Flag<'t, N>>,
+pub struct DeserializerConditions<'s, 'v, 't, N: TypeIdent>
+where
+    's: 'v,
+{
+    pub flags: Vec<Flag<'s, 'v, 't, N>>,
 }
 
-impl<N: TypeIdent> DeserializerConditions<'_, N> {
+impl<N: TypeIdent> DeserializerConditions<'_, '_, '_, N> {
     pub fn explanation(&self) -> Vec<ParsingError> {
         self.flags
             .iter()
@@ -93,6 +137,10 @@ impl<N: TypeIdent> DeserializerConditions<'_, N> {
                     // Some(format!( "Error parsing value for key '{}' in map: {}", key, e))
                     Some(e.clone())
                 }
+                Flag::OptionalFieldError(_key, e) => {
+                    // Some(format!( "Error parsing value for key '{}' in map: {}", key, e))
+                    Some(e.clone())
+                }
                 Flag::JsonToString(_) => None,
                 Flag::ImpliedKey(_) => None,
                 Flag::InferedObject(_) => None,
@@ -102,6 +150,7 @@ impl<N: TypeIdent> DeserializerConditions<'_, N> {
                 Flag::DefaultFromInProgress(_) => None,
                 Flag::DefaultButHadValue(_) => None,
                 Flag::OptionalDefaultFromNoValue => None,
+                Flag::StringToInt(_) => None,
                 Flag::StringToBool(_) => None,
                 Flag::StringToNull(_) => None,
                 Flag::StringToChar(_) => None,
@@ -139,13 +188,13 @@ impl<N: TypeIdent> DeserializerConditions<'_, N> {
 //         .collect()
 // }
 
-impl<N: TypeIdent> std::fmt::Debug for DeserializerConditions<'_, N> {
+impl<N: TypeIdent> std::fmt::Debug for DeserializerConditions<'_, '_, '_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
     }
 }
 
-impl<N: TypeIdent> std::fmt::Display for DeserializerConditions<'_, N> {
+impl<N: TypeIdent> std::fmt::Display for DeserializerConditions<'_, '_, '_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.flags.is_empty() {
             return Ok(());
@@ -160,7 +209,7 @@ impl<N: TypeIdent> std::fmt::Display for DeserializerConditions<'_, N> {
     }
 }
 
-impl<N: TypeIdent> std::fmt::Display for Flag<'_, N> {
+impl<N: TypeIdent> std::fmt::Display for Flag<'_, '_, '_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Flag::InferedObject(value) => {
@@ -196,6 +245,9 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, N> {
             }
             Flag::MapValueParseError(key, error) => {
                 write!(f, "Error parsing map value for key {key}: {error}")?;
+            }
+            Flag::OptionalFieldError(key, error) => {
+                write!(f, "Error parsing optional field {key}: {error}")?;
             }
             Flag::SingleToArray => {
                 write!(f, "Converted a single value to an array")?;
@@ -256,6 +308,9 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, N> {
                 write!(f, "Null but had value: ")?;
                 writeln!(f, "{value:#?}")?;
             }
+            Flag::StringToInt(value) => {
+                write!(f, "String to int: {value}")?;
+            }
             Flag::StringToBool(value) => {
                 write!(f, "String to bool: {value}")?;
             }
@@ -300,12 +355,12 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, N> {
     }
 }
 
-impl<'t, N: TypeIdent> DeserializerConditions<'t, N> {
-    pub fn add_flag(&mut self, flag: Flag<'t, N>) {
+impl<'s, 'v, 't, N: TypeIdent> DeserializerConditions<'s, 'v, 't, N> {
+    pub fn add_flag(&mut self, flag: Flag<'s, 'v, 't, N>) {
         self.flags.push(flag);
     }
 
-    pub fn with_flag(mut self, flag: Flag<'t, N>) -> Self {
+    pub fn with_flag(mut self, flag: Flag<'s, 'v, 't, N>) -> Self {
         self.flags.push(flag);
         self
     }
@@ -314,19 +369,19 @@ impl<'t, N: TypeIdent> DeserializerConditions<'t, N> {
         Self { flags: Vec::new() }
     }
 
-    pub fn flags(&self) -> &Vec<Flag<'t, N>> {
+    pub fn flags(&self) -> &Vec<Flag<'s, 'v, 't, N>> {
         &self.flags
     }
 }
 
-impl<N: TypeIdent> Default for DeserializerConditions<'_, N> {
+impl<N: TypeIdent> Default for DeserializerConditions<'_, '_, '_, N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'t, N: TypeIdent> From<Flag<'t, N>> for DeserializerConditions<'t, N> {
-    fn from(flag: Flag<'t, N>) -> Self {
+impl<'s, 'v, 't, N: TypeIdent> From<Flag<'s, 'v, 't, N>> for DeserializerConditions<'s, 'v, 't, N> {
+    fn from(flag: Flag<'s, 'v, 't, N>) -> Self {
         DeserializerConditions::new().with_flag(flag)
     }
 }

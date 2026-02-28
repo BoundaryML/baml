@@ -16,7 +16,8 @@ use crate::{
     baml_value::ValueWithMeta,
     deserializer::types::DeserializerMeta,
     sap_model::{
-        Ty, TyResolved, TyWithMeta, TypeAnnotations, TypeIdent, TypeName, TypeRefDb, TypeValue,
+        FromLiteral, TyResolved, TyWithMeta, TypeAnnotations, TypeIdent, TypeName, TypeRefDb,
+        TypeValue,
     },
 };
 // use baml_types::{BamlValue, Constraint, JinjaExpression};
@@ -26,10 +27,10 @@ use crate::{
 use super::types::BamlValueWithFlags;
 use crate::jsonish;
 
-pub struct ParsingContext<'t, N: TypeIdent> {
+pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     pub scope: Vec<String>,
-    visited_during_coerce: HashSet<(String, jsonish::Value)>,
-    visited_during_try_cast: HashSet<(String, jsonish::Value)>,
+    visited_during_coerce: HashSet<(String, &'v jsonish::Value<'s>)>,
+    visited_during_try_cast: HashSet<(String, &'v jsonish::Value<'s>)>,
     pub db: &'t TypeRefDb<'t, N>,
     pub of: &'t TyResolved<'t, N>,
     /// Hint for union coercion: the variant index that succeeded on the previous
@@ -38,7 +39,7 @@ pub struct ParsingContext<'t, N: TypeIdent> {
     pub union_variant_hint: Option<usize>,
 }
 
-impl<'t, N: TypeIdent> ParsingContext<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     pub fn display_scope(&self) -> String {
         if self.scope.is_empty() {
             return "<root>".to_string();
@@ -46,6 +47,7 @@ impl<'t, N: TypeIdent> ParsingContext<'t, N> {
         self.scope.join(".")
     }
 
+    #[allow(dead_code)]
     pub(crate) fn new(of: &'t TyResolved<'t, N>, db: &'t TypeRefDb<'t, N>) -> Self {
         ParsingContext {
             scope: Vec::new(),
@@ -91,7 +93,7 @@ impl<'t, N: TypeIdent> ParsingContext<'t, N> {
     // mutability or something.
     pub(crate) fn visit_class_value_pair(
         &self,
-        cls_value_pair: (String, jsonish::Value),
+        cls_value_pair: (String, &'v jsonish::Value<'s>),
         is_coerce: bool,
     ) -> Self {
         let mut new_visited_coerce = self.visited_during_coerce.clone();
@@ -253,8 +255,8 @@ impl<'t, N: TypeIdent> ParsingContext<'t, N> {
 
     pub(crate) fn error_missing_required_field(
         &self,
-        unparsed: Vec<(String, &ParsingError)>,
-        missing: Vec<String>,
+        unparsed: Vec<(impl AsRef<str>, ParsingError)>,
+        missing: Vec<impl AsRef<str>>,
         _item: Option<&crate::jsonish::Value>,
     ) -> ParsingError {
         ParsingError {
@@ -268,12 +270,12 @@ impl<'t, N: TypeIdent> ParsingContext<'t, N> {
                 .into_iter()
                 .map(|k| ParsingError {
                     scope: self.scope.clone(),
-                    reason: format!("Missing required field: {k}"),
+                    reason: format!("Missing required field: {}", k.as_ref()),
                     causes: Vec::new(),
                 })
                 .chain(unparsed.into_iter().map(|(k, e)| ParsingError {
                     scope: self.scope.clone(),
-                    reason: format!("Failed to parse field {k}: {e}"),
+                    reason: format!("Failed to parse field {}: {}", k.as_ref(), e),
                     causes: vec![e.clone()],
                 }))
                 .collect(),
@@ -383,59 +385,55 @@ impl std::fmt::Display for ParsingError {
 
 impl std::error::Error for ParsingError {}
 
-pub trait TypeCoercer<'t, N: TypeIdent>: TypeValue {
+pub trait TypeCoercer<'s, 'v, 't, N: TypeIdent>:
+    TypeValue<'s, 'v, 't> + FromLiteral<'s, 'v, 't, N>
+where
+    's: 'v,
+{
     /// Tries to coerce a value to an annotated type. May perform transformations.
+    ///
+    /// Returns `Ok(None)` if the value was incomplete and has `in_progress = never`
+    ///
+    /// Does not handle errors with [`TypeAnnotations::on_error`]. Callers should use that value if an error occurs.
     fn coerce(
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: Option<&crate::jsonish::Value>,
-    ) -> Result<ValueWithMeta<<Self as TypeValue>::Value, DeserializerMeta<'t, N>>, ParsingError>;
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Result<
+        Option<
+            ValueWithMeta<<Self as TypeValue<'s, 'v, 't>>::Value, DeserializerMeta<'s, 'v, 't, N>>,
+        >,
+        ParsingError,
+    >;
 
     /// Tries to cast a value to an annotated type. Does not perform any transformations.
     fn try_cast(
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: Option<&crate::jsonish::Value>,
-    ) -> Option<ValueWithMeta<<Self as TypeValue>::Value, DeserializerMeta<'t, N>>>;
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<
+        ValueWithMeta<<Self as TypeValue<'s, 'v, 't>>::Value, DeserializerMeta<'s, 'v, 't, N>>,
+    >;
 }
 
-pub trait DefaultValue<'t, N: TypeIdent> {
-    fn default_value(&self, error: Option<&ParsingError>) -> Option<BamlValueWithFlags<'t, N>>;
+pub trait DefaultValue<'s, 'v, 't, N: TypeIdent> {
+    fn default_value(
+        &self,
+        error: Option<&ParsingError>,
+    ) -> Option<BamlValueWithFlags<'s, 'v, 't, N>>;
 }
-
-// /// Run all checks and asserts for a value at a given type.
-// /// This function only runs checks on the top-level node of the `BamlValue`.
-// /// Checks on nested fields, list items etc. are not run here.
-// ///
-// /// For a function that traverses a whole `BamlValue` looking for failed asserts,
-// /// see `first_failing_assert_nested`.
-// pub fn run_user_checks<'t, N: TypeIdent>(
-//     baml_value: &BamlValue<N>,
-//     type_: &AnnotatedTy<'t, N>,
-// ) -> Result<Vec<(Constraint, bool)>> {
-//     let res = type_
-//         .meta()
-//         .constraints
-//         .iter()
-//         .map(|constraint| {
-//             let result = evaluate_predicate(baml_value, &constraint.expression)?;
-//             Ok((constraint.clone(), result))
-//         })
-//         .collect::<Result<Vec<_>>>();
-//     res
-// }
 
 /// A trait that gets the type name (permitting resolution errors) from a type.
 pub(crate) trait TryTypeName<'t, N: TypeIdent> {
     fn error_type_resolution(
         &self,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'_, '_, 't, N>,
     ) -> Result<Cow<'static, str>, &'t N>;
 }
 impl<'t, T: TypeName, N: TypeIdent> TryTypeName<'t, N> for T {
     fn error_type_resolution(
         &self,
-        _ctx: &ParsingContext<'t, N>,
+        _ctx: &ParsingContext<'_, '_, 't, N>,
     ) -> Result<Cow<'static, str>, &'t N> {
         Ok(self.type_name())
     }

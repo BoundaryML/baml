@@ -5,12 +5,12 @@ use anyhow::Result;
 use super::ParseOptions;
 use crate::jsonish::{
     Value,
-    parser::{ParsingMode, entry},
+    parser::ParsingMode,
 };
 
 #[derive(Debug)]
-pub enum MarkdownResult {
-    CodeBlock(String, Value),
+pub(super) enum MarkdownResult<'s> {
+    CodeBlock(String, Value<'s>),
     String(String),
 }
 
@@ -26,8 +26,8 @@ static MD_TAG_END: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?m)^[ \t]*```(?:\n|$)").expect("Failed to compile md-tag-end regex")
 });
 
-pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
-    let mut values: Vec<MarkdownResult> = vec![];
+pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<MarkdownResult<'s>>> {
+    let mut values: Vec<MarkdownResult<'s>> = vec![];
 
     let mut remaining = str;
 
@@ -44,7 +44,7 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
 
         // Heuristic: the first "```" after an opening fence might appear inside the fenced content
         // (e.g. within a JSON string). Prefer the last closing fence that yields a successful parse.
-        let mut parsed_value: Option<Value> = None;
+        let mut parsed_value: Option<Value<'s>> = None;
 
         let ends: Vec<_> = md_tag_end.find_iter(after_start).collect();
         let md_content = if ends.is_empty() {
@@ -123,6 +123,8 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
 
 #[cfg(test)]
 mod test {
+    use std::borrow::Cow;
+
     use super::*;
     use crate::jsonish::{CompletionState, Value};
 
@@ -163,7 +165,7 @@ print("Hello, world!")
             assert!(
                 value.contains(&Value::Object(
                     [(
-                        "a".to_string(),
+                        Cow::Borrowed("a"),
                         Value::Number((1).into(), CompletionState::Complete)
                     )]
                     .into_iter()
@@ -185,7 +187,7 @@ print("Hello, world!")
             };
             // dbg!(&value);
             assert!(value.contains(&Value::String(
-                "This is a test".to_string(),
+                Cow::Borrowed("This is a test"),
                 CompletionState::Complete
             )));
         }

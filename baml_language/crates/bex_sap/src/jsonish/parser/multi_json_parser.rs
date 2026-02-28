@@ -3,7 +3,7 @@ use anyhow::Result;
 use super::{ParseOptions, entry};
 use crate::jsonish::Value;
 
-pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
+pub fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Value<'s>>> {
     // Find all balanced JSON objects but w/o any fixes.
     let mut stack = Vec::new();
     let mut json_str_start = None;
@@ -83,7 +83,7 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
     }
 }
 
-fn complete_stack_head(stack: &mut [Value]) {
+fn complete_stack_head(stack: &mut [Value<'_>]) {
     if let Some(v) = stack.last_mut() {
         v.complete_deeply();
     }
@@ -91,6 +91,8 @@ fn complete_stack_head(stack: &mut [Value]) {
 
 #[cfg(test)]
 mod test {
+    use std::borrow::Cow;
+
     use crate::jsonish::CompletionState;
 
     use super::*;
@@ -126,7 +128,7 @@ print("Hello, world!")
             assert!(
                 value.contains(&Value::Object(
                     [(
-                        "a".to_string(),
+                        Cow::Borrowed("a"),
                         Value::Number((1).into(), CompletionState::Complete)
                     )]
                     .into_iter()
@@ -142,7 +144,7 @@ print("Hello, world!")
             };
             assert!(value.contains(&Value::Array(
                 vec![Value::String(
-                    "This is a test".to_string(),
+                    Cow::Borrowed("This is a test"),
                     CompletionState::Complete
                 )],
                 CompletionState::Complete

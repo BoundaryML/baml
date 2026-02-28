@@ -19,16 +19,16 @@ struct StringQuoteTracking {
 }
 
 #[derive(Debug)]
-pub struct JsonParseState {
+pub(super) struct JsonParseState<'s> {
     /// The stack of Json collection values being assembled.
     /// The stack-ness is used in order to parse nested values,
     /// e.g. an object with fields of list, or lists of lists.
-    pub collection_stack: Vec<(JsonCollection, Vec<Fixes>)>,
+    pub(super) collection_stack: Vec<(JsonCollection<'s>, Vec<Fixes>)>,
 
     /// Values for which parsing is completed, and popped off of the
     /// collection stack.
     /// Technically we may find multiple values in a single string
-    pub completed_values: Vec<(&'static str, Value, Vec<Fixes>)>,
+    pub(super) completed_values: Vec<(&'static str, Value<'s>, Vec<Fixes>)>,
 
     /// Incremental tracking state for the current quoted string being parsed.
     /// Reset when a new string is started, used to avoid O(n²) quote counting.
@@ -44,8 +44,8 @@ enum Pos {
     InArray,       // 4
 }
 
-impl JsonParseState {
-    pub fn new() -> Self {
+impl<'s> JsonParseState<'s> {
+    pub(super) fn new() -> Self {
         JsonParseState {
             collection_stack: vec![],
             completed_values: vec![],
@@ -84,7 +84,7 @@ impl JsonParseState {
     /// The `completion_state` parameter is applied to the value being
     /// completed. If it is `CompletionState::Complete`, we also apply
     /// that state to the children of the value being completed.
-    pub fn complete_collection(&mut self, completion_state: CompletionState) {
+    pub(super) fn complete_collection(&mut self, completion_state: CompletionState) {
         let (collection, fixes) = match self.collection_stack.pop() {
             Some(collection) => collection,
             None => return,
@@ -92,7 +92,7 @@ impl JsonParseState {
 
         let name = collection.name();
 
-        let mut value: Value = match collection.into() {
+        let mut value: Value<'s> = match collection.into() {
             Some(value) => value,
             None => return,
         };
@@ -105,8 +105,8 @@ impl JsonParseState {
                 JsonCollection::Object(keys, values, _) => {
                     if keys.len() == values.len() {
                         match value {
-                            Value::String(s, _) => keys.push(s),
-                            Value::AnyOf(_, s) => keys.push(s),
+                            Value::String(s, _) => keys.push(s.into_owned()),
+                            Value::AnyOf(_, s) => keys.push(s.into_owned()),
                             _ => keys.push(value.to_string()),
                         }
                     } else {
@@ -166,6 +166,7 @@ impl JsonParseState {
         Ok(0)
     }
 
+    #[allow(dead_code)]
     fn is_string_complete(&self) -> bool {
         let Some((JsonCollection::UnquotedString(v, _), _)) = self.collection_stack.last() else {
             return false;
@@ -494,7 +495,7 @@ impl JsonParseState {
         }
     }
 
-    pub fn process_token(
+    pub(super) fn process_token(
         &mut self,
         token: char,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,

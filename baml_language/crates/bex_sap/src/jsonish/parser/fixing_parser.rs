@@ -7,7 +7,7 @@ use self::json_parse_state::JsonParseState;
 use super::ParseOptions;
 use crate::jsonish::{CompletionState, Value, value::Fixes};
 
-pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes>)>> {
+pub(super) fn parse<'s>(str: &'s str, _options: &ParseOptions) -> Result<Vec<(Value<'s>, Vec<Fixes>)>> {
     // Try to fix some common JSON issues
     // - Unquoted single word strings
     // - Single quoted strings
@@ -66,7 +66,7 @@ pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes
                             .completed_values
                             .into_iter()
                             .map(|f| {
-                                let completion_state = f.1.completion_state().clone();
+                                let _completion_state = f.1.completion_state().clone();
                                 Value::FixedJson(f.1.into(), f.2)
                             })
                             .collect(),
@@ -76,7 +76,7 @@ pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes
                 )])
             } else {
                 // Filter for only objects and arrays
-                let values: Vec<(Value, Vec<Fixes>)> = state
+                let values: Vec<(Value<'s>, Vec<Fixes>)> = state
                     .completed_values
                     .into_iter()
                     .filter_map(|f| {
@@ -132,8 +132,8 @@ mod tests {
                 assert_eq!(obj_cmplt, &CompletionState::Incomplete);
                 match (&fields[0], &fields[1]) {
                     ((key_a, Value::Number(a, a_cmplt)), (key_b, Value::Number(b, b_cmplt))) => {
-                        assert_eq!(key_a.as_str(), "a");
-                        assert_eq!(key_b.as_str(), "b");
+                        assert_eq!(key_a, "a");
+                        assert_eq!(key_b, "b");
                         assert_eq!(a, &serde_json::Number::from(11));
                         assert_eq!(b, &serde_json::Number::from(22));
                         assert_eq!(a_cmplt, &CompletionState::Complete);
@@ -156,8 +156,8 @@ mod tests {
                 assert_eq!(obj_cmplt, &CompletionState::Incomplete);
                 match (&fields[0], &fields[1]) {
                     ((key_a, Value::Number(a, a_cmplt)), (key_b, Value::Number(b, b_cmplt))) => {
-                        assert_eq!(key_a.as_str(), "a");
-                        assert_eq!(key_b.as_str(), "b");
+                        assert_eq!(key_a, "a");
+                        assert_eq!(key_b, "b");
                         assert_eq!(a, &serde_json::Number::from(11));
                         assert_eq!(b, &serde_json::Number::from(22));
                         assert_eq!(a_cmplt, &CompletionState::Complete);

@@ -7,26 +7,31 @@ use crate::{
     sap_model::*,
 };
 
-pub trait FromLiteral<'t, N: TypeIdent>: TypeValue {
+pub trait FromLiteral<'s, 'v, 't, N: TypeIdent>: TypeValue<'s, 'v, 't>
+where
+    's: 'v,
+{
     /// Converts from a SAP model literal (used in attributes) into a BAML value.
+    /// Does not perform any transformations: the value should be of the correct type.
     ///
     /// ## Errors
     /// If the literal cannot be converted for the type.
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError>;
 }
 
-impl<'t, N> FromLiteral<'t, N> for IntTy
+impl<'s, 'v, 't, N> FromLiteral<'s, 'v, 't, N> for IntTy
 where
+    's: 'v,
     N: TypeIdent,
 {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             Literal::Int(i) => Ok(BamlInt { value: *i }),
@@ -35,11 +40,11 @@ where
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for FloatTy {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for FloatTy where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             Literal::Float(f) => Ok(BamlFloat { value: *f }),
@@ -48,11 +53,11 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for FloatTy {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for BoolTy {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BoolTy where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             Literal::Bool(b) => Ok(BamlBool { value: *b }),
@@ -61,26 +66,26 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for BoolTy {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for StringTy {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StringTy where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             Literal::String(s) => Ok(BamlString {
-                value: s.to_string(),
+                value: s.to_string().into(),
             }),
             _ => Err(ctx.error_internal("attribute literal must match the type: string")),
         }
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for NullTy {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for NullTy where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             Literal::Null => Ok(BamlNull),
@@ -89,21 +94,21 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for NullTy {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for MediaTy {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for MediaTy where 's: 'v {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        _literal: &'t Literal<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         Err(ctx.error_internal("media literals are not currently supported"))
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for PrimitiveTy {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for PrimitiveTy where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match self {
             PrimitiveTy::Int(ty) => ty.from_literal(literal, ctx).map(BamlPrimitive::Int),
@@ -116,11 +121,11 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for PrimitiveTy {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for IntLiteralTy {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for IntLiteralTy where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             Literal::Int(i) if *i == self.0 => Ok(BamlInt { value: *i }),
@@ -132,11 +137,11 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for IntLiteralTy {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for BoolLiteralTy {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BoolLiteralTy where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             Literal::Bool(b) if *b == self.0 => Ok(BamlBool { value: *b }),
@@ -148,15 +153,15 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for BoolLiteralTy {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for StringLiteralTy<'t> {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StringLiteralTy<'t> where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
             Literal::String(s) if s == self.0.as_ref() => Ok(BamlString {
-                value: s.to_string(),
+                value: s.to_string().into(),
             }),
             _ => Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
@@ -166,11 +171,11 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for StringLiteralTy<'t> {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for LiteralTy<'t> {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for LiteralTy<'t> where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match self {
             LiteralTy::String(lit) => lit.from_literal(literal, ctx).map(BamlPrimitive::String),
@@ -180,11 +185,11 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for LiteralTy<'t> {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for ArrayTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ArrayTy<'t, N> where 't: 's, 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let Literal::Array(items) = literal else {
             return Err(ctx.error_internal(format!(
@@ -222,13 +227,13 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for ArrayTy<'t, N> {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for MapTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for MapTy<'t, N> where 't: 's, 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        let Literal::Object { name, data } = literal else {
+        let Literal::Object { name: _, data } = literal else {
             return Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
@@ -246,7 +251,7 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for MapTy<'t, N> {
                     flags: DeserializerConditions::new(),
                     ty: value_ty.clone(),
                 };
-                Ok((key.to_string(), BamlValueWithFlags::new(value, meta)))
+                Ok((key.to_string().into(), BamlValueWithFlags::new(value, meta)))
             })
             .collect::<Result<IndexMap<_, _>, _>>();
         match data {
@@ -261,11 +266,11 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for MapTy<'t, N> {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for ClassTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ClassTy<'t, N> where 't: 's, 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let Literal::Object { name, data } = literal else {
             return Err(ctx.error_internal(format!(
@@ -296,7 +301,7 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for ClassTy<'t, N> {
                     flags: DeserializerConditions::new(),
                     ty,
                 };
-                field_data.insert(name.to_string(), BamlValueWithFlags::new(value, meta));
+                field_data.insert(&**name, BamlValueWithFlags::new(value, meta));
             } else if !field.ty.ty.is_optional(ctx.db) {
                 // FromLiteral does not add for missing fields.
                 return Err(ctx.error_internal("Provided literal is missing one or more fields."));
@@ -309,11 +314,11 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for ClassTy<'t, N> {
     }
 }
 
-impl<'t, N: TypeIdent + 't> FromLiteral<'t, N> for EnumTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent + 't> FromLiteral<'s, 'v, 't, N> for EnumTy<'t, N> where 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let Literal::String(s) = literal else {
             return Err(ctx.error_internal(format!(
@@ -339,16 +344,16 @@ impl<'t, N: TypeIdent + 't> FromLiteral<'t, N> for EnumTy<'t, N> {
             })?;
         Ok(BamlEnum {
             name: &self.name,
-            value: value.to_string(),
+            value,
         })
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for UnionTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for UnionTy<'t, N> where 't: 's, 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         for TyWithMeta { ty, .. } in &self.variants {
             if let Ok(value) = ty.from_literal(literal, ctx) {
@@ -362,11 +367,11 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for UnionTy<'t, N> {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for StreamStateTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StreamStateTy<'t, N> where 't: 's, 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let inner_ty = ctx
             .db
@@ -387,12 +392,16 @@ impl<'t, N: TypeIdent> FromLiteral<'t, N> for StreamStateTy<'t, N> {
 /// Inherent method for `TyResolvedRef` dispatch, taking `self` by value (Copy)
 /// instead of `&'t self`. This avoids the lifetime issue where `resolve` returns
 /// a local `TyResolvedRef` that can't satisfy `&'t self` in the `FromLiteral` trait.
-impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> TyResolvedRef<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
     pub fn from_literal(
         self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
-    ) -> Result<BamlValue<'t, N>, ParsingError> {
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+    ) -> Result<BamlValue<'s, 'v, 't, N>, ParsingError> {
         match self {
             TyResolvedRef::Primitive(ty) => ty
                 .as_static_ref()
@@ -411,11 +420,11 @@ impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
     }
 }
 
-impl<'t, N: TypeIdent> FromLiteral<'t, N> for Ty<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for Ty<'t, N> where 't: 's, 's: 'v {
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let resolved = ctx
             .db

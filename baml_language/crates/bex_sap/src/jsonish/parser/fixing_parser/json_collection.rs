@@ -2,10 +2,10 @@ use super::super::dedent::dedent;
 use crate::jsonish::{CompletionState, Value};
 
 #[derive(Debug)]
-pub enum JsonCollection {
+pub enum JsonCollection<'s> {
     // Key, Value
-    Object(Vec<String>, Vec<Value>, CompletionState),
-    Array(Vec<Value>, CompletionState),
+    Object(Vec<String>, Vec<Value<'s>>, CompletionState),
+    Array(Vec<Value<'s>>, CompletionState),
     QuotedString(String, CompletionState),
     TripleQuotedString(String, CompletionState),
     SingleQuotedString(String, CompletionState),
@@ -31,7 +31,7 @@ pub enum JsonCollection {
     BlockComment(String, CompletionState),
 }
 
-impl JsonCollection {
+impl JsonCollection<'_> {
     pub fn name(&self) -> &'static str {
         match self {
             JsonCollection::Object(_, _, _) => "Object",
@@ -63,8 +63,8 @@ impl JsonCollection {
     }
 }
 
-impl From<JsonCollection> for Option<Value> {
-    fn from(collection: JsonCollection) -> Option<Value> {
+impl<'s> From<JsonCollection<'s>> for Option<Value<'s>> {
+    fn from(collection: JsonCollection<'s>) -> Option<Value<'s>> {
         Some(match collection {
             JsonCollection::TrailingComment(_, _) | JsonCollection::BlockComment(_, _) => {
                 return None;
@@ -73,30 +73,30 @@ impl From<JsonCollection> for Option<Value> {
                 // log::debug!("keys: {:?}", keys);
                 let mut object: Vec<_> = Vec::new();
                 for (key, value) in keys.into_iter().zip(values.into_iter()) {
-                    object.push((key, value));
+                    object.push((key.into(), value));
                 }
                 Value::Object(object, object_completion)
             }
             JsonCollection::Array(values, completion_state) => {
                 Value::Array(values, completion_state)
             }
-            JsonCollection::QuotedString(s, completion_state) => Value::String(s, completion_state),
+            JsonCollection::QuotedString(s, completion_state) => Value::String(s.into(), completion_state),
             JsonCollection::TripleQuotedString(s, completion_state) => {
-                Value::String(dedent(s.as_str()).content, completion_state)
+                Value::String(dedent(s.as_str()).content.into(), completion_state)
             }
             JsonCollection::SingleQuotedString(s, completion_state) => {
-                Value::String(s, completion_state)
+                Value::String(s.into(), completion_state)
             }
             JsonCollection::TripleBacktickString { content, .. } => {
-                let Some((fenced_codeblock_info, codeblock_contents)) = content.0.split_once("\n")
+                let Some((_fenced_codeblock_info, codeblock_contents)) = content.0.split_once("\n")
                 else {
-                    return Some(Value::String(content.0, content.1));
+                    return Some(Value::String(content.0.into(), content.1));
                 };
 
-                Value::String(dedent(codeblock_contents).content, content.1)
+                Value::String(dedent(codeblock_contents).content.into(), content.1)
             }
             JsonCollection::BacktickString(s, completion_state) => {
-                Value::String(s, completion_state)
+                Value::String(s.into(), completion_state)
             }
             JsonCollection::UnquotedString(s, completion_state) => {
                 let s = s.trim();
@@ -113,10 +113,10 @@ impl From<JsonCollection> for Option<Value> {
                 } else if let Ok(n) = s.parse::<f64>() {
                     match serde_json::Number::from_f64(n) {
                         Some(n) => Value::Number(n, completion_state),
-                        None => Value::String(s.into(), completion_state),
+                        None => Value::String(s.to_owned().into(), completion_state),
                     }
                 } else {
-                    Value::String(s.into(), completion_state)
+                    Value::String(s.to_owned().into(), completion_state)
                 }
             }
         })

@@ -792,6 +792,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_sap"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "baml_db",
+ "baml_project",
+ "derive_more",
+ "indexmap",
+ "log",
+ "ouroboros",
+ "regex",
+ "rowan 0.16.1",
+ "salsa",
+ "serde",
+ "serde_json",
+ "strsim",
+ "thiserror 2.0.18",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "baml_tests"
 version = "0.0.0-beta"
 dependencies = [
@@ -1747,6 +1768,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc3dc5ad92c2e2d1c193bbbbdf2ea477cb81331de4f3103f267ca18368b988c4"
 dependencies = [
  "powerfmt",
+]
+
+[[package]]
+name = "derive_more"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d751e9e49156b02b44f9c1815bcb94b984cdcc4396ecc32521c739452808b134"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "799a97264921d8623a957f6c3b9011f3b5492f557bbb7a5a19b7fa6d06ba8dcb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn 2.0.116",
 ]
 
 [[package]]
@@ -5217,6 +5259,15 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "unicode-normalization"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fd4f6878c9cb28d874b009da9e8d183b5abc80117c40bbd187a1fde336be6e8"
+dependencies = [
+ "tinyvec",
+]
 
 [[package]]
 name = "unicode-segmentation"

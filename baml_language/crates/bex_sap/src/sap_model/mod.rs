@@ -20,11 +20,12 @@ use crate::{
     },
     deserializer::{
         coercer::{ParsingContext, ParsingError},
-        types::{BamlValueWithFlags, DeserializerMeta},
+        types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
     },
+    jsonish::{self, CompletionState},
 };
 
-/// An identifier for a type. Used to look up a type in a `TypeRefDb`.
+/// An identifier for a type. Used to look up a type in a [`TypeRefDb`].
 pub trait TypeIdent: Eq + std::hash::Hash + Display + Clone {}
 impl TypeIdent for &'_ str {}
 impl TypeIdent for String {}
@@ -56,6 +57,13 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
         }
     }
 
+    /// Unwraps a [`Ty`] into a [`TyResolvedRef`].
+    ///
+    /// If the type is already resolved, returns a reference to it.
+    /// If the type is unresolved, looks up the type and returns a reference to it.
+    ///
+    /// # Errors
+    /// If the type is unresolved and not found in the database, returns the identifier.
     pub fn resolve(&'t self, ty: &'t Ty<'t, N>) -> Result<TyResolvedRef<'t, N>, &'t N> {
         match ty {
             Ty::Resolved(ty) => Ok(ty.as_ref()),
@@ -64,6 +72,7 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
         }
     }
 
+    /// Like [`TypeRefDb::resolve`], but maps the result to keep the type annotations.
     pub fn resolve_with_meta(
         &'t self,
         ty: TyWithMeta<&'t Ty<'t, N>, &'t TypeAnnotations<'t, N>>,
@@ -74,7 +83,10 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
 
 /// A trait that associates a BAML value type with a SAP model type.
 /// Should be implemented for SAP model types.
-pub trait TypeValue {
+pub trait TypeValue<'s, 'v, 't>
+where
+    's: 'v,
+{
     /// The BAML value type associated with this SAP model type.
     type Value;
 }
@@ -94,8 +106,11 @@ pub enum TyResolved<'t, N: TypeIdent> {
     /// A type that tells you if it is completed or not.
     StreamState(StreamStateTy<'t, N>),
 }
-impl<'t, N: TypeIdent> TypeValue for TyResolved<'t, N> {
-    type Value = BamlValue<'t, N>;
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for TyResolved<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlValue<'s, 'v, 't, N>;
 }
 impl<'t, N: TypeIdent> TyResolved<'t, N> {
     pub fn as_ref(&'t self) -> TyResolvedRef<'t, N> {
@@ -145,8 +160,11 @@ impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
         }
     }
 }
-impl<'t, N: TypeIdent> TypeValue for TyResolvedRef<'t, N> {
-    type Value = BamlValue<'t, N>;
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for TyResolvedRef<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlValue<'s, 'v, 't, N>;
 }
 
 #[derive(Clone, From)]
@@ -172,8 +190,11 @@ impl<'t, N: TypeIdent> Ty<'t, N> {
         db.resolve(self).map_or(false, |ty| ty.is_optional(db))
     }
 }
-impl<'t, N: TypeIdent> TypeValue for Ty<'t, N> {
-    type Value = BamlValue<'t, N>;
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for Ty<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlValue<'s, 'v, 't, N>;
 }
 
 /// Represents a type with additional metadata.
@@ -226,8 +247,11 @@ pub enum PrimitiveTy {
     #[from(forward)]
     Media(MediaTy),
 }
-impl TypeValue for PrimitiveTy {
-    type Value = BamlPrimitive;
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for PrimitiveTy
+where
+    's: 'v,
+{
+    type Value = BamlPrimitive<'s>;
 }
 impl PrimitiveTy {
     /// Returns a `&'static` reference to an equivalent `PrimitiveTy`.
@@ -255,35 +279,50 @@ impl PrimitiveTy {
 /// Corresponds to the BAML `int` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct IntTy;
-impl TypeValue for IntTy {
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for IntTy
+where
+    's: 'v,
+{
     type Value = BamlInt;
 }
 
 /// Corresponds to the BAML `float` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct FloatTy;
-impl TypeValue for FloatTy {
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for FloatTy
+where
+    's: 'v,
+{
     type Value = BamlFloat;
 }
 
 /// Corresponds to the BAML `string` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct StringTy;
-impl TypeValue for StringTy {
-    type Value = BamlString;
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for StringTy
+where
+    's: 'v,
+{
+    type Value = BamlString<'s>;
 }
 
 /// Corresponds to the BAML `bool` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct BoolTy;
-impl TypeValue for BoolTy {
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for BoolTy
+where
+    's: 'v,
+{
     type Value = BamlBool;
 }
 
 /// Corresponds to the BAML `null` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct NullTy;
-impl TypeValue for NullTy {
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for NullTy
+where
+    's: 'v,
+{
     type Value = BamlNull;
 }
 
@@ -294,7 +333,10 @@ pub enum MediaTy {
     Pdf,
     Video,
 }
-impl TypeValue for MediaTy {
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for MediaTy
+where
+    's: 'v,
+{
     type Value = BamlMedia;
 }
 
@@ -304,28 +346,40 @@ pub enum LiteralTy<'t> {
     Int(IntLiteralTy),
     Bool(BoolLiteralTy),
 }
-impl TypeValue for LiteralTy<'_> {
-    type Value = BamlPrimitive;
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for LiteralTy<'_>
+where
+    's: 'v,
+{
+    type Value = BamlPrimitive<'t>;
 }
 
 /// Corresponds to the BAML string literal type.
 #[derive(Clone, PartialEq, Eq)]
 pub struct StringLiteralTy<'t>(pub Cow<'t, str>);
-impl TypeValue for StringLiteralTy<'_> {
-    type Value = BamlString;
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for StringLiteralTy<'t>
+where
+    's: 'v,
+{
+    type Value = BamlString<'t>;
 }
 
 /// Corresponds to the BAML int literal type.
 #[derive(Clone, PartialEq, Eq)]
 pub struct IntLiteralTy(pub i64);
-impl TypeValue for IntLiteralTy {
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for IntLiteralTy
+where
+    's: 'v,
+{
     type Value = BamlInt;
 }
 
 /// Corresponds to the BAML bool literal type.
 #[derive(Clone, PartialEq, Eq)]
 pub struct BoolLiteralTy(pub bool);
-impl TypeValue for BoolLiteralTy {
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for BoolLiteralTy
+where
+    's: 'v,
+{
     type Value = BamlBool;
 }
 
@@ -334,8 +388,11 @@ impl TypeValue for BoolLiteralTy {
 pub struct ArrayTy<'t, N: TypeIdent> {
     pub ty: Box<AnnotatedTy<'t, N>>,
 }
-impl<'t, N: TypeIdent> TypeValue for ArrayTy<'t, N> {
-    type Value = BamlArray<'t, N>;
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for ArrayTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlArray<'s, 'v, 't, N>;
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
@@ -344,8 +401,11 @@ pub struct MapTy<'t, N: TypeIdent> {
     pub key: Box<AnnotatedTy<'t, N>>,
     pub value: Box<AnnotatedTy<'t, N>>,
 }
-impl<'t, N: TypeIdent> TypeValue for MapTy<'t, N> {
-    type Value = BamlMap<'t, N>;
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for MapTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlMap<'s, 'v, 't, N>;
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
@@ -354,8 +414,11 @@ pub struct ClassTy<'t, N: TypeIdent> {
     pub name: N,
     pub fields: Vec<AnnotatedField<'t, N>>,
 }
-impl<'t, N: TypeIdent> TypeValue for ClassTy<'t, N> {
-    type Value = BamlClass<'t, N>;
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for ClassTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlClass<'s, 'v, 't, N>;
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
@@ -364,7 +427,10 @@ pub struct EnumTy<'t, N: TypeIdent> {
     pub name: N,
     pub variants: Vec<AnnotatedEnumVariant<'t>>,
 }
-impl<'t, N: TypeIdent + 't> TypeValue for EnumTy<'t, N> {
+impl<'s, 'v, 't, N: TypeIdent + 't> TypeValue<'s, 'v, 't> for EnumTy<'t, N>
+where
+    's: 'v,
+{
     type Value = BamlEnum<'t, N>;
 }
 
@@ -381,8 +447,11 @@ impl<'t, N: TypeIdent> UnionTy<'t, N> {
         self.variants.iter().any(|v| v.ty.is_optional(db))
     }
 }
-impl<'t, N: TypeIdent> TypeValue for UnionTy<'t, N> {
-    type Value = BamlValue<'t, N>;
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for UnionTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlValue<'s, 'v, 't, N>;
 }
 
 /// Represents that the value should be wrapped in a stream state enum.
@@ -390,8 +459,11 @@ impl<'t, N: TypeIdent> TypeValue for UnionTy<'t, N> {
 pub struct StreamStateTy<'t, N: TypeIdent> {
     pub value: Box<AnnotatedTy<'t, N>>,
 }
-impl<'t, N: TypeIdent> TypeValue for StreamStateTy<'t, N> {
-    type Value = BamlStreamState<'t, N>;
+impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for StreamStateTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlStreamState<'s, 'v, 't, N>;
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
@@ -413,16 +485,29 @@ impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
     fn default() -> Self {
         Self {
             in_progress: None,
-            on_error: Literal::Null,
+            on_error: Literal::Never,
             asserts: Vec::new(),
         }
     }
 }
 impl<'t, N: TypeIdent> TypeAnnotations<'t, N> {
-    pub fn check_asserts(
+    /// Runs [`TypeAnnotations::check_asserts`] but also gives an error if the assertions fail
+    pub fn expect_asserts<'s, 'v>(
         &self,
-        value: &BamlValue<'t, N>,
-        ctx: &ParsingContext<'t, N>,
+        value: &BamlValue<'s, 'v, 't, N>,
+        ctx: &ParsingContext<'_, '_, 't, N>,
+    ) -> Result<(), ParsingError> {
+        match self.check_asserts(value, ctx) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(ctx.error_assertion_failure()),
+            Err(err) => Err(err),
+        }
+    }
+
+    pub fn check_asserts<'s, 'v>(
+        &self,
+        value: &BamlValue<'s, 'v, 't, N>,
+        ctx: &ParsingContext<'_, '_, 't, N>,
     ) -> Result<bool, ParsingError> {
         for assert in self.asserts.iter() {
             if !assert.evaluate(value, ctx)? {
@@ -439,13 +524,18 @@ pub struct AnnotatedField<'t, N: TypeIdent> {
     pub name: Cow<'t, str>,
     pub ty: AnnotatedTy<'t, N>,
     /// If the parent object is incomplete and this field has not yet been started,
-    /// use this value instead. If it is `never`, then the field is excluded.
+    /// use this value instead. If it is `never` then this causes an error.
     pub before_started: Literal<'t, N>,
     /// If the parent object is complete and this field is missing, use this value instead.
-    /// If it is `never`, then the field is excluded.
+    /// If it is `never` then this causes an error.
     pub missing: Literal<'t, N>,
 
     pub aliases: Vec<Cow<'t, str>>,
+}
+impl<'t, N: TypeIdent> AnnotatedField<'t, N> {
+    pub fn key_matches(&self, key: &str) -> bool {
+        self.name == key || self.aliases.iter().any(|a| a == key)
+    }
 }
 
 #[derive(Clone)]
