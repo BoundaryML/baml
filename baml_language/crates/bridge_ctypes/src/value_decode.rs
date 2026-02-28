@@ -55,7 +55,26 @@ fn convert_list(
         .map(|v| inbound_to_external(v, handle_table))
         .collect();
     Ok(BexExternalValue::Array {
-        element_type: Ty::Union(vec![Ty::Int, Ty::Float, Ty::String, Ty::Bool, Ty::Null]),
+        element_type: Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: baml_type::TyAttr::default(),
+                },
+                Ty::Float {
+                    attr: baml_type::TyAttr::default(),
+                },
+                Ty::String {
+                    attr: baml_type::TyAttr::default(),
+                },
+                Ty::Bool {
+                    attr: baml_type::TyAttr::default(),
+                },
+                Ty::Null {
+                    attr: baml_type::TyAttr::default(),
+                },
+            ],
+            baml_type::TyAttr::default(),
+        ),
         items: items?,
     })
 }
@@ -75,8 +94,29 @@ fn convert_map(
         entries.insert(key, value);
     }
     Ok(BexExternalValue::Map {
-        key_type: Ty::String,
-        value_type: Ty::Union(vec![Ty::Int, Ty::Float, Ty::String, Ty::Bool, Ty::Null]),
+        key_type: Ty::String {
+            attr: baml_type::TyAttr::default(),
+        },
+        value_type: Ty::Union(
+            vec![
+                Ty::Int {
+                    attr: baml_type::TyAttr::default(),
+                },
+                Ty::Float {
+                    attr: baml_type::TyAttr::default(),
+                },
+                Ty::String {
+                    attr: baml_type::TyAttr::default(),
+                },
+                Ty::Bool {
+                    attr: baml_type::TyAttr::default(),
+                },
+                Ty::Null {
+                    attr: baml_type::TyAttr::default(),
+                },
+            ],
+            baml_type::TyAttr::default(),
+        ),
         entries,
     })
 }

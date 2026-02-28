@@ -285,13 +285,13 @@ impl<'a> ExhaustivenessChecker<'a> {
     fn expand_type_to_values(&self, ty: &Ty) -> Vec<ValueSet> {
         match ty {
             // Union types: expand each member
-            Ty::Union(members) => members
+            Ty::Union(members, _) => members
                 .iter()
                 .flat_map(|m| self.expand_type_to_values(m))
                 .collect(),
 
             // Optional is T | null
-            Ty::Optional(inner) => {
+            Ty::Optional(inner, _) => {
                 let mut values = self.expand_type_to_values(inner);
                 // Only add null if not already present (handles T?? = T? flattening)
                 let null_value = ValueSet::Literal(Literal::Null);
@@ -302,7 +302,7 @@ impl<'a> ExhaustivenessChecker<'a> {
             }
 
             // Type alias: expand to underlying type
-            Ty::TypeAlias(fqn) => {
+            Ty::TypeAlias(fqn, _) => {
                 // Check if we can resolve the type alias
                 //
                 // TODO(type-alias-architecture): Type alias resolution should be its own
@@ -346,14 +346,14 @@ impl<'a> ExhaustivenessChecker<'a> {
             }
 
             // Bool is finite: {true, false}
-            Ty::Bool => vec![
+            Ty::Bool { .. } => vec![
                 ValueSet::Literal(Literal::Bool(true)),
                 ValueSet::Literal(Literal::Bool(false)),
             ],
 
             // Singleton types (types containing exactly one value)
-            Ty::Null => vec![ValueSet::Literal(Literal::Null)],
-            Ty::Literal(value) => match value {
+            Ty::Null { .. } => vec![ValueSet::Literal(Literal::Null)],
+            Ty::Literal(value, _) => match value {
                 LiteralValue::Int(v) => vec![ValueSet::Literal(Literal::Int(*v))],
                 LiteralValue::Float(v) => {
                     vec![ValueSet::Literal(Literal::Float(v.clone()))]
@@ -365,19 +365,19 @@ impl<'a> ExhaustivenessChecker<'a> {
             },
 
             // Infinite types: int, float, string, resource, classes, etc.
-            Ty::Int => vec![ValueSet::OfType(Name::new("int"))],
-            Ty::Float => vec![ValueSet::OfType(Name::new("float"))],
-            Ty::String => vec![ValueSet::OfType(Name::new("string"))],
-            Ty::Resource => vec![ValueSet::OfType(Name::new("resource"))],
-            Ty::Type => vec![ValueSet::OfType(Name::new("type"))],
-            Ty::Media(kind) => vec![ValueSet::OfType(Name::new(kind.to_string()))],
+            Ty::Int { .. } => vec![ValueSet::OfType(Name::new("int"))],
+            Ty::Float { .. } => vec![ValueSet::OfType(Name::new("float"))],
+            Ty::String { .. } => vec![ValueSet::OfType(Name::new("string"))],
+            Ty::Resource { .. } => vec![ValueSet::OfType(Name::new("resource"))],
+            Ty::Type { .. } => vec![ValueSet::OfType(Name::new("type"))],
+            Ty::Media(kind, _) => vec![ValueSet::OfType(Name::new(kind.to_string()))],
 
             // User-defined class and enum types (resolved by FQN).
-            Ty::Class(fqn) => {
+            Ty::Class(fqn, _) => {
                 // Class types are treated like named types for exhaustiveness
                 vec![ValueSet::OfType(fqn.display_name())]
             }
-            Ty::Enum(fqn) => {
+            Ty::Enum(fqn, _) => {
                 // Enum types: look up variants for exhaustiveness checking
                 // Use display_name (FQN for builtins, short name for locals)
                 let display = fqn.display_name();
@@ -395,16 +395,18 @@ impl<'a> ExhaustivenessChecker<'a> {
             }
 
             // List types: include element type for proper distinction between e.g. int[] vs string[]
-            Ty::List(inner) => vec![ValueSet::OfType(Name::new(format!("{inner}[]")))],
+            Ty::List(inner, _) => vec![ValueSet::OfType(Name::new(format!("{inner}[]")))],
 
             // Map types are not yet fully implemented in HIR (see tests/maps.rs).
             // When they are, this should include key/value types: map<{key}, {value}>
             Ty::Map { .. } => vec![ValueSet::OfType(Name::new("<map>"))],
 
             // Special types
-            Ty::Unknown | Ty::Error | Ty::Void | Ty::BuiltinUnknown => Vec::new(),
+            Ty::Unknown { .. } | Ty::Error { .. } | Ty::Void { .. } | Ty::BuiltinUnknown { .. } => {
+                Vec::new()
+            }
             Ty::Function { .. } => vec![ValueSet::OfType(Name::new("<function>"))],
-            Ty::WatchAccessor(_) => vec![ValueSet::OfType(Name::new("<$watch>"))],
+            Ty::WatchAccessor(..) => vec![ValueSet::OfType(Name::new("<$watch>"))],
         }
     }
 
@@ -471,7 +473,7 @@ impl<'a> ExhaustivenessChecker<'a> {
     /// Convert a type to a value set (for typed bindings).
     fn ty_to_value_set(ty: &Ty) -> ValueSet {
         match ty {
-            Ty::Union(members) => {
+            Ty::Union(members, _) => {
                 let sub_sets: Vec<ValueSet> = members.iter().map(Self::ty_to_value_set).collect();
                 if sub_sets.len() == 1 {
                     sub_sets.into_iter().next().unwrap()
@@ -479,28 +481,28 @@ impl<'a> ExhaustivenessChecker<'a> {
                     ValueSet::Union(sub_sets)
                 }
             }
-            Ty::Optional(inner) => {
+            Ty::Optional(inner, _) => {
                 let inner_set = Self::ty_to_value_set(inner);
                 ValueSet::Union(vec![inner_set, ValueSet::Literal(Literal::Null)])
             }
-            Ty::TypeAlias(fqn) => {
+            Ty::TypeAlias(fqn, _) => {
                 // For type aliases, keep the alias name (don't expand)
                 // The coverage check will handle expansion
                 ValueSet::OfType(fqn.name.clone())
             }
-            Ty::Class(fqn) => ValueSet::OfType(fqn.display_name()),
-            Ty::Enum(fqn) => ValueSet::OfType(fqn.display_name()),
-            Ty::Literal(value) => match value {
+            Ty::Class(fqn, _) => ValueSet::OfType(fqn.display_name()),
+            Ty::Enum(fqn, _) => ValueSet::OfType(fqn.display_name()),
+            Ty::Literal(value, _) => match value {
                 LiteralValue::Int(v) => ValueSet::Literal(Literal::Int(*v)),
                 LiteralValue::Float(v) => ValueSet::Literal(Literal::Float(v.clone())),
                 LiteralValue::String(v) => ValueSet::Literal(Literal::String(v.clone())),
                 LiteralValue::Bool(v) => ValueSet::Literal(Literal::Bool(*v)),
             },
-            Ty::Bool => ValueSet::OfType(Name::new("bool")),
-            Ty::Int => ValueSet::OfType(Name::new("int")),
-            Ty::Float => ValueSet::OfType(Name::new("float")),
-            Ty::String => ValueSet::OfType(Name::new("string")),
-            Ty::Null => ValueSet::Literal(Literal::Null),
+            Ty::Bool { .. } => ValueSet::OfType(Name::new("bool")),
+            Ty::Int { .. } => ValueSet::OfType(Name::new("int")),
+            Ty::Float { .. } => ValueSet::OfType(Name::new("float")),
+            Ty::String { .. } => ValueSet::OfType(Name::new("string")),
+            Ty::Null { .. } => ValueSet::Literal(Literal::Null),
             _ => ValueSet::OfType(Name::new(ty.to_string())),
         }
     }

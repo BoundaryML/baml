@@ -3,26 +3,26 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function floatArray:
-    Return: List(Float)
+    Return: List(Float { attr: TyAttr(None) }, TyAttr(None))
   Function stringArray:
-    Return: List(String)
+    Return: List(String { attr: TyAttr(None) }, TyAttr(None))
   Function pointArray:
-    Return: List(Class(QualifiedName { namespace: Local, name: "Point" }))
+    Return: List(Class(QualifiedName { namespace: Local, name: "Point" }, TyAttr(None)), TyAttr(None))
   Function boolArray:
-    Return: List(Bool)
+    Return: List(Bool { attr: TyAttr(None) }, TyAttr(None))
   Function mixedArray:
-    Return: List(Union([Int, String]))
+    Return: List(Union([Int { attr: TyAttr(None) }, String { attr: TyAttr(None) }], TyAttr(None)), TyAttr(None))
   Function intArray:
-    Return: List(Int)
+    Return: List(Int { attr: TyAttr(None) }, TyAttr(None))
   Function point:
-    Return: Class(QualifiedName { namespace: Local, name: "Point" })
+    Return: Class(QualifiedName { namespace: Local, name: "Point" }, TyAttr(None))
   Function vec2d:
-    Return: Class(QualifiedName { namespace: Local, name: "Vec2D" })
+    Return: Class(QualifiedName { namespace: Local, name: "Vec2D" }, TyAttr(None))
   Function boolValues:
-    Return: Map { key: String, value: Bool }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Bool { attr: TyAttr(None) }, attr: TyAttr(None) }
   Function intValues:
-    Return: Map { key: String, value: Int }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Int { attr: TyAttr(None) }, attr: TyAttr(None) }
   Function stringValues:
-    Return: Map { key: String, value: String }
+    Return: Map { key: String { attr: TyAttr(None) }, value: String { attr: TyAttr(None) }, attr: TyAttr(None) }
   Function floatValues:
-    Return: Map { key: String, value: Float }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Float { attr: TyAttr(None) }, attr: TyAttr(None) }

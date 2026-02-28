@@ -30,8 +30,8 @@ pub fn new_http_response(
             "_handle".to_string() => BexExternalValue::Resource(handle),
             "status_code".to_string() => BexExternalValue::Int(i64::from(status_code)),
             "headers".to_string() => BexExternalValue::Map {
-                key_type: Ty::String,
-                value_type: Ty::String,
+                key_type: Ty::String { attr: baml_type::TyAttr::default() },
+                value_type: Ty::String { attr: baml_type::TyAttr::default() },
                 entries: headers.into_iter().map(|(k, v)| (k, BexExternalValue::String(v))).collect(),
             },
             "url".to_string() => BexExternalValue::String(url),
@@ -66,8 +66,8 @@ pub fn new_http_request_get(url: String) -> BexExternalValue {
             "method".to_string() => BexExternalValue::String("GET".to_string()),
             "url".to_string() => BexExternalValue::String(url),
             "headers".to_string() => BexExternalValue::Map {
-                key_type: Ty::String,
-                value_type: Ty::String,
+                key_type: Ty::String { attr: baml_type::TyAttr::default() },
+                value_type: Ty::String { attr: baml_type::TyAttr::default() },
                 entries: indexmap::IndexMap::new(),
             },
             "body".to_string() => BexExternalValue::String(String::new()),

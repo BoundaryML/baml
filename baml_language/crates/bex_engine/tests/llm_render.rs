@@ -6,6 +6,7 @@
 //! 3. `render_prompt` correctly renders templates with arguments
 
 use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
+use baml_type::TyAttr;
 use bex_engine::{FunctionCallContextBuilder, Ty};
 use bex_external_types::BexExternalAdt;
 use bex_heap::{BexExternalValue, builtin_types::owned::LlmPrimitiveClient};
@@ -42,7 +43,9 @@ async fn test_render_prompt_directly() {
             default_role: client.default_role.clone(),
             allowed_roles: client.allowed_roles,
         },
-        output_format: sys_llm::OutputFormatContent::new(Ty::String),
+        output_format: sys_llm::OutputFormatContent::new(Ty::String {
+            attr: TyAttr::default(),
+        }),
         tags: IndexMap::new(),
         enums: std::collections::HashMap::new(),
     };
@@ -95,7 +98,9 @@ You are a helpful assistant.
             default_role: client.default_role.clone(),
             allowed_roles: client.allowed_roles,
         },
-        output_format: sys_llm::OutputFormatContent::new(Ty::String),
+        output_format: sys_llm::OutputFormatContent::new(Ty::String {
+            attr: TyAttr::default(),
+        }),
         tags: IndexMap::new(),
         enums: std::collections::HashMap::new(),
     };
@@ -173,7 +178,9 @@ async fn test_render_prompt_with_enums() {
             default_role: "user".to_string(),
             allowed_roles: vec!["user".to_string()],
         },
-        output_format: sys_llm::OutputFormatContent::new(Ty::String),
+        output_format: sys_llm::OutputFormatContent::new(Ty::String {
+            attr: TyAttr::default(),
+        }),
         tags: IndexMap::new(),
         enums,
     };

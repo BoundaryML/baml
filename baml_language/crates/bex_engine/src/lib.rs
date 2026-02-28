@@ -792,7 +792,11 @@ impl BexEngine {
         let _call_guard = ActiveCallGuard::new(&self.active_calls, call_id, &cancel)?;
 
         let function_index = self.lookup_function(function_name)?;
-        let return_type = self.function_return_type(function_name).unwrap_or(Ty::Null);
+        let return_type = self
+            .function_return_type(function_name)
+            .unwrap_or(Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            });
 
         // Register with current epoch
         let my_epoch = self.current_epoch.load(Ordering::Acquire);

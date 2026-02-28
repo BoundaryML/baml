@@ -459,15 +459,21 @@ mod tests {
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
-                    field_type: baml_type::Ty::Int,
+                    field_type: baml_type::Ty::Int {
+                        attr: baml_type::TyAttr::default(),
+                    },
                     description: None,
                     alias: None,
+                    field_attr: Default::default(),
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
-                    field_type: baml_type::Ty::Int,
+                    field_type: baml_type::Ty::Int {
+                        attr: baml_type::TyAttr::default(),
+                    },
                     description: None,
                     alias: None,
+                    field_attr: Default::default(),
                 },
             ],
             description: None,

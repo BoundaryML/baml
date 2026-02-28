@@ -327,6 +327,7 @@ pub struct ClassField {
     pub field_type: Ty,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub field_attr: baml_type::FieldAttr,
 }
 
 /// Runtime class representation.

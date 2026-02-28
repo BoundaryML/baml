@@ -3,10 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function Calculate:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function FieldAccess:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function IndexAccess:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function TestPrecedence:
-    Return: Bool
+    Return: Bool { attr: TyAttr(None) }

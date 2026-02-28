@@ -316,21 +316,21 @@ fn find_invalid_map_keys_recursive(
     invalid_keys: &mut Vec<Ty>,
 ) {
     match ty {
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             if !is_valid_map_key_type(key, aliases) {
                 invalid_keys.push((**key).clone());
             }
             find_invalid_map_keys_recursive(key, aliases, invalid_keys);
             find_invalid_map_keys_recursive(value, aliases, invalid_keys);
         }
-        Ty::List(inner) => find_invalid_map_keys_recursive(inner, aliases, invalid_keys),
-        Ty::Optional(inner) => find_invalid_map_keys_recursive(inner, aliases, invalid_keys),
-        Ty::Union(types) => {
+        Ty::List(inner, _) => find_invalid_map_keys_recursive(inner, aliases, invalid_keys),
+        Ty::Optional(inner, _) => find_invalid_map_keys_recursive(inner, aliases, invalid_keys),
+        Ty::Union(types, _) => {
             for t in types {
                 find_invalid_map_keys_recursive(t, aliases, invalid_keys);
             }
         }
-        Ty::Function { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             for (_, p) in params {
                 find_invalid_map_keys_recursive(p, aliases, invalid_keys);
             }
@@ -357,27 +357,27 @@ fn normalize_impl(
 ) -> StructuralTy {
     match ty {
         // Direct conversions
-        Ty::Int => StructuralTy::Int,
-        Ty::Float => StructuralTy::Float,
-        Ty::String => StructuralTy::String,
-        Ty::Bool => StructuralTy::Bool,
-        Ty::Null => StructuralTy::Null,
-        Ty::Media(kind) => StructuralTy::Media(*kind),
-        Ty::Unknown => StructuralTy::Unknown,
-        Ty::Error => StructuralTy::Error,
-        Ty::Void => StructuralTy::Void,
-        Ty::Resource => StructuralTy::Resource,
-        Ty::BuiltinUnknown => StructuralTy::BuiltinUnknown,
-        Ty::Type => StructuralTy::Type,
-        Ty::Literal(lit) => StructuralTy::Literal(lit.clone()),
-        Ty::Class(fqn) => StructuralTy::Class(fqn.name.clone()),
-        Ty::Enum(fqn) => StructuralTy::Enum(fqn.name.clone()),
-        Ty::WatchAccessor(inner) => StructuralTy::WatchAccessor(Box::new(normalize_impl(
+        Ty::Int { .. } => StructuralTy::Int,
+        Ty::Float { .. } => StructuralTy::Float,
+        Ty::String { .. } => StructuralTy::String,
+        Ty::Bool { .. } => StructuralTy::Bool,
+        Ty::Null { .. } => StructuralTy::Null,
+        Ty::Media(kind, _) => StructuralTy::Media(*kind),
+        Ty::Unknown { .. } => StructuralTy::Unknown,
+        Ty::Error { .. } => StructuralTy::Error,
+        Ty::Void { .. } => StructuralTy::Void,
+        Ty::Resource { .. } => StructuralTy::Resource,
+        Ty::BuiltinUnknown { .. } => StructuralTy::BuiltinUnknown,
+        Ty::Type { .. } => StructuralTy::Type,
+        Ty::Literal(lit, _) => StructuralTy::Literal(lit.clone()),
+        Ty::Class(fqn, _) => StructuralTy::Class(fqn.name.clone()),
+        Ty::Enum(fqn, _) => StructuralTy::Enum(fqn.name.clone()),
+        Ty::WatchAccessor(inner, _) => StructuralTy::WatchAccessor(Box::new(normalize_impl(
             inner, aliases, recursive, expanding,
         ))),
 
         // TypeAlias: resolve alias
-        Ty::TypeAlias(fqn) => {
+        Ty::TypeAlias(fqn, _) => {
             let name = &fqn.name;
             if expanding.contains(name) {
                 // Back-reference in recursive expansion
@@ -406,23 +406,23 @@ fn normalize_impl(
         }
 
         // Type constructors
-        Ty::Optional(inner) => StructuralTy::Optional(Box::new(normalize_impl(
+        Ty::Optional(inner, _) => StructuralTy::Optional(Box::new(normalize_impl(
             inner, aliases, recursive, expanding,
         ))),
-        Ty::List(inner) => StructuralTy::List(Box::new(normalize_impl(
+        Ty::List(inner, _) => StructuralTy::List(Box::new(normalize_impl(
             inner, aliases, recursive, expanding,
         ))),
-        Ty::Map { key, value } => StructuralTy::Map {
+        Ty::Map { key, value, .. } => StructuralTy::Map {
             key: Box::new(normalize_impl(key, aliases, recursive, expanding)),
             value: Box::new(normalize_impl(value, aliases, recursive, expanding)),
         },
-        Ty::Union(types) => StructuralTy::Union(
+        Ty::Union(types, _) => StructuralTy::Union(
             types
                 .iter()
                 .map(|t| normalize_impl(t, aliases, recursive, expanding))
                 .collect(),
         ),
-        Ty::Function { params, ret } => StructuralTy::Function {
+        Ty::Function { params, ret, .. } => StructuralTy::Function {
             params: params
                 .iter()
                 .map(|(_, t)| normalize_impl(t, aliases, recursive, expanding))
@@ -477,18 +477,18 @@ fn ty_has_cycle(
     stack: &mut HashSet<Name>,
 ) -> bool {
     match ty {
-        Ty::TypeAlias(fqn) if aliases.contains_key(&fqn.name) => {
+        Ty::TypeAlias(fqn, _) if aliases.contains_key(&fqn.name) => {
             has_cycle(&fqn.name, aliases, visited, stack)
         }
-        Ty::Optional(inner) | Ty::List(inner) => ty_has_cycle(inner, aliases, visited, stack),
-        Ty::Map { key, value } => {
+        Ty::Optional(inner, _) | Ty::List(inner, _) => ty_has_cycle(inner, aliases, visited, stack),
+        Ty::Map { key, value, .. } => {
             ty_has_cycle(key, aliases, visited, stack)
                 || ty_has_cycle(value, aliases, visited, stack)
         }
-        Ty::Union(types) => types
+        Ty::Union(types, _) => types
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
-        Ty::Function { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             params
                 .iter()
                 .any(|(_, t)| ty_has_cycle(t, aliases, visited, stack))
@@ -500,35 +500,64 @@ fn ty_has_cycle(
 
 #[cfg(test)]
 mod tests {
+    use baml_base::TyAttr;
     use baml_compiler_hir::QualifiedName;
 
     use super::*;
 
     /// Helper to create a type alias type
     fn type_alias(name: &str) -> Ty {
-        Ty::TypeAlias(QualifiedName::local(Name::new(name)))
+        Ty::TypeAlias(QualifiedName::local(Name::new(name)), TyAttr::default())
     }
 
     #[test]
     fn test_simple_alias() {
         let mut aliases = HashMap::new();
-        aliases.insert(Name::new("MyInt"), Ty::Int);
+        aliases.insert(
+            Name::new("MyInt"),
+            Ty::Int {
+                attr: TyAttr::default(),
+            },
+        );
 
         // MyInt <: int should be true
-        assert!(is_subtype_of(&type_alias("MyInt"), &Ty::Int, &aliases));
+        assert!(is_subtype_of(
+            &type_alias("MyInt"),
+            &Ty::Int {
+                attr: TyAttr::default()
+            },
+            &aliases
+        ));
 
         // int <: MyInt should also be true (same structural type)
-        assert!(is_subtype_of(&Ty::Int, &type_alias("MyInt"), &aliases));
+        assert!(is_subtype_of(
+            &Ty::Int {
+                attr: TyAttr::default()
+            },
+            &type_alias("MyInt"),
+            &aliases
+        ));
     }
 
     #[test]
     fn test_transitive_alias() {
         let mut aliases = HashMap::new();
-        aliases.insert(Name::new("MyInt"), Ty::Int);
+        aliases.insert(
+            Name::new("MyInt"),
+            Ty::Int {
+                attr: TyAttr::default(),
+            },
+        );
         aliases.insert(Name::new("AnotherInt"), type_alias("MyInt"));
 
         // AnotherInt <: int
-        assert!(is_subtype_of(&type_alias("AnotherInt"), &Ty::Int, &aliases));
+        assert!(is_subtype_of(
+            &type_alias("AnotherInt"),
+            &Ty::Int {
+                attr: TyAttr::default()
+            },
+            &aliases
+        ));
 
         // AnotherInt <: MyInt
         assert!(is_subtype_of(
@@ -543,26 +572,42 @@ mod tests {
         let mut aliases = HashMap::new();
         aliases.insert(
             Name::new("IntOrString"),
-            Ty::Union(vec![Ty::Int, Ty::String]),
+            Ty::Union(
+                vec![
+                    Ty::Int {
+                        attr: TyAttr::default(),
+                    },
+                    Ty::String {
+                        attr: TyAttr::default(),
+                    },
+                ],
+                TyAttr::default(),
+            ),
         );
 
         // int <: IntOrString
         assert!(is_subtype_of(
-            &Ty::Int,
+            &Ty::Int {
+                attr: TyAttr::default()
+            },
             &type_alias("IntOrString"),
             &aliases
         ));
 
         // string <: IntOrString
         assert!(is_subtype_of(
-            &Ty::String,
+            &Ty::String {
+                attr: TyAttr::default()
+            },
             &type_alias("IntOrString"),
             &aliases
         ));
 
         // bool NOT <: IntOrString
         assert!(!is_subtype_of(
-            &Ty::Bool,
+            &Ty::Bool {
+                attr: TyAttr::default()
+            },
             &type_alias("IntOrString"),
             &aliases
         ));
@@ -574,7 +619,15 @@ mod tests {
         // type List = int | List (simplified recursive type)
         aliases.insert(
             Name::new("List"),
-            Ty::Union(vec![Ty::Null, type_alias("List")]),
+            Ty::Union(
+                vec![
+                    Ty::Null {
+                        attr: TyAttr::default(),
+                    },
+                    type_alias("List"),
+                ],
+                TyAttr::default(),
+            ),
         );
 
         let recursive = find_recursive_aliases(&aliases);
@@ -584,7 +637,12 @@ mod tests {
     #[test]
     fn test_non_recursive_not_marked() {
         let mut aliases = HashMap::new();
-        aliases.insert(Name::new("MyInt"), Ty::Int);
+        aliases.insert(
+            Name::new("MyInt"),
+            Ty::Int {
+                attr: TyAttr::default(),
+            },
+        );
 
         let recursive = find_recursive_aliases(&aliases);
         assert!(!recursive.contains(&Name::new("MyInt")));
@@ -593,10 +651,17 @@ mod tests {
     #[test]
     fn test_void_not_subtype_of_map() {
         let aliases = HashMap::new();
-        let void_ty = Ty::Void;
+        let void_ty = Ty::Void {
+            attr: TyAttr::default(),
+        };
         let map_ty = Ty::Map {
-            key: Box::new(Ty::String),
-            value: Box::new(Ty::Bool),
+            key: Box::new(Ty::String {
+                attr: TyAttr::default(),
+            }),
+            value: Box::new(Ty::Bool {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
         };
 
         // Void should NOT be a subtype of Map
@@ -612,6 +677,7 @@ mod tests {
         Ty::Function {
             params: params.into_iter().map(|t| (None, t)).collect(),
             ret: Box::new(ret),
+            attr: TyAttr::default(),
         }
     }
 
@@ -620,7 +686,14 @@ mod tests {
         let aliases = HashMap::new();
 
         // (int) -> string <: (int) -> string
-        let f = func(vec![Ty::Int], Ty::String);
+        let f = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
         assert!(is_subtype_of(&f, &f, &aliases));
     }
 
@@ -629,8 +702,22 @@ mod tests {
         let aliases = HashMap::new();
 
         // (int) -> int <: (int) -> float  (because int <: float)
-        let f1 = func(vec![Ty::Int], Ty::Int);
-        let f2 = func(vec![Ty::Int], Ty::Float);
+        let f1 = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::Int {
+                attr: TyAttr::default(),
+            },
+        );
+        let f2 = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::Float {
+                attr: TyAttr::default(),
+            },
+        );
         assert!(is_subtype_of(&f1, &f2, &aliases));
 
         // (int) -> float NOT <: (int) -> int
@@ -643,8 +730,22 @@ mod tests {
 
         // (float) -> string <: (int) -> string  (because int <: float, contravariance)
         // A function that accepts float can be used where one accepting int is expected
-        let f1 = func(vec![Ty::Float], Ty::String);
-        let f2 = func(vec![Ty::Int], Ty::String);
+        let f1 = func(
+            vec![Ty::Float {
+                attr: TyAttr::default(),
+            }],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
+        let f2 = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
         assert!(is_subtype_of(&f1, &f2, &aliases));
 
         // (int) -> string NOT <: (float) -> string
@@ -658,8 +759,20 @@ mod tests {
         // () -> string is a supertype of (int) -> string
         // A nullary function can be used where a unary function is expected
         // (it just ignores the argument)
-        let nullary = func(vec![], Ty::String);
-        let unary = func(vec![Ty::Int], Ty::String);
+        let nullary = func(
+            vec![],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
+        let unary = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
 
         // (int) -> string <: () -> string
         assert!(is_subtype_of(&unary, &nullary, &aliases));
@@ -675,8 +788,27 @@ mod tests {
 
         // (int, string) -> bool <: (int) -> bool
         // A function with more params can be used where fewer are expected
-        let binary = func(vec![Ty::Int, Ty::String], Ty::Bool);
-        let unary = func(vec![Ty::Int], Ty::Bool);
+        let binary = func(
+            vec![
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            Ty::Bool {
+                attr: TyAttr::default(),
+            },
+        );
+        let unary = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::Bool {
+                attr: TyAttr::default(),
+            },
+        );
 
         assert!(is_subtype_of(&binary, &unary, &aliases));
 
@@ -691,8 +823,22 @@ mod tests {
         // (float) -> int <: (int) -> float
         // - Param: int <: float (contravariant, so float in sub, int in sup)
         // - Return: int <: float (covariant)
-        let f1 = func(vec![Ty::Float], Ty::Int);
-        let f2 = func(vec![Ty::Int], Ty::Float);
+        let f1 = func(
+            vec![Ty::Float {
+                attr: TyAttr::default(),
+            }],
+            Ty::Int {
+                attr: TyAttr::default(),
+            },
+        );
+        let f2 = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::Float {
+                attr: TyAttr::default(),
+            },
+        );
         assert!(is_subtype_of(&f1, &f2, &aliases));
     }
 
@@ -703,8 +849,32 @@ mod tests {
         // (float, string) -> bool <: (int, string) -> bool
         // First param: int <: float (contravariant)
         // Second param: string = string
-        let f1 = func(vec![Ty::Float, Ty::String], Ty::Bool);
-        let f2 = func(vec![Ty::Int, Ty::String], Ty::Bool);
+        let f1 = func(
+            vec![
+                Ty::Float {
+                    attr: TyAttr::default(),
+                },
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            Ty::Bool {
+                attr: TyAttr::default(),
+            },
+        );
+        let f2 = func(
+            vec![
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+            ],
+            Ty::Bool {
+                attr: TyAttr::default(),
+            },
+        );
         assert!(is_subtype_of(&f1, &f2, &aliases));
 
         // (int, string) -> bool NOT <: (float, string) -> bool
@@ -715,28 +885,74 @@ mod tests {
     fn test_function_not_subtype_of_non_function() {
         let aliases = HashMap::new();
 
-        let f = func(vec![Ty::Int], Ty::String);
+        let f = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
 
         // Function is not a subtype of primitive types
-        assert!(!is_subtype_of(&f, &Ty::Int, &aliases));
-        assert!(!is_subtype_of(&f, &Ty::String, &aliases));
+        assert!(!is_subtype_of(
+            &f,
+            &Ty::Int {
+                attr: TyAttr::default()
+            },
+            &aliases
+        ));
+        assert!(!is_subtype_of(
+            &f,
+            &Ty::String {
+                attr: TyAttr::default()
+            },
+            &aliases
+        ));
 
         // Primitive types are not subtypes of functions
-        assert!(!is_subtype_of(&Ty::Int, &f, &aliases));
+        assert!(!is_subtype_of(
+            &Ty::Int {
+                attr: TyAttr::default()
+            },
+            &f,
+            &aliases
+        ));
     }
 
     #[test]
     fn test_function_in_union() {
         let aliases = HashMap::new();
 
-        let f = func(vec![Ty::Int], Ty::String);
-        let union = Ty::Union(vec![f.clone(), Ty::Null]);
+        let f = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
+        let union = Ty::Union(
+            vec![
+                f.clone(),
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        );
 
         // (int) -> string <: ((int) -> string) | null
         assert!(is_subtype_of(&f, &union, &aliases));
 
         // null <: ((int) -> string) | null
-        assert!(is_subtype_of(&Ty::Null, &union, &aliases));
+        assert!(is_subtype_of(
+            &Ty::Null {
+                attr: TyAttr::default()
+            },
+            &union,
+            &aliases
+        ));
     }
 
     #[test]
@@ -745,8 +961,20 @@ mod tests {
 
         // A function that takes a function as parameter
         // ((int) -> string) -> bool
-        let inner_fn_int = func(vec![Ty::Int], Ty::String);
-        let higher_order_int = func(vec![inner_fn_int], Ty::Bool);
+        let inner_fn_int = func(
+            vec![Ty::Int {
+                attr: TyAttr::default(),
+            }],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
+        let higher_order_int = func(
+            vec![inner_fn_int],
+            Ty::Bool {
+                attr: TyAttr::default(),
+            },
+        );
 
         // Reflexivity
         assert!(is_subtype_of(
@@ -765,8 +993,20 @@ mod tests {
         //   - params are contravariant: need float <: int (FALSE! float is supertype of int)
         //
         // So ((float) -> string) -> bool is NOT <: ((int) -> string) -> bool
-        let inner_fn_float = func(vec![Ty::Float], Ty::String);
-        let higher_order_float = func(vec![inner_fn_float], Ty::Bool);
+        let inner_fn_float = func(
+            vec![Ty::Float {
+                attr: TyAttr::default(),
+            }],
+            Ty::String {
+                attr: TyAttr::default(),
+            },
+        );
+        let higher_order_float = func(
+            vec![inner_fn_float],
+            Ty::Bool {
+                attr: TyAttr::default(),
+            },
+        );
         assert!(!is_subtype_of(
             &higher_order_float,
             &higher_order_int,

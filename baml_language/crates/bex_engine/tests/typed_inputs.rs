@@ -5,6 +5,7 @@
 
 mod common;
 
+use baml_type::TyAttr;
 use bex_engine::{BexExternalValue, Ty};
 use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
@@ -104,7 +105,9 @@ async fn array_input() -> anyhow::Result<()> {
         "#,
         entry: "sum",
         inputs: vec![BexExternalValue::Array {
-            element_type: Ty::Int,
+            element_type: Ty::Int {
+                attr: TyAttr::default(),
+            },
             items: vec![
                 BexExternalValue::Int(1),
                 BexExternalValue::Int(2),
@@ -157,8 +160,12 @@ async fn map_input() -> anyhow::Result<()> {
         entry: "get_value",
         inputs: vec![
             BexExternalValue::Map {
-                key_type: Ty::String,
-                value_type: Ty::Int,
+                key_type: Ty::String {
+                    attr: TyAttr::default(),
+                },
+                value_type: Ty::Int {
+                    attr: TyAttr::default(),
+                },
                 entries: indexmap! {
                     "foo".to_string() => BexExternalValue::Int(42),
                     "bar".to_string() => BexExternalValue::Int(100),

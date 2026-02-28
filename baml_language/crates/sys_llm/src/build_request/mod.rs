@@ -554,15 +554,21 @@ mod tests {
                 (
                     "allowed_role_metadata",
                     BexExternalValue::Array {
-                        element_type: Ty::String,
+                        element_type: Ty::String {
+                            attr: baml_type::TyAttr::default(),
+                        },
                         items: vec![BexExternalValue::String("cache_control".into())],
                     },
                 ),
                 (
                     "headers",
                     BexExternalValue::Map {
-                        key_type: Ty::String,
-                        value_type: Ty::String,
+                        key_type: Ty::String {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        value_type: Ty::String {
+                            attr: baml_type::TyAttr::default(),
+                        },
                         entries: header_entries,
                     },
                 ),

@@ -1,13 +1,12 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function Foo:
-    Return: Void
+    Return: Void { attr: TyAttr(None) }
   Function GPT4.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function Incomplete:
-    Return: Unknown
+    Return: Unknown { attr: TyAttr(None) }
   Function NextFunction:
-    Return: String
+    Return: String { attr: TyAttr(None) }

@@ -103,7 +103,9 @@ fn convert_ty(
 ) -> Ty {
     baml_type::convert_tir_ty(tir_ty, type_aliases, recursive_aliases)
         .and_then(baml_type::sanitize_for_runtime)
-        .unwrap_or(Ty::Null)
+        .unwrap_or(Ty::Null {
+            attr: baml_type::TyAttr::default(),
+        })
 }
 
 fn lower_class(
@@ -123,6 +125,7 @@ fn lower_class(
                 description: attr_to_option(&field.description),
                 alias: attr_to_option(&field.alias),
                 skip: attr_to_bool(&field.skip),
+                field_attr: Default::default(),
             }
         })
         .collect();

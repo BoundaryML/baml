@@ -43,7 +43,7 @@ fn ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     let _3: Status // x
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }, TyAttr(None)));
         branch copy _2 -> [bb5, bb3];
     }
 
@@ -212,7 +212,7 @@ fn UnreachableMultiple(x: int) -> string {
     }
 
     bb5: {
-        _2 = is_type(copy _1, Int);
+        _2 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _2 -> [bb8, bb7];
     }
 
@@ -222,7 +222,7 @@ fn UnreachableMultiple(x: int) -> string {
     }
 
     bb7: {
-        _4 = is_type(copy _1, Int);
+        _4 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _4 -> [bb10, bb3];
     }
 
@@ -253,7 +253,7 @@ fn OverlappingWithBindings(r: Success | Failure) -> string {
     let _6: Success | Failure // x
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -276,7 +276,7 @@ fn OverlappingWithBindings(r: Success | Failure) -> string {
     }
 
     bb5: {
-        _5 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
+        _5 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _5 -> [bb8, bb3];
     }
 
@@ -482,7 +482,7 @@ fn ExhaustiveTypeAlias(r: Success | Failure) -> string {
     let _7: Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -505,7 +505,7 @@ fn ExhaustiveTypeAlias(r: Success | Failure) -> string {
     }
 
     bb5: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
         branch copy _5 -> [bb8, bb3];
     }
 
@@ -535,7 +535,7 @@ fn EnumVariantAfterTypedEnum(s: Status) -> string {
     let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -581,7 +581,7 @@ fn BoolLiteralAfterTypedBool(b: bool) -> string {
     let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, Bool);
+        _2 = is_type(copy _1, Bool { attr: TyAttr(None) });
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -748,7 +748,7 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     let _4: Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -828,7 +828,7 @@ fn ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
     let _5: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -897,7 +897,7 @@ fn ExhaustiveLiteralWithBaseType(x: int) -> string {
     }
 
     bb5: {
-        _3 = is_type(copy _1, Int);
+        _3 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _3 -> [bb7, bb3];
     }
 
@@ -960,7 +960,7 @@ fn NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
     let _4: Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -1121,7 +1121,7 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
     let _7: Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -1140,7 +1140,7 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
     }
 
     bb4: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
         branch copy _5 -> [bb8, bb7];
     }
 
@@ -1178,7 +1178,7 @@ fn ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
     let _8: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -1201,7 +1201,7 @@ fn ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
     }
 
     bb5: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
         branch copy _5 -> [bb9, bb8];
     }
 
@@ -1331,7 +1331,7 @@ fn GuardedOnlyNonExhaustive(x: int) -> int {
     let _16: 1
 
     bb0: {
-        _2 = is_type(copy _1, Int);
+        _2 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -1351,7 +1351,7 @@ fn GuardedOnlyNonExhaustive(x: int) -> int {
     }
 
     bb4: {
-        _9 = is_type(copy _1, Int);
+        _9 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _9 -> [bb9, bb8];
     }
 
@@ -1722,7 +1722,7 @@ fn PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -1744,7 +1744,7 @@ fn PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     }
 
     bb5: {
-        _4 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: [], display_name: "Pending" }));
+        _4 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: [], display_name: "Pending" }, TyAttr(None)));
         branch copy _4 -> [bb8, bb3];
     }
 
@@ -1947,7 +1947,7 @@ fn NestedTypeAlias(mr: Success | Failure?) -> string {
     let _8: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -1970,7 +1970,7 @@ fn NestedTypeAlias(mr: Success | Failure?) -> string {
     }
 
     bb5: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
         branch copy _5 -> [bb9, bb8];
     }
 
@@ -2182,7 +2182,7 @@ fn NestedTypeBindings(r: Success | Failure) -> int {
     let _5: Failure // f
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -2204,7 +2204,7 @@ fn NestedTypeBindings(r: Success | Failure) -> int {
     }
 
     bb5: {
-        _4 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }));
+        _4 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
         branch copy _4 -> [bb8, bb3];
     }
 
@@ -2355,7 +2355,7 @@ fn GuardedWithFallback(x: int) -> int {
     let _8: 2
 
     bb0: {
-        _2 = is_type(copy _1, Int);
+        _2 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -2559,7 +2559,7 @@ fn NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
     let _7: Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -2578,7 +2578,7 @@ fn NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
     }
 
     bb4: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
         branch copy _5 -> [bb8, bb7];
     }
 
@@ -2639,7 +2639,7 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
     let _4: Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -2676,7 +2676,7 @@ fn ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -2861,7 +2861,7 @@ fn ExhaustiveOptional(x: int?) -> string {
     let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, Int);
+        _2 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -3023,7 +3023,7 @@ fn UnreachableAfterCatchAll(x: int) -> string {
     }
 
     bb5: {
-        _2 = is_type(copy _1, Int);
+        _2 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _2 -> [bb7, bb3];
     }
 
@@ -3135,7 +3135,7 @@ fn OverlappingTypedPatterns(r: Success | Failure) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -3157,7 +3157,7 @@ fn OverlappingTypedPatterns(r: Success | Failure) -> string {
     }
 
     bb5: {
-        _3 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
+        _3 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _3 -> [bb8, bb3];
     }
 
@@ -3184,7 +3184,7 @@ fn StringLiteralAfterStringType(s: string) -> string {
     let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, String);
+        _2 = is_type(copy _1, String { attr: TyAttr(None) });
         branch copy _2 -> [bb6, bb5];
     }
 
@@ -3258,7 +3258,7 @@ fn UnionPatternCoversAll(r: Success | Failure) -> string {
     let _3: Success | Failure // x
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _2 -> [bb5, bb3];
     }
 
@@ -3326,7 +3326,7 @@ fn PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
     let _3: Success | Failure // x
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" })]));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _2 -> [bb5, bb4];
     }
 
@@ -3613,7 +3613,7 @@ fn MixedPatterns(x: int) -> string {
     }
 
     bb7: {
-        _4 = is_type(copy _1, Int);
+        _4 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _4 -> [bb10, bb9];
     }
 
@@ -3685,7 +3685,7 @@ fn LiteralAfterTypedPattern(x: int) -> string {
     let _4: bool
 
     bb0: {
-        _2 = is_type(copy _1, Int);
+        _2 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _2 -> [bb6, bb5];
     }
 

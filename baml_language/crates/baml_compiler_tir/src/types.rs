@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use baml_base::TyAttr;
 use baml_compiler_hir::QualifiedName;
 
 /// The value component of a literal type.
@@ -39,14 +40,24 @@ impl fmt::Display for LiteralValue {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
     // Primitive types
-    Int,
-    Float,
-    String,
-    Bool,
-    Null,
+    Int {
+        attr: TyAttr,
+    },
+    Float {
+        attr: TyAttr,
+    },
+    String {
+        attr: TyAttr,
+    },
+    Bool {
+        attr: TyAttr,
+    },
+    Null {
+        attr: TyAttr,
+    },
 
     // Media types
-    Media(baml_base::MediaKind),
+    Media(baml_base::MediaKind, TyAttr),
 
     /// Literal type: a type inhabited by exactly one value (also called singleton type).
     /// Used for exhaustiveness checking of literal unions like `200 | 201 | 204`.
@@ -54,27 +65,28 @@ pub enum Ty {
     ///
     /// Note: `Ty::Null` is also a singleton type but is kept as a separate variant
     /// for convenience, since null is fundamental to optional types.
-    Literal(LiteralValue),
+    Literal(LiteralValue, TyAttr),
 
     // User-defined types (resolved with fully-qualified names)
     /// A class type with its fully-qualified name.
-    Class(QualifiedName),
+    Class(QualifiedName, TyAttr),
     /// An enum type with its fully-qualified name.
-    Enum(QualifiedName),
+    Enum(QualifiedName, TyAttr),
     /// A type alias with its fully-qualified name.
     /// Type aliases are NOT expanded during resolution - they stay as `TypeAlias(FQN)`.
     /// Expansion happens later during normalization when needed for subtype checks.
     /// This preserves user spelling for error messages and handles recursive types.
-    TypeAlias(QualifiedName),
+    TypeAlias(QualifiedName, TyAttr),
 
     // Type constructors
-    Optional(Box<Ty>),
-    List(Box<Ty>),
+    Optional(Box<Ty>, TyAttr),
+    List(Box<Ty>, TyAttr),
     Map {
         key: Box<Ty>,
         value: Box<Ty>,
+        attr: TyAttr,
     },
-    Union(Vec<Ty>),
+    Union(Vec<Ty>, TyAttr),
 
     /// Function/arrow type: `(T1, T2, ...) -> R`
     ///
@@ -83,19 +95,28 @@ pub enum Ty {
     Function {
         params: Vec<(Option<baml_base::Name>, Ty)>,
         ret: Box<Ty>,
+        attr: TyAttr,
     },
 
     // Special types
     /// Type inference failed - used for error recovery.
     /// Treated as uninhabited to prevent cascading errors.
-    Unknown,
+    Unknown {
+        attr: TyAttr,
+    },
     /// A type error occurred.
-    Error,
+    Error {
+        attr: TyAttr,
+    },
     /// The void/unit type for functions that return nothing.
-    Void,
+    Void {
+        attr: TyAttr,
+    },
 
     /// Opaque resource handle (file, socket, HTTP response body).
-    Resource,
+    Resource {
+        attr: TyAttr,
+    },
     /// Internal-only type for builtin functions that accept any argument.
     ///
     /// Similar to TypeScript's `unknown` - any value can be passed where
@@ -126,31 +147,35 @@ pub enum Ty {
     /// But we don't yet know the BAML syntax for this. `BuiltinUnknown` is the
     /// interim solution that allows builtins to type-check while we design
     /// the proper generic system.
-    BuiltinUnknown,
+    BuiltinUnknown {
+        attr: TyAttr,
+    },
 
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     /// Contains the inner type being watched for method resolution.
-    WatchAccessor(Box<Ty>),
+    WatchAccessor(Box<Ty>, TyAttr),
 
     /// Meta-type — the type of type values at the TIR level.
     /// Matches `TypePattern::Type` in builtin signatures.
-    Type,
+    Type {
+        attr: TyAttr,
+    },
 }
 
 impl Ty {
     /// Check if this type is an error type.
     pub fn is_error(&self) -> bool {
-        matches!(self, Ty::Error)
+        matches!(self, Ty::Error { .. })
     }
 
     /// Check if this type is unknown.
     pub fn is_unknown(&self) -> bool {
-        matches!(self, Ty::Unknown)
+        matches!(self, Ty::Unknown { .. })
     }
 
     /// Check if this type is void.
     pub fn is_void(&self) -> bool {
-        matches!(self, Ty::Void)
+        matches!(self, Ty::Void { .. })
     }
 
     /// Check if this type is uninhabited (has no possible values).
@@ -172,9 +197,9 @@ impl Ty {
     pub fn is_uninhabited(&self) -> bool {
         match self {
             // Error recovery: don't emit additional errors when type inference failed
-            Ty::Unknown | Ty::Error => true,
+            Ty::Unknown { .. } | Ty::Error { .. } => true,
             // Empty union has no members, therefore no possible values
-            Ty::Union(types) => types.is_empty(),
+            Ty::Union(types, _) => types.is_empty(),
             // All other types are inhabited
             // TODO(exhaustiveness): Check for zero-variant enums. This requires access
             // to enum variants map. Currently only empty unions are detected.
@@ -184,34 +209,41 @@ impl Ty {
 
     /// Check if this type is a primitive type.
     pub fn is_primitive(&self) -> bool {
-        matches!(self, Ty::Int | Ty::Float | Ty::String | Ty::Bool | Ty::Null)
+        matches!(
+            self,
+            Ty::Int { .. }
+                | Ty::Float { .. }
+                | Ty::String { .. }
+                | Ty::Bool { .. }
+                | Ty::Null { .. }
+        )
     }
 
     /// Check if this type is a media type.
     #[allow(dead_code)]
     pub fn is_media(&self) -> bool {
-        matches!(self, Ty::Media(_))
+        matches!(self, Ty::Media(..))
     }
 
     /// Make this type optional.
     #[must_use]
     #[allow(dead_code)]
     pub fn into_optional(self) -> Self {
-        Ty::Optional(Box::new(self))
+        Ty::Optional(Box::new(self), TyAttr::default())
     }
 
     /// Make a list of this type.
     #[must_use]
     #[allow(dead_code)]
     pub fn into_list(self) -> Self {
-        Ty::List(Box::new(self))
+        Ty::List(Box::new(self), TyAttr::default())
     }
 
     /// Get the element type if this is a list type.
     #[allow(dead_code)]
     pub fn list_element(&self) -> Option<&Ty> {
         match self {
-            Ty::List(inner) => Some(inner),
+            Ty::List(inner, _) => Some(inner),
             _ => None,
         }
     }
@@ -220,7 +252,7 @@ impl Ty {
     #[allow(dead_code)]
     pub fn map_types(&self) -> Option<(&Ty, &Ty)> {
         match self {
-            Ty::Map { key, value } => Some((key, value)),
+            Ty::Map { key, value, .. } => Some((key, value)),
             _ => None,
         }
     }
@@ -229,7 +261,7 @@ impl Ty {
     #[allow(dead_code)]
     pub fn unwrap_optional(&self) -> &Ty {
         match self {
-            Ty::Optional(inner) => inner,
+            Ty::Optional(inner, _) => inner,
             _ => self,
         }
     }
@@ -238,25 +270,25 @@ impl Ty {
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Ty::Int => write!(f, "int"),
-            Ty::Float => write!(f, "float"),
-            Ty::String => write!(f, "string"),
-            Ty::Bool => write!(f, "bool"),
-            Ty::Null => write!(f, "null"),
-            Ty::Media(kind) => write!(f, "{kind}"),
-            Ty::Literal(val) => write!(f, "{val}"),
-            Ty::Class(fqn) => write!(f, "{fqn}"),
-            Ty::Enum(fqn) => write!(f, "{fqn}"),
-            Ty::TypeAlias(fqn) => write!(f, "{fqn}"),
-            Ty::Optional(inner) => write!(f, "{inner}?"),
-            Ty::List(inner) => write!(f, "{inner}[]"),
-            Ty::Map { key, value } => write!(f, "map<{key}, {value}>"),
-            Ty::Union(types) => {
+            Ty::Int { .. } => write!(f, "int"),
+            Ty::Float { .. } => write!(f, "float"),
+            Ty::String { .. } => write!(f, "string"),
+            Ty::Bool { .. } => write!(f, "bool"),
+            Ty::Null { .. } => write!(f, "null"),
+            Ty::Media(kind, _) => write!(f, "{kind}"),
+            Ty::Literal(val, _) => write!(f, "{val}"),
+            Ty::Class(fqn, _) => write!(f, "{fqn}"),
+            Ty::Enum(fqn, _) => write!(f, "{fqn}"),
+            Ty::TypeAlias(fqn, _) => write!(f, "{fqn}"),
+            Ty::Optional(inner, _) => write!(f, "{inner}?"),
+            Ty::List(inner, _) => write!(f, "{inner}[]"),
+            Ty::Map { key, value, .. } => write!(f, "map<{key}, {value}>"),
+            Ty::Union(types, _) => {
                 let parts: Vec<std::string::String> =
                     types.iter().map(std::string::ToString::to_string).collect();
                 write!(f, "{}", parts.join(" | "))
             }
-            Ty::Function { params, ret } => {
+            Ty::Function { params, ret, .. } => {
                 let param_strs: Vec<std::string::String> = params
                     .iter()
                     .map(|(name, ty)| {
@@ -269,13 +301,13 @@ impl fmt::Display for Ty {
                     .collect();
                 write!(f, "({}) -> {}", param_strs.join(", "), ret)
             }
-            Ty::Unknown => write!(f, "unknown"),
-            Ty::Error => write!(f, "error"),
-            Ty::Void => write!(f, "void"),
-            Ty::Resource => write!(f, "resource"),
-            Ty::BuiltinUnknown => write!(f, "unknown"),
-            Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
-            Ty::Type => write!(f, "type"),
+            Ty::Unknown { .. } => write!(f, "unknown"),
+            Ty::Error { .. } => write!(f, "error"),
+            Ty::Void { .. } => write!(f, "void"),
+            Ty::Resource { .. } => write!(f, "resource"),
+            Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
+            Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
+            Ty::Type { .. } => write!(f, "type"),
         }
     }
 }
@@ -287,13 +319,23 @@ mod tests {
     // NOTE: Subtyping tests are now in normalize.rs which handles
     // type alias resolution and equirecursive subtyping.
 
+    fn d() -> TyAttr {
+        TyAttr::default()
+    }
+
     #[test]
     fn test_display() {
-        assert_eq!(Ty::Int.to_string(), "int");
-        assert_eq!(Ty::Optional(Box::new(Ty::String)).to_string(), "string?");
-        assert_eq!(Ty::List(Box::new(Ty::Int)).to_string(), "int[]");
+        assert_eq!(Ty::Int { attr: d() }.to_string(), "int");
         assert_eq!(
-            Ty::Union(vec![Ty::Int, Ty::String]).to_string(),
+            Ty::Optional(Box::new(Ty::String { attr: d() }), d()).to_string(),
+            "string?"
+        );
+        assert_eq!(
+            Ty::List(Box::new(Ty::Int { attr: d() }), d()).to_string(),
+            "int[]"
+        );
+        assert_eq!(
+            Ty::Union(vec![Ty::Int { attr: d() }, Ty::String { attr: d() }], d()).to_string(),
             "int | string"
         );
     }
@@ -301,23 +343,25 @@ mod tests {
     #[test]
     fn test_is_uninhabited() {
         // Unknown and Error are treated as uninhabited for error recovery
-        assert!(Ty::Unknown.is_uninhabited());
-        assert!(Ty::Error.is_uninhabited());
+        assert!(Ty::Unknown { attr: d() }.is_uninhabited());
+        assert!(Ty::Error { attr: d() }.is_uninhabited());
 
         // Empty union is uninhabited (no possible values)
-        assert!(Ty::Union(vec![]).is_uninhabited());
+        assert!(Ty::Union(vec![], d()).is_uninhabited());
 
         // Non-empty union is inhabited
-        assert!(!Ty::Union(vec![Ty::Int]).is_uninhabited());
-        assert!(!Ty::Union(vec![Ty::Int, Ty::String]).is_uninhabited());
+        assert!(!Ty::Union(vec![Ty::Int { attr: d() }], d()).is_uninhabited());
+        assert!(
+            !Ty::Union(vec![Ty::Int { attr: d() }, Ty::String { attr: d() }], d()).is_uninhabited()
+        );
 
         // Regular types are inhabited
-        assert!(!Ty::Int.is_uninhabited());
-        assert!(!Ty::String.is_uninhabited());
-        assert!(!Ty::Bool.is_uninhabited());
-        assert!(!Ty::Null.is_uninhabited());
-        assert!(!Ty::Void.is_uninhabited());
-        assert!(!Ty::List(Box::new(Ty::Int)).is_uninhabited());
-        assert!(!Ty::Optional(Box::new(Ty::Int)).is_uninhabited());
+        assert!(!Ty::Int { attr: d() }.is_uninhabited());
+        assert!(!Ty::String { attr: d() }.is_uninhabited());
+        assert!(!Ty::Bool { attr: d() }.is_uninhabited());
+        assert!(!Ty::Null { attr: d() }.is_uninhabited());
+        assert!(!Ty::Void { attr: d() }.is_uninhabited());
+        assert!(!Ty::List(Box::new(Ty::Int { attr: d() }), d()).is_uninhabited());
+        assert!(!Ty::Optional(Box::new(Ty::Int { attr: d() }), d()).is_uninhabited());
     }
 }

@@ -33,7 +33,7 @@ fn Broken.MixedLiteralAndTyped(x: int) -> string {
     }
 
     bb5: {
-        _3 = is_type(copy _1, Int);
+        _3 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _3 -> [bb6, bb3];
     }
 

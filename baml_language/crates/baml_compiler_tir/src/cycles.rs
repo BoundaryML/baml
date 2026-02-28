@@ -242,7 +242,7 @@ fn extract_type_alias_deps(ty: &Ty) -> (HashSet<Name>, HashSet<Name>) {
         in_structural_context: bool,
     ) {
         match ty {
-            Ty::TypeAlias(fqn) => {
+            Ty::TypeAlias(fqn, _) => {
                 // Type aliases in Ty are kept unexpanded - this is what we want to track.
                 // They stay as names and never expand, preventing infinite recursion.
                 let name = fqn.name.clone();
@@ -252,7 +252,7 @@ fn extract_type_alias_deps(ty: &Ty) -> (HashSet<Name>, HashSet<Name>) {
                     non_structural_deps.insert(name);
                 }
             }
-            Ty::Optional(inner) => {
+            Ty::Optional(inner, _) => {
                 // Optional doesn't make it structural for type aliases
                 visit(
                     inner,
@@ -261,16 +261,16 @@ fn extract_type_alias_deps(ty: &Ty) -> (HashSet<Name>, HashSet<Name>) {
                     in_structural_context,
                 );
             }
-            Ty::List(inner) => {
+            Ty::List(inner, _) => {
                 // List makes it structural - provides termination via []
                 visit(inner, non_structural_deps, structural_deps, true);
             }
-            Ty::Map { key, value } => {
+            Ty::Map { key, value, .. } => {
                 // Map makes it structural - provides termination via {}
                 visit(key, non_structural_deps, structural_deps, true);
                 visit(value, non_structural_deps, structural_deps, true);
             }
-            Ty::Union(variants) => {
+            Ty::Union(variants, _) => {
                 for variant in variants {
                     visit(
                         variant,
@@ -411,14 +411,14 @@ fn extract_class_deps(ty: &Ty, type_aliases: &HashMap<Name, Ty>) -> HashSet<Name
         visiting: &mut HashSet<Name>,
     ) {
         match ty {
-            Ty::Class(fqn) => {
+            Ty::Class(fqn, _) => {
                 // Only add if not optional and not in list/map.
                 // Optional and structural contexts break the hard dependency.
                 if !optional && !in_list_or_map {
                     deps.insert(fqn.display_name());
                 }
             }
-            Ty::TypeAlias(fqn) => {
+            Ty::TypeAlias(fqn, _) => {
                 // Type aliases are kept unexpanded in Ty - resolve them.
                 // But only if this is a required field (not optional, not in list/map).
                 if !optional && !in_list_or_map {
@@ -440,20 +440,20 @@ fn extract_class_deps(ty: &Ty, type_aliases: &HashMap<Name, Ty>) -> HashSet<Name
                     }
                 }
             }
-            Ty::Optional(inner) => {
+            Ty::Optional(inner, _) => {
                 // Optional breaks cycles - field can be absent
                 visit(inner, deps, true, in_list_or_map, type_aliases, visiting);
             }
-            Ty::List(inner) => {
+            Ty::List(inner, _) => {
                 // Lists break cycles - can be empty
                 visit(inner, deps, optional, true, type_aliases, visiting);
             }
-            Ty::Map { key, value } => {
+            Ty::Map { key, value, .. } => {
                 // Maps break cycles - can be empty
                 visit(key, deps, optional, true, type_aliases, visiting);
                 visit(value, deps, optional, true, type_aliases, visiting);
             }
-            Ty::Union(variants) => {
+            Ty::Union(variants, _) => {
                 // For unions, we need to check if ALL variants lead to the same class.
                 // If they do, then that class is a hard dependency. Otherwise, the
                 // union can be satisfied by choosing a variant without that class.

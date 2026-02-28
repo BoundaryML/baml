@@ -23,7 +23,7 @@
 //! ```
 
 // Re-export Ty and TypeName from baml_type for convenience
-pub use baml_type::{Ty, TypeName};
+pub use baml_type::{Ty, TyAttr, TypeName};
 use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
 
@@ -55,12 +55,15 @@ impl UnionMetadata {
     /// Create metadata for a union type.
     pub fn new(union_type: Ty, selected_option: Ty) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
-            Ty::Union(members) => {
-                let has_null = members.iter().any(|m| matches!(m, Ty::Null));
-                let non_null_count = members.iter().filter(|m| !matches!(m, Ty::Null)).count();
+            Ty::Union(members, _) => {
+                let has_null = members.iter().any(|m| matches!(m, Ty::Null { .. }));
+                let non_null_count = members
+                    .iter()
+                    .filter(|m| !matches!(m, Ty::Null { .. }))
+                    .count();
                 (has_null, non_null_count == 1)
             }
-            Ty::Optional(_) => (true, true),
+            Ty::Optional(..) => (true, true),
             _ => (false, false),
         };
 

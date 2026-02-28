@@ -3,6 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function GetTransform:
-    Return: Literal(Int(1))
+    Return: Literal(Int(1), TyAttr(None))
     Errors:
       - Expected (x: int) -> int. Found int

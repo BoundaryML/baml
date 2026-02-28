@@ -3,6 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function GetTodo:
-    Return: Unknown
+    Return: Unknown { attr: TyAttr(None) }
     Errors:
       - Unknown type for variable `baml`
