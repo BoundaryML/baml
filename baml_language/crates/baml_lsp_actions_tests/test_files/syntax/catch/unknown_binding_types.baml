@@ -30,6 +30,15 @@ function UnknownBindingTypes(x: int) -> string {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
+// Error: Unreachable catch arm
+//    ╭─[ catch_unknown_binding_types.baml:7:5 ]
+//    │
+//  7 │     _ => "caught any"
+//    │     ┬  
+//    │     ╰── Unreachable catch arm
+//    │ 
+//    │ Note: Error code: E0095
+// ───╯
 // Error: Type `unknown` is not allowed in catch bindings
 //    ╭─[ catch_unknown_binding_types.baml:8:12 ]
 //    │
@@ -38,4 +47,13 @@ function UnknownBindingTypes(x: int) -> string {
 //    │                   ╰──────── Type `unknown` is not allowed in catch bindings
 //    │ 
 //    │ Note: Error code: E0093
+// ───╯
+// Error: Unreachable catch arm
+//    ╭─[ catch_unknown_binding_types.baml:9:5 ]
+//    │
+//  9 │     _ => "caught unknown"
+//    │     ┬  
+//    │     ╰── Unreachable catch arm
+//    │ 
+//    │ Note: Error code: E0095
 // ───╯

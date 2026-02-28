@@ -68,4 +68,12 @@ client<llm> GPT4 {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Cannot apply operator 'Add' to types `string` and `never`
+//     ╭─[ headers_complex_workflow.baml:17:1 ]
+//     │
+//  17 │     computed_title + ": " + summary
+//     │ ─────────────────┬─────────────────  
+//     │                  ╰─────────────────── Cannot apply operator 'Add' to types `string` and `never`
+//     │ 
+//     │ Note: Error code: E0004
+// ────╯

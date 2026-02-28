@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TYPE INFERENCE ===
+  Function CatchAllTyped:
+    Return: Union([String, Literal(String("caught string")), Literal(String("caught int"))])
+  Function MayFailIntOrString:
+    Return: Union([Never, Never, Literal(String("ok"))])
+  Function CatchThenCatchAll:
+    Return: Union([String, Literal(String("caught string")), Literal(String("caught rest"))])
+  Function PartialCatch:
+    Return: Union([String, Literal(String("caught string"))])
+  Function CatchAllWildcard:
+    Return: Union([String, Literal(String("caught all"))])

@@ -1,0 +1,268 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "MayFailIntOrString"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        MATCH_EXPR
+          KW_MATCH "match"
+          L_PAREN "("
+          WORD "x"
+          R_PAREN ")"
+          L_BRACE "{"
+          MATCH_ARM
+            MATCH_PATTERN "0"
+              INTEGER_LITERAL "0"
+            FAT_ARROW "=>"
+            THROW_EXPR
+              KW_THROW "throw"
+              STRING_LITERAL "string error"
+                QUOTE """
+                WORD "string"
+                WORD "error"
+                QUOTE """
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "1"
+              INTEGER_LITERAL "1"
+            FAT_ARROW "=>"
+            THROW_EXPR "throw 42"
+              KW_THROW "throw"
+              INTEGER_LITERAL "42"
+            COMMA ","
+          MATCH_ARM
+            MATCH_PATTERN "_"
+              WORD "_"
+            FAT_ARROW "=>"
+            STRING_LITERAL "ok"
+              QUOTE """
+              WORD "ok"
+              QUOTE """
+          R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "PartialCatch"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "MayFailIntOrString"
+            CALL_ARGS "(x)"
+              L_PAREN "("
+              WORD "x"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "string"
+                  WORD "string"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught string"
+                QUOTE """
+                WORD "caught"
+                WORD "string"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAllWildcard"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "MayFailIntOrString"
+            CALL_ARGS "(x)"
+              L_PAREN "("
+              WORD "x"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH_ALL "catch_all"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "_"
+                WORD "_"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught all"
+                QUOTE """
+                WORD "caught"
+                WORD "all"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchAllTyped"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "MayFailIntOrString"
+            CALL_ARGS "(x)"
+              L_PAREN "("
+              WORD "x"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH_ALL "catch_all"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "string"
+                  WORD "string"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught string"
+                QUOTE """
+                WORD "caught"
+                WORD "string"
+                QUOTE """
+              COMMA ","
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "int"
+                  WORD "int"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught int"
+                QUOTE """
+                WORD "caught"
+                WORD "int"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "CatchThenCatchAll"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "x"
+        COLON ":"
+        TYPE_EXPR "int"
+          WORD "int"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        CATCH_EXPR
+          CALL_EXPR
+            WORD "MayFailIntOrString"
+            CALL_ARGS "(x)"
+              L_PAREN "("
+              WORD "x"
+              R_PAREN ")"
+          CATCH_CLAUSE
+            KW_CATCH "catch"
+            L_PAREN "("
+            CATCH_PATTERN "e"
+              WORD "e"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN
+                WORD "_"
+                COLON ":"
+                TYPE_EXPR "string"
+                  WORD "string"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught string"
+                QUOTE """
+                WORD "caught"
+                WORD "string"
+                QUOTE """
+            R_BRACE "}"
+          CATCH_CLAUSE
+            KW_CATCH_ALL "catch_all"
+            L_PAREN "("
+            CATCH_PATTERN "e2"
+              WORD "e2"
+            R_PAREN ")"
+            L_BRACE "{"
+            CATCH_ARM
+              CATCH_PATTERN "_"
+                WORD "_"
+              FAT_ARROW "=>"
+              STRING_LITERAL "caught rest"
+                QUOTE """
+                WORD "caught"
+                WORD "rest"
+                QUOTE """
+            R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

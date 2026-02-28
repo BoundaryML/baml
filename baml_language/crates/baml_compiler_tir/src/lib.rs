@@ -424,37 +424,51 @@ pub fn function_divergence_set(db: &dyn Db, project: Project) -> FunctionDiverge
 ///
 /// Uses `AnalysisGraph` (BEP-007) to propagate direct throw facts transitively
 /// over call edges with SCC-safe fixed-point semantics.
+///
+/// When a function has a `throws` declaration, the declared facts are used
+/// as its caller-visible throw set (modular checking). Without a declaration,
+/// body-derived facts propagate transitively as before.
 #[salsa::tracked]
 pub fn function_throw_sets(db: &dyn Db, project: Project) -> FunctionThrowSets<'_> {
     use throw_inference::{ThrowAnalysisInput, analyze_throws};
 
     let items = baml_compiler_hir::project_items(db, project);
-    let mut names_and_bodies: Vec<(Name, Arc<FunctionBody>)> = Vec::new();
+    let enum_variants_map = enum_variants(db, project).enums(db).clone();
+    let enum_name_set = enum_names(db, project).names(db).clone();
+
+    let mut entries: Vec<(Name, Arc<FunctionBody>, Option<BTreeSet<String>>)> = Vec::new();
 
     for item in items.items(db) {
         if let baml_compiler_hir::ItemId::Function(func_loc) = item {
             let function_name =
                 baml_compiler_hir::function_qualified_name(db, *func_loc).display_name();
             let body = baml_compiler_hir::function_body(db, *func_loc);
-            names_and_bodies.push((function_name, body));
+
+            let sig = baml_compiler_hir::function_signature(db, *func_loc);
+            let declared_throws = sig.throws.as_ref().map(|type_ref| {
+                lower_throws_to_facts(type_ref, &enum_variants_map, &enum_name_set)
+            });
+
+            entries.push((function_name, body, declared_throws));
         }
     }
 
-    let inputs: Vec<ThrowAnalysisInput<'_>> = names_and_bodies
+    let inputs: Vec<ThrowAnalysisInput<'_>> = entries
         .iter()
-        .map(|(name, body)| ThrowAnalysisInput {
+        .map(|(name, body, declared)| ThrowAnalysisInput {
             name: name.clone(),
             body: match body.as_ref() {
                 FunctionBody::Expr(expr_body, _) => Some(expr_body),
                 _ => None,
             },
+            declared_throws: declared.clone(),
         })
         .collect();
 
     let analysis = analyze_throws(&inputs);
     let mut transitive: HashMap<Name, BTreeSet<String>> = HashMap::new();
 
-    for (name, _) in &names_and_bodies {
+    for (name, _, _) in &entries {
         let throw_set = analysis.transitive(name).cloned().unwrap_or_default();
         transitive.insert(name.clone(), throw_set);
     }
@@ -701,6 +715,9 @@ pub struct InferenceResult {
     /// refined to `Never` instead of the declared return type, since the function can
     /// never produce a value.
     pub body_diverges: bool,
+    /// Throw types that actually escape the function after catch handling.
+    /// Computed post-inference; used for `throws` contract checking.
+    pub effective_throws: BTreeSet<String>,
     /// Type checking errors.
     pub errors: Vec<TirTypeError>,
     /// Resolution information for IDE features (go-to-definition, find-references).
@@ -757,6 +774,9 @@ pub struct TypeContext<'db> {
     file_id: FileId,
     /// Variables declared with `watch let` (tracked for $watch validation).
     watched_vars: HashSet<Name>,
+    /// Residual throw types for each catch expression (types that escape the catch).
+    /// Populated during inference, used for `throws` contract checking.
+    catch_residual_throws: HashMap<ExprId, BTreeSet<String>>,
     /// Resolution map for expressions (for IDE features).
     expr_resolutions: ResolutionMap,
     /// Track where local variables were defined (for go-to-definition).
@@ -798,6 +818,7 @@ impl<'db> TypeContext<'db> {
             errors: Vec::new(),
             file_id,
             watched_vars: HashSet::new(),
+            catch_residual_throws: HashMap::new(),
             expr_resolutions: HashMap::new(),
             local_definitions: HashMap::new(),
             hir_source_map,
@@ -1071,6 +1092,7 @@ pub fn infer_function_body<'db>(
     enum_names_opt: Option<HashMap<Name, baml_compiler_hir::QualifiedName>>,
     type_alias_names: Option<HashSet<Name>>,
     function_loc: FunctionLoc<'db>,
+    declared_throws: Option<&(BTreeSet<String>, Span)>,
 ) -> InferenceResult {
     let file_id = function_loc.file(db).file_id(db);
 
@@ -1181,6 +1203,53 @@ pub fn infer_function_body<'db>(
         _ => false,
     };
 
+    // Compute effective throws (catch-aware) for contract checking
+    let effective_throws = match body {
+        FunctionBody::Expr(expr_body, _) => {
+            let mut throws = BTreeSet::new();
+            if let Some(root_expr) = expr_body.root_expr {
+                collect_effective_throws_from_expr(&ctx, root_expr, expr_body, &mut throws);
+            }
+            throws
+        }
+        _ => BTreeSet::new(),
+    };
+
+    // Check throws contract if declared (fact-set comparison, no Ty conversion)
+    if let Some((declared_facts, throws_span)) = declared_throws {
+        let location = ErrorLocation::Span(*throws_span);
+
+        // Violation: effective throws include facts not in the declared set
+        let uncovered: Vec<String> = effective_throws
+            .iter()
+            .filter(|fact| !declared_facts.contains(*fact))
+            .cloned()
+            .collect();
+        if !uncovered.is_empty() {
+            ctx.push_error(TypeError::ThrowsContractViolation {
+                extra_types: uncovered,
+                location: location.clone(),
+            });
+        }
+
+        // Extraneous: declared facts not matched by any effective throw.
+        // Skip when effective throws is empty (stub function) or declared
+        // is empty (`throws never` — an assertion, not a type list).
+        if !effective_throws.is_empty() && !declared_facts.is_empty() {
+            let unused: Vec<String> = declared_facts
+                .iter()
+                .filter(|df| !effective_throws.contains(*df))
+                .cloned()
+                .collect();
+            if !unused.is_empty() {
+                ctx.push_error(TypeError::ThrowsContractExtraneous {
+                    unused_types: unused,
+                    location,
+                });
+            }
+        }
+    }
+
     InferenceResult {
         return_type,
         param_types,
@@ -1190,6 +1259,7 @@ pub fn infer_function_body<'db>(
         enum_variant_exprs: ctx.enum_variant_exprs,
         exhaustive_matches: ctx.exhaustive_matches,
         body_diverges,
+        effective_throws,
         errors: ctx.errors,
         expr_resolutions: ctx.expr_resolutions,
     }
@@ -1836,6 +1906,13 @@ pub fn infer_function<'db>(
     );
     type_errors.extend(errors);
 
+    // Lower declared throws to fact set (bypasses Ty lattice for variant precision)
+    let declared_throws = signature.throws.as_ref().map(|throws_type_ref| {
+        let enum_variants_map = crate::enum_variants(db, project).enums(db).clone();
+        let facts = lower_throws_to_facts(throws_type_ref, &enum_variants_map, &enum_name_set);
+        (facts, return_type_span)
+    });
+
     // Validate map key types in function signature
     // Check return type for invalid map keys (only if we have a valid span)
     if return_type_span != Span::default() {
@@ -1888,6 +1965,7 @@ pub fn infer_function<'db>(
         Some(enum_name_set),
         Some(type_alias_name_set),
         function_loc,
+        declared_throws.as_ref(),
     );
 
     // Prepend type lowering errors to the result
@@ -2752,6 +2830,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         Expr::Catch { base, clauses } => {
+            use baml_compiler_hir::CatchClauseKind;
+
             let base_ty = infer_expr(ctx, *base, body);
             let mut residual_throw_types = catch_base_throw_types(ctx, *base, &base_ty, body);
 
@@ -2829,15 +2909,24 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 }
 
                 residual_throw_types = clause_residual;
+
+                if !residual_throw_types.is_empty()
+                    && matches!(
+                        clause.kind,
+                        CatchClauseKind::CatchAll | CatchClauseKind::CatchAllPanics
+                    )
+                {
+                    ctx.push_error(TypeError::NonExhaustiveCatch {
+                        unhandled_types: residual_throw_types.iter().cloned().collect(),
+                        location: ErrorLocation::Expr(expr_id),
+                    });
+                }
+
                 ctx.pop_scope();
             }
 
-            if !residual_throw_types.is_empty() {
-                ctx.push_error(TypeError::NonExhaustiveCatch {
-                    unhandled_types: residual_throw_types.into_iter().collect(),
-                    location: ErrorLocation::Expr(expr_id),
-                });
-            }
+            ctx.catch_residual_throws
+                .insert(expr_id, residual_throw_types);
 
             let mut all_types = vec![base_ty];
             all_types.extend(arm_types);
@@ -3196,6 +3285,108 @@ fn throw_types_to_ty(ctx: &TypeContext<'_>, throw_types: &BTreeSet<String>) -> T
         .map(|throw_fact| throw_fact_to_ty(ctx, throw_fact))
         .collect();
     normalize_union_members(members)
+}
+
+/// Lower a `throws` clause `TypeRef` directly to throw facts.
+///
+/// Unlike `lower_type_ref` (which produces a Ty), this produces the set of
+/// throw-fact strings that the declaration covers. This keeps `throws` in
+/// the fact lattice — the same lattice used by catch exhaustiveness — so
+/// variant-level precision is preserved.
+///
+/// Expansion rules:
+/// - Primitive names: `string` → {"string"}, `int` → {"int"}, etc.
+/// - Enum names: `Errors` → {"Errors.V1", "Errors.V2", ...} (all variants)
+/// - Enum variant paths: `Errors.AuthError` → {"Errors.AuthError"}
+/// - Other names (classes, etc.): `MyError` → {"`MyError`"}
+/// - Unions: recurse and merge
+/// - `never` → {} (empty set)
+fn lower_throws_to_facts(
+    type_ref: &baml_compiler_hir::TypeRef,
+    enum_variants: &HashMap<Name, Vec<Name>>,
+    enum_names: &HashMap<Name, baml_compiler_hir::QualifiedName>,
+) -> BTreeSet<String> {
+    use baml_compiler_hir::TypeRef;
+
+    let mut facts = BTreeSet::new();
+    match type_ref {
+        TypeRef::Int => {
+            facts.insert("int".into());
+        }
+        TypeRef::Float => {
+            facts.insert("float".into());
+        }
+        TypeRef::String => {
+            facts.insert("string".into());
+        }
+        TypeRef::Bool => {
+            facts.insert("bool".into());
+        }
+        TypeRef::Null => {
+            facts.insert("null".into());
+        }
+        TypeRef::Never => {}
+
+        TypeRef::Path(path) => match path.segments.len() {
+            1 => {
+                let name = &path.segments[0];
+                if enum_names.contains_key(name) {
+                    if let Some(variants) = enum_variants.get(name) {
+                        for v in variants {
+                            facts.insert(format!("{}.{}", name.as_str(), v.as_str()));
+                        }
+                    } else {
+                        facts.insert(name.as_str().into());
+                    }
+                } else {
+                    facts.insert(name.as_str().into());
+                }
+            }
+            2 => {
+                let enum_name = &path.segments[0];
+                let variant_name = &path.segments[1];
+                facts.insert(format!("{}.{}", enum_name.as_str(), variant_name.as_str()));
+            }
+            _ => {
+                let full = path
+                    .segments
+                    .iter()
+                    .map(smol_str::SmolStr::as_str)
+                    .collect::<Vec<_>>()
+                    .join(".");
+                facts.insert(full);
+            }
+        },
+
+        TypeRef::Union(members) => {
+            for m in members {
+                facts.extend(lower_throws_to_facts(m, enum_variants, enum_names));
+            }
+        }
+
+        TypeRef::Optional(inner) => {
+            facts.insert("null".into());
+            facts.extend(lower_throws_to_facts(inner, enum_variants, enum_names));
+        }
+
+        TypeRef::StringLiteral(_) => {
+            facts.insert("string".into());
+        }
+        TypeRef::IntLiteral(_) => {
+            facts.insert("int".into());
+        }
+        TypeRef::FloatLiteral(_) => {
+            facts.insert("float".into());
+        }
+        TypeRef::BoolLiteral(_) => {
+            facts.insert("bool".into());
+        }
+
+        _ => {
+            facts.insert("unknown".into());
+        }
+    }
+    facts
 }
 
 /// Build a canonical union type:
@@ -3589,6 +3780,174 @@ fn catch_base_throw_types(
         BTreeSet::from(["unknown".to_string()])
     } else {
         BTreeSet::new()
+    }
+}
+
+/// Collect the effective throw types that escape a function body, accounting for
+/// catch clauses. Unlike `collect_throw_facts_from_expr`, this uses the residual
+/// throw types computed during type inference to correctly subtract what catches handle.
+fn collect_effective_throws_from_expr(
+    ctx: &TypeContext<'_>,
+    expr_id: ExprId,
+    body: &ExprBody,
+    out: &mut BTreeSet<String>,
+) {
+    use baml_compiler_hir::Expr;
+
+    match &body.exprs[expr_id] {
+        Expr::Throw { value } => {
+            collect_effective_throws_from_expr(ctx, *value, body, out);
+            collect_throw_facts_from_value(ctx, *value, body, out);
+        }
+        Expr::Call { callee, args } => {
+            collect_effective_throws_from_expr(ctx, *callee, body, out);
+            for arg in args {
+                collect_effective_throws_from_expr(ctx, *arg, body, out);
+            }
+            if let Some(function_name) = divergence::call_target_from_callee_expr(*callee, body) {
+                let throws = function_throw_sets(ctx.db(), ctx.db().project());
+                if let Some(transitive) = throws.transitive(ctx.db()).get(&function_name) {
+                    out.extend(transitive.iter().cloned());
+                } else if is_function_always_diverging(ctx, &function_name) {
+                    out.insert("unknown".to_string());
+                }
+            }
+        }
+        Expr::Catch { base, .. } => {
+            // Use the residual from type inference (catch-aware)
+            if let Some(residual) = ctx.catch_residual_throws.get(&expr_id) {
+                out.extend(residual.iter().cloned());
+            }
+            // Still recurse into catch arm bodies for throws within handlers
+            if let Expr::Catch { clauses, .. } = &body.exprs[expr_id] {
+                for clause in clauses {
+                    for arm_id in &clause.arms {
+                        let arm = &body.catch_arms[*arm_id];
+                        collect_effective_throws_from_expr(ctx, arm.body, body, out);
+                    }
+                }
+            }
+            // Don't recurse into base — its throws are accounted for by the residual
+            let _ = base;
+        }
+        Expr::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            collect_effective_throws_from_expr(ctx, *condition, body, out);
+            collect_effective_throws_from_expr(ctx, *then_branch, body, out);
+            if let Some(else_branch) = else_branch {
+                collect_effective_throws_from_expr(ctx, *else_branch, body, out);
+            }
+        }
+        Expr::Match {
+            scrutinee, arms, ..
+        } => {
+            collect_effective_throws_from_expr(ctx, *scrutinee, body, out);
+            for arm_id in arms {
+                let arm = &body.match_arms[*arm_id];
+                if let Some(guard) = arm.guard {
+                    collect_effective_throws_from_expr(ctx, guard, body, out);
+                }
+                collect_effective_throws_from_expr(ctx, arm.body, body, out);
+            }
+        }
+        Expr::Binary { lhs, rhs, .. } => {
+            collect_effective_throws_from_expr(ctx, *lhs, body, out);
+            collect_effective_throws_from_expr(ctx, *rhs, body, out);
+        }
+        Expr::Unary { expr, .. } => {
+            collect_effective_throws_from_expr(ctx, *expr, body, out);
+        }
+        Expr::Object {
+            fields, spreads, ..
+        } => {
+            for (_, value) in fields {
+                collect_effective_throws_from_expr(ctx, *value, body, out);
+            }
+            for spread in spreads {
+                collect_effective_throws_from_expr(ctx, spread.expr, body, out);
+            }
+        }
+        Expr::Array { elements } => {
+            for elem in elements {
+                collect_effective_throws_from_expr(ctx, *elem, body, out);
+            }
+        }
+        Expr::Map { entries } => {
+            for (key, value) in entries {
+                collect_effective_throws_from_expr(ctx, *key, body, out);
+                collect_effective_throws_from_expr(ctx, *value, body, out);
+            }
+        }
+        Expr::Block { stmts, tail_expr } => {
+            for stmt_id in stmts {
+                collect_effective_throws_from_stmt(ctx, *stmt_id, body, out);
+            }
+            if let Some(tail_expr) = tail_expr {
+                collect_effective_throws_from_expr(ctx, *tail_expr, body, out);
+            }
+        }
+        Expr::FieldAccess { base, .. } => {
+            collect_effective_throws_from_expr(ctx, *base, body, out);
+        }
+        Expr::Index { base, index } => {
+            collect_effective_throws_from_expr(ctx, *base, body, out);
+            collect_effective_throws_from_expr(ctx, *index, body, out);
+        }
+        Expr::Literal(_) | Expr::Path(_) | Expr::Missing => {}
+    }
+}
+
+fn collect_effective_throws_from_stmt(
+    ctx: &TypeContext<'_>,
+    stmt_id: StmtId,
+    body: &ExprBody,
+    out: &mut BTreeSet<String>,
+) {
+    use baml_compiler_hir::Stmt;
+
+    match &body.stmts[stmt_id] {
+        Stmt::Expr(expr_id) => collect_effective_throws_from_expr(ctx, *expr_id, body, out),
+        Stmt::Let { initializer, .. } => {
+            if let Some(initializer) = initializer {
+                collect_effective_throws_from_expr(ctx, *initializer, body, out);
+            }
+        }
+        Stmt::While {
+            condition,
+            body: loop_body,
+            after,
+            ..
+        } => {
+            collect_effective_throws_from_expr(ctx, *condition, body, out);
+            collect_effective_throws_from_expr(ctx, *loop_body, body, out);
+            if let Some(after) = after {
+                collect_effective_throws_from_stmt(ctx, *after, body, out);
+            }
+        }
+        Stmt::Return(expr) => {
+            if let Some(expr) = expr {
+                collect_effective_throws_from_expr(ctx, *expr, body, out);
+            }
+        }
+        Stmt::Assign { target, value } => {
+            collect_effective_throws_from_expr(ctx, *target, body, out);
+            collect_effective_throws_from_expr(ctx, *value, body, out);
+        }
+        Stmt::AssignOp { target, value, .. } => {
+            collect_effective_throws_from_expr(ctx, *target, body, out);
+            collect_effective_throws_from_expr(ctx, *value, body, out);
+        }
+        Stmt::Assert { condition } => {
+            collect_effective_throws_from_expr(ctx, *condition, body, out);
+        }
+        Stmt::Throw { value } => {
+            collect_effective_throws_from_expr(ctx, *value, body, out);
+            collect_throw_facts_from_value(ctx, *value, body, out);
+        }
+        Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
     }
 }
 

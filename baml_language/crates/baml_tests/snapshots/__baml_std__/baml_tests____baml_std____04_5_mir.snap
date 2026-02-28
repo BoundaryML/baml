@@ -1426,13 +1426,13 @@ fn build_request(function_name: string, args: map<string, unknown>) -> baml.http
     let _3: baml.llm.PrimitiveClient // primitive_client
     let _4: null
     let _5: string
-    let _6: baml.llm.PromptAst // specialized_prompt
+    let _6: never // specialized_prompt
     let _7: null
     let _8: string
     let _9: map<string, unknown>
     let _10: void
     let _11: baml.llm.PrimitiveClient
-    let _12: baml.llm.PromptAst
+    let _12: never
     let _13: (baml.llm.PrimitiveClient, baml.llm.PromptAst) -> baml.http.Request
     let _14: null
 

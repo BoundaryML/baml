@@ -247,4 +247,15 @@ pub enum TypeError<C: ErrorContext> {
         type_name: String,
         location: C::Location,
     },
+
+    /// Function body throws types not covered by its `throws` declaration.
+    ThrowsContractViolation {
+        extra_types: Vec<String>,
+        location: C::Location,
+    },
+    /// `throws` declaration covers types the function never actually throws.
+    ThrowsContractExtraneous {
+        unused_types: Vec<String>,
+        location: C::Location,
+    },
 }

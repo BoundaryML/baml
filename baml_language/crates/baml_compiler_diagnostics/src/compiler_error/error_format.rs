@@ -165,6 +165,28 @@ where
                 span,
                 NON_EXHAUSTIVE_MATCH,
             ),
+            TypeError::ThrowsContractViolation {
+                extra_types,
+                span,
+            } => simple_error(
+                format!(
+                    "Function throws types not covered by `throws` declaration: {}",
+                    extra_types.join(", ")
+                ),
+                span,
+                NON_EXHAUSTIVE_MATCH,
+            ),
+            TypeError::ThrowsContractExtraneous {
+                unused_types,
+                span,
+            } => simple_error(
+                format!(
+                    "`throws` declaration includes types the function never throws: {}",
+                    unused_types.join(", ")
+                ),
+                span,
+                NON_EXHAUSTIVE_MATCH,
+            ),
         },
         CompilerError::NameError(name_error) => match name_error {
             NameError::DuplicateName {

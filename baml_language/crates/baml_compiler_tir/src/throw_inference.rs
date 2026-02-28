@@ -49,6 +49,9 @@ pub type ThrowFact = String;
 pub struct ThrowAnalysisInput<'a> {
     pub name: Name,
     pub body: Option<&'a ExprBody>,
+    /// Expanded throw facts from a `throws` declaration, if present.
+    /// When `Some`, replaces body-derived facts as the caller-visible throw set.
+    pub declared_throws: Option<BTreeSet<ThrowFact>>,
 }
 
 /// Extract a throw fact from a thrown expression's HIR representation.
@@ -120,16 +123,31 @@ pub fn analyze_throws(functions: &[ThrowAnalysisInput<'_>]) -> AnalysisResult<Na
     let mut graph: AnalysisGraph<Name, ThrowFact> = AnalysisGraph::new();
 
     for function in functions {
-        let direct_throws = function
-            .body
-            .map_or_else(BTreeSet::new, collect_direct_throws);
+        // When a function has a `throws` declaration, use that as its
+        // caller-visible throw set. The contract check (in TIR inference)
+        // ensures the body is consistent with the declaration.
+        let direct_throws = if let Some(ref declared) = function.declared_throws {
+            declared.clone()
+        } else {
+            function
+                .body
+                .map_or_else(BTreeSet::new, collect_direct_throws)
+        };
         graph.add_node(function.name.clone(), direct_throws);
     }
 
+    // Call edges still come from the body — they determine transitive propagation
+    // for functions *without* a `throws` declaration.
+    // Functions *with* a declaration act as "firewalls": their declared facts
+    // are the complete set, so callee edges beyond them don't propagate further.
     for function in functions {
-        if let Some(b) = function.body {
-            for target in collect_call_targets(b) {
-                graph.add_edge(function.name.clone(), target);
+        // Only add call edges for functions without `throws` declarations.
+        // With a declaration, the declared set *is* the complete throw surface.
+        if function.declared_throws.is_none() {
+            if let Some(b) = function.body {
+                for target in collect_call_targets(b) {
+                    graph.add_edge(function.name.clone(), target);
+                }
             }
         }
     }
@@ -298,10 +316,12 @@ mod tests {
             ThrowAnalysisInput {
                 name: Name::new("A"),
                 body: Some(&body_a),
+                declared_throws: None,
             },
             ThrowAnalysisInput {
                 name: Name::new("B"),
                 body: Some(&body_b),
+                declared_throws: None,
             },
         ];
 
@@ -327,10 +347,12 @@ mod tests {
             ThrowAnalysisInput {
                 name: Name::new("A"),
                 body: Some(&body_a),
+                declared_throws: None,
             },
             ThrowAnalysisInput {
                 name: Name::new("B"),
                 body: Some(&body_b),
+                declared_throws: None,
             },
         ];
 
@@ -344,6 +366,84 @@ mod tests {
             result
                 .transitive(&Name::new("B"))
                 .is_some_and(|s| s.contains("int"))
+        );
+    }
+
+    #[test]
+    fn analyze_throws_uses_declared_contract() {
+        // A has `throws string | int` declared; body only throws string.
+        // The declared set should be used as the caller-visible throw set.
+        let body_a = make_throw_body(Literal::String("boom".to_string()));
+        let body_b = make_call_body("A");
+
+        let inputs = vec![
+            ThrowAnalysisInput {
+                name: Name::new("A"),
+                body: Some(&body_a),
+                declared_throws: Some(BTreeSet::from(["string".to_string(), "int".to_string()])),
+            },
+            ThrowAnalysisInput {
+                name: Name::new("B"),
+                body: Some(&body_b),
+                declared_throws: None,
+            },
+        ];
+
+        let result = analyze_throws(&inputs);
+        // A's transitive set is its declared contract
+        let a_set = result.transitive(&Name::new("A")).unwrap();
+        assert!(a_set.contains("string"), "A should contain string");
+        assert!(
+            a_set.contains("int"),
+            "A should contain int (from declaration)"
+        );
+
+        // B calls A, so B sees A's declared contract
+        let b_set = result.transitive(&Name::new("B")).unwrap();
+        assert!(b_set.contains("string"), "B should see string from A");
+        assert!(
+            b_set.contains("int"),
+            "B should see int from A's declaration"
+        );
+    }
+
+    #[test]
+    fn analyze_throws_declared_acts_as_firewall() {
+        // A throws "string" (body-derived).
+        // B declares `throws int`, body calls A.
+        // C calls B.
+        // C should only see "int" (B's declaration), NOT "string" from A.
+        let body_a = make_throw_body(Literal::String("boom".to_string()));
+        let body_b = make_call_body("A");
+        let body_c = make_call_body("B");
+
+        let inputs = vec![
+            ThrowAnalysisInput {
+                name: Name::new("A"),
+                body: Some(&body_a),
+                declared_throws: None,
+            },
+            ThrowAnalysisInput {
+                name: Name::new("B"),
+                body: Some(&body_b),
+                declared_throws: Some(BTreeSet::from(["int".to_string()])),
+            },
+            ThrowAnalysisInput {
+                name: Name::new("C"),
+                body: Some(&body_c),
+                declared_throws: None,
+            },
+        ];
+
+        let result = analyze_throws(&inputs);
+        let c_set = result.transitive(&Name::new("C")).unwrap();
+        assert!(
+            c_set.contains("int"),
+            "C should see int from B's declaration"
+        );
+        assert!(
+            !c_set.contains("string"),
+            "C should NOT see string — B's declaration is a firewall"
         );
     }
 }

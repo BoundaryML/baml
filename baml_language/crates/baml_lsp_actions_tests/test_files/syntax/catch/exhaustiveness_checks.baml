@@ -32,6 +32,15 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 
 //----
 //- diagnostics
+// Error: Unreachable catch arm
+//     ╭─[ catch_exhaustiveness_checks.baml:27:5 ]
+//     │
+//  27 │     _ => match (pet) {
+//     │     ┬  
+//     │     ╰── Unreachable catch arm
+//     │ 
+//     │ Note: Error code: E0095
+// ────╯
 // Error: Non-exhaustive match on `Pet`: missing cases Dog
 //     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
 //     │
@@ -42,6 +51,15 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 //     │ ╰─────────── Non-exhaustive match on `Pet`: missing cases Dog
 //     │     
 //     │     Note: Error code: E0062
+// ────╯
+// Error: Unreachable catch arm
+//     ╭─[ catch_exhaustiveness_checks.baml:17:5 ]
+//     │
+//  17 │     _ => match (pet) {
+//     │     ┬  
+//     │     ╰── Unreachable catch arm
+//     │ 
+//     │ Note: Error code: E0095
 // ────╯
 // Error: Unreachable match arm
 //     ╭─[ catch_exhaustiveness_checks.baml:20:7 ]

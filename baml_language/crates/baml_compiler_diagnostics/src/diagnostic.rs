@@ -164,6 +164,10 @@ pub enum DiagnosticId {
     // Catch binding errors (E0093)
     InvalidCatchBindingType,
 
+    // Throws contract errors (E0096-E0097)
+    ThrowsContractViolation,
+    ThrowsContractExtraneous,
+
     // VIR lowering errors (E0089)
     LoweringError,
 }
@@ -285,6 +289,10 @@ impl DiagnosticId {
 
             // Catch binding errors
             DiagnosticId::InvalidCatchBindingType => "E0093",
+
+            // Throws contract errors
+            DiagnosticId::ThrowsContractViolation => "E0096",
+            DiagnosticId::ThrowsContractExtraneous => "E0097",
 
             // VIR lowering errors
             DiagnosticId::LoweringError => "E0089",

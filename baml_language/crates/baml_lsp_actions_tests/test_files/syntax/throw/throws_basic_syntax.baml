@@ -27,4 +27,12 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Warning: `throws` declaration includes types the function never throws: int
+//     ╭─[ throw_throws_basic_syntax.baml:21:37 ]
+//     │
+//  21 │ function MayThrowMultiple(x: int) -> string throws string | int {
+//     │                                     ───┬───  
+//     │                                        ╰───── `throws` declaration includes types the function never throws: int
+//     │ 
+//     │ Note: Error code: E0097
+// ────╯

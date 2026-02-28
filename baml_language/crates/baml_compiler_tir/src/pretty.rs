@@ -720,6 +720,18 @@ pub fn short_display(error: &TirTypeError) -> String {
                 unhandled_types.join(", ")
             )
         }
+        TypeError::ThrowsContractViolation { extra_types, .. } => {
+            format!(
+                "Function throws types not covered by `throws` declaration: {}",
+                extra_types.join(", ")
+            )
+        }
+        TypeError::ThrowsContractExtraneous { unused_types, .. } => {
+            format!(
+                "`throws` declaration includes types the function never throws: {}",
+                unused_types.join(", ")
+            )
+        }
         TypeError::InvalidMapKeyType { ty, .. } => {
             format!("Invalid key type for map: {ty}.")
         }

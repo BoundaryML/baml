@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+function CatchAllTyped(x: int) -> string {
+    MayFailIntOrString(x) catch_all (e) {
+        _: string => "caught string",
+        _: int => "caught int",
+    }
+}
+
+function MayFailIntOrString(x: int) -> string {
+    match (x) {
+        0 => throw "string error",
+        1 => throw 42,
+        _ => "ok",
+    }
+}
+
+function CatchThenCatchAll(x: int) -> string {
+    MayFailIntOrString(x) catch (e) {
+        _: string => "caught string",
+    } catch_all (e2) {
+        _ => "caught rest",
+    }
+}
+
+function PartialCatch(x: int) -> string {
+    MayFailIntOrString(x) catch (e) {
+        _: string => "caught string",
+    }
+}
+
+function CatchAllWildcard(x: int) -> string {
+    MayFailIntOrString(x) catch_all (e) {
+        _ => "caught all",
+    }
+}

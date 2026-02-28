@@ -45,4 +45,30 @@ function CatchOuter(x: int) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Unreachable catch arm
+//     ╭─[ throw_throw_with_catch.baml:27:5 ]
+//     │
+//  27 │     _ => throw "wrapped"
+//     │     ┬  
+//     │     ╰── Unreachable catch arm
+//     │ 
+//     │ Note: Error code: E0095
+// ────╯
+// Error: Unreachable catch arm
+//     ╭─[ throw_throw_with_catch.baml:29:5 ]
+//     │
+//  29 │     _ => "ultimately caught"
+//     │     ┬  
+//     │     ╰── Unreachable catch arm
+//     │ 
+//     │ Note: Error code: E0095
+// ────╯
+// Error: Unreachable catch arm
+//     ╭─[ throw_throw_with_catch.baml:42:5 ]
+//     │
+//  42 │     _ => "caught outer"
+//     │     ┬  
+//     │     ╰── Unreachable catch arm
+//     │ 
+//     │ Note: Error code: E0095
+// ────╯

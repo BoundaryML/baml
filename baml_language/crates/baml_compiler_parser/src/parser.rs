@@ -52,6 +52,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
+        TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
         TokenKind::Assert => SyntaxKind::KW_ASSERT,
         TokenKind::Throws => SyntaxKind::KW_THROWS,
 
@@ -2700,7 +2701,7 @@ impl<'a> Parser<'a> {
     }
 
     fn at_catch_clause_start(&self) -> bool {
-        self.at(TokenKind::Catch)
+        self.at(TokenKind::Catch) || self.at(TokenKind::CatchAll)
     }
 
     fn parse_catch_expr(&mut self, expr_start: usize) {

@@ -81,6 +81,8 @@ pub enum TokenKind {
     Match,
     #[token("catch")]
     Catch,
+    #[token("catch_all")]
+    CatchAll,
     #[token("assert")]
     Assert,
     #[token("throws")]
@@ -283,6 +285,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Throw => "throw",
             TokenKind::Match => "match",
             TokenKind::Catch => "catch",
+            TokenKind::CatchAll => "catch_all",
             TokenKind::Assert => "assert",
             TokenKind::Throws => "throws",
             TokenKind::Watch => "watch",
@@ -844,9 +847,9 @@ mod tests {
         let tokens = lex_no_whitespace("throw catch");
         assert_eq!(tokens, vec![TokenKind::Throw, TokenKind::Catch,]);
 
-        // catch_all and catch_all_panics are no longer keywords; they lex as identifiers
+        // catch_all is a keyword; catch_all_panics is internal-only (lexes as identifier)
         let tokens2 = lex_no_whitespace("catch_all catch_all_panics");
-        assert_eq!(tokens2, vec![TokenKind::Word, TokenKind::Word,]);
+        assert_eq!(tokens2, vec![TokenKind::CatchAll, TokenKind::Word,]);
     }
 
     #[test]

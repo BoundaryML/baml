@@ -215,6 +215,30 @@ impl<C: ErrorContext> TypeError<C> {
                 .with_primary_span(loc_fn(location))
             }
 
+            TypeError::ThrowsContractViolation {
+                extra_types,
+                location,
+            } => {
+                let extras = extra_types.join(", ");
+                Diagnostic::error(
+                    DiagnosticId::ThrowsContractViolation,
+                    format!("Function throws types not covered by `throws` declaration: {extras}"),
+                )
+                .with_primary_span(loc_fn(location))
+            }
+
+            TypeError::ThrowsContractExtraneous {
+                unused_types,
+                location,
+            } => {
+                let unused = unused_types.join(", ");
+                Diagnostic::warning(
+                    DiagnosticId::ThrowsContractExtraneous,
+                    format!("`throws` declaration includes types the function never throws: {unused}"),
+                )
+                .with_primary_span(loc_fn(location))
+            }
+
             TypeError::InvalidMapKeyType { ty, location } => Diagnostic::error(
                 DiagnosticId::InvalidMapKeyType,
                 format!(

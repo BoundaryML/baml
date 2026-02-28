@@ -1,0 +1,149 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function CatchAllTyped(x: int) -> string {
+    push_unwind L0, slot 2
+    load_var x
+    call MayFailIntOrString
+    pop_unwind
+    jump L5
+
+  L0:
+    load_var _2
+    store_var e
+    load_var _2
+    type_tag
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var _2
+    type_tag
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var _2
+    throw
+
+  L3:
+    load_const "caught int"
+    jump L5
+
+  L4:
+    load_const "caught string"
+
+  L5:
+    return
+}
+
+function CatchAllWildcard(x: int) -> string {
+    push_unwind L0, slot 2
+    load_var x
+    call MayFailIntOrString
+    pop_unwind
+    jump L1
+
+  L0:
+    load_var _2
+    store_var e
+    load_const "caught all"
+
+  L1:
+    return
+}
+
+function CatchThenCatchAll(x: int) -> string {
+    push_unwind L0, slot 2
+    load_var x
+    call MayFailIntOrString
+    pop_unwind
+    jump L3
+
+  L0:
+    load_var _2
+    store_var e
+    load_var _2
+    type_tag
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _2
+    store_var _3
+    load_var _3
+    store_var e2
+    load_const "caught rest"
+    jump L3
+
+  L2:
+    load_const "caught string"
+
+  L3:
+    return
+}
+
+function MayFailIntOrString(x: int) -> string {
+    load_var x
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L3
+
+  L0:
+    copy 0
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L2
+
+  L1:
+    pop 1
+    load_const "ok"
+    return
+
+  L2:
+    load_const 42
+    throw
+
+  L3:
+    load_const "string error"
+    throw
+}
+
+function PartialCatch(x: int) -> string {
+    push_unwind L0, slot 2
+    load_var x
+    call MayFailIntOrString
+    pop_unwind
+    jump L3
+
+  L0:
+    load_var _2
+    store_var e
+    load_var _2
+    type_tag
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _2
+    throw
+
+  L2:
+    load_const "caught string"
+
+  L3:
+    return
+}
