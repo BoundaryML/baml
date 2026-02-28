@@ -15,11 +15,14 @@ struct Program {
 fn bootstrap_vm(input: &Program) -> BexVm {
     let program = compile_source(input.source);
 
-    let function_index = program
-        .function_index(input.function)
-        .expect("function not found");
+    let Some(function_index) = program.function_index(input.function) else {
+        panic!("function not found");
+    };
 
-    let mut vm = make_vm(program).expect("native function attachment must succeed");
+    let mut vm = match make_vm(program) {
+        Ok(vm) => vm,
+        Err(err) => panic!("native function attachment must succeed: {err}"),
+    };
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &input.args);
     vm
@@ -43,7 +46,10 @@ pub fn recursive_fib<const N: i64>(bencher: divan::Bencher) {
                 args: vec![Value::Int(N)],
             })
         })
-        .bench_refs(|vm| vm.exec().unwrap());
+        .bench_refs(|vm| match vm.exec() {
+            Ok(result) => result,
+            Err(err) => panic!("vm exec failed: {err}"),
+        });
 }
 
 #[divan::bench(consts = [1000, 2000, 3000])]
@@ -74,7 +80,10 @@ pub fn iterative_fib<const N: i64>(bencher: divan::Bencher) {
                 args: vec![Value::Int(N)],
             })
         })
-        .bench_refs(|vm| vm.exec().unwrap());
+        .bench_refs(|vm| match vm.exec() {
+            Ok(result) => result,
+            Err(err) => panic!("vm exec failed: {err}"),
+        });
 }
 
 fn main() {

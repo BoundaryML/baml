@@ -1523,24 +1523,27 @@ impl CompilerRunner {
             .insert(CompilerPhase::Diagnostics, output_annotated);
     }
 
-    fn run_codegen(&mut self) {
-        // Include both user files and builtin files so codegen can compile
-        // builtin functions (e.g., baml.llm.render_prompt) that compiler-generated
-        // functions call.
+    /// Compile the current project including builtin files.
+    fn compile_program_with_builtins(
+        &self,
+    ) -> std::result::Result<baml_compiler_emit::Program, baml_compiler_emit::LoweringError> {
         let mut files: Vec<_> = self.source_files.values().copied().collect();
         files.extend(&self.builtin_files);
-
-        let mut output = String::new();
-        let mut output_annotated = Vec::new();
-
-        let program = match baml_compiler_emit::compile_files(
+        baml_compiler_emit::compile_files(
             &self.db,
             &files,
             baml_compiler_emit::OptLevel::One,
             &baml_compiler_emit::CompileOptions {
                 emit_test_cases: false,
             },
-        ) {
+        )
+    }
+
+    fn run_codegen(&mut self) {
+        let mut output = String::new();
+        let mut output_annotated = Vec::new();
+
+        let program = match self.compile_program_with_builtins() {
             Ok(p) => p,
             Err(err) => {
                 writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").ok();
@@ -1640,16 +1643,7 @@ impl CompilerRunner {
         let mut output_annotated = Vec::new();
 
         // Compile the program (include builtins so codegen can resolve builtin functions)
-        let mut files: Vec<_> = self.source_files.values().copied().collect();
-        files.extend(&self.builtin_files);
-        let program = match baml_compiler_emit::compile_files(
-            &self.db,
-            &files,
-            baml_compiler_emit::OptLevel::One,
-            &baml_compiler_emit::CompileOptions {
-                emit_test_cases: false,
-            },
-        ) {
+        let program = match self.compile_program_with_builtins() {
             Ok(p) => p,
             Err(err) => {
                 writeln!(output, "=== VM RUNNER ===").ok();
@@ -1808,15 +1802,7 @@ impl CompilerRunner {
         use bex_engine::{BexEngine, FunctionCallContextBuilder};
         use sys_types::{CallId, SysOps};
 
-        let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = match baml_compiler_emit::compile_files(
-            &self.db,
-            &files,
-            baml_compiler_emit::OptLevel::One,
-            &baml_compiler_emit::CompileOptions {
-                emit_test_cases: false,
-            },
-        ) {
+        let program = match self.compile_program_with_builtins() {
             Ok(p) => p,
             Err(err) => return VmExecutionResult::Error(format!("Codegen failed: {err}")),
         };
@@ -2701,5 +2687,43 @@ fn format_external_value(value: &bex_engine::BexExternalValue) -> String {
         // Remaining variants (Resource, Handle, FunctionRef, Adt) are not
         // expected from pure-compute functions; fall back to the type name.
         other => format!("<{}>", other.type_name()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_external_value;
+    use bex_engine::{BexExternalValue, Ty, UnionMetadata};
+
+    #[test]
+    fn formats_scalars_and_variant() {
+        assert_eq!(format_external_value(&BexExternalValue::Null), "null");
+        assert_eq!(format_external_value(&BexExternalValue::Int(42)), "42");
+        assert_eq!(
+            format_external_value(&BexExternalValue::String("hi".to_string())),
+            "\"hi\""
+        );
+        assert_eq!(
+            format_external_value(&BexExternalValue::Variant {
+                enum_name: "Status".to_string(),
+                variant_name: "Ok".to_string(),
+            }),
+            "Status::Ok"
+        );
+    }
+
+    #[test]
+    fn formats_array_and_union_unwrap() {
+        let array = BexExternalValue::Array {
+            element_type: Ty::Union(vec![Ty::Int, Ty::Bool]),
+            items: vec![BexExternalValue::Int(1), BexExternalValue::Bool(true)],
+        };
+        assert_eq!(format_external_value(&array), "[1, true]");
+
+        let union = BexExternalValue::Union {
+            value: Box::new(BexExternalValue::Int(7)),
+            metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+        };
+        assert_eq!(format_external_value(&union), "7");
     }
 }

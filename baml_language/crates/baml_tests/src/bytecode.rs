@@ -81,7 +81,9 @@ pub fn setup_test_db(source: &str) -> ProjectDatabase {
 pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
     use baml_compiler_diagnostics::Severity;
 
-    let project = db.get_project().expect("project must be set");
+    let Some(project) = db.get_project() else {
+        panic!("project must be set");
+    };
     let all_files = db.get_source_files();
     let diagnostics = baml_project::collect_diagnostics(db, project, &all_files);
     let errors: Vec<_> = diagnostics
@@ -104,13 +106,21 @@ pub fn compile_source(source: &str) -> VmProgram {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
 
-    let project = db.get_project().unwrap();
-    let all_files = project.files(&db).clone();
+    let Some(project) = db.get_project() else {
+        panic!("project must be set");
+    };
     let options = baml_compiler_emit::CompileOptions {
         emit_test_cases: false,
     };
-    baml_compiler_emit::compile_files(&db, &all_files, baml_compiler_emit::OptLevel::One, &options)
-        .expect("compile_files should succeed for valid test source")
+    match baml_compiler_emit::compile_files(
+        &db,
+        project.files(&db),
+        baml_compiler_emit::OptLevel::One,
+        &options,
+    ) {
+        Ok(program) => program,
+        Err(err) => panic!("compile_files should succeed for valid test source: {err}"),
+    }
 }
 
 //
@@ -235,19 +245,36 @@ pub fn assert_vm_emits_with_inspection(
 ) -> anyhow::Result<()> {
     let (vm, states) = collect_vm_exec_states(input.source, input.function)?;
 
-    let emit_states: Vec<Vec<Notification>> = states
-        .iter()
-        .filter_map(|state| match state {
-            ExecState::Emit(roots) => Some(roots.clone()),
-            _ => None,
-        })
-        .collect();
+    let mut expected_iter = input.expected.iter();
+    let mut emit_index = 0;
 
-    assert_eq!(
-        emit_states, input.expected,
-        "VM emit states mismatch for function '{}'",
-        input.function
-    );
+    for state in &states {
+        let ExecState::Emit(roots) = state else {
+            continue;
+        };
+
+        let Some(expected) = expected_iter.next() else {
+            panic!(
+                "VM emit states mismatch for function '{}': unexpected extra emit at index {}",
+                input.function, emit_index
+            );
+        };
+
+        assert_eq!(
+            roots, expected,
+            "VM emit states mismatch for function '{}': emit index {}",
+            input.function, emit_index
+        );
+
+        emit_index += 1;
+    }
+
+    if expected_iter.next().is_some() {
+        panic!(
+            "VM emit states mismatch for function '{}': missing emit at index {}",
+            input.function, emit_index
+        );
+    }
 
     inspect(&vm, &states)?;
 
