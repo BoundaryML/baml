@@ -148,6 +148,7 @@ pub enum SyntaxKind {
     DYNAMIC_TYPE_DEF,   // dynamic class/enum inside type_builder blocks
 
     // Function components
+    GENERIC_PARAM_LIST,
     PARAMETER_LIST,
     PARAMETER,
     FUNCTION_BODY,

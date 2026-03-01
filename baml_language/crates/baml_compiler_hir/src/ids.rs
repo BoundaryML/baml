@@ -8,6 +8,8 @@
 
 use std::marker::PhantomData;
 
+use baml_base::Name;
+
 /// Identifier for a class definition.
 pub use crate::loc::ClassLoc as ClassId;
 /// Identifier for a client configuration.
@@ -187,4 +189,36 @@ pub enum ItemKind {
     Test,
     TemplateString,
     RetryPolicy,
+}
+
+/// Allocator for `LocalItemId`s with collision handling.
+///
+/// Replays the same hashing and collision-indexing logic as `ItemTree`.
+/// This allows queries to reproduce the same local IDs when scanning CST.
+pub struct LocalIdAllocator {
+    next_index: rustc_hash::FxHashMap<(ItemKind, u16), u16>,
+}
+
+impl LocalIdAllocator {
+    /// Create a new allocator with empty collision state.
+    pub fn new() -> Self {
+        Self {
+            next_index: rustc_hash::FxHashMap::default(),
+        }
+    }
+
+    /// Allocate a `LocalItemId` for a named item, updating collision state.
+    pub fn alloc_id<T>(&mut self, kind: ItemKind, name: &Name) -> LocalItemId<T> {
+        let hash = hash_name(name);
+        let index = self.next_index.entry((kind, hash)).or_insert(0);
+        let id = LocalItemId::new(hash, *index);
+        *index += 1;
+        id
+    }
+}
+
+impl Default for LocalIdAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
 }

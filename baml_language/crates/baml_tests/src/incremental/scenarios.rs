@@ -3,12 +3,161 @@
 //! These tests verify that editing BAML files only recomputes the necessary
 //! queries, demonstrating Salsa's "early cutoff" optimization.
 
-use baml_compiler_hir::{FunctionLoc, function_body, function_signature};
+use std::collections::HashMap;
+
+use baml_base::Name;
+use baml_compiler_hir::{
+    FunctionLoc, GenericParams, QualifiedName, class_generic_params, enum_generic_params,
+    function_body, function_generic_params, function_signature, hash_name,
+    type_alias_generic_params,
+};
 use baml_compiler_tir::function_type_inference;
 use baml_db::{SourceFile, baml_compiler_hir};
 use salsa::Setter;
 
 use super::IncrementalTestDb;
+
+fn param_names(params: &GenericParams) -> Vec<String> {
+    params
+        .type_param_names()
+        .map(|name| name.as_str().to_string())
+        .collect()
+}
+
+fn find_item_by_name<'db, T>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+    kind: &str,
+    mut pick: impl FnMut(&baml_compiler_hir::ItemId<'db>, &baml_compiler_hir::ItemTree) -> Option<T>,
+) -> T {
+    let item_tree = baml_compiler_hir::file_item_tree(db, file);
+    let items = baml_compiler_hir::file_items(db, file);
+    match items
+        .items(db)
+        .iter()
+        .find_map(|item| pick(item, &item_tree))
+    {
+        Some(value) => value,
+        None => panic!("{kind} not found: {name}"),
+    }
+}
+
+fn collect_items<'db, T>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    mut pick: impl FnMut(&baml_compiler_hir::ItemId<'db>, &baml_compiler_hir::ItemTree) -> Option<T>,
+) -> Vec<T> {
+    let item_tree = baml_compiler_hir::file_item_tree(db, file);
+    let items = baml_compiler_hir::file_items(db, file);
+    items
+        .items(db)
+        .iter()
+        .filter_map(|item| pick(item, &item_tree))
+        .collect()
+}
+
+fn find_function_by_name<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> FunctionLoc<'db> {
+    let funcs = find_functions_by_name(db, file, name);
+    match funcs.first().copied() {
+        Some(func) => func,
+        None => panic!("function not found: {name}"),
+    }
+}
+
+fn find_functions_by_name<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> Vec<FunctionLoc<'db>> {
+    let mut funcs: Vec<_> = collect_items(db, file, |item, item_tree| match item {
+        baml_compiler_hir::ItemId::Function(func_id) => {
+            let func = &item_tree[func_id.id(db)];
+            if func.compiler_generated.is_none() && func.name.as_str() == name {
+                Some(*func_id)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    });
+    funcs.sort_by_key(|loc| loc.id(db).index());
+    funcs
+}
+
+fn find_class_by_name<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> baml_compiler_hir::ClassLoc<'db> {
+    find_item_by_name(db, file, name, "class", |item, item_tree| match item {
+        baml_compiler_hir::ItemId::Class(class_id) => {
+            let class_def = &item_tree[class_id.id(db)];
+            if class_def.name.as_str() == name {
+                Some(*class_id)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    })
+}
+
+fn find_enum_by_name<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> baml_compiler_hir::EnumLoc<'db> {
+    find_item_by_name(db, file, name, "enum", |item, item_tree| match item {
+        baml_compiler_hir::ItemId::Enum(enum_id) => {
+            let enum_def = &item_tree[enum_id.id(db)];
+            if enum_def.name.as_str() == name {
+                Some(*enum_id)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    })
+}
+
+fn find_type_alias_by_name<'db>(
+    db: &'db baml_project::ProjectDatabase,
+    file: SourceFile,
+    name: &str,
+) -> baml_compiler_hir::TypeAliasLoc<'db> {
+    find_item_by_name(db, file, name, "type alias", |item, item_tree| match item {
+        baml_compiler_hir::ItemId::TypeAlias(alias_id) => {
+            let alias = &item_tree[alias_id.id(db)];
+            if alias.name.as_str() == name {
+                Some(*alias_id)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    })
+}
+
+fn find_hash_collision(prefix: &str) -> (String, String) {
+    let mut seen: HashMap<u16, String> = HashMap::new();
+    for i in 0..10_000 {
+        let candidate = format!("{prefix}{i}");
+        let hash = hash_name(&Name::new(&candidate));
+        if let Some(existing) = seen.get(&hash) {
+            if existing != &candidate {
+                return (existing.clone(), candidate);
+            }
+        } else {
+            seen.insert(hash, candidate);
+        }
+    }
+    panic!("unable to find name hash collision")
+}
 
 /// Query all function bodies in a file.
 /// This is a helper to avoid manually extracting function IDs in tests.
@@ -29,6 +178,130 @@ fn query_all_function_signatures(db: &baml_project::ProjectDatabase, file: Sourc
             let _sig = function_signature(db, *func_id);
         }
     }
+}
+
+#[test]
+fn generic_params_from_items_and_methods() {
+    let mut test_db = IncrementalTestDb::new();
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r#"
+function Foo<T, U>(x: T) -> U {
+    return x;
+}
+
+function NoGenerics(x: int) -> int {
+    return x;
+}
+
+class Box<T> {
+    value T
+
+    function map<U>(self, x: U) -> U {
+        return x;
+    }
+}
+
+enum Option<T> {
+    Some
+    None
+}
+
+type Id<T> = T
+"#,
+    );
+
+    let db = test_db.db();
+
+    let foo_id = find_function_by_name(db, file, "Foo");
+    let foo_params = function_generic_params(db, foo_id);
+    assert_eq!(
+        param_names(&foo_params),
+        vec!["T".to_string(), "U".to_string()]
+    );
+
+    let no_generics_id = find_function_by_name(db, file, "NoGenerics");
+    let no_generics_params = function_generic_params(db, no_generics_id);
+    assert!(no_generics_params.is_empty());
+
+    let class_id = find_class_by_name(db, file, "Box");
+    let class_params = class_generic_params(db, class_id);
+    assert_eq!(param_names(&class_params), vec!["T".to_string()]);
+
+    let method_name = QualifiedName::local_method_from_str("Box", "map");
+    let method_id = find_function_by_name(db, file, method_name.as_str());
+    let method_params = function_generic_params(db, method_id);
+    assert_eq!(param_names(&method_params), vec!["U".to_string()]);
+
+    let enum_id = find_enum_by_name(db, file, "Option");
+    let enum_params = enum_generic_params(db, enum_id);
+    assert_eq!(param_names(&enum_params), vec!["T".to_string()]);
+
+    let alias_id = find_type_alias_by_name(db, file, "Id");
+    let alias_params = type_alias_generic_params(db, alias_id);
+    assert_eq!(param_names(&alias_params), vec!["T".to_string()]);
+}
+
+#[test]
+fn generic_params_respect_duplicate_name_indices() {
+    let mut test_db = IncrementalTestDb::new();
+    let file = test_db.db_mut().add_file(
+        "test.baml",
+        r#"
+function Dup<T>(x: T) -> T {
+    return x;
+}
+
+function Dup<U>(x: U) -> U {
+    return x;
+}
+"#,
+    );
+
+    let db = test_db.db();
+    let dups = find_functions_by_name(db, file, "Dup");
+    assert_eq!(dups.len(), 2);
+
+    let first_params = function_generic_params(db, dups[0]);
+    let second_params = function_generic_params(db, dups[1]);
+
+    assert_eq!(param_names(&first_params), vec!["T".to_string()]);
+    assert_eq!(param_names(&second_params), vec!["U".to_string()]);
+}
+
+#[test]
+fn generic_params_handle_hash_collisions() {
+    let mut test_db = IncrementalTestDb::new();
+    let (first_name, second_name) = find_hash_collision("Collide");
+    assert_ne!(first_name, second_name);
+    assert_eq!(
+        hash_name(&Name::new(&first_name)),
+        hash_name(&Name::new(&second_name))
+    );
+
+    let contents = format!(
+        r#"
+function {first_name}<T>(x: T) -> T {{
+    return x;
+}}
+
+function {second_name}<U>(x: U) -> U {{
+    return x;
+}}
+"#,
+    );
+
+    let file = test_db.db_mut().add_file("test.baml", &contents);
+    let db = test_db.db();
+
+    let first_id = find_function_by_name(db, file, &first_name);
+    let second_id = find_function_by_name(db, file, &second_name);
+
+    let first_params = function_generic_params(db, first_id);
+    let second_params = function_generic_params(db, second_id);
+
+    assert_eq!(param_names(&first_params), vec!["T".to_string()]);
+    assert_eq!(param_names(&second_params), vec!["U".to_string()]);
 }
 
 /// Test that editing a function body doesn't invalidate the item tree.
@@ -471,18 +744,13 @@ function NewName(x: string) -> string {
 
 /// Helper to get all function locations from a file.
 fn get_function_locs(db: &baml_project::ProjectDatabase, file: SourceFile) -> Vec<FunctionLoc<'_>> {
-    let items = baml_compiler_hir::file_items(db, file);
-    items
-        .items(db)
-        .iter()
-        .filter_map(|item| {
-            if let baml_compiler_hir::ItemId::Function(func_id) = item {
-                Some(*func_id)
-            } else {
-                None
-            }
-        })
-        .collect()
+    collect_items(db, file, |item, _item_tree| {
+        if let baml_compiler_hir::ItemId::Function(func_id) = item {
+            Some(*func_id)
+        } else {
+            None
+        }
+    })
 }
 
 /// Query type inference for all functions in a file.

@@ -88,6 +88,7 @@ ast_node!(RetryPolicyDef, RETRY_POLICY_DEF);
 ast_node!(TemplateStringDef, TEMPLATE_STRING_DEF);
 ast_node!(TypeAliasDef, TYPE_ALIAS_DEF);
 
+ast_node!(GenericParamList, GENERIC_PARAM_LIST);
 ast_node!(ParameterList, PARAMETER_LIST);
 ast_node!(Parameter, PARAMETER);
 ast_node!(FunctionBody, FUNCTION_BODY);
@@ -753,6 +754,11 @@ impl FunctionDef {
             .nth(0) // Get the first WORD (function keyword is KW_FUNCTION, not WORD)
     }
 
+    /// Get the generic parameter list.
+    pub fn generic_param_list(&self) -> Option<GenericParamList> {
+        self.syntax.children().find_map(GenericParamList::cast)
+    }
+
     /// Get the parameter list.
     pub fn param_list(&self) -> Option<ParameterList> {
         self.syntax.children().find_map(ParameterList::cast)
@@ -1007,6 +1013,16 @@ impl Parameter {
     }
 }
 
+impl GenericParamList {
+    /// Get all generic parameter tokens.
+    pub fn params(&self) -> impl Iterator<Item = SyntaxToken> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .filter(|token| token.kind() == SyntaxKind::WORD)
+    }
+}
+
 impl ParameterList {
     /// Get all parameters.
     pub fn params(&self) -> impl Iterator<Item = Parameter> {
@@ -1024,6 +1040,11 @@ impl ClassDef {
                 token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
             })
             .nth(0) // Get the first WORD (class keyword is KW_CLASS, not WORD)
+    }
+
+    /// Get the generic parameter list.
+    pub fn generic_param_list(&self) -> Option<GenericParamList> {
+        self.syntax.children().find_map(GenericParamList::cast)
     }
 
     /// Get all fields.
@@ -1072,6 +1093,11 @@ impl EnumDef {
                 token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
             })
             .nth(0) // Get the first WORD (enum keyword is KW_ENUM, not WORD)
+    }
+
+    /// Get the generic parameter list.
+    pub fn generic_param_list(&self) -> Option<GenericParamList> {
+        self.syntax.children().find_map(GenericParamList::cast)
     }
 
     /// Check if this enum has a body (braces).
@@ -1516,6 +1542,11 @@ impl TypeAliasDef {
                 token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
             })
             .nth(1) // Skip "type" keyword (which is a WORD), get the actual name
+    }
+
+    /// Get the generic parameter list.
+    pub fn generic_param_list(&self) -> Option<GenericParamList> {
+        self.syntax.children().find_map(GenericParamList::cast)
     }
 
     /// Get the aliased type expression.

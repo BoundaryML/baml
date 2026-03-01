@@ -20,8 +20,8 @@ use std::sync::Arc;
 use baml_base::{FileId, Name, SourceFile, Span, TyAttr};
 use baml_compiler_diagnostics::{HirDiagnostic, NameError};
 use baml_compiler_parser::syntax_tree;
-use baml_compiler_syntax::SyntaxNode;
-use rowan::{SyntaxToken, TextRange, ast::AstNode};
+use baml_compiler_syntax::{SyntaxNode, SyntaxToken};
+use rowan::{TextRange, ast::AstNode};
 
 // Module declarations
 mod body;
@@ -210,34 +210,27 @@ pub fn project_items(db: &dyn Db, root: baml_workspace::Project) -> ProjectItems
 ///
 /// This is queried separately from `ItemTree` for incrementality - changes to
 /// generic parameters don't invalidate the `ItemTree`.
-///
-/// For now, this returns empty generic parameters since BAML doesn't currently
-/// parse generic syntax. Future work will extract `<T>` from the CST.
 #[salsa::tracked]
-pub fn function_generic_params(_db: &dyn Db, _func: FunctionId<'_>) -> Arc<GenericParams> {
-    // TODO: Extract generic parameters from CST when BAML adds generic syntax
-    Arc::new(GenericParams::new())
+pub fn function_generic_params(db: &dyn Db, func: FunctionId<'_>) -> Arc<GenericParams> {
+    generics::function_generic_params_from_cst(db, func)
 }
 
 /// Tracked: Get generic parameters for a class.
 #[salsa::tracked]
-pub fn class_generic_params(_db: &dyn Db, _class: ClassId<'_>) -> Arc<GenericParams> {
-    // TODO: Extract generic parameters from CST when BAML adds generic syntax
-    Arc::new(GenericParams::new())
+pub fn class_generic_params(db: &dyn Db, class: ClassId<'_>) -> Arc<GenericParams> {
+    generics::class_generic_params_from_cst(db, class)
 }
 
 /// Tracked: Get generic parameters for an enum.
 #[salsa::tracked]
-pub fn enum_generic_params(_db: &dyn Db, _enum: EnumId<'_>) -> Arc<GenericParams> {
-    // TODO: Extract generic parameters from CST when BAML adds generic syntax
-    Arc::new(GenericParams::new())
+pub fn enum_generic_params(db: &dyn Db, enum_def: EnumId<'_>) -> Arc<GenericParams> {
+    generics::enum_generic_params_from_cst(db, enum_def)
 }
 
 /// Tracked: Get generic parameters for a type alias.
 #[salsa::tracked]
-pub fn type_alias_generic_params(_db: &dyn Db, _alias: TypeAliasId<'_>) -> Arc<GenericParams> {
-    // TODO: Extract generic parameters from CST when BAML adds generic syntax
-    Arc::new(GenericParams::new())
+pub fn type_alias_generic_params(db: &dyn Db, alias: TypeAliasId<'_>) -> Arc<GenericParams> {
+    generics::type_alias_generic_params_from_cst(db, alias)
 }
 
 //

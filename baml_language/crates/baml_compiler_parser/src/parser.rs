@@ -1833,6 +1833,10 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("enum name".to_string());
             }
 
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
             // Opening brace
             if !p.expect(TokenKind::LBrace) {
                 return; // Error recovery: stop here
@@ -1954,6 +1958,10 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("class name".to_string());
             }
 
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
             // Opening brace
             if !p.expect(TokenKind::LBrace) {
                 return;
@@ -2045,6 +2053,10 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
             // Check for old-style function syntax: `function Name {` (without parens and return type)
             // If we see '{' directly after the name, emit a single helpful error and skip to body
             if p.at(TokenKind::LBrace) {
@@ -2085,6 +2097,37 @@ impl<'a> Parser<'a> {
             } else {
                 p.error_unexpected_token("function body".to_string());
             }
+        });
+    }
+
+    fn parse_generic_param_list(&mut self) {
+        self.with_node(SyntaxKind::GENERIC_PARAM_LIST, |p| {
+            p.expect(TokenKind::Less);
+
+            if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
+                p.error_unexpected_token("generic parameter".to_string());
+                p.expect_greater();
+                return;
+            }
+
+            if p.at(TokenKind::Word) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("generic parameter".to_string());
+            }
+
+            while p.eat(TokenKind::Comma) {
+                if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
+                    break;
+                }
+                if p.at(TokenKind::Word) {
+                    p.bump();
+                } else {
+                    p.error_unexpected_token("generic parameter".to_string());
+                }
+            }
+
+            p.expect_greater();
         });
     }
 
@@ -4277,6 +4320,10 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("type alias name".to_string());
             }
 
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
             // Equals
             p.expect(TokenKind::Equals);
 
@@ -4368,6 +4415,7 @@ mod tests {
     use baml_base::FileId;
     use baml_compiler_lexer::lex_lossless;
     use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
+    use rowan::NodeOrToken;
 
     use super::{ParseError, parse_file};
 
@@ -4382,6 +4430,11 @@ mod tests {
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
         );
+    }
+
+    fn parse_source_no_errors(source: &str) -> SyntaxNode {
+        let (root, _errors) = parse_source(source);
+        root
     }
 
     #[test]
@@ -4762,5 +4815,40 @@ function Demo() -> int {
         let child_kinds: Vec<_> = catch_expr.children().map(|n| n.kind()).collect();
         assert_eq!(child_kinds[0], SyntaxKind::THROW_EXPR);
         assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
+    }
+
+    fn generic_params_in(source: &str) -> Vec<String> {
+        let root = parse_source_no_errors(source);
+        root.descendants()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_LIST)
+            .map(|node| {
+                node.children_with_tokens()
+                    .filter_map(NodeOrToken::into_token)
+                    .filter(|t| t.kind() == SyntaxKind::WORD)
+                    .map(|t| t.text().to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn parses_function_generic_params() {
+        let source = "function Foo<T, U>(x: T) -> T { return x; }";
+        let params = generic_params_in(source);
+        assert_eq!(params, vec!["T", "U"]);
+    }
+
+    #[test]
+    fn parses_class_generic_params() {
+        let source = "class Box<T> { value: T }";
+        let params = generic_params_in(source);
+        assert_eq!(params, vec!["T"]);
+    }
+
+    #[test]
+    fn parses_type_alias_generic_params() {
+        let source = "type Id<T> = T;";
+        let params = generic_params_in(source);
+        assert_eq!(params, vec!["T"]);
     }
 }
