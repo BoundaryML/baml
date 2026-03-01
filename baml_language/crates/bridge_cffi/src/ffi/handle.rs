@@ -14,3 +14,17 @@ pub extern "C" fn clone_handle(key: u64) -> u64 {
 pub extern "C" fn release_handle(key: u64) {
     HANDLE_TABLE.release(key);
 }
+
+/// Release multiple handles in one call. Ignores null pointers.
+///
+/// # Safety
+///
+/// `keys` must be valid for reads of `len` elements.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn release_handles(keys: *const u64, len: usize) {
+    if keys.is_null() || len == 0 {
+        return;
+    }
+    let slice = unsafe { std::slice::from_raw_parts(keys, len) };
+    HANDLE_TABLE.release_many(slice.iter().copied());
+}

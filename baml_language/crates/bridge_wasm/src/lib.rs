@@ -46,6 +46,8 @@
 mod error;
 mod handle;
 mod registry;
+
+pub use handle::release_handles;
 mod send_wrapper;
 mod wasm_env;
 mod wasm_fs;

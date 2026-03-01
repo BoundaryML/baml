@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from baml.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2
-from baml_py.baml_py import BamlHandle
 
+from baml_py.baml_py import BamlHandle
 
 # ---------------------------------------------------------------------------
 # Encoding: Python kwargs → CallFunctionArgs
@@ -45,7 +45,9 @@ def _set_inbound_value(inbound_value, value: Any) -> None:
         for k, v in value.items():
             _set_inbound_map_entry(map_val.entries.add(), k, v)
     else:
-        raise TypeError(f"Cannot encode value of type {type(value).__name__} to protobuf")
+        raise TypeError(
+            f"Cannot encode value of type {type(value).__name__} to protobuf"
+        )
 
 
 def _set_inbound_map_entry(entry, key: Any, value: Any) -> None:
@@ -132,6 +134,19 @@ def _decode_value_holder(holder) -> Any:
     return None
 
 
+def _collect_handles(value: Any, used: set[int]) -> None:
+    if isinstance(value, BamlHandle):
+        used.add(value.key)
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            _collect_handles(item, used)
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            _collect_handles(item, used)
+
+
 def decode_call_result(data: bytes) -> Any:
     """Decode a BamlOutboundValue protobuf to a Python value.
 
@@ -143,4 +158,14 @@ def decode_call_result(data: bytes) -> Any:
     """
     holder = baml_outbound_pb2.BamlOutboundValue()
     holder.ParseFromString(data)
-    return _decode_value_holder(holder)
+    value = _decode_value_holder(holder)
+
+    created = {handle.key for handle in holder.handles_created}
+    if created:
+        used: set[int] = set()
+        _collect_handles(value, used)
+        unused = created - used
+        if unused:
+            BamlHandle.release_many(list(unused))
+
+    return value

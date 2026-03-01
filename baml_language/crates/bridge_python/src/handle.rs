@@ -30,6 +30,11 @@ impl BamlHandle {
         self.handle_type
     }
 
+    #[staticmethod]
+    pub fn release_many(keys: Vec<u64>) {
+        HANDLE_TABLE.release_many(keys);
+    }
+
     pub fn __copy__(&self) -> PyResult<Self> {
         let new_key = HANDLE_TABLE.clone_handle(self.key).ok_or_else(|| {
             pyo3::exceptions::PyRuntimeError::new_err("Handle is no longer valid")

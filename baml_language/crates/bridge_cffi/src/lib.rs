@@ -19,7 +19,7 @@ pub use ffi::{
         call_function_from_c, call_function_parse_from_c, call_function_stream_from_c,
         cancel_function_call,
     },
-    handle::{clone_handle, release_handle},
+    handle::{clone_handle, release_handle, release_handles},
     objects::free_buffer,
     runtime::{create_baml_runtime, destroy_baml_runtime, invoke_runtime_cli, version},
 };

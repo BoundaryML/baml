@@ -23,10 +23,13 @@ pub enum HandleTableValue {
     Adt(BexExternalAdt),
 }
 
+const DEFAULT_MAX_INLINE_MEDIA_BYTES: usize = 1_000_000;
+
 pub struct HandleTableOptions<'a> {
     pub(crate) table: &'a HandleTable,
     pub(crate) serialize_media: bool,
     pub(crate) serialize_prompt_ast: bool,
+    pub(crate) max_inline_media_bytes: Option<usize>,
 }
 
 impl HandleTableOptions<'_> {
@@ -35,6 +38,7 @@ impl HandleTableOptions<'_> {
             table: &HANDLE_TABLE,
             serialize_media: true,
             serialize_prompt_ast: true,
+            max_inline_media_bytes: Some(DEFAULT_MAX_INLINE_MEDIA_BYTES),
         }
     }
 
@@ -43,6 +47,7 @@ impl HandleTableOptions<'_> {
             table: &HANDLE_TABLE,
             serialize_media: false,
             serialize_prompt_ast: false,
+            max_inline_media_bytes: None,
         }
     }
 }
@@ -85,6 +90,33 @@ impl TryFrom<BexExternalValue> for HandleTableValue {
                 Ok(Self::FunctionRef { global_index })
             }
             BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
+            BexExternalValue::Null
+            | BexExternalValue::Int(_)
+            | BexExternalValue::Float(_)
+            | BexExternalValue::Bool(_)
+            | BexExternalValue::String(_)
+            | BexExternalValue::Array { .. }
+            | BexExternalValue::Map { .. }
+            | BexExternalValue::Instance { .. }
+            | BexExternalValue::Variant { .. }
+            | BexExternalValue::Union { .. } => {
+                Err("only opaque BexExternalValue variants can be held as handles")
+            }
+        }
+    }
+}
+
+impl TryFrom<&BexExternalValue> for HandleTableValue {
+    type Error = &'static str;
+
+    fn try_from(value: &BexExternalValue) -> Result<Self, Self::Error> {
+        match value {
+            BexExternalValue::Handle(h) => Ok(Self::Handle(h.clone())),
+            BexExternalValue::Resource(r) => Ok(Self::Resource(r.clone())),
+            BexExternalValue::FunctionRef { global_index } => Ok(Self::FunctionRef {
+                global_index: *global_index,
+            }),
+            BexExternalValue::Adt(a) => Ok(Self::Adt(a.clone())),
             BexExternalValue::Null
             | BexExternalValue::Int(_)
             | BexExternalValue::Float(_)
@@ -172,6 +204,20 @@ impl HandleTable {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(&key)
             .is_some()
+    }
+
+    /// Release multiple handles.
+    pub fn release_many<I>(&self, keys: I)
+    where
+        I: IntoIterator<Item = u64>,
+    {
+        let mut entries = self
+            .entries
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for key in keys {
+            entries.remove(&key);
+        }
     }
 }
 

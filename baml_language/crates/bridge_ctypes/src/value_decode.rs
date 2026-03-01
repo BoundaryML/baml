@@ -10,8 +10,8 @@ use indexmap::IndexMap;
 
 use crate::{
     baml::cffi::{
-        InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry, InboundMapValue,
-        InboundValue, inbound_value::Value as InboundValueVariant,
+        BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
+        InboundMapValue, InboundValue, inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
     handle_table::HandleTable,
@@ -39,9 +39,24 @@ pub fn inbound_to_external(
                 let value = handle_table
                     .resolve(handle.key)
                     .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
+                let actual = value.handle_type() as i32;
+                validate_handle_type(handle.key, handle.handle_type, actual)?;
                 Ok(BexExternalValue::from((*value).clone()))
             }
         },
+    }
+}
+
+fn validate_handle_type(key: u64, expected: i32, actual: i32) -> Result<(), CtypesError> {
+    match BamlHandleType::try_from(expected) {
+        Ok(BamlHandleType::HandleUnspecified | BamlHandleType::HandleUnknown) => Ok(()),
+        Ok(_) if expected == actual => Ok(()),
+        Err(_) => Ok(()),
+        Ok(_) => Err(CtypesError::InvalidHandleType {
+            key,
+            expected,
+            actual,
+        }),
     }
 }
 
@@ -135,4 +150,60 @@ pub fn kwargs_to_bex_values(
         result.insert(key, value);
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        baml::cffi::{BamlHandle, inbound_value::Value as InboundValueVariant},
+        handle_table::HandleTableValue,
+    };
+
+    fn inbound_handle(key: u64, handle_type: BamlHandleType) -> InboundValue {
+        InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key,
+                handle_type: handle_type as i32,
+            })),
+        }
+    }
+
+    #[test]
+    fn handle_type_matches() {
+        let table = HandleTable::new();
+        let key = table.insert(HandleTableValue::FunctionRef { global_index: 1 });
+        let inbound = inbound_handle(key, BamlHandleType::FunctionRef);
+        let out = inbound_to_external(inbound, &table).unwrap();
+        assert!(matches!(
+            out,
+            BexExternalValue::FunctionRef { global_index: 1 }
+        ));
+    }
+
+    #[test]
+    fn handle_type_unknown_is_allowed() {
+        let table = HandleTable::new();
+        let key = table.insert(HandleTableValue::FunctionRef { global_index: 2 });
+        let inbound = inbound_handle(key, BamlHandleType::HandleUnknown);
+        let out = inbound_to_external(inbound, &table).unwrap();
+        assert!(matches!(
+            out,
+            BexExternalValue::FunctionRef { global_index: 2 }
+        ));
+    }
+
+    #[test]
+    fn handle_type_mismatch_errors() {
+        let table = HandleTable::new();
+        let key = table.insert(HandleTableValue::FunctionRef { global_index: 3 });
+        let inbound = inbound_handle(key, BamlHandleType::AdtMediaImage);
+        let err = inbound_to_external(inbound, &table).unwrap_err();
+        match err {
+            CtypesError::InvalidHandleType { key: err_key, .. } => {
+                assert_eq!(err_key, key);
+            }
+            _ => panic!("expected InvalidHandleType"),
+        }
+    }
 }

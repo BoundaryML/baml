@@ -14,6 +14,13 @@ pub enum CtypesError {
     #[error("Invalid handle key: {0}")]
     InvalidHandleKey(u64),
 
+    #[error("Handle type mismatch for key {key}: expected {expected}, actual {actual}")]
+    InvalidHandleType {
+        key: u64,
+        expected: i32,
+        actual: i32,
+    },
+
     #[error("Map entry missing key")]
     MapEntryMissingKey,
 

@@ -1,7 +1,7 @@
 //! `BexExternalValue` -> `BamlOutboundValue` conversion.
 
 use baml_type::Literal;
-use bex_project::{BexExternalAdt, BexExternalValue, Ty};
+use bex_project::{BexExternalAdt, BexExternalValue, MediaContent, Ty};
 
 use crate::{
     baml::cffi::{
@@ -24,6 +24,55 @@ pub fn external_to_baml_value(
     value: &BexExternalValue,
     options: &HandleTableOptions,
 ) -> Result<BamlOutboundValue, CtypesError> {
+    let mut handles_created = Vec::new();
+    let value = external_to_baml_value_inner(value, options, &mut handles_created)?;
+    Ok(BamlOutboundValue {
+        handles_created,
+        value,
+    })
+}
+
+fn encode_value(
+    value: &BexExternalValue,
+    options: &HandleTableOptions,
+    handles_created: &mut Vec<BamlHandle>,
+) -> Result<BamlOutboundValue, CtypesError> {
+    let value = external_to_baml_value_inner(value, options, handles_created)?;
+    Ok(BamlOutboundValue {
+        value,
+        ..Default::default()
+    })
+}
+
+fn encode_entries<'a, I>(
+    entries: I,
+    options: &HandleTableOptions,
+    handles_created: &mut Vec<BamlHandle>,
+) -> Result<Vec<BamlOutboundMapEntry>, CtypesError>
+where
+    I: IntoIterator<Item = (&'a String, &'a BexExternalValue)>,
+{
+    entries
+        .into_iter()
+        .map(|(key, val)| {
+            let value = encode_value(val, options, handles_created)?;
+            Ok(BamlOutboundMapEntry {
+                key: key.clone(),
+                value: Some(value),
+            })
+        })
+        .collect()
+}
+
+fn build_handle(key: u64, handle_type: i32) -> BamlHandle {
+    BamlHandle { key, handle_type }
+}
+
+fn external_to_baml_value_inner(
+    value: &BexExternalValue,
+    options: &HandleTableOptions,
+    handles_created: &mut Vec<BamlHandle>,
+) -> Result<Option<BamlValueVariant>, CtypesError> {
     let variant = match value {
         BexExternalValue::Null => None,
         BexExternalValue::Int(i) => Some(BamlValueVariant::IntValue(*i)),
@@ -36,7 +85,7 @@ pub fn external_to_baml_value(
         } => {
             let values: Result<Vec<BamlOutboundValue>, CtypesError> = items
                 .iter()
-                .map(|v| external_to_baml_value(v, options))
+                .map(|v| encode_value(v, options, handles_created))
                 .collect();
             Some(BamlValueVariant::ListValue(BamlValueList {
                 item_type: Some(ty_to_field_type(element_type)),
@@ -48,13 +97,7 @@ pub fn external_to_baml_value(
             key_type,
             value_type,
         } => {
-            let mut baml_entries = Vec::new();
-            for (key, val) in entries {
-                baml_entries.push(BamlOutboundMapEntry {
-                    key: key.clone(),
-                    value: Some(external_to_baml_value(val, options)?),
-                });
-            }
+            let baml_entries = encode_entries(entries.iter(), options, handles_created)?;
             Some(BamlValueVariant::MapValue(BamlValueMap {
                 key_type: Some(ty_to_field_type(key_type)),
                 value_type: Some(ty_to_field_type(value_type)),
@@ -62,13 +105,7 @@ pub fn external_to_baml_value(
             }))
         }
         BexExternalValue::Instance { class_name, fields } => {
-            let mut baml_fields = Vec::new();
-            for (key, val) in fields {
-                baml_fields.push(BamlOutboundMapEntry {
-                    key: key.clone(),
-                    value: Some(external_to_baml_value(val, options)?),
-                });
-            }
+            let baml_fields = encode_entries(fields.iter(), options, handles_created)?;
             Some(BamlValueVariant::ClassValue(BamlValueClass {
                 name: Some(BamlTypeName {
                     namespace: BamlTypeNamespace::Types as i32,
@@ -89,7 +126,7 @@ pub fn external_to_baml_value(
             is_dynamic: false,
         })),
         BexExternalValue::Union { value, metadata } => {
-            let inner = external_to_baml_value(value, options)?;
+            let inner = encode_value(value, options, handles_created)?;
             Some(BamlValueVariant::UnionVariantValue(Box::new(
                 BamlValueUnionVariant {
                     name: metadata.name.as_ref().map(|n| BamlTypeName {
@@ -105,9 +142,13 @@ pub fn external_to_baml_value(
             )))
         }
 
-        BexExternalValue::Adt(BexExternalAdt::Media(media)) if options.serialize_media => Some(
-            BamlValueVariant::MediaValue(bex_media_to_proto_media(media)),
-        ),
+        BexExternalValue::Adt(BexExternalAdt::Media(media))
+            if options.serialize_media && should_inline_media(media, options) =>
+        {
+            Some(BamlValueVariant::MediaValue(bex_media_to_proto_media(
+                media,
+            )))
+        }
 
         BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt_ast))
             if options.serialize_prompt_ast =>
@@ -122,19 +163,30 @@ pub fn external_to_baml_value(
         | BexExternalValue::Resource(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_) => {
-            let table_value = HandleTableValue::try_from(value.clone()).map_err(|e| {
+            let table_value = HandleTableValue::try_from(value).map_err(|e| {
                 CtypesError::InternalError(format!("handle table insertion failed: {e}"))
             })?;
-            let ht = table_value.handle_type();
+            let handle_type = table_value.handle_type() as i32;
             let key = options.table.insert(table_value);
-            Some(BamlValueVariant::HandleValue(BamlHandle {
+            handles_created.push(build_handle(key, handle_type));
+            Some(BamlValueVariant::HandleValue(build_handle(
                 key,
-                handle_type: ht as i32,
-            }))
+                handle_type,
+            )))
         }
     };
 
-    Ok(BamlOutboundValue { value: variant })
+    Ok(variant)
+}
+
+fn should_inline_media(media: &bex_project::MediaValue, options: &HandleTableOptions) -> bool {
+    let Some(limit) = options.max_inline_media_bytes else {
+        return true;
+    };
+    media.read_content(|content| match content {
+        MediaContent::Base64 { base64_data } => base64_data.len() <= limit,
+        MediaContent::Url { .. } | MediaContent::File { .. } => true,
+    })
 }
 
 fn literal_to_field_type_literal(lit: &Literal) -> BamlFieldTypeLiteral {
@@ -298,4 +350,79 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
     };
 
     BamlFieldType { r#type: field_type }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::handle_table::HandleTable;
+    use baml_type::MediaKind;
+    use bex_project::{BexExternalAdt, BexExternalValue, MediaContent, MediaValue};
+
+    fn options_for_media(
+        table: &HandleTable,
+        max_inline_media_bytes: usize,
+    ) -> HandleTableOptions<'_> {
+        HandleTableOptions {
+            table,
+            serialize_media: true,
+            serialize_prompt_ast: false,
+            max_inline_media_bytes: Some(max_inline_media_bytes),
+        }
+    }
+
+    #[test]
+    fn handles_created_collects_opaque_values() {
+        let table = HandleTable::new();
+        let options = HandleTableOptions {
+            table: &table,
+            serialize_media: false,
+            serialize_prompt_ast: false,
+            max_inline_media_bytes: None,
+        };
+
+        let value = BexExternalValue::FunctionRef { global_index: 1 };
+        let out = external_to_baml_value(&value, &options).unwrap();
+
+        assert_eq!(out.handles_created.len(), 1);
+        assert!(matches!(out.value, Some(BamlValueVariant::HandleValue(_))));
+    }
+
+    #[test]
+    fn media_inlines_when_under_limit() {
+        let table = HandleTable::new();
+        let options = options_for_media(&table, 3);
+
+        let media = MediaValue::new(
+            MediaKind::Image,
+            MediaContent::Base64 {
+                base64_data: "AAA".to_string(),
+            },
+            None,
+        );
+        let value = BexExternalValue::Adt(BexExternalAdt::Media(std::sync::Arc::new(media)));
+        let out = external_to_baml_value(&value, &options).unwrap();
+
+        assert!(out.handles_created.is_empty());
+        assert!(matches!(out.value, Some(BamlValueVariant::MediaValue(_))));
+    }
+
+    #[test]
+    fn media_falls_back_to_handle_over_limit() {
+        let table = HandleTable::new();
+        let options = options_for_media(&table, 3);
+
+        let media = MediaValue::new(
+            MediaKind::Image,
+            MediaContent::Base64 {
+                base64_data: "AAAA".to_string(),
+            },
+            None,
+        );
+        let value = BexExternalValue::Adt(BexExternalAdt::Media(std::sync::Arc::new(media)));
+        let out = external_to_baml_value(&value, &options).unwrap();
+
+        assert_eq!(out.handles_created.len(), 1);
+        assert!(matches!(out.value, Some(BamlValueVariant::HandleValue(_))));
+    }
 }

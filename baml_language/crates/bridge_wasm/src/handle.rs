@@ -23,6 +23,11 @@ fn type_name(ht: BamlHandleType) -> &'static str {
     }
 }
 
+#[wasm_bindgen(js_name = "releaseHandles")]
+pub fn release_handles(keys: Vec<String>) {
+    HANDLE_TABLE.release_many(keys.into_iter().filter_map(|key| key.parse::<u64>().ok()));
+}
+
 /// A reference to an opaque BAML value held in the engine's handle table.
 ///
 /// When this object is garbage-collected by JS (via `FinalizationRegistry`),
