@@ -21,7 +21,7 @@ fn bootstrap_vm(input: &Program) -> BexVm {
 
     let mut vm = match make_vm(program) {
         Ok(vm) => vm,
-        Err(err) => panic!("native function attachment must succeed: {err}"),
+        Err(err) => panic!("failed to construct VM from compiled program: {err}"),
     };
     let function_ptr = vm.heap.compile_time_ptr(function_index);
     vm.set_entry_point(function_ptr, &input.args);
