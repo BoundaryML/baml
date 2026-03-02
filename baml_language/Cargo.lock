@@ -447,6 +447,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler2_visualization"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_compiler2_ast",
+ "indexmap",
+ "la-arena",
+]
+
+[[package]]
 name = "baml_compiler_analysis"
 version = "0.0.0-beta"
 dependencies = [
@@ -574,7 +583,7 @@ name = "baml_compiler_vir"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_compiler2_ast",
+ "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_tir",
@@ -4914,6 +4923,7 @@ dependencies = [
  "baml_compiler2_ast",
  "baml_compiler2_hir",
  "baml_compiler2_tir",
+ "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_compiler_hir",

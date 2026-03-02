@@ -3323,7 +3323,7 @@ impl CompilerRunner {
 
     fn run_control_flow(&mut self) {
         use baml_compiler2_hir::body::FunctionBody;
-        use baml_compiler_vir::control_flow::{
+        use baml_compiler2_visualization::control_flow::{
             build_control_flow_graph_from_ast, flatten_control_flow_graph,
         };
 
