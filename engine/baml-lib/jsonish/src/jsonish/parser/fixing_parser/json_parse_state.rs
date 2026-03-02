@@ -912,8 +912,9 @@ enum CloseStringResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_types::CompletionState;
+
+    use super::*;
 
     /// Test the InObjectValue branch of should_close_unescaped_string directly.
     ///
@@ -928,11 +929,7 @@ mod tests {
         // Set up stack: Object with one key but no value yet (InObjectValue),
         // then an UnquotedString being accumulated on top.
         state.collection_stack.push((
-            JsonCollection::Object(
-                vec!["key".to_string()],
-                vec![],
-                CompletionState::Incomplete,
-            ),
+            JsonCollection::Object(vec!["key".to_string()], vec![], CompletionState::Incomplete),
             Default::default(),
         ));
         state.collection_stack.push((
@@ -941,8 +938,7 @@ mod tests {
         ));
 
         // Remaining chars: "world" — no ',' or '}' to trigger Complete
-        let remaining: Vec<(usize, char)> =
-            vec![(0, 'w'), (1, 'o'), (2, 'r'), (3, 'l'), (4, 'd')];
+        let remaining: Vec<(usize, char)> = vec![(0, 'w'), (1, 'o'), (2, 'r'), (3, 'l'), (4, 'd')];
         let result = state.should_close_unescaped_string(remaining.into_iter().peekable());
 
         // counter should be 5 (last idx=4, +1), not 4

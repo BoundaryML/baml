@@ -203,7 +203,11 @@ mod tests {
         let vals = parse("foobar", &opts).unwrap();
         match &vals[0].0 {
             Value::String(s, cmplt) => {
-                assert_eq!(s.as_str(), "foobar", "Top-level string should be 'foobar' without duplicated chars");
+                assert_eq!(
+                    s.as_str(),
+                    "foobar",
+                    "Top-level string should be 'foobar' without duplicated chars"
+                );
                 assert_eq!(cmplt, &CompletionState::Incomplete);
             }
             _ => panic!("Expected string, got: {:?}", vals[0].0),
