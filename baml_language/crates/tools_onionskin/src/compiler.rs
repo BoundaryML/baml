@@ -3322,30 +3322,16 @@ impl CompilerRunner {
     }
 
     fn run_control_flow(&mut self) {
-        use baml_compiler_hir::FunctionBody;
+        use baml_compiler2_hir::body::FunctionBody;
         use baml_compiler_vir::control_flow::{
-            build_control_flow_graph, flatten_control_flow_graph,
+            build_control_flow_graph_from_ast, flatten_control_flow_graph,
         };
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        // Build typing context for VIR lowering (same setup as run_typed_ir)
-        let globals = typing_context(&self.db, self.project_root)
-            .functions(&self.db)
-            .clone();
-        let class_fields = class_field_types(&self.db, self.project_root)
-            .classes(&self.db)
-            .clone();
-        let type_aliases_map = type_aliases(&self.db, self.project_root)
-            .aliases(&self.db)
-            .clone();
-        let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
-        let enum_variants_map = enum_variants(&self.db, self.project_root);
-        let enum_variants_data = enum_variants_map.enums(&self.db).clone();
-
-        let resolution_ctx =
-            baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
+        // No typing context needed — we build CFG directly from the compiler2 AST,
+        // bypassing type inference and VIR lowering entirely.
 
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
         sorted_files.sort_by_key(|(path, _)| path.as_path());
@@ -3354,20 +3340,23 @@ impl CompilerRunner {
             let file_path = path.display().to_string();
             let file_recomputed = self.modified_files.contains(path);
 
-            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
-            let items = items_struct.items(&self.db);
+            let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+            let item_tree = &index.item_tree;
+
+            // Sort functions by name for deterministic output.
+            let mut functions: Vec<_> = item_tree.functions.iter().collect();
+            functions.sort_by_key(|(_, f)| f.name.as_str());
 
             let mut file_has_output = false;
 
-            for item in items {
-                let ItemId::Function(func_id) = item else {
-                    continue;
-                };
-
-                let signature = function_signature(&self.db, *func_id);
-                let sig_source_map = function_signature_source_map(&self.db, *func_id);
-                let func_name = signature.name.to_string();
-                let body = function_body(&self.db, *func_id);
+            for (local_id, func_data) in functions {
+                let func_name = func_data.name.to_string();
+                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
+                    &self.db,
+                    *source_file,
+                    *local_id,
+                );
+                let body = baml_compiler2_hir::body::function_body(&self.db, func_loc);
 
                 let status = if file_recomputed {
                     LineStatus::Recomputed
@@ -3375,37 +3364,13 @@ impl CompilerRunner {
                     LineStatus::Cached
                 };
 
-                // Try to build control flow graph
-                let graph_result = match &*body {
-                    FunctionBody::Expr(_, _) => {
-                        let inference_result = baml_compiler_tir::infer_function(
-                            &self.db,
-                            &signature,
-                            Some(&sig_source_map),
-                            &body,
-                            Some(globals.clone()),
-                            Some(class_fields.clone()),
-                            Some(type_aliases_map.clone()),
-                            Some(enum_variants_data.clone()),
-                            *func_id,
-                        );
-
-                        match baml_compiler_vir::lower_from_hir(
-                            &body,
-                            &inference_result,
-                            &resolution_ctx,
-                            &type_aliases_map,
-                            &recursive_aliases,
-                        ) {
-                            Ok(expr_body) => Some(build_control_flow_graph(&func_name, &expr_body)),
-                            Err(_) => None,
-                        }
+                // Build control flow graph directly from the compiler2 AST.
+                // This survives parse and type errors thanks to Missing sentinels.
+                let graph = match body.as_ref() {
+                    FunctionBody::Expr(expr_body) => {
+                        build_control_flow_graph_from_ast(&func_name, expr_body)
                     }
-                    _ => None,
-                };
-
-                let Some(graph) = graph_result else {
-                    continue;
+                    _ => continue,
                 };
 
                 if !file_has_output {

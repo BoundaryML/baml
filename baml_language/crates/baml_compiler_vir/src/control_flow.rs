@@ -8,10 +8,12 @@
 //! separate from MIR lowering.
 
 mod flatten;
+mod from_ast;
 
 use std::{collections::HashMap, fmt};
 
 pub use flatten::flatten_control_flow_graph;
+pub use from_ast::build_control_flow_graph_from_ast;
 use indexmap::IndexMap;
 
 use crate::{BinaryOp, Expr, ExprBody, ExprId, Literal, MatchArm, Pattern, UnaryOp};
