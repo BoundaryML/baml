@@ -30,7 +30,7 @@ function getProfile(req: Request) -> bool throws Errors {
 
 //----
 //- diagnostics
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ throw_throws_type_alias_repro.baml:22:5 ]
 //     │
 //  22 │     Errors.AuthenticationError => { throw e }

@@ -16,7 +16,7 @@ function server(req: int) -> bool throws never {
 
 //----
 //- diagnostics
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ throw_throws_never_unreachable_rethrow.baml:13:7 ]
 //     │
 //  13 │     Errors.AuthenticationError => { throw e }

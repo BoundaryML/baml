@@ -18,7 +18,7 @@ function CatchNamedWildcard(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_wildcard_only.baml:15:7 ]
 //     │
 //  15 │     other => "caught: " + other
@@ -27,7 +27,7 @@ function CatchNamedWildcard(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //    ╭─[ catch_catch_wildcard_only.baml:8:7 ]
 //    │
 //  8 │     _ => "caught everything"

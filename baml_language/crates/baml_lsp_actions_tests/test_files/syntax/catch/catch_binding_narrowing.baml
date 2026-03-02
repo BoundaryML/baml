@@ -29,7 +29,7 @@ function MultipleNarrowedArms(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_binding_narrowing.baml:24:5 ]
 //     │
 //  24 │     TimeoutError => "timeout",
@@ -38,7 +38,7 @@ function MultipleNarrowedArms(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_binding_narrowing.baml:25:5 ]
 //     │
 //  25 │     ParseError => "parse error",
@@ -47,7 +47,7 @@ function MultipleNarrowedArms(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_binding_narrowing.baml:26:5 ]
 //     │
 //  26 │     _ => "unknown"
@@ -56,7 +56,7 @@ function MultipleNarrowedArms(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_binding_narrowing.baml:16:5 ]
 //     │
 //  16 │     TimeoutError => "retry",
@@ -65,7 +65,7 @@ function MultipleNarrowedArms(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_binding_narrowing.baml:17:5 ]
 //     │
 //  17 │     _ => "other"

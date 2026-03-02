@@ -25,7 +25,7 @@ function CatchInLet(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_nested_catch.baml:21:7 ]
 //     │
 //  21 │     _ => "fallback"
@@ -34,7 +34,7 @@ function CatchInLet(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_nested_catch.baml:12:7 ]
 //     │
 //  12 │     _ => AlsoMayFail(x) catch (e2) {
@@ -43,7 +43,7 @@ function CatchInLet(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_nested_catch.baml:13:9 ]
 //     │
 //  13 │       _ => "double caught"

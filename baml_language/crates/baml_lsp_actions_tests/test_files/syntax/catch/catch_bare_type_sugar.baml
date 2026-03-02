@@ -37,7 +37,7 @@ function CatchBarePrimitive(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_bare_type_sugar.baml:24:5 ]
 //     │
 //  24 │     TimeoutError => "timeout",
@@ -46,7 +46,7 @@ function CatchBarePrimitive(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_bare_type_sugar.baml:25:5 ]
 //     │
 //  25 │     ParseError => "parse error",
@@ -55,7 +55,7 @@ function CatchBarePrimitive(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_bare_type_sugar.baml:26:5 ]
 //     │
 //  26 │     _ => "unknown"
@@ -64,7 +64,7 @@ function CatchBarePrimitive(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_bare_type_sugar.baml:33:5 ]
 //     │
 //  33 │     string => "string error",
@@ -73,7 +73,7 @@ function CatchBarePrimitive(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_bare_type_sugar.baml:34:5 ]
 //     │
 //  34 │     _ => "other"
@@ -82,7 +82,7 @@ function CatchBarePrimitive(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_bare_type_sugar.baml:16:5 ]
 //     │
 //  16 │     TimeoutError => "timeout",
@@ -91,7 +91,7 @@ function CatchBarePrimitive(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_catch_bare_type_sugar.baml:17:5 ]
 //     │
 //  17 │     _ => "other error"

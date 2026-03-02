@@ -32,7 +32,7 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_exhaustiveness_checks.baml:27:5 ]
 //     │
 //  27 │     _ => match (pet) {
@@ -52,7 +52,7 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 //     │     
 //     │     Note: Error code: E0062
 // ────╯
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ catch_exhaustiveness_checks.baml:17:5 ]
 //     │
 //  17 │     _ => match (pet) {

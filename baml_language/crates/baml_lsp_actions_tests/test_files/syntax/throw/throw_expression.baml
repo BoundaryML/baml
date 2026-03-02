@@ -29,7 +29,7 @@ function ThrowExpressionInCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable catch arm
+// Warning: Unreachable catch arm
 //     ╭─[ throw_throw_expression.baml:26:7 ]
 //     │
 //  26 │     _ => throw "re-throw as expression"

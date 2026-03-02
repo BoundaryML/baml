@@ -166,7 +166,7 @@ impl<C: ErrorContext> TypeError<C> {
             }
 
             TypeError::UnreachableCatchArm { location } => {
-                Diagnostic::error(DiagnosticId::UnreachableCatchArm, "Unreachable catch arm")
+                Diagnostic::warning(DiagnosticId::UnreachableCatchArm, "Unreachable catch arm")
                     .with_primary_span(loc_fn(location))
             }
 
