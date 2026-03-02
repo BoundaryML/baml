@@ -6,7 +6,7 @@ fn TypeBuilderFn.build_request(from_text: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // from_text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "TypeBuilderFn"
     let _4: map<string, unknown>
     let _5: "from_text"
@@ -34,7 +34,7 @@ fn TypeBuilderFn.render_prompt(from_text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // from_text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "TypeBuilderFn"
     let _4: map<string, unknown>
     let _5: "from_text"
@@ -62,7 +62,7 @@ fn TypeBuilderFn(from_text: string) -> Resume {
     // Locals:
     let _0: Resume // return
     let _1: string // from_text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "TypeBuilderFn"
     let _4: map<string, unknown>
     let _5: "from_text"

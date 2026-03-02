@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TYPE INFERENCE ===
+  Function IfElseWithHeaders:
+    Return: Union([Literal(String("yes")), Literal(String("no"))])
+  Function Headers:
+    Return: Unknown
+    Errors:
+      - int has no field to_string
+  Function SimpleFunction:
+    Return: Literal(Int(42))
+  Function LlmFunction:
+    Return: String
+  Function NestedControlFlow:
+    Return: Union([Union([Literal(String("large")), Literal(String("small"))]), Literal(String("zero or negative"))])
+  Function ElseIfChain:
+    Return: Union([Literal(String("one")), Union([Literal(String("two")), Union([Literal(String("three")), Literal(String("other"))])])])
+  Function WhileWithHeaders:
+    Return: Int
+  Function MatchExpression:
+    Return: Union([Literal(String("one")), Literal(String("two")), Literal(String("other"))])
+  Function LlmFunction.render_prompt:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+  Function LlmFunction.build_request:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+  Function TestClient.resolve:
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })

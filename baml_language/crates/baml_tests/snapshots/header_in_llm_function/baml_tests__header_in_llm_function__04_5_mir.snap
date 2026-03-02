@@ -6,7 +6,7 @@ fn FetchDatax(user_id: string) -> Hi {
     // Locals:
     let _0: Hi // return
     let _1: string // user_id // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "FetchDatax"
     let _4: map<string, unknown>
     let _5: "user_id"
@@ -37,7 +37,7 @@ fn FetchDatax.build_request(user_id: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // user_id // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "FetchDatax"
     let _4: map<string, unknown>
     let _5: "user_id"
@@ -65,7 +65,7 @@ fn FetchDatax.render_prompt(user_id: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // user_id // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "FetchDatax"
     let _4: map<string, unknown>
     let _5: "user_id"

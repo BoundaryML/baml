@@ -3,30 +3,13 @@
 //! This module provides APIs for listing symbols (functions, classes, enums, etc.)
 //! in a BAML project.
 
+pub use baml_db::baml_compiler_hir::SymbolKind;
 use baml_db::{
     Name, Span,
     baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items},
     baml_workspace::Project,
 };
 use text_size::TextRange;
-
-/// The kind of a symbol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SymbolKind {
-    Function,
-    Class,
-    Enum,
-    TypeAlias,
-    Client,
-    Test,
-    Generator,
-    TemplateString,
-    RetryPolicy,
-    /// A field within a class.
-    Field,
-    /// A variant within an enum.
-    EnumVariant,
-}
 
 /// Information about a symbol in the project.
 #[derive(Debug, Clone)]

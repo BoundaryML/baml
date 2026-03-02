@@ -93,10 +93,6 @@ pub enum Ty {
     Error,
     /// The void/unit type for functions that return nothing.
     Void,
-    /// The bottom type — uninhabited, subtype of everything.
-    /// Used in streaming type expansion (e.g., `@stream.starts_as(never)`).
-    /// `T | never` simplifies to `T`.
-    Never,
 
     /// Opaque resource handle (file, socket, HTTP response body).
     Resource,
@@ -135,6 +131,11 @@ pub enum Ty {
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     /// Contains the inner type being watched for method resolution.
     WatchAccessor(Box<Ty>),
+
+    /// The bottom type (uninhabited). A `throw` expression or a function that
+    /// always diverges produces `Never`. It is a subtype of every type:
+    /// `Never <: T` for all `T`, and `never | T = T`.
+    Never,
 
     /// Meta-type — the type of type values at the TIR level.
     /// Matches `TypePattern::Type` in builtin signatures.
@@ -177,8 +178,6 @@ impl Ty {
         match self {
             // Error recovery: don't emit additional errors when type inference failed
             Ty::Unknown | Ty::Error => true,
-            // Bottom type is uninhabited by definition
-            Ty::Never => true,
             // Empty union has no members, therefore no possible values
             Ty::Union(types) => types.is_empty(),
             // All other types are inhabited
@@ -278,10 +277,10 @@ impl fmt::Display for Ty {
             Ty::Unknown => write!(f, "unknown"),
             Ty::Error => write!(f, "error"),
             Ty::Void => write!(f, "void"),
-            Ty::Never => write!(f, "never"),
             Ty::Resource => write!(f, "resource"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
             Ty::WatchAccessor(inner) => write!(f, "{inner}.$watch"),
+            Ty::Never => write!(f, "never"),
             Ty::Type => write!(f, "type"),
         }
     }

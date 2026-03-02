@@ -208,6 +208,12 @@ fn generate_project_tests(
     let hir_test = generate_hir_test(project);
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
+    let control_flow_test =
+        if project.name == "control_flow" || project.name == "headers_edge_cases" {
+            generate_control_flow_test(project)
+        } else {
+            quote! {}
+        };
     let diagnostics_test = generate_diagnostics_test(project);
     let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
 
@@ -256,6 +262,7 @@ fn generate_project_tests(
             #hir_test
             #tir_test
             #mir_test
+            #control_flow_test
             #diagnostics_test
             #codegen_test
             #formatter_tests
@@ -595,6 +602,92 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
+            });
+        }
+    }
+}
+
+fn generate_control_flow_test(project: &TestProject) -> TokenStream {
+    let file_loaders: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let relative_path = baml_file.relative_path.display().to_string();
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    db.add_file(
+                        #relative_path,
+                        &content,
+                    );
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_04_6_control_flow() {
+            use baml_compiler_vir::control_flow::flatten_control_flow_graph;
+            #[allow(unused_imports)]
+            use baml_compiler_hir::{
+                FunctionBody, file_item_tree, file_items, function_body, ItemId,
+                CompilerGenerated,
+            };
+
+            let mut db = ProjectDatabase::new();
+            let root = db.set_project_root(std::path::Path::new("."));
+
+            #file_loaders
+
+            let mut output = String::new();
+            writeln!(output, "=== CONTROL FLOW GRAPHS ===").unwrap();
+
+            // Iterate over non-builtin files and their functions
+            let all_files = root.files(&db).clone();
+            for source_file in &all_files {
+                // Skip builtin files
+                if source_file.path(&db).to_string_lossy().contains("<builtin>") {
+                    continue;
+                }
+                let item_tree = file_item_tree(&db, *source_file);
+                let items_struct = file_items(&db, *source_file);
+                for item in items_struct.items(&db).iter() {
+                    let ItemId::Function(func_loc) = item else {
+                        continue;
+                    };
+                    let func = &item_tree[func_loc.id(&db)];
+
+                    // Skip compiler-generated functions
+                    if let Some(ref cg) = func.compiler_generated {
+                        match cg {
+                            CompilerGenerated::ClientResolve { .. }
+                            | CompilerGenerated::LlmRenderPrompt { .. }
+                            | CompilerGenerated::LlmBuildRequest { .. }
+                            | CompilerGenerated::LlmCall { .. } => continue,
+                        }
+                    }
+
+                    let func_name = func.name.to_string();
+                    // Use the convenience method on ProjectDatabase
+                    if let Some(graph) = db.control_flow_graph(&func_name) {
+                        writeln!(output, "--- {} (raw) ---", func_name).unwrap();
+                        write!(output, "{}", graph).unwrap();
+
+                        let flattened = flatten_control_flow_graph(&graph);
+                        writeln!(output, "--- {} (flattened) ---", func_name).unwrap();
+                        write!(output, "{}", flattened).unwrap();
+                        writeln!(output).unwrap();
+                    }
+                }
+            }
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+                assert_snapshot!("04_6_control_flow", output);
             });
         }
     }

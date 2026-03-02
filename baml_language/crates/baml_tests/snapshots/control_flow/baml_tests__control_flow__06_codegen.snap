@@ -1,0 +1,240 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function ElseIfChain(x: int) -> string {
+    load_var x
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L7
+
+  L0:
+    viz_enter Caseone
+    load_var x
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L5
+
+  L1:
+    viz_enter Casetwo
+    load_var x
+    load_const 3
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    notify_block Defaultcase
+    load_const "other"
+    jump L4
+
+  L3:
+    notify_block Casethree
+    load_const "three"
+
+  L4:
+    viz_exit Casetwo
+    jump L6
+
+  L5:
+    notify_block Casetwo
+    load_const "two"
+
+  L6:
+    viz_exit Caseone
+    jump L8
+
+  L7:
+    notify_block Caseone
+    load_const "one"
+
+  L8:
+    return
+}
+
+function Headers() -> string {
+    notify_block Setup
+    notify_block Configuration
+    notify_block Processing
+    load_const 1
+    load_const 2
+    bin_op +
+    load_field .0
+    call_indirect
+    return
+}
+
+function IfElseWithHeaders(flag: bool) -> string {
+    notify_block Checkflag
+    viz_enter Checkflag
+    load_var flag
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    notify_block Falsebranch
+    load_const "no"
+    jump L2
+
+  L1:
+    notify_block Truebranch
+    load_const "yes"
+
+  L2:
+    viz_exit Checkflag
+    return
+}
+
+function LlmFunction(input: string) -> string {
+    load_const "LlmFunction"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}
+
+function LlmFunction.build_request(input: string) -> baml.http.Request {
+    load_const "LlmFunction"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function LlmFunction.render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "LlmFunction"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
+function MatchExpression(x: int) -> string {
+    load_var x
+    copy 0
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L3
+
+  L0:
+    copy 0
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L2
+
+  L1:
+    pop 1
+    notify_block Default
+    load_const "other"
+    jump L4
+
+  L2:
+    notify_block Two
+    load_const "two"
+    jump L4
+
+  L3:
+    notify_block One
+    load_const "one"
+
+  L4:
+    return
+}
+
+function NestedControlFlow(x: int) -> string {
+    notify_block Outer
+    viz_enter Outer
+    load_var x
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    notify_block Non-positive
+    load_const "zero or negative"
+    jump L5
+
+  L1:
+    notify_block Positive
+    viz_enter Positive
+    load_var x
+    load_const 100
+    cmp_op >
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    notify_block Small
+    load_const "small"
+    jump L4
+
+  L3:
+    notify_block Large
+    load_const "large"
+
+  L4:
+    viz_exit Positive
+
+  L5:
+    viz_exit Outer
+    return
+}
+
+function SimpleFunction() -> int {
+    load_const 42
+    return
+}
+
+function TestClient.resolve() -> baml.llm.PrimitiveClient {
+    load_const "TestClient"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_const "assistant"
+    load_const "system"
+    alloc_array 3
+    load_const "gpt-4"
+    load_const "model"
+    alloc_map 1
+    dispatch_future baml.llm.build_primitive_client
+    await
+    return
+}
+
+function WhileWithHeaders() -> int {
+    notify_block Initialize
+    load_const 0
+    store_var count
+    notify_block Loop
+    viz_enter Loop
+
+  L0:
+    load_var count
+    load_const 10
+    cmp_op <
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    viz_exit Loop
+    notify_block Done
+    load_var count
+    return
+
+  L2:
+    notify_block Iteration
+    load_var count
+    load_const 1
+    bin_op +
+    store_var count
+    jump L0
+}

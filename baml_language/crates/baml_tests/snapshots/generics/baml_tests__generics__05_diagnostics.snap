@@ -3,10 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === DIAGNOSTICS ===
   [type] Error: Unknown variable `baml`
-    ╭─[ fetch_as.baml:10:16 ]
+    ╭─[ fetch_as.baml:10:17 ]
     │
  10 │         method: baml.HttpMethod.Get,
-    │                ──────────┬─────────  
+    │                 ─────────┬─────────  
     │                          ╰─────────── Unknown variable `baml`
     │ 
     │ Note: Error code: E0003

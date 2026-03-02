@@ -2743,7 +2743,7 @@ fn ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
 fn TestTarget() -> string {
     // Locals:
     let _0: string // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> unknown
     let _2: "TestTarget"
     let _3: map<string, unknown>
 
@@ -2890,7 +2890,7 @@ fn LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
 fn TestTarget.build_request() -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.http.Request
     let _2: "TestTarget"
     let _3: map<string, unknown>
 
@@ -4018,7 +4018,7 @@ fn MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
 fn TestTarget.render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _2: "TestTarget"
     let _3: map<string, unknown>
 
@@ -4231,7 +4231,7 @@ fn LlmMultiLine(text: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "LlmMultiLine"
     let _4: map<string, unknown>
     let _5: "text"
@@ -4285,7 +4285,7 @@ fn LlmBasic.render_prompt(name: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // name // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "LlmBasic"
     let _4: map<string, unknown>
     let _5: "name"
@@ -4343,7 +4343,7 @@ fn LlmMultiLine.render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "LlmMultiLine"
     let _4: map<string, unknown>
     let _5: "text"
@@ -4673,7 +4673,7 @@ fn LlmBasic(name: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // name // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "LlmBasic"
     let _4: map<string, unknown>
     let _5: "name"
@@ -4718,7 +4718,7 @@ fn LlmBasic.build_request(name: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // name // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "LlmBasic"
     let _4: map<string, unknown>
     let _5: "name"
@@ -4746,7 +4746,7 @@ fn LlmStringClient.render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "LlmStringClient"
     let _4: map<string, unknown>
     let _5: "text"
@@ -4797,7 +4797,7 @@ fn LlmWithLongSignature.build_request(first_context: string, second_context: str
     let _2: string // second_context // param
     let _3: string // third_context // param
     let _4: string // user_query // param
-    let _5: null
+    let _5: (string, map<string, unknown>) -> baml.http.Request
     let _6: "LlmWithLongSignature"
     let _7: map<string, unknown>
     let _8: "first_context"
@@ -4837,7 +4837,7 @@ fn LlmReversedOrder(text: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "LlmReversedOrder"
     let _4: map<string, unknown>
     let _5: "text"
@@ -4882,7 +4882,7 @@ fn LlmStringClient(text: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "LlmStringClient"
     let _4: map<string, unknown>
     let _5: "text"
@@ -4964,7 +4964,7 @@ fn LlmWithLongSignature(first_context: string, second_context: string, third_con
     let _2: string // second_context // param
     let _3: string // third_context // param
     let _4: string // user_query // param
-    let _5: null
+    let _5: (string, map<string, unknown>) -> unknown
     let _6: "LlmWithLongSignature"
     let _7: map<string, unknown>
     let _8: "first_context"
@@ -5154,7 +5154,7 @@ fn LlmReversedOrder.build_request(text: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "LlmReversedOrder"
     let _4: map<string, unknown>
     let _5: "text"
@@ -5203,7 +5203,7 @@ fn LlmWithLongSignature.render_prompt(first_context: string, second_context: str
     let _2: string // second_context // param
     let _3: string // third_context // param
     let _4: string // user_query // param
-    let _5: null
+    let _5: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _6: "LlmWithLongSignature"
     let _7: map<string, unknown>
     let _8: "first_context"
@@ -5258,7 +5258,7 @@ fn LlmMultiLine.build_request(text: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "LlmMultiLine"
     let _4: map<string, unknown>
     let _5: "text"
@@ -5286,7 +5286,7 @@ fn LlmStringClient.build_request(text: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "LlmStringClient"
     let _4: map<string, unknown>
     let _5: "text"
@@ -5364,7 +5364,7 @@ fn LlmReversedOrder.render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "LlmReversedOrder"
     let _4: map<string, unknown>
     let _5: "text"

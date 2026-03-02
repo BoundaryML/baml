@@ -14,12 +14,6 @@ __LINKEDIT = 114688
 __TEXT = 6537216
 
 [artifacts.bridge_cffi-stripped]
-file_bytes = 4761024
-stripped_bytes = 4761064
-gzip_bytes = 1888489
-
-[artifacts.bridge_cffi-stripped.sections]
-__DATA = 16384
-__DATA_CONST = 311296
-__LINKEDIT = 81920
-__TEXT = 4358144
+file_bytes = 4927136
+stripped_bytes = 4927176
+gzip_bytes = 1959257
