@@ -60,7 +60,6 @@ function SumOdds() -> int {
 // break_continue.baml:14:21 (operator) len=1 "<"
 // break_continue.baml:14:23 (number) len=2 "10"
 // break_continue.baml:14:27 (variable) len=1 "i"
-// break_continue.baml:14:27 (variable) len=1 "i"
 // break_continue.baml:14:29 (operator) len=2 "+="
 // break_continue.baml:14:32 (number) len=1 "1"
 // break_continue.baml:15:5 (keyword) len=2 "if"

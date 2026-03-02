@@ -13,7 +13,7 @@ class Lizard {
   name string
 }
 
-type Pet = Cat | Dog
+type Pet = Cat | Dog | Lizard;
 
 function Describe(pet: Pet) -> string {
   match (pet) {
@@ -25,15 +25,7 @@ function Describe(pet: Pet) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable match arm
-//     ╭─[ match_expr.baml:22:5 ]
-//     │
-//  22 │     _ => "other pet",
-//     │     ┬  
-//     │     ╰── Unreachable match arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
+// <no-diagnostics-expected>
 //
 //- semantic_tokens
 // match_expr.baml:1:1 (keyword) len=5 "class"
@@ -66,6 +58,8 @@ function Describe(pet: Pet) -> string {
 // match_expr.baml:16:12 (class) len=3 "Cat"
 // match_expr.baml:16:16 (operator) len=1 "|"
 // match_expr.baml:16:18 (class) len=3 "Dog"
+// match_expr.baml:16:22 (operator) len=1 "|"
+// match_expr.baml:16:24 (class) len=6 "Lizard"
 // match_expr.baml:18:1 (keyword) len=8 "function"
 // match_expr.baml:18:10 (function) len=8 "Describe"
 // match_expr.baml:18:19 (parameter) len=3 "pet"
@@ -73,9 +67,11 @@ function Describe(pet: Pet) -> string {
 // match_expr.baml:18:32 (type) len=6 "string"
 // match_expr.baml:19:3 (keyword) len=5 "match"
 // match_expr.baml:19:10 (parameter) len=3 "pet"
+// match_expr.baml:20:5 (variable) len=3 "cat"
 // match_expr.baml:20:10 (class) len=3 "Cat"
 // match_expr.baml:20:17 (variable) len=3 "cat"
 // match_expr.baml:20:21 (property) len=4 "name"
+// match_expr.baml:21:5 (variable) len=3 "dog"
 // match_expr.baml:21:10 (class) len=3 "Dog"
 // match_expr.baml:21:17 (variable) len=3 "dog"
 // match_expr.baml:21:21 (property) len=4 "name"
