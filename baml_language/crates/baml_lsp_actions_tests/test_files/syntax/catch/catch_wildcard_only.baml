@@ -27,16 +27,6 @@ function CatchNamedWildcard(x: int) -> string {
 //     │ 
 //     │ Note: Error code: E0095
 // ────╯
-// Error: Cannot apply operator 'Add' to types `string` and `never`
-//     ╭─[ catch_catch_wildcard_only.baml:15:15 ]
-//     │
-//  15 │ ╭─▶     other => "caught: " + other
-//  16 │ ├─▶   }
-//     │ │         
-//     │ ╰───────── Cannot apply operator 'Add' to types `string` and `never`
-//     │     
-//     │     Note: Error code: E0004
-// ────╯
 // Error: Unreachable catch arm
 //    ╭─[ catch_catch_wildcard_only.baml:8:7 ]
 //    │
