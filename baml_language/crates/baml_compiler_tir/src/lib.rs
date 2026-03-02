@@ -2248,9 +2248,20 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                 },
                             );
                             let enum_name = enum_fqn.display_name();
-                            ctx.enum_variant_exprs.insert(expr_id, (enum_name, variant));
-                            let ty = Ty::Enum(enum_fqn, d());
+                            ctx.enum_variant_exprs
+                                .insert(expr_id, (enum_name, variant.clone()));
+                            let ty = Ty::Enum(enum_fqn.clone(), d());
                             ctx.set_expr_type(expr_id, ty.clone());
+
+                            // Populate per-segment resolutions as well
+                            ctx.path_segment_resolutions.insert(
+                                expr_id,
+                                vec![
+                                    ResolvedValue::Enum(enum_fqn.clone()),
+                                    ResolvedValue::EnumVariant { enum_fqn, variant },
+                                ],
+                            );
+
                             return ty;
                         }
                     }

@@ -148,11 +148,11 @@ fn visit_node(
 ) {
     match node.kind() {
         ref n if n.is_comment() => emit_node(node, SemanticTokenType::Comment, out), // Handle header comments which are actually nodes
+        // String literals are nodes, emit the whole thing with all its children as string.
         SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
             emit_node(node, SemanticTokenType::String, out);
         }
-        SyntaxKind::ATTRIBUTE => visit_attribute(db, file, node, out),
-        SyntaxKind::BLOCK_ATTRIBUTE => visit_attribute(db, file, node, out),
+        SyntaxKind::ATTRIBUTE | SyntaxKind::BLOCK_ATTRIBUTE => visit_attribute(db, file, node, out),
         SyntaxKind::TYPE_ALIAS_DEF => visit_type_alias_def(db, file, node, out),
         SyntaxKind::ENUM_DEF => visit_word_as(db, file, node, SemanticTokenType::Enum, out),
         SyntaxKind::ENUM_VARIANT => {
@@ -163,18 +163,21 @@ fn visit_node(
         SyntaxKind::FUNCTION_DEF => visit_function_def(db, file, node, out),
         SyntaxKind::PARAMETER => visit_word_as(db, file, node, SemanticTokenType::Parameter, out),
         SyntaxKind::TYPE_EXPR => visit_type_expr(db, file, node, out),
+        // Highlight top-level let statements for now...
         SyntaxKind::LET_STMT => {
-            // Highlight top-level let statements for now...
             visit_first_word_as(db, file, node, SemanticTokenType::Variable, out);
         }
         SyntaxKind::CLIENT_TYPE => visit_word_as(db, file, node, SemanticTokenType::Type, out),
         SyntaxKind::CONFIG_ITEM => visit_word_as(db, file, node, SemanticTokenType::Property, out),
+        // Put these as struct so they're in theory different from classes
         SyntaxKind::CLIENT_DEF | SyntaxKind::GENERATOR_DEF | SyntaxKind::RETRY_POLICY_DEF => {
             visit_word_as(db, file, node, SemanticTokenType::Struct, out);
-        } // Put these as struct so they're in theory different from classes
-        SyntaxKind::TEST_DEF => visit_word_as(db, file, node, SemanticTokenType::Struct, out), // TODO: semantic tokens for test def functions
+        }
+        // TODO: semantic tokens for test def functions
+        SyntaxKind::TEST_DEF => visit_word_as(db, file, node, SemanticTokenType::Struct, out),
+        // I guess this is sorta like a function?
         SyntaxKind::TEMPLATE_STRING_DEF => {
-            visit_word_as(db, file, node, SemanticTokenType::Function, out); // Sorta like a function?
+            visit_word_as(db, file, node, SemanticTokenType::Function, out);
         }
         SyntaxKind::PROMPT_FIELD => visit_word_as(db, file, node, SemanticTokenType::Property, out),
         SyntaxKind::CLIENT_FIELD => visit_client_field(db, file, node, out),
@@ -184,27 +187,16 @@ fn visit_node(
 
 /// Classify a leaf token into a semantic token type.
 fn visit_token(token: &SyntaxToken, out: &mut Vec<SemanticToken>) {
-    let kind = token.kind();
-    if kind.is_whitespace() {
-        return;
-    }
-    let token_type = if kind.is_keyword() {
-        SemanticTokenType::Keyword
-    } else if kind.is_operator() {
-        SemanticTokenType::Operator
-    } else if kind.is_comment() {
-        SemanticTokenType::Comment
-    } else if matches!(
-        kind,
-        SyntaxKind::INTEGER_LITERAL | SyntaxKind::FLOAT_LITERAL
-    ) {
-        SemanticTokenType::Number
-    } else {
-        return;
-    };
     out.push(SemanticToken {
         range: token.text_range(),
-        token_type,
+        token_type: match token.kind() {
+            ref kind if kind.is_whitespace() => return,
+            ref kind if kind.is_keyword() => SemanticTokenType::Keyword,
+            ref kind if kind.is_operator() => SemanticTokenType::Operator,
+            ref kind if kind.is_comment() => SemanticTokenType::Comment,
+            SyntaxKind::INTEGER_LITERAL | SyntaxKind::FLOAT_LITERAL => SemanticTokenType::Number,
+            _ => return,
+        },
     });
 }
 
@@ -366,6 +358,8 @@ fn visit_type_expr(
         match child {
             NodeOrToken::Node(n) => visit_node(db, file, &n, out),
             NodeOrToken::Token(t) => match t.kind() {
+                // Capture the type name.
+                // This will need adjustment when namespaces are brought into the mix.
                 SyntaxKind::WORD => emit_token(&t, resolve_type_name(db, t.text()), out),
                 _ => visit_token(&t, out),
             },
@@ -381,7 +375,7 @@ fn visit_function_def(
     node: &SyntaxNode,
     out: &mut Vec<SemanticToken>,
 ) {
-    // Walk children: handle the header via CST, but intercept EXPR_FUNCTION_BODY
+    // Walk children: handle the signature via CST, but intercept EXPR_FUNCTION_BODY
     for child in node.children_with_tokens() {
         match child {
             NodeOrToken::Node(n) => {
@@ -389,15 +383,16 @@ fn visit_function_def(
                     if let Some(func_loc) =
                         find_function_at_position(db, file, node.text_range().start())
                     {
-                        emit_expr_body_tokens(db, file, func_loc, &n, out);
-                    } else {
-                        visit_children(db, file, &n, out);
+                        if let Some(visitor) = ExprBodyVisitor::new(db, file, func_loc) {
+                            visitor.visit_children(&n, out);
+                        }
                     }
                 } else {
                     visit_node(db, file, &n, out);
                 }
             }
             NodeOrToken::Token(t) => match t.kind() {
+                // Capture the function name.
                 SyntaxKind::WORD => emit_token(&t, SemanticTokenType::Function, out),
                 _ => visit_token(&t, out),
             },
@@ -502,22 +497,10 @@ fn build_resolution_map(
                         }
                     }
 
-                    let is_last = i + 1 == segments.len();
                     let token_type = if let Some(resolutions) = seg_resolutions {
                         resolutions.get(i).and_then(resolved_value_to_token_type)
                     } else if let Some(resolved) = whole_resolution {
-                        // For compound resolutions (e.g. EnumVariant), prefix
-                        // segments get the container type and only the last
-                        // segment gets the member type.
-                        if is_last {
-                            resolved_value_to_token_type(resolved)
-                        } else {
-                            match resolved {
-                                ResolvedValue::EnumVariant { .. } => Some(SemanticTokenType::Enum),
-                                ResolvedValue::Field { .. } => Some(SemanticTokenType::Class),
-                                _ => resolved_value_to_token_type(resolved),
-                            }
-                        }
+                        resolved_value_to_token_type(resolved)
                     } else {
                         continue;
                     };
@@ -580,7 +563,7 @@ fn build_resolution_map(
                     // object literal) or the field exists on the class.
                     if known_fields
                         .as_ref()
-                        .map_or(true, |f| f.contains_key(field_name))
+                        .is_none_or(|f| f.contains_key(field_name))
                     {
                         map.insert(range, SemanticTokenType::Property);
                     }
@@ -617,17 +600,9 @@ fn build_resolution_map(
     map
 }
 
-// ── Expression body visitor ─────────────────────────────────────────────────
-//
-// Mirrors the free-function CST visitors (`visit_node`, `visit_children`,
-// `visit_token`) but every leaf token is first checked against a pre-built
-// resolution map from HIR/TIR. This keeps the two worlds (CST-only vs
-// resolution-map-aware) cleanly separated: the free functions never see a
-// resolution map, and the struct methods always consult one.
-
 /// Visitor for expression function bodies.
 ///
-/// Pre-builds a `TextRange → SemanticTokenType` resolution map from HIR/TIR,
+/// Pre-builds a `TextRange` -> `SemanticTokenType` resolution map from HIR/TIR,
 /// then walks the CST in document order. Leaf tokens are checked against the
 /// map first; if there is no entry the normal syntactic classifier is used.
 struct ExprBodyVisitor<'a> {
@@ -664,9 +639,6 @@ impl<'a> ExprBodyVisitor<'a> {
             SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
                 emit_node(node, SemanticTokenType::String, out);
             }
-            SyntaxKind::ATTRIBUTE | SyntaxKind::BLOCK_ATTRIBUTE => {
-                visit_attribute(self.db, self.file, node, out);
-            }
             SyntaxKind::TYPE_EXPR => visit_type_expr(self.db, self.file, node, out),
             SyntaxKind::LET_STMT => {
                 self.visit_first_word_as(node, SemanticTokenType::Variable, out);
@@ -684,7 +656,7 @@ impl<'a> ExprBodyVisitor<'a> {
     }
 
     /// Classify a leaf token. Resolution map wins; otherwise fall back to the
-    /// shared syntactic classifier.
+    /// default token classifier.
     fn visit_token(&self, token: &SyntaxToken, out: &mut Vec<SemanticToken>) {
         if let Some(&token_type) = self.resolution_map.get(&token.text_range()) {
             emit_token(token, token_type, out);
@@ -724,20 +696,5 @@ impl<'a> ExprBodyVisitor<'a> {
                 }
             }
         }
-    }
-}
-
-/// Emit semantic tokens for an expression function body using HIR/TIR resolution.
-fn emit_expr_body_tokens(
-    db: &ProjectDatabase,
-    file: SourceFile,
-    func_loc: baml_compiler_hir::FunctionId<'_>,
-    body_node: &SyntaxNode,
-    out: &mut Vec<SemanticToken>,
-) {
-    if let Some(visitor) = ExprBodyVisitor::new(db, file, func_loc) {
-        visitor.visit_children(body_node, out);
-    } else {
-        visit_children(db, file, body_node, out);
     }
 }
