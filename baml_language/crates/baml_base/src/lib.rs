@@ -2,15 +2,15 @@
 //!
 //! This crate has NO dependencies on other compiler crates to avoid circular dependencies.
 
+pub mod attr;
 pub mod core_types;
 pub mod debug_log;
 pub mod files;
 pub mod qualified_name;
-pub mod sap;
 
 // Re-export everything for convenience
+pub use attr::*;
 pub use core_types::*;
 pub use debug_log::{DebugMessage, drain_debug_log, has_debug_messages};
 pub use files::*;
 pub use qualified_name::{BAML_STD_PREFIX, Namespace, QualifiedName};
-pub use sap::*;
