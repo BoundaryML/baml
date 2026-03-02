@@ -4421,10 +4421,14 @@ fn infer_binary_op(
         }
     }
 
-    // Don't emit errors for operations involving unknown or error types - the root cause
-    // (e.g., unknown variable) has already been reported
+    // Don't emit errors for operations involving unknown, error, or never types.
+    // Unknown/Error: the root cause (e.g., unknown variable) has already been reported.
+    // Never: the expression is unreachable (e.g., after throw), so no error needed.
     if lhs.is_unknown() || lhs.is_error() || rhs.is_unknown() || rhs.is_error() {
         return Ty::Unknown { attr: d() };
+    }
+    if matches!(lhs, Ty::Never { .. }) || matches!(rhs, Ty::Never { .. }) {
+        return Ty::Never { attr: d() };
     }
 
     match op {

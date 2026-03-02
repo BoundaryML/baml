@@ -8,6 +8,6 @@ stripped_bytes = 10551424
 gzip_bytes = 3984950
 
 [artifacts.bridge_cffi-stripped]
-file_bytes = 6781976
-stripped_bytes = 6781968
-gzip_bytes = 2447882
+file_bytes = 7061784
+stripped_bytes = 7061776
+gzip_bytes = 2538168

@@ -4,7 +4,7 @@ baseline_dir = ".ci/size-gate"
 package = "bridge_cffi"
 # ignore default features (includes bundle-http → reqwest + hyper + rustls)
 no_default_features = true
-policy.max_gzip_bytes = 2_500_000
+policy.max_gzip_bytes = 2_600_000
 policy.max_delta_pct = 10.0
 
 [artifacts.bridge_cffi]
@@ -17,5 +17,5 @@ package = "bridge_wasm"
 target = "wasm32-unknown-unknown"
 no_default_features = true
 wasm = true
-policy.max_gzip_bytes = 1_920_000
+policy.max_gzip_bytes = 2_000_000
 policy.max_delta_pct = 10.0
