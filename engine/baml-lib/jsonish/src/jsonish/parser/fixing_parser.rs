@@ -170,4 +170,47 @@ mod tests {
             _ => panic!("Expected object"),
         }
     }
+
+    // Regression tests for the off-by-one fix in should_close_unescaped_string.
+    // When the iterator exhausts without finding a structural delimiter, the
+    // counter must account for the last consumed character to prevent the outer
+    // loop from re-processing it. These tests fail without the fix.
+    //
+    // Note: The InObjectValue branch has the same bug but it only manifests
+    // during streaming (multiple parse() calls on successive chunks), not in
+    // single-pass parsing, so it cannot be tested at this level.
+
+    #[test]
+    fn test_partial_unquoted_key_no_char_duplication() {
+        // InObjectKey: unquoted key "mykey", stream ends before ':' is found.
+        // Without the fix, the off-by-one causes the last char to be
+        // re-processed, creating a spurious key-value pair.
+        let opts = ParseOptions::default();
+        let vals = parse(r#"{mykey"#, &opts).unwrap();
+        match &vals[0].0 {
+            Value::Object(fields, _) => {
+                assert_eq!(fields.len(), 0, "No complete key-value pair yet");
+            }
+            _ => panic!("Expected object"),
+        }
+    }
+
+    #[test]
+    fn test_partial_unquoted_toplevel_no_char_duplication() {
+        // InNothing: unquoted string at top level, stream ends without '{' or '['.
+        // Without the fix, the off-by-one corrupts parsing so no value is produced.
+        let opts = ParseOptions::default();
+        let vals = parse("foobar", &opts).unwrap();
+        match &vals[0].0 {
+            Value::String(s, cmplt) => {
+                assert_eq!(
+                    s.as_str(),
+                    "foobar",
+                    "Top-level string should be 'foobar' without duplicated chars"
+                );
+                assert_eq!(cmplt, &CompletionState::Incomplete);
+            }
+            _ => panic!("Expected string, got: {:?}", vals[0].0),
+        }
+    }
 }
