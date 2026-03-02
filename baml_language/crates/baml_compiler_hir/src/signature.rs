@@ -85,10 +85,14 @@ impl FunctionSignature {
         }
 
         // Extract throws clause (BEP-007)
-        let throws = func_node
-            .throws_clause()
-            .and_then(|tc| tc.type_expr())
-            .map(|te| TypeRef::from_ast(&te));
+        let throws_clause = func_node.throws_clause();
+        let throws = throws_clause
+            .as_ref()
+            .and_then(baml_compiler_syntax::ThrowsClause::type_expr)
+            .map(|te| {
+                source_map.set_throws_type_span(te.syntax().text_range());
+                TypeRef::from_ast(&te)
+            });
 
         (
             Arc::new(FunctionSignature {

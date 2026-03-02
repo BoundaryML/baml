@@ -374,7 +374,6 @@ impl<'a> TreeRenderer<'a> {
                     let kind_str = match clause.kind {
                         baml_compiler_hir::CatchClauseKind::Catch => "catch",
                         baml_compiler_hir::CatchClauseKind::CatchAll => "catch_all",
-                        baml_compiler_hir::CatchClauseKind::CatchAllPanics => "catch_all_panics",
                     };
                     let clause_prefix = self.make_prefix(is_last_clause);
                     writeln!(

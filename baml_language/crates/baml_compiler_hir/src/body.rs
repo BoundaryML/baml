@@ -643,14 +643,10 @@ pub struct MatchArm {
 /// - `Catch`: only catches the listed exception types; unmatched errors rethrow.
 /// - `CatchAll`: catches all errors, with an implicit rethrow fallback if no explicit
 ///   catch-all arm is provided.
-/// - `CatchAllPanics`: like `CatchAll` but also catches panics.
-///
-/// See `agreed-upon-format.txt` for desugaring rules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CatchClauseKind {
     Catch,
     CatchAll,
-    CatchAllPanics,
 }
 
 /// A single catch clause attached to a callable expression.
@@ -2207,7 +2203,7 @@ impl LoweringContext {
     /// Lower a single catch clause from CST to HIR.
     ///
     /// `CATCH_CLAUSE` structure (from parser):
-    /// - Keyword token (`KW_CATCH`, `KW_CATCH_ALL`, `KW_CATCH_ALL_PANICS`)
+    /// - Keyword token (`KW_CATCH`, `KW_CATCH_ALL`)
     /// - `CATCH_PATTERN` node (the error binding)
     /// - `CATCH_ARM` children (arm form with `pattern => body`)
     fn lower_catch_clause(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> CatchClause {
@@ -2222,7 +2218,6 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => match token.kind() {
                     SyntaxKind::KW_CATCH => kind = CatchClauseKind::Catch,
                     SyntaxKind::KW_CATCH_ALL => kind = CatchClauseKind::CatchAll,
-                    SyntaxKind::KW_CATCH_ALL_PANICS => kind = CatchClauseKind::CatchAllPanics,
                     _ => {}
                 },
                 rowan::NodeOrToken::Node(child) => match child.kind() {

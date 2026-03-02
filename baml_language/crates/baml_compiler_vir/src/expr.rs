@@ -278,18 +278,16 @@ pub enum Expr {
 ///
 /// - `Catch`: only catches the listed exception types; unmatched errors rethrow.
 /// - `CatchAll`: catches all errors.
-/// - `CatchAllPanics`: like `CatchAll` but also catches panics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatchClauseKind {
     Catch,
     CatchAll,
-    CatchAllPanics,
 }
 
 /// A single catch clause attached to a callable expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatchClause {
-    /// The kind of catch (`catch` / `catch_all` / `catch_all_panics`).
+    /// The kind of catch (`catch` / `catch_all`).
     pub kind: CatchClauseKind,
     /// The error binding pattern (e.g., `e` in `catch (e)`).
     pub binding: PatId,
@@ -462,7 +460,6 @@ impl From<baml_compiler_hir::CatchClauseKind> for CatchClauseKind {
         match kind {
             baml_compiler_hir::CatchClauseKind::Catch => CatchClauseKind::Catch,
             baml_compiler_hir::CatchClauseKind::CatchAll => CatchClauseKind::CatchAll,
-            baml_compiler_hir::CatchClauseKind::CatchAllPanics => CatchClauseKind::CatchAllPanics,
         }
     }
 }

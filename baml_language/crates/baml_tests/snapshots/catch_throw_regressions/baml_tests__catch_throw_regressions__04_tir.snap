@@ -9,7 +9,7 @@ source: crates/baml_tests/src/generated_tests.rs
   Function CatchAlwaysThrows:
     Return: Union([Literal(String("http!")), Literal(String("index!"))])
   Function RecA:
-    Return: Union([Never, String])
+    Return: String
   Function WrapperAlwaysThrows:
     Return: Never
   Function UnreachableTailStillChecked:

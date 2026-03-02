@@ -278,7 +278,6 @@ const KEYWORDS: &[&str] = &[
     "throw",
     "catch",
     "catch_all",
-    "catch_all_panics",
     "true",
     "false",
     "null",

@@ -46,10 +46,10 @@ fn ThrowsAllStatusVariants(n: int) -> Status {
     // Locals:
     let _0: Status // return
     let _1: int // n // param
-    let _2: null
-    let _3: null
-    let _4: null
-    let _5: null
+    let _2: Status
+    let _3: Status
+    let _4: Status
+    let _5: Status
 
     bb0: {
         switch copy _1 [1: bb3, 2: bb4, 3: bb5, otherwise: bb6];

@@ -332,7 +332,6 @@ impl<'a> PrettyPrinter<'a> {
                     let kind_str = match clause.kind {
                         CatchClauseKind::Catch => "catch",
                         CatchClauseKind::CatchAll => "catch_all",
-                        CatchClauseKind::CatchAllPanics => "catch_all_panics",
                     };
                     let binding_str = self.format_pattern(clause.binding);
                     writeln!(self.output, "{kind_str}({binding_str}) [{ci}]:").unwrap();

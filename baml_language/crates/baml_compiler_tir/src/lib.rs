@@ -2962,12 +2962,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     })
                     .collect();
 
-                // If all arms have the same type, use that; otherwise union
-                if arm_types.iter().all(|t| t == &arm_types[0]) {
-                    arm_types.into_iter().next().unwrap_or(Ty::Unknown)
-                } else {
-                    Ty::Union(arm_types)
-                }
+                normalize_union_members(arm_types)
             }
         }
 
@@ -3061,10 +3056,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 residual_throw_types = clause_residual;
 
                 if !residual_throw_types.is_empty()
-                    && matches!(
-                        clause.kind,
-                        CatchClauseKind::CatchAll | CatchClauseKind::CatchAllPanics
-                    )
+                    && matches!(clause.kind, CatchClauseKind::CatchAll)
                 {
                     ctx.push_error(TypeError::NonExhaustiveCatch {
                         unhandled_types: residual_throw_types.iter().cloned().collect(),

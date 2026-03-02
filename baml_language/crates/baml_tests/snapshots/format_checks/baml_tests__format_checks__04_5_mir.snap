@@ -7566,7 +7566,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _778: int
     let _779: 1
     let _780: int
-    let _781: never | never | int // val
+    let _781: int // val
     let _782: int
     let _783: int
     let _784: int
@@ -7582,7 +7582,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _794: int // n
     let _795: void
     let _796: int
-    let _797: never | never | int
+    let _797: int
     let _798: int
     let _799: 0 // lvl1
     let _800: void

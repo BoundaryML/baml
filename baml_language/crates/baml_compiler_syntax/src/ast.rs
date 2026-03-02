@@ -2662,19 +2662,12 @@ impl CatchExpr {
 }
 
 impl CatchClause {
-    /// Get the clause keyword token (`catch`, `catch_all`, `catch_all_panics`).
+    /// Get the clause keyword token (`catch`, `catch_all`).
     pub fn keyword(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| {
-                matches!(
-                    t.kind(),
-                    SyntaxKind::KW_CATCH
-                        | SyntaxKind::KW_CATCH_ALL
-                        | SyntaxKind::KW_CATCH_ALL_PANICS
-                )
-            })
+            .find(|t| matches!(t.kind(), SyntaxKind::KW_CATCH | SyntaxKind::KW_CATCH_ALL))
     }
 
     /// Get the binding pattern from `catch (...)`.

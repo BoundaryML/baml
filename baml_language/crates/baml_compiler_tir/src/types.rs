@@ -178,6 +178,8 @@ impl Ty {
         match self {
             // Error recovery: don't emit additional errors when type inference failed
             Ty::Unknown | Ty::Error => true,
+            // Bottom type: no value of type Never exists
+            Ty::Never => true,
             // Empty union has no members, therefore no possible values
             Ty::Union(types) => types.is_empty(),
             // All other types are inhabited

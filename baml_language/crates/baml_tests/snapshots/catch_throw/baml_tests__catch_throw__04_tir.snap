@@ -13,13 +13,13 @@ source: crates/baml_tests/src/generated_tests.rs
   Function ThrowStatement:
     Return: Never
   Function MayFailIntOrString:
-    Return: Union([Never, Never, Literal(String("ok"))])
+    Return: Literal(String("ok"))
   Function MayFail:
-    Return: Union([Never, Literal(String("ok"))])
+    Return: Literal(String("ok"))
   Function SingleCatchTyped:
     Return: Union([String, Literal(String("caught string"))])
   Function AlsoMayFail:
-    Return: Union([Never, Literal(String("also ok"))])
+    Return: Literal(String("also ok"))
   Function NestedCatch:
     Return: Union([String, Union([String, Literal(String("inner caught"))])])
   Function CatchWithFallback:

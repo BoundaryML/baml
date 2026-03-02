@@ -1996,7 +1996,6 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// - Chained clauses are nested: clause[n+1] catches errors from clause[n]'s handlers
     /// - `catch`: unmatched errors rethrow
     /// - `catch_all`: adds implicit rethrow fallback
-    /// - `catch_all_panics`: like `catch_all` but also catches panics
     fn lower_catch(
         &mut self,
         base: ExprId,
@@ -2125,12 +2124,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             // Behavior depends on clause kind:
             //   catch: rethrow (unmatched error propagates)
             //   catch_all: rethrow (implicit fallback)
-            //   catch_all_panics: rethrow (implicit fallback)
             self.builder.set_current_block(fallthrough_block);
             match clause.kind {
-                CatchClauseKind::Catch
-                | CatchClauseKind::CatchAll
-                | CatchClauseKind::CatchAllPanics => {
+                CatchClauseKind::Catch | CatchClauseKind::CatchAll => {
                     // Rethrow the error. If there's an outer catch context, route
                     // directly to its handler local/block. Otherwise propagate.
                     if let Some(catch_ctx) = outer_catch_for_arms.clone() {

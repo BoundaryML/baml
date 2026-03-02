@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function build_attempt_with_state:
-    Return: Union([List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" })), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" })), Union([List(Unknown), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }))])])
+    Return: Union([List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" })), Union([List(Unknown), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }))])])
   Function build_plan_with_state:
     Return: List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }))
   Function render_prompt:

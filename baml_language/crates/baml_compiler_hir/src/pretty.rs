@@ -202,7 +202,6 @@ impl<'a> CodePrinter<'a> {
                     let kw = match clause.kind {
                         CatchClauseKind::Catch => "catch",
                         CatchClauseKind::CatchAll => "catch_all",
-                        CatchClauseKind::CatchAllPanics => "catch_all_panics",
                     };
                     write!(self.output, " {kw} (").unwrap();
                     self.print_pattern(clause.binding);

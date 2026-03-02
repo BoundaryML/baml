@@ -2171,6 +2171,10 @@ impl<'a> Parser<'a> {
                 | TokenKind::If
                 | TokenKind::While
                 | TokenKind::For
+                | TokenKind::Throw
+                | TokenKind::Catch
+                | TokenKind::CatchAll
+                | TokenKind::Assert
                     if brace_depth == 1 =>
                 {
                     return false;
@@ -2740,6 +2744,9 @@ impl<'a> Parser<'a> {
             } else {
                 p.parse_catch_arm();
                 while !p.at(TokenKind::RBrace) && !p.at_end() {
+                    if p.at_top_level_keyword() {
+                        break;
+                    }
                     p.parse_catch_arm();
                 }
             }

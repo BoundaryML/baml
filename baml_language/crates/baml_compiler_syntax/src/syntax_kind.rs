@@ -33,7 +33,6 @@ pub enum SyntaxKind {
     KW_MATCH,
     KW_CATCH,
     KW_CATCH_ALL,
-    KW_CATCH_ALL_PANICS,
     KW_ASSERT,
     KW_THROWS,
 
@@ -369,7 +368,6 @@ impl SyntaxKind {
                 | Self::KW_MATCH
                 | Self::KW_CATCH
                 | Self::KW_CATCH_ALL
-                | Self::KW_CATCH_ALL_PANICS
                 | Self::KW_ASSERT
                 | Self::KW_THROWS
                 | Self::KW_WATCH

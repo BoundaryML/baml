@@ -402,6 +402,7 @@ impl TypeRef {
             "bool" => TypeRef::Bool,
             "null" => TypeRef::Null,
             "unknown" => TypeRef::BuiltinUnknown,
+            "never" => TypeRef::Never,
             "type" => TypeRef::Type,
             "image" => TypeRef::Media(baml_base::MediaKind::Image),
             "audio" => TypeRef::Media(baml_base::MediaKind::Audio),

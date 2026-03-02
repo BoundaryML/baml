@@ -68,6 +68,10 @@ struct UnwindHandler {
     target_ip: usize,
     /// Frame-local slot index where the exception value is stored.
     error_slot: usize,
+    /// Eval-stack depth at registration time. On same-frame unwind the stack
+    /// is truncated back to this depth so stale temporaries don't corrupt the
+    /// handler block.
+    stack_depth: usize,
 }
 
 /// Exception payload used by unwind routing.
@@ -969,6 +973,7 @@ impl BexVm {
             frame_depth,
             target_ip,
             error_slot,
+            stack_depth: self.stack.len(),
         });
         Ok(())
     }
@@ -1035,6 +1040,10 @@ impl BexVm {
         {
             self.interrupt_frame = None;
         }
+
+        // Restore the eval stack to the depth at PushUnwind time. This removes
+        // any stale temporaries from interrupted expressions in the handler frame.
+        self.stack.truncate(handler.stack_depth);
 
         let exception_value = self.exception_to_value(&exception);
 

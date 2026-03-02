@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
   Function CatchAllTyped:
     Return: Union([String, Literal(String("caught string")), Literal(String("caught int"))])
   Function MayFailIntOrString:
-    Return: Union([Never, Never, Literal(String("ok"))])
+    Return: Literal(String("ok"))
   Function CatchThenCatchAll:
     Return: Union([String, Literal(String("caught string")), Literal(String("caught rest"))])
   Function PartialCatch:

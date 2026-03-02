@@ -847,7 +847,7 @@ mod tests {
         let tokens = lex_no_whitespace("throw catch");
         assert_eq!(tokens, vec![TokenKind::Throw, TokenKind::Catch,]);
 
-        // catch_all is a keyword; catch_all_panics is internal-only (lexes as identifier)
+        // catch_all is a keyword; catch_all_panics lexes as a plain identifier
         let tokens2 = lex_no_whitespace("catch_all catch_all_panics");
         assert_eq!(tokens2, vec![TokenKind::CatchAll, TokenKind::Word,]);
     }

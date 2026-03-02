@@ -65,6 +65,8 @@ pub enum ErrorLocation {
     Expr(ExprId),
     /// Error at a match arm (for unreachable arm errors).
     MatchArm(MatchArmId),
+    /// Error at a catch arm (for unreachable arm errors).
+    CatchArm(CatchArmId),
     /// Error at a top-level type item (type alias or class).
     ///
     /// Used for validation errors about type definitions (e.g., cycle detection).
@@ -123,6 +125,11 @@ impl ErrorLocation {
             ErrorLocation::MatchArm(id) => ctx
                 .expr_fn_source_map
                 .match_arm_spans(*id)
+                .map(|s| s.arm_span)
+                .unwrap_or_default(),
+            ErrorLocation::CatchArm(id) => ctx
+                .expr_fn_source_map
+                .catch_arm_spans(*id)
                 .map(|s| s.arm_span)
                 .unwrap_or_default(),
             ErrorLocation::TypeItem(name) => ctx
@@ -185,6 +192,12 @@ impl From<ExprId> for ErrorLocation {
 impl From<MatchArmId> for ErrorLocation {
     fn from(id: MatchArmId) -> Self {
         ErrorLocation::MatchArm(id)
+    }
+}
+
+impl From<CatchArmId> for ErrorLocation {
+    fn from(id: CatchArmId) -> Self {
+        ErrorLocation::CatchArm(id)
     }
 }
 
@@ -346,6 +359,9 @@ pub struct SignatureSourceMap {
     /// Span of the return type annotation
     return_type_span: Option<TextRange>,
 
+    /// Span of the throws clause type annotation
+    throws_type_span: Option<TextRange>,
+
     /// Spans of parameters (entire param including name), indexed by position
     param_spans: Vec<Option<TextRange>>,
 
@@ -367,6 +383,16 @@ impl SignatureSourceMap {
     /// Get the return type span.
     pub fn return_type_span(&self) -> Option<TextRange> {
         self.return_type_span
+    }
+
+    /// Set the throws clause type span.
+    pub fn set_throws_type_span(&mut self, span: TextRange) {
+        self.throws_type_span = Some(span);
+    }
+
+    /// Get the throws clause type span.
+    pub fn throws_type_span(&self) -> Option<TextRange> {
+        self.throws_type_span
     }
 
     /// Add a parameter span (entire parameter including name).
