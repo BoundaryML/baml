@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use baml_db::{
-    Name, QualifiedName, SourceFile, baml_compiler_hir, baml_compiler_parser,
+    Name, QualifiedName, SourceFile, Span, baml_compiler_hir, baml_compiler_parser,
     baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxToken},
     baml_compiler_tir::{self, DefinitionSite, ResolvedValue},
 };
@@ -161,6 +161,7 @@ fn visit_node(
         SyntaxKind::CLASS_DEF => visit_word_as(db, file, node, SemanticTokenType::Class, out),
         SyntaxKind::FIELD => visit_word_as(db, file, node, SemanticTokenType::Property, out),
         SyntaxKind::FUNCTION_DEF => visit_function_def(db, file, node, out),
+        SyntaxKind::PARAMETER => visit_word_as(db, file, node, SemanticTokenType::Parameter, out),
         SyntaxKind::TYPE_EXPR => visit_type_expr(db, file, node, out),
         SyntaxKind::LET_STMT => {
             // Highlight top-level let statements for now...
@@ -434,7 +435,28 @@ fn resolved_value_to_token_type(resolved: &ResolvedValue) -> Option<SemanticToke
 /// This pre-computes the semantic classification for every token that has HIR resolution,
 /// keyed by the exact source range. The map is then consulted during a single CST walk
 /// so tokens are emitted in document order without needing a sort.
+/// Build a `TextRange` covering `name_len` bytes starting at `base + offset`.
+fn text_range_at(base: usize, offset: usize, name_len: usize) -> TextRange {
+    let start = base + offset;
+    TextRange::new(
+        start.try_into().unwrap(),
+        (start + name_len).try_into().unwrap(),
+    )
+}
+
+/// Extract the text slice for a span, returning `(start, slice)`.
+/// Returns `None` if the span extends past the end of `file_text`.
+fn span_text<'a>(span: &Span, file_text: &'a str) -> Option<(usize, &'a str)> {
+    let start: usize = span.range.start().into();
+    let end: usize = span.range.end().into();
+    if end > file_text.len() {
+        return None;
+    }
+    Some((start, &file_text[start..end]))
+}
+
 fn build_resolution_map(
+    db: &ProjectDatabase,
     expr_body: &baml_compiler_hir::ExprBody,
     source_map: &baml_compiler_hir::HirSourceMap,
     inference: &baml_compiler_tir::InferenceResult,
@@ -442,8 +464,17 @@ fn build_resolution_map(
 ) -> HashMap<TextRange, SemanticTokenType> {
     let mut map = HashMap::new();
 
+    // Class field map for validating object field names.
+    let class_fields = db
+        .project()
+        .map(|p| baml_compiler_tir::class_field_types(db, p));
+
     for (expr_id, expr) in expr_body.exprs.iter() {
         let Some(span) = source_map.expr_span(expr_id) else {
+            continue;
+        };
+
+        let Some((span_start, text)) = span_text(&span, file_text) else {
             continue;
         };
 
@@ -453,24 +484,14 @@ fn build_resolution_map(
                 let seg_types = inference.path_segment_types.get(&expr_id);
                 let whole_resolution = inference.expr_resolutions.get(&expr_id);
 
-                let path_start: usize = span.range.start().into();
-                let path_end: usize = span.range.end().into();
-                if path_end > file_text.len() {
-                    continue;
-                }
-                let path_text = &file_text[path_start..path_end];
-
                 let mut cursor = 0usize;
                 for (i, seg_name) in segments.iter().enumerate() {
                     let name_str = seg_name.as_str();
-                    let Some(offset_in_path) = path_text[cursor..].find(name_str) else {
+                    let Some(offset) = text[cursor..].find(name_str) else {
                         continue;
                     };
-                    let seg_start = path_start + cursor + offset_in_path;
-                    let seg_end = seg_start + name_str.len();
-                    let range =
-                        TextRange::new(seg_start.try_into().unwrap(), seg_end.try_into().unwrap());
-                    cursor += offset_in_path + name_str.len();
+                    let range = text_range_at(span_start + cursor, offset, name_str.len());
+                    cursor += offset + name_str.len();
 
                     // Skip segments whose inferred type is Unknown/Error (e.g. non-existent fields).
                     if let Some(types) = seg_types {
@@ -507,21 +528,9 @@ fn build_resolution_map(
                 }
             }
             baml_compiler_hir::Expr::FieldAccess { field, .. } => {
-                let span_start: usize = span.range.start().into();
-                let span_end: usize = span.range.end().into();
-                if span_end > file_text.len() {
-                    continue;
-                }
-                let span_text = &file_text[span_start..span_end];
                 let field_str = field.as_str();
-                if let Some(offset) = span_text.rfind(field_str) {
-                    let field_start = span_start + offset;
-                    let field_end = field_start + field_str.len();
-                    let range = TextRange::new(
-                        field_start.try_into().unwrap(),
-                        field_end.try_into().unwrap(),
-                    );
-
+                if let Some(offset) = text.rfind(field_str) {
+                    let range = text_range_at(span_start, offset, field_str.len());
                     if let Some(token_type) = inference
                         .expr_resolutions
                         .get(&expr_id)
@@ -536,23 +545,11 @@ fn build_resolution_map(
                 fields,
                 spreads: _,
             } => {
-                let span_start: usize = span.range.start().into();
-                let span_end: usize = span.range.end().into();
-                if span_end > file_text.len() {
-                    continue;
-                }
-                let span_text = &file_text[span_start..span_end];
-
                 // Highlight the type name (e.g. `Point` in `Point { x: 1, y: 2 }`)
                 if let Some(name) = type_name {
                     let name_str = name.as_str();
-                    if let Some(offset) = span_text.find(name_str) {
-                        let name_start = span_start + offset;
-                        let name_end = name_start + name_str.len();
-                        let range = TextRange::new(
-                            name_start.try_into().unwrap(),
-                            name_end.try_into().unwrap(),
-                        );
+                    if let Some(offset) = text.find(name_str) {
+                        let range = text_range_at(span_start, offset, name_str.len());
                         // Use the expr resolution (Class) if available, fall back to Class
                         let token_type = inference
                             .expr_resolutions
@@ -563,20 +560,30 @@ fn build_resolution_map(
                     }
                 }
 
-                // Highlight field names as properties
+                // Highlight field names as properties, but only if the field
+                // actually exists on the resolved class.
+                let known_fields = class_fields.as_ref().and_then(|cft| {
+                    let classes = cft.classes(db);
+                    match inference.expr_resolutions.get(&expr_id)? {
+                        ResolvedValue::Class(qn) => classes.get(&qn.display_name()).cloned(),
+                        _ => None,
+                    }
+                });
                 let mut cursor = 0usize;
                 for (field_name, _) in fields {
                     let field_str = field_name.as_str();
-                    let Some(offset) = span_text[cursor..].find(field_str) else {
+                    let Some(offset) = text[cursor..].find(field_str) else {
                         continue;
                     };
-                    let field_start = span_start + cursor + offset;
-                    let field_end = field_start + field_str.len();
-                    let range = TextRange::new(
-                        field_start.try_into().unwrap(),
-                        field_end.try_into().unwrap(),
-                    );
-                    map.insert(range, SemanticTokenType::Property);
+                    let range = text_range_at(span_start + cursor, offset, field_str.len());
+                    // Only highlight if we couldn't resolve the class (untyped
+                    // object literal) or the field exists on the class.
+                    if known_fields
+                        .as_ref()
+                        .map_or(true, |f| f.contains_key(field_name))
+                    {
+                        map.insert(range, SemanticTokenType::Property);
+                    }
                     cursor += offset + field_str.len();
                 }
             }
@@ -598,17 +605,11 @@ fn build_resolution_map(
         let Some(span) = source_map.pattern_span(pat_id) else {
             continue;
         };
-        let span_start: usize = span.range.start().into();
-        let span_end: usize = span.range.end().into();
-        if span_end > file_text.len() {
+        let Some((pat_start, pat_text)) = span_text(&span, file_text) else {
             continue;
-        }
-        let span_text = &file_text[span_start..span_end];
-        if let Some(offset) = span_text.find(name_str) {
-            let name_start = span_start + offset;
-            let name_end = name_start + name_str.len();
-            let range =
-                TextRange::new(name_start.try_into().unwrap(), name_end.try_into().unwrap());
+        };
+        if let Some(offset) = pat_text.find(name_str) {
+            let range = text_range_at(pat_start, offset, name_str.len());
             map.insert(range, SemanticTokenType::Variable);
         }
     }
@@ -647,7 +648,7 @@ impl<'a> ExprBodyVisitor<'a> {
         };
         let inference = baml_compiler_tir::function_type_inference(db, func_loc);
         let file_text = file.text(db);
-        let resolution_map = build_resolution_map(expr_body, source_map, &inference, file_text);
+        let resolution_map = build_resolution_map(db, expr_body, source_map, &inference, file_text);
         Some(Self {
             db,
             file,
@@ -671,7 +672,9 @@ impl<'a> ExprBodyVisitor<'a> {
                 self.visit_first_word_as(node, SemanticTokenType::Variable, out);
             }
             SyntaxKind::OBJECT_FIELD => {
-                self.visit_first_word_as(node, SemanticTokenType::Property, out);
+                // Field names are handled by the resolution map (only valid
+                // fields on the resolved class get highlighted as Property).
+                self.visit_children(node, out);
             }
             SyntaxKind::OBJECT_LITERAL => {
                 self.visit_children(node, out);
