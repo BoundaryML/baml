@@ -2,7 +2,10 @@
 
 use baml_db::{
     Name, SourceFile,
-    baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items, type_ref_to_str},
+    baml_compiler_hir::{
+        self, ExprBody, FunctionBody, ItemId, file_item_tree, project_items, type_ref_to_str,
+    },
+    baml_compiler_tir,
     baml_workspace::Project,
 };
 use text_size::{TextRange, TextSize};
@@ -66,23 +69,32 @@ impl Hover {
 ///
 /// Returns `None` if there's nothing to show at this position.
 pub fn hover(
-    db: &dyn Db,
+    db: &dyn baml_compiler_tir::Db,
     file: SourceFile,
     project: Project,
     offset: TextSize,
 ) -> Option<RangedValue<Hover>> {
     let text = file.text(db);
 
-    // Get the word at the cursor position
     let (word, word_range) = get_word_at_offset(text, offset)?;
 
-    // Look up the symbol by name
-    let hover_text = get_hover_text_for_symbol(db, project, &word)?;
+    // Try top-level symbol lookup first
+    if let Some(hover_text) = get_hover_text_for_symbol(db, project, &word) {
+        return Some(RangedValue::new(
+            word_range,
+            Hover::with_signature(hover_text),
+        ));
+    }
 
-    Some(RangedValue::new(
-        word_range,
-        Hover::with_signature(hover_text),
-    ))
+    // Fall back to local variable / expression type lookup
+    if let Some(hover_text) = get_hover_for_local(db, file, project, offset, &word) {
+        return Some(RangedValue::new(
+            word_range,
+            Hover::with_signature(hover_text),
+        ));
+    }
+
+    None
 }
 
 /// Extract the word (identifier) at the given byte offset.
@@ -129,7 +141,11 @@ fn is_identifier_char(b: u8) -> bool {
 }
 
 /// Get hover text for a symbol by name.
-fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Option<String> {
+fn get_hover_text_for_symbol(
+    db: &dyn baml_compiler_tir::Db,
+    project: Project,
+    name: &str,
+) -> Option<String> {
     let name_to_find = Name::new(name);
     let items = project_items(db, project);
 
@@ -142,7 +158,21 @@ fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Optio
 
                 if func.name == name_to_find {
                     let sig = baml_compiler_hir::function_signature(db, *func_loc);
-                    return Some(format_function_signature(&sig));
+                    let mut text = format_function_signature(&sig);
+
+                    if sig.throws.is_none() {
+                        let precise = baml_compiler_tir::precise_function_throw_sets(db, project);
+                        if let Some(throws) = precise.transitive(db).get(&name_to_find) {
+                            if !throws.is_empty() {
+                                let throws_list =
+                                    throws.iter().cloned().collect::<Vec<_>>().join(" | ");
+                                text.push_str("\n// inferred throws: ");
+                                text.push_str(&throws_list);
+                            }
+                        }
+                    }
+
+                    return Some(text);
                 }
             }
             ItemId::Class(class_loc) => {
@@ -228,6 +258,102 @@ fn get_hover_text_for_symbol(db: &dyn Db, project: Project, name: &str) -> Optio
     None
 }
 
+const KEYWORDS: &[&str] = &[
+    "function",
+    "class",
+    "enum",
+    "type",
+    "client",
+    "generator",
+    "test",
+    "template_string",
+    "retry_policy",
+    "if",
+    "else",
+    "match",
+    "for",
+    "while",
+    "let",
+    "return",
+    "throw",
+    "catch",
+    "catch_all",
+    "catch_all_panics",
+    "true",
+    "false",
+    "null",
+    "never",
+];
+
+/// Try to get hover text for a local variable or expression at the cursor.
+///
+/// Finds the function containing the position, gets TIR inference results,
+/// and looks up the inferred type. For identifiers, finds the variable's
+/// type by searching for `Expr::Path([word])` in the body.
+fn get_hover_for_local(
+    db: &dyn baml_compiler_tir::Db,
+    file: SourceFile,
+    _project: Project,
+    offset: TextSize,
+    word: &str,
+) -> Option<String> {
+    if KEYWORDS.contains(&word) {
+        return None;
+    }
+
+    let func_loc = crate::utils::find_function_at_position(db, file, offset)?;
+    let body = baml_compiler_hir::function_body(db, func_loc);
+
+    let FunctionBody::Expr(expr_body, source_map) = body.as_ref() else {
+        return None;
+    };
+
+    let inference = baml_compiler_tir::function_type_inference(db, func_loc);
+
+    // Position-based pattern binding lookup (catch, match arm)
+    for (pat_id, _) in expr_body.patterns.iter() {
+        if let Some(span) = source_map.pattern_span(pat_id) {
+            if span.range.contains(offset) {
+                if let Some(ty) = inference.pattern_types.get(&pat_id) {
+                    return Some(format!("let {word}: {ty}"));
+                }
+            }
+        }
+    }
+
+    // Expression-based variable lookup (references to variables in expressions)
+    if let Some(ty) = find_variable_type(expr_body, &inference, word) {
+        return Some(format!("let {word}: {ty}"));
+    }
+
+    // Check if it's a function parameter
+    if let Some(ty) = inference.param_types.get(&Name::new(word)) {
+        return Some(format!("(parameter) {word}: {ty}"));
+    }
+
+    None
+}
+
+/// Find the type of a variable by searching for `Expr::Path([name])` in the body.
+fn find_variable_type(
+    body: &ExprBody,
+    inference: &baml_compiler_tir::InferenceResult,
+    name: &str,
+) -> Option<baml_compiler_tir::Ty> {
+    use baml_compiler_hir::Expr;
+
+    for (expr_id, expr) in body.exprs.iter() {
+        if let Expr::Path(segments) = expr {
+            if segments.len() == 1 && segments[0].as_str() == name {
+                if let Some(ty) = inference.expr_types.get(&expr_id) {
+                    return Some(ty.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Format a template string signature for hover display.
 fn format_template_string_signature(sig: &baml_compiler_hir::TemplateStringSignature) -> String {
     let params: Vec<String> = sig
@@ -251,11 +377,18 @@ fn format_function_signature(sig: &baml_compiler_hir::FunctionSignature) -> Stri
         .map(|p| format!("{}: {}", p.name, type_ref_to_str(&p.type_ref)))
         .collect();
 
+    let throws_clause = sig
+        .throws
+        .as_ref()
+        .map(|t| format!(" throws {}", type_ref_to_str(t)))
+        .unwrap_or_default();
+
     format!(
-        "function {}({}) -> {}",
+        "function {}({}) -> {}{}",
         sig.name,
         params.join(", "),
-        type_ref_to_str(&sig.return_type)
+        type_ref_to_str(&sig.return_type),
+        throws_clause
     )
 }
 

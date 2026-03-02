@@ -11,7 +11,6 @@ use baml_db::{
     baml_compiler_tir::{DefinitionSite, ResolvedValue},
 };
 use baml_project::ProjectDatabase;
-use rowan::ast::AstNode;
 use text_size::{TextRange, TextSize};
 
 /// A navigation target representing a definition location.
@@ -95,7 +94,7 @@ pub fn goto_definition(
     tracing::debug!(word, "goto_definition");
 
     // Get the function containing this position
-    let function_loc = find_function_at_position(db, file_id, position)?;
+    let function_loc = crate::utils::find_function_at_position(db, *source_file, position)?;
 
     // Get the function body
     let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
@@ -220,76 +219,6 @@ pub fn goto_definition(
     lookup_symbol_definition(db, &fqn)
 }
 
-/// Find the function containing the given position.
-fn find_function_at_position(
-    db: &ProjectDatabase,
-    file_id: FileId,
-    position: TextSize,
-) -> Option<FunctionLoc<'_>> {
-    // Get the source file
-    let source_files = db.get_source_files();
-    let source_file = source_files.iter().find(|f| f.file_id(db) == file_id)?;
-
-    // Get all items in the file
-    let file_items = baml_db::baml_compiler_hir::file_items(db, *source_file);
-
-    // Get the syntax tree to check text ranges
-    let tree = baml_db::baml_compiler_parser::syntax_tree(db, *source_file);
-    let ast_file = baml_db::baml_compiler_syntax::ast::SourceFile::cast(tree).unwrap();
-
-    // Iterate through items to find functions
-    for item_id in file_items.items(db) {
-        if let baml_db::baml_compiler_hir::ItemId::Function(func_loc) = item_id {
-            // Get the function from the item tree
-            let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, *source_file);
-            let func = &item_tree[func_loc.id(db)];
-            let func_name = &func.name;
-
-            // Find the function node in the AST
-            for item in ast_file.items() {
-                match item {
-                    baml_db::baml_compiler_syntax::ast::Item::Function(func_node) => {
-                        if let Some(name) = func_node.name() {
-                            if name.text() == func_name {
-                                // Check if position is within this function's range
-                                let range = func_node.syntax().text_range();
-                                if range.contains(position) {
-                                    return Some(*func_loc);
-                                }
-                            }
-                        }
-                    }
-                    baml_db::baml_compiler_syntax::ast::Item::Class(class_node) => {
-                        // Check methods in classes
-                        // Method func_name is qualified as "ClassName.methodName"
-                        // AST method name is just "methodName"
-                        let class_name = class_node
-                            .name()
-                            .map(|n| n.text().to_string())
-                            .unwrap_or_else(|| "UnnamedClass".to_string());
-                        for method in class_node.methods() {
-                            if let Some(name) = method.name() {
-                                // Compare against qualified name (ClassName.methodName)
-                                let qualified_method_name =
-                                    QualifiedName::local_method_from_str(&class_name, name.text());
-                                if qualified_method_name.as_str() == func_name.as_str() {
-                                    let range = method.syntax().text_range();
-                                    if range.contains(position) {
-                                        return Some(*func_loc);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-
-    None
-}
-
 /// Get the type inference results for a function.
 fn get_function_inference(
     db: &ProjectDatabase,
@@ -342,9 +271,6 @@ fn resolution_to_navigation_target(
                     Some(NavigationTarget::new(name.clone(), file_path, span))
                 }
                 Some(DefinitionSite::Parameter(_index)) => {
-                    // Get the function signature to find the parameter span
-                    // Note: We use the name from the resolution because param_types doesn't
-                    // preserve order, so the index may not be accurate
                     let signature =
                         baml_db::baml_compiler_hir::function_signature(db, function_loc);
                     let sig_source_map =
@@ -355,12 +281,15 @@ fn resolution_to_navigation_target(
                         .enumerate()
                         .find(|(_, p)| p.name == *name)?;
                     let param_span = sig_source_map.param_span(param_idx)?;
-
-                    // Create a span using the file_id and text range
                     let span = Span::new(file_id, param_span);
                     let file_path = db.file_id_to_path(file_id)?.clone();
 
                     Some(NavigationTarget::new(param.name.clone(), file_path, span))
+                }
+                Some(DefinitionSite::Pattern(pat_id)) => {
+                    let span = source_map.pattern_span(*pat_id)?;
+                    let file_path = db.file_id_to_path(file_id)?.clone();
+                    Some(NavigationTarget::new(name.clone(), file_path, span))
                 }
                 None => None,
             }

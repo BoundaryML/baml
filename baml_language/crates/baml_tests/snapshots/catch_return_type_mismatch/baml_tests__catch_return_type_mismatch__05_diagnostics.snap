@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== DIAGNOSTICS ===
+  [type] Error: Expected `bool`, found `Errors.AuthenticationError`
+    ╭─[ catch_return_type_mismatch.baml:18:44 ]
+    │
+ 18 │     Errors.AuthenticationError => { return e }
+    │                                            ┬  
+    │                                            ╰── Expected `bool`, found `Errors.AuthenticationError`
+    │ 
+    │ Note: Error code: E0001
+────╯

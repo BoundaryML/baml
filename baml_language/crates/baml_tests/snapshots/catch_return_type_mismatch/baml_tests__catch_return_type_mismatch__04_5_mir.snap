@@ -1,0 +1,68 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR ===
+fn caller() -> bool {
+    // Locals:
+    let _0: bool // return
+    let _1: unknown
+    let _2: unknown // e
+    let _3: bool
+    let _4: void
+    let _5: () -> bool
+
+    bb0: {
+        _5 = const fn callee;
+        _0 = call copy _5() -> [bb7, unwind: bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _2 = copy _1;
+        _3 = copy _1 == const Errors.AuthenticationError;
+        branch copy _3 -> [bb5, bb4];
+    }
+
+    bb4: {
+        throw copy _1;
+    }
+
+    bb5: {
+        _0 = copy _2;
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+
+    bb7: {
+        goto -> bb2;
+    }
+}
+
+fn callee() -> bool {
+    // Locals:
+    let _0: bool // return
+    let _1: void
+
+    bb0: {
+        _0 = const true;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+}

@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TYPE INFERENCE ===
+  Function caller:
+    Return: Bool
+    Errors:
+      - Expected bool. Found Errors.AuthenticationError
+  Function callee:
+    Return: Bool

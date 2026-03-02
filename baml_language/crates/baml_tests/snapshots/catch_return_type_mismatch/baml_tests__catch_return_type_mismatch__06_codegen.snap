@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function callee() -> bool {
+    load_const true
+    return
+}
+
+function caller() -> bool {
+    push_unwind L0, slot 1
+    call callee
+    pop_unwind
+    jump L3
+
+  L0:
+    load_var _1
+    load_const 0 /* Errors.AuthenticationError */
+    alloc_variant Errors
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L2
+
+  L1:
+    load_var _1
+    throw
+
+  L2:
+    load_var _1
+    return
+
+  L3:
+    return
+}

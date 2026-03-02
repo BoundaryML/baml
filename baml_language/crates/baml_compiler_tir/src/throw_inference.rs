@@ -34,11 +34,11 @@
 //! falls back to `"unknown"`. The TIR-level pass fills in the precision
 //! for local analysis.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use baml_base::Name;
 use baml_compiler_analysis::{AnalysisGraph, AnalysisResult};
-use baml_compiler_hir::{Expr, ExprBody, Literal, Stmt};
+use baml_compiler_hir::{Expr, ExprBody, Literal, Pattern, Stmt};
 
 use crate::divergence::call_target_from_callee_expr;
 
@@ -81,7 +81,9 @@ fn throw_fact_from_expr(expr: &Expr) -> ThrowFact {
 /// Collect direct throw types from a function body's HIR.
 ///
 /// Flat-scans all expressions and statements for `Throw` nodes, recording a
-/// throw fact for each.
+/// throw fact for each. Then filters out facts that match catch binding
+/// variable names — `throw e` inside `catch (e) { ... }` is a re-throw
+/// whose types propagate through call edges, not direct facts.
 pub fn collect_direct_throws(body: &ExprBody) -> BTreeSet<ThrowFact> {
     let mut facts = BTreeSet::new();
 
@@ -96,7 +98,35 @@ pub fn collect_direct_throws(body: &ExprBody) -> BTreeSet<ThrowFact> {
         }
     }
 
+    let catch_bindings = collect_catch_binding_names(body);
+    if !catch_bindings.is_empty() {
+        facts.retain(|fact| !catch_bindings.contains(fact.as_str()));
+    }
+
     facts
+}
+
+/// Collect all catch binding variable names from a function body.
+///
+/// These names are used to filter garbage facts from `collect_direct_throws`.
+/// A `throw e` where `e` is a catch binding produces the variable name as a
+/// fact, which is meaningless — the actual throw types propagate through
+/// call edges from the catch base's callee.
+fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
+    let mut names = HashSet::new();
+    for (_, expr) in body.exprs.iter() {
+        if let Expr::Catch { clauses, .. } = expr {
+            for clause in clauses {
+                match &body.patterns[clause.binding] {
+                    Pattern::Binding(name) | Pattern::TypedBinding { name, .. } => {
+                        names.insert(name.as_str());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    names
 }
 
 /// Collect function call targets from a function body's HIR.
@@ -404,6 +434,73 @@ mod tests {
         assert!(
             b_set.contains("int"),
             "B should see int from A's declaration"
+        );
+    }
+
+    #[test]
+    fn collect_direct_throws_filters_catch_binding_rethrows() {
+        use baml_compiler_hir::{CatchArm, CatchClause, CatchClauseKind, Pattern};
+
+        // Build: catch (e) { _ => throw e }
+        // Also has: throw "real_error"
+        // The "e" fact should be filtered; "string" should survive.
+        let mut exprs = Arena::new();
+        let mut patterns = Arena::new();
+        let mut catch_arms_arena = Arena::new();
+
+        // `throw "real_error"` at top level
+        let real_value = exprs.alloc(Expr::Literal(Literal::String("real_error".into())));
+        let _real_throw = exprs.alloc(Expr::Throw { value: real_value });
+
+        // catch base: some call
+        let callee = exprs.alloc(Expr::Path(vec![Name::new("getProfile")]));
+        let call = exprs.alloc(Expr::Call {
+            callee,
+            args: Vec::new(),
+        });
+
+        // catch arm body: `throw e`
+        let e_ref = exprs.alloc(Expr::Path(vec![Name::new("e")]));
+        let rethrow = exprs.alloc(Expr::Throw { value: e_ref });
+
+        // catch binding pattern
+        let binding_pat = patterns.alloc(Pattern::Binding(Name::new("e")));
+        // arm pattern (wildcard)
+        let arm_pat = patterns.alloc(Pattern::Binding(Name::new("_")));
+
+        let arm = catch_arms_arena.alloc(CatchArm {
+            pattern: arm_pat,
+            body: rethrow,
+        });
+
+        let _catch_expr = exprs.alloc(Expr::Catch {
+            base: call,
+            clauses: vec![CatchClause {
+                kind: CatchClauseKind::Catch,
+                binding: binding_pat,
+                arms: vec![arm],
+            }],
+        });
+
+        let body = ExprBody {
+            exprs,
+            stmts: Arena::new(),
+            patterns,
+            match_arms: Arena::new(),
+            catch_arms: catch_arms_arena,
+            types: Arena::new(),
+            root_expr: None,
+            diagnostics: Vec::new(),
+        };
+
+        let throws = collect_direct_throws(&body);
+        assert!(
+            throws.contains("string"),
+            "should keep 'string' from throw \"real_error\", got: {throws:?}"
+        );
+        assert!(
+            !throws.contains("e"),
+            "should filter 'e' (catch binding re-throw), got: {throws:?}"
         );
     }
 

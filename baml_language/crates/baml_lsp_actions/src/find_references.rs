@@ -11,7 +11,6 @@ use baml_db::{
     baml_compiler_tir::ResolvedValue,
 };
 use baml_project::ProjectDatabase;
-use rowan::ast::AstNode;
 use text_size::TextSize;
 
 /// A reference location in source code.
@@ -79,7 +78,8 @@ fn find_symbol_at_position(
     }
 
     // Try to find expression at position within a function
-    if let Some(function_loc) = find_function_at_position(db, file_id, position) {
+    if let Some(function_loc) = crate::utils::find_function_at_position(db, *source_file, position)
+    {
         // Get the function body
         let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
         let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) = &*body else {
@@ -192,16 +192,14 @@ fn find_local_definition_at_position(
         }
     }
 
-    // Check let statements in the function body
+    // Check let statements and pattern bindings in the function body
     let body = baml_db::baml_compiler_hir::function_body(db, function_loc);
     if let baml_db::baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) = &*body {
         for (stmt_id, stmt) in expr_body.stmts.iter() {
             if let baml_db::baml_compiler_hir::Stmt::Let { pattern, .. } = stmt {
-                // Get the pattern name
                 let pat = &expr_body.patterns[*pattern];
                 if let baml_db::baml_compiler_hir::Pattern::Binding(name) = pat {
                     if name.as_str() == word {
-                        // Check if position is within this statement's span
                         if let Some(span) = source_map.stmt_span(stmt_id) {
                             if span.range.contains(position) {
                                 return Some(ResolvedValue::Local {
@@ -214,44 +212,22 @@ fn find_local_definition_at_position(
                 }
             }
         }
-    }
 
-    None
-}
-
-/// Find the function containing the given position (reusing logic from `goto_definition`).
-fn find_function_at_position(
-    db: &ProjectDatabase,
-    file_id: FileId,
-    position: TextSize,
-) -> Option<FunctionLoc<'_>> {
-    // Get the source file
-    let source_files = db.get_source_files();
-    let source_file = source_files.iter().find(|f| f.file_id(db) == file_id)?;
-
-    // Get all items in the file
-    let file_items = baml_db::baml_compiler_hir::file_items(db, *source_file);
-
-    // Get the syntax tree to check text ranges
-    let tree = baml_db::baml_compiler_parser::syntax_tree(db, *source_file);
-    let ast_file = baml_db::baml_compiler_syntax::ast::SourceFile::cast(tree)?;
-
-    // Iterate through items to find functions
-    for item_id in file_items.items(db) {
-        if let baml_db::baml_compiler_hir::ItemId::Function(func_loc) = item_id {
-            let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, *source_file);
-            let func = &item_tree[func_loc.id(db)];
-            let func_name = &func.name;
-
-            // Find the function node in the AST
-            for item in ast_file.items() {
-                if let baml_db::baml_compiler_syntax::ast::Item::Function(func_node) = item {
-                    if let Some(name) = func_node.name() {
-                        if name.text() == func_name {
-                            let range = func_node.syntax().text_range();
-                            if range.contains(position) {
-                                return Some(*func_loc);
-                            }
+        // Check pattern bindings (catch, match arm)
+        for (pat_id, pat) in expr_body.patterns.iter() {
+            let pat_name = match pat {
+                baml_db::baml_compiler_hir::Pattern::Binding(name) => Some(name),
+                baml_db::baml_compiler_hir::Pattern::TypedBinding { name, .. } => Some(name),
+                _ => None,
+            };
+            if let Some(name) = pat_name {
+                if name.as_str() == word {
+                    if let Some(span) = source_map.pattern_span(pat_id) {
+                        if span.range.contains(position) {
+                            return Some(ResolvedValue::Local {
+                                name: name.clone(),
+                                definition_site: Some(DefinitionSite::Pattern(pat_id)),
+                            });
                         }
                     }
                 }
