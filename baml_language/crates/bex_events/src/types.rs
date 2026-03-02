@@ -31,7 +31,7 @@ pub enum EventKind {
 #[derive(Clone, Debug)]
 pub enum FunctionEvent {
     Start(FunctionStart),
-    End(FunctionEnd),
+    End(Box<FunctionEnd>),
 }
 
 /// Emitted when a traced function begins execution.

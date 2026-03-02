@@ -1127,11 +1127,13 @@ impl BexEngine {
                                 },
                                 call_stack: full_call_stack,
                                 timestamp: SystemTime::now(),
-                                event: EventKind::Function(FunctionEvent::End(FunctionEnd {
-                                    name: root_span.label,
-                                    result: external_result,
-                                    duration: root_span.started_at.elapsed(),
-                                })),
+                                event: EventKind::Function(FunctionEvent::End(Box::new(
+                                    FunctionEnd {
+                                        name: root_span.label,
+                                        result: external_result,
+                                        duration: root_span.started_at.elapsed(),
+                                    },
+                                ))),
                             };
                             self.emit(end_event);
                         }
@@ -1378,13 +1380,13 @@ impl BexEngine {
                                         },
                                         call_stack,
                                         timestamp: SystemTime::now(),
-                                        event: EventKind::Function(FunctionEvent::End(
+                                        event: EventKind::Function(FunctionEvent::End(Box::new(
                                             FunctionEnd {
                                                 name: function_name,
                                                 result: external_result,
                                                 duration: span.started_at.elapsed(),
                                             },
-                                        )),
+                                        ))),
                                     };
                                     self.emit(exit_event);
                                 }

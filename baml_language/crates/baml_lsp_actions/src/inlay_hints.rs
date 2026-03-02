@@ -78,18 +78,10 @@ fn display_ty(ty: &baml_db::baml_compiler_tir::Ty) -> Option<baml_db::baml_compi
     use baml_db::baml_compiler_tir::{LiteralValue, Ty};
     match ty {
         Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => None,
-        Ty::Literal(LiteralValue::Int(_), _) => Some(Ty::Int {
-            attr: Default::default(),
-        }),
-        Ty::Literal(LiteralValue::Float(_), _) => Some(Ty::Float {
-            attr: Default::default(),
-        }),
-        Ty::Literal(LiteralValue::String(_), _) => Some(Ty::String {
-            attr: Default::default(),
-        }),
-        Ty::Literal(LiteralValue::Bool(_), _) => Some(Ty::Bool {
-            attr: Default::default(),
-        }),
+        Ty::Literal(LiteralValue::Int(_), attr) => Some(Ty::Int { attr: attr.clone() }),
+        Ty::Literal(LiteralValue::Float(_), attr) => Some(Ty::Float { attr: attr.clone() }),
+        Ty::Literal(LiteralValue::String(_), attr) => Some(Ty::String { attr: attr.clone() }),
+        Ty::Literal(LiteralValue::Bool(_), attr) => Some(Ty::Bool { attr: attr.clone() }),
         other => Some(other.clone()),
     }
 }

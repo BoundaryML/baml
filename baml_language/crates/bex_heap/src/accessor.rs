@@ -679,6 +679,8 @@ impl<'a> BexValue<'a> {
                     }),
 
                     Object::String(s) => Ok(BexExternalValue::String(s.clone())),
+                    // Deep-copy path for trace payloads: no declared type is available here,
+                    // so placeholder types with default attr are used.
                     Object::Array(array) => Ok(BexExternalValue::Array {
                         element_type: Ty::BuiltinUnknown {
                             attr: baml_type::TyAttr::default(),

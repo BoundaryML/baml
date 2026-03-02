@@ -348,6 +348,10 @@ fn is_simple_type_name(name: &str) -> bool {
 }
 
 /// Normalize a union type by flattening nested unions and removing duplicates.
+///
+/// Uses `TyAttr::default()` for the output union because this is only called during
+/// type lowering from `TypeRef` syntax nodes, which construct fresh types rather than
+/// transforming existing ones — there is no source `TyAttr` to preserve.
 fn normalize_union(types: Vec<Ty>) -> Ty {
     let mut normalized = Vec::new();
 

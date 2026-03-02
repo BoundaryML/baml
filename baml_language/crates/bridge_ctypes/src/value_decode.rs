@@ -45,6 +45,21 @@ pub fn inbound_to_external(
     }
 }
 
+/// Build the default "any scalar" union type for untyped inbound values.
+fn default_scalar_union_ty() -> Ty {
+    let d = baml_type::TyAttr::default();
+    Ty::Union(
+        vec![
+            Ty::Int { attr: d.clone() },
+            Ty::Float { attr: d.clone() },
+            Ty::String { attr: d.clone() },
+            Ty::Bool { attr: d.clone() },
+            Ty::Null { attr: d.clone() },
+        ],
+        d,
+    )
+}
+
 fn convert_list(
     list: InboundListValue,
     handle_table: &HandleTable,
@@ -55,26 +70,7 @@ fn convert_list(
         .map(|v| inbound_to_external(v, handle_table))
         .collect();
     Ok(BexExternalValue::Array {
-        element_type: Ty::Union(
-            vec![
-                Ty::Int {
-                    attr: baml_type::TyAttr::default(),
-                },
-                Ty::Float {
-                    attr: baml_type::TyAttr::default(),
-                },
-                Ty::String {
-                    attr: baml_type::TyAttr::default(),
-                },
-                Ty::Bool {
-                    attr: baml_type::TyAttr::default(),
-                },
-                Ty::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-            ],
-            baml_type::TyAttr::default(),
-        ),
+        element_type: default_scalar_union_ty(),
         items: items?,
     })
 }
@@ -97,26 +93,7 @@ fn convert_map(
         key_type: Ty::String {
             attr: baml_type::TyAttr::default(),
         },
-        value_type: Ty::Union(
-            vec![
-                Ty::Int {
-                    attr: baml_type::TyAttr::default(),
-                },
-                Ty::Float {
-                    attr: baml_type::TyAttr::default(),
-                },
-                Ty::String {
-                    attr: baml_type::TyAttr::default(),
-                },
-                Ty::Bool {
-                    attr: baml_type::TyAttr::default(),
-                },
-                Ty::Null {
-                    attr: baml_type::TyAttr::default(),
-                },
-            ],
-            baml_type::TyAttr::default(),
-        ),
+        value_type: default_scalar_union_ty(),
         entries,
     })
 }

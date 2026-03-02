@@ -173,6 +173,31 @@ pub enum Ty {
 impl Ty {
     // --- TyAttr accessor ---
 
+    /// Replace the TyAttr on this type, returning a new Ty with the given attr.
+    pub fn with_attr(self, attr: TyAttr) -> Ty {
+        match self {
+            Ty::Int { .. } => Ty::Int { attr },
+            Ty::Float { .. } => Ty::Float { attr },
+            Ty::String { .. } => Ty::String { attr },
+            Ty::Bool { .. } => Ty::Bool { attr },
+            Ty::Null { .. } => Ty::Null { attr },
+            Ty::Void { .. } => Ty::Void { attr },
+            Ty::BuiltinUnknown { .. } => Ty::BuiltinUnknown { attr },
+            Ty::Media(kind, _) => Ty::Media(kind, attr),
+            Ty::Literal(lit, _) => Ty::Literal(lit, attr),
+            Ty::Class(tn, _) => Ty::Class(tn, attr),
+            Ty::Enum(tn, _) => Ty::Enum(tn, attr),
+            Ty::Optional(inner, _) => Ty::Optional(inner, attr),
+            Ty::List(inner, _) => Ty::List(inner, attr),
+            Ty::Map { key, value, .. } => Ty::Map { key, value, attr },
+            Ty::Union(members, _) => Ty::Union(members, attr),
+            Ty::Opaque(tn, _) => Ty::Opaque(tn, attr),
+            Ty::TypeAlias(tn, _) => Ty::TypeAlias(tn, attr),
+            Ty::Function { params, ret, .. } => Ty::Function { params, ret, attr },
+            Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
+        }
+    }
+
     /// Get the TyAttr for this type.
     pub fn attr(&self) -> &TyAttr {
         match self {
@@ -225,11 +250,13 @@ impl Ty {
     }
 
     /// Opaque resource handle type (file, socket, HTTP response body).
+    /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
     pub fn resource() -> Self {
         Self::opaque_builtin("baml.llm.Resource", "baml.llm.Resource", TyAttr::default())
     }
 
     /// Opaque structured prompt tree type for LLM calls.
+    /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
     pub fn prompt_ast() -> Self {
         Self::opaque_builtin(
             "baml.llm.PromptAst",
@@ -239,6 +266,7 @@ impl Ty {
     }
 
     /// Meta-type — a runtime value that wraps a `Ty`.
+    /// NOTE: Uses TyAttr::default(). Callers with a source attr should use opaque_builtin() directly.
     pub fn type_type() -> Self {
         Self::opaque_builtin("baml.reflect.Type", "type", TyAttr::default())
     }

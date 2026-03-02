@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{Literal, Name};
 use baml_compiler_tir::{self, LiteralValue, Namespace, QualifiedName};
 
-use crate::{Ty, TyAttr, TypeName};
+use crate::{Ty, TypeName};
 
 /// Convert a `QualifiedName` to a `TypeName`, pre-computing the display string.
 pub fn fqn_to_type_name(fqn: &QualifiedName) -> TypeName {
@@ -68,7 +68,6 @@ pub fn convert_tir_ty(
     aliases: &HashMap<Name, baml_compiler_tir::Ty>,
     recursive_aliases: &HashSet<Name>,
 ) -> Result<Ty, String> {
-    let d = TyAttr::default();
     match tir_ty {
         baml_compiler_tir::Ty::Int { attr } => Ok(Ty::Int { attr: attr.clone() }),
         baml_compiler_tir::Ty::Float { attr } => Ok(Ty::Float { attr: attr.clone() }),
@@ -103,11 +102,16 @@ pub fn convert_tir_ty(
                 // compiler-level subtyping, or error at runtime boundary.
                 Ok(Ty::TypeAlias(fqn_to_type_name(fqn), attr.clone()))
             } else if let Some(resolved) = aliases.get(name) {
-                // Non-recursive alias — expand inline
-                convert_tir_ty(resolved, aliases, recursive_aliases)
+                // Non-recursive alias — expand inline, preserving source attr if non-default
+                let expanded = convert_tir_ty(resolved, aliases, recursive_aliases)?;
+                if attr.is_default() {
+                    Ok(expanded)
+                } else {
+                    Ok(expanded.with_attr(attr.clone()))
+                }
             } else {
                 // Alias not found — shouldn't happen after validation
-                Ok(Ty::Null { attr: d })
+                Ok(Ty::Null { attr: attr.clone() })
             }
         }
 
@@ -147,8 +151,8 @@ pub fn convert_tir_ty(
         // Unknown and Error are TIR-only error recovery types.
         // All real type checking happens in TIR; by the time we convert to
         // baml_type, these just mean "no meaningful type" → map to Null.
-        baml_compiler_tir::Ty::Unknown { .. } => Ok(Ty::Null { attr: d }),
-        baml_compiler_tir::Ty::Error { .. } => Ok(Ty::Null { attr: d }),
+        baml_compiler_tir::Ty::Unknown { attr } => Ok(Ty::Null { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Error { attr, .. } => Ok(Ty::Null { attr: attr.clone() }),
         baml_compiler_tir::Ty::Void { attr } => Ok(Ty::Void { attr: attr.clone() }),
         baml_compiler_tir::Ty::Resource { attr } => Ok(Ty::opaque_builtin(
             "baml.llm.Resource",

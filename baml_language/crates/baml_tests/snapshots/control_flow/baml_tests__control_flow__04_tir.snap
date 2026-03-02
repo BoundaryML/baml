@@ -3,26 +3,26 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function IfElseWithHeaders:
-    Return: Union([Literal(String("yes")), Literal(String("no"))])
+    Return: Union([Literal(String("yes"), TyAttr(None)), Literal(String("no"), TyAttr(None))], TyAttr(None))
   Function Headers:
-    Return: Unknown
+    Return: Unknown { attr: TyAttr(None) }
     Errors:
       - int has no field to_string
   Function SimpleFunction:
-    Return: Literal(Int(42))
+    Return: Literal(Int(42), TyAttr(None))
   Function LlmFunction:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function NestedControlFlow:
-    Return: Union([Union([Literal(String("large")), Literal(String("small"))]), Literal(String("zero or negative"))])
+    Return: Union([Union([Literal(String("large"), TyAttr(None)), Literal(String("small"), TyAttr(None))], TyAttr(None)), Literal(String("zero or negative"), TyAttr(None))], TyAttr(None))
   Function ElseIfChain:
-    Return: Union([Literal(String("one")), Union([Literal(String("two")), Union([Literal(String("three")), Literal(String("other"))])])])
+    Return: Union([Literal(String("one"), TyAttr(None)), Union([Literal(String("two"), TyAttr(None)), Union([Literal(String("three"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))], TyAttr(None))], TyAttr(None))
   Function WhileWithHeaders:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function MatchExpression:
-    Return: Union([Literal(String("one")), Literal(String("two")), Literal(String("other"))])
+    Return: Union([Literal(String("one"), TyAttr(None)), Literal(String("two"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
   Function LlmFunction.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function LlmFunction.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function TestClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))

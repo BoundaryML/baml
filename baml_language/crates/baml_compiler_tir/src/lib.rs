@@ -2763,7 +2763,7 @@ fn check_expr_with_info_location(
             // If we expect a specific list type, use it to check elements
             if let Ty::List(expected_elem, _) = expected {
                 if elements.is_empty() {
-                    Ty::List(expected_elem.clone(), d())
+                    expected.clone()
                 } else {
                     // Check all elements against the expected element type
                     // check_expr already emits type mismatch errors, no need for redundant check
@@ -2872,11 +2872,7 @@ fn check_expr_with_info_location(
             } = expected
             {
                 if entries.is_empty() {
-                    Ty::Map {
-                        key: expected_key.clone(),
-                        value: expected_value.clone(),
-                        attr: d(),
-                    }
+                    expected.clone()
                 } else {
                     // Check all entries against the expected key/value types
                     // check_expr already emits type mismatch errors, no need for redundant check
@@ -3082,10 +3078,10 @@ fn infer_literal(lit: &baml_compiler_hir::Literal) -> Ty {
 fn generalize(ty: &Ty) -> Ty {
     use crate::types::LiteralValue;
     match ty {
-        Ty::Literal(LiteralValue::Int(_), _) => Ty::Int { attr: d() },
-        Ty::Literal(LiteralValue::Float(_), _) => Ty::Float { attr: d() },
-        Ty::Literal(LiteralValue::String(_), _) => Ty::String { attr: d() },
-        Ty::Literal(LiteralValue::Bool(_), _) => Ty::Bool { attr: d() },
+        Ty::Literal(LiteralValue::Int(_), attr) => Ty::Int { attr: attr.clone() },
+        Ty::Literal(LiteralValue::Float(_), attr) => Ty::Float { attr: attr.clone() },
+        Ty::Literal(LiteralValue::String(_), attr) => Ty::String { attr: attr.clone() },
+        Ty::Literal(LiteralValue::Bool(_), attr) => Ty::Bool { attr: attr.clone() },
         other => other.clone(),
     }
 }

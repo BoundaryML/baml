@@ -178,11 +178,11 @@ impl HostSpanManager {
             },
             call_stack,
             timestamp: std::time::SystemTime::now(),
-            event: EventKind::Function(FunctionEvent::End(bex_events::FunctionEnd {
+            event: EventKind::Function(FunctionEvent::End(Box::new(bex_events::FunctionEnd {
                 name: entry.function_name,
                 result,
                 duration: entry.started_at.elapsed(),
-            })),
+            }))),
         };
         event_store::emit(&event);
         if let Some(sink) = &self.sink {

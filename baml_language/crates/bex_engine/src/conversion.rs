@@ -65,6 +65,7 @@ impl BexEngine {
             Object::Array(arr) => {
                 // Get element type from declared type, falling back to Null when
                 // the declared type doesn't resolve (e.g., builtin class arrays)
+
                 let element_type = match effective_type {
                     Ty::List(elem_ty, _) => elem_ty.as_ref(),
                     _ => &Ty::Null {
@@ -85,6 +86,7 @@ impl BexEngine {
             Object::Map(map) => {
                 // Get key and value types from declared type, falling back to
                 // Null when the declared type doesn't resolve
+
                 let (key_type, value_type) = match effective_type {
                     Ty::Map { key, value, .. } => (key.as_ref(), value.as_ref()),
                     _ => (
@@ -382,10 +384,10 @@ pub(crate) fn maybe_wrap_union(
                 metadata,
             })
         }
-        Ty::Optional(inner, _) => {
+        Ty::Optional(inner, opt_attr) => {
             let selected = if matches!(value, BexExternalValue::Null) {
                 Ty::Null {
-                    attr: baml_type::TyAttr::default(),
+                    attr: opt_attr.clone(),
                 }
             } else {
                 (**inner).clone()
@@ -467,6 +469,13 @@ fn resolve_effective_type<'a>(value: &Value, declared_type: &'a Ty) -> &'a Ty {
     match declared_type {
         Ty::Union(members, _) => find_matching_union_member(value, members)
             .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
+        Ty::Optional(inner, _) => {
+            if matches!(value, Value::Null) {
+                declared_type
+            } else {
+                resolve_effective_type(value, inner)
+            }
+        }
         _ => declared_type,
     }
 }

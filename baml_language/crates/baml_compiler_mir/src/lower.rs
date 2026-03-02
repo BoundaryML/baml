@@ -1727,6 +1727,8 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 _ => panic!("instanceof RHS must be a simple type name"),
             };
 
+            // Constructed from the type name in the instanceof expression, not transformed
+            // from an existing typed value, so default attr is correct.
             self.builder.assign(
                 dest,
                 Rvalue::IsType {

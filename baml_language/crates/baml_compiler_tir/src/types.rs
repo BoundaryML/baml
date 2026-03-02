@@ -226,6 +226,8 @@ impl Ty {
     }
 
     /// Make this type optional.
+    // The wrapper gets default attr because SAP attrs describe the wrapped type itself,
+    // not the container. The inner type's attr is preserved on the inner type.
     #[must_use]
     #[allow(dead_code)]
     pub fn into_optional(self) -> Self {

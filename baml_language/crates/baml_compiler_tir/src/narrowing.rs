@@ -96,7 +96,7 @@ fn is_nullable(ty: &Ty) -> bool {
 fn remove_null(ty: &Ty) -> Ty {
     match ty {
         Ty::Optional(inner, _) => (**inner).clone(),
-        Ty::Union(members, _) => {
+        Ty::Union(members, union_attr) => {
             let non_null: Vec<Ty> = members
                 .iter()
                 .filter(|m| !matches!(m, Ty::Null { .. }))
@@ -104,15 +104,13 @@ fn remove_null(ty: &Ty) -> Ty {
                 .collect();
             match non_null.len() {
                 0 => Ty::Unknown {
-                    attr: TyAttr::default(),
+                    attr: union_attr.clone(),
                 },
                 1 => non_null.into_iter().next().unwrap(),
-                _ => Ty::Union(non_null, TyAttr::default()),
+                _ => Ty::Union(non_null, union_attr.clone()),
             }
         }
-        Ty::Null { .. } => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        Ty::Null { attr } => Ty::Unknown { attr: attr.clone() },
         other => other.clone(),
     }
 }
@@ -140,7 +138,7 @@ fn same_named_type(a: &Ty, b: &Ty) -> bool {
 /// Remove a specific type from a union (for instanceof false-branch narrowing).
 fn remove_type_from(ty: &Ty, to_remove: &Ty) -> Ty {
     match ty {
-        Ty::Union(members, _) => {
+        Ty::Union(members, union_attr) => {
             let remaining: Vec<Ty> = members
                 .iter()
                 .filter(|m| !same_named_type(m, to_remove))
@@ -148,14 +146,14 @@ fn remove_type_from(ty: &Ty, to_remove: &Ty) -> Ty {
                 .collect();
             match remaining.len() {
                 0 => Ty::Unknown {
-                    attr: TyAttr::default(),
+                    attr: union_attr.clone(),
                 },
                 1 => remaining.into_iter().next().unwrap(),
-                _ => Ty::Union(remaining, TyAttr::default()),
+                _ => Ty::Union(remaining, union_attr.clone()),
             }
         }
-        Ty::Optional(inner, _) if same_named_type(inner.as_ref(), to_remove) => Ty::Null {
-            attr: TyAttr::default(),
+        Ty::Optional(inner, opt_attr) if same_named_type(inner.as_ref(), to_remove) => Ty::Null {
+            attr: opt_attr.clone(),
         },
         _ => ty.clone(),
     }
@@ -307,7 +305,7 @@ fn extract_discriminated_union_narrowing(
 
     // Look up the variable's type — must be a union
     let var_ty = ctx.lookup(var_name)?;
-    let Ty::Union(members, _) = var_ty else {
+    let Ty::Union(members, union_attr) = var_ty else {
         return None;
     };
 
@@ -337,7 +335,7 @@ fn extract_discriminated_union_narrowing(
         // Narrow to matching members
         let narrowed = match matching_members.len() {
             1 => matching_members.into_iter().next().unwrap(),
-            _ => Ty::Union(matching_members, TyAttr::default()),
+            _ => Ty::Union(matching_members, union_attr.clone()),
         };
         Some(vec![(var_name.clone(), narrowed)])
     } else {
@@ -352,7 +350,7 @@ fn extract_discriminated_union_narrowing(
         } else {
             let narrowed = match non_matching.len() {
                 1 => non_matching.into_iter().next().unwrap(),
-                _ => Ty::Union(non_matching, TyAttr::default()),
+                _ => Ty::Union(non_matching, union_attr.clone()),
             };
             Some(vec![(var_name.clone(), narrowed)])
         }
