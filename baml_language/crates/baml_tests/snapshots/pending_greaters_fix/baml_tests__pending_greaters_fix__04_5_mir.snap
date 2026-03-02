@@ -6,7 +6,7 @@ fn BadParam.build_request(x: map<string, int>) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: map<string, int> // x // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "BadParam"
     let _4: map<string, unknown>
     let _5: "x"
@@ -34,7 +34,7 @@ fn BadParam.render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: map<string, int> // x // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "BadParam"
     let _4: map<string, unknown>
     let _5: "x"
@@ -61,7 +61,7 @@ fn BadParam.render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
 fn BadReturnType.build_request() -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.http.Request
     let _2: "BadReturnType"
     let _3: map<string, unknown>
 
@@ -84,7 +84,7 @@ fn BadReturnType.build_request() -> baml.http.Request {
 fn BadReturnType() -> map<string, int> {
     // Locals:
     let _0: map<string, int> // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> unknown
     let _2: "BadReturnType"
     let _3: map<string, unknown>
 
@@ -107,7 +107,7 @@ fn BadReturnType() -> map<string, int> {
 fn BadReturnType.render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _2: "BadReturnType"
     let _3: map<string, unknown>
 
@@ -131,7 +131,7 @@ fn BadParam(x: map<string, int>) -> string {
     // Locals:
     let _0: string // return
     let _1: map<string, int> // x // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "BadParam"
     let _4: map<string, unknown>
     let _5: "x"

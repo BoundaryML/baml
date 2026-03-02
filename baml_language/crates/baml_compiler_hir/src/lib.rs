@@ -1167,6 +1167,179 @@ pub fn list_function_names(db: &dyn Db, root: baml_workspace::Project) -> Vec<(S
     functions
 }
 
+/// The kind of a symbol in a BAML project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolKind {
+    Function,
+    Class,
+    Enum,
+    TypeAlias,
+    Client,
+    Test,
+    Generator,
+    TemplateString,
+    RetryPolicy,
+    /// A field within a class.
+    Field,
+    /// A variant within an enum.
+    EnumVariant,
+}
+
+/// A symbol with proper CST ranges, suitable for document-symbol / outline views.
+#[derive(Debug, Clone)]
+pub struct FileSymbol {
+    pub name: String,
+    pub kind: SymbolKind,
+    pub range: TextRange,
+    pub selection_range: TextRange,
+    pub children: Vec<FileSymbol>,
+}
+
+/// Returns all top-level symbols in a single file with accurate CST ranges.
+///
+/// Used by `textDocument/documentSymbol` to power the Outline view and `@`
+/// symbol search.  Each symbol carries its full range and name-selection range
+/// derived directly from the concrete syntax tree, so cursor-position matching
+/// works correctly.
+pub fn list_file_symbols(db: &dyn Db, file: SourceFile) -> Vec<FileSymbol> {
+    use baml_compiler_syntax::ast;
+    use rowan::ast::AstNode as _;
+
+    let tree = syntax_tree(db, file);
+    let Some(source_file) = ast::SourceFile::cast(tree) else {
+        return Vec::new();
+    };
+
+    let mut symbols = Vec::new();
+
+    for item in source_file.items() {
+        match item {
+            ast::Item::Function(func) => {
+                if let Some(name_token) = func.name() {
+                    // Skip compiler-generated functions (render_prompt, build_request)
+                    if name_token.text().contains('.') {
+                        continue;
+                    }
+                    symbols.push(FileSymbol {
+                        name: name_token.text().to_string(),
+                        kind: SymbolKind::Function,
+                        range: func.syntax().text_range(),
+                        selection_range: name_token.text_range(),
+                        children: Vec::new(),
+                    });
+                }
+            }
+            ast::Item::Class(class) => {
+                if let Some(name_token) = class.name() {
+                    let children: Vec<FileSymbol> = class
+                        .fields()
+                        .filter_map(|field| {
+                            let field_name = field.name()?;
+                            Some(FileSymbol {
+                                name: field_name.text().to_string(),
+                                kind: SymbolKind::Field,
+                                range: field.syntax().text_range(),
+                                selection_range: field_name.text_range(),
+                                children: Vec::new(),
+                            })
+                        })
+                        .collect();
+
+                    symbols.push(FileSymbol {
+                        name: name_token.text().to_string(),
+                        kind: SymbolKind::Class,
+                        range: class.syntax().text_range(),
+                        selection_range: name_token.text_range(),
+                        children,
+                    });
+                }
+            }
+            ast::Item::Enum(enum_def) => {
+                if let Some(name_token) = enum_def.name() {
+                    let children: Vec<FileSymbol> = enum_def
+                        .variants()
+                        .filter_map(|variant| {
+                            let variant_name = variant.name()?;
+                            Some(FileSymbol {
+                                name: variant_name.text().to_string(),
+                                kind: SymbolKind::EnumVariant,
+                                range: variant.syntax().text_range(),
+                                selection_range: variant_name.text_range(),
+                                children: Vec::new(),
+                            })
+                        })
+                        .collect();
+
+                    symbols.push(FileSymbol {
+                        name: name_token.text().to_string(),
+                        kind: SymbolKind::Enum,
+                        range: enum_def.syntax().text_range(),
+                        selection_range: name_token.text_range(),
+                        children,
+                    });
+                }
+            }
+            ast::Item::TypeAlias(alias) => {
+                if let Some(name_token) = alias.name() {
+                    symbols.push(FileSymbol {
+                        name: name_token.text().to_string(),
+                        kind: SymbolKind::TypeAlias,
+                        range: alias.syntax().text_range(),
+                        selection_range: name_token.text_range(),
+                        children: Vec::new(),
+                    });
+                }
+            }
+            ast::Item::Client(client) => {
+                if let Some(name_token) = client.name() {
+                    symbols.push(FileSymbol {
+                        name: name_token.text().to_string(),
+                        kind: SymbolKind::Client,
+                        range: client.syntax().text_range(),
+                        selection_range: name_token.text_range(),
+                        children: Vec::new(),
+                    });
+                }
+            }
+            ast::Item::Test(test) => {
+                if let Some(name_token) = test.name() {
+                    symbols.push(FileSymbol {
+                        name: name_token.text().to_string(),
+                        kind: SymbolKind::Test,
+                        range: test.syntax().text_range(),
+                        selection_range: name_token.text_range(),
+                        children: Vec::new(),
+                    });
+                }
+            }
+            ast::Item::RetryPolicy(rp) => {
+                if let Some(name_token) = rp.name() {
+                    symbols.push(FileSymbol {
+                        name: name_token.text().to_string(),
+                        kind: SymbolKind::RetryPolicy,
+                        range: rp.syntax().text_range(),
+                        selection_range: name_token.text_range(),
+                        children: Vec::new(),
+                    });
+                }
+            }
+            ast::Item::TemplateString(ts) => {
+                if let Some(name_token) = ts.name() {
+                    symbols.push(FileSymbol {
+                        name: name_token.text().to_string(),
+                        kind: SymbolKind::TemplateString,
+                        range: ts.syntax().text_range(),
+                        selection_range: name_token.text_range(),
+                        children: Vec::new(),
+                    });
+                }
+            }
+        }
+    }
+
+    symbols
+}
+
 /// Returns the body of a function (LLM prompt or expression IR).
 ///
 /// This is the most frequently invalidated query - it changes whenever

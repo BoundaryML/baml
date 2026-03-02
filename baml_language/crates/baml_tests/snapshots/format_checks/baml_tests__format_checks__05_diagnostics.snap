@@ -349,44 +349,39 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-    ╭─[ chain_expr.baml:83:6 ]
+    ╭─[ chain_expr.baml:86:5 ]
     │
- 83 │ ╭─▶     ;
-    ┆ ┆   
- 86 │ ├─▶     user.name.len();
-    │ │                          
-    │ ╰────────────────────────── Type `string` has no field `len`
-    │     
-    │     Note: Error code: E0007
+ 86 │     user.name.len();
+    │     ──────┬──────  
+    │           ╰──────── Type `string` has no field `len`
+    │ 
+    │ Note: Error code: E0007
 ────╯
 
   [type] Error: Type `ChainItem[]` has no field `len`
-    ╭─[ chain_expr.baml:86:21 ]
+    ╭─[ chain_expr.baml:87:5 ]
     │
- 86 │ ╭─▶     user.name.len();
- 87 │ ├─▶     items.len();
-    │ │                      
-    │ ╰────────────────────── Type `ChainItem[]` has no field `len`
-    │     
-    │     Note: Error code: E0007
+ 87 │     items.len();
+    │     ────┬────  
+    │         ╰────── Type `ChainItem[]` has no field `len`
+    │ 
+    │ Note: Error code: E0007
 ────╯
 
   [type] Error: Type `ChainItem[]` has no field `get`
-    ╭─[ chain_expr.baml:87:17 ]
+    ╭─[ chain_expr.baml:90:5 ]
     │
- 87 │ ╭─▶     items.len();
-    ┆ ┆   
- 90 │ ├─▶     user.profile.items.get(0);
-    │ │                                    
-    │ ╰──────────────────────────────────── Type `ChainItem[]` has no field `get`
-    │     
-    │     Note: Error code: E0007
+ 90 │     user.profile.items.get(0);
+    │     ───────────┬──────────  
+    │                ╰──────────── Type `ChainItem[]` has no field `get`
+    │ 
+    │ Note: Error code: E0007
 ────╯
 
   [type] Error: Type `ChainItem[]` has no field `get`
-    ╭─[ chain_expr.baml:90:31 ]
+    ╭─[ chain_expr.baml:94:5 ]
     │
- 90 │ ╭─▶     user.profile.items.get(0);
+ 94 │ ╭─▶     items // 2 callee trailing
     ┆ ┆   
  98 │ ├─▶     get // 6 method trailing
     │ │                                  
@@ -396,9 +391,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] Error: Type `ChainItem[]` has no field `get`
-     ╭─[ chain_expr.baml:104:6 ]
+     ╭─[ chain_expr.baml:108:5 ]
      │
- 104 │ ╭─▶     ;
+ 108 │ ╭─▶     items /* 2 callee trailing */
      ┆ ┆   
  112 │ ├─▶     get /* 6 method trailing */
      │ │                                     
@@ -408,1959 +403,1633 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:146:6 ]
+     ╭─[ chain_expr.baml:149:5 ]
      │
- 146 │ ╭─▶     ;
-     ┆ ┆   
- 149 │ ├─▶     user.name.len().to_string();
-     │ │                                      
-     │ ╰────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 149 │     user.name.len().to_string();
+     │     ──────┬──────  
+     │           ╰──────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:146:6 ]
+     ╭─[ chain_expr.baml:149:5 ]
      │
- 146 │ ╭─▶     ;
-     ┆ ┆   
- 149 │ ├─▶     user.name.len().to_string();
-     │ │                                      
-     │ ╰────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 149 │     user.name.len().to_string();
+     │     ──────┬──────  
+     │           ╰──────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:5 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬─────────────────────  
+     │                          ╰─────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:5 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │     ─────────────────────┬────────────────────  
+     │                          ╰────────────────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `get`
-     ╭─[ chain_expr.baml:155:98 ]
+     ╭─[ chain_expr.baml:158:5 ]
      │
- 155 │ ╭─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 158 │ ├─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │ │                                                                                                                                   
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `ChainItem[]` has no field `get`
-     │     
-     │     Note: Error code: E0007
+ 158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+     │     ───────────┬──────────  
+     │                ╰──────────── Type `ChainItem[]` has no field `get`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `len`
@@ -2374,51 +2043,49 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `len`
-     ╭─[ chain_expr.baml:158:58 ]
+     ╭─[ chain_expr.baml:158:59 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                                          ───────────┬───────────  
-     │                                                                     ╰───────────── Type `ChainItem[]` has no field `len`
+     │                                                           ───────────┬──────────  
+     │                                                                      ╰──────────── Type `ChainItem[]` has no field `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `len`
-     ╭─[ chain_expr.baml:158:89 ]
+     ╭─[ chain_expr.baml:158:90 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                                                                         ───────────┬───────────  
-     │                                                                                                    ╰───────────── Type `ChainItem[]` has no field `len`
+     │                                                                                          ───────────┬──────────  
+     │                                                                                                     ╰──────────── Type `ChainItem[]` has no field `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `slice`
-     ╭─[ chain_expr.baml:158:126 ]
+     ╭─[ chain_expr.baml:161:5 ]
      │
- 158 │ ╭─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     ┆ ┆   
- 161 │ ├─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     │ │                                                                                                            
-     │ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────── Type `ChainItem[]` has no field `slice`
-     │     
-     │     Note: Error code: E0007
+ 161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+     │     ────────────┬───────────  
+     │                 ╰───────────── Type `ChainItem[]` has no field `slice`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `len`
-     ╭─[ chain_expr.baml:161:32 ]
+     ╭─[ chain_expr.baml:161:33 ]
      │
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     │                                ───────────┬───────────  
-     │                                           ╰───────────── Type `ChainItem[]` has no field `len`
+     │                                 ───────────┬──────────  
+     │                                            ╰──────────── Type `ChainItem[]` has no field `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:161:103 ]
+     ╭─[ chain_expr.baml:165:5 ]
      │
- 161 │ ╭─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+ 165 │ ╭─▶     user // 2 trailing
      ┆ ┆   
  180 │ ├─▶     len // 17 trailing
      │ │                            
@@ -2428,9 +2095,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:161:103 ]
+     ╭─[ chain_expr.baml:165:5 ]
      │
- 161 │ ╭─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+ 165 │ ╭─▶     user // 2 trailing
      ┆ ┆   
  180 │ ├─▶     len // 17 trailing
      │ │                            
@@ -2440,9 +2107,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:161:103 ]
+     ╭─[ chain_expr.baml:165:5 ]
      │
- 161 │ ╭─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+ 165 │ ╭─▶     user // 2 trailing
      ┆ ┆   
  180 │ ├─▶     len // 17 trailing
      │ │                            
@@ -2452,9 +2119,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:161:103 ]
+     ╭─[ chain_expr.baml:165:5 ]
      │
- 161 │ ╭─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+ 165 │ ╭─▶     user // 2 trailing
      ┆ ┆   
  180 │ ├─▶     len // 17 trailing
      │ │                            
@@ -2464,9 +2131,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:193:6 ]
+     ╭─[ chain_expr.baml:197:5 ]
      │
- 193 │ ╭─▶     ;
+ 197 │ ╭─▶     user /* 2 trailing */
      ┆ ┆   
  212 │ ├─▶     len /* 17 trailing */
      │ │                               
@@ -2476,9 +2143,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:193:6 ]
+     ╭─[ chain_expr.baml:197:5 ]
      │
- 193 │ ╭─▶     ;
+ 197 │ ╭─▶     user /* 2 trailing */
      ┆ ┆   
  212 │ ├─▶     len /* 17 trailing */
      │ │                               
@@ -2488,9 +2155,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:193:6 ]
+     ╭─[ chain_expr.baml:197:5 ]
      │
- 193 │ ╭─▶     ;
+ 197 │ ╭─▶     user /* 2 trailing */
      ┆ ┆   
  212 │ ├─▶     len /* 17 trailing */
      │ │                               
@@ -2500,9 +2167,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:193:6 ]
+     ╭─[ chain_expr.baml:197:5 ]
      │
- 193 │ ╭─▶     ;
+ 197 │ ╭─▶     user /* 2 trailing */
      ┆ ┆   
  212 │ ├─▶     len /* 17 trailing */
      │ │                               
@@ -2512,9 +2179,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `get`
-     ╭─[ chain_expr.baml:225:6 ]
+     ╭─[ chain_expr.baml:229:5 ]
      │
- 225 │ ╭─▶     ;
+ 229 │ ╭─▶     user // 2 trailing
      ┆ ┆   
  238 │ ├─▶     get // 11 trailing
      │ │                            
@@ -2524,23 +2191,21 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `len`
-     ╭─[ chain_expr.baml:239:6 ]
+     ╭─[ chain_expr.baml:241:5 ]
      │
- 239 │ ╭─▶     ( // 12 trailing
-     ┆ ┆   
- 241 │ ├─▶     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     │ │                                                                                    
-     │ ╰──────────────────────────────────────────────────────────────────────────────────── Type `ChainItem[]` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+     │     ───────────┬──────────  
+     │                ╰──────────── Type `ChainItem[]` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `len`
-     ╭─[ chain_expr.baml:241:35 ]
+     ╭─[ chain_expr.baml:241:36 ]
      │
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     │                                   ───────────┬───────────  
-     │                                              ╰───────────── Type `ChainItem[]` has no field `len`
+     │                                    ───────────┬──────────  
+     │                                               ╰──────────── Type `ChainItem[]` has no field `len`
      │ 
      │ Note: Error code: E0007
 ─────╯
@@ -2566,37 +2231,33 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Type `ChainItem[]` has no field `get`
-     ╭─[ chain_expr.baml:255:20 ]
+     ╭─[ chain_expr.baml:256:5 ]
      │
- 255 │ ╭─▶     items  [  0  ];
- 256 │ ├─▶     items  .  get  (  0  );
-     │ │                                 
-     │ ╰───────────────────────────────── Type `ChainItem[]` has no field `get`
-     │     
-     │     Note: Error code: E0007
+ 256 │     items  .  get  (  0  );
+     │     ──────┬──────  
+     │           ╰──────── Type `ChainItem[]` has no field `get`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:256:28 ]
+     ╭─[ chain_expr.baml:259:5 ]
      │
- 256 │ ╭─▶     items  .  get  (  0  );
-     ┆ ┆   
- 259 │ ├─▶     user.tags[0].len();
-     │ │                             
-     │ ╰───────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 259 │     user.tags[0].len();
+     │     ────────┬───────  
+     │             ╰───────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Type `string` has no field `len`
-     ╭─[ chain_expr.baml:260:23 ]
+     ╭─[ chain_expr.baml:261:5 ]
      │
- 260 │ ╭─▶     user.scores[0][0];
- 261 │ ├─▶     items[0].label.len();
-     │ │                               
-     │ ╰─────────────────────────────── Type `string` has no field `len`
-     │     
-     │     Note: Error code: E0007
+ 261 │     items[0].label.len();
+     │     ─────────┬────────  
+     │              ╰────────── Type `string` has no field `len`
+     │ 
+     │ Note: Error code: E0007
 ─────╯
 
   [type] Error: Expected `(x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>`, found `int`

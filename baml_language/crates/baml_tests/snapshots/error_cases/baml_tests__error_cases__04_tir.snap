@@ -3,10 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function Broken.MixedLiteralAndTyped:
-    Return: Literal(String("mixed"))
+    Return: Literal(String("mixed"), TyAttr(None))
   Function Broken.Invalid:
-    Return: Void
+    Return: Void { attr: TyAttr(None) }
   Function Broken.BadUnionPattern:
-    Return: Union([Unknown, Literal(String("bad"))])
+    Return: Union([Unknown { attr: TyAttr(None) }, Literal(String("bad"), TyAttr(None))], TyAttr(None))
     Errors:
       - Unknown type b

@@ -6,7 +6,7 @@ fn AnotherLLM(input: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "AnotherLLM"
     let _4: map<string, unknown>
     let _5: "input"
@@ -34,7 +34,7 @@ fn AnotherLLM.build_request(input: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "AnotherLLM"
     let _4: map<string, unknown>
     let _5: "input"
@@ -62,7 +62,7 @@ fn Ambiguous.build_request(input: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "Ambiguous"
     let _4: map<string, unknown>
     let _5: "input"
@@ -90,7 +90,7 @@ fn AnotherLLM.render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "AnotherLLM"
     let _4: map<string, unknown>
     let _5: "input"
@@ -118,7 +118,7 @@ fn Ambiguous.render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "Ambiguous"
     let _4: map<string, unknown>
     let _5: "input"
@@ -146,7 +146,7 @@ fn Ambiguous(input: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "Ambiguous"
     let _4: map<string, unknown>
     let _5: "input"
@@ -230,7 +230,7 @@ fn ExtractData.render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "ExtractData"
     let _4: map<string, unknown>
     let _5: "text"
@@ -258,7 +258,7 @@ fn ExtractData(text: string) -> JsonData {
     // Locals:
     let _0: JsonData // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "ExtractData"
     let _4: map<string, unknown>
     let _5: "text"
@@ -286,7 +286,7 @@ fn ExtractData.build_request(text: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "ExtractData"
     let _4: map<string, unknown>
     let _5: "text"
@@ -343,7 +343,7 @@ fn ChainedProcess.build_request(input: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "ChainedProcess"
     let _4: map<string, unknown>
     let _5: "input"
@@ -371,7 +371,7 @@ fn LLMAnalyze.render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "LLMAnalyze"
     let _4: map<string, unknown>
     let _5: "text"
@@ -519,7 +519,7 @@ fn LLMAnalyze(text: string) -> Analysis {
     // Locals:
     let _0: Analysis // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "LLMAnalyze"
     let _4: map<string, unknown>
     let _5: "text"
@@ -547,7 +547,7 @@ fn ChainedProcess(input: string) -> string {
     // Locals:
     let _0: string // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> unknown
     let _3: "ChainedProcess"
     let _4: map<string, unknown>
     let _5: "input"
@@ -575,7 +575,7 @@ fn LLMAnalyze.build_request(text: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
     let _1: string // text // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.http.Request
     let _3: "LLMAnalyze"
     let _4: map<string, unknown>
     let _5: "text"
@@ -603,7 +603,7 @@ fn ChainedProcess.render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
     let _1: string // input // param
-    let _2: null
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _3: "ChainedProcess"
     let _4: map<string, unknown>
     let _5: "input"

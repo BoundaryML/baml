@@ -3,24 +3,24 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function ReadAndClose:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ReadMultipleFiles:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ReadFile:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ReadFileInline:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function MultipleConnections:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ConnectAndReadInline:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ConnectAndRead:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ConnectReadAndClose:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ChainCommands:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function RunCommandWithVar:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function RunCommand:
-    Return: String
+    Return: String { attr: TyAttr(None) }

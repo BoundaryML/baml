@@ -193,8 +193,11 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// Uses the shared conversion from `baml_type` which handles FQN→TypeName conversion,
     /// alias expansion, and literal preservation.
     fn convert_tir_ty(&self, tir_ty: &baml_compiler_tir::Ty) -> Ty {
-        baml_type::convert_tir_ty(tir_ty, self.type_aliases, self.recursive_aliases)
-            .unwrap_or(Ty::Null)
+        baml_type::convert_tir_ty(tir_ty, self.type_aliases, self.recursive_aliases).unwrap_or(
+            Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            },
+        )
     }
 
     // ========================================================================
@@ -983,7 +986,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 let base_local = self.builder.temp(base_ty.clone());
                 self.lower_expr(*base, Place::local(base_local), body);
 
-                let index_local = self.builder.temp(Ty::Int);
+                let index_local = self.builder.temp(Ty::Int {
+                    attr: baml_type::TyAttr::default(),
+                });
                 self.lower_expr(*index, Place::local(index_local), body);
 
                 // Determine index kind based on base type
@@ -1104,7 +1109,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                         let body_block = self.builder.create_block();
 
                         // Lower guard expression
-                        let guard_local = self.builder.temp(Ty::Bool);
+                        let guard_local = self.builder.temp(Ty::Bool {
+                            attr: baml_type::TyAttr::default(),
+                        });
                         self.lower_expr(guard, Place::local(guard_local), body);
 
                         // Branch: if guard is true go to body_block, else go to next_block
@@ -1330,19 +1337,19 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// which is not yet implemented.
     fn type_tag_for_ty(&self, ty: &Ty) -> Option<i64> {
         match ty {
-            Ty::Int => Some(baml_type::typetag::INT),
-            Ty::String => Some(baml_type::typetag::STRING),
-            Ty::Bool => Some(baml_type::typetag::BOOL),
-            Ty::Null => Some(baml_type::typetag::NULL),
-            Ty::Float => Some(baml_type::typetag::FLOAT),
-            Ty::Class(tn) => self.class_type_tags.get(tn.name.as_str()).copied(),
+            Ty::Int { .. } => Some(baml_type::typetag::INT),
+            Ty::String { .. } => Some(baml_type::typetag::STRING),
+            Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
+            Ty::Null { .. } => Some(baml_type::typetag::NULL),
+            Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
+            Ty::Class(tn, _) => self.class_type_tags.get(tn.name.as_str()).copied(),
             // TypeAliases: look up by alias name. See doc comment for limitations.
-            Ty::TypeAlias(tn) => self.class_type_tags.get(tn.name.as_str()).copied(),
+            Ty::TypeAlias(tn, _) => self.class_type_tags.get(tn.name.as_str()).copied(),
             // Literal types map to the same tag as their base type
-            Ty::Literal(baml_base::Literal::Int(_)) => Some(baml_type::typetag::INT),
-            Ty::Literal(baml_base::Literal::Float(_)) => Some(baml_type::typetag::FLOAT),
-            Ty::Literal(baml_base::Literal::String(_)) => Some(baml_type::typetag::STRING),
-            Ty::Literal(baml_base::Literal::Bool(_)) => Some(baml_type::typetag::BOOL),
+            Ty::Literal(baml_base::Literal::Int(_), _) => Some(baml_type::typetag::INT),
+            Ty::Literal(baml_base::Literal::Float(_), _) => Some(baml_type::typetag::FLOAT),
+            Ty::Literal(baml_base::Literal::String(_), _) => Some(baml_type::typetag::STRING),
+            Ty::Literal(baml_base::Literal::Bool(_), _) => Some(baml_type::typetag::BOOL),
             _ => None, // Not a type with a known tag
         }
     }
@@ -1379,7 +1386,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             }
             SwitchKind::EnumDiscriminant(_) => {
                 // Emit Discriminant to extract variant index
-                let discriminant_local = self.builder.temp(Ty::Int);
+                let discriminant_local = self.builder.temp(Ty::Int {
+                    attr: baml_type::TyAttr::default(),
+                });
                 self.builder.assign(
                     Place::local(discriminant_local),
                     Rvalue::Discriminant(Place::local(scrutinee_local)),
@@ -1388,7 +1397,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             }
             SwitchKind::TypeTag => {
                 // Emit TypeTag to extract runtime type tag
-                let type_tag_local = self.builder.temp(Ty::Int);
+                let type_tag_local = self.builder.temp(Ty::Int {
+                    attr: baml_type::TyAttr::default(),
+                });
                 self.builder.assign(
                     Place::local(type_tag_local),
                     Rvalue::TypeTag(Place::local(scrutinee_local)),
@@ -1582,7 +1593,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 let pattern_ty = ty.clone();
 
                 // Emit instanceof check
-                let check_local = self.builder.temp(Ty::Bool);
+                let check_local = self.builder.temp(Ty::Bool {
+                    attr: baml_type::TyAttr::default(),
+                });
                 self.builder.assign(
                     Place::local(check_local),
                     Rvalue::IsType {
@@ -1619,7 +1632,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             Pattern::Literal(lit) => {
                 // Compare scrutinee with literal
                 let lit_const = Self::lower_literal(lit);
-                let cmp_local = self.builder.temp(Ty::Bool);
+                let cmp_local = self.builder.temp(Ty::Bool {
+                    attr: baml_type::TyAttr::default(),
+                });
                 self.builder.assign(
                     Place::local(cmp_local),
                     Rvalue::BinaryOp {
@@ -1640,7 +1655,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                     enum_qn,
                     variant: variant.clone(),
                 };
-                let cmp_local = self.builder.temp(Ty::Bool);
+                let cmp_local = self.builder.temp(Ty::Bool {
+                    attr: baml_type::TyAttr::default(),
+                });
                 self.builder.assign(
                     Place::local(cmp_local),
                     Rvalue::BinaryOp {
@@ -1710,11 +1727,13 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
                 _ => panic!("instanceof RHS must be a simple type name"),
             };
 
+            // Constructed from the type name in the instanceof expression, not transformed
+            // from an existing typed value, so default attr is correct.
             self.builder.assign(
                 dest,
                 Rvalue::IsType {
                     operand: lhs_operand,
-                    ty: Ty::TypeAlias(TypeName::local(type_name)),
+                    ty: Ty::TypeAlias(TypeName::local(type_name), baml_type::TyAttr::default()),
                 },
             );
             return;
@@ -1775,7 +1794,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
     /// Lower short-circuit AND: `a && b`
     fn lower_short_circuit_and(&mut self, lhs: ExprId, rhs: ExprId, dest: Place, body: &ExprBody) {
-        let lhs_local = self.builder.temp(Ty::Bool);
+        let lhs_local = self.builder.temp(Ty::Bool {
+            attr: baml_type::TyAttr::default(),
+        });
         self.lower_expr(lhs, Place::local(lhs_local), body);
 
         let bb_rhs = self.builder.create_block();
@@ -1803,7 +1824,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
     /// Lower short-circuit OR: `a || b`
     fn lower_short_circuit_or(&mut self, lhs: ExprId, rhs: ExprId, dest: Place, body: &ExprBody) {
-        let lhs_local = self.builder.temp(Ty::Bool);
+        let lhs_local = self.builder.temp(Ty::Bool {
+            attr: baml_type::TyAttr::default(),
+        });
         self.lower_expr(lhs, Place::local(lhs_local), body);
 
         let bb_true = self.builder.create_block();
@@ -1847,7 +1870,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             None
         };
 
-        let cond_local = self.builder.temp(Ty::Bool);
+        let cond_local = self.builder.temp(Ty::Bool {
+            attr: baml_type::TyAttr::default(),
+        });
         self.lower_expr(condition, Place::local(cond_local), body);
 
         let bb_then = self.builder.create_block();
@@ -1900,7 +1925,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
         // Condition block
         self.builder.set_current_block(bb_cond);
-        let cond_local = self.builder.temp(Ty::Bool);
+        let cond_local = self.builder.temp(Ty::Bool {
+            attr: baml_type::TyAttr::default(),
+        });
         self.lower_expr(condition, Place::local(cond_local), body);
         self.builder
             .branch(Operand::copy_local(cond_local), bb_body, bb_exit);
@@ -1914,7 +1941,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
 
         // Body block
         self.builder.set_current_block(bb_body);
-        let body_result = self.builder.temp(Ty::Void);
+        let body_result = self.builder.temp(Ty::Void {
+            attr: baml_type::TyAttr::default(),
+        });
         self.lower_expr(loop_body, Place::local(body_result), body);
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_cond);
@@ -1944,7 +1973,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         // Check if this is a $watch method call (e.g., value.$watch.options(filter))
         if let Expr::FieldAccess { base, field } = callee_expr {
             let base_ty = body.ty(*base);
-            if let baml_compiler_vir::Ty::WatchAccessor(_) = base_ty {
+            if let baml_compiler_vir::Ty::WatchAccessor(..) = base_ty {
                 // This is a $watch method call
                 // The base expression is var.$watch, so we need to get the var
                 let watch_accessor_expr = body.expr(*base);
@@ -2028,12 +2057,12 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             // Get the type name for method path construction
             // Works for both builtin class types and primitive types with methods
             let type_name = match &base_ty {
-                Ty::Class(tn) if !tn.module_path.is_empty() => Some(tn.display_name.to_string()),
-                Ty::Opaque(tn) => Some(tn.display_name.to_string()),
-                Ty::List(_) => Some("baml.Array".to_string()),
-                Ty::String => Some("baml.String".to_string()),
+                Ty::Class(tn, _) if !tn.module_path.is_empty() => Some(tn.display_name.to_string()),
+                Ty::Opaque(tn, _) => Some(tn.display_name.to_string()),
+                Ty::List(..) => Some("baml.Array".to_string()),
+                Ty::String { .. } => Some("baml.String".to_string()),
                 Ty::Map { .. } => Some("baml.Map".to_string()),
-                Ty::Class(_) => Self::class_name_from_ty(base_ty),
+                Ty::Class(..) => Self::class_name_from_ty(base_ty),
                 _ => None,
             };
 
@@ -2155,7 +2184,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             Expr::Index { base, index } => {
                 let base_place = self.lower_lvalue(*base, body);
                 let base_ty = body.ty(*base).clone();
-                let index_local = self.builder.temp(Ty::Int);
+                let index_local = self.builder.temp(Ty::Int {
+                    attr: baml_type::TyAttr::default(),
+                });
                 self.lower_expr(*index, Place::local(index_local), body);
 
                 // Determine index kind based on base type
@@ -2221,7 +2252,7 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     /// For user classes, returns just the name (e.g., "`MyClass`").
     fn class_name_from_ty(ty: &Ty) -> Option<String> {
         match ty {
-            Ty::TypeAlias(tn) | Ty::Class(tn) => {
+            Ty::TypeAlias(tn, _) | Ty::Class(tn, _) => {
                 // Use display_name which is pre-computed with the full path for builtins
                 Some(tn.display_name.to_string())
             }
@@ -2265,7 +2296,9 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
     fn emit_sys_op_call(&mut self, callee: Operand, args: Vec<Operand>, dest: Place) {
         // Create a temp to hold the future handle
         // Future handles are opaque to the VM - we use Null type
-        let future_local = self.builder.temp(Ty::Null);
+        let future_local = self.builder.temp(Ty::Null {
+            attr: baml_type::TyAttr::default(),
+        });
         let future_place = Place::local(future_local);
 
         // Create blocks for the dispatch and await

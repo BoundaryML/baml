@@ -15,7 +15,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::{FileId, Name, Span};
+use baml_base::{FileId, Name, Span, TyAttr};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
     ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
@@ -61,6 +61,11 @@ pub use resolve::{ResolvedMethod, ResolvedValue};
 use text_size::TextRange;
 pub use types::*;
 
+/// Shorthand for `TyAttr::default()` to reduce verbosity.
+fn d() -> TyAttr {
+    TyAttr::default()
+}
+
 /// Substitute type variable bindings into a `TypePattern`, falling back to `Ty::Unknown`
 /// for unbound type variables.
 ///
@@ -69,33 +74,40 @@ pub use types::*;
 fn substitute_with_fallback(pattern: &baml_builtins::TypePattern, bindings: &Bindings) -> Ty {
     use baml_builtins::TypePattern;
     match pattern {
-        TypePattern::Var(name) => bindings.get(name).cloned().unwrap_or(Ty::Unknown),
-        TypePattern::Int => Ty::Int,
-        TypePattern::Float => Ty::Float,
-        TypePattern::String => Ty::String,
-        TypePattern::Bool => Ty::Bool,
-        TypePattern::Null => Ty::Null,
-        TypePattern::Array(elem) => Ty::List(Box::new(substitute_with_fallback(elem, bindings))),
+        TypePattern::Var(name) => bindings
+            .get(name)
+            .cloned()
+            .unwrap_or(Ty::Unknown { attr: d() }),
+        TypePattern::Int => Ty::Int { attr: d() },
+        TypePattern::Float => Ty::Float { attr: d() },
+        TypePattern::String => Ty::String { attr: d() },
+        TypePattern::Bool => Ty::Bool { attr: d() },
+        TypePattern::Null => Ty::Null { attr: d() },
+        TypePattern::Array(elem) => {
+            Ty::List(Box::new(substitute_with_fallback(elem, bindings)), d())
+        }
         TypePattern::Map { key, value } => Ty::Map {
             key: Box::new(substitute_with_fallback(key, bindings)),
             value: Box::new(substitute_with_fallback(value, bindings)),
+            attr: d(),
         },
-        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
+        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic, d()),
         TypePattern::Optional(inner) => {
-            Ty::Optional(Box::new(substitute_with_fallback(inner, bindings)))
+            Ty::Optional(Box::new(substitute_with_fallback(inner, bindings)), d())
         }
-        TypePattern::Builtin(path) => Ty::Class(builtins::parse_builtin_path(path)),
+        TypePattern::Builtin(path) => Ty::Class(builtins::parse_builtin_path(path), d()),
         TypePattern::Function { params, ret } => Ty::Function {
             params: params
                 .iter()
                 .map(|p| (None, substitute_with_fallback(p, bindings)))
                 .collect(),
             ret: Box::new(substitute_with_fallback(ret, bindings)),
+            attr: d(),
         },
-        TypePattern::Resource => Ty::Resource,
-        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
-        TypePattern::Enum(path) => Ty::Enum(builtins::parse_builtin_path(path)),
-        TypePattern::Type => Ty::Type,
+        TypePattern::Resource => Ty::Resource { attr: d() },
+        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown { attr: d() },
+        TypePattern::Enum(path) => Ty::Enum(builtins::parse_builtin_path(path), d()),
+        TypePattern::Type => Ty::Type { attr: d() },
     }
 }
 
@@ -322,6 +334,7 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
                     let func_type = Ty::Function {
                         params,
                         ret: Box::new(return_type),
+                        attr: d(),
                     };
 
                     // Use the qualified display name so builtin BAML functions are only
@@ -344,11 +357,12 @@ pub fn typing_context(db: &dyn Db, project: Project) -> TypingContextMap<'_> {
                         .collect();
 
                     // Template strings always return String
-                    let return_type = Ty::String;
+                    let return_type = Ty::String { attr: d() };
 
                     let func_type = Ty::Function {
                         params,
                         ret: Box::new(return_type),
+                        attr: d(),
                     };
 
                     let ts_name = hir_signature.name.clone();
@@ -879,11 +893,11 @@ impl<'db> TypeContext<'db> {
     pub fn resolve_named_type(&self, name: &Name) -> Ty {
         use baml_compiler_hir::QualifiedName;
         if let Some(qn) = self.class_names.get(name) {
-            Ty::Class(qn.clone())
+            Ty::Class(qn.clone(), d())
         } else if let Some(qn) = self.enum_names.get(name) {
-            Ty::Enum(qn.clone())
+            Ty::Enum(qn.clone(), d())
         } else {
-            Ty::TypeAlias(QualifiedName::local(name.clone()))
+            Ty::TypeAlias(QualifiedName::local(name.clone()), d())
         }
     }
 
@@ -1003,7 +1017,7 @@ pub fn infer_function_body<'db>(
                 (ty, ErrorLocation::Expr(root_expr))
             } else {
                 (
-                    Ty::Void,
+                    Ty::Void { attr: d() },
                     ErrorLocation::Span(return_type_span.unwrap_or_default()),
                 )
             }
@@ -1065,7 +1079,7 @@ pub fn infer_function_body<'db>(
     } else if !trailing_expr_type.is_void() {
         trailing_expr_type
     } else {
-        Ty::Void
+        Ty::Void { attr: d() }
     };
 
     InferenceResult {
@@ -1371,7 +1385,7 @@ fn validate_llm_prompt(
     // We add them both as functions (for signature checking) and as variables
     // (so {{ Foo() }} resolves "Foo" as a callable)
     for (func_name, func_ty) in ctx.scopes.first().unwrap_or(&HashMap::new()) {
-        if let Ty::Function { params, ret } = func_ty {
+        if let Ty::Function { params, ret, .. } = func_ty {
             // Extract parameter names and types from Ty::Function
             // Names are stored directly in params as (Option<Name>, Ty)
             let jinja_params: Vec<(String, JinjaType)> = params
@@ -1596,7 +1610,7 @@ pub fn validate_template_string_body(
 
     // Add functions (including other template strings) from globals
     for (func_name, func_ty) in globals {
-        if let Ty::Function { params, ret } = func_ty {
+        if let Ty::Function { params, ret, .. } = func_ty {
             // Extract parameter names and types from Ty::Function
             // Names are stored directly in params as (Option<Name>, Ty)
             let jinja_params: Vec<(String, JinjaType)> = params
@@ -1798,7 +1812,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
         Expr::Path(segments) => {
             if segments.is_empty() {
-                Ty::Unknown
+                Ty::Unknown { attr: d() }
             } else if segments.len() == 1 {
                 // Single segment: variable, function, class, or enum lookup
                 let name = &segments[0];
@@ -1845,7 +1859,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         name: name.to_string(),
                         location,
                     });
-                    Ty::Unknown
+                    Ty::Unknown { attr: d() }
                 }
             } else {
                 // Multi-segment path: use HIR name resolution first, then
@@ -1863,7 +1877,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             );
                             // Look up builtin signature and compute function type
                             let full_path = qn.display();
-                            if let Some(def) = builtins::lookup_builtin_by_path(full_path.as_str())
+                            let ty = if let Some(def) =
+                                builtins::lookup_builtin_by_path(full_path.as_str())
                             {
                                 let mut param_types: Vec<(Option<Name>, Ty)> = Vec::new();
                                 if let Some(ref receiver_pattern) = def.receiver {
@@ -1879,20 +1894,25 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                                     ));
                                 }
                                 let return_type = builtins::substitute_unknown(&def.returns);
-                                return Ty::Function {
+                                Ty::Function {
                                     params: param_types,
                                     ret: Box::new(return_type),
-                                };
-                            }
-                            return Ty::Unknown;
+                                    attr: d(),
+                                }
+                            } else {
+                                Ty::Unknown { attr: d() }
+                            };
+                            ctx.set_expr_type(expr_id, ty.clone());
+                            return ty;
                         }
                         PathResolution::Function(qn) => {
                             ctx.set_expr_resolution(expr_id, ResolvedValue::Function(qn.clone()));
                             let path_name = qn.display_name();
-                            if let Some(func_ty) = ctx.lookup(&path_name).cloned() {
-                                return func_ty;
-                            }
-                            return Ty::Unknown;
+                            let Some(ty) = ctx.lookup(&path_name).cloned() else {
+                                return Ty::Unknown { attr: d() };
+                            };
+                            ctx.set_expr_type(expr_id, ty.clone());
+                            return ty;
                         }
                         PathResolution::EnumVariant { enum_fqn, variant } => {
                             ctx.set_expr_resolution(
@@ -1904,7 +1924,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             );
                             let enum_name = enum_fqn.display_name();
                             ctx.enum_variant_exprs.insert(expr_id, (enum_name, variant));
-                            return Ty::Enum(enum_fqn);
+                            let ty = Ty::Enum(enum_fqn, d());
+                            ctx.set_expr_type(expr_id, ty.clone());
+                            return ty;
                         }
                     }
                 }
@@ -1918,7 +1940,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         name: first.to_string(),
                         location,
                     });
-                    return Ty::Unknown;
+                    return Ty::Unknown { attr: d() };
                 };
 
                 // Record segment types and resolutions for codegen
@@ -1960,7 +1982,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ResolvedValue::BuiltinFunction(baml_base::QualifiedName::from_builtin_path(
                             def.path,
                         ))
-                    } else if let Ty::Class(class_fqn) = &ty {
+                    } else if let Ty::Class(class_fqn, _) = &ty {
                         // Check if this is a method (function type) or a data field
                         if matches!(field_ty, Ty::Function { .. }) {
                             // Method reference - use qualified name
@@ -2019,7 +2041,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 // For instanceof, don't try to resolve RHS as a variable.
                 // The RHS is a type name and will be resolved at runtime.
                 // Just return bool since instanceof always returns a boolean.
-                Ty::Bool
+                Ty::Bool { attr: d() }
             } else {
                 let lhs_ty = infer_expr(ctx, *lhs, body);
                 let rhs_ty = infer_expr(ctx, *rhs, body);
@@ -2065,6 +2087,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let callee_ty = Ty::Function {
                             params: param_types,
                             ret: Box::new(return_type),
+                            attr: d(),
                         };
                         // Store the callee type so downstream passes (VIR, MIR) can find it
                         ctx.set_expr_type(*callee, callee_ty.clone());
@@ -2182,6 +2205,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         let callee_ty = Ty::Function {
                             params,
                             ret: Box::new(return_type),
+                            attr: d(),
                         };
                         // Store the callee type so downstream passes (VIR, MIR) can find it
                         ctx.set_expr_type(*callee, callee_ty.clone());
@@ -2235,11 +2259,14 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             // Simple receiver: `baz.method()`
                             ctx.lookup(&receiver_segments[0])
                                 .cloned()
-                                .unwrap_or(Ty::Unknown)
+                                .unwrap_or(Ty::Unknown { attr: d() })
                         } else {
                             // Nested receiver: `obj.field.method()`
                             let first = &receiver_segments[0];
-                            let mut ty = ctx.lookup(first).cloned().unwrap_or(Ty::Unknown);
+                            let mut ty = ctx
+                                .lookup(first)
+                                .cloned()
+                                .unwrap_or(Ty::Unknown { attr: d() });
                             for field in &receiver_segments[1..] {
                                 ty = infer_field_access(ctx, &ty, field, location.clone(), None);
                             }
@@ -2275,7 +2302,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
             // If the callee is a function type, check arguments and return the return type
             match &callee_ty {
-                Ty::Function { params, ret } => {
+                Ty::Function { params, ret, .. } => {
                     // Check argument count
                     if effective_args.len() != params.len() {
                         ctx.push_error(TypeError::ArgumentCountMismatch {
@@ -2305,13 +2332,13 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     // Return the function's return type
                     (**ret).clone()
                 }
-                Ty::Unknown => Ty::Unknown,
+                Ty::Unknown { .. } => Ty::Unknown { attr: d() },
                 _ => {
                     ctx.push_error(TypeError::NotCallable {
                         ty: callee_ty,
                         location,
                     });
-                    Ty::Unknown
+                    Ty::Unknown { attr: d() }
                 }
             }
         }
@@ -2353,7 +2380,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
         Expr::Array { elements } => {
             if elements.is_empty() {
-                Ty::List(Box::new(Ty::Unknown))
+                Ty::List(Box::new(Ty::Unknown { attr: d() }), d())
             } else {
                 // Infer element type from first element, but generalize literals to base types
                 // This ensures [1, 2, 3] is int[] not "1"[]
@@ -2366,7 +2393,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 for &elem in &elements[1..] {
                     infer_expr(ctx, elem, body);
                 }
-                Ty::List(Box::new(elem_ty))
+                Ty::List(Box::new(elem_ty), d())
             }
         }
 
@@ -2384,7 +2411,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             let obj_ty = if let Some(name) = type_name {
                 ctx.resolve_named_type(name)
             } else {
-                Ty::Unknown
+                Ty::Unknown { attr: d() }
             };
 
             // Store resolution for IDE features if this is a class instantiation
@@ -2398,7 +2425,8 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             for spread in spreads {
                 let spread_ty = infer_expr(ctx, spread.expr, body);
                 // If we have a named type, verify the spread is compatible
-                if !matches!(obj_ty, Ty::Unknown) && !ctx.is_subtype_of(&spread_ty, &obj_ty) {
+                if !matches!(obj_ty, Ty::Unknown { .. }) && !ctx.is_subtype_of(&spread_ty, &obj_ty)
+                {
                     ctx.push_error(TypeError::TypeMismatch {
                         expected: obj_ty.clone(),
                         found: spread_ty,
@@ -2414,8 +2442,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         Expr::Map { entries } => {
             if entries.is_empty() {
                 Ty::Map {
-                    key: Box::new(Ty::Unknown),
-                    value: Box::new(Ty::Unknown),
+                    key: Box::new(Ty::Unknown { attr: d() }),
+                    value: Box::new(Ty::Unknown { attr: d() }),
+                    attr: d(),
                 }
             } else {
                 // Infer key and value types from first entry, but generalize literals to base types
@@ -2436,6 +2465,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 Ty::Map {
                     key: Box::new(key_ty),
                     value: Box::new(value_ty),
+                    attr: d(),
                 }
             }
         }
@@ -2456,7 +2486,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             let result = if let Some(tail) = tail_expr {
                 infer_expr(ctx, *tail, body)
             } else {
-                Ty::Void
+                Ty::Void { attr: d() }
             };
 
             ctx.pop_scope();
@@ -2500,7 +2530,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                     infer_expr(ctx, *else_expr, body)
                 }
             } else {
-                Ty::Void
+                Ty::Void { attr: d() }
             };
 
             // Generalize literal types for the result, similar to arrays.
@@ -2513,9 +2543,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                 then_ty
             } else if else_branch.is_none() {
                 // if without else returns optional
-                Ty::Union(vec![then_ty, Ty::Null])
+                Ty::Union(vec![then_ty, Ty::Null { attr: d() }], d())
             } else {
-                Ty::Union(vec![then_ty, else_ty])
+                Ty::Union(vec![then_ty, else_ty], d())
             }
         }
 
@@ -2548,7 +2578,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         location: ErrorLocation::Expr(expr_id),
                     });
                 }
-                Ty::Unknown
+                Ty::Unknown { attr: d() }
             } else {
                 let arms_and_patterns: Vec<(MatchArmId, PatId)> = arms
                     .iter()
@@ -2582,9 +2612,11 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         // Type-check the guard (if present)
                         if let Some(guard) = arm.guard {
                             let guard_ty = infer_expr(ctx, guard, body);
-                            if !ctx.is_subtype_of(&guard_ty, &Ty::Bool) && !guard_ty.is_unknown() {
+                            if !ctx.is_subtype_of(&guard_ty, &Ty::Bool { attr: d() })
+                                && !guard_ty.is_unknown()
+                            {
                                 ctx.push_error(TypeError::TypeMismatch {
-                                    expected: Ty::Bool,
+                                    expected: Ty::Bool { attr: d() },
                                     found: guard_ty,
                                     location: location.clone(),
                                     info_location: None,
@@ -2602,14 +2634,17 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
 
                 // If all arms have the same type, use that; otherwise union
                 if arm_types.iter().all(|t| t == &arm_types[0]) {
-                    arm_types.into_iter().next().unwrap_or(Ty::Unknown)
+                    arm_types
+                        .into_iter()
+                        .next()
+                        .unwrap_or(Ty::Unknown { attr: d() })
                 } else {
-                    Ty::Union(arm_types)
+                    Ty::Union(arm_types, d())
                 }
             }
         }
 
-        Expr::Missing => Ty::Unknown,
+        Expr::Missing => Ty::Unknown { attr: d() },
     };
 
     ctx.set_expr_type(expr_id, ty.clone());
@@ -2665,7 +2700,7 @@ fn check_expr_with_info_location(
             } else {
                 // No tail expression means the block evaluates to void
                 // This is fine - the function might return via explicit return statements
-                Ty::Void
+                Ty::Void { attr: d() }
             };
 
             ctx.pop_scope();
@@ -2709,7 +2744,7 @@ fn check_expr_with_info_location(
                     check_expr(ctx, *else_expr, body, expected)
                 }
             } else {
-                Ty::Void
+                Ty::Void { attr: d() }
             };
 
             // In checking mode, don't generalize - the branches were checked against
@@ -2718,17 +2753,17 @@ fn check_expr_with_info_location(
                 then_ty
             } else if else_branch.is_none() {
                 // if without else returns optional
-                Ty::Union(vec![then_ty, Ty::Null])
+                Ty::Union(vec![then_ty, Ty::Null { attr: d() }], d())
             } else {
-                Ty::Union(vec![then_ty, else_ty])
+                Ty::Union(vec![then_ty, else_ty], d())
             }
         }
 
         Expr::Array { elements } => {
             // If we expect a specific list type, use it to check elements
-            if let Ty::List(expected_elem) = expected {
+            if let Ty::List(expected_elem, _) = expected {
                 if elements.is_empty() {
-                    Ty::List(expected_elem.clone())
+                    expected.clone()
                 } else {
                     // Check all elements against the expected element type
                     // check_expr already emits type mismatch errors, no need for redundant check
@@ -2768,7 +2803,7 @@ fn check_expr_with_info_location(
             }
 
             // If we expect a specific class type, we can use its field types
-            if let Ty::Class(expected_fqn) = expected {
+            if let Ty::Class(expected_fqn, _) = expected {
                 // Check field types against the expected class fields
                 for (field_name, value_expr) in fields {
                     // Clone the field type to avoid borrow issues
@@ -2788,9 +2823,9 @@ fn check_expr_with_info_location(
                 } else if let Some(name) = type_name {
                     ctx.resolve_named_type(name)
                 } else {
-                    Ty::Unknown
+                    Ty::Unknown { attr: d() }
                 }
-            } else if let Ty::TypeAlias(expected_fqn) = expected {
+            } else if let Ty::TypeAlias(expected_fqn, _) = expected {
                 use baml_compiler_hir::QualifiedName;
                 // Similar handling for TypeAlias types
                 let alias_key = expected_fqn.display_name();
@@ -2806,9 +2841,9 @@ fn check_expr_with_info_location(
                 if type_name.as_ref() == Some(&expected_fqn.name) {
                     expected.clone()
                 } else if let Some(name) = type_name {
-                    Ty::TypeAlias(QualifiedName::local(name.clone()))
+                    Ty::TypeAlias(QualifiedName::local(name.clone()), d())
                 } else {
-                    Ty::Unknown
+                    Ty::Unknown { attr: d() }
                 }
             } else {
                 // Fall back to synthesis
@@ -2833,13 +2868,11 @@ fn check_expr_with_info_location(
             if let Ty::Map {
                 key: expected_key,
                 value: expected_value,
+                ..
             } = expected
             {
                 if entries.is_empty() {
-                    Ty::Map {
-                        key: expected_key.clone(),
-                        value: expected_value.clone(),
-                    }
+                    expected.clone()
                 } else {
                     // Check all entries against the expected key/value types
                     // check_expr already emits type mismatch errors, no need for redundant check
@@ -3030,11 +3063,11 @@ fn check_match_exhaustiveness(
 fn infer_literal(lit: &baml_compiler_hir::Literal) -> Ty {
     use crate::types::LiteralValue;
     match lit {
-        baml_compiler_hir::Literal::Int(n) => Ty::Literal(LiteralValue::Int(*n)),
-        baml_compiler_hir::Literal::Float(f) => Ty::Literal(LiteralValue::Float(f.clone())),
-        baml_compiler_hir::Literal::String(s) => Ty::Literal(LiteralValue::String(s.clone())),
-        baml_compiler_hir::Literal::Bool(b) => Ty::Literal(LiteralValue::Bool(*b)),
-        baml_compiler_hir::Literal::Null => Ty::Null,
+        baml_compiler_hir::Literal::Int(n) => Ty::Literal(LiteralValue::Int(*n), d()),
+        baml_compiler_hir::Literal::Float(f) => Ty::Literal(LiteralValue::Float(f.clone()), d()),
+        baml_compiler_hir::Literal::String(s) => Ty::Literal(LiteralValue::String(s.clone()), d()),
+        baml_compiler_hir::Literal::Bool(b) => Ty::Literal(LiteralValue::Bool(*b), d()),
+        baml_compiler_hir::Literal::Null => Ty::Null { attr: d() },
     }
 }
 
@@ -3045,10 +3078,10 @@ fn infer_literal(lit: &baml_compiler_hir::Literal) -> Ty {
 fn generalize(ty: &Ty) -> Ty {
     use crate::types::LiteralValue;
     match ty {
-        Ty::Literal(LiteralValue::Int(_)) => Ty::Int,
-        Ty::Literal(LiteralValue::Float(_)) => Ty::Float,
-        Ty::Literal(LiteralValue::String(_)) => Ty::String,
-        Ty::Literal(LiteralValue::Bool(_)) => Ty::Bool,
+        Ty::Literal(LiteralValue::Int(_), attr) => Ty::Int { attr: attr.clone() },
+        Ty::Literal(LiteralValue::Float(_), attr) => Ty::Float { attr: attr.clone() },
+        Ty::Literal(LiteralValue::String(_), attr) => Ty::String { attr: attr.clone() },
+        Ty::Literal(LiteralValue::Bool(_), attr) => Ty::Bool { attr: attr.clone() },
         other => other.clone(),
     }
 }
@@ -3059,7 +3092,7 @@ fn generalize(ty: &Ty) -> Ty {
 /// rather than "Expected `4`, found `int`". But when expected is a base type like `int[]`,
 /// we want to show "Expected `int[]`, found `int`" rather than "Expected `int[]`, found `42`".
 fn generalize_for_error(expected: &Ty, found: &Ty) -> Ty {
-    if matches!(expected, Ty::Literal(_)) {
+    if matches!(expected, Ty::Literal(..)) {
         // Keep literal types when expected is also a literal
         found.clone()
     } else {
@@ -3086,29 +3119,29 @@ fn infer_binary_op(
     // e.g., `20 | 0` is int-like because all members are int literals.
     fn is_int_like(ty: &Ty) -> bool {
         match ty {
-            Ty::Int | Ty::Literal(LiteralValue::Int(_)) => true,
-            Ty::Union(members) => members.iter().all(is_int_like),
+            Ty::Int { .. } | Ty::Literal(LiteralValue::Int(_), _) => true,
+            Ty::Union(members, _) => members.iter().all(is_int_like),
             _ => false,
         }
     }
     fn is_float_like(ty: &Ty) -> bool {
         match ty {
-            Ty::Float | Ty::Literal(LiteralValue::Float(_)) => true,
-            Ty::Union(members) => members.iter().all(is_float_like),
+            Ty::Float { .. } | Ty::Literal(LiteralValue::Float(_), _) => true,
+            Ty::Union(members, _) => members.iter().all(is_float_like),
             _ => false,
         }
     }
     fn is_string_like(ty: &Ty) -> bool {
         match ty {
-            Ty::String | Ty::Literal(LiteralValue::String(_)) => true,
-            Ty::Union(members) => members.iter().all(is_string_like),
+            Ty::String { .. } | Ty::Literal(LiteralValue::String(_), _) => true,
+            Ty::Union(members, _) => members.iter().all(is_string_like),
             _ => false,
         }
     }
     fn is_bool_like(ty: &Ty) -> bool {
         match ty {
-            Ty::Bool | Ty::Literal(LiteralValue::Bool(_)) => true,
-            Ty::Union(members) => members.iter().all(is_bool_like),
+            Ty::Bool { .. } | Ty::Literal(LiteralValue::Bool(_), _) => true,
+            Ty::Union(members, _) => members.iter().all(is_bool_like),
             _ => false,
         }
     }
@@ -3116,21 +3149,21 @@ fn infer_binary_op(
     // Don't emit errors for operations involving unknown or error types - the root cause
     // (e.g., unknown variable) has already been reported
     if lhs.is_unknown() || lhs.is_error() || rhs.is_unknown() || rhs.is_error() {
-        return Ty::Unknown;
+        return Ty::Unknown { attr: d() };
     }
 
     match op {
         // Arithmetic operations (and string concatenation for Add)
         Add => {
             if is_int_like(lhs) && is_int_like(rhs) {
-                Ty::Int
+                Ty::Int { attr: d() }
             } else if (is_int_like(lhs) || is_float_like(lhs))
                 && (is_int_like(rhs) || is_float_like(rhs))
             {
-                Ty::Float
+                Ty::Float { attr: d() }
             } else if is_string_like(lhs) && is_string_like(rhs) {
                 // String concatenation
-                Ty::String
+                Ty::String { attr: d() }
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
@@ -3138,16 +3171,16 @@ fn infer_binary_op(
                     rhs: generalize(rhs),
                     location,
                 });
-                Ty::Error
+                Ty::Error { attr: d() }
             }
         }
         Sub | Mul | Div | Mod => {
             if is_int_like(lhs) && is_int_like(rhs) {
-                Ty::Int
+                Ty::Int { attr: d() }
             } else if (is_int_like(lhs) || is_float_like(lhs))
                 && (is_int_like(rhs) || is_float_like(rhs))
             {
-                Ty::Float
+                Ty::Float { attr: d() }
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
@@ -3155,18 +3188,18 @@ fn infer_binary_op(
                     rhs: generalize(rhs),
                     location,
                 });
-                Ty::Error
+                Ty::Error { attr: d() }
             }
         }
 
         // Comparison operations
-        Eq | Ne => Ty::Bool,
+        Eq | Ne => Ty::Bool { attr: d() },
 
         Lt | Le | Gt | Ge => {
             let numeric_lhs = is_int_like(lhs) || is_float_like(lhs);
             let numeric_rhs = is_int_like(rhs) || is_float_like(rhs);
             if (numeric_lhs && numeric_rhs) || (is_string_like(lhs) && is_string_like(rhs)) {
-                Ty::Bool
+                Ty::Bool { attr: d() }
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
@@ -3174,14 +3207,14 @@ fn infer_binary_op(
                     rhs: generalize(rhs),
                     location,
                 });
-                Ty::Error
+                Ty::Error { attr: d() }
             }
         }
 
         // Logical operations
         And | Or => {
             if is_bool_like(lhs) && is_bool_like(rhs) {
-                Ty::Bool
+                Ty::Bool { attr: d() }
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
@@ -3189,14 +3222,14 @@ fn infer_binary_op(
                     rhs: generalize(rhs),
                     location,
                 });
-                Ty::Error
+                Ty::Error { attr: d() }
             }
         }
 
         // Bitwise operations
         BitAnd | BitOr | BitXor | Shl | Shr => {
             if is_int_like(lhs) && is_int_like(rhs) {
-                Ty::Int
+                Ty::Int { attr: d() }
             } else {
                 ctx.push_error(TypeError::InvalidBinaryOp {
                     op: format!("{op:?}"),
@@ -3204,12 +3237,12 @@ fn infer_binary_op(
                     rhs: generalize(rhs),
                     location,
                 });
-                Ty::Error
+                Ty::Error { attr: d() }
             }
         }
 
         // Type checking operations
-        Instanceof => Ty::Bool,
+        Instanceof => Ty::Bool { attr: d() },
     }
 }
 
@@ -3227,7 +3260,7 @@ fn infer_unary_op(
     // Don't emit errors for operations involving unknown or error types - the root cause
     // has already been reported
     if operand.is_unknown() || operand.is_error() {
-        return Ty::Unknown;
+        return Ty::Unknown { attr: d() };
     }
 
     match op {
@@ -3235,18 +3268,18 @@ fn infer_unary_op(
             // `!` is a truthiness check: accepts any type, returns bool.
             // For bool operands this is logical negation; for other types
             // it converts to bool (falsy: null, false; truthy: everything else).
-            Ty::Bool
+            Ty::Bool { attr: d() }
         }
         Neg => match operand {
-            Ty::Int | Ty::Literal(LiteralValue::Int(_)) => Ty::Int,
-            Ty::Float | Ty::Literal(LiteralValue::Float(_)) => Ty::Float,
+            Ty::Int { .. } | Ty::Literal(LiteralValue::Int(_), _) => Ty::Int { attr: d() },
+            Ty::Float { .. } | Ty::Literal(LiteralValue::Float(_), _) => Ty::Float { attr: d() },
             _ => {
                 ctx.push_error(TypeError::InvalidUnaryOp {
                     op: "-".to_string(),
                     operand: generalize(operand),
                     location,
                 });
-                Ty::Error
+                Ty::Error { attr: d() }
             }
         },
     }
@@ -3270,11 +3303,11 @@ fn infer_field_access(
     // Special case: $watch accessor on any type
     // The actual watched check happens at MIR lowering time
     if field.as_str() == "$watch" {
-        return Ty::WatchAccessor(Box::new(base.clone()));
+        return Ty::WatchAccessor(Box::new(base.clone()), d());
     }
 
     // Special case: methods on WatchAccessor type
-    if let Ty::WatchAccessor(_inner_ty) = base {
+    if let Ty::WatchAccessor(_inner_ty, _) = base {
         match field.as_str() {
             "options" => {
                 // $watch.options(filter) - filter can be a function, "manual", or "never"
@@ -3283,9 +3316,10 @@ fn infer_field_access(
                     // First param is receiver (the WatchAccessor), second is filter
                     params: vec![
                         (None, base.clone()),
-                        (Some(Name::new("filter")), Ty::Unknown),
+                        (Some(Name::new("filter")), Ty::Unknown { attr: d() }),
                     ], // Filter type is flexible
-                    ret: Box::new(Ty::Null),
+                    ret: Box::new(Ty::Null { attr: d() }),
+                    attr: d(),
                 };
             }
             "notify" => {
@@ -3293,7 +3327,8 @@ fn infer_field_access(
                 // Returns null (void operation)
                 return Ty::Function {
                     params: vec![(None, base.clone())], // Just the receiver
-                    ret: Box::new(Ty::Null),
+                    ret: Box::new(Ty::Null { attr: d() }),
+                    attr: d(),
                 };
             }
             _ => {
@@ -3302,20 +3337,20 @@ fn infer_field_access(
                     field: field.to_string(),
                     location,
                 });
-                return Ty::Unknown;
+                return Ty::Unknown { attr: d() };
             }
         }
     }
 
     // First, try class field lookup for named types
     let found_field = match base {
-        Ty::TypeAlias(fqn) => {
+        Ty::TypeAlias(fqn, _) => {
             let key = fqn.display_name();
             ctx.lookup(field)
                 .or(ctx.lookup_class_field(&key, field))
                 .cloned()
         }
-        Ty::Class(fqn) => {
+        Ty::Class(fqn, _) => {
             // First try to find a method using a class-qualified name in the same
             // namespace as the class (e.g., `baml.llm.Foo.bar`).
             let method_qn = QualifiedName {
@@ -3338,7 +3373,7 @@ fn infer_field_access(
         }
         // Union field access: x.field where x: A | B is allowed if all members
         // have the field. Result type is the union of field types across members.
-        Ty::Union(members) => {
+        Ty::Union(members, _) => {
             let field_types: Vec<Ty> = members
                 .iter()
                 .filter_map(|member| infer_union_member_field(ctx, member, field))
@@ -3349,13 +3384,13 @@ fn infer_field_access(
                 if field_types.iter().all(|t| t == &field_types[0]) {
                     Some(field_types.into_iter().next().unwrap())
                 } else {
-                    Some(Ty::Union(field_types))
+                    Some(Ty::Union(field_types, d()))
                 }
             } else {
                 None
             }
         }
-        Ty::Unknown => return Ty::Unknown,
+        Ty::Unknown { .. } => return Ty::Unknown { attr: d() },
         _ => None,
     };
 
@@ -3389,6 +3424,7 @@ fn infer_field_access(
         return Ty::Function {
             params,
             ret: Box::new(return_type),
+            attr: d(),
         };
     }
 
@@ -3398,7 +3434,7 @@ fn infer_field_access(
         field: field.to_string(),
         location,
     });
-    Ty::Unknown
+    Ty::Unknown { attr: d() }
 }
 
 /// Infer the type of an index access.
@@ -3409,11 +3445,11 @@ fn infer_index_access(
     location: ErrorLocation,
 ) -> Ty {
     match base {
-        Ty::List(elem) => {
+        Ty::List(elem, _) => {
             // Index must be int
-            if !ctx.is_subtype_of(index, &Ty::Int) {
+            if !ctx.is_subtype_of(index, &Ty::Int { attr: d() }) {
                 ctx.push_error(TypeError::TypeMismatch {
-                    expected: Ty::Int,
+                    expected: Ty::Int { attr: d() },
                     found: index.clone(),
                     location,
                     info_location: None,
@@ -3421,7 +3457,7 @@ fn infer_index_access(
             }
             (**elem).clone()
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             // Index must match key type
             if !ctx.is_subtype_of(index, key) {
                 ctx.push_error(TypeError::TypeMismatch {
@@ -3433,25 +3469,25 @@ fn infer_index_access(
             }
             (**value).clone()
         }
-        Ty::String => {
+        Ty::String { .. } => {
             // String indexing returns a character (string of length 1)
-            if !ctx.is_subtype_of(index, &Ty::Int) {
+            if !ctx.is_subtype_of(index, &Ty::Int { attr: d() }) {
                 ctx.push_error(TypeError::TypeMismatch {
-                    expected: Ty::Int,
+                    expected: Ty::Int { attr: d() },
                     found: index.clone(),
                     location,
                     info_location: None,
                 });
             }
-            Ty::String
+            Ty::String { attr: d() }
         }
-        Ty::Unknown => Ty::Unknown,
+        Ty::Unknown { .. } => Ty::Unknown { attr: d() },
         _ => {
             ctx.push_error(TypeError::NotIndexable {
                 ty: base.clone(),
                 location,
             });
-            Ty::Unknown
+            Ty::Unknown { attr: d() }
         }
     }
 }
@@ -3481,6 +3517,7 @@ fn check_stmt_with_return(
             type_annotation,
             initializer,
             is_watched,
+            ..
         } => {
             let ty = if let Some(init) = initializer {
                 // If there's a type annotation, use check_expr for bidirectional typing
@@ -3510,7 +3547,9 @@ fn check_stmt_with_return(
                 let span = ctx.type_span(*type_id);
                 ctx.lower_type(type_ref, span)
             } else {
-                Ty::Unknown
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
             };
 
             // Extract variable name from pattern and track watched status
@@ -3549,7 +3588,9 @@ fn check_stmt_with_return(
                     infer_expr(ctx, *e, body)
                 }
             } else {
-                Ty::Void
+                Ty::Void {
+                    attr: TyAttr::default(),
+                }
             };
             // Record return type (span resolved at render time if needed)
             ctx.record_return(return_ty, Span::default());
@@ -3611,7 +3652,14 @@ fn check_stmt_with_return(
 
         Stmt::Assert { condition } => {
             // Type-check the condition expression (bidirectional)
-            check_expr(ctx, *condition, body, &Ty::Bool);
+            check_expr(
+                ctx,
+                *condition,
+                body,
+                &Ty::Bool {
+                    attr: TyAttr::default(),
+                },
+            );
         }
 
         Stmt::Missing => {}

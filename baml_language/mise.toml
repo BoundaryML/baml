@@ -11,6 +11,7 @@ description = "Run cargo fmt"
 run = "cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate"
 sources = ["**/*.rs"]
 
+# Note that clippy-fix and clippy are separate tasks because clippy-fix is substantially slower.
 [tasks.clippy-fix]
 description = "Auto-fix clippy warnings"
 run = "cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged --allow-no-vcs -- -D warnings"
@@ -54,3 +55,9 @@ run = "cargo run -p cargo-size-gate -- size-gate check"
 [tasks.size-gate-record]
 description = "Record new size baseline"
 run = "cargo run -p cargo-size-gate -- size-gate record"
+
+[tasks.insta-update]
+description = "Run all snapshot tests with INSTA_UPDATE=always"
+env = { INSTA_UPDATE = "always" }
+run = "cargo test --workspace"
+sources = ["**/*.rs", "**/Cargo.toml"]

@@ -3,14 +3,18 @@
 //! This module uses the centralized `ProjectDatabase::check()` method for diagnostic
 //! collection, eliminating code duplication with the LSP server.
 
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use baml_compiler_diagnostics::{RenderConfig, render_diagnostic};
-use baml_lsp_actions::{MarkupKind, hover::hover as lsp_ide_hover};
+use baml_lsp_actions::{
+    MarkupKind,
+    hover::hover as lsp_ide_hover,
+    inlay_hints::{InlayHint, InlayHintKind, inlay_hints as lsp_inlay_hints},
+};
 use baml_project::ProjectDatabase;
 use text_size::TextSize;
 
-use super::parser::ParsedTestFile;
+use super::parser::{ParsedTestFile, VirtualFile};
 
 /// Result of running an inline test.
 #[derive(Debug)]
@@ -23,6 +27,8 @@ pub struct TestResult {
     pub actual_hovers: Option<String>,
     /// Completion test result (if completions were expected).
     pub completion_result: Option<CompletionTestResult>,
+    /// Actual inlay hints output.
+    pub actual_inlay_hints: Option<String>,
     /// Diff between expected and actual (if failed).
     pub diff: Option<String>,
     /// Preserved comments from diagnostics section.
@@ -31,6 +37,8 @@ pub struct TestResult {
     pub hovers_comments: Vec<String>,
     /// Preserved comments from completions section.
     pub completions_comments: Vec<String>,
+    /// Preserved comments from inlay hints section.
+    pub inlay_hints_comments: Vec<String>,
 }
 
 /// Result of completion testing.
@@ -160,20 +168,45 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         None
     };
 
-    // 6. Compare against expectations
+    // 6. Handle inlay hints
+    let actual_inlay_hints = if parsed.expected_inlay_hints.is_some() {
+        let db = lsp_db.db();
+        let project = lsp_db.project().expect("Project should be set");
+
+        // Collect all inlay hints from all files.
+        let mut all_hints: Vec<(String, InlayHint)> = Vec::new();
+        for (filename, source_file) in &file_map {
+            let hints = lsp_inlay_hints(db, *source_file, project);
+            for hint in hints {
+                all_hints.push((filename.clone(), hint));
+            }
+        }
+
+        // Sort inlay hints by filename and offset so the order is consistent between runs.
+        all_hints.sort_by(|(fa, ha), (fb, hb)| fa.cmp(fb).then_with(|| ha.offset.cmp(&hb.offset)));
+
+        Some(format_inlay_hints_results(&all_hints, &parsed.files))
+    } else {
+        None
+    };
+
+    // Compare against expectations
     let diagnostics_passed = parsed.expected_diagnostics == actual_diagnostics;
     let hovers_passed = parsed.expected_hovers == actual_hovers;
     let completions_passed = completion_result.as_ref().map(|r| r.passed).unwrap_or(true);
+    let inlay_hints_passed = parsed.expected_inlay_hints == actual_inlay_hints;
 
-    let passed = diagnostics_passed && hovers_passed && completions_passed;
+    let passed = diagnostics_passed && hovers_passed && completions_passed && inlay_hints_passed;
 
     let diff = if !passed {
-        Some(generate_full_diff_with_completions(
+        Some(generate_full_diff(
             &parsed.expected_diagnostics,
             &actual_diagnostics,
             parsed.expected_hovers.as_deref(),
             actual_hovers.as_deref(),
             completion_result.as_ref(),
+            parsed.expected_inlay_hints.as_deref(),
+            actual_inlay_hints.as_deref(),
         ))
     } else {
         None
@@ -184,10 +217,12 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
         actual_diagnostics,
         actual_hovers,
         completion_result,
+        actual_inlay_hints,
         diff,
         diagnostics_comments: parsed.diagnostics_comments.clone(),
         hovers_comments: parsed.hovers_comments.clone(),
         completions_comments: parsed.completions_comments.clone(),
+        inlay_hints_comments: parsed.inlay_hints_comments.clone(),
     }
 }
 
@@ -231,13 +266,96 @@ fn format_as_comment(text: &str) -> String {
         .join("\n")
 }
 
-/// Generate a full diff including diagnostics, hovers, and completions.
-fn generate_full_diff_with_completions(
+/// Convert a byte offset to a 1-indexed (line, column) pair.
+fn offset_to_line_col(content: &str, offset: u32) -> (usize, usize) {
+    let offset = offset as usize;
+    let clamped = offset.min(content.len());
+
+    // Walk back to the nearest valid char boundary to avoid a possible panic.
+    let safe = (0..=clamped)
+        .rev()
+        .find(|&i| content.is_char_boundary(i))
+        .unwrap_or(0);
+    let before = &content[..safe];
+    let line = before.matches('\n').count() + 1;
+    let last_newline = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+    let column = safe - last_newline + 1;
+
+    (line, column)
+}
+
+/// Format inlay hints for output (used in expectations section).
+fn format_inlay_hints_results(
+    hints: &[(String, InlayHint)],
+    files: &HashMap<String, VirtualFile>,
+) -> String {
+    if hints.is_empty() {
+        return "// <no-inlay-hints>".to_string();
+    }
+
+    let mut output = String::new();
+    for (filename, hint) in hints {
+        let file_content = &files[filename].content;
+        let (line, col) = offset_to_line_col(file_content, u32::from(hint.offset));
+        let kind_str = match hint.kind {
+            Some(InlayHintKind::Type) => " (Type)",
+            Some(InlayHintKind::Parameter) => " (Parameter)",
+            None => "",
+        };
+        let label_text: String = hint.label.iter().map(|p| p.value.as_str()).collect();
+
+        output.push_str(&format!(
+            "// {filename}:{line}:{col}{kind_str} {label_text:?}\n"
+        ));
+
+        // Show label parts that have navigation targets.
+        for part in &hint.label {
+            if let Some(target) = &part.target {
+                let target_filename = target.file_path.display();
+                // Resolve target line:col from the target file's content.
+                let (target_line, target_col) = if let Some(target_vfile) =
+                    files.get(&target.file_path.display().to_string())
+                {
+                    offset_to_line_col(&target_vfile.content, u32::from(target.span.range.start()))
+                } else {
+                    // If something goes wrong and we can't find the file, show the raw offset.
+                    let raw = u32::from(target.span.range.start());
+                    output.push_str(&format!(
+                                            "//   target {:?} -> {target_filename}:+{raw} (raw offset, file not in test)\n",
+                                            part.value
+                                        ));
+                    continue;
+                };
+                output.push_str(&format!(
+                    "//   target {:?} -> {target_filename}:{target_line}:{target_col}\n",
+                    part.value
+                ));
+            }
+        }
+
+        // Show text edits.
+        for edit in &hint.text_edits {
+            let (edit_line, edit_col) = offset_to_line_col(file_content, u32::from(edit.offset));
+            output.push_str(&format!(
+                "//   edit@{edit_line}:{edit_col} {:?}\n",
+                edit.new_text
+            ));
+        }
+    }
+
+    output.trim_end().to_string()
+}
+
+/// Generate a full diff including diagnostics, hovers, completions, and inlay hints.
+#[allow(clippy::too_many_arguments)]
+fn generate_full_diff(
     expected_diag: &str,
     actual_diag: &str,
     expected_hovers: Option<&str>,
     actual_hovers: Option<&str>,
     completion_result: Option<&CompletionTestResult>,
+    expected_inlay_hints: Option<&str>,
+    actual_inlay_hints: Option<&str>,
 ) -> String {
     let mut diff = String::new();
 
@@ -269,6 +387,14 @@ fn generate_full_diff_with_completions(
         for label in found {
             diff.push_str(&format!("  - {label}\n"));
         }
+    }
+
+    if expected_inlay_hints.is_some() || actual_inlay_hints.is_some() {
+        diff.push_str("\n\n=== INLAY HINTS ===\n");
+        diff.push_str("Expected:\n");
+        diff.push_str(expected_inlay_hints.unwrap_or("<none>"));
+        diff.push_str("\n\nActual:\n");
+        diff.push_str(actual_inlay_hints.unwrap_or("<none>"));
     }
 
     diff

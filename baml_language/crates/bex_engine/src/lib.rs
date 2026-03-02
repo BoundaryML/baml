@@ -792,7 +792,11 @@ impl BexEngine {
         let _call_guard = ActiveCallGuard::new(&self.active_calls, call_id, &cancel)?;
 
         let function_index = self.lookup_function(function_name)?;
-        let return_type = self.function_return_type(function_name).unwrap_or(Ty::Null);
+        let return_type = self
+            .function_return_type(function_name)
+            .unwrap_or(Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            });
 
         // Register with current epoch
         let my_epoch = self.current_epoch.load(Ordering::Acquire);
@@ -1123,11 +1127,13 @@ impl BexEngine {
                                 },
                                 call_stack: full_call_stack,
                                 timestamp: SystemTime::now(),
-                                event: EventKind::Function(FunctionEvent::End(FunctionEnd {
-                                    name: root_span.label,
-                                    result: external_result,
-                                    duration: root_span.started_at.elapsed(),
-                                })),
+                                event: EventKind::Function(FunctionEvent::End(Box::new(
+                                    FunctionEnd {
+                                        name: root_span.label,
+                                        result: external_result,
+                                        duration: root_span.started_at.elapsed(),
+                                    },
+                                ))),
                             };
                             self.emit(end_event);
                         }
@@ -1374,13 +1380,13 @@ impl BexEngine {
                                         },
                                         call_stack,
                                         timestamp: SystemTime::now(),
-                                        event: EventKind::Function(FunctionEvent::End(
+                                        event: EventKind::Function(FunctionEvent::End(Box::new(
                                             FunctionEnd {
                                                 name: function_name,
                                                 result: external_result,
                                                 duration: span.started_at.elapsed(),
                                             },
-                                        )),
+                                        ))),
                                     };
                                     self.emit(exit_event);
                                 }

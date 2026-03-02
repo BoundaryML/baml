@@ -679,16 +679,24 @@ impl<'a> BexValue<'a> {
                     }),
 
                     Object::String(s) => Ok(BexExternalValue::String(s.clone())),
+                    // Deep-copy path for trace payloads: no declared type is available here,
+                    // so placeholder types with default attr are used.
                     Object::Array(array) => Ok(BexExternalValue::Array {
-                        element_type: Ty::BuiltinUnknown,
+                        element_type: Ty::BuiltinUnknown {
+                            attr: baml_type::TyAttr::default(),
+                        },
                         items: array
                             .iter()
                             .map(|item| BexValue::Value(item).as_owned_but_very_slow(heap))
                             .collect::<Result<_, _>>()?,
                     }),
                     Object::Map(map) => Ok(BexExternalValue::Map {
-                        key_type: Ty::String,
-                        value_type: Ty::BuiltinUnknown,
+                        key_type: Ty::String {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        value_type: Ty::BuiltinUnknown {
+                            attr: baml_type::TyAttr::default(),
+                        },
                         entries: map
                             .iter()
                             .map(|(k, v)| {

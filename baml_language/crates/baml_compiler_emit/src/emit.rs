@@ -258,7 +258,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    Ty::Class(type_name) => {
+                    Ty::Class(type_name, _) => {
                         let &obj_idx = self
                             .class_object_indices
                             .get(type_name.display_name.as_str())?;
@@ -275,7 +275,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
-                    Ty::List(inner) => Some(*inner),
+                    Ty::List(inner, _) => Some(*inner),
                     Ty::Map { value, .. } => Some(*value),
                     _ => None,
                 }
@@ -409,7 +409,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             span: mir.span.unwrap_or_else(Span::fake),
             block_notifications: self.block_notifications,
             viz_nodes,
-            return_type: baml_type::Ty::Null,
+            return_type: baml_type::Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            },
             param_names: Vec::new(),
             param_types: Vec::new(),
             body_meta: None,
@@ -1639,7 +1641,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
         // Emit instanceof check using CmpOp::InstanceOf for class aliases.
-        if let Ty::Class(tn) | Ty::TypeAlias(tn) = ty {
+        if let Ty::Class(tn, _) | Ty::TypeAlias(tn, _) = ty {
             let class_name_str = tn.display_name.as_str();
             if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
                 let class_const =
@@ -1667,7 +1669,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class_name = match self.resolve_place_type(base) {
-            Some(Ty::Class(tn)) => tn.display_name.to_string(),
+            Some(Ty::Class(tn, _)) => tn.display_name.to_string(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(&class_name, field_idx)

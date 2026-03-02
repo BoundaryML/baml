@@ -3,24 +3,24 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function HeaderOnlyFunction:
-    Return: Literal(String("default"))
+    Return: Literal(String("default"), TyAttr(None))
   Function VeryLongHeaderTitle:
-    Return: Literal(String("long headers"))
+    Return: Literal(String("long headers"), TyAttr(None))
   Function HeadersAroundExpressions:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
     Errors:
       - Expected string. Found int
   Function HeadersInComplexNesting:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function HeadersAndComments:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ConsecutiveHeaders:
-    Return: Literal(String("multiple consecutive headers"))
+    Return: Literal(String("multiple consecutive headers"), TyAttr(None))
   Function UnicodeHeaders:
-    Return: Literal(String("test"))
+    Return: Literal(String("test"), TyAttr(None))
   Function HeaderLevels:
-    Return: Literal(String("deep nesting"))
+    Return: Literal(String("deep nesting"), TyAttr(None))
   Function HeadersWithSpecialChars:
-    Return: Literal(String("special chars"))
+    Return: Literal(String("special chars"), TyAttr(None))
   Function HeadersWithWhitespace:
-    Return: String
+    Return: String { attr: TyAttr(None) }

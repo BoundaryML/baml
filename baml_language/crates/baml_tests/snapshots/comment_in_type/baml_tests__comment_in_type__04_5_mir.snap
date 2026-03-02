@@ -7,7 +7,7 @@ fn FunctionWithComments.render_prompt(a: string, b: int) -> baml.llm.PromptAst {
     let _0: baml.llm.PromptAst // return
     let _1: string // a // param
     let _2: int // b // param
-    let _3: null
+    let _3: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _4: "FunctionWithComments"
     let _5: map<string, unknown>
     let _6: "a"
@@ -40,7 +40,7 @@ fn FunctionWithComments.build_request(a: string, b: int) -> baml.http.Request {
     let _0: baml.http.Request // return
     let _1: string // a // param
     let _2: int // b // param
-    let _3: null
+    let _3: (string, map<string, unknown>) -> baml.http.Request
     let _4: "FunctionWithComments"
     let _5: map<string, unknown>
     let _6: "a"
@@ -71,7 +71,7 @@ fn FunctionWithComments.build_request(a: string, b: int) -> baml.http.Request {
 fn CommentAfterArrow() -> string {
     // Locals:
     let _0: string // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> unknown
     let _2: "CommentAfterArrow"
     let _3: map<string, unknown>
 
@@ -94,7 +94,7 @@ fn CommentAfterArrow() -> string {
 fn CommentAfterArrow.render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
     let _2: "CommentAfterArrow"
     let _3: map<string, unknown>
 
@@ -117,7 +117,7 @@ fn CommentAfterArrow.render_prompt() -> baml.llm.PromptAst {
 fn CommentAfterArrow.build_request() -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // return
-    let _1: null
+    let _1: (string, map<string, unknown>) -> baml.http.Request
     let _2: "CommentAfterArrow"
     let _3: map<string, unknown>
 
@@ -142,7 +142,7 @@ fn FunctionWithComments(a: string, b: int) -> string {
     let _0: string // return
     let _1: string // a // param
     let _2: int // b // param
-    let _3: null
+    let _3: (string, map<string, unknown>) -> unknown
     let _4: "FunctionWithComments"
     let _5: map<string, unknown>
     let _6: "a"

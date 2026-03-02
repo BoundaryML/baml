@@ -4,6 +4,7 @@
 
 mod common;
 
+use baml_type::TyAttr;
 use bex_engine::BexExternalValue;
 use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
@@ -58,8 +59,15 @@ async fn env_get_existing_var() -> anyhow::Result<()> {
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::String("hello_env".to_string())),
             metadata: bex_engine::UnionMetadata::new(
-                bex_engine::Ty::Optional(Box::new(bex_engine::Ty::String)),
-                bex_engine::Ty::String,
+                bex_engine::Ty::Optional(
+                    Box::new(bex_engine::Ty::String {
+                        attr: TyAttr::default(),
+                    }),
+                    TyAttr::default(),
+                ),
+                bex_engine::Ty::String {
+                    attr: TyAttr::default(),
+                },
             ),
         }),
     })
@@ -81,8 +89,15 @@ async fn env_get_missing_var_returns_null() -> anyhow::Result<()> {
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Null),
             metadata: bex_engine::UnionMetadata::new(
-                bex_engine::Ty::Optional(Box::new(bex_engine::Ty::String)),
-                bex_engine::Ty::Null,
+                bex_engine::Ty::Optional(
+                    Box::new(bex_engine::Ty::String {
+                        attr: TyAttr::default(),
+                    }),
+                    TyAttr::default(),
+                ),
+                bex_engine::Ty::Null {
+                    attr: TyAttr::default(),
+                },
             ),
         }),
     })

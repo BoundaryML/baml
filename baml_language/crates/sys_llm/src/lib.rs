@@ -62,7 +62,9 @@ pub fn execute_render_prompt_from_owned(
             default_role: client.default_role.clone(),
             allowed_roles: client.allowed_roles.clone(),
         },
-        output_format: types::OutputFormatContent::new(bex_external_types::Ty::String),
+        output_format: types::OutputFormatContent::new(bex_external_types::Ty::String {
+            attr: baml_type::TyAttr::default(),
+        }),
         tags: indexmap::IndexMap::new(),
         enums: std::collections::HashMap::new(),
     };
@@ -111,7 +113,7 @@ pub fn execute_parse_response_from_owned(
     }
 
     match return_type {
-        baml_type::Ty::String => Ok(bex_external_types::BexExternalValue::String(
+        baml_type::Ty::String { .. } => Ok(bex_external_types::BexExternalValue::String(
             response.content,
         )),
         _ => Err(LlmOpError::NotImplemented {
@@ -179,7 +181,9 @@ mod tests {
 
     fn single_string_array(value: &str) -> BexExternalValue {
         BexExternalValue::Array {
-            element_type: baml_type::Ty::String,
+            element_type: baml_type::Ty::String {
+                attr: baml_type::TyAttr::default(),
+            },
             items: vec![BexExternalValue::String(value.to_string())],
         }
     }
@@ -211,15 +215,22 @@ mod tests {
         let allow_client = make_client_with_options(allow_options);
 
         // "stop" is allowed.
-        let allowed =
-            execute_parse_response_from_owned(&allow_client, response_stop, &baml_type::Ty::String);
+        let allowed = execute_parse_response_from_owned(
+            &allow_client,
+            response_stop,
+            &baml_type::Ty::String {
+                attr: baml_type::TyAttr::default(),
+            },
+        );
         assert!(allowed.is_ok());
 
         // "length" is rejected.
         let blocked = execute_parse_response_from_owned(
             &allow_client,
             response_length,
-            &baml_type::Ty::String,
+            &baml_type::Ty::String {
+                attr: baml_type::TyAttr::default(),
+            },
         );
         assert!(blocked.is_err());
 
@@ -234,7 +245,9 @@ mod tests {
         let denied = execute_parse_response_from_owned(
             &deny_client,
             response_length,
-            &baml_type::Ty::String,
+            &baml_type::Ty::String {
+                attr: baml_type::TyAttr::default(),
+            },
         );
         assert!(denied.is_err());
     }

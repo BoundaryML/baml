@@ -346,6 +346,118 @@ impl ProjectDatabase {
             .and_then(|path| self.file_map.get(path).copied())
     }
 
+    /// Build the control flow visualization graph for a function.
+    ///
+    /// Returns `None` if the function is not found, is compiler-generated
+    /// (`render_prompt`, `build_request`, `client_resolve`), or has errors that
+    /// prevent VIR lowering.
+    pub fn control_flow_graph(
+        &self,
+        function_name: &str,
+    ) -> Option<baml_compiler_vir::control_flow::ControlFlowGraph> {
+        use baml_compiler_hir::{
+            FunctionBody, ItemId, file_item_tree, file_items, function_body, function_signature,
+            function_signature_source_map,
+        };
+        use baml_compiler_tir::{
+            class_field_types, enum_variants, infer_function, type_aliases, typing_context,
+        };
+        use baml_compiler_vir::control_flow::{
+            build_control_flow_graph, build_llm_control_flow_graph,
+        };
+
+        let project = self.project?;
+        let files = project.files(self);
+
+        // Build typing context lazily (only if we find an expr function)
+        let mut typing_ctx = None;
+
+        for source_file in files {
+            let item_tree = file_item_tree(self, *source_file);
+            let items_struct = file_items(self, *source_file);
+            for item in items_struct.items(self) {
+                let ItemId::Function(func_loc) = item else {
+                    continue;
+                };
+                let func = &item_tree[func_loc.id(self)];
+
+                // Skip compiler-generated functions
+                if let Some(ref cg) = func.compiler_generated {
+                    use baml_compiler_hir::CompilerGenerated;
+                    match cg {
+                        CompilerGenerated::ClientResolve { .. }
+                        | CompilerGenerated::LlmRenderPrompt { .. }
+                        | CompilerGenerated::LlmBuildRequest { .. } => continue,
+                        CompilerGenerated::LlmCall { .. } => {
+                            // LlmCall functions have an expr body that wraps the LLM call.
+                            // We can still build a control flow graph for them.
+                        }
+                    }
+                }
+
+                let sig = function_signature(self, *func_loc);
+                if sig.name != function_name {
+                    continue;
+                }
+
+                // Found the function — check body type
+                let body = function_body(self, *func_loc);
+                match body.as_ref() {
+                    FunctionBody::Llm(llm_body) => {
+                        return Some(build_llm_control_flow_graph(
+                            function_name,
+                            llm_body.client.as_ref(),
+                        ));
+                    }
+                    FunctionBody::Expr(_, _) => {
+                        // Lazy-init typing context
+                        let ctx = typing_ctx.get_or_insert_with(|| {
+                            let globals = typing_context(self, project).functions(self).clone();
+                            let class_fields =
+                                class_field_types(self, project).classes(self).clone();
+                            let ta = type_aliases(self, project).aliases(self).clone();
+                            let recursive = baml_compiler_tir::find_recursive_aliases(&ta);
+                            let ev = enum_variants(self, project).enums(self).clone();
+                            let resolution_ctx =
+                                baml_compiler_tir::TypeResolutionContext::new(self, project);
+                            (globals, class_fields, ta, recursive, ev, resolution_ctx)
+                        });
+
+                        let sig_source_map = function_signature_source_map(self, *func_loc);
+                        let inference = infer_function(
+                            self,
+                            &sig,
+                            Some(&sig_source_map),
+                            &body,
+                            Some(ctx.0.clone()),
+                            Some(ctx.1.clone()),
+                            Some(ctx.2.clone()),
+                            Some(ctx.4.clone()),
+                            *func_loc,
+                        );
+
+                        match baml_compiler_vir::lower_from_hir(
+                            &body, &inference, &ctx.5, &ctx.2, &ctx.3,
+                        ) {
+                            Ok(vir_body) => {
+                                return Some(build_control_flow_graph(function_name, &vir_body));
+                            }
+                            Err(baml_compiler_vir::LoweringError::LlmFunction) => {
+                                // Shouldn't happen since we check FunctionBody first,
+                                // but handle gracefully
+                                return None;
+                            }
+                            Err(_) => return None,
+                        }
+                    }
+                    FunctionBody::Missing => return None,
+                }
+            }
+        }
+
+        None
+    }
+
     /// Get the compiled bytecode for the project.
     pub fn get_bytecode(&self) -> Result<bex_vm_types::Program, baml_compiler_emit::LoweringError> {
         // First ensure no diagnostics errors are present

@@ -1,0 +1,489 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR ===
+fn IfElseWithHeaders(flag: bool) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: bool // flag // param
+    let _2: void
+    let _3: bool
+    let _4: void
+    let _5: void
+
+    bb0: {
+        notify_block(Checkflag, level=1);
+        _2 = const null;
+        viz_enter(0);
+        _3 = copy _1;
+        branch copy _3 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        notify_block(Truebranch, level=1);
+        _4 = const null;
+        _0 = const "yes";
+        goto -> bb4;
+    }
+
+    bb3: {
+        notify_block(Falsebranch, level=1);
+        _5 = const null;
+        _0 = const "no";
+        goto -> bb4;
+    }
+
+    bb4: {
+        viz_exit(0);
+        goto -> bb1;
+    }
+}
+
+fn Headers() -> string {
+    // Locals:
+    let _0: string // return
+    let _1: void
+    let _2: 1 // x
+    let _3: void
+    let _4: 2 // y
+    let _5: void
+    let _6: int // z
+    let _7: int
+    let _8: int
+    let _9: null
+    let _10: int
+
+    bb0: {
+        notify_block(Setup, level=1);
+        _1 = const null;
+        _2 = const 1_i64;
+        notify_block(Configuration, level=2);
+        _3 = const null;
+        _4 = const 2_i64;
+        notify_block(Processing, level=1);
+        _5 = const null;
+        _7 = copy _2;
+        _8 = copy _4;
+        _6 = copy _7 + copy _8;
+        _10 = copy _6;
+        _9 = copy _10.0;
+        _0 = call copy _9() -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn SimpleFunction() -> int {
+    // Locals:
+    let _0: int // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn LlmFunction(input: string) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: string // input // param
+    let _2: (string, map<string, unknown>) -> unknown
+    let _3: "LlmFunction"
+    let _4: map<string, unknown>
+    let _5: "input"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "LlmFunction";
+        _5 = const "input";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn NestedControlFlow(x: int) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: int // x // param
+    let _2: void
+    let _3: bool
+    let _4: int
+    let _5: 0
+    let _6: void
+    let _7: bool
+    let _8: int
+    let _9: 100
+    let _10: void
+    let _11: void
+    let _12: void
+
+    bb0: {
+        notify_block(Outer, level=1);
+        _2 = const null;
+        viz_enter(0);
+        _4 = copy _1;
+        _5 = const 0_i64;
+        _3 = copy _4 > copy _5;
+        branch copy _3 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        notify_block(Positive, level=1);
+        _6 = const null;
+        viz_enter(1);
+        _8 = copy _1;
+        _9 = const 100_i64;
+        _7 = copy _8 > copy _9;
+        branch copy _7 -> [bb5, bb6];
+    }
+
+    bb3: {
+        notify_block(Non-positive, level=1);
+        _12 = const null;
+        _0 = const "zero or negative";
+        goto -> bb4;
+    }
+
+    bb4: {
+        viz_exit(0);
+        goto -> bb1;
+    }
+
+    bb5: {
+        notify_block(Large, level=1);
+        _10 = const null;
+        _0 = const "large";
+        goto -> bb7;
+    }
+
+    bb6: {
+        notify_block(Small, level=1);
+        _11 = const null;
+        _0 = const "small";
+        goto -> bb7;
+    }
+
+    bb7: {
+        viz_exit(1);
+        goto -> bb4;
+    }
+}
+
+fn ElseIfChain(x: int) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: int // x // param
+    let _2: bool
+    let _3: int
+    let _4: 1
+    let _5: void
+    let _6: bool
+    let _7: int
+    let _8: 2
+    let _9: void
+    let _10: bool
+    let _11: int
+    let _12: 3
+    let _13: void
+    let _14: void
+
+    bb0: {
+        _3 = copy _1;
+        _4 = const 1_i64;
+        _2 = copy _3 == copy _4;
+        branch copy _2 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        notify_block(Caseone, level=1);
+        _5 = const null;
+        _0 = const "one";
+        goto -> bb4;
+    }
+
+    bb3: {
+        viz_enter(0);
+        _7 = copy _1;
+        _8 = const 2_i64;
+        _6 = copy _7 == copy _8;
+        branch copy _6 -> [bb5, bb6];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        notify_block(Casetwo, level=1);
+        _9 = const null;
+        _0 = const "two";
+        goto -> bb7;
+    }
+
+    bb6: {
+        viz_enter(1);
+        _11 = copy _1;
+        _12 = const 3_i64;
+        _10 = copy _11 == copy _12;
+        branch copy _10 -> [bb8, bb9];
+    }
+
+    bb7: {
+        viz_exit(0);
+        goto -> bb4;
+    }
+
+    bb8: {
+        notify_block(Casethree, level=1);
+        _13 = const null;
+        _0 = const "three";
+        goto -> bb10;
+    }
+
+    bb9: {
+        notify_block(Defaultcase, level=1);
+        _14 = const null;
+        _0 = const "other";
+        goto -> bb10;
+    }
+
+    bb10: {
+        viz_exit(1);
+        goto -> bb7;
+    }
+}
+
+fn WhileWithHeaders() -> int {
+    // Locals:
+    let _0: int // return
+    let _1: void
+    let _2: 0 // count
+    let _3: void
+    let _4: void
+    let _5: bool
+    let _6: int
+    let _7: 10
+    let _8: void
+    let _9: void
+    let _10: void
+    let _11: int
+    let _12: 1
+    let _13: int
+    let _14: void
+
+    bb0: {
+        notify_block(Initialize, level=1);
+        _1 = const null;
+        _2 = const 0_i64;
+        notify_block(Loop, level=1);
+        _3 = const null;
+        viz_enter(0);
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _6 = copy _2;
+        _7 = const 10_i64;
+        _5 = copy _6 < copy _7;
+        branch copy _5 -> [bb3, bb4];
+    }
+
+    bb3: {
+        notify_block(Iteration, level=1);
+        _9 = const null;
+        _11 = copy _2;
+        _12 = const 1_i64;
+        _13 = copy _11 + copy _12;
+        _2 = copy _13;
+        _10 = const null;
+        _8 = const null;
+        goto -> bb2;
+    }
+
+    bb4: {
+        viz_exit(0);
+        _4 = const null;
+        notify_block(Done, level=1);
+        _14 = const null;
+        _0 = copy _2;
+        goto -> bb1;
+    }
+}
+
+fn MatchExpression(x: int) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: int // x // param
+    let _2: void
+    let _3: void
+    let _4: void
+
+    bb0: {
+        switch copy _1 [1: bb3, 2: bb4, otherwise: bb5];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        notify_block(One, level=1);
+        _2 = const null;
+        _0 = const "one";
+        goto -> bb2;
+    }
+
+    bb4: {
+        notify_block(Two, level=1);
+        _3 = const null;
+        _0 = const "two";
+        goto -> bb2;
+    }
+
+    bb5: {
+        notify_block(Default, level=1);
+        _4 = const null;
+        _0 = const "other";
+        goto -> bb2;
+    }
+}
+
+fn LlmFunction.render_prompt(input: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // return
+    let _1: string // input // param
+    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
+    let _3: "LlmFunction"
+    let _4: map<string, unknown>
+    let _5: "input"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.render_prompt;
+        _3 = const "LlmFunction";
+        _5 = const "input";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn LlmFunction.build_request(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // return
+    let _1: string // input // param
+    let _2: (string, map<string, unknown>) -> baml.http.Request
+    let _3: "LlmFunction"
+    let _4: map<string, unknown>
+    let _5: "input"
+    let _6: string
+
+    bb0: {
+        _2 = const fn baml.llm.build_request;
+        _3 = const "LlmFunction";
+        _5 = const "input";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn TestClient.resolve() -> baml.llm.PrimitiveClient {
+    // Locals:
+    let _0: baml.llm.PrimitiveClient // return
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
+    let _2: "TestClient"
+    let _3: "openai"
+    let _4: "user"
+    let _5: string[]
+    let _6: "user"
+    let _7: "assistant"
+    let _8: "system"
+    let _9: map<string, unknown>
+    let _10: "model"
+    let _11: "gpt-4"
+    let _12: null
+
+    bb0: {
+        _1 = const fn baml.llm.build_primitive_client;
+        _2 = const "TestClient";
+        _3 = const "openai";
+        _4 = const "user";
+        _6 = const "user";
+        _7 = const "assistant";
+        _8 = const "system";
+        _5 = [copy _6, copy _7, copy _8];
+        _10 = const "model";
+        _11 = const "gpt-4";
+        _9 = { copy _10: copy _11 };
+        _12 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _12 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+}

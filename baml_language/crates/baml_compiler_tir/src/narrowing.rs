@@ -8,7 +8,7 @@
 //! - **Early-return narrowing**: Applying the negation of an if-condition to code
 //!   after the if, when the if-body definitely diverges.
 
-use baml_base::Name;
+use baml_base::{Name, TyAttr};
 use baml_compiler_hir::{ExprBody, ExprId, StmtId};
 
 use crate::{TypeContext, types::Ty};
@@ -81,8 +81,8 @@ fn stmt_definitely_diverges(stmt_id: StmtId, body: &ExprBody) -> bool {
 /// Check if a type is nullable (Optional or Union containing Null).
 fn is_nullable(ty: &Ty) -> bool {
     match ty {
-        Ty::Optional(_) | Ty::Null => true,
-        Ty::Union(members) => members.iter().any(|m| matches!(m, Ty::Null)),
+        Ty::Optional(..) | Ty::Null { .. } => true,
+        Ty::Union(members, _) => members.iter().any(|m| matches!(m, Ty::Null { .. })),
         _ => false,
     }
 }
@@ -95,20 +95,22 @@ fn is_nullable(ty: &Ty) -> bool {
 /// - Other → unchanged
 fn remove_null(ty: &Ty) -> Ty {
     match ty {
-        Ty::Optional(inner) => (**inner).clone(),
-        Ty::Union(members) => {
+        Ty::Optional(inner, _) => (**inner).clone(),
+        Ty::Union(members, union_attr) => {
             let non_null: Vec<Ty> = members
                 .iter()
-                .filter(|m| !matches!(m, Ty::Null))
+                .filter(|m| !matches!(m, Ty::Null { .. }))
                 .cloned()
                 .collect();
             match non_null.len() {
-                0 => Ty::Unknown,
+                0 => Ty::Unknown {
+                    attr: union_attr.clone(),
+                },
                 1 => non_null.into_iter().next().unwrap(),
-                _ => Ty::Union(non_null),
+                _ => Ty::Union(non_null, union_attr.clone()),
             }
         }
-        Ty::Null => Ty::Unknown,
+        Ty::Null { attr } => Ty::Unknown { attr: attr.clone() },
         other => other.clone(),
     }
 }
@@ -116,7 +118,7 @@ fn remove_null(ty: &Ty) -> Ty {
 /// Get the simple name of a named type (Class, Enum, or `TypeAlias`).
 fn named_type_name(ty: &Ty) -> Option<&Name> {
     match ty {
-        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => Some(&qn.name),
+        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => Some(&qn.name),
         _ => None,
     }
 }
@@ -136,19 +138,23 @@ fn same_named_type(a: &Ty, b: &Ty) -> bool {
 /// Remove a specific type from a union (for instanceof false-branch narrowing).
 fn remove_type_from(ty: &Ty, to_remove: &Ty) -> Ty {
     match ty {
-        Ty::Union(members) => {
+        Ty::Union(members, union_attr) => {
             let remaining: Vec<Ty> = members
                 .iter()
                 .filter(|m| !same_named_type(m, to_remove))
                 .cloned()
                 .collect();
             match remaining.len() {
-                0 => Ty::Unknown,
+                0 => Ty::Unknown {
+                    attr: union_attr.clone(),
+                },
                 1 => remaining.into_iter().next().unwrap(),
-                _ => Ty::Union(remaining),
+                _ => Ty::Union(remaining, union_attr.clone()),
             }
         }
-        Ty::Optional(inner) if same_named_type(inner.as_ref(), to_remove) => Ty::Null,
+        Ty::Optional(inner, opt_attr) if same_named_type(inner.as_ref(), to_remove) => Ty::Null {
+            attr: opt_attr.clone(),
+        },
         _ => ty.clone(),
     }
 }
@@ -161,11 +167,11 @@ pub(crate) fn infer_union_member_field(
     field: &Name,
 ) -> Option<Ty> {
     match member {
-        Ty::Class(fqn) => {
+        Ty::Class(fqn, _) => {
             let key = fqn.display_name();
             ctx.lookup_class_field(&key, field).cloned()
         }
-        Ty::TypeAlias(fqn) => {
+        Ty::TypeAlias(fqn, _) => {
             let key = fqn.display_name();
             ctx.lookup_class_field(&key, field).cloned()
         }
@@ -203,7 +209,7 @@ fn extract_instanceof_narrowing(
                             let type_name = type_segments[0].clone();
                             return Some((
                                 var_name,
-                                Ty::TypeAlias(QualifiedName::local(type_name)),
+                                Ty::TypeAlias(QualifiedName::local(type_name), TyAttr::default()),
                             ));
                         }
                     }
@@ -299,7 +305,7 @@ fn extract_discriminated_union_narrowing(
 
     // Look up the variable's type — must be a union
     let var_ty = ctx.lookup(var_name)?;
-    let Ty::Union(members) = var_ty else {
+    let Ty::Union(members, union_attr) = var_ty else {
         return None;
     };
 
@@ -308,7 +314,9 @@ fn extract_discriminated_union_narrowing(
     for member in members {
         if let Some(field_ty) = infer_union_member_field(ctx, member, field_name) {
             match &field_ty {
-                Ty::Literal(crate::types::LiteralValue::String(s)) if s.as_str() == literal_str => {
+                Ty::Literal(crate::types::LiteralValue::String(s), _)
+                    if s.as_str() == literal_str =>
+                {
                     matching_members.push(member.clone());
                 }
                 _ => {}
@@ -327,7 +335,7 @@ fn extract_discriminated_union_narrowing(
         // Narrow to matching members
         let narrowed = match matching_members.len() {
             1 => matching_members.into_iter().next().unwrap(),
-            _ => Ty::Union(matching_members),
+            _ => Ty::Union(matching_members, union_attr.clone()),
         };
         Some(vec![(var_name.clone(), narrowed)])
     } else {
@@ -342,7 +350,7 @@ fn extract_discriminated_union_narrowing(
         } else {
             let narrowed = match non_matching.len() {
                 1 => non_matching.into_iter().next().unwrap(),
-                _ => Ty::Union(non_matching),
+                _ => Ty::Union(non_matching, union_attr.clone()),
             };
             Some(vec![(var_name.clone(), narrowed)])
         }
@@ -382,7 +390,12 @@ pub(crate) fn extract_condition_narrowing(
             BinaryOp::Eq => {
                 if let Some((var_name, var_ty)) = extract_null_comparison(ctx, *lhs, *rhs, body) {
                     if when_true {
-                        vec![(var_name, Ty::Null)]
+                        vec![(
+                            var_name,
+                            Ty::Null {
+                                attr: TyAttr::default(),
+                            },
+                        )]
                     } else {
                         vec![(var_name, remove_null(&var_ty))]
                     }
@@ -398,7 +411,12 @@ pub(crate) fn extract_condition_narrowing(
                     if when_true {
                         vec![(var_name, remove_null(&var_ty))]
                     } else {
-                        vec![(var_name, Ty::Null)]
+                        vec![(
+                            var_name,
+                            Ty::Null {
+                                attr: TyAttr::default(),
+                            },
+                        )]
                     }
                 } else {
                     extract_discriminated_union_narrowing(ctx, *lhs, *rhs, body, !when_true)

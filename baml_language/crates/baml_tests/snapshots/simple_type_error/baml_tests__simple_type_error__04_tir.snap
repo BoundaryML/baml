@@ -3,6 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function Foo:
-    Return: Error
+    Return: Error { attr: TyAttr(None) }
     Errors:
       - Invalid op Add for int and string

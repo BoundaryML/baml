@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use baml_base::{Name, baml_debug};
+use baml_base::{Name, TyAttr, baml_debug};
 use baml_builtins::{BuiltinSignature, TypePattern};
 use baml_compiler_hir::QualifiedName;
 
@@ -84,14 +84,14 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
         }
 
         // Primitive types must match exactly
-        (TypePattern::Int, Ty::Int) => true,
-        (TypePattern::Float, Ty::Float) => true,
-        (TypePattern::String, Ty::String) => true,
-        (TypePattern::Bool, Ty::Bool) => true,
-        (TypePattern::Null, Ty::Null) => true,
+        (TypePattern::Int, Ty::Int { .. }) => true,
+        (TypePattern::Float, Ty::Float { .. }) => true,
+        (TypePattern::String, Ty::String { .. }) => true,
+        (TypePattern::Bool, Ty::Bool { .. }) => true,
+        (TypePattern::Null, Ty::Null { .. }) => true,
 
         // Array/List: match element type
-        (TypePattern::Array(elem_pat), Ty::List(elem_ty)) => {
+        (TypePattern::Array(elem_pat), Ty::List(elem_ty, _)) => {
             match_pattern_inner(elem_pat, elem_ty, bindings)
         }
 
@@ -104,28 +104,29 @@ fn match_pattern_inner(pattern: &TypePattern, ty: &Ty, bindings: &mut Bindings) 
             Ty::Map {
                 key: key_ty,
                 value: value_ty,
+                ..
             },
         ) => {
             match_pattern_inner(key_pat, key_ty, bindings)
                 && match_pattern_inner(value_pat, value_ty, bindings)
         }
-        (TypePattern::Media, Ty::Media(_)) => true,
+        (TypePattern::Media, Ty::Media(_, _)) => true,
 
         // Builtin types match exactly by path - they are represented as Ty::Class now
         // Use full display path (e.g., "baml.fs.File") for comparison
-        (TypePattern::Builtin(pattern_path), Ty::Class(fqn)) => *pattern_path == fqn.display(),
+        (TypePattern::Builtin(pattern_path), Ty::Class(fqn, _)) => *pattern_path == fqn.display(),
 
         // Builtin enums match exactly by path
-        (TypePattern::Enum(path), Ty::Enum(fqn)) => *path == fqn.display(),
+        (TypePattern::Enum(path), Ty::Enum(fqn, _)) => *path == fqn.display(),
 
         // Opaque runtime types match their corresponding patterns
-        (TypePattern::Resource, Ty::Resource) => true,
-        (TypePattern::Type, Ty::Type) => true,
-        (TypePattern::Type, Ty::Unknown | Ty::Error) => true,
+        (TypePattern::Resource, Ty::Resource { .. }) => true,
+        (TypePattern::Type, Ty::Type { .. }) => true,
+        (TypePattern::Type, Ty::Unknown { .. } | Ty::Error { .. }) => true,
         (TypePattern::Type, _) => false,
 
         // Unknown in Ty matches any pattern (for error recovery)
-        (_, Ty::Unknown) => true,
+        (_, Ty::Unknown { .. }) => true,
 
         // BuiltinUnknown accepts any type (for builtins that need heterogeneous values)
         (TypePattern::BuiltinUnknown, _) => true,
@@ -161,34 +162,58 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
             .get(name)
             .cloned()
             // Fall back to Unknown for unbound type variables (e.g., "Any")
-            .unwrap_or(Ty::Unknown),
+            .unwrap_or(Ty::Unknown {
+                attr: TyAttr::default(),
+            }),
 
-        TypePattern::Int => Ty::Int,
-        TypePattern::Float => Ty::Float,
-        TypePattern::String => Ty::String,
-        TypePattern::Bool => Ty::Bool,
-        TypePattern::Null => Ty::Null,
+        TypePattern::Int => Ty::Int {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Float => Ty::Float {
+            attr: TyAttr::default(),
+        },
+        TypePattern::String => Ty::String {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Bool => Ty::Bool {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Null => Ty::Null {
+            attr: TyAttr::default(),
+        },
 
-        TypePattern::Array(elem) => Ty::List(Box::new(substitute(elem, bindings))),
+        TypePattern::Array(elem) => {
+            Ty::List(Box::new(substitute(elem, bindings)), TyAttr::default())
+        }
 
         TypePattern::Map { key, value } => Ty::Map {
             key: Box::new(substitute(key, bindings)),
             value: Box::new(substitute(value, bindings)),
+            attr: TyAttr::default(),
         },
-        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
-        TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute(inner, bindings))),
-        TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path)),
+        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic, TyAttr::default()),
+        TypePattern::Optional(inner) => {
+            Ty::Optional(Box::new(substitute(inner, bindings)), TyAttr::default())
+        }
+        TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path), TyAttr::default()),
         TypePattern::Function { params, ret } => Ty::Function {
             params: params
                 .iter()
                 .map(|p| (None, substitute(p, bindings)))
                 .collect(),
             ret: Box::new(substitute(ret, bindings)),
+            attr: TyAttr::default(),
         },
-        TypePattern::Resource => Ty::Resource,
-        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
-        TypePattern::Enum(path) => Ty::Enum(parse_builtin_path(path)),
-        TypePattern::Type => Ty::Type,
+        TypePattern::Resource => Ty::Resource {
+            attr: TyAttr::default(),
+        },
+        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Enum(path) => Ty::Enum(parse_builtin_path(path), TyAttr::default()),
+        TypePattern::Type => Ty::Type {
+            attr: TyAttr::default(),
+        },
     }
 }
 
@@ -198,31 +223,53 @@ pub fn substitute(pattern: &TypePattern, bindings: &Bindings) -> Ty {
 /// (e.g., `baml.Array.length(arr)` where we don't know the element type yet).
 pub fn substitute_unknown(pattern: &TypePattern) -> Ty {
     match pattern {
-        TypePattern::Var(_) => Ty::Unknown,
-        TypePattern::Int => Ty::Int,
-        TypePattern::Float => Ty::Float,
-        TypePattern::String => Ty::String,
-        TypePattern::Bool => Ty::Bool,
-        TypePattern::Null => Ty::Null,
-        TypePattern::Array(elem) => Ty::List(Box::new(substitute_unknown(elem))),
+        TypePattern::Var(_) => Ty::Unknown {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Int => Ty::Int {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Float => Ty::Float {
+            attr: TyAttr::default(),
+        },
+        TypePattern::String => Ty::String {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Bool => Ty::Bool {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Null => Ty::Null {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Array(elem) => Ty::List(Box::new(substitute_unknown(elem)), TyAttr::default()),
         TypePattern::Map { key, value } => Ty::Map {
             key: Box::new(substitute_unknown(key)),
             value: Box::new(substitute_unknown(value)),
+            attr: TyAttr::default(),
         },
-        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic),
-        TypePattern::Optional(inner) => Ty::Optional(Box::new(substitute_unknown(inner))),
-        TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path)),
+        TypePattern::Media => Ty::Media(baml_base::MediaKind::Generic, TyAttr::default()),
+        TypePattern::Optional(inner) => {
+            Ty::Optional(Box::new(substitute_unknown(inner)), TyAttr::default())
+        }
+        TypePattern::Builtin(path) => Ty::Class(parse_builtin_path(path), TyAttr::default()),
         TypePattern::Function { params, ret } => Ty::Function {
             params: params
                 .iter()
                 .map(|p| (None, substitute_unknown(p)))
                 .collect(),
             ret: Box::new(substitute_unknown(ret)),
+            attr: TyAttr::default(),
         },
-        TypePattern::Resource => Ty::Resource,
-        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown,
-        TypePattern::Enum(path) => Ty::Enum(parse_builtin_path(path)),
-        TypePattern::Type => Ty::Type,
+        TypePattern::Resource => Ty::Resource {
+            attr: TyAttr::default(),
+        },
+        TypePattern::BuiltinUnknown => Ty::BuiltinUnknown {
+            attr: TyAttr::default(),
+        },
+        TypePattern::Enum(path) => Ty::Enum(parse_builtin_path(path), TyAttr::default()),
+        TypePattern::Type => Ty::Type {
+            attr: TyAttr::default(),
+        },
     }
 }
 
@@ -309,26 +356,30 @@ pub fn method_param_types(receiver_ty: &Ty, method_name: &str) -> Option<Vec<(&'
 mod tests {
     use super::*;
 
+    fn d() -> TyAttr {
+        TyAttr::default()
+    }
+
     #[test]
     fn test_match_primitive() {
-        assert!(match_pattern(&TypePattern::Int, &Ty::Int).is_some());
-        assert!(match_pattern(&TypePattern::String, &Ty::String).is_some());
-        assert!(match_pattern(&TypePattern::Int, &Ty::String).is_none());
+        assert!(match_pattern(&TypePattern::Int, &Ty::Int { attr: d() }).is_some());
+        assert!(match_pattern(&TypePattern::String, &Ty::String { attr: d() }).is_some());
+        assert!(match_pattern(&TypePattern::Int, &Ty::String { attr: d() }).is_none());
     }
 
     #[test]
     fn test_match_type_var() {
-        let bindings = match_pattern(&TypePattern::Var("T"), &Ty::Int).unwrap();
-        assert_eq!(bindings.get("T"), Some(&Ty::Int));
+        let bindings = match_pattern(&TypePattern::Var("T"), &Ty::Int { attr: d() }).unwrap();
+        assert_eq!(bindings.get("T"), Some(&Ty::Int { attr: d() }));
     }
 
     #[test]
     fn test_match_array() {
         let pattern = TypePattern::Array(Box::new(TypePattern::Var("T")));
-        let ty = Ty::List(Box::new(Ty::String));
+        let ty = Ty::List(Box::new(Ty::String { attr: d() }), d());
 
         let bindings = match_pattern(&pattern, &ty).unwrap();
-        assert_eq!(bindings.get("T"), Some(&Ty::String));
+        assert_eq!(bindings.get("T"), Some(&Ty::String { attr: d() }));
     }
 
     #[test]
@@ -338,52 +389,53 @@ mod tests {
             value: Box::new(TypePattern::Var("V")),
         };
         let ty = Ty::Map {
-            key: Box::new(Ty::String),
-            value: Box::new(Ty::Int),
+            key: Box::new(Ty::String { attr: d() }),
+            value: Box::new(Ty::Int { attr: d() }),
+            attr: d(),
         };
 
         let bindings = match_pattern(&pattern, &ty).unwrap();
-        assert_eq!(bindings.get("K"), Some(&Ty::String));
-        assert_eq!(bindings.get("V"), Some(&Ty::Int));
+        assert_eq!(bindings.get("K"), Some(&Ty::String { attr: d() }));
+        assert_eq!(bindings.get("V"), Some(&Ty::Int { attr: d() }));
     }
 
     #[test]
     fn test_substitute_var() {
         let mut bindings = HashMap::new();
-        bindings.insert("T", Ty::Int);
+        bindings.insert("T", Ty::Int { attr: d() });
 
         let result = substitute(&TypePattern::Var("T"), &bindings);
-        assert_eq!(result, Ty::Int);
+        assert_eq!(result, Ty::Int { attr: d() });
     }
 
     #[test]
     fn test_substitute_array() {
         let mut bindings = HashMap::new();
-        bindings.insert("T", Ty::String);
+        bindings.insert("T", Ty::String { attr: d() });
 
         let pattern = TypePattern::Array(Box::new(TypePattern::Var("T")));
         let result = substitute(&pattern, &bindings);
-        assert_eq!(result, Ty::List(Box::new(Ty::String)));
+        assert_eq!(result, Ty::List(Box::new(Ty::String { attr: d() }), d()));
     }
 
     #[test]
     fn test_lookup_array_length() {
-        let arr_ty = Ty::List(Box::new(Ty::Int));
+        let arr_ty = Ty::List(Box::new(Ty::Int { attr: d() }), d());
         let result = lookup_method(&arr_ty, "length");
 
         assert!(result.is_some());
         let (def, bindings) = result.unwrap();
         assert_eq!(def.path, "baml.Array.length");
-        assert_eq!(bindings.get("T"), Some(&Ty::Int));
+        assert_eq!(bindings.get("T"), Some(&Ty::Int { attr: d() }));
 
         // Return type should be int
         let return_ty = substitute(&def.returns, &bindings);
-        assert_eq!(return_ty, Ty::Int);
+        assert_eq!(return_ty, Ty::Int { attr: d() });
     }
 
     #[test]
     fn test_lookup_string_length() {
-        let result = lookup_method(&Ty::String, "length");
+        let result = lookup_method(&Ty::String { attr: d() }, "length");
 
         assert!(result.is_some());
         let (def, _bindings) = result.unwrap();
@@ -392,55 +444,73 @@ mod tests {
 
     #[test]
     fn test_method_return_type() {
-        let arr_ty = Ty::List(Box::new(Ty::Float));
+        let arr_ty = Ty::List(Box::new(Ty::Float { attr: d() }), d());
 
         // length returns int regardless of element type
-        assert_eq!(method_return_type(&arr_ty, "length"), Some(Ty::Int));
+        assert_eq!(
+            method_return_type(&arr_ty, "length"),
+            Some(Ty::Int { attr: d() })
+        );
 
         // push returns null
-        assert_eq!(method_return_type(&arr_ty, "push"), Some(Ty::Null));
+        assert_eq!(
+            method_return_type(&arr_ty, "push"),
+            Some(Ty::Null { attr: d() })
+        );
     }
 
     #[test]
     fn test_method_param_types() {
-        let arr_ty = Ty::List(Box::new(Ty::String));
+        let arr_ty = Ty::List(Box::new(Ty::String { attr: d() }), d());
 
         // push takes the element type
         let params = method_param_types(&arr_ty, "push").unwrap();
         assert_eq!(params.len(), 1);
-        assert_eq!(params[0], ("item", Ty::String));
+        assert_eq!(params[0], ("item", Ty::String { attr: d() }));
     }
 
     #[test]
     fn test_no_such_method() {
-        let arr_ty = Ty::List(Box::new(Ty::Int));
+        let arr_ty = Ty::List(Box::new(Ty::Int { attr: d() }), d());
         assert!(lookup_method(&arr_ty, "nonexistent").is_none());
     }
 
     #[test]
     fn test_match_opaque_types() {
-        assert!(match_pattern(&TypePattern::Resource, &Ty::Resource).is_some());
-        assert!(match_pattern(&TypePattern::Type, &Ty::Type).is_some());
+        assert!(match_pattern(&TypePattern::Resource, &Ty::Resource { attr: d() }).is_some());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Type { attr: d() }).is_some());
 
         // Type also matches error recovery types
-        assert!(match_pattern(&TypePattern::Type, &Ty::Unknown).is_some());
-        assert!(match_pattern(&TypePattern::Type, &Ty::Error).is_some());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Unknown { attr: d() }).is_some());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Error { attr: d() }).is_some());
 
         // Neither matches unrelated types
-        assert!(match_pattern(&TypePattern::Resource, &Ty::Int).is_none());
-        assert!(match_pattern(&TypePattern::Type, &Ty::Int).is_none());
+        assert!(match_pattern(&TypePattern::Resource, &Ty::Int { attr: d() }).is_none());
+        assert!(match_pattern(&TypePattern::Type, &Ty::Int { attr: d() }).is_none());
     }
 
     #[test]
     fn test_substitute_opaque_types() {
         let bindings = HashMap::new();
-        assert_eq!(substitute(&TypePattern::Resource, &bindings), Ty::Resource);
-        assert_eq!(substitute(&TypePattern::Type, &bindings), Ty::Type);
+        assert_eq!(
+            substitute(&TypePattern::Resource, &bindings),
+            Ty::Resource { attr: d() }
+        );
+        assert_eq!(
+            substitute(&TypePattern::Type, &bindings),
+            Ty::Type { attr: d() }
+        );
     }
 
     #[test]
     fn test_substitute_unknown_opaque_types() {
-        assert_eq!(substitute_unknown(&TypePattern::Resource), Ty::Resource);
-        assert_eq!(substitute_unknown(&TypePattern::Type), Ty::Type);
+        assert_eq!(
+            substitute_unknown(&TypePattern::Resource),
+            Ty::Resource { attr: d() }
+        );
+        assert_eq!(
+            substitute_unknown(&TypePattern::Type),
+            Ty::Type { attr: d() }
+        );
     }
 }

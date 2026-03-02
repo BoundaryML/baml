@@ -3,26 +3,26 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function build_attempt_with_state:
-    Return: Union([List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" })), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" })), Union([List(Unknown), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }))])])
+    Return: Union([List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }, TyAttr(None)), TyAttr(None)), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }, TyAttr(None)), TyAttr(None)), Union([List(Unknown { attr: TyAttr(None) }, TyAttr(None)), List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }, TyAttr(None)), TyAttr(None))], TyAttr(None))], TyAttr(None))
   Function build_plan_with_state:
-    Return: List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }))
+    Return: List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }, TyAttr(None)), TyAttr(None))
   Function render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function resolve_primitive:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function build_attempt:
-    Return: List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }))
+    Return: List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }, TyAttr(None)), TyAttr(None))
   Function execute_client:
-    Return: Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "ExecutionResult" })
+    Return: Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "ExecutionResult" }, TyAttr(None))
   Function execute_client_once:
-    Return: Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "ExecutionResult" })
+    Return: Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "ExecutionResult" }, TyAttr(None))
   Function build_plan:
-    Return: List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }))
+    Return: List(Class(QualifiedName { namespace: BamlStd { path: ["llm"] }, name: "OrchestrationStep" }, TyAttr(None)), TyAttr(None))
   Function build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function call_llm_function:
-    Return: BuiltinUnknown
+    Return: BuiltinUnknown { attr: TyAttr(None) }
   Function PlannerState.rr_local_offset:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function PlannerState.rr_pick_index:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }

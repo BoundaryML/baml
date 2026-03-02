@@ -28,9 +28,11 @@ pub fn update_test_file(
         &result.actual_diagnostics,
         result.actual_hovers.as_deref(),
         completion_section.as_deref(),
+        result.actual_inlay_hints.as_deref(),
         &result.diagnostics_comments,
         &result.hovers_comments,
         &result.completions_comments,
+        &result.inlay_hints_comments,
     );
 
     // Combine source and new expectations
@@ -48,9 +50,10 @@ fn extract_completion_section(content: &str) -> Option<String> {
     let after_marker = &content[marker_pos + marker.len()..];
 
     // Find where the next section starts (or end of file)
-    let section_end = after_marker
-        .find("//- diagnostics")
-        .or_else(|| after_marker.find("//- on_hover"))
+    let section_end = ["//- diagnostics", "//- on_hover", "//- inlay_hints"]
+        .iter()
+        .filter_map(|marker| after_marker.find(marker))
+        .min()
         .unwrap_or(after_marker.len());
 
     let section = &after_marker[..section_end];
@@ -73,13 +76,16 @@ fn extract_completion_section(content: &str) -> Option<String> {
 
 /// Generate the expectations section from actual output.
 /// Preserves user comments (lines starting with `// (`) from the original file.
+#[allow(clippy::too_many_arguments)]
 fn generate_expectations_section(
     diagnostics: &str,
     hovers: Option<&str>,
     completions: Option<&str>,
+    inlay_hints: Option<&str>,
     diagnostics_comments: &[String],
     hovers_comments: &[String],
     completions_comments: &[String],
+    inlay_hints_comments: &[String],
 ) -> String {
     let mut section = String::new();
     section.push_str("\n\n//----\n");
@@ -122,6 +128,20 @@ fn generate_expectations_section(
         section.push('\n');
     }
 
+    if let Some(inlay_hints) = inlay_hints {
+        section.push_str("//\n");
+        section.push_str("//- inlay_hints\n");
+
+        // Add preserved inlay hints comments first
+        for comment in inlay_hints_comments {
+            section.push_str(comment);
+            section.push('\n');
+        }
+
+        section.push_str(inlay_hints);
+        section.push('\n');
+    }
+
     section
 }
 
@@ -132,7 +152,8 @@ mod tests {
     #[test]
     fn test_generate_expectations_section() {
         let diagnostics = "// <no-diagnostics-expected>";
-        let section = generate_expectations_section(diagnostics, None, None, &[], &[], &[]);
+        let section =
+            generate_expectations_section(diagnostics, None, None, None, &[], &[], &[], &[]);
 
         assert!(section.contains("//----"));
         assert!(section.contains("//- diagnostics"));
@@ -144,7 +165,16 @@ mod tests {
     fn test_generate_expectations_with_hovers() {
         let diagnostics = "// <no-diagnostics-expected>";
         let hovers = "// `Foo` at test.baml:1:1\n// class Foo {}";
-        let section = generate_expectations_section(diagnostics, Some(hovers), None, &[], &[], &[]);
+        let section = generate_expectations_section(
+            diagnostics,
+            Some(hovers),
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+            &[],
+        );
 
         assert!(section.contains("//----"));
         assert!(section.contains("//- diagnostics"));
@@ -156,8 +186,16 @@ mod tests {
     fn test_generate_expectations_with_preserved_comments() {
         let diagnostics = "// Error: something went wrong";
         let diagnostics_comments = vec!["// (expect one error here)".to_string()];
-        let section =
-            generate_expectations_section(diagnostics, None, None, &diagnostics_comments, &[], &[]);
+        let section = generate_expectations_section(
+            diagnostics,
+            None,
+            None,
+            None,
+            &diagnostics_comments,
+            &[],
+            &[],
+            &[],
+        );
 
         assert!(section.contains("//- diagnostics"));
         assert!(section.contains("// (expect one error here)"));
@@ -178,8 +216,10 @@ mod tests {
             diagnostics,
             Some(hovers),
             None,
+            None,
             &[],
             &hovers_comments,
+            &[],
             &[],
         );
 
@@ -197,8 +237,16 @@ mod tests {
     fn test_generate_expectations_with_completions() {
         let diagnostics = "// <no-diagnostics-expected>";
         let completions = "// SHOULD_CONTAIN: function, class, enum";
-        let section =
-            generate_expectations_section(diagnostics, None, Some(completions), &[], &[], &[]);
+        let section = generate_expectations_section(
+            diagnostics,
+            None,
+            Some(completions),
+            None,
+            &[],
+            &[],
+            &[],
+            &[],
+        );
 
         assert!(section.contains("//- completions"));
         assert!(section.contains("// SHOULD_CONTAIN: function, class, enum"));

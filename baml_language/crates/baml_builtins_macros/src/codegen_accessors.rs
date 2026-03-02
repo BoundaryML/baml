@@ -103,8 +103,8 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
         FieldTypeKind::MapStringString => {
             let binding = quote! {
                 let #name = BexExternalValue::Map {
-                    key_type: bex_external_types::Ty::String,
-                    value_type: bex_external_types::Ty::String,
+                    key_type: bex_external_types::Ty::String { attr: baml_type::TyAttr::default() },
+                    value_type: bex_external_types::Ty::String { attr: baml_type::TyAttr::default() },
                     entries: self.#name
                         .into_iter()
                         .map(|(k, v)| (k, BexExternalValue::String(v)))
@@ -117,8 +117,8 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
         FieldTypeKind::MapStringUnknown => {
             let binding = quote! {
                 let #name = BexExternalValue::Map {
-                    key_type: bex_external_types::Ty::String,
-                    value_type: bex_external_types::Ty::BuiltinUnknown,
+                    key_type: bex_external_types::Ty::String { attr: baml_type::TyAttr::default() },
+                    value_type: bex_external_types::Ty::BuiltinUnknown { attr: baml_type::TyAttr::default() },
                     entries: self.#name,
                 };
             };
@@ -128,7 +128,7 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
         FieldTypeKind::ArrayString => {
             let binding = quote! {
                 let #name = BexExternalValue::Array {
-                    element_type: bex_external_types::Ty::String,
+                    element_type: bex_external_types::Ty::String { attr: baml_type::TyAttr::default() },
                     items: self.#name
                         .into_iter()
                         .map(BexExternalValue::String)
@@ -148,7 +148,7 @@ fn gen_as_bex_external_field(field: &AccessorFieldDef) -> (Option<TokenStream2>,
         FieldTypeKind::ArrayBuiltinStruct(_) => {
             let binding = quote! {
                 let #name = BexExternalValue::Array {
-                    element_type: bex_external_types::Ty::BuiltinUnknown,
+                    element_type: bex_external_types::Ty::BuiltinUnknown { attr: baml_type::TyAttr::default() },
                     items: self.#name
                         .into_iter()
                         .map(AsBexExternalValue::into_bex_external_value)

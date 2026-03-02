@@ -5,6 +5,7 @@
 
 mod common;
 
+use baml_type::TyAttr;
 use bex_engine::{BexExternalValue, Ty, UnionMetadata};
 use common::{EngineProgram, assert_engine_executes};
 use indexmap::indexmap;
@@ -22,7 +23,22 @@ async fn union_int_or_string_returns_int() -> anyhow::Result<()> {
         inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Int(42)),
-            metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+            metadata: UnionMetadata::new(
+                Ty::Union(
+                    vec![
+                        Ty::Int {
+                            attr: TyAttr::default(),
+                        },
+                        Ty::String {
+                            attr: TyAttr::default(),
+                        },
+                    ],
+                    TyAttr::default(),
+                ),
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            ),
         }),
     })
     .await
@@ -41,7 +57,22 @@ async fn union_int_or_string_returns_string() -> anyhow::Result<()> {
         inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::String("hello".to_string())),
-            metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
+            metadata: UnionMetadata::new(
+                Ty::Union(
+                    vec![
+                        Ty::Int {
+                            attr: TyAttr::default(),
+                        },
+                        Ty::String {
+                            attr: TyAttr::default(),
+                        },
+                    ],
+                    TyAttr::default(),
+                ),
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+            ),
         }),
     })
     .await
@@ -60,7 +91,17 @@ async fn optional_int_returns_value() -> anyhow::Result<()> {
         inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Int(42)),
-            metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int)), Ty::Int),
+            metadata: UnionMetadata::new(
+                Ty::Optional(
+                    Box::new(Ty::Int {
+                        attr: TyAttr::default(),
+                    }),
+                    TyAttr::default(),
+                ),
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            ),
         }),
     })
     .await
@@ -79,7 +120,17 @@ async fn optional_int_returns_null() -> anyhow::Result<()> {
         inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Null),
-            metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int)), Ty::Null),
+            metadata: UnionMetadata::new(
+                Ty::Optional(
+                    Box::new(Ty::Int {
+                        attr: TyAttr::default(),
+                    }),
+                    TyAttr::default(),
+                ),
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
+            ),
         }),
     })
     .await
@@ -105,7 +156,7 @@ async fn class_with_union_field() -> anyhow::Result<()> {
             fields: indexmap! {
                 "data".to_string() => BexExternalValue::Union {
                     value: Box::new(BexExternalValue::Int(42)),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int { attr: TyAttr::default() }, Ty::String { attr: TyAttr::default() }], TyAttr::default()), Ty::Int { attr: TyAttr::default() }),
                 },
             },
         }),
@@ -140,11 +191,23 @@ async fn union_of_classes_returns_success() -> anyhow::Result<()> {
                 },
             }),
             metadata: UnionMetadata::new(
-                Ty::Union(vec![
-                    Ty::Class(bex_engine::TypeName::local("Success".into())),
-                    Ty::Class(bex_engine::TypeName::local("Failure".into())),
-                ]),
-                Ty::Class(bex_engine::TypeName::local("Success".into())),
+                Ty::Union(
+                    vec![
+                        Ty::Class(
+                            bex_engine::TypeName::local("Success".into()),
+                            TyAttr::default(),
+                        ),
+                        Ty::Class(
+                            bex_engine::TypeName::local("Failure".into()),
+                            TyAttr::default(),
+                        ),
+                    ],
+                    TyAttr::default(),
+                ),
+                Ty::Class(
+                    bex_engine::TypeName::local("Success".into()),
+                    TyAttr::default(),
+                ),
             ),
         }),
     })
@@ -179,10 +242,10 @@ async fn union_of_classes_returns_failure() -> anyhow::Result<()> {
             }),
             metadata: UnionMetadata::new(
                 Ty::Union(vec![
-                    Ty::Class(bex_engine::TypeName::local("Success".into())),
-                    Ty::Class(bex_engine::TypeName::local("Failure".into())),
-                ]),
-                Ty::Class(bex_engine::TypeName::local("Failure".into())),
+                    Ty::Class(bex_engine::TypeName::local("Success".into()), TyAttr::default()),
+                    Ty::Class(bex_engine::TypeName::local("Failure".into()), TyAttr::default()),
+                ], TyAttr::default()),
+                Ty::Class(bex_engine::TypeName::local("Failure".into()), TyAttr::default()),
             ),
         }),
     })
@@ -202,7 +265,9 @@ async fn union_of_arrays() -> anyhow::Result<()> {
         inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Array {
-                element_type: Ty::Int,
+                element_type: Ty::Int {
+                    attr: TyAttr::default(),
+                },
                 items: vec![
                     BexExternalValue::Int(1),
                     BexExternalValue::Int(2),
@@ -210,11 +275,29 @@ async fn union_of_arrays() -> anyhow::Result<()> {
                 ],
             }),
             metadata: UnionMetadata::new(
-                Ty::Union(vec![
-                    Ty::List(Box::new(Ty::Int)),
-                    Ty::List(Box::new(Ty::String)),
-                ]),
-                Ty::List(Box::new(Ty::Int)),
+                Ty::Union(
+                    vec![
+                        Ty::List(
+                            Box::new(Ty::Int {
+                                attr: TyAttr::default(),
+                            }),
+                            TyAttr::default(),
+                        ),
+                        Ty::List(
+                            Box::new(Ty::String {
+                                attr: TyAttr::default(),
+                            }),
+                            TyAttr::default(),
+                        ),
+                    ],
+                    TyAttr::default(),
+                ),
+                Ty::List(
+                    Box::new(Ty::Int {
+                        attr: TyAttr::default(),
+                    }),
+                    TyAttr::default(),
+                ),
             ),
         }),
     })
@@ -233,19 +316,74 @@ async fn array_of_unions() -> anyhow::Result<()> {
         entry: "main",
         inputs: vec![],
         expected: Ok(BexExternalValue::Array {
-            element_type: Ty::Union(vec![Ty::Int, Ty::String]),
+            element_type: Ty::Union(
+                vec![
+                    Ty::Int {
+                        attr: TyAttr::default(),
+                    },
+                    Ty::String {
+                        attr: TyAttr::default(),
+                    },
+                ],
+                TyAttr::default(),
+            ),
             items: vec![
                 BexExternalValue::Union {
                     value: Box::new(BexExternalValue::Int(1)),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+                    metadata: UnionMetadata::new(
+                        Ty::Union(
+                            vec![
+                                Ty::Int {
+                                    attr: TyAttr::default(),
+                                },
+                                Ty::String {
+                                    attr: TyAttr::default(),
+                                },
+                            ],
+                            TyAttr::default(),
+                        ),
+                        Ty::Int {
+                            attr: TyAttr::default(),
+                        },
+                    ),
                 },
                 BexExternalValue::Union {
                     value: Box::new(BexExternalValue::String("two".to_string())),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
+                    metadata: UnionMetadata::new(
+                        Ty::Union(
+                            vec![
+                                Ty::Int {
+                                    attr: TyAttr::default(),
+                                },
+                                Ty::String {
+                                    attr: TyAttr::default(),
+                                },
+                            ],
+                            TyAttr::default(),
+                        ),
+                        Ty::String {
+                            attr: TyAttr::default(),
+                        },
+                    ),
                 },
                 BexExternalValue::Union {
                     value: Box::new(BexExternalValue::Int(3)),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+                    metadata: UnionMetadata::new(
+                        Ty::Union(
+                            vec![
+                                Ty::Int {
+                                    attr: TyAttr::default(),
+                                },
+                                Ty::String {
+                                    attr: TyAttr::default(),
+                                },
+                            ],
+                            TyAttr::default(),
+                        ),
+                        Ty::Int {
+                            attr: TyAttr::default(),
+                        },
+                    ),
                 },
             ],
         }),
@@ -276,10 +414,17 @@ async fn optional_class() -> anyhow::Result<()> {
                 },
             }),
             metadata: UnionMetadata::new(
-                Ty::Optional(Box::new(Ty::Class(bex_engine::TypeName::local(
-                    "Data".into(),
-                )))),
-                Ty::Class(bex_engine::TypeName::local("Data".into())),
+                Ty::Optional(
+                    Box::new(Ty::Class(
+                        bex_engine::TypeName::local("Data".into()),
+                        TyAttr::default(),
+                    )),
+                    TyAttr::default(),
+                ),
+                Ty::Class(
+                    bex_engine::TypeName::local("Data".into()),
+                    TyAttr::default(),
+                ),
             ),
         }),
     })
@@ -304,10 +449,16 @@ async fn optional_class_returns_null() -> anyhow::Result<()> {
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Null),
             metadata: UnionMetadata::new(
-                Ty::Optional(Box::new(Ty::Class(bex_engine::TypeName::local(
-                    "Data".into(),
-                )))),
-                Ty::Null,
+                Ty::Optional(
+                    Box::new(Ty::Class(
+                        bex_engine::TypeName::local("Data".into()),
+                        TyAttr::default(),
+                    )),
+                    TyAttr::default(),
+                ),
+                Ty::Null {
+                    attr: TyAttr::default(),
+                },
             ),
         }),
     })
@@ -336,7 +487,7 @@ async fn class_with_optional_field() -> anyhow::Result<()> {
                 "name".to_string() => BexExternalValue::String("Alice".to_string()),
                 "age".to_string() => BexExternalValue::Union {
                     value: Box::new(BexExternalValue::Null),
-                    metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int)), Ty::Null),
+                    metadata: UnionMetadata::new(Ty::Optional(Box::new(Ty::Int { attr: TyAttr::default() }), TyAttr::default()), Ty::Null { attr: TyAttr::default() }),
                 },
             },
         }),
@@ -356,16 +507,16 @@ async fn map_with_union_values() -> anyhow::Result<()> {
         entry: "main",
         inputs: vec![],
         expected: Ok(BexExternalValue::Map {
-            key_type: Ty::String,
-            value_type: Ty::Union(vec![Ty::Int, Ty::String]),
+            key_type: Ty::String { attr: TyAttr::default() },
+            value_type: Ty::Union(vec![Ty::Int { attr: TyAttr::default() }, Ty::String { attr: TyAttr::default() }], TyAttr::default()),
             entries: indexmap! {
                 "count".to_string() => BexExternalValue::Union {
                     value: Box::new(BexExternalValue::Int(42)),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::Int),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int { attr: TyAttr::default() }, Ty::String { attr: TyAttr::default() }], TyAttr::default()), Ty::Int { attr: TyAttr::default() }),
                 },
                 "name".to_string() => BexExternalValue::Union {
                     value: Box::new(BexExternalValue::String("test".to_string())),
-                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::String]), Ty::String),
+                    metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int { attr: TyAttr::default() }, Ty::String { attr: TyAttr::default() }], TyAttr::default()), Ty::String { attr: TyAttr::default() }),
                 },
             },
         }),
@@ -388,30 +539,116 @@ async fn union_of_array_with_union_elements_or_string() -> anyhow::Result<()> {
         inputs: vec![],
         expected: Ok(BexExternalValue::Union {
             value: Box::new(BexExternalValue::Array {
-                element_type: Ty::Union(vec![Ty::Int, Ty::Bool]),
+                element_type: Ty::Union(
+                    vec![
+                        Ty::Int {
+                            attr: TyAttr::default(),
+                        },
+                        Ty::Bool {
+                            attr: TyAttr::default(),
+                        },
+                    ],
+                    TyAttr::default(),
+                ),
                 items: vec![
                     BexExternalValue::Union {
                         value: Box::new(BexExternalValue::Int(1)),
-                        metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Int),
+                        metadata: UnionMetadata::new(
+                            Ty::Union(
+                                vec![
+                                    Ty::Int {
+                                        attr: TyAttr::default(),
+                                    },
+                                    Ty::Bool {
+                                        attr: TyAttr::default(),
+                                    },
+                                ],
+                                TyAttr::default(),
+                            ),
+                            Ty::Int {
+                                attr: TyAttr::default(),
+                            },
+                        ),
                     },
                     BexExternalValue::Union {
                         value: Box::new(BexExternalValue::Bool(true)),
-                        metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Bool),
+                        metadata: UnionMetadata::new(
+                            Ty::Union(
+                                vec![
+                                    Ty::Int {
+                                        attr: TyAttr::default(),
+                                    },
+                                    Ty::Bool {
+                                        attr: TyAttr::default(),
+                                    },
+                                ],
+                                TyAttr::default(),
+                            ),
+                            Ty::Bool {
+                                attr: TyAttr::default(),
+                            },
+                        ),
                     },
                     BexExternalValue::Union {
                         value: Box::new(BexExternalValue::Int(2)),
-                        metadata: UnionMetadata::new(Ty::Union(vec![Ty::Int, Ty::Bool]), Ty::Int),
+                        metadata: UnionMetadata::new(
+                            Ty::Union(
+                                vec![
+                                    Ty::Int {
+                                        attr: TyAttr::default(),
+                                    },
+                                    Ty::Bool {
+                                        attr: TyAttr::default(),
+                                    },
+                                ],
+                                TyAttr::default(),
+                            ),
+                            Ty::Int {
+                                attr: TyAttr::default(),
+                            },
+                        ),
                     },
                 ],
             }),
             // Key assertion: selected_option is the full declared type (int | bool)[]
-            // not Ty::List(Ty::Int) inferred from first element
+            // not Ty::List(Ty::Int { attr: TyAttr::default() }) inferred from first element
             metadata: UnionMetadata::new(
-                Ty::Union(vec![
-                    Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::Bool]))),
-                    Ty::String,
-                ]),
-                Ty::List(Box::new(Ty::Union(vec![Ty::Int, Ty::Bool]))),
+                Ty::Union(
+                    vec![
+                        Ty::List(
+                            Box::new(Ty::Union(
+                                vec![
+                                    Ty::Int {
+                                        attr: TyAttr::default(),
+                                    },
+                                    Ty::Bool {
+                                        attr: TyAttr::default(),
+                                    },
+                                ],
+                                TyAttr::default(),
+                            )),
+                            TyAttr::default(),
+                        ),
+                        Ty::String {
+                            attr: TyAttr::default(),
+                        },
+                    ],
+                    TyAttr::default(),
+                ),
+                Ty::List(
+                    Box::new(Ty::Union(
+                        vec![
+                            Ty::Int {
+                                attr: TyAttr::default(),
+                            },
+                            Ty::Bool {
+                                attr: TyAttr::default(),
+                            },
+                        ],
+                        TyAttr::default(),
+                    )),
+                    TyAttr::default(),
+                ),
             ),
         }),
     })

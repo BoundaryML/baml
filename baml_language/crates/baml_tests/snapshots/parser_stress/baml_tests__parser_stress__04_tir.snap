@@ -3,610 +3,610 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function ComplexType:
-    Return: Map { key: String, value: Map { key: String, value: Map { key: String, value: Optional(List(Int)) } } }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Map { key: String { attr: TyAttr(None) }, value: Map { key: String { attr: TyAttr(None) }, value: Optional(List(Int { attr: TyAttr(None) }, TyAttr(None)), TyAttr(None)), attr: TyAttr(None) }, attr: TyAttr(None) }, attr: TyAttr(None) }
   Function DeepExpression:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function Process24.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process22:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process66.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process30.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process54:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process95:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process60:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process68:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process58.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process36.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process53.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process14:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process22.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process79:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process84:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process62.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process97.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process9.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process33:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process33.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process12:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process59.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process37.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process59.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process74:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process45.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process13.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process99:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process76.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process64:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process52:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process40.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process7:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process32.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process80:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process88.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process31.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process58:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process42.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process97:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process36:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process63.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process51.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process54.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process47.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process26.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process63:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process37.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process19:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process95.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process33.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process56.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process80.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process13.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process94.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process60.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process83:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process36.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process18:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process56.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process26:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process43:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process41.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process46:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process91.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process62:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process87:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process44:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process47:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process35:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process38:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process29.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process25.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process41:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process98.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process18.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process28:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process65:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process17.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process5.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process95.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process6:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process32:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process52.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process92:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process90.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process55:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process66:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process97.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process27.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process93.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process8.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process16.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process86.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process85.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process56:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process67.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process11.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process67:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process76.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process78.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process12.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process79.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process57.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process12.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process75.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process77.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process93.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process64.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process48.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process3:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process43.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process75:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process48:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process49:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process96.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process41.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process20.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process50.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process44.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process60.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process61:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process96:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process15.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process82.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process34:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process96.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process49.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process59:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process54.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process89:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process45:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process1.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process25.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process86:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process19.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process38.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process23.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process65.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process23.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process72.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process35.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process100.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process46.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process4.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process86.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process73.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process16:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process65.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process39:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process78.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process68.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process82:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process35.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process2:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process27:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process11.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process100.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process61.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process53:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process62.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process23:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process16.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process21.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process74.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process55.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process9:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process61.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process84.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process89.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process52.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process74.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process30.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process32.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process48.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process28.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process19.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process31.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process89.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process72:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process38.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process77:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process40:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process30:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process20.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process26.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process8:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process83.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process63.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process39.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process11:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process28.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process24.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process37:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process4:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process91:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process46.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process31:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process70.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process3.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process29.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process9.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process84.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process43.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process50:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process20:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process98:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process88.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process87.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process91.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process71.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process85:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process6.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process71.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process47.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process67.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process72.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process69.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process17.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process79.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process78:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process2.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process1:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process94.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process5.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process98.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process81.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process81.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process2.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process90:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process17:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process50.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process49.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process27.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process22.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process64.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process81:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process58.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process83.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process71:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process15:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process8.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process42:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process92.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process6.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process51:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process7.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process5:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process21.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process13:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process10.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process14.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process92.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process7.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process85.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process73.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process55.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process82.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process44.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process99.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process29:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process93:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process51.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process90.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process34.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process87.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process1.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process53.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process39.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process70:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process75.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process76:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process10:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process68.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process21:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process15.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process14.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process57.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process66.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process40.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process77.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process99.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process100:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process80.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process18.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process70.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process94:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process25:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process69:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process24:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process88:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process69.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process73:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Process45.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process4.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process10.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process42.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Process34.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process3.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Process57:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function BodyTorture:
-    Return: Void
+    Return: Void { attr: TyAttr(None) }
     Errors:
       - Missing return expression. Function expects `int` but body has no final expression.

@@ -323,11 +323,11 @@ mod tests {
             },
             call_stack: vec![],
             timestamp: SystemTime::now(),
-            event: EventKind::Function(FunctionEvent::End(FunctionEnd {
+            event: EventKind::Function(FunctionEvent::End(Box::new(FunctionEnd {
                 name: name.to_string(),
                 result,
                 duration,
-            })),
+            }))),
         }
     }
 

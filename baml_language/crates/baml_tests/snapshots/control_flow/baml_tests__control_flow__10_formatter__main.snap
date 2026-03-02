@@ -1,0 +1,113 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Control flow visualization graph test cases
+
+// Simple function with no control flow — just FunctionRoot
+function SimpleFunction() -> int {
+    42
+}
+
+// Headers at various levels
+function Headers() -> string {
+    //# Setup
+    let x = 1;
+    //## Configuration
+    let y = 2;
+    //# Processing
+    let z = x + y;
+    z.to_string()
+}
+
+// If/else with headers
+function IfElseWithHeaders(flag: bool) -> string {
+    //# Check flag
+    if (flag) {
+        //# True branch
+        "yes"
+    } else {
+        //# False branch
+        "no"
+    }
+}
+
+// Nested if/else-if chain (tests flattening)
+function ElseIfChain(x: int) -> string {
+    if (x == 1) {
+        //# Case one
+        "one"
+    } else if (x == 2) {
+        //# Case two
+        "two"
+    } else if (x == 3) {
+        //# Case three
+        "three"
+    } else {
+        //# Default case
+        "other"
+    }
+}
+
+// While loop with headers
+function WhileWithHeaders() -> int {
+    //# Initialize
+    let count = 0;
+    //# Loop
+    while (count < 10) {
+        //# Iteration
+        count += 1;
+    }
+    //# Done
+    count
+}
+
+// Match expression
+function MatchExpression(x: int) -> string {
+    match (x) {
+        1 => {
+            //# One
+            "one"
+        },
+        2 => {
+            //# Two
+            "two"
+        },
+        _ => {
+            //# Default
+            "other"
+        },
+    }
+}
+
+// Nested control flow
+function NestedControlFlow(x: int) -> string {
+    //# Outer
+    if (x > 0) {
+        //# Positive
+        if (x > 100) {
+            //# Large
+            "large"
+        } else {
+            //# Small
+            "small"
+        }
+    } else {
+        //# Non-positive
+        "zero or negative"
+    }
+}
+
+// LLM function
+client<llm> TestClient {
+    provider: openai,
+    options: {
+        model: gpt-4,
+    },
+}
+
+function LlmFunction(input: string) -> string {
+    client: TestClient
+    prompt: #"
+        Echo: {{ input }}
+    "#
+}

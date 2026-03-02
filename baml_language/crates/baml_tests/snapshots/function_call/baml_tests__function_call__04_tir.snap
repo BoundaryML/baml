@@ -3,14 +3,14 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function array_length:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function param_in_if_statement:
-    Return: Union([Literal(Int(1)), Literal(Int(2))])
+    Return: Union([Literal(Int(1), TyAttr(None)), Literal(Int(2), TyAttr(None))], TyAttr(None))
   Function Bar:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function Foo:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function GreetBaz:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function Baz.Greeting:
-    Return: String
+    Return: String { attr: TyAttr(None) }

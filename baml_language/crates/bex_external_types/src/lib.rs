@@ -28,7 +28,7 @@ mod handle;
 
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
-    AsBexExternalValue, BexExternalAdt, BexExternalValue, Ty, TypeName, UnionMetadata,
+    AsBexExternalValue, BexExternalAdt, BexExternalValue, Ty, TyAttr, TypeName, UnionMetadata,
 };
 pub use epoch_guard::EpochGuard;
 pub use handle::{Handle, HandleInner, WeakHeapRef};
