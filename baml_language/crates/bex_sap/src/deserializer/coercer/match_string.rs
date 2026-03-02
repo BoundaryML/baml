@@ -60,7 +60,7 @@ pub(super) fn matches_string_to_string<'t, N: TypeIdent>(
 pub(super) fn match_string<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
     target: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
-    value: &'v jsonish::Value<'s>,
+    value: Cow<'v, jsonish::Value<'s>>,
     // List of (name, [aliases]) tuples.
     candidates: &[(&'t str, Vec<impl AsRef<str>>)],
     allow_substring_match: bool,
@@ -69,22 +69,22 @@ where
     's: 'v,
 {
     // Get rid of nulls.
-    if matches!(value, jsonish::Value::Null) {
+    if matches!(*value, jsonish::Value::Null) {
         return Err(ctx.error_unexpected_null(&target.ty));
     }
 
     let mut flags = DeserializerConditions::new();
 
     // Grab context.
-    let match_context: Cow<'_, str> = match value {
+    let match_context: Cow<'_, str> = match &*value {
         jsonish::Value::String(s, _) => Cow::Borrowed(s.trim()),
         jsonish::Value::AnyOf(_, s) => {
-            flags.add_flag(Flag::ObjectToString(&value));
+            flags.add_flag(Flag::ObjectToString(value.clone()));
             Cow::Borrowed(s.trim())
         }
-        v => {
-            flags.add_flag(Flag::ObjectToString(&v));
-            Cow::Owned(format!("{v}").trim().to_string())
+        _ => {
+            flags.add_flag(Flag::ObjectToString(value.clone()));
+            Cow::Owned(format!("{value}").trim().to_string())
         }
     };
 

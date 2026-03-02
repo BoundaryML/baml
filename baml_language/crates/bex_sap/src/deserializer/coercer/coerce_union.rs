@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     baml_value::{BamlNull, BamlValue},
     jsonish::CompletionState,
@@ -45,7 +47,7 @@ where
                     ret,
                     DeserializerMeta {
                         flags: DeserializerConditions::new()
-                            .with_flag(Flag::DefaultFromInProgress(value)),
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
                         ty: target.map_ty(TyResolvedRef::Union),
                     },
                 )));

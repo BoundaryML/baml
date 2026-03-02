@@ -16,7 +16,7 @@ use crate::{
     baml_value::ValueWithMeta,
     deserializer::types::DeserializerMeta,
     sap_model::{
-        FromLiteral, TyResolved, TyWithMeta, TypeAnnotations, TypeIdent, TypeName, TypeRefDb,
+        FromLiteral, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName, TypeRefDb,
         TypeValue,
     },
 };
@@ -32,7 +32,7 @@ pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     visited_during_coerce: HashSet<(String, &'v jsonish::Value<'s>)>,
     visited_during_try_cast: HashSet<(String, &'v jsonish::Value<'s>)>,
     pub db: &'t TypeRefDb<'t, N>,
-    pub of: &'t TyResolved<'t, N>,
+    pub of: TyResolvedRef<'t, N>,
     /// Hint for union coercion: the variant index that succeeded on the previous
     /// array element. Used to optimize arrays of unions by trying the likely
     /// variant first.
@@ -48,7 +48,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn new(of: &'t TyResolved<'t, N>, db: &'t TypeRefDb<'t, N>) -> Self {
+    pub(crate) fn new(of: TyResolvedRef<'t, N>, db: &'t TypeRefDb<'t, N>) -> Self {
         ParsingContext {
             scope: Vec::new(),
             visited_during_coerce: HashSet::new(),

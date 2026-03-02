@@ -20,9 +20,8 @@ use crate::{
     },
     deserializer::{
         coercer::{ParsingContext, ParsingError},
-        types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
+        types::{BamlValueWithFlags, DeserializerMeta},
     },
-    jsonish::{self, CompletionState},
 };
 
 /// An identifier for a type. Used to look up a type in a [`TypeRefDb`].
@@ -70,6 +69,10 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
             Ty::ResolvedRef(ty) => Ok(ty.clone()),
             Ty::Unresolved(ident) => self.types.get(ident).map(TyResolved::as_ref).ok_or(ident),
         }
+    }
+
+    pub fn resolved_from_ident(&'t self, ident: &'t N) -> Option<TyResolvedRef<'t, N>> {
+        self.types.get(ident).map(TyResolved::as_ref)
     }
 
     /// Like [`TypeRefDb::resolve`], but maps the result to keep the type annotations.
@@ -352,6 +355,21 @@ where
 {
     type Value = BamlPrimitive<'t>;
 }
+impl<'t> From<&'t str> for LiteralTy<'t> {
+    fn from(s: &'t str) -> Self {
+        LiteralTy::String(StringLiteralTy(Cow::Borrowed(s.as_ref())))
+    }
+}
+impl From<i64> for LiteralTy<'static> {
+    fn from(i: i64) -> Self {
+        LiteralTy::Int(IntLiteralTy(i))
+    }
+}
+impl From<bool> for LiteralTy<'static> {
+    fn from(b: bool) -> Self {
+        LiteralTy::Bool(BoolLiteralTy(b))
+    }
+}
 
 /// Corresponds to the BAML string literal type.
 #[derive(Clone, PartialEq, Eq)]
@@ -406,6 +424,14 @@ where
     's: 'v,
 {
     type Value = BamlMap<'s, 'v, 't, N>;
+}
+impl<'t, N: TypeIdent> MapTy<'t, N> {
+    pub fn new(key: AnnotatedTy<'t, N>, value: AnnotatedTy<'t, N>) -> Self {
+        Self {
+            key: Box::new(key),
+            value: Box::new(value),
+        }
+    }
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
@@ -471,9 +497,11 @@ where
 pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// Represents the behavior when streaming and incomplete.
     ///
-    /// If `Some`, this is the value to use when streaming and the value is incomplete.
-    /// If `None`, the partial value will be used.
-    /// If `Some(never)`, the value should be excluded until done.
+    /// - If `None`, the partial value will be used.
+    /// - If `Some(never)`, the value should be excluded until done.
+    /// - If `Some(<value>)`, this is the value to use when streaming and the value is incomplete.
+    ///
+    /// Example:
     /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
     pub in_progress: Option<Literal<'t, N>>,
     /// Represents the behavior when completed but the value is invalid.

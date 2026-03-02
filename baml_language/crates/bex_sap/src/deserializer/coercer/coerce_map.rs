@@ -32,7 +32,7 @@ where
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>> {
         // Only handle object values
-        let crate::jsonish::Value::Object(obj, _) = value else {
+        let crate::jsonish::Value::Object(obj, completion_state) = value else {
             return None;
         };
 
@@ -42,18 +42,15 @@ where
         // For empty objects, we can return immediately
         if obj.is_empty() {
             let mut flags = DeserializerConditions::new();
-            flags.add_flag(Flag::ObjectToMap(value));
+            flags.add_flag(Flag::ObjectToMap(Cow::Borrowed(value)));
 
             let map = BamlMap {
                 value: IndexMap::new(),
             };
 
             // Check completion state
-            match value.completion_state() {
-                CompletionState::Complete => {}
-                CompletionState::Incomplete => {
-                    flags.add_flag(Flag::Incomplete);
-                }
+            if matches!(completion_state, CompletionState::Incomplete) {
+                flags.add_flag(Flag::Incomplete);
             }
 
             return Some(ValueWithFlags::new(
@@ -81,7 +78,7 @@ where
             .collect::<Option<_>>()?;
 
         let mut flags = DeserializerConditions::new();
-        flags.add_flag(Flag::ObjectToMap(value));
+        flags.add_flag(Flag::ObjectToMap(Cow::Borrowed(value)));
 
         let map = BamlMap { value: items };
         let mut result = ValueWithFlags::new(
@@ -165,14 +162,14 @@ where
         }
 
         let mut flags = DeserializerConditions::new();
-        flags.add_flag(Flag::ObjectToMap(value));
+        flags.add_flag(Flag::ObjectToMap(Cow::Borrowed(value)));
 
         let ret = match (&value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Object(_, CompletionState::Incomplete), Some(Literal::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Object(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 target.ty.from_literal(lit, ctx)
             }
             (jsonish::Value::Object(obj, completion_state), _) => {
@@ -262,5 +259,33 @@ where
                 Err(lit_err) => Err(lit_err.with_cause(e)),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::sap_model::{NullTy, StringTy, TypeRefDb};
+
+    use super::*;
+
+    #[test]
+    fn test_empty_map() {
+        let target_ty: MapTy<'_, &'static str> = MapTy::new(
+            TyWithMeta::new(
+                PrimitiveTy::String(StringTy).into(),
+                TypeAnnotations::default(),
+            ),
+            TyWithMeta::new(PrimitiveTy::Null(NullTy).into(), TypeAnnotations::default()),
+        );
+        let db = TypeRefDb::new();
+
+        let target_resolved_ref = TyResolvedRef::Map(&target_ty);
+        let ctx = ParsingContext::new(target_resolved_ref, &db);
+        let annotations = TypeAnnotations::default();
+        let target_ty = TyWithMeta::new(&target_ty, &annotations);
+
+        let parsed = jsonish::Value::Object(vec![], CompletionState::Complete);
+        let casted = MapTy::try_cast(&ctx, target_ty, &parsed).unwrap();
+        assert_eq!(casted.value.value.len(), 0);
     }
 }

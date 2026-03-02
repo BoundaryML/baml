@@ -1,10 +1,12 @@
+use std::borrow::Cow;
+
 use crate::baml_value::{BamlEnum, BamlValue};
 use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
     AnnotatedEnumVariant, EnumTy, FromLiteral, Literal, TyResolvedRef, TyWithMeta, TypeAnnotations,
-    TypeIdent,
+    TypeIdent, TypeValue,
 };
 use anyhow::Result;
 
@@ -54,7 +56,7 @@ where
                     in_progress,
                     DeserializerMeta {
                         flags: DeserializerConditions::new()
-                            .with_flag(Flag::DefaultFromInProgress(value)),
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
                         ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
                     },
                 ))
@@ -119,27 +121,41 @@ where
                         in_progress,
                         DeserializerMeta {
                             flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultFromInProgress(value)),
+                                .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
                             ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
                         },
                     )));
                 }
                 None => {
-                    add_flags.push(Flag::DefaultFromInProgress(value));
+                    add_flags.push(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 }
             }
         }
 
+        Self::coerce_from_cow(ctx, target, Cow::Borrowed(value), add_flags)
+    }
+}
+
+impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
+    pub fn coerce_from_cow(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: Cow<'v, jsonish::Value<'s>>,
+        add_flags: impl IntoIterator<Item = Flag<'s, 'v, 't, N>>,
+    ) -> Result<
+        Option<ValueWithFlags<'s, 'v, 't, <EnumTy<'t, N> as TypeValue<'s, 'v, 't>>::Value, N>>,
+        ParsingError,
+    > {
         match_string(
             ctx,
-            TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
+            target.clone().map_ty(TyResolvedRef::Enum),
             value,
-            &enum_match_candidates(enum_ty),
+            &enum_match_candidates(target.ty),
             true,
         )
         .map(|v| {
             v.map_value(|val| BamlEnum {
-                name: &enum_ty.name,
+                name: &target.ty.name,
                 value: val,
             })
             .with_flags(add_flags)
@@ -150,7 +166,7 @@ where
                 .expect_asserts(&BamlValue::Enum(v.value.clone()), ctx)?;
             Ok(v)
         })
-        .or_else(|err| match &meta.on_error {
+        .or_else(|err| match &target.meta.on_error {
             Literal::Never => Err(err),
             lit => {
                 let ret = target.ty.from_literal(lit, ctx)?;

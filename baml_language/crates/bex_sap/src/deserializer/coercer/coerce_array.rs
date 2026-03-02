@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use anyhow::Result;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
@@ -138,8 +140,9 @@ where
                             let ret = ValueWithFlags::new(
                                 ret,
                                 DeserializerMeta {
-                                    flags: DeserializerConditions::new()
-                                        .with_flag(Flag::DefaultFromInProgress(value)),
+                                    flags: DeserializerConditions::new().with_flag(
+                                        Flag::DefaultFromInProgress(Cow::Borrowed(value)),
+                                    ),
                                     ty: target.map_ty(TyResolvedRef::Array),
                                 },
                             );

@@ -52,7 +52,7 @@ pub(super) fn pick_best<'s, 'v, 't, 'a, N: TypeIdent>(
         .collect::<Vec<_>>();
 
     // Pick the best one, but in case of picking "default" values like null or empty list, prefer picking the first one
-    let mut all_valid_scores = res_index
+    let all_valid_scores = res_index
         .iter()
         .filter_map(|&(i, score)| match res.get(i) {
             Some(Ok(r)) => Some((

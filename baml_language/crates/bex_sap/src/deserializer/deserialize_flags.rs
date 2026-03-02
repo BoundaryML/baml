@@ -18,12 +18,12 @@ where
     ObjectFromFixedJson(Vec<crate::jsonish::Fixes>),
 
     DefaultButHadUnparseableValue(ParsingError),
-    ObjectToString(&'v crate::jsonish::Value<'s>),
+    ObjectToString(Cow<'v, crate::jsonish::Value<'s>>),
     /// When we were expecting a primitive but got a single-field object so used the first field as the value.
     /// If combined with a `Default*` flag, it means the unused json value was an object (not that the default value was an object).
-    ObjectToPrimitive(&'v crate::jsonish::Value<'s>),
-    ObjectToMap(&'v crate::jsonish::Value<'s>),
-    ExtraKey(Cow<'s, str>, &'v crate::jsonish::Value<'s>),
+    ObjectToPrimitive(Cow<'v, crate::jsonish::Value<'s>>),
+    ObjectToMap(Cow<'v, crate::jsonish::Value<'s>>),
+    ExtraKey(Cow<'s, str>, Cow<'v, crate::jsonish::Value<'s>>),
     StrippedNonAlphaNumeric(Cow<'s, str>),
     SubstringMatch(Cow<'s, str>),
     SingleToArray,
@@ -32,15 +32,15 @@ where
     MapValueParseError(Cow<'s, str>, ParsingError),
     /// When an optional field's value is present but parsing failed.
     /// The field will be set to `null` and this flag will be added to the class object.
-    /// 
+    ///
     /// (In the case that a required field is errored, it is an error on the parent object so no flag is added.)
     OptionalFieldError(Cow<'s, str>, ParsingError),
 
-    JsonToString(&'v crate::jsonish::Value<'s>),
-    
+    JsonToString(Cow<'v, crate::jsonish::Value<'s>>),
+
     /// This key was not present and was inferred from the input (e.g. type was class but input was an array).
     ImpliedKey(Cow<'t, str>),
-    InferedObject(&'v crate::jsonish::Value<'s>),
+    InferedObject(Cow<'v, crate::jsonish::Value<'s>>),
 
     // Values here are all the possible matches.
     FirstMatch(
@@ -64,8 +64,8 @@ where
     /// The type of `in_progress` should match the expected type.
     ///
     /// Includes the partial value that was present in the input.
-    DefaultFromInProgress(&'v crate::jsonish::Value<'s>),
-    DefaultButHadValue(&'v crate::jsonish::Value<'s>),
+    DefaultFromInProgress(Cow<'v, crate::jsonish::Value<'s>>),
+    DefaultButHadValue(Cow<'v, crate::jsonish::Value<'s>>),
     OptionalDefaultFromNoValue,
 
     /// `int` value was converted from a parsed string value
@@ -93,7 +93,7 @@ where
     FloatToInt(f64),
 
     // X -> Object convertions.
-    NoFields(Option<&'v crate::jsonish::Value<'s>>),
+    NoFields(Option<Cow<'v, crate::jsonish::Value<'s>>>),
 
     // /// Constraint results (only contains checks)
     // ConstraintResults(Vec<(String, JinjaExpression, bool)>),

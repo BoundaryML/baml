@@ -5,7 +5,7 @@ use crate::baml_value::{BamlClass, BamlNull, BamlValue};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
     AnnotatedField, ClassTy, FromLiteral as _, Literal, NullTy, PrimitiveTy, TyResolvedRef,
-    TyWithMeta, TypeAnnotations, TypeIdent, TypeRefDb,
+    TyWithMeta, TypeAnnotations, TypeIdent,
 };
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -159,7 +159,6 @@ where
         // current class in the visited set and we'll use that to stop recursion
         // when dealing with recursive classes.
         // TODO: is this necessary? we should be recusing over the finite input data, not the potentially infinite type structure
-        let mut nested_ctx = None;
 
         let cls_value_pair = (class_ty.name.to_string(), value);
 
@@ -175,41 +174,24 @@ where
         // recursive class should start from scratch with an empty visited
         // set so they will not fail because this class has already been
         // coerced for a different field.
-        nested_ctx = Some(ctx.visit_class_value_pair(cls_value_pair, true));
+        let nested_ctx = Some(ctx.visit_class_value_pair(cls_value_pair, true));
 
         // Now just maintain the previous context or get the new one and proceed
         // normally.
         let ctx = nested_ctx.as_ref().unwrap_or(ctx);
 
-        // let (optional, required): (Vec<_>, Vec<_>) = class_ty
-        //     .fields
-        //     .iter()
-        //     .partition(|f| f.ty.ty.is_optional(ctx.db));
-
-        // let mut optional_values = optional
-        //     .iter()
-        //     .map(|f| (&*f.name, None))
-        //     .collect::<IndexMap<&'t str, Option<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>>>();
-        // let mut required_values = required
-        //     .iter()
-        //     .map(|f| (&*f.name, None))
-        //     .collect::<IndexMap<&'t str, Option<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>>>();
-
-        // let mut completed_cls: Vec<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>> =
-        //     Vec::new();
-
         // There are a few possible approaches here:
         let ret = match (value, target.meta.in_progress.as_ref()) {
-            (jsonish::Value::Object(obj, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(Literal::Never)) => {
                 return Ok(None);
             }
-            (jsonish::Value::Object(obj, CompletionState::Incomplete), Some(lit)) => {
+            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(lit)) => {
                 return target
                     .ty
                     .from_literal(lit, ctx)
                     .map(|v| {
                         ValueWithFlags::new(v, DeserializerMeta::new(target))
-                            .with_flag(Flag::DefaultFromInProgress(value))
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
                     })
                     .map(Some);
             }
@@ -271,12 +253,12 @@ where
                         entries.insert(field.name.clone(), Ok(parsed_value));
                     } else {
                         for (key, v) in extra_keys {
-                            flags.add_flag(Flag::ExtraKey(key, v));
+                            flags.add_flag(Flag::ExtraKey(key, Cow::Borrowed(v)));
                         }
                     }
                 } else {
                     for (key, v) in extra_keys {
-                        flags.add_flag(Flag::ExtraKey(key, v));
+                        flags.add_flag(Flag::ExtraKey(key, Cow::Borrowed(v)));
                     }
                 }
                 class_from_entries(
@@ -287,13 +269,13 @@ where
                     flags,
                 )
             }
-            (jsonish::Value::Array(items, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(Literal::Never)) => {
                 return Ok(None);
             }
-            (jsonish::Value::Array(items, CompletionState::Incomplete), Some(lit)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
                 target.ty.from_literal(lit, ctx).map(|v| {
                     ValueWithFlags::new(v, DeserializerMeta::new(target.clone()))
-                        .with_flag(Flag::DefaultFromInProgress(value))
+                        .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
                 })
             }
             (jsonish::Value::Array(items, c), None) => {
@@ -312,7 +294,7 @@ where
                         flags.add_flag(Flag::Incomplete);
                     }
                     parsed.add_flag(Flag::ImpliedKey(field.name.clone()));
-                    flags.add_flag(Flag::InferedObject(value));
+                    flags.add_flag(Flag::InferedObject(Cow::Borrowed(value)));
                     let mut entries = IndexMap::new();
                     entries.insert(&*field.name, parsed);
 
@@ -375,7 +357,7 @@ where
                             .meta
                             .flags
                             .add_flag(Flag::ImpliedKey(field.name.clone()));
-                        flags.add_flag(Flag::InferedObject(x));
+                        flags.add_flag(Flag::InferedObject(Cow::Borrowed(x)));
 
                         let mut entries = IndexMap::new();
                         entries.insert(&*field.name, field_value);

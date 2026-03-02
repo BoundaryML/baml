@@ -40,7 +40,10 @@ where
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for FloatTy where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for FloatTy
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -53,7 +56,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for FloatTy where 's: 
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BoolTy where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BoolTy
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -66,7 +72,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BoolTy where 's: '
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StringTy where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StringTy
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -81,7 +90,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StringTy where 's:
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for NullTy where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for NullTy
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -94,7 +106,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for NullTy where 's: '
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for MediaTy where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for MediaTy
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         _literal: &'t Literal<'t, N>,
@@ -104,7 +119,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for MediaTy where 's: 
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for PrimitiveTy where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for PrimitiveTy
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -121,7 +139,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for PrimitiveTy where 
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for IntLiteralTy where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for IntLiteralTy
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -137,7 +158,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for IntLiteralTy where
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BoolLiteralTy where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BoolLiteralTy
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -153,7 +177,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for BoolLiteralTy wher
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StringLiteralTy<'t> where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StringLiteralTy<'t>
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -171,7 +198,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StringLiteralTy<'t
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for LiteralTy<'t> where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for LiteralTy<'t>
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -185,7 +215,11 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for LiteralTy<'t> wher
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ArrayTy<'t, N> where 't: 's, 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ArrayTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -227,7 +261,11 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ArrayTy<'t, N> whe
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for MapTy<'t, N> where 't: 's, 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for MapTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -266,7 +304,11 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for MapTy<'t, N> where
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ClassTy<'t, N> where 't: 's, 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ClassTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -314,7 +356,10 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for ClassTy<'t, N> whe
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent + 't> FromLiteral<'s, 'v, 't, N> for EnumTy<'t, N> where 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent + 't> FromLiteral<'s, 'v, 't, N> for EnumTy<'t, N>
+where
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -349,7 +394,11 @@ impl<'s, 'v, 't, N: TypeIdent + 't> FromLiteral<'s, 'v, 't, N> for EnumTy<'t, N>
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for UnionTy<'t, N> where 't: 's, 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for UnionTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -367,7 +416,11 @@ impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for UnionTy<'t, N> whe
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StreamStateTy<'t, N> where 't: 's, 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for StreamStateTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,
@@ -420,7 +473,11 @@ where
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for Ty<'t, N> where 't: 's, 's: 'v {
+impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for Ty<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
     fn from_literal(
         &'t self,
         literal: &'t Literal<'t, N>,

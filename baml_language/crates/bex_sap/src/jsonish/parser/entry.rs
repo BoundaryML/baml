@@ -11,7 +11,11 @@ use crate::jsonish::{
     value::Fixes,
 };
 
-pub(super) fn parse_func<'s>(str: &'s str, mut options: ParseOptions, is_done: bool) -> Result<Value<'s>> {
+pub(super) fn parse_func<'s>(
+    str: &'s str,
+    mut options: ParseOptions,
+    is_done: bool,
+) -> Result<Value<'s>> {
     log::debug!("Parsing:\n{options:?}\n-------\n{str}\n-------");
 
     options.depth += 1;

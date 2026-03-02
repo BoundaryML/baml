@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::baml_value::{BamlBool, BamlInt, BamlString, BamlValue};
 use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
@@ -115,8 +117,9 @@ where
                             ValueWithFlags::new(
                                 ret,
                                 DeserializerMeta {
-                                    flags: DeserializerConditions::new()
-                                        .with_flag(Flag::DefaultFromInProgress(value)),
+                                    flags: DeserializerConditions::new().with_flag(
+                                        Flag::DefaultFromInProgress(Cow::Borrowed(value)),
+                                    ),
                                     ty: target.clone().map_ty(|_| {
                                         TyResolvedRef::Primitive(PrimitiveTy::Int(IntTy))
                                     }),
@@ -127,8 +130,8 @@ where
                     }
                     None => {
                         let flags = DeserializerConditions::new()
-                            .with_flag(Flag::DefaultFromInProgress(value))
-                            .with_flag(Flag::ObjectToPrimitive(value));
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
+                            .with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value)));
                         Ok(Some(ValueWithFlags::new(
                             BamlInt { value: target.ty.0 },
                             DeserializerMeta {
@@ -149,8 +152,9 @@ where
                         | jsonish::Value::Boolean(_)
                         | jsonish::Value::String(_, _)),
                     ),
-                ] => Self::coerce(ctx, target.clone(), v)
-                    .map(|ret| ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(value)))),
+                ] => Self::coerce(ctx, target.clone(), v).map(|ret| {
+                    ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
+                }),
                 _ => Err(ctx.error_unexpected_type(target.ty, value)),
             },
             _ => {
@@ -270,8 +274,9 @@ where
                     jsonish::Value::Number(_, _)
                     | jsonish::Value::Boolean(_)
                     | jsonish::Value::String(_, _) => {
-                        return Self::coerce(ctx, target, inner_value)
-                            .map(|opt| opt.map(|v| v.with_flag(Flag::ObjectToPrimitive(value))));
+                        return Self::coerce(ctx, target, inner_value).map(|opt| {
+                            opt.map(|v| v.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
+                        });
                     }
                     _ => {}
                 }
@@ -391,15 +396,16 @@ where
                     jsonish::Value::Number(_, _)
                     | jsonish::Value::Boolean(_)
                     | jsonish::Value::String(_, _) => {
-                        return Self::coerce(ctx, target, inner_value)
-                            .map(|opt| opt.map(|v| v.with_flag(Flag::ObjectToPrimitive(value))));
+                        return Self::coerce(ctx, target, inner_value).map(|opt| {
+                            opt.map(|v| v.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
+                        });
                     }
                     _ => {}
                 }
             }
         }
 
-        let candidates = vec![(target.ty.0.as_ref(), vec![target.ty.0.to_string()])];
+        let candidates = vec![(target.ty.0.as_ref(), vec![&*target.ty.0])];
         // Can't construct TyResolvedRef::Literal(&LiteralTy) without a persistent reference,
         // so use Primitive(String) which is semantically close for error messages.
         let literal_match = match_string(
@@ -408,14 +414,12 @@ where
                 TyResolvedRef::Primitive(PrimitiveTy::String(StringTy)),
                 target.meta,
             ),
-            value,
+            Cow::Borrowed(value),
             &candidates,
             true,
         )?;
 
-        let result = literal_match.map_value(|s| BamlString {
-            value: s.to_string().into(),
-        });
+        let result = literal_match.map_value(|s| BamlString { value: s.into() });
         target
             .meta
             .expect_asserts(&BamlValue::String(result.value.clone()), ctx)?;

@@ -167,8 +167,8 @@ where
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(Literal::Never)) => {
                 return Ok(None);
             }
-            (jsonish::Value::Number(n, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 target.ty.from_literal(lit, ctx)?
             }
             (jsonish::Value::Number(n, c), _) => {
@@ -188,11 +188,11 @@ where
                 target.meta.expect_asserts(&BamlValue::Int(res), ctx)?;
                 res
             }
-            (jsonish::Value::String(s, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::String(_, CompletionState::Incomplete), Some(Literal::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 flags.add_flag(Flag::StringToInt(s.clone()));
                 target.ty.from_literal(lit, ctx)?
             }
@@ -231,11 +231,11 @@ where
                 target.meta.expect_asserts(&BamlValue::Int(res), ctx)?;
                 res
             }
-            (jsonish::Value::Array(items, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(Literal::Never)) => {
                 return Ok(None);
             }
-            (jsonish::Value::Array(items, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 target.ty.from_literal(lit, ctx)?
             }
             (jsonish::Value::Array(items, c), _) => {
@@ -358,7 +358,7 @@ where
                 return Ok(None);
             }
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 target.ty.from_literal(lit, ctx)?
             }
             (jsonish::Value::Number(n, c), _) => {
@@ -381,7 +381,7 @@ where
                 return Ok(None);
             }
             (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 flags.add_flag(Flag::StringToFloat(s.clone()));
                 target.ty.from_literal(lit, ctx)?
             }
@@ -414,11 +414,11 @@ where
                 target.meta.expect_asserts(&BamlValue::Float(res), ctx)?;
                 res
             }
-            (jsonish::Value::Array(items, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(Literal::Never)) => {
                 return Ok(None);
             }
-            (jsonish::Value::Array(items, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 target.ty.from_literal(lit, ctx)?
             }
             (jsonish::Value::Array(items, c), _) => {
@@ -544,7 +544,7 @@ where
                 return Ok(None);
             }
             (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 flags.add_flag(Flag::StringToBool(s.clone()));
                 target.ty.from_literal(lit, ctx)?
             }
@@ -565,7 +565,7 @@ where
                         match super::match_string::match_string(
                             ctx,
                             TyWithMeta::new(TyResolvedRef::Primitive(PRIM_BOOL), target.meta),
-                            value,
+                            Cow::Borrowed(value),
                             &[
                                 ("true", vec!["true", "True", "TRUE"]),
                                 ("false", vec!["false", "False", "FALSE"]),
@@ -590,11 +590,11 @@ where
                 target.meta.expect_asserts(&BamlValue::Bool(res), ctx)?;
                 res
             }
-            (jsonish::Value::Array(items, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(Literal::Never)) => {
                 return Ok(None);
             }
-            (jsonish::Value::Array(items, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 target.ty.from_literal(lit, ctx)?
             }
             (crate::jsonish::Value::Array(items, c), _) => {
@@ -704,7 +704,7 @@ where
         match (value.completion_state(), target.meta.in_progress.as_ref()) {
             (CompletionState::Incomplete, Some(Literal::Never)) => return Ok(None),
             (CompletionState::Incomplete, Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 let result = target.ty.from_literal(lit, ctx)?;
                 return Ok(Some(ValueWithFlags::new(
                     result,
@@ -722,7 +722,7 @@ where
 
         match value {
             crate::jsonish::Value::Null => {}
-            v => flags.add_flag(Flag::DefaultButHadValue(v)),
+            v => flags.add_flag(Flag::DefaultButHadValue(Cow::Borrowed(v))),
         }
 
         let result = BamlNull;
@@ -823,7 +823,7 @@ where
         match (value.completion_state(), target.meta.in_progress.as_ref()) {
             (CompletionState::Incomplete, Some(Literal::Never)) => return Ok(None),
             (CompletionState::Incomplete, Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(value));
+                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 let result = target.ty.from_literal(lit, ctx)?;
                 return Ok(Some(ValueWithFlags::new(
                     result,
@@ -868,7 +868,7 @@ where
                 string_val.into_owned()
             }
             v => {
-                flags.add_flag(Flag::JsonToString(v));
+                flags.add_flag(Flag::JsonToString(Cow::Borrowed(v)));
                 v.to_string()
             }
         };
