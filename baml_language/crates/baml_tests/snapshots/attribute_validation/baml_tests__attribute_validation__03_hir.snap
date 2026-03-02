@@ -31,3 +31,19 @@ enum HasDuplicateVariantAttr {
   ACTIVE
   INACTIVE
 }
+
+class stream_HasDuplicateDescription {
+  name: null | string
+}
+
+class stream_HasDuplicateFieldAttr {
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  name: null | string
+}
+
+class stream_HasDuplicateField {
+  name: null | int
+  age: null | int
+  name: null | int
+}

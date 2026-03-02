@@ -230,12 +230,13 @@ class Bar {
 "#,
         );
 
-        // First execution
+        // First execution — file_lowering, parse_result, lex_file each run 2x
+        // (once for the real file, once for the synthetic stream expansion file)
         test_db.assert_executed(
             |db| {
                 let _ = baml_compiler_hir::file_items(db, file);
             },
-            &[("lex_file", 1), ("parse_result", 1), ("file_lowering", 1)],
+            &[("lex_file", 2), ("parse_result", 2), ("file_lowering", 2)],
         );
 
         // Second execution without any changes - everything should be cached
@@ -273,15 +274,15 @@ class Modified {
 "#
         .to_string());
 
-        // After modification, queries should re-execute
+        // After modification, queries should re-execute (2x: real + synthetic stream file)
         test_db.assert_executed(
             |db| {
                 let _ = baml_compiler_hir::file_items(db, file);
             },
             &[
-                ("lex_file", 1),      // Must re-lex
-                ("parse_result", 1),  // Must re-parse
-                ("file_lowering", 1), // Must rebuild item tree (class name changed)
+                ("lex_file", 2),      // Must re-lex (real + synth)
+                ("parse_result", 2),  // Must re-parse (real + synth)
+                ("file_lowering", 2), // Must rebuild item tree (real + synth)
             ],
         );
     }

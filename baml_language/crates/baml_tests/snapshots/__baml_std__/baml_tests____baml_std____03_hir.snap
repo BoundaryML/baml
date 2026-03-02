@@ -239,3 +239,47 @@ class OrchestrationStep {
   primitive_client: baml.llm.PrimitiveClient
   delay_ms: int
 }
+
+function stream_PlannerState.rr_local_offset(self: stream_PlannerState, client_name: string) -> int {
+    let offset = 0;
+    {
+        let _iter = self.rr_client_names;
+        let _len = _iter.length();
+        let _i = 0;
+        while (_i < _len) {
+            let seen_name = _iter[_i];
+            _i += 1;
+            if (seen_name == client_name) {
+                offset += 1;
+            };
+        }
+    };
+    offset
+}
+
+function stream_PlannerState.rr_pick_index(self: stream_PlannerState, client_name: string, sub_client_count: int) -> int {
+    let local_offset = self.rr_local_offset(client_name);
+    self.rr_client_names.push(client_name);
+    let base = baml.llm.round_robin_peek(client_name);
+    base + local_offset % sub_client_count
+}
+
+class stream_OrchestrationStep {
+  primitive_client: null | baml.llm.PrimitiveClient
+  delay_ms: null | int
+}
+
+class stream_ExecutionResult {
+  ok: null | bool
+  value: null | unknown
+}
+
+class stream_PlannerState {
+  rr_client_names: never[] | string[]
+}
+
+class stream_ExecutionContext {
+  jinja_string: null | string
+  args: map<string, never> | map<string, unknown>
+  function_name: null | string
+}

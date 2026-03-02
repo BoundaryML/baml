@@ -57,3 +57,13 @@ function param_in_if_statement(b: bool) -> int {
   L2:
     return
 }
+
+function stream_Baz.Greeting(self: stream_Baz) -> string {
+    load_const "Hello, "
+    load_var self
+    load_field .name
+    bin_op +
+    load_const "!"
+    bin_op +
+    return
+}

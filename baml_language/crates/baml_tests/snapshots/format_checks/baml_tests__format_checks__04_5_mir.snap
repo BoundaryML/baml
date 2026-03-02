@@ -2638,6 +2638,41 @@ fn WithLongMethod.processData(first_input: map<string, int>, second_input: int |
     }
 }
 
+fn stream_WithMethod.greet() -> string {
+    // Locals:
+    let _0: string // return
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn stream_WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+    // Locals:
+    let _0: map<string, int | string | bool> // return
+    let _1: map<string, int> // first_input // param
+    let _2: int | string | bool[] // second_input // param
+    let _3: string // third_input // param
+    let _4: "result"
+    let _5: 1
+
+    bb0: {
+        _4 = const "result";
+        _5 = const 1_i64;
+        _0 = { copy _4: copy _5 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
     // Locals:
     let _0: baml.llm.PrimitiveClient // return

@@ -238,15 +238,15 @@ class Address {
 "#,
     );
 
-    // Query all items initially
+    // Query all items initially (2x: real file + synthetic stream expansion file)
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
-            ("file_lowering", 1),
+            ("lex_file", 2),
+            ("parse_result", 2),
+            ("file_lowering", 2),
             ("file_items", 1),
         ],
     );
@@ -270,15 +270,15 @@ class NewClass {
     .to_string());
 
     // After adding a class: must re-lex, re-parse, and rebuild item tree
-    // (new class means different ItemTree content)
+    // (new class means different ItemTree content; 2x for real + synth)
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
-            ("file_lowering", 1),
+            ("lex_file", 2),
+            ("parse_result", 2),
+            ("file_lowering", 2),
             ("file_items", 1),
         ],
     );
@@ -298,15 +298,15 @@ class MyClass {
 "#,
     );
 
-    // Query items initially
+    // Query items initially (2x: real + synthetic stream expansion file)
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
-            ("file_lowering", 1),
+            ("lex_file", 2),
+            ("parse_result", 2),
+            ("file_lowering", 2),
             ("file_items", 1),
         ],
     );
@@ -324,15 +324,18 @@ class MyClass {
     // file_lowering re-executes because the CST changed, but produces the same
     // ItemTree (comments don't affect item names/structure).
     // file_items benefits from early cutoff: ItemTree is equal, so it's cached.
+    // Counts are 2x because the synthetic stream expansion file also re-runs.
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file);
         },
         &[
-            ("lex_file", 1),      // Must re-run: input text changed
-            ("parse_result", 1),  // Must re-run: tokens changed
-            ("file_lowering", 1), // Must re-run: CST changed (even though ItemTree will be same)
-            ("file_items", 0),    // Early cutoff! ItemTree equal → cached
+            ("lex_file", 2),      // Must re-run: input text changed (real + synth)
+            ("parse_result", 2),  // Must re-run: tokens changed (real + synth)
+            ("file_lowering", 2), // Must re-run: CST changed (real + synth)
+            // file_items re-executes because ppir_expansion_cst creates a new
+            // synthetic SourceFile on each run, changing the ItemIds.
+            ("file_items", 1),
         ],
     );
 }
@@ -360,16 +363,20 @@ class ClassB {
 "#,
     );
 
-    // Query both files initially
+    // Query both files initially.
+    // file_item_tree no longer triggers ppir_names, so querying file_a
+    // does NOT cache file_b's lex/parse as a side effect.
+    // Note: ppir_names IS triggered by ppir_expansion_cst, which iterates all
+    // project files. So querying file_a WILL cache file_b's lex/parse via ppir_names.
     let _ = baml_compiler_hir::file_items(test_db.db(), file_a);
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_b);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
-            ("file_lowering", 1),
+            // file_b's lex/parse were cached by ppir_names (iterates all files)
+            // during file_a's query, so only the synth file triggers lex/parse.
+            ("file_lowering", 2), // real + synth
             ("file_items", 1),
         ],
     );
@@ -383,29 +390,31 @@ class ClassA {
 "#
     .to_string());
 
-    // Query file_b - should be fully cached (file_a's change doesn't affect it)
+    // Query file_b - file_b is unchanged, but ppir_names (project-wide)
+    // must re-verify, which re-lexes/re-parses the changed file_a.
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_b);
         },
         &[
-            ("lex_file", 0),
-            ("parse_result", 0),
-            ("file_lowering", 0),
-            ("file_items", 0),
+            ("file_lowering", 0), // file_b unchanged
+            ("file_items", 0),    // file_b item tree unchanged
         ],
     );
 
-    // Query file_a - should re-execute
+    // Query file_a - must re-lower (file_a text changed)
+    // Note: file_a's lex_file/parse_result were already re-cached by ppir_names
+    // during the file_b query above (ppir_names iterates all project files).
+    // Only the synth file's lex/parse runs fresh.
     test_db.assert_executed(
         |db| {
             let _ = baml_compiler_hir::file_items(db, file_a);
         },
         &[
-            ("lex_file", 1),
-            ("parse_result", 1),
-            ("file_lowering", 1),
-            ("file_items", 1),
+            ("lex_file", 1),      // Synth only (real was cached by ppir_names above)
+            ("parse_result", 1),  // Synth only
+            ("file_lowering", 2), // Must re-run: real + synth
+            ("file_items", 1),    // Must re-run: item tree changed (new field)
         ],
     );
 }

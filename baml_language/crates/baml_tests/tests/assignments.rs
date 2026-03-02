@@ -841,6 +841,17 @@ async fn array_element_method_field_assignment() {
         load_field .value
         return
     }
+
+    function stream_Container.get_data(self: stream_Container) -> Data {
+        load_var self
+        load_field .data
+        return
+    }
+
+    function stream_Data.get_self(self: stream_Data) -> Data {
+        load_var self
+        return
+    }
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(35)));
@@ -916,6 +927,12 @@ async fn method_call_then_array_access_assignment() {
         load_field .value
         return
     }
+
+    function stream_Container.get_nested(self: stream_Container) -> Item[] {
+        load_var self
+        load_field .data
+        return
+    }
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(25)));
@@ -979,6 +996,12 @@ async fn method_call_field_assignment() {
         load_field .value
         return
     }
+
+    function stream_Factory.get_counter(self: stream_Factory) -> Counter {
+        load_var self
+        load_field .counter
+        return
+    }
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(15)));
@@ -1039,6 +1062,12 @@ async fn method_call_field_assignment_with_copy() {
         store_field .value
         load_var c
         load_field .value
+        return
+    }
+
+    function stream_Factory.get_counter(self: stream_Factory) -> Counter {
+        load_var self
+        load_field .counter
         return
     }
     ");

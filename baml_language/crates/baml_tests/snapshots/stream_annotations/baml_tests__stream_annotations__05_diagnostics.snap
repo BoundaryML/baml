@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== DIAGNOSTICS ===
+  [parse] Error: Expected ')', found '['
+    ╭─[ main.baml:32:9 ]
+    │
+ 32 │     name string @stream.done
+    │         ┬  
+    │         ╰── Expected ')', found '['
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected Unexpected token in class body, found ')'
+    ╭─[ main.baml:32:11 ]
+    │
+ 32 │     name string @stream.done
+    │           ┬  
+    │           ╰── Expected Unexpected token in class body, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯

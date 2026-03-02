@@ -10,3 +10,11 @@ source: crates/baml_tests/src/generated_tests.rs
     Return: Union([Unknown { attr: TyAttr(None) }, Literal(String("bad"), TyAttr(None))], TyAttr(None))
     Errors:
       - Unknown type b
+  Function stream_Broken.MixedLiteralAndTyped:
+    Return: Literal(String("mixed"), TyAttr(None))
+  Function stream_Broken.Invalid:
+    Return: Void { attr: TyAttr(None) }
+  Function stream_Broken.BadUnionPattern:
+    Return: Union([Unknown { attr: TyAttr(None) }, Literal(String("bad"), TyAttr(None))], TyAttr(None))
+    Errors:
+      - Unknown type b

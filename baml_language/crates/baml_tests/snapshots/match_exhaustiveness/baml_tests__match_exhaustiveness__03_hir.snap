@@ -721,3 +721,63 @@ type HttpOk = 200
 type DoubleMaybe = MaybeResult?
 
 type AlwaysTrue = true
+
+class stream_Fish {
+  name: null | string
+}
+
+class stream_Pending {
+  eta: null | int
+}
+
+class stream_Cat {
+  name: null | string
+}
+
+class stream_Bird {
+  name: null | string
+}
+
+class stream_Success {
+  data: null | string
+}
+
+class stream_Failure {
+  reason: null | string
+}
+
+class stream_Dog {
+  name: null | string
+}
+
+type stream_AlwaysFalse = false
+
+type stream_CustomBool = true | false
+
+type stream_SuccessCode = 200 | 201 | 204
+
+type stream_HttpOk = 200
+
+type stream_DoubleMaybe = stream_MaybeResult | null
+
+type stream_SuccessOr200 = stream_Success | 200
+
+type stream_MixedLiterals = 200 | "success" | true
+
+type stream_OkCode = 200
+
+type stream_AlwaysTrue = true
+
+type stream_Result = stream_Success | stream_Failure
+
+type stream_HttpCreated = 201
+
+type stream_FullResult = stream_Success | stream_Failure | stream_Pending
+
+type stream_MaybeOk = 200 | null
+
+type stream_OkOrCreated = stream_OkCode | 201
+
+type stream_MaybeResult = stream_Result | null
+
+type stream_Role = "user" | "assistant" | "system"

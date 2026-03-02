@@ -943,6 +943,18 @@ async fn method_call() {
         load_field .value
         return
     }
+
+    function stream_Number.add(self: stream_Number, other: Number) -> Number {
+        alloc_instance Number
+        copy 0
+        load_var self
+        load_field .value
+        load_var other
+        load_field .value
+        bin_op +
+        store_field .value
+        return
+    }
     ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
@@ -998,6 +1010,18 @@ async fn mutable_self_method() {
         pop 1
         load_var a
         load_field .value
+        return
+    }
+
+    function stream_Number.add(self: stream_Number, other: Number) -> bool {
+        load_var self
+        load_var self
+        load_field .value
+        load_var other
+        load_field .value
+        bin_op +
+        store_field .value
+        load_const true
         return
     }
     ");

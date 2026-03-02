@@ -23,3 +23,21 @@ type BinaryOp = (a: int, b: int) -> int
 type UnnamedParams = (int, int) -> int
 
 type FunctionFactory = (config: string) -> (int) -> int
+
+type stream_FunctionFactory = unknown
+
+type stream_UnionParam = unknown
+
+type stream_MixedParams = unknown
+
+type stream_BinaryOp = unknown
+
+type stream_Complex = unknown
+
+type stream_UnnamedParams = unknown
+
+type stream_Producer = unknown
+
+type stream_Curried = unknown
+
+type stream_IntToInt = unknown

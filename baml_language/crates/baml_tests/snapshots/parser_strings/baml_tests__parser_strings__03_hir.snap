@@ -27,6 +27,35 @@ class NestedQuotes {
   json_like: string
 }
 
+class stream_NestedQuotes {
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  single_in_double: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  double_in_single: null | string
+
+  She: null | said
+  hello: never | "')
+  escaped_in_escaped string @alias("
+  The: <unknown>
+  sap: <unknown>
+  class_completed_field_missing: null
+  quote: <unknown>
+  sap: <unknown>
+  class_completed_field_missing: null
+  is: null | here
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  complex_nesting: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  json_like: null | string
+}
+
 function ProcessText.build_request(input: string) -> baml.http.Request {
     baml.llm.build_request("ProcessText", { "input": input })
 }
@@ -46,6 +75,24 @@ class RawStrings {
   multiline: string
 }
 
+class stream_RawStrings {
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  simple: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  with_quotes: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  multi_hash: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  multiline: null | string
+}
+
 function GetRole() -> "admin" | "user" | "guest" {
     return "user";
 }
@@ -56,6 +103,28 @@ class Messages {
   with_spaces: string
   with_escapes: string
   with_quotes: string
+}
+
+class stream_Messages {
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  greeting: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  empty: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  with_spaces: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  with_escapes: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  with_quotes: null | string
 }
 
 function GPT4.resolve() -> baml.llm.PrimitiveClient {
@@ -79,4 +148,54 @@ class UnicodeStrings {
 
 client GPT4 {
   provider: unknown
+}
+
+class stream_UnicodeStrings {
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  emoji_basic: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  emoji_multiple: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  emoji_in_text: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  chinese: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  arabic: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  japanese: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  russian: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  math_symbols: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  currency: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  arrows: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  zero_width: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  rtl_override: null | string
 }

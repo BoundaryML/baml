@@ -17,6 +17,33 @@ class ClassAttributes {
   @@dynamic
 }
 
+class stream_FieldAttributes {
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  money: null | int
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  currency: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  name: null | string
+
+  summary: null | string
+  details: never | string | null
+  state: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  multiple: null | string | null
+}
+
+class stream_ClassAttributes {
+  name: null | string
+  @@dynamic
+}
+
 function GetMixedMap() -> map<string, int | string> {
     baml.llm.call_llm_function("GetMixedMap", {  })
 }
@@ -95,3 +122,29 @@ type ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | string 
 type OptionalFlag = true?
 
 type OptionalCode = 200?
+
+class stream_User {
+  id: null | int
+  name: null | string
+  email: null | string
+}
+
+type stream_UnionOfArrays = int[] | string[]
+
+type stream_OptionalFlag = true | null
+
+type stream_OptionalRoleList = "writer"[] | null
+
+type stream_OptionalCode = 200 | null
+
+type stream_MixedList = (int | string)[]
+
+type stream_MixedMap = map<string, int | string>
+
+type stream_ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | string | bool | float | int[] | string[] | map<string, int | string> | map<string, map<string, int | string>> | map<string, map<string, map<string, int | string>>> | map<string, map<string, map<string, map<string, int | string>>>>>
+
+type stream_OptionalRole = "admin" | null
+
+type stream_RoleList = "reader"[]
+
+type stream_Role = "user" | "assistant" | "system"

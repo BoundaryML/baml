@@ -158,3 +158,28 @@ fn Baz.Greeting(self: Baz) -> string {
         return;
     }
 }
+
+fn stream_Baz.Greeting(self: stream_Baz) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: stream_Baz // self // param
+    let _2: null
+    let _3: "Hello, "
+    let _4: null | string
+    let _5: stream_Baz
+    let _6: "!"
+
+    bb0: {
+        _3 = const "Hello, ";
+        _5 = copy _1;
+        _4 = copy _5.0;
+        _2 = copy _3 + copy _4;
+        _6 = const "!";
+        _0 = copy _2 + copy _6;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

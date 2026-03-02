@@ -276,7 +276,6 @@ impl TypeRef {
     pub fn bool_literal(b: bool) -> Self {
         TypeRef::BoolLiteral(b, TyAttr::default())
     }
-
     /// Create a simple named type reference.
     pub fn named(name: Name) -> Self {
         Self::path(Path::single(name))

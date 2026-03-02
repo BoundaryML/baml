@@ -18,3 +18,8 @@ class User {
   name: string
   age: int
 }
+
+class stream_User {
+  name: null | string
+  age: null | int
+}

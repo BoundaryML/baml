@@ -17,7 +17,10 @@
 
 use std::sync::Arc;
 
-use baml_base::{FileId, Name, SourceFile, Span, TyAttr};
+use baml_base::{
+    FieldAttr, FieldAttrInner, FileId, Name, SapAttrValue, SapConstValue, SourceFile, Span, TyAttr,
+    TyAttrInner,
+};
 use baml_compiler_diagnostics::{HirDiagnostic, NameError};
 use baml_compiler_parser::syntax_tree;
 use baml_compiler_syntax::SyntaxNode;
@@ -66,10 +69,11 @@ pub use type_ref::*;
 
 /// Database trait for HIR queries.
 ///
-/// Extends `baml_workspace::Db`. Use the free functions in this crate
-/// (e.g., `project_items`, `file_items`) for HIR queries.
+/// Extends `baml_compiler_ppir::Db` (which itself extends `baml_workspace::Db`).
+/// Use the free functions in this crate (e.g., `project_items`, `file_items`)
+/// for HIR queries.
 #[salsa::db]
-pub trait Db: baml_workspace::Db {}
+pub trait Db: baml_compiler_ppir::Db {}
 
 //
 // ───────────────────────────────────────────────────── TRACKED STRUCTS ─────
@@ -172,9 +176,10 @@ pub fn file_lowering(db: &dyn Db, file: SourceFile) -> LoweringResult<'_> {
 
 /// Extract `ItemTree` from a file's syntax tree.
 ///
-/// This is a convenience wrapper around `file_lowering` for callers that
-/// only need the `ItemTree`. Not tracked separately since `file_lowering`
-/// already caches the result - this just clones the Arc (O(1)).
+/// Works for both real and synthetic files: `syntax_tree` parses the file's
+/// text, lowering produces the items. For real files, these are user-defined
+/// items; for synthetic files, these are `stream_*` items.
+#[salsa::tracked]
 pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     file_lowering(db, file).item_tree(db).clone()
 }
@@ -185,11 +190,20 @@ pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
 
 /// Tracked: Get all items defined in a file.
 ///
-/// Returns a tracked struct containing interned IDs for all top-level items.
+/// Returns a tracked struct containing interned IDs for all top-level items,
+/// including synthesized stream_* items from PPIR expansion.
 #[salsa::tracked]
 pub fn file_items(db: &dyn Db, file: SourceFile) -> FileItems<'_> {
     let item_tree = file_item_tree(db, file);
-    let items = intern_all_items(db, file, &item_tree);
+    let mut items = intern_all_items(db, file, &item_tree);
+
+    // Also include synthesized stream_* items
+    let synth = baml_compiler_ppir::ppir_expansion_cst(db, file);
+    if let Some(synth_file) = synth.source_file(db) {
+        let synth_tree = file_item_tree(db, synth_file);
+        items.extend(intern_all_items(db, synth_file, &synth_tree));
+    }
+
     FileItems::new(db, items)
 }
 
@@ -199,8 +213,7 @@ pub fn project_items(db: &dyn Db, root: baml_workspace::Project) -> ProjectItems
     let mut all_items = Vec::new();
 
     for file in root.files(db) {
-        let items_struct = file_items(db, *file);
-        all_items.extend(items_struct.items(db).iter().copied());
+        all_items.extend(file_items(db, *file).items(db).iter().copied());
     }
 
     ProjectItems::new(db, all_items)
@@ -764,8 +777,7 @@ pub fn project_type_item_spans(
                 let class = &item_tree[loc.id(db)];
                 let name = class.name.clone();
 
-                if let Some(span) =
-                    get_item_name_span(db, file, "class", name.as_str(), loc.id(db).index())
+                if let Some(span) = get_item_name_span(db, file, "class", &name, loc.id(db).index())
                 {
                     spans.insert(name, span);
                 }
@@ -777,7 +789,7 @@ pub fn project_type_item_spans(
                 let name = alias.name.clone();
 
                 if let Some(span) =
-                    get_item_name_span(db, file, "type alias", name.as_str(), loc.id(db).index())
+                    get_item_name_span(db, file, "type alias", &name, loc.id(db).index())
                 {
                     spans.insert(name, span);
                 }
@@ -815,7 +827,7 @@ pub fn project_class_field_type_spans(
             // Find the class in the CST
             if let Some(class_node) = source_file.items().find_map(|item| {
                 if let baml_compiler_syntax::ast::Item::Class(c) = item {
-                    if c.name().as_ref().map(SyntaxToken::text) == Some(&class_name) {
+                    if c.name().as_ref().map(SyntaxToken::text) == Some(class_name.as_str()) {
                         return Some(c);
                     }
                 }
@@ -869,7 +881,7 @@ pub fn project_type_alias_type_spans(
             // Find the type alias in the CST
             if let Some(alias_node) = source_file.items().find_map(|item| {
                 if let baml_compiler_syntax::ast::Item::TypeAlias(a) = item {
-                    if a.name().as_ref().map(SyntaxToken::text) == Some(&alias_name) {
+                    if a.name().as_ref().map(SyntaxToken::text) == Some(alias_name.as_str()) {
                         return Some(a);
                     }
                 }
@@ -1953,6 +1965,114 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
     }
 }
 
+//
+// ──────────────────────────────────── SAP ATTRIBUTE PARSING ─────
+//
+
+/// Which SAP field attribute slot to populate.
+#[derive(Clone, Copy)]
+enum SapFieldKind {
+    CompletedMissing,
+    InProgressMissing,
+}
+
+/// Parse an @sap.class_*_`field_missing` attribute from synthesized CST into `FieldAttr`.
+fn parse_sap_field_attr(
+    attr: &baml_compiler_syntax::ast::Attribute,
+    existing: &FieldAttr,
+    kind: SapFieldKind,
+) -> FieldAttr {
+    let value = parse_sap_attr_value(attr);
+    let inner = existing
+        .0
+        .as_ref()
+        .map(|i| FieldAttrInner {
+            sap_class_completed_field_missing: i.sap_class_completed_field_missing.clone(),
+            sap_class_in_progress_field_missing: i.sap_class_in_progress_field_missing.clone(),
+        })
+        .unwrap_or(FieldAttrInner {
+            sap_class_completed_field_missing: SapAttrValue::Never,
+            sap_class_in_progress_field_missing: SapAttrValue::Never,
+        });
+    let inner = match kind {
+        SapFieldKind::CompletedMissing => FieldAttrInner {
+            sap_class_completed_field_missing: value,
+            ..inner
+        },
+        SapFieldKind::InProgressMissing => FieldAttrInner {
+            sap_class_in_progress_field_missing: value,
+            ..inner
+        },
+    };
+    FieldAttr(Some(Box::new(inner)))
+}
+
+/// Parse a @@`sap.in_progress` block attribute from synthesized CST into `TyAttr`.
+fn parse_sap_type_attr(attr: &baml_compiler_syntax::ast::BlockAttribute) -> TyAttr {
+    let value = parse_sap_block_attr_value(attr);
+    TyAttr(Some(Box::new(TyAttrInner {
+        sap_in_progress: value,
+    })))
+}
+
+/// Parse an @sap.* attribute argument into a `SapAttrValue`.
+/// Accepts: "never", "null", "[]", "{}", "true", "false", integers, floats, strings.
+fn parse_sap_attr_value(attr: &baml_compiler_syntax::ast::Attribute) -> SapAttrValue {
+    match attr.string_arg().as_deref() {
+        Some("never") => SapAttrValue::Never,
+        Some("null") => SapAttrValue::ConstValueExpr(SapConstValue::Null),
+        Some("[]") => SapAttrValue::ConstValueExpr(SapConstValue::EmptyList),
+        Some("{}") => SapAttrValue::ConstValueExpr(SapConstValue::EmptyMap),
+        Some("true") => SapAttrValue::ConstValueExpr(SapConstValue::Bool(true)),
+        Some("false") => SapAttrValue::ConstValueExpr(SapConstValue::Bool(false)),
+        Some(s) => {
+            if let Ok(i) = s.parse::<i64>() {
+                SapAttrValue::ConstValueExpr(SapConstValue::Int(i))
+            } else if s.parse::<f64>().is_ok() && !s.contains(|c: char| c.is_alphabetic()) {
+                SapAttrValue::ConstValueExpr(SapConstValue::Float(s.to_string()))
+            } else if let Some((left, right)) = s.split_once('.') {
+                // Enum value pattern: Foo.Bar
+                SapAttrValue::ConstValueExpr(SapConstValue::EnumValue {
+                    enum_name: left.to_string(),
+                    variant_name: right.to_string(),
+                })
+            } else {
+                SapAttrValue::ConstValueExpr(SapConstValue::String(s.to_string()))
+            }
+        }
+        None => SapAttrValue::Never,
+    }
+}
+
+/// Parse a @@sap.* block attribute argument into a `SapAttrValue`.
+/// Same logic as `parse_sap_attr_value` but for `BlockAttribute` type.
+fn parse_sap_block_attr_value(attr: &baml_compiler_syntax::ast::BlockAttribute) -> SapAttrValue {
+    match attr.string_arg().as_deref() {
+        Some("never") => SapAttrValue::Never,
+        Some("null") => SapAttrValue::ConstValueExpr(SapConstValue::Null),
+        Some("[]") => SapAttrValue::ConstValueExpr(SapConstValue::EmptyList),
+        Some("{}") => SapAttrValue::ConstValueExpr(SapConstValue::EmptyMap),
+        Some("true") => SapAttrValue::ConstValueExpr(SapConstValue::Bool(true)),
+        Some("false") => SapAttrValue::ConstValueExpr(SapConstValue::Bool(false)),
+        Some(s) => {
+            if let Ok(i) = s.parse::<i64>() {
+                SapAttrValue::ConstValueExpr(SapConstValue::Int(i))
+            } else if s.parse::<f64>().is_ok() && !s.contains(|c: char| c.is_alphabetic()) {
+                SapAttrValue::ConstValueExpr(SapConstValue::Float(s.to_string()))
+            } else if let Some((left, right)) = s.split_once('.') {
+                // Enum value pattern: Foo.Bar
+                SapAttrValue::ConstValueExpr(SapConstValue::EnumValue {
+                    enum_name: left.to_string(),
+                    variant_name: right.to_string(),
+                })
+            } else {
+                SapAttrValue::ConstValueExpr(SapConstValue::String(s.to_string()))
+            }
+        }
+        None => SapAttrValue::Never,
+    }
+}
+
 /// Extract class definition from CST with validation.
 pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option<Class> {
     use baml_compiler_syntax::ast::ClassDef;
@@ -1987,6 +2107,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
             let mut field_alias = Attribute::Unset;
             let mut field_description = Attribute::Unset;
             let mut field_skip = Attribute::Unset;
+            let mut field_attr = FieldAttr::default();
 
             // Validate field attributes for duplicates and constraint syntax
             let mut seen_field_attrs: FxHashMap<String, Span> = FxHashMap::default();
@@ -2070,8 +2191,25 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                             // Validate constraint attribute syntax
                             validate_constraint_attribute(&attr, &attr_name, attr_span, ctx);
                         }
+                        // SAP field attributes (from synthesized stream_* nodes)
+                        "sap.class_completed_field_missing" => {
+                            field_attr = parse_sap_field_attr(
+                                &attr,
+                                &field_attr,
+                                SapFieldKind::CompletedMissing,
+                            );
+                        }
+                        "sap.class_in_progress_field_missing" => {
+                            field_attr = parse_sap_field_attr(
+                                &attr,
+                                &field_attr,
+                                SapFieldKind::InProgressMissing,
+                            );
+                        }
+                        // @stream.* attributes are consumed by PPIR, silently skip
+                        a if a.starts_with("stream.") => {}
                         _ => {
-                            // Other attributes (stream.done, etc.) - just validate duplicates
+                            // Other attributes - just validate duplicates
                         }
                     }
                 }
@@ -2082,6 +2220,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 validate_map_type_arity(&type_expr, ctx);
             }
 
+            // Extract TypeRef and check for type-level SAP attributes
             let type_ref = field_node
                 .ty()
                 .map(|t| TypeRef::from_ast(&t))
@@ -2093,7 +2232,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 alias: field_alias,
                 description: field_description,
                 skip: field_skip,
-                field_attr: baml_base::FieldAttr::default(),
+                field_attr,
             });
         }
     }
@@ -2103,6 +2242,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
     let mut class_is_dynamic = Attribute::Unset;
     let mut class_alias = Attribute::Unset;
     let mut class_description = Attribute::Unset;
+    let mut class_ty_attr = TyAttr::default();
 
     // Validate block attributes
     for attr in class.block_attributes() {
@@ -2176,6 +2316,12 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                         });
                     }
                 }
+                // SAP block attribute (from synthesized stream_* nodes)
+                "sap.in_progress" => {
+                    class_ty_attr = parse_sap_type_attr(&attr);
+                }
+                // @@stream.* attributes are consumed by PPIR, silently skip
+                a if a.starts_with("stream.") => {}
                 _ => {
                     // Other attributes - just validate duplicates
                 }
@@ -2189,7 +2335,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
         is_dynamic: class_is_dynamic,
         alias: class_alias,
         description: class_description,
-        ty_attr: TyAttr::default(),
+        ty_attr: class_ty_attr,
     })
 }
 
@@ -2579,6 +2725,7 @@ pub struct HirValidationResult {
 pub fn validate_hir(db: &dyn Db, root: baml_workspace::Project) -> HirValidationResult {
     let mut hir_diagnostics = validate_reserved_names(db, root);
     hir_diagnostics.extend(validate_retry_policy_refs(db, root));
+    hir_diagnostics.extend(validate_stream_prefix(db, root));
     let mut name_errors = validate_duplicate_names(db, root);
     name_errors.extend(validate_test_functions(db, root));
 
@@ -2593,10 +2740,10 @@ fn validate_retry_policy_refs(db: &dyn Db, root: baml_workspace::Project) -> Vec
     // Collect all retry policy names across all files.
     let mut known_policies: rustc_hash::FxHashSet<Name> = rustc_hash::FxHashSet::default();
     for file in root.files(db) {
-        let item_tree = file_item_tree(db, *file);
         let items_struct = file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::RetryPolicy(rp_loc) = item {
+                let item_tree = file_item_tree(db, rp_loc.file(db));
                 let rp = &item_tree[rp_loc.id(db)];
                 known_policies.insert(rp.name.clone());
             }
@@ -2606,11 +2753,11 @@ fn validate_retry_policy_refs(db: &dyn Db, root: baml_workspace::Project) -> Vec
     // Check each client's retry_policy_name against the known set.
     let mut errors = Vec::new();
     for file in root.files(db) {
-        let item_tree = file_item_tree(db, *file);
         let items_struct = file_items(db, *file);
         let file_id = file.file_id(db);
         for item in items_struct.items(db) {
             if let ItemId::Client(client_loc) = item {
+                let item_tree = file_item_tree(db, client_loc.file(db));
                 let client = &item_tree[client_loc.id(db)];
                 if let Some(ref policy_name) = client.retry_policy_name {
                     if !known_policies.contains(policy_name) {
@@ -3415,6 +3562,59 @@ pub fn get_item_name_span(
     None
 }
 
+/// Validate that user-defined items don't use the reserved `stream_` prefix.
+///
+/// The `stream_` prefix is reserved for compiler-generated streaming types.
+/// This checks the raw lowered items (before PPIR injection) so we only
+/// flag user-authored items, not generated ones.
+fn validate_stream_prefix(db: &dyn Db, root: baml_workspace::Project) -> Vec<HirDiagnostic> {
+    let mut errors = Vec::new();
+
+    for file in root.files(db) {
+        // Check raw lowered items (without stream_* injection)
+        let lowering = file_lowering(db, *file);
+        let raw_tree = lowering.item_tree(db);
+
+        for (id, class) in raw_tree.iter_classes() {
+            if class.name.starts_with("stream_") {
+                let span = get_item_name_span(db, *file, "class", &class.name, id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                errors.push(HirDiagnostic::ReservedStreamPrefix {
+                    item_kind: "class",
+                    item_name: class.name.to_string(),
+                    span,
+                });
+            }
+        }
+
+        for (id, alias) in raw_tree.iter_type_aliases() {
+            if alias.name.starts_with("stream_") {
+                let span = get_item_name_span(db, *file, "type alias", &alias.name, id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                errors.push(HirDiagnostic::ReservedStreamPrefix {
+                    item_kind: "type alias",
+                    item_name: alias.name.to_string(),
+                    span,
+                });
+            }
+        }
+
+        for (id, enum_def) in raw_tree.iter_enums() {
+            if enum_def.name.starts_with("stream_") {
+                let span = get_item_name_span(db, *file, "enum", &enum_def.name, id.index())
+                    .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())));
+                errors.push(HirDiagnostic::ReservedStreamPrefix {
+                    item_kind: "enum",
+                    item_name: enum_def.name.to_string(),
+                    span,
+                });
+            }
+        }
+    }
+
+    errors
+}
+
 /// Validate that field names and function parameters don't use reserved keywords.
 ///
 /// This checks:
@@ -3705,7 +3905,7 @@ pub fn definition_name_span(db: &dyn Db, def: Definition<'_>) -> Span {
         }
     };
 
-    get_item_name_span(db, file, kind, name.as_str(), index)
+    get_item_name_span(db, file, kind, &name, index)
         .unwrap_or_else(|| Span::new(file.file_id(db), TextRange::empty(0.into())))
 }
 

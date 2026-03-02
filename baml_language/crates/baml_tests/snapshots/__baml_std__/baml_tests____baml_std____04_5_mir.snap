@@ -1736,3 +1736,168 @@ fn PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub_clien
         goto -> bb1;
     }
 }
+
+fn stream_PlannerState.rr_local_offset(self: stream_PlannerState, client_name: string) -> int {
+    // Locals:
+    let _0: int // return
+    let _1: stream_PlannerState // self // param
+    let _2: string // client_name // param
+    let _3: 0 // offset
+    let _4: void
+    let _5: null[] | string[] // _iter
+    let _6: stream_PlannerState
+    let _7: null // _len
+    let _8: null
+    let _9: null[] | string[]
+    let _10: 0 // _i
+    let _11: void
+    let _12: bool
+    let _13: int
+    let _14: null
+    let _15: void
+    let _16: null // seen_name
+    let _17: null[] | string[]
+    let _18: int
+    let _19: void
+    let _20: int
+    let _21: 1
+    let _22: int
+    let _23: void | null
+    let _24: bool
+    let _25: null
+    let _26: string
+    let _27: void
+    let _28: int
+    let _29: 1
+    let _30: int
+
+    bb0: {
+        _3 = const 0_i64;
+        _6 = copy _1;
+        _5 = copy _6.0;
+        _9 = copy _5;
+        _8 = copy _9.0;
+        _7 = call copy _8() -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _10 = const 0_i64;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _13 = copy _10;
+        _14 = copy _7;
+        _12 = copy _13 < copy _14;
+        branch copy _12 -> [bb4, bb5];
+    }
+
+    bb4: {
+        _17 = copy _5;
+        _18 = copy _10;
+        _16 = copy _17[_18];
+        _20 = copy _10;
+        _21 = const 1_i64;
+        _22 = copy _20 + copy _21;
+        _10 = copy _22;
+        _19 = const null;
+        _25 = copy _16;
+        _26 = copy _2;
+        _24 = copy _25 == copy _26;
+        branch copy _24 -> [bb6, bb7];
+    }
+
+    bb5: {
+        _11 = const null;
+        _4 = const null;
+        _0 = copy _3;
+        goto -> bb1;
+    }
+
+    bb6: {
+        _28 = copy _3;
+        _29 = const 1_i64;
+        _30 = copy _28 + copy _29;
+        _3 = copy _30;
+        _27 = const null;
+        _23 = const null;
+        goto -> bb8;
+    }
+
+    bb7: {
+        _23 = const null;
+        goto -> bb8;
+    }
+
+    bb8: {
+        _15 = const null;
+        goto -> bb3;
+    }
+}
+
+fn stream_PlannerState.rr_pick_index(self: stream_PlannerState, client_name: string, sub_client_count: int) -> int {
+    // Locals:
+    let _0: int // return
+    let _1: stream_PlannerState // self // param
+    let _2: string // client_name // param
+    let _3: int // sub_client_count // param
+    let _4: int // local_offset
+    let _5: stream_PlannerState
+    let _6: string
+    let _7: (stream_PlannerState, string) -> int
+    let _8: null
+    let _9: null
+    let _10: null[] | string[]
+    let _11: stream_PlannerState
+    let _12: string
+    let _13: int // base
+    let _14: (string) -> int
+    let _15: string
+    let _16: null
+    let _17: int
+    let _18: int
+    let _19: int
+    let _20: int
+
+    bb0: {
+        _5 = copy _1;
+        _6 = copy _2;
+        _7 = const fn stream_PlannerState.rr_local_offset;
+        _4 = call copy _7(copy _5, copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _11 = copy _1;
+        _10 = copy _11.0;
+        _9 = copy _10.0;
+        _12 = copy _2;
+        _8 = call copy _9(copy _12) -> [bb3];
+    }
+
+    bb3: {
+        _14 = const fn baml.llm.round_robin_peek;
+        _15 = copy _2;
+        _16 = dispatch_future copy _14(copy _15) -> bb4;
+    }
+
+    bb4: {
+        _13 = await _16 -> [bb5];
+    }
+
+    bb5: {
+        _18 = copy _13;
+        _19 = copy _4;
+        _17 = copy _18 + copy _19;
+        _20 = copy _3;
+        _0 = copy _17 % copy _20;
+        goto -> bb1;
+    }
+}

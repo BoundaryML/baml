@@ -92,6 +92,9 @@ impl baml_compiler2_tir::Db for ProjectDatabase {}
 impl baml_lsp2_actions::Db for ProjectDatabase {}
 
 #[salsa::db]
+impl baml_compiler_ppir::Db for ProjectDatabase {}
+
+#[salsa::db]
 impl baml_compiler_hir::Db for ProjectDatabase {}
 
 #[salsa::db]
@@ -352,6 +355,7 @@ impl ProjectDatabase {
         (v1_builtin_files, v2_builtin_files)
     }
 
+    /// Register synthetic stream-expansion files in the reverse-lookup maps.
     /// Add a file to the database.
     ///
     /// This is an alias for `add_or_update_file` for API compatibility.
@@ -427,12 +431,12 @@ impl ProjectDatabase {
         let mut typing_ctx = None;
 
         for source_file in files {
-            let item_tree = file_item_tree(self, *source_file);
             let items_struct = file_items(self, *source_file);
             for item in items_struct.items(self) {
                 let ItemId::Function(func_loc) = item else {
                     continue;
                 };
+                let item_tree = file_item_tree(self, func_loc.file(self));
                 let func = &item_tree[func_loc.id(self)];
 
                 // Skip compiler-generated functions

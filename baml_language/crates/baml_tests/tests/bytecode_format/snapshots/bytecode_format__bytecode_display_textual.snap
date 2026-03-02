@@ -326,3 +326,32 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
   L24:
     unreachable
 }
+
+function stream_User.promote(self: stream_User, bonus: int) -> Report {
+    load_var self
+    load_var self
+    load_field .age
+    load_const 1
+    bin_op +
+    store_field .age
+    load_var self
+    load_var bonus
+    call score
+    store_var base
+    alloc_instance Report
+    copy 0
+    load_var base
+    load_field .score
+    load_var bonus
+    bin_op +
+    store_field .score
+    copy 0
+    load_var base
+    load_field .label
+    store_field .label
+    copy 0
+    load_var base
+    load_field .breakdown
+    store_field .breakdown
+    return
+}

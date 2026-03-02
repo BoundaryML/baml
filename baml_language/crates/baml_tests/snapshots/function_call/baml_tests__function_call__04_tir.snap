@@ -14,3 +14,7 @@ source: crates/baml_tests/src/generated_tests.rs
     Return: String { attr: TyAttr(None) }
   Function Baz.Greeting:
     Return: String { attr: TyAttr(None) }
+  Function stream_Baz.Greeting:
+    Return: Unknown { attr: TyAttr(None) }
+    Errors:
+      - Invalid op Add for string and null | string

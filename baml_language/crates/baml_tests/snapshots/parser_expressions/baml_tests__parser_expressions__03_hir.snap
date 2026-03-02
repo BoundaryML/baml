@@ -33,6 +33,21 @@ class Profile {
   settings: Settings
 }
 
+class stream_User {
+  name: null | string
+  profile: null | stream_Profile
+  tags: never[] | string[]
+}
+
+class stream_Profile {
+  bio: null | string
+  settings: null | stream_Settings
+}
+
+class stream_Settings {
+  theme: null | string
+}
+
 function IndexAccess(users: IndexUser[]) -> string {
     let first = users[0];
     let idx = 1;
@@ -46,6 +61,12 @@ class IndexUser {
   name: string
   age: int
   tags: string[]
+}
+
+class stream_IndexUser {
+  name: null | string
+  age: null | int
+  tags: never[] | string[]
 }
 
 function TestPrecedence() -> bool {

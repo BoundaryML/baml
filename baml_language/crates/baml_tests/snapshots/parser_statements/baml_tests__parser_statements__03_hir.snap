@@ -198,6 +198,11 @@ class Point {
   y: int
 }
 
+class stream_Point {
+  x: null | int
+  y: null | int
+}
+
 function simple_while_loop() -> int {
     let i = 0;
     while (i < 10) {

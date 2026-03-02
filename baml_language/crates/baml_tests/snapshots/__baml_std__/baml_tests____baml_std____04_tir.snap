@@ -26,3 +26,12 @@ source: crates/baml_tests/src/generated_tests.rs
     Return: Int { attr: TyAttr(None) }
   Function PlannerState.rr_pick_index:
     Return: Int { attr: TyAttr(None) }
+  Function stream_PlannerState.rr_local_offset:
+    Return: Int { attr: TyAttr(None) }
+    Errors:
+      - never[] | string[] has no field length
+      - never[] | string[] is not indexable
+  Function stream_PlannerState.rr_pick_index:
+    Return: Int { attr: TyAttr(None) }
+    Errors:
+      - never[] | string[] has no field push

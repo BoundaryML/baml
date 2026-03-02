@@ -24,10 +24,11 @@ fn compile_display_functions(
 
 #[test]
 fn bytecode_display_formats() {
-    let source = include_str!("bytecode_display.baml");
+    // Normalize CRLF → LF so line numbers are consistent across platforms.
+    let source = include_str!("bytecode_display.baml").replace("\r\n", "\n");
 
     // 1. Textual format (optimized)
-    let o1 = compile_display_functions(source, baml_compiler_emit::OptLevel::One);
+    let o1 = compile_display_functions(&source, baml_compiler_emit::OptLevel::One);
     let o1_refs: Vec<(String, &Function)> = o1.iter().map(|(n, f)| (n.clone(), f)).collect();
     let textual = display_program(&o1_refs, BytecodeFormat::Textual);
 
@@ -35,7 +36,7 @@ fn bytecode_display_formats() {
     let expanded = display_program(&o1_refs, BytecodeFormat::Expanded);
 
     // 3. Expanded format (unoptimized)
-    let o0 = compile_display_functions(source, baml_compiler_emit::OptLevel::Zero);
+    let o0 = compile_display_functions(&source, baml_compiler_emit::OptLevel::Zero);
     let o0_refs: Vec<(String, &Function)> = o0.iter().map(|(n, f)| (n.clone(), f)).collect();
     let expanded_unopt = display_program(&o0_refs, BytecodeFormat::Expanded);
 

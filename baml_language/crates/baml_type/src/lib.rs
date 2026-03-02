@@ -79,7 +79,7 @@ impl fmt::Display for TypeName {
 ///
 /// Every variant carries an `attr: TyAttr` (or trailing `TyAttr` for tuple
 /// variants) that holds SAP streaming annotations. All existing code uses
-/// `TyAttr::default()` — only Phase 3 (stream type generation) will populate
+/// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
 /// non-default values.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
@@ -174,7 +174,14 @@ impl Ty {
     // --- TyAttr accessor ---
 
     /// Replace the TyAttr on this type, returning a new Ty with the given attr.
+    /// Short-circuits if the attr is default (avoids unnecessary cloning).
+    ///
+    /// Used during HIR lowering to apply SAP attributes (sap_in_progress) to the
+    /// resolved type of generated stream_* class fields.
     pub fn with_attr(self, attr: TyAttr) -> Ty {
+        if attr.is_default() {
+            return self;
+        }
         match self {
             Ty::Int { .. } => Ty::Int { attr },
             Ty::Float { .. } => Ty::Float { attr },

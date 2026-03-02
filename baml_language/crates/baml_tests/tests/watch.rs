@@ -421,6 +421,17 @@ async fn watch_function_call_modifications() {
         unwatch point
         return
     }
+
+    function stream_Point.set(self: stream_Point, x: int, y: int) -> Point {
+        load_var self
+        load_var x
+        store_field .x
+        load_var self
+        load_var y
+        store_field .y
+        load_var self
+        return
+    }
     "#);
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));

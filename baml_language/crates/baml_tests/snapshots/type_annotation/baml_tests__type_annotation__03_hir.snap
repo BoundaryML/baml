@@ -8,6 +8,12 @@ type MetaList = type[]
 
 type MetaAlias = type
 
+type stream_MetaUnion = type | string
+
+type stream_MetaList = type[]
+
+type stream_MetaAlias = type
+
 function test_type_annotation(function_name: string) -> string {
     let t: type = baml.llm.get_return_type(function_name);
     return "ok";
@@ -25,6 +31,15 @@ class MetaField {
 enum Kind {
   type
   other
+}
+
+class stream_MetaField {
+  type: null | type
+}
+
+class stream_RiskFactor {
+  type: null | string
+  severity: null | float
 }
 
 function test_optional(function_name: string) -> string {

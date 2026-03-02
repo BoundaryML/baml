@@ -21,3 +21,23 @@ function Broken.BadUnionPattern(x: int | bool) -> string {
 class Broken {
   field: int
 }
+
+function stream_Broken.MixedLiteralAndTyped(x: int) -> string {
+    match (x) {
+        42 | n: int => "mixed",
+    }
+}
+
+function stream_Broken.Invalid() -> <unknown> {
+}
+
+function stream_Broken.BadUnionPattern(x: int | bool) -> string {
+    match (x) {
+        a: int | b => <missing>,
+        _: bool => "bad",
+    }
+}
+
+class stream_Broken {
+  field: null | int
+}

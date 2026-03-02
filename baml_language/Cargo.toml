@@ -39,6 +39,7 @@ baml_compiler_hir = { path = "crates/baml_compiler_hir" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
 baml_compiler_mir = { path = "crates/baml_compiler_mir" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
+baml_compiler_ppir = { path = "crates/baml_compiler_ppir" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
 baml_compiler_tir = { path = "crates/baml_compiler_tir" }
 baml_compiler_vir = { path = "crates/baml_compiler_vir" }

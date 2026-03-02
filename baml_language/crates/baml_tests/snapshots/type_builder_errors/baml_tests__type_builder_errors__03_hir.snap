@@ -41,3 +41,7 @@ test SingleTypeBuilderBlock {
     }
   }
 }
+
+class stream_Resume {
+  name: null | string
+}

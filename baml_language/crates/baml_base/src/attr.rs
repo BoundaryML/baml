@@ -26,6 +26,10 @@ pub enum SapConstValue {
     Bool(bool),
     EmptyList,
     EmptyMap,
+    EnumValue {
+        enum_name: String,
+        variant_name: String,
+    },
 }
 
 /// Non-default type attributes.

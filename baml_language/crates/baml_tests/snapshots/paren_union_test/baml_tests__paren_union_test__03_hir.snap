@@ -26,3 +26,28 @@ class Union {
   arr_opt_arr_fun_opt_opt_opt_arr_arr_opt_arr: ((Union | Union[]?[] | Union | Union) -> Union | Union[]?[] | Union | Union)???[][]?[]
   opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr: ((Union | Union?[]? | Union | Union) -> Union | Union?[]? | Union | Union)???[][]?[]
 }
+
+class stream_Union {
+  u: null | stream_Union | stream_Union | stream_Union | stream_Union
+  u_arr: never[] | (stream_Union | stream_Union | stream_Union | stream_Union)[]
+  u_arr_arr: never[] | (stream_Union | stream_Union)[]
+  u_arr_arr_arr: never[] | (stream_Union | stream_Union)[]
+  u_opt_arr: never[] | (stream_Union | stream_Union | stream_Union | stream_Union)[]
+  u_arr_opt: null | (stream_Union | stream_Union | stream_Union | stream_Union)[] | null
+  u_arr_opt_arr: never[] | (stream_Union | stream_Union | stream_Union | stream_Union)[]
+  u_opt_arr_opt: null | (stream_Union | stream_Union | stream_Union | stream_Union)[] | null
+  u_opt_arr_arr_opt_arr_arr: never[] | (stream_Union | stream_Union | stream_Union | stream_Union)[]
+  u_arr_opt_opt_arr_opt_opt: null | stream_Union | stream_Union | stream_Union | stream_Union | null
+  u_arr_arr_arr_opt_arr_arr_opt_opt_opt: null | stream_Union | stream_Union | stream_Union | stream_Union | null
+  u_opt_opt_opt_arr_opt_opt_arr_arr_arr: never[] | (stream_Union | stream_Union | stream_Union | stream_Union)[]
+  arr_opt_arr_u_arr_arr_arr_opt_opt_arr: never[] | (stream_Union | (stream_Union[] | null)[] | stream_Union | stream_Union)[]
+  opt_arr_opt_u_arr_arr_arr_opt_opt_arr: never[] | (stream_Union | (stream_Union | null)[] | null | stream_Union | stream_Union)[]
+  fun: null | unknown
+  fun_arr: never[] | unknown[]
+  fun_arr_opt: null | unknown[] | null
+  fun_opt: null | unknown | null
+  fun_opt_arr: never[] | unknown[]
+  fun_opt_opt_opt_arr_arr_opt_arr: never[] | unknown[]
+  arr_opt_arr_fun_opt_opt_opt_arr_arr_opt_arr: never[] | unknown[]
+  opt_arr_opt_fun_opt_opt_opt_arr_arr_opt_arr: never[] | unknown[]
+}

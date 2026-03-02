@@ -1563,7 +1563,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Placeholder for expression block parsing (Phase 4)
+    /// Parse an expression block (`{{ ... }}`).
     fn parse_expression_block(&mut self) {
         // For now, just consume the {{ }} tokens
         self.with_node(SyntaxKind::EXPR, |p| {

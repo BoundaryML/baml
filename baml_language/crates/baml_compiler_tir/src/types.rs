@@ -233,6 +233,40 @@ impl Ty {
         matches!(self, Ty::Media(..))
     }
 
+    /// Replace the `TyAttr` on this type, returning a new Ty with the given attr.
+    /// Short-circuits if the attr is default (avoids unnecessary cloning).
+    #[must_use]
+    pub fn with_attr(self, attr: TyAttr) -> Self {
+        if attr.is_default() {
+            return self;
+        }
+        match self {
+            Ty::Int { .. } => Ty::Int { attr },
+            Ty::Float { .. } => Ty::Float { attr },
+            Ty::String { .. } => Ty::String { attr },
+            Ty::Bool { .. } => Ty::Bool { attr },
+            Ty::Null { .. } => Ty::Null { attr },
+            Ty::Media(kind, _) => Ty::Media(kind, attr),
+            Ty::Literal(lit, _) => Ty::Literal(lit, attr),
+            Ty::Class(qn, _) => Ty::Class(qn, attr),
+            Ty::Enum(qn, _) => Ty::Enum(qn, attr),
+            Ty::TypeAlias(qn, _) => Ty::TypeAlias(qn, attr),
+            Ty::Optional(inner, _) => Ty::Optional(inner, attr),
+            Ty::List(inner, _) => Ty::List(inner, attr),
+            Ty::Map { key, value, .. } => Ty::Map { key, value, attr },
+            Ty::Union(types, _) => Ty::Union(types, attr),
+            Ty::Function { params, ret, .. } => Ty::Function { params, ret, attr },
+            Ty::Unknown { .. } => Ty::Unknown { attr },
+            Ty::Error { .. } => Ty::Error { attr },
+            Ty::Void { .. } => Ty::Void { attr },
+            Ty::Resource { .. } => Ty::Resource { attr },
+            Ty::BuiltinUnknown { .. } => Ty::BuiltinUnknown { attr },
+            Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
+            Ty::Never { .. } => Ty::Never { attr },
+            Ty::Type { .. } => Ty::Type { attr },
+        }
+    }
+
     /// Make this type optional.
     // The wrapper gets default attr because SAP attrs describe the wrapped type itself,
     // not the container. The inner type's attr is preserved on the inner type.

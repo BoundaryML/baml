@@ -22,7 +22,7 @@ pub fn find_function_at_position(
 
     for item_id in items.items(db) {
         if let ItemId::Function(func_loc) = item_id {
-            let item_tree = baml_compiler_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler_hir::file_item_tree(db, func_loc.file(db));
             let func = &item_tree[func_loc.id(db)];
             let func_name = &func.name;
 

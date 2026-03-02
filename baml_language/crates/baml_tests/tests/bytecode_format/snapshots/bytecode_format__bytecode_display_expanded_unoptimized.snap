@@ -320,3 +320,40 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
   88   161   return                  
        162   unreachable             
 }
+
+function stream_User.promote(self: stream_User, bonus: int) -> Report {
+  23   0    load_var 1          (self)
+       1    load_var 1          (self)
+       2    load_field 1        (age)
+       3    load_const 0        (1)
+       4    bin_op +            
+       5    store_field 1       (age)
+
+  27   6    load_var 1          (self)
+       7    load_var 2          (bonus)
+       8    call 62             (score)
+       9    store_var 3         (base)
+
+  31   10   load_var 3          (base)
+       11   load_field 0        (score)
+       12   load_var 2          (bonus)
+       13   bin_op +            
+       14   store_var 4         (new_score)
+
+  33   15   alloc_instance 12   (Report)
+       16   copy 0              
+
+  36   17   load_var 4          (new_score)
+       18   store_field 0       (score)
+       19   copy 0              
+
+  38   20   load_var 3          (base)
+       21   load_field 1        (label)
+       22   store_field 1       (label)
+       23   copy 0              
+
+  40   24   load_var 3          (base)
+       25   load_field 2        (breakdown)
+       26   store_field 2       (breakdown)
+       27   return              
+}

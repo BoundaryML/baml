@@ -219,10 +219,10 @@ pub fn compile_files(
 
     // Now add user-defined classes
     for file in files {
-        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Class(class_loc) = item {
+                let item_tree = baml_compiler_hir::file_item_tree(db, class_loc.file(db));
                 let class = &item_tree[class_loc.id(db)];
                 // Use FQN for builtin-file classes (e.g., "baml.llm.OrchestrationStep"),
                 // short name for user classes (e.g., "MyClass").
@@ -291,10 +291,10 @@ pub fn compile_files(
     let mut enum_object_indices: HashMap<String, usize> = HashMap::new();
 
     for file in files {
-        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Enum(enum_loc) = item {
+                let item_tree = baml_compiler_hir::file_item_tree(db, enum_loc.file(db));
                 let enum_def = &item_tree[enum_loc.id(db)];
                 let enum_name = enum_def.name.to_string();
 
@@ -600,10 +600,10 @@ pub fn compile_files(
     // First, collect all retry policies by name
     let mut retry_policies: HashMap<String, bex_vm_types::RetryPolicyMeta> = HashMap::new();
     for file in files {
-        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::RetryPolicy(rp_loc) = item {
+                let item_tree = baml_compiler_hir::file_item_tree(db, rp_loc.file(db));
                 let rp = &item_tree[rp_loc.id(db)];
                 let policy_name = rp.name.to_string();
                 retry_policies.insert(
@@ -641,10 +641,10 @@ pub fn compile_files(
 
     // Then, collect all clients with their metadata
     for file in files {
-        let item_tree = baml_compiler_hir::file_item_tree(db, *file);
         let items_struct = baml_compiler_hir::file_items(db, *file);
         for item in items_struct.items(db) {
             if let ItemId::Client(client_loc) = item {
+                let item_tree = baml_compiler_hir::file_item_tree(db, client_loc.file(db));
                 let client = &item_tree[client_loc.id(db)];
                 let client_name = client.name.to_string();
                 let provider = client.provider.as_str();
@@ -703,10 +703,10 @@ pub fn compile_files(
         }
 
         for file in files {
-            let item_tree = baml_compiler_hir::file_item_tree(db, *file);
             let items_struct = baml_compiler_hir::file_items(db, *file);
             for item in items_struct.items(db) {
                 if let ItemId::Test(test_loc) = item {
+                    let item_tree = baml_compiler_hir::file_item_tree(db, test_loc.file(db));
                     let test = &item_tree[test_loc.id(db)];
                     // Use the first function ref to look up param types.
                     let param_types = test

@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class Education {
+  school: string
+  degree: Degree
+  year: int
+}
+
+enum Degree {
+  Bachelors
+  Masters
+  PhD
+}
+
+type EducationList = Education[]
+
+class stream_Education {
+  school: null | string
+  degree: null | Degree
+  year: null | int
+}
+
+type stream_EducationList = stream_Education[]
+
+class Resume {
+  name: string
+  education: Education[]
+  highest_degree: Degree
+  aliases: EducationList
+}
+
+class stream_Resume {
+  name: null | string
+  education: never[] | stream_Education[]
+  highest_degree: null | Degree
+  aliases: null | stream_EducationList
+}

@@ -640,6 +640,14 @@ impl TypeExpr {
             .map(|n| TypeExpr { syntax: n })
             .last() // The return type is typically the last TYPE_EXPR
     }
+
+    /// Get all attributes attached to this type expression.
+    ///
+    /// These are ATTRIBUTE nodes that are direct children of the `TYPE_EXPR` node.
+    /// The parser creates these for type-level annotations like `@stream.done`.
+    pub fn attributes(&self) -> impl Iterator<Item = Attribute> {
+        self.syntax.children().filter_map(Attribute::cast)
+    }
 }
 
 /// A parameter in a function type expression.
@@ -1993,6 +2001,16 @@ impl Attribute {
     /// Check if this attribute has exactly one argument that is a string literal or unquoted string.
     pub fn has_single_string_or_unquoted_arg(&self) -> bool {
         self.arg_count() == 1 && self.arg_is_string_or_unquoted()
+    }
+
+    /// Get the `ATTRIBUTE_ARGS` syntax node as-is (for deferred parsing).
+    ///
+    /// Returns the raw `SyntaxNode` for the argument list. Used by PPIR to
+    /// clone the CST node for deferred parsing in later phases.
+    pub fn arg_syntax_node(&self) -> Option<SyntaxNode> {
+        self.syntax
+            .children()
+            .find(|child| child.kind() == SyntaxKind::ATTRIBUTE_ARGS)
     }
 }
 

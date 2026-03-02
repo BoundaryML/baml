@@ -11,3 +11,13 @@ class A {
 }
 
 type A = int
+
+class stream_A {
+  field: null | string
+}
+
+class stream_A {
+  field: null | string
+}
+
+type stream_A = int

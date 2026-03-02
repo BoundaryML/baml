@@ -39,6 +39,11 @@ class JsonData {
   field2: int
 }
 
+class stream_JsonData {
+  field1: null | int
+  field2: null | int
+}
+
 function ExtractData.render_prompt(text: string) -> baml.llm.PromptAst {
     baml.llm.render_prompt("ExtractData", { "text": text })
 }
@@ -96,4 +101,10 @@ class Analysis {
   sentiment: string
   keywords: string[]
   score: float
+}
+
+class stream_Analysis {
+  sentiment: null | string
+  keywords: never[] | string[]
+  score: null | float
 }

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function Foo() -> <unknown> {
@@ -28,6 +27,14 @@ class User {
   name: string
 }
 
+class stream_User {
+  name: null | string
+}
+
+class stream_Another {
+  field: null | int
+}
+
 function Incomplete(param1: string) -> <unknown> {
     // missing body
 }
@@ -49,10 +56,40 @@ enum ValidEnum {
   OPTION2
 }
 
+class stream_Partial {
+  field1: null | str
+  field2: <unknown>
+  sap: <unknown>
+  class_completed_field_missing: null
+  field3: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  field4: null | string
+
+  string: <unknown>
+  sap: <unknown>
+  class_completed_field_missing: null
+}
+
 class Test {
   field1: string
   field2: string
   another: closed
   string: ")  // Should still parse this
+}"
+}
+
+class stream_Test {
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  field1: null | string
+
+  @sap.class_in_progress_field_missing(null)
+  @sap.class_completed_field_missing(null)
+  field2: null | string
+
+  another: null | closed
+  string: never | ")  // Should still parse this
 }"
 }

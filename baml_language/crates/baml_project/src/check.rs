@@ -250,6 +250,11 @@ pub fn collect_diagnostics(
         }
     }
 
+    // Filter out diagnostics from synthetic stream expansion files.
+    // These are generated files (stream_* types) and their errors duplicate
+    // diagnostics already reported on the real source files.
+    diagnostics.retain(|d| d.file_id().is_none_or(|fid| !fid.is_stream_expansion()));
+
     diagnostics
 }
 
@@ -281,6 +286,14 @@ impl ProjectDatabase {
 
             sources.insert(file_id, text);
             file_paths.insert(file_id, path);
+
+            // Register virtual files from PPIR stream_* expansions
+            let synth = baml_compiler_ppir::ppir_expansion_cst(self, *source_file);
+            if let Some(synth_file) = synth.source_file(self) {
+                let synth_file_id = synth_file.file_id(self);
+                sources.insert(synth_file_id, synth_file.text(self).clone());
+                file_paths.insert(synth_file_id, synth_file.path(self));
+            }
         }
 
         // Use the shared collect_diagnostics function

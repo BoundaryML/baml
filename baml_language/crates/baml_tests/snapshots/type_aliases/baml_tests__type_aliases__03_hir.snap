@@ -20,6 +20,12 @@ type Json = int | float | string | Json[] | map<string, Json>
 
 type foo = bar
 
+type stream_bar = int
+
+type stream_Json = int | float | string | stream_Json[] | map<string, stream_Json>
+
+type stream_foo = stream_bar
+
 function EchoJSON(i: JSON) -> JSON {
     NotJSON { inner: "Whoops" }
 }
@@ -33,3 +39,9 @@ class NotJSON {
 }
 
 type JSON = int | float | string | bool | JSON[] | map<string, json>
+
+class stream_NotJSON {
+  inner: null | name
+}
+
+type stream_JSON = int | float | string | bool | stream_JSON[] | map<string, json>

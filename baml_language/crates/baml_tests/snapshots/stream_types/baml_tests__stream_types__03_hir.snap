@@ -1,0 +1,250 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class Resume {
+  name: string
+  age: int
+  type: "resume"
+  status: Status
+  education: Education[]
+  scores: int[]
+  metadata: map<string, string>
+}
+
+class Container {
+  matrix: int[][]
+  grid: TreeNode[][]
+  groups: map<string, TreeNode[]>
+}
+
+class WithNested {
+  matrix: int[][]
+  class_matrix: Inner[][]
+  nested_map: map<string, int[]>
+  class_nested_map: map<string, Inner[]>
+}
+
+class Primitives {
+  name: string
+  count: int
+  flag: bool
+  score: float
+}
+
+class WithLiterals {
+  type: "resume"
+  version: 1
+  enabled: true
+}
+
+class WithUnions {
+  simple: int | string
+  with_class: Inner | Primitives
+  mixed: int | Inner
+}
+
+class TreeNode {
+  value: string
+  children: TreeNode[]
+}
+
+class Education {
+  school: string
+  year: int
+}
+
+class AllDefaults {
+  name: string
+  age: int
+  score: float
+  active: bool
+  type: "resume"
+  version: 42
+  status: Status
+  edu: Education
+  scores: int[]
+  education: Education[]
+  nested_edu: Education[][]
+  edu_map: map<string, Education>
+  data: AliasedType
+  mixed: int | Education
+  maybe: string?
+  maybe_list: int[]?
+}
+
+class WithEnum {
+  status: Status
+}
+
+class DynamicClass {
+  name: string
+  @@dynamic
+}
+
+class WithLists {
+  strings: string[]
+  ints: int[]
+  classes: Inner[]
+}
+
+class Outer {
+  inner: Inner
+}
+
+class WithMaps {
+  simple: map<string, int>
+  complex: map<string, Inner>
+}
+
+class WithOptionals {
+  name: string?
+  inner: Inner?
+  items: int[]?
+}
+
+class Inner {
+  value: string
+}
+
+enum Status {
+  Active
+  Inactive
+}
+
+type UnionAlias = int | Inner
+
+type SimpleAlias = string
+
+type OptionalAlias = Inner?
+
+type ClassAlias = Inner
+
+type Bar = Foo | bool
+
+type MixedType = int | Education
+
+type Foo = int | string
+
+type AliasedType = string | int
+
+class stream_Primitives {
+  name: null | string
+  count: null | int
+  flag: null | bool
+  score: null | float
+}
+
+class stream_Outer {
+  inner: null | stream_Inner
+}
+
+class stream_Education {
+  school: null | string
+  year: null | int
+}
+
+class stream_DynamicClass {
+  name: null | string
+  @@dynamic
+}
+
+class stream_WithMaps {
+  simple: map<string, never> | map<string, int>
+  complex: map<string, never> | map<string, stream_Inner>
+}
+
+class stream_TreeNode {
+  value: null | string
+  children: never[] | stream_TreeNode[]
+}
+
+class stream_WithOptionals {
+  name: null | string | null
+  inner: null | stream_Inner | null
+  items: null | int[] | null
+}
+
+class stream_WithUnions {
+  simple: null | int | string
+  with_class: null | stream_Inner | stream_Primitives
+  mixed: null | int | stream_Inner
+}
+
+class stream_Container {
+  matrix: never[] | int[][]
+  grid: never[] | stream_TreeNode[][]
+  groups: map<string, never> | map<string, stream_TreeNode[]>
+}
+
+class stream_WithLists {
+  strings: never[] | string[]
+  ints: never[] | int[]
+  classes: never[] | stream_Inner[]
+}
+
+class stream_WithLiterals {
+  type: never | "resume"
+  version: never | 1
+  enabled: never | true
+}
+
+class stream_Resume {
+  name: null | string
+  age: null | int
+  type: never | "resume"
+  status: null | Status
+  education: never[] | stream_Education[]
+  scores: never[] | int[]
+  metadata: map<string, never> | map<string, string>
+}
+
+class stream_Inner {
+  value: null | string
+}
+
+class stream_WithEnum {
+  status: null | Status
+}
+
+class stream_AllDefaults {
+  name: null | string
+  age: null | int
+  score: null | float
+  active: null | bool
+  type: never | "resume"
+  version: never | 42
+  status: null | Status
+  edu: null | stream_Education
+  scores: never[] | int[]
+  education: never[] | stream_Education[]
+  nested_edu: never[] | stream_Education[][]
+  edu_map: map<string, never> | map<string, stream_Education>
+  data: null | stream_AliasedType
+  mixed: null | int | stream_Education
+  maybe: null | string | null
+  maybe_list: null | int[] | null
+}
+
+class stream_WithNested {
+  matrix: never[] | int[][]
+  class_matrix: never[] | stream_Inner[][]
+  nested_map: map<string, never> | map<string, int[]>
+  class_nested_map: map<string, never> | map<string, stream_Inner[]>
+}
+
+type stream_MixedType = int | stream_Education
+
+type stream_Bar = stream_Foo | bool
+
+type stream_UnionAlias = int | stream_Inner
+
+type stream_SimpleAlias = string
+
+type stream_Foo = int | string
+
+type stream_OptionalAlias = stream_Inner | null
+
+type stream_ClassAlias = stream_Inner
+
+type stream_AliasedType = string | int

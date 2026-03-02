@@ -12,3 +12,10 @@ class Todo {
   completed: bool
   userId: int
 }
+
+class stream_Todo {
+  id: null | int
+  title: null | string
+  completed: null | bool
+  userId: null | int
+}

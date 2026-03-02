@@ -38,3 +38,16 @@ class NestedGenerics {
 }
 
 type BadAlias = map<string, int>
+
+class stream_NestedGenerics {
+  nested: map<string, never> | map<string, map<string, int>>
+  simple: map<string, never> | map<string, int>
+}
+
+class stream_MalformedClass {
+  bad_field: map<string, never> | map<string, int>
+  good_field: map<string, never> | map<string, int>
+  another_field: null | string
+}
+
+type stream_BadAlias = map<string, int>

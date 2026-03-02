@@ -107,6 +107,11 @@ impl<'a> TypeLoweringContextResolved<'a> {
 }
 
 /// Lower a `TypeRef` with validation and resolution context.
+///
+/// Propagates the `TyAttr` carried on each HIR `TypeRef` variant into the
+/// corresponding TIR `Ty`. For leaf types the attr is used directly; for
+/// recursive types (Optional, List, Union, …) the outer attr goes on the
+/// outer `Ty`, and inner `TypeRef`s carry their own attrs (lowered recursively).
 fn lower_type_ref_resolved_with_ctx(
     ctx: &mut TypeLoweringContextResolved<'_>,
     type_ref: &TypeRef,
@@ -145,7 +150,7 @@ fn lower_type_ref_resolved_with_ctx(
             let key_ty = lower_type_ref_resolved_with_ctx(ctx, key);
             ctx.current_path.pop();
 
-            ctx.current_path.push(1); // Map value is at index 1
+            ctx.current_path.push(1);
             let value_ty = lower_type_ref_resolved_with_ctx(ctx, value);
             ctx.current_path.pop();
 
@@ -161,7 +166,7 @@ fn lower_type_ref_resolved_with_ctx(
                 .iter()
                 .enumerate()
                 .map(|(i, t)| {
-                    ctx.current_path.push(i); // Union variant is at its index
+                    ctx.current_path.push(i);
                     let ty = lower_type_ref_resolved_with_ctx(ctx, t);
                     ctx.current_path.pop();
                     ty

@@ -1,0 +1,170 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class Person {
+  name: string
+  age: int
+}
+
+class AnnotatedResume {
+  name: string
+  gpa: float
+  title: string
+  internal_id: string
+  token: string
+}
+
+class TypeCategoryOverrides {
+  items: Person[]
+  maybe: string?
+  internal: string
+  data: map<string, int>
+}
+
+class NotNullEducation {
+  school: string
+  year: int
+}
+
+class ReferencesNotNull {
+  name: string
+  education: NotNullEducation
+  status: NotNullStatus
+  educations: NotNullEducation[]
+  optional_education: NotNullEducation?
+}
+
+class AtomicPoint {
+  x: float
+  y: float
+}
+
+class AtomicWithOverride {
+  x: float
+  y: float
+}
+
+class Education {
+  school: string
+  year: int
+}
+
+class WithDesugaring {
+  done_string: string
+  not_null_string: string
+  not_null_class: Inner
+  done_and_not_null: string
+  type_never: string
+  type_never_literal: "resume"
+}
+
+class StatusResponse {
+  status: Status
+  message: string
+}
+
+class WithDone {
+  type: "resume"
+  name: string
+  id: string
+}
+
+class ExplicitAnnotations {
+  name: string
+  gpa: float
+  certifications: Education[][]
+  internal: string
+}
+
+class Inner {
+  value: string
+}
+
+enum NotNullStatus {
+  Active
+  Inactive
+}
+
+enum Status {
+  Loading
+  Ready
+  Error
+}
+
+class stream_StatusResponse {
+  status: Status | Status
+  message: null | string
+}
+
+class stream_Education {
+  school: null | string
+  year: null | int
+}
+
+class stream_TypeCategoryOverrides {
+  items: null | string
+  maybe: null | int
+}
+
+class stream_AnnotatedResume {
+  name: null | string
+  gpa: never | float
+  title: "Loading..." | string
+  token: never | string
+}
+
+class stream_ExplicitAnnotations {
+  name: "Loading..." | string
+  gpa: never | float
+  certifications: null | Education
+}
+
+class stream_ReferencesNotNull {
+  name: null | string
+  education: never | stream_NotNullEducation
+  status: never | NotNullStatus
+  educations: never[] | stream_NotNullEducation[]
+  optional_education: null | stream_NotNullEducation | null
+}
+
+class stream_WithDone {
+  type: never | "resume"
+  name: null | string
+  id: never | string
+}
+
+class stream_AtomicPoint {
+  @@sap.in_progress(never)
+
+  x: null | float
+  y: null | float
+}
+
+class stream_WithDesugaring {
+  done_string: null | string
+  not_null_string: never | string
+  not_null_class: never | stream_Inner
+  done_and_not_null: never | string
+}
+
+class stream_Person {
+  name: null | string
+  age: null | int
+}
+
+class stream_Inner {
+  value: null | string
+}
+
+class stream_AtomicWithOverride {
+  @@sap.in_progress(never)
+
+  x: null | float
+  y: null | float
+}
+
+class stream_NotNullEducation {
+  school: null | string
+  year: null | int
+}

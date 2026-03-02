@@ -5321,3 +5321,15 @@ function WithMethod.greet() -> string {
     load_const "hello"
     return
 }
+
+function stream_WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+    load_const 1
+    load_const "result"
+    alloc_map 1
+    return
+}
+
+function stream_WithMethod.greet() -> string {
+    load_const "hello"
+    return
+}

@@ -43,3 +43,7 @@ test MyTest {
     type MyAlias = string | int
   }
 }
+
+class stream_TopLevelClass {
+  a: null | string
+}

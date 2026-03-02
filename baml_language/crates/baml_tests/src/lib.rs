@@ -200,11 +200,32 @@ fn format_node_recursive(node: &baml_db::baml_compiler_syntax::SyntaxNode, depth
 #[cfg(test)]
 use baml_compiler_hir::type_ref_to_str as format_type_ref;
 
+// Helper for formatting SAP attribute values in HIR snapshots
+#[cfg(test)]
+fn format_sap_attr_value(value: &baml_base::attr::SapAttrValue) -> String {
+    use baml_base::attr::{SapAttrValue, SapConstValue};
+    match value {
+        SapAttrValue::Never => "never".to_string(),
+        SapAttrValue::ConstValueExpr(c) => match c {
+            SapConstValue::Null => "null".to_string(),
+            SapConstValue::String(s) => format!("\"{}\"", s),
+            SapConstValue::Int(i) => i.to_string(),
+            SapConstValue::Float(f) => f.clone(),
+            SapConstValue::Bool(b) => b.to_string(),
+            SapConstValue::EmptyList => "[]".to_string(),
+            SapConstValue::EmptyMap => "{}".to_string(),
+            SapConstValue::EnumValue {
+                enum_name,
+                variant_name,
+            } => format!("{enum_name}.{variant_name}"),
+        },
+    }
+}
+
 // Helper function for formatting HIR items from a specific file
 #[cfg(test)]
-fn format_hir_file(
+fn format_hir_items(
     db: &baml_project::ProjectDatabase,
-    source_file: baml_db::SourceFile,
     items: &[baml_db::baml_compiler_hir::ItemId],
 ) -> String {
     use std::fmt::Write;
@@ -212,13 +233,12 @@ fn format_hir_file(
     use baml_compiler_hir::{function_body, function_signature, template_string_signature};
     use baml_db::baml_compiler_hir::ItemId;
 
-    // Get the ItemTree once and keep it alive for all lookups
-    let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, source_file);
     let mut result = String::new();
 
     for item in items {
         match item {
             ItemId::Function(func_id) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, func_id.file(db));
                 let func = &item_tree[func_id.id(db)];
                 let sig = function_signature(db, *func_id);
                 let body = function_body(db, *func_id);
@@ -281,16 +301,71 @@ fn format_hir_file(
                 writeln!(result).unwrap(); // blank line after function
             }
             ItemId::Class(class_id) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, class_id.file(db));
                 let class = &item_tree[class_id.id(db)];
                 writeln!(result, "class {} {{", class.name).unwrap();
-                for field in &class.fields {
+                if let Some(inner) = class.ty_attr.0.as_ref() {
                     writeln!(
                         result,
-                        "  {}: {}",
-                        field.name,
-                        format_type_ref(&field.type_ref)
+                        "  @@sap.in_progress({})",
+                        format_sap_attr_value(&inner.sap_in_progress)
                     )
                     .unwrap();
+                    writeln!(result).unwrap(); // blank line after @@ attribute
+                }
+                for (i, field) in class.fields.iter().enumerate() {
+                    let field_has_attr = field.field_attr.0.is_some();
+                    // Insert blank line between fields when either adjacent field has a @ attribute
+                    if i > 0 && (field_has_attr || class.fields[i - 1].field_attr.0.is_some()) {
+                        writeln!(result).unwrap();
+                    }
+                    // Field attributes on preceding lines
+                    if let Some(in_progress) = field
+                        .field_attr
+                        .0
+                        .as_ref()
+                        .map(|inner| &inner.sap_class_in_progress_field_missing)
+                    {
+                        writeln!(
+                            result,
+                            "  @sap.class_in_progress_field_missing({})",
+                            format_sap_attr_value(in_progress)
+                        )
+                        .unwrap();
+                    }
+                    if let Some(completed) = field
+                        .field_attr
+                        .0
+                        .as_ref()
+                        .map(|inner| &inner.sap_class_completed_field_missing)
+                    {
+                        writeln!(
+                            result,
+                            "  @sap.class_completed_field_missing({})",
+                            format_sap_attr_value(completed)
+                        )
+                        .unwrap();
+                    }
+
+                    let type_str = format_type_ref(&field.type_ref);
+                    write!(result, "  {}: ", field.name).unwrap();
+                    if let Some(val) = field
+                        .type_ref
+                        .attr()
+                        .0
+                        .as_ref()
+                        .map(|inner| &inner.sap_in_progress)
+                    {
+                        writeln!(
+                            result,
+                            "({} @sap.in_progress({}))",
+                            type_str,
+                            format_sap_attr_value(val),
+                        )
+                        .unwrap();
+                    } else {
+                        writeln!(result, "{}", type_str).unwrap();
+                    }
                 }
                 if class.is_dynamic.is_explicit() {
                     writeln!(result, "  @@dynamic").unwrap();
@@ -299,8 +374,17 @@ fn format_hir_file(
                 writeln!(result).unwrap(); // blank line after class
             }
             ItemId::Enum(enum_id) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, enum_id.file(db));
                 let enum_def = &item_tree[enum_id.id(db)];
                 writeln!(result, "enum {} {{", enum_def.name).unwrap();
+                if let Some(inner) = enum_def.ty_attr.0.as_ref() {
+                    writeln!(
+                        result,
+                        "  @@sap.in_progress({})",
+                        format_sap_attr_value(&inner.sap_in_progress)
+                    )
+                    .unwrap();
+                }
                 for variant in &enum_def.variants {
                     writeln!(result, "  {}", variant.name).unwrap();
                 }
@@ -308,6 +392,7 @@ fn format_hir_file(
                 writeln!(result).unwrap(); // blank line after enum
             }
             ItemId::TypeAlias(alias_id) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, alias_id.file(db));
                 let alias = &item_tree[alias_id.id(db)];
                 writeln!(
                     result,
@@ -319,6 +404,7 @@ fn format_hir_file(
                 writeln!(result).unwrap(); // blank line after type alias
             }
             ItemId::Client(client_id) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, client_id.file(db));
                 let client = &item_tree[client_id.id(db)];
                 writeln!(result, "client {} {{", client.name).unwrap();
                 writeln!(result, "  provider: {}", client.provider).unwrap();
@@ -326,6 +412,7 @@ fn format_hir_file(
                 writeln!(result).unwrap(); // blank line after client
             }
             ItemId::Test(test_id) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, test_id.file(db));
                 let test = &item_tree[test_id.id(db)];
                 writeln!(result, "test {} {{", test.name).unwrap();
                 if !test.function_refs.is_empty() {
@@ -393,6 +480,7 @@ fn format_hir_file(
                 writeln!(result).unwrap(); // blank line after test
             }
             ItemId::Generator(gen_id) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, gen_id.file(db));
                 let generator = &item_tree[gen_id.id(db)];
                 writeln!(result, "generator {} {{", generator.name).unwrap();
                 if let Some(ref output_type) = generator.output_type {
@@ -408,6 +496,7 @@ fn format_hir_file(
                 writeln!(result).unwrap(); // blank line after generator
             }
             ItemId::TemplateString(ts_id) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, ts_id.file(db));
                 let ts = &item_tree[ts_id.id(db)];
                 let sig = template_string_signature(db, *ts_id);
 
@@ -429,6 +518,7 @@ fn format_hir_file(
                 writeln!(result).unwrap(); // blank line after template_string
             }
             ItemId::RetryPolicy(rp_loc) => {
+                let item_tree = baml_db::baml_compiler_hir::file_item_tree(db, rp_loc.file(db));
                 let rp = &item_tree[rp_loc.id(db)];
                 writeln!(result, "retry_policy {}", rp.name).unwrap();
                 writeln!(result).unwrap();

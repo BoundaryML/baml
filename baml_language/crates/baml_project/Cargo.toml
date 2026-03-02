@@ -26,6 +26,7 @@ baml_compiler_diagnostics = { workspace = true }
 baml_compiler_emit = { workspace = true }
 baml_compiler_hir = { workspace = true }
 baml_compiler_mir = { workspace = true }
+baml_compiler_ppir = { workspace = true }
 baml_compiler_tir = { workspace = true }
 baml_compiler_vir = { workspace = true }
 baml_db = { workspace = true }

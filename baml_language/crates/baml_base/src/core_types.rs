@@ -6,13 +6,70 @@ use ariadne;
 use smol_str::SmolStr;
 use text_size::{TextRange, TextSize};
 
-/// Unique identifier for a source file
+/// Unique identifier for a source file.
+///
+/// ## Bit layout
+///
+/// ```text
+///   3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1
+///   1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
+///  ├─┬─┬─┬─┼───────────────────────────────────────────────────────────┤
+///  │ tag   │                    index (28 bits)                        │
+///  └───────┴──────────────────────────────────────────────────────────-┘
+/// ```
+///
+/// - **tag `0x0`** — real file (assigned by the host database)
+/// - **tag `0x1`** — synthetic stream expansion of the origin file at `index`
+/// - **tag `0xF`** — sentinel / fake (used by `Span::fake()` and `Span::default()`)
+///
+/// ## Why not `enum FileId { Real(u32), Stream(u32), Sentinel }`?
+///
+/// `FileId` is stored inside every `Span` (`file_id` + `TextRange` = 12 bytes).
+/// An enum would widen `FileId` from 4 to 8 bytes (discriminant + alignment),
+/// inflating `Span` from 12 to 16 bytes — a 33% increase across millions of spans.
+///
+/// ## Prior art
+///
+/// - **Roslyn** (C#): synthetic `SyntaxTree`s constructed with a virtual file path.
+/// - **Clang**: bit 31 of `SourceLocation` distinguishes file vs macro-expansion locs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct FileId(u32);
 
 impl FileId {
+    /// Create a `FileId` for a real source file.
+    ///
+    /// # Panics
+    /// Panics if `id` uses the top 4 bits (reserved for tags).
     pub fn new(id: u32) -> Self {
+        assert!(
+            id & 0xF000_0000 == 0,
+            "FileId::new({id}) exceeds 28-bit limit — top 4 bits are reserved"
+        );
         FileId(id)
+    }
+
+    /// Sentinel value for fake/default spans. Not a real file.
+    ///
+    /// Bypasses the `new()` assert — the sentinel uses tag `0xF`.
+    pub fn sentinel() -> FileId {
+        FileId(u32::MAX)
+    }
+
+    /// Create a synthetic `FileId` for the stream expansion of `origin`.
+    ///
+    /// Sets tag `0x1` on the origin's index bits. Deterministic: same origin
+    /// always produces the same synthetic id.
+    pub fn stream_expansion(origin: FileId) -> FileId {
+        debug_assert!(
+            origin.0 & 0xF000_0000 == 0,
+            "cannot expand a non-origin FileId"
+        );
+        FileId(origin.0 | 0x1000_0000)
+    }
+
+    /// Returns `true` if this `FileId` refers to a synthetic stream expansion file.
+    pub fn is_stream_expansion(self) -> bool {
+        self.0 & 0xF000_0000 == 0x1000_0000
     }
 
     pub fn as_u32(self) -> u32 {
@@ -59,7 +116,7 @@ impl Span {
     /// Uses a sentinel `FileId` (`u32::MAX`) that's unlikely to conflict with real files.
     pub fn fake() -> Self {
         Span {
-            file_id: FileId::new(u32::MAX),
+            file_id: FileId::sentinel(),
             range: TextRange::empty(TextSize::new(0)),
         }
     }

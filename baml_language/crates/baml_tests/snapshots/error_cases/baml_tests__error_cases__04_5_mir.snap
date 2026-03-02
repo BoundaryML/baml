@@ -59,3 +59,61 @@ fn Broken.Invalid() -> null {
 
 fn Broken.BadUnionPattern:
   (no MIR due to errors: missing expression at file 4294967295:0..0)
+
+fn stream_Broken.MixedLiteralAndTyped(x: int) -> string {
+    // Locals:
+    let _0: string // return
+    let _1: int // x // param
+    let _2: bool
+    let _3: bool
+    let _4: int // n
+
+    bb0: {
+        _2 = copy _1 == const 42_i64;
+        branch copy _2 -> [bb4, bb5];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        unreachable;
+    }
+
+    bb4: {
+        _0 = const "mixed";
+        goto -> bb2;
+    }
+
+    bb5: {
+        _3 = is_type(copy _1, Int { attr: TyAttr(None) });
+        branch copy _3 -> [bb6, bb3];
+    }
+
+    bb6: {
+        _4 = copy _1;
+        goto -> bb4;
+    }
+}
+
+fn stream_Broken.Invalid() -> null {
+    // Locals:
+    let _0: null // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn stream_Broken.BadUnionPattern:
+  (no MIR due to errors: missing expression at file 4294967295:0..0)
