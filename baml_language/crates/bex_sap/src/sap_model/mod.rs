@@ -3,6 +3,7 @@
 
 mod assertions;
 mod from_literal;
+mod test_macros;
 mod type_name;
 
 use std::{borrow::Cow, fmt::Display};

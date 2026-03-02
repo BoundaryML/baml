@@ -37,6 +37,12 @@ pub type ValueWithFlags<'s, 'v, 't, T, N> = ValueWithMeta<T, DeserializerMeta<'s
 pub type BamlValueWithFlags<'s, 'v, 't, N> =
     ValueWithFlags<'s, 'v, 't, BamlValue<'s, 'v, 't, N>, N>;
 
+impl<N: TypeIdent> serde::Serialize for BamlValueWithFlags<'_, '_, '_, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.value.serialize(serializer)
+    }
+}
+
 impl<N: TypeIdent> std::fmt::Debug for BamlValueWithFlags<'_, '_, '_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value {

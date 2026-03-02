@@ -142,3 +142,116 @@ where
 /// - `M`: The type of metadata.
 /// - `N`: the type used by the host to identify a type reference (i.e. enum or class name).
 pub type BamlValueWithMeta<'s, 'v, 't, M, N> = ValueWithMeta<BamlValue<'s, 'v, 't, N>, M>;
+
+// --- serde::Serialize implementations ---
+
+impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlValue<'s, 'v, 't, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            BamlValue::String(s) => s.serialize(serializer),
+            BamlValue::Int(i) => i.serialize(serializer),
+            BamlValue::Float(f) => f.serialize(serializer),
+            BamlValue::Bool(b) => b.serialize(serializer),
+            BamlValue::Null(n) => n.serialize(serializer),
+            BamlValue::Media(m) => m.serialize(serializer),
+            BamlValue::Array(a) => a.serialize(serializer),
+            BamlValue::Map(m) => m.serialize(serializer),
+            BamlValue::Enum(e) => e.serialize(serializer),
+            BamlValue::Class(c) => c.serialize(serializer),
+            BamlValue::StreamState(s) => s.serialize(serializer),
+        }
+    }
+}
+
+impl serde::Serialize for BamlString<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.value)
+    }
+}
+
+impl serde::Serialize for BamlInt {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_i64(self.value)
+    }
+}
+
+impl serde::Serialize for BamlFloat {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_f64(self.value)
+    }
+}
+
+impl serde::Serialize for BamlBool {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bool(self.value)
+    }
+}
+
+impl serde::Serialize for BamlNull {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_none()
+    }
+}
+
+impl serde::Serialize for BamlMedia {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str("<media>")
+    }
+}
+
+impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlArray<'s, 'v, 't, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.value.len()))?;
+        for item in &self.value {
+            seq.serialize_element(&item.value)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlMap<'s, 'v, 't, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.value.len()))?;
+        for (key, val) in &self.value {
+            map.serialize_entry(key.as_ref(), &val.value)?;
+        }
+        map.end()
+    }
+}
+
+impl<N: TypeIdent> serde::Serialize for BamlEnum<'_, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.value)
+    }
+}
+
+impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlClass<'s, 'v, 't, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.value.len()))?;
+        for (key, val) in &self.value {
+            map.serialize_entry(key, &val.value)?;
+        }
+        map.end()
+    }
+}
+
+impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlStreamState<'s, 'v, 't, N> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(2))?;
+        match self {
+            BamlStreamState::Incomplete(inner) => {
+                map.serialize_entry("value", &inner.value)?;
+                map.serialize_entry("state", "Incomplete")?;
+            }
+            BamlStreamState::Complete(inner) => {
+                map.serialize_entry("value", &inner.value)?;
+                map.serialize_entry("state", "Complete")?;
+            }
+        }
+        map.end()
+    }
+}
