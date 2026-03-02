@@ -14,6 +14,9 @@ pub mod vm;
 pub mod incremental;
 
 #[cfg(test)]
+pub mod stream_generate;
+
+#[cfg(test)]
 pub mod stream_normalize;
 
 #[cfg(test)]
@@ -80,6 +83,25 @@ fn format_node_recursive(node: &baml_db::baml_compiler_syntax::SyntaxNode, depth
 // Use the shared type_ref_to_str function from baml_compiler_hir
 #[cfg(test)]
 use baml_compiler_hir::type_ref_to_str as format_type_ref;
+
+// Helper for formatting SAP attribute values in HIR snapshots
+#[cfg(test)]
+fn format_sap_attr_value(value: &baml_base::sap::SapAttrValue) -> String {
+    use baml_base::sap::{SapAttrValue, SapConstValue};
+    match value {
+        SapAttrValue::DefaultForType => "default".to_string(),
+        SapAttrValue::Never => "never".to_string(),
+        SapAttrValue::ConstValueExpr(c) => match c {
+            SapConstValue::Null => "null".to_string(),
+            SapConstValue::String(s) => format!("\"{}\"", s),
+            SapConstValue::Int(i) => i.to_string(),
+            SapConstValue::Float(f) => f.clone(),
+            SapConstValue::Bool(b) => b.to_string(),
+            SapConstValue::EmptyList => "[]".to_string(),
+            SapConstValue::EmptyMap => "{}".to_string(),
+        },
+    }
+}
 
 // Helper function for formatting HIR items from a specific file
 #[cfg(test)]
@@ -165,13 +187,32 @@ fn format_hir_file(
                 let class = &item_tree[class_id.id(db)];
                 writeln!(result, "class {} {{", class.name).unwrap();
                 for field in &class.fields {
-                    writeln!(
-                        result,
-                        "  {}: {}",
-                        field.name,
-                        format_type_ref(&field.type_ref)
-                    )
-                    .unwrap();
+                    let has_ty_attr = !field.ty_attr.is_default();
+                    let has_field_attr = !field.field_attr.is_default();
+                    let type_str = format_type_ref(&field.type_ref);
+                    write!(result, "  {}: ", field.name).unwrap();
+                    if has_ty_attr {
+                        // Wrap (type @sap.in_progress(...) @sap.on_error(...)) as a unit
+                        write!(
+                            result,
+                            "({} @sap.in_progress({}) @sap.on_error({}))",
+                            type_str,
+                            format_sap_attr_value(field.ty_attr.sap_in_progress()),
+                            format_sap_attr_value(field.ty_attr.sap_on_error()),
+                        )
+                        .unwrap();
+                    } else {
+                        write!(result, "{}", type_str).unwrap();
+                    }
+                    if has_field_attr {
+                        write!(
+                            result,
+                            " @sap.missing({})",
+                            format_sap_attr_value(field.field_attr.sap_missing()),
+                        )
+                        .unwrap();
+                    }
+                    writeln!(result).unwrap();
                 }
                 if class.is_dynamic.is_explicit() {
                     writeln!(result, "  @@dynamic").unwrap();

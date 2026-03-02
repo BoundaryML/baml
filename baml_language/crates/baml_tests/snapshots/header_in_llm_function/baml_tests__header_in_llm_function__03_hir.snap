@@ -19,7 +19,7 @@ function FetchDatax.render_prompt(user_id: string) -> baml.llm.PromptAst {
 }
 
 class stream_Hi {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class Hi {

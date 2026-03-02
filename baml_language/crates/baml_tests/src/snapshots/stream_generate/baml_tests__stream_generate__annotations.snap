@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/stream_generate.rs
+---
+class stream_Education {
+  school: null | string  @sap.missing(Null)
+  year: null | int  @sap.missing(Null)
+}
+
+class stream_AnnotatedResume {
+  name: null | string  @sap.in_progress(never) @sap.missing(Null)
+  gpa: float  @sap.missing(never)
+  title: string  @sap.missing(String("Loading..."))
+  token: string  @sap.in_progress(never) @sap.missing(never)
+}
+
+class stream_AtomicPoint {
+  x: float  @sap.in_progress(never) @sap.missing(never)
+  y: float  @sap.in_progress(never) @sap.missing(never)
+}
+
+class stream_AtomicWithOverride {
+  x: float  @sap.in_progress(never) @sap.missing(never)
+  y: null | float  @sap.in_progress(never) @sap.missing(Null)
+}

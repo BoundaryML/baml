@@ -7,5 +7,5 @@ class Union {
 }
 
 class stream_Union {
-  u: null | stream_Union | stream_Union | stream_Union | stream_Union
+  u: null | stream_Union | stream_Union | stream_Union @sap.missing(null)
 }

@@ -3,19 +3,19 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class stream_Education {
-  school: null | string
-  year: null | int
+  school: null | string @sap.missing(null)
+  year: null | int @sap.missing(null)
 }
 
 class stream_AtomicCoordinate {
-  x: float
-  y: float
+  x: (float @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
+  y: (float @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
 }
 
 class stream_WithDone {
-  type: "resume"
-  name: null | string
-  id: string
+  type: ("resume" @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
+  name: (null | string @sap.in_progress(never) @sap.on_error(default)) @sap.missing(null)
+  id: (string @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
 }
 
 class AtomicWithOverride {
@@ -29,8 +29,8 @@ class Education {
 }
 
 class stream_AtomicWithOverride {
-  x: float
-  y: null | float
+  x: (float @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
+  y: (null | float @sap.in_progress(never) @sap.on_error(default)) @sap.missing(null)
 }
 
 class WithDone {

@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/stream_generate.rs
+---
+class stream_TreeNode {
+  value: null | string  @sap.missing(Null)
+  children: stream_TreeNode[]  @sap.missing(EmptyList)
+}
+
+class stream_Container {
+  matrix: int[][]  @sap.missing(EmptyList)
+  grid: stream_TreeNode[][]  @sap.missing(EmptyList)
+  groups: map<string, stream_TreeNode[]>  @sap.missing(EmptyMap)
+}
+
+type stream_Bar = stream_Foo | bool
+
+type stream_Foo = int | string

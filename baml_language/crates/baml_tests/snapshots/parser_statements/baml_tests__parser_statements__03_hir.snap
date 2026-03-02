@@ -194,8 +194,8 @@ function let_statements() -> int {
 }
 
 class stream_Point {
-  x: null | int
-  y: null | int
+  x: null | int @sap.missing(null)
+  y: null | int @sap.missing(null)
 }
 
 class Point {

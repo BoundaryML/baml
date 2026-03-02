@@ -2145,6 +2145,8 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 description: field_description,
                 skip: field_skip,
                 stream: None,
+                field_attr: Default::default(),
+                ty_attr: Default::default(),
             });
         }
     }

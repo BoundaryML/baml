@@ -56,6 +56,9 @@ pub(crate) fn convert_ppir_class(ppir_class: &baml_compiler_ppir::Class) -> Clas
             // Stream annotations are not set on generated stream_* class fields;
             // they live on the original user class fields.
             stream: None,
+            // SAP attributes propagated from PPIR Phase 3 computation.
+            field_attr: pf.field_attr.clone(),
+            ty_attr: pf.ty_attr.clone(),
         })
         .collect();
 

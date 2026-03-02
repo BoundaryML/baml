@@ -27,8 +27,8 @@ function intArray() -> int[] {
 }
 
 class stream_Point {
-  x: null | int
-  y: null | int
+  x: null | int @sap.missing(null)
+  y: null | int @sap.missing(null)
 }
 
 class Point {
@@ -45,8 +45,8 @@ function vec2d() -> Vec2D {
 }
 
 class stream_Point {
-  x: null | int
-  y: null | int
+  x: null | int @sap.missing(null)
+  y: null | int @sap.missing(null)
 }
 
 class Vec2D {
@@ -60,8 +60,8 @@ class Point {
 }
 
 class stream_Vec2D {
-  p: null | stream_Point
-  q: null | stream_Point
+  p: null | stream_Point @sap.missing(null)
+  q: null | stream_Point @sap.missing(null)
 }
 
 function boolValues() -> map<string, bool> {

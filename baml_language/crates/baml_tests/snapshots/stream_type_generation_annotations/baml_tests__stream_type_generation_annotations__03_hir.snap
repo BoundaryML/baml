@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class AnnotatedResume {
+  name: string
+  gpa: float
+  title: string
+  internal_id: string
+  token: string
+}
+
+class stream_Education {
+  school: null | string @sap.missing(null)
+  year: null | int @sap.missing(null)
+}
+
+class stream_AnnotatedResume {
+  name: (null | string @sap.in_progress(never) @sap.on_error(default)) @sap.missing(null)
+  gpa: float @sap.missing(never)
+  title: string @sap.missing("Loading...")
+  token: (string @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
+}
+
+class AtomicPoint {
+  x: float
+  y: float
+}
+
+class stream_AtomicPoint {
+  x: (float @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
+  y: (float @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
+}
+
+class AtomicWithOverride {
+  x: float
+  y: float
+}
+
+class Education {
+  school: string
+  year: int
+}
+
+class stream_AtomicWithOverride {
+  x: (float @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
+  y: (null | float @sap.in_progress(never) @sap.on_error(default)) @sap.missing(null)
+}

@@ -124,9 +124,9 @@ class ChainItem {
 }
 
 class stream_ChainProfile {
-  bio: null | string
-  settings: null | stream_ChainSettings
-  items: never[] | stream_ChainItem[]
+  bio: null | string @sap.missing(null)
+  settings: null | stream_ChainSettings @sap.missing(null)
+  items: stream_ChainItem[] @sap.missing([])
 }
 
 class ChainSettings {
@@ -149,16 +149,16 @@ class ChainUser {
 }
 
 class stream_ChainUser {
-  name: null | string
-  profile: null | stream_ChainProfile
-  tags: never[] | string[]
-  scores: never[] | int[][]
+  name: null | string @sap.missing(null)
+  profile: null | stream_ChainProfile @sap.missing(null)
+  tags: string[] @sap.missing([])
+  scores: int[][] @sap.missing([])
 }
 
 class stream_ChainSettings {
-  theme: null | string
-  notifications: null | bool
-  preferences: null | stream_ChainPreferences
+  theme: null | string @sap.missing(null)
+  notifications: null | bool @sap.missing(null)
+  preferences: null | stream_ChainPreferences @sap.missing(null)
 }
 
 class ChainPreferences {
@@ -168,9 +168,9 @@ class ChainPreferences {
 }
 
 class stream_ChainItem {
-  label: null | string
-  value: null | int
-  metadata: null | stream_ChainMetadata
+  label: null | string @sap.missing(null)
+  value: null | int @sap.missing(null)
+  metadata: null | stream_ChainMetadata @sap.missing(null)
 }
 
 class ChainMetadata {
@@ -179,14 +179,14 @@ class ChainMetadata {
 }
 
 class stream_ChainMetadata {
-  created_at: null | string
-  tags: never[] | string[]
+  created_at: null | string @sap.missing(null)
+  tags: string[] @sap.missing([])
 }
 
 class stream_ChainPreferences {
-  color: null | string
-  font: null | string
-  size: null | int
+  color: null | string @sap.missing(null)
+  font: null | string @sap.missing(null)
+  size: null | int @sap.missing(null)
 }
 
 function WithMethod.greet() -> string {
@@ -202,7 +202,7 @@ class WithLongMethod {
 }
 
 class stream_SingleField {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class TriviaMultiAttrBlock {
@@ -230,10 +230,10 @@ class TypeVariety {
 }
 
 class stream_Outer {
-  inner: null | stream_InnerNested
-  list: never[] | stream_InnerNested[]
-  optional: null | stream_InnerNested | null
-  mapping: map<string, never> | map<string, stream_InnerNested>
+  inner: null | stream_InnerNested @sap.missing(null)
+  list: stream_InnerNested[] @sap.missing([])
+  optional: null | stream_InnerNested @sap.missing(null)
+  mapping: map<string, stream_InnerNested> @sap.missing({})
 }
 
 class MultiBlockAttr {
@@ -252,25 +252,25 @@ class ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterL
 }
 
 class stream_A {
-  x: null | int
+  x: null | int @sap.missing(null)
 }
 
 class stream_TriviaFieldAttrsBlock {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_ColonFields {
-  name: null | string
-  age: null | int
+  name: null | string @sap.missing(null)
+  age: null | int @sap.missing(null)
 }
 
 class stream_TriviaMultiAttr {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_DeepLevel2 {
-  level3: null | stream_DeepLevel3
-  value: null | int | string | bool | float | null
+  level3: null | stream_DeepLevel3 @sap.missing(null)
+  value: null | int | string | bool | float @sap.missing(null)
 }
 
 class TriviaClass {
@@ -278,7 +278,7 @@ class TriviaClass {
 }
 
 class stream_DynamicClass {
-  name: null | string
+  name: null | string @sap.missing(null)
   @@dynamic
 }
 
@@ -290,15 +290,15 @@ class SingleField {
 }
 
 class stream_InnerNested {
-  value: null | int
+  value: null | int @sap.missing(null)
 }
 
 class stream_TriviaLongFieldType {
-  data: map<string, never> | map<string, int | string | bool | float | null>
+  data: map<string, int | string | bool | float | null> @sap.missing({})
 }
 
 class stream_TriviaLongFieldTypeBlock {
-  data: map<string, never> | map<string, int | string | bool | float | null>
+  data: map<string, int | string | bool | float | null> @sap.missing({})
 }
 
 class ExtraWhitespace {
@@ -313,24 +313,24 @@ class LongAttrField {
 }
 
 class stream_AttributeVariety {
-  a: null | string
-  b: null | string
-  c: null | string
-  d: null | string
-  e: string
-  f: null | string
+  a: null | string @sap.missing(null)
+  b: null | string @sap.missing(null)
+  c: null | string @sap.missing(null)
+  d: (null | string @sap.in_progress(never) @sap.on_error(default)) @sap.missing(null)
+  e: string @sap.missing(never)
+  f: null | string @sap.missing(null)
 }
 
 class stream_ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself {
-  x: null | int
+  x: null | int @sap.missing(null)
 }
 
 class stream_SingleAttrField {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_MultiBlockAttr {
-  name: null | string
+  name: null | string @sap.missing(null)
   @@dynamic
 }
 
@@ -344,9 +344,9 @@ class AttributeVariety {
 }
 
 class stream_DeepLevel1 {
-  level2: null | stream_DeepLevel2
-  items: never[] | stream_DeepLevel2[]
-  mapping: map<string, never> | map<string, stream_DeepLevel2>
+  level2: null | stream_DeepLevel2 @sap.missing(null)
+  items: stream_DeepLevel2[] @sap.missing([])
+  mapping: map<string, stream_DeepLevel2> @sap.missing({})
 }
 
 class TriviaLongFieldType {
@@ -358,11 +358,11 @@ class SingleAttrField {
 }
 
 class stream_TriviaClass {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_DeepOuter {
-  level1: null | stream_DeepLevel1
+  level1: null | stream_DeepLevel1 @sap.missing(null)
 }
 
 class InnerNested {
@@ -374,7 +374,7 @@ class TriviaMultiAttr {
 }
 
 class stream_TriviaMultiAttrBlock {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class TriviaClassBlock {
@@ -382,9 +382,9 @@ class TriviaClassBlock {
 }
 
 class stream_MultiField {
-  name: null | string
-  age: null | int
-  active: null | bool
+  name: null | string @sap.missing(null)
+  age: null | int @sap.missing(null)
+  active: null | bool @sap.missing(null)
 }
 
 class TriviaLongFieldTypeBlock {
@@ -392,8 +392,8 @@ class TriviaLongFieldTypeBlock {
 }
 
 class stream_DeepLevel3 {
-  data: null | string
-  nested: map<string, never> | map<string, map<string, int>>
+  data: null | string @sap.missing(null)
+  nested: map<string, map<string, int>> @sap.missing({})
 }
 
 class ManyFields {
@@ -450,37 +450,37 @@ class DeepOuter {
 }
 
 class stream_ManyFields {
-  field1: null | int
-  field2: null | int
-  field3: null | int
-  field4: null | int
-  field5: null | int
-  field6: null | int
-  field7: null | int
-  field8: null | int
-  field9: null | int
-  field10: null | int
+  field1: null | int @sap.missing(null)
+  field2: null | int @sap.missing(null)
+  field3: null | int @sap.missing(null)
+  field4: null | int @sap.missing(null)
+  field5: null | int @sap.missing(null)
+  field6: null | int @sap.missing(null)
+  field7: null | int @sap.missing(null)
+  field8: null | int @sap.missing(null)
+  field9: null | int @sap.missing(null)
+  field10: null | int @sap.missing(null)
 }
 
 class stream_MultiAttrField {
-  name: null | string
-  summary: null | string | null
+  name: null | string @sap.missing(null)
+  summary: null | string @sap.missing(null)
 }
 
 class stream_TypeVariety {
-  simple: null | string
-  optional: null | string | null
-  array: never[] | int[]
-  nested_array: never[] | int[][]
-  union_type: null | int | string
-  optional_union: null | int | string | null
-  union_array: never[] | (int | string)[]
-  generic: map<string, never> | map<string, int>
-  complex_generic: map<string, never> | map<string, int | string | bool>
-  deep_generic: map<string, never> | map<string, map<string, int[]>>
-  fn_type: null | <error>
-  paren_union_array: never[] | (int | string | bool)[]
-  triple_nested: map<string, never> | map<string, map<string, map<string, int>>>
+  simple: null | string @sap.missing(null)
+  optional: null | string @sap.missing(null)
+  array: int[] @sap.missing([])
+  nested_array: int[][] @sap.missing([])
+  union_type: null | int | string @sap.missing(null)
+  optional_union: null | int | string @sap.missing(null)
+  union_array: (int | string)[] @sap.missing([])
+  generic: map<string, int> @sap.missing({})
+  complex_generic: map<string, int | string | bool> @sap.missing({})
+  deep_generic: map<string, map<string, int[]>> @sap.missing({})
+  fn_type: null | <error> @sap.missing(null)
+  paren_union_array: (int | string | bool)[] @sap.missing([])
+  triple_nested: map<string, map<string, map<string, int>>> @sap.missing({})
 }
 
 class A {
@@ -488,14 +488,14 @@ class A {
 }
 
 class stream_LongAttrField {
-  name: null | string
-  data: map<string, never> | map<string, int | string | bool>
-  config: map<string, never> | map<string, map<string, int | string | bool | null>>
+  name: null | string @sap.missing(null)
+  data: map<string, int | string | bool> @sap.missing({})
+  config: map<string, map<string, int | string | bool | null>> @sap.missing({})
 }
 
 class stream_ExtraWhitespace {
-  name: null | string
-  age: null | int
+  name: null | string @sap.missing(null)
+  age: null | int @sap.missing(null)
 }
 
 class MultiAttrField {
@@ -509,7 +509,7 @@ class DeepLevel3 {
 }
 
 class stream_TriviaFieldAttrs {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class DeepLevel1 {
@@ -519,18 +519,18 @@ class DeepLevel1 {
 }
 
 class stream_WithLongMethod {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_TriviaClassBlock {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_LongFieldTypes {
-  very_long_field_name_that_takes_up_space: null | int | string | bool | float | null | int[] | string[]
-  another_long_field: map<string, never> | map<string, map<string, map<string, int | string | bool | float | null>>>
-  callback_field: null | <error>
-  deeply_nested: null | (int | string | bool | float | null)[] | null
+  very_long_field_name_that_takes_up_space: null | int | string | bool | float | int[] | string[] @sap.missing(null)
+  another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>> @sap.missing({})
+  callback_field: null | <error> @sap.missing(null)
+  deeply_nested: null | (int | string | bool | float | null)[] @sap.missing(null)
 }
 
 class TriviaFieldAttrsBlock {
@@ -538,7 +538,7 @@ class TriviaFieldAttrsBlock {
 }
 
 class stream_WithMethod {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 function ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
@@ -1852,11 +1852,11 @@ class MatchSuccess {
 }
 
 class stream_MatchFailure {
-  reason: null | string
+  reason: null | string @sap.missing(null)
 }
 
 class stream_MatchSuccess {
-  data: null | string
+  data: null | string @sap.missing(null)
 }
 
 class MatchFailure {
@@ -1981,9 +1981,9 @@ class OtherPoint {
 }
 
 class stream_OtherTriple {
-  a: null | stream_OtherVec
-  b: null | stream_OtherVec
-  c: null | stream_OtherVec
+  a: null | stream_OtherVec @sap.missing(null)
+  b: null | stream_OtherVec @sap.missing(null)
+  c: null | stream_OtherVec @sap.missing(null)
 }
 
 class OtherTriple {
@@ -1993,8 +1993,8 @@ class OtherTriple {
 }
 
 class stream_OtherVec {
-  p: null | stream_OtherPoint
-  q: null | stream_OtherPoint
+  p: null | stream_OtherPoint @sap.missing(null)
+  q: null | stream_OtherPoint @sap.missing(null)
 }
 
 class OtherVec {
@@ -2003,8 +2003,8 @@ class OtherVec {
 }
 
 class stream_OtherPoint {
-  x: null | int
-  y: null | int
+  x: null | int @sap.missing(null)
+  y: null | int @sap.missing(null)
 }
 
 template_string TriviaVeryLongTemplateNameWithParameters(first_parameter: string, second_parameter: int, third_parameter: bool)
@@ -2041,11 +2041,11 @@ template_string TriviaWrappingParams(first_parameter: map<string, int | string |
 template_string VeryLongComplexParams(first_parameter: map<string, int | string | bool>, second_parameter: (int | string)[], third_parameter: map<string, map<string, int>>, fourth_parameter: (x: int) -> string)
 template_string MultiParamTriviaBlock(a: string, b: int)
 class stream_TypeAliasSuccess {
-  data: null | string
+  data: null | string @sap.missing(null)
 }
 
 class stream_TypeAliasFailure {
-  reason: null | string
+  reason: null | string @sap.missing(null)
 }
 
 class TypeAliasFailure {

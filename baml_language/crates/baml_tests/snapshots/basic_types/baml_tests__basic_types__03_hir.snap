@@ -3,13 +3,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class stream_FieldAttributes {
-  money: null | int
-  currency: null | string
-  name: null | string
-  summary: null | string
-  details: string | null
-  state: null | string
-  multiple: null | string | null
+  money: null | int @sap.missing(null)
+  currency: null | string @sap.missing(null)
+  name: null | string @sap.missing(null)
+  summary: (null | string @sap.in_progress(never) @sap.on_error(default)) @sap.missing(null)
+  details: string | null @sap.missing(never)
+  state: null | string @sap.missing(null)
+  multiple: null | string @sap.missing(null)
 }
 
 class FieldAttributes {
@@ -28,7 +28,7 @@ class ClassAttributes {
 }
 
 class stream_ClassAttributes {
-  name: null | string
+  name: null | string @sap.missing(null)
   @@dynamic
 }
 
@@ -81,9 +81,9 @@ function GetMixedList.render_prompt() -> baml.llm.PromptAst {
 }
 
 class stream_User {
-  id: null | int
-  name: null | string
-  email: null | string
+  id: null | int @sap.missing(null)
+  name: null | string @sap.missing(null)
+  email: null | string @sap.missing(null)
 }
 
 class User {

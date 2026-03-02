@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/stream_generate.rs
+---
+class stream_Education {
+  school: null | string  @sap.missing(Null)
+  year: null | int  @sap.missing(Null)
+}
+
+class stream_Resume {
+  name: null | string  @sap.missing(Null)
+  age: null | int  @sap.missing(Null)
+  type: "resume"  @sap.missing(never)
+  status: null | Status  @sap.missing(Null)
+  education: stream_Education[]  @sap.missing(EmptyList)
+  scores: int[]  @sap.missing(EmptyList)
+  metadata: map<string, string>  @sap.missing(EmptyMap)
+}
+
+type stream_MixedType = int | stream_Education

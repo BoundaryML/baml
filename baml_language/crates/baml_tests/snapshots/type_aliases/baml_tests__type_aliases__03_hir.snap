@@ -39,7 +39,7 @@ class NotJSON {
 }
 
 class stream_NotJSON {
-  inner: null | name
+  inner: null | name @sap.missing(null)
 }
 
 type JSON = int | float | string | bool | JSON[] | map<string, json>

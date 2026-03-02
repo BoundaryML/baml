@@ -3,9 +3,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class stream_Education {
-  school: null | string
-  degree: null | Degree
-  year: null | int
+  school: null | string @sap.missing(null)
+  degree: null | Degree @sap.missing(null)
+  year: null | int @sap.missing(null)
 }
 
 class Education {
@@ -32,8 +32,8 @@ class Resume {
 }
 
 class stream_Resume {
-  name: null | string
-  education: never[] | stream_Education[]
-  highest_degree: null | Degree
-  aliases: null | stream_EducationList
+  name: null | string @sap.missing(null)
+  education: stream_Education[] @sap.missing([])
+  highest_degree: null | Degree @sap.missing(null)
+  aliases: null | stream_EducationList @sap.missing(null)
 }

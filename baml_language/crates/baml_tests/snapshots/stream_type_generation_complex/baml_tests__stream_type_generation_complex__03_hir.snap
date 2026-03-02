@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class Container {
+  matrix: int[][]
+  grid: TreeNode[][]
+  groups: map<string, TreeNode[]>
+}
+
+class stream_TreeNode {
+  value: null | string @sap.missing(null)
+  children: stream_TreeNode[] @sap.missing([])
+}
+
+class stream_Container {
+  matrix: int[][] @sap.missing([])
+  grid: stream_TreeNode[][] @sap.missing([])
+  groups: map<string, stream_TreeNode[]> @sap.missing({})
+}
+
+class TreeNode {
+  value: string
+  children: TreeNode[]
+}
+
+type stream_Bar = stream_Foo | bool
+
+type Bar = Foo | bool
+
+type Foo = int | string
+
+type stream_Foo = int | string

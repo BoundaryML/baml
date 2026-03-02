@@ -1,0 +1,42 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class Resume {
+  name: string
+  age: int
+  type: "resume"
+  status: Status
+  education: Education[]
+  scores: int[]
+  metadata: map<string, string>
+}
+
+class stream_Education {
+  school: null | string @sap.missing(null)
+  year: null | int @sap.missing(null)
+}
+
+class Education {
+  school: string
+  year: int
+}
+
+class stream_Resume {
+  name: null | string @sap.missing(null)
+  age: null | int @sap.missing(null)
+  type: "resume" @sap.missing(never)
+  status: null | Status @sap.missing(null)
+  education: stream_Education[] @sap.missing([])
+  scores: int[] @sap.missing([])
+  metadata: map<string, string> @sap.missing({})
+}
+
+enum Status {
+  Active
+  Inactive
+}
+
+type stream_MixedType = int | stream_Education
+
+type MixedType = int | Education

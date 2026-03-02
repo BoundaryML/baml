@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class stream_A {
-  field: null | string
+  field: null | string @sap.missing(null)
 }
 
 class A {

@@ -27,14 +27,14 @@ function BadParam(x: map<string, int>) -> string {
 }
 
 class stream_NestedGenerics {
-  nested: map<string, never> | map<string, map<string, int>>
-  simple: map<string, never> | map<string, int>
+  nested: map<string, map<string, int>> @sap.missing({})
+  simple: map<string, int> @sap.missing({})
 }
 
 class stream_MalformedClass {
-  bad_field: map<string, never> | map<string, int>
-  good_field: map<string, never> | map<string, int>
-  another_field: null | string
+  bad_field: map<string, int> @sap.missing({})
+  good_field: map<string, int> @sap.missing({})
+  another_field: null | string @sap.missing(null)
 }
 
 class MalformedClass {

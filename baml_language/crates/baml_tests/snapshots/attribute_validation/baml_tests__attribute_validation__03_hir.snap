@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class stream_HasDuplicateDescription {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class HasDuplicateField {
@@ -13,13 +13,13 @@ class HasDuplicateField {
 }
 
 class stream_HasDuplicateFieldAttr {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_HasDuplicateField {
-  name: null | string
-  age: null | int
-  name: null | int
+  name: null | string @sap.missing(null)
+  age: null | int @sap.missing(null)
+  name: null | int @sap.missing(null)
 }
 
 class HasDuplicateDescription {

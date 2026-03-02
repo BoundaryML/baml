@@ -15,8 +15,8 @@ function HelloWorld(name: string) -> string {
 }
 
 class stream_User {
-  name: null | string
-  age: null | int
+  name: null | string @sap.missing(null)
+  age: null | int @sap.missing(null)
 }
 
 class User {

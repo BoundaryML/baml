@@ -650,11 +650,11 @@ function EnumVariantUnionWithCatchAll(s: Status) -> string {
 }
 
 class stream_Fish {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_Pending {
-  eta: null | int
+  eta: null | int @sap.missing(null)
 }
 
 class Success {
@@ -670,7 +670,7 @@ class Fish {
 }
 
 class stream_Cat {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class Bird {
@@ -678,11 +678,11 @@ class Bird {
 }
 
 class stream_Bird {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_Success {
-  data: null | string
+  data: null | string @sap.missing(null)
 }
 
 class Cat {
@@ -694,11 +694,11 @@ class Dog {
 }
 
 class stream_Failure {
-  reason: null | string
+  reason: null | string @sap.missing(null)
 }
 
 class stream_Dog {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class Failure {

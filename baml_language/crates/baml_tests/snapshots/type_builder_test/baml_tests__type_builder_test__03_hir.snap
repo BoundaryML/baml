@@ -15,7 +15,7 @@ function Fn() -> string {
 }
 
 class stream_TopLevelClass {
-  a: null | string
+  a: null | string @sap.missing(null)
 }
 
 class TopLevelClass {

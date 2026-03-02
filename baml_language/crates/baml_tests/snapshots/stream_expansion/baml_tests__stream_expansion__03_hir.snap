@@ -3,11 +3,11 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class stream_Outer {
-  inner: null | stream_Inner
+  inner: null | stream_Inner @sap.missing(null)
 }
 
 class stream_Inner {
-  value: null | string
+  value: null | string @sap.missing(null)
 }
 
 class Outer {
@@ -19,8 +19,8 @@ class Inner {
 }
 
 class stream_WithMaps {
-  simple: map<string, never> | map<string, int>
-  complex: map<string, never> | map<string, stream_Inner>
+  simple: map<string, int> @sap.missing({})
+  complex: map<string, stream_Inner> @sap.missing({})
 }
 
 class WithNested {
@@ -31,9 +31,9 @@ class WithNested {
 }
 
 class stream_WithLists {
-  strings: never[] | string[]
-  ints: never[] | int[]
-  classes: never[] | stream_Inner[]
+  strings: string[] @sap.missing([])
+  ints: int[] @sap.missing([])
+  classes: stream_Inner[] @sap.missing([])
 }
 
 class WithLists {
@@ -48,17 +48,17 @@ class WithMaps {
 }
 
 class stream_WithNested {
-  matrix: never[] | int[][]
-  class_matrix: never[] | stream_Inner[][]
-  nested_map: map<string, never> | map<string, int[]>
-  class_nested_map: map<string, never> | map<string, stream_Inner[]>
+  matrix: int[][] @sap.missing([])
+  class_matrix: stream_Inner[][] @sap.missing([])
+  nested_map: map<string, int[]> @sap.missing({})
+  class_nested_map: map<string, stream_Inner[]> @sap.missing({})
 }
 
 class stream_WithDesugaring {
-  done_string: null | string
-  not_null_string: string
-  not_null_class: stream_Inner
-  done_and_not_null: string
+  done_string: (null | string @sap.in_progress(never) @sap.on_error(default)) @sap.missing(null)
+  not_null_string: string @sap.missing(never)
+  not_null_class: stream_Inner @sap.missing(never)
+  done_and_not_null: (string @sap.in_progress(never) @sap.on_error(default)) @sap.missing(never)
 }
 
 class WithDesugaring {
@@ -71,7 +71,7 @@ class WithDesugaring {
 }
 
 class stream_DynamicClass {
-  name: null | string
+  name: null | string @sap.missing(null)
   @@dynamic
 }
 
@@ -85,7 +85,7 @@ class WithEnum {
 }
 
 class stream_WithEnum {
-  status: null | Status
+  status: null | Status @sap.missing(null)
 }
 
 enum Status {
@@ -100,16 +100,16 @@ class WithLiterals {
 }
 
 class stream_WithLiterals {
-  type: "resume"
-  version: 1
-  enabled: true
+  type: "resume" @sap.missing(never)
+  version: 1 @sap.missing(never)
+  enabled: true @sap.missing(never)
 }
 
 class stream_Primitives {
-  name: null | string
-  count: null | int
-  flag: null | bool
-  score: null | float
+  name: null | string @sap.missing(null)
+  count: null | int @sap.missing(null)
+  flag: null | bool @sap.missing(null)
+  score: null | float @sap.missing(null)
 }
 
 class Primitives {
@@ -136,15 +136,15 @@ type stream_OptionalAlias = stream_Inner | null
 type stream_ClassAlias = stream_Inner
 
 class stream_WithOptionals {
-  name: null | string | null
-  inner: null | stream_Inner | null
-  items: null | int[] | null
+  name: null | string @sap.missing(null)
+  inner: null | stream_Inner @sap.missing(null)
+  items: null | int[] @sap.missing(null)
 }
 
 class stream_WithUnions {
-  simple: null | int | string
-  with_class: null | stream_Inner | stream_Primitives
-  mixed: null | int | stream_Inner
+  simple: null | int | string @sap.missing(null)
+  with_class: null | stream_Inner | stream_Primitives @sap.missing(null)
+  mixed: null | int | stream_Inner @sap.missing(null)
 }
 
 class WithUnions {

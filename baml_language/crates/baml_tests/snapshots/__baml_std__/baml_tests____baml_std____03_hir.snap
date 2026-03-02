@@ -221,8 +221,8 @@ function PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub
 }
 
 class stream_OrchestrationStep {
-  primitive_client: null | baml.llm.PrimitiveClient
-  delay_ms: null | int
+  primitive_client: null | baml.llm.PrimitiveClient @sap.missing(null)
+  delay_ms: null | int @sap.missing(null)
 }
 
 class ExecutionResult {
@@ -231,18 +231,18 @@ class ExecutionResult {
 }
 
 class stream_ExecutionResult {
-  ok: null | bool
-  value: null | unknown
+  ok: null | bool @sap.missing(null)
+  value: null | unknown @sap.missing(null)
 }
 
 class stream_PlannerState {
-  rr_client_names: never[] | string[]
+  rr_client_names: string[] @sap.missing([])
 }
 
 class stream_ExecutionContext {
-  jinja_string: null | string
-  args: map<string, never> | map<string, unknown>
-  function_name: null | string
+  jinja_string: null | string @sap.missing(null)
+  args: map<string, unknown> @sap.missing({})
+  function_name: null | string @sap.missing(null)
 }
 
 class ExecutionContext {

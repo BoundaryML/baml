@@ -34,7 +34,7 @@ function Baz.Greeting(self: Baz) -> string {
 }
 
 class stream_Baz {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class Baz {

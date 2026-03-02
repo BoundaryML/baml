@@ -7,10 +7,10 @@ function GetTodo() -> Todo {
 }
 
 class stream_Todo {
-  id: null | int
-  title: null | string
-  completed: null | bool
-  userId: null | int
+  id: null | int @sap.missing(null)
+  title: null | string @sap.missing(null)
+  completed: null | bool @sap.missing(null)
+  userId: null | int @sap.missing(null)
 }
 
 class Todo {

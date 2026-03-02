@@ -20,7 +20,7 @@ function test_type_annotation(function_name: string) -> string {
 }
 
 class stream_MetaField {
-  type: null | type
+  type: null | type @sap.missing(null)
 }
 
 class RiskFactor {
@@ -29,8 +29,8 @@ class RiskFactor {
 }
 
 class stream_RiskFactor {
-  type: null | string
-  severity: null | float
+  type: null | string @sap.missing(null)
+  severity: null | float @sap.missing(null)
 }
 
 class MetaField {

@@ -7,6 +7,7 @@
 use std::ops::Index;
 
 use baml_base::Name;
+use baml_base::sap::{FieldAttr, TyAttr};
 use indexmap::IndexMap;
 use rowan::TextRange;
 use rustc_hash::FxHashMap;
@@ -300,6 +301,12 @@ pub struct Field {
     /// Normalized streaming annotations. Set after PPIR normalization pass.
     /// None for fields not yet normalized (e.g., during initial lowering).
     pub stream: Option<NormalizedStreamAnnotations>,
+    /// SAP field attribute (sap_missing). Populated on generated `stream_*` class fields.
+    /// Default for user-defined class fields.
+    pub field_attr: FieldAttr,
+    /// SAP type attribute (sap_in_progress). Populated on generated `stream_*` class fields.
+    /// Default for user-defined class fields.
+    pub ty_attr: TyAttr,
 }
 
 /// Fully normalized streaming annotations for a field.

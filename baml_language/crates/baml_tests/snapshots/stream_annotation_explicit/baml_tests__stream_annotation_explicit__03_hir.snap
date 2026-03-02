@@ -3,14 +3,14 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class stream_Education {
-  school: null | string
-  year: null | int
+  school: null | string @sap.missing(null)
+  year: null | int @sap.missing(null)
 }
 
 class stream_ExplicitAnnotations {
-  name: null | string
-  gpa: float
-  certifications: null | Education
+  name: string @sap.missing("Loading...")
+  gpa: float @sap.missing(never)
+  certifications: null | Education @sap.missing(null)
 }
 
 class Education {

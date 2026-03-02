@@ -1,0 +1,23 @@
+// Test basic stream_* class generation with default annotations.
+
+enum Status {
+    Active
+    Inactive
+}
+
+class Education {
+    school string
+    year int
+}
+
+class Resume {
+    name string
+    age int
+    type "resume"
+    status Status
+    education Education[]
+    scores int[]
+    metadata map<string, string>
+}
+
+type MixedType = int | Education

@@ -23,18 +23,18 @@ class Settings {
 }
 
 class stream_User {
-  name: null | string
-  profile: null | stream_Profile
-  tags: never[] | string[]
+  name: null | string @sap.missing(null)
+  profile: null | stream_Profile @sap.missing(null)
+  tags: string[] @sap.missing([])
 }
 
 class stream_Profile {
-  bio: null | string
-  settings: null | stream_Settings
+  bio: null | string @sap.missing(null)
+  settings: null | stream_Settings @sap.missing(null)
 }
 
 class stream_Settings {
-  theme: null | string
+  theme: null | string @sap.missing(null)
 }
 
 class User {
@@ -58,9 +58,9 @@ function IndexAccess(users: IndexUser[]) -> string {
 }
 
 class stream_IndexUser {
-  name: null | string
-  age: null | int
-  tags: never[] | string[]
+  name: null | string @sap.missing(null)
+  age: null | int @sap.missing(null)
+  tags: string[] @sap.missing([])
 }
 
 class IndexUser {

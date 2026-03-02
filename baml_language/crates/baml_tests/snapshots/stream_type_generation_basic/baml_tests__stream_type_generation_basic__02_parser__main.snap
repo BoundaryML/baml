@@ -1,0 +1,86 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "Active"
+      WORD "Active"
+    ENUM_VARIANT "Inactive"
+      WORD "Inactive"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Education"
+    L_BRACE "{"
+    FIELD
+      WORD "school"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "year"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Resume"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "type"
+      TYPE_EXPR
+        STRING_LITERAL "resume"
+          QUOTE """
+          WORD "resume"
+          QUOTE """
+    FIELD
+      WORD "status"
+      TYPE_EXPR "Status"
+        WORD "Status"
+    FIELD
+      WORD "education"
+      TYPE_EXPR "Education[]"
+        WORD "Education"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "scores"
+      TYPE_EXPR "int[]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "metadata"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "string"
+            WORD "string"
+          GREATER ">"
+    R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "MixedType"
+    EQUALS "="
+    TYPE_EXPR "int | Education"
+      WORD "int"
+      PIPE "|"
+      WORD "Education"
+
+=== ERRORS ===
+None

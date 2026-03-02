@@ -4,12 +4,13 @@
 //! sap_in_progress_never) and per-alias expanded bodies. Phase 3 consumes
 //! these to synthesize `stream_*` class and type alias definitions.
 
-use baml_base::Name;
+use baml_base::{Name, sap::{FieldAttr, SapAttrValue, SapConstValue, TyAttr}};
 use baml_compiler_syntax::{GreenNode, SyntaxNode};
 use smol_str::SmolStr;
 
 use crate::{
     PpirNames,
+    normalize::{StartsAs, StartsAsLiteral},
     ty::{PpirField, PpirTy, PpirTypeAttrs},
 };
 
@@ -116,6 +117,10 @@ pub struct Field {
     pub alias: Option<String>,
     pub description: Option<String>,
     pub skip: bool,
+    /// SAP field attribute (sap_missing) computed from normalized starts_as.
+    pub field_attr: FieldAttr,
+    /// SAP type attribute (sap_in_progress) computed from in_progress_never.
+    pub ty_attr: TyAttr,
 }
 
 /// A generated `stream_*` type alias (bridge output for HIR).
@@ -271,9 +276,12 @@ pub fn default_starts_as(d: &PpirTy) -> PpirTy {
 // ──────────────────────────────────────────── MAKE UNION ─────
 //
 
-/// Build a union `PpirTy` from S and D, with minimal simplification.
+/// Build a union `PpirTy` from S and D, with structural simplification.
 ///
-/// Only simplifies `never | T → T` and `T | T → T`.
+/// Simplifies:
+/// - `never | T → T` and `T | T → T`
+/// - `list<never> | list<T> → list<T>` (empty list subsumed by any list)
+/// - `map<K, never> | map<K, V> → map<K, V>` (empty map subsumed by any map)
 pub(crate) fn make_union(s: PpirTy, d: PpirTy) -> PpirTy {
     if s == d {
         return s;
@@ -281,6 +289,28 @@ pub(crate) fn make_union(s: PpirTy, d: PpirTy) -> PpirTy {
     match (&s, &d) {
         (PpirTy::Never { .. }, _) => d,
         (_, PpirTy::Never { .. }) => s,
+        // list<never> | list<T> → list<T> (empty list subsumed)
+        (PpirTy::List { inner: s_inner, .. }, PpirTy::List { .. })
+            if matches!(**s_inner, PpirTy::Never { .. }) =>
+        {
+            d
+        }
+        (PpirTy::List { .. }, PpirTy::List { inner: d_inner, .. })
+            if matches!(**d_inner, PpirTy::Never { .. }) =>
+        {
+            s
+        }
+        // map<K, never> | map<K, V> → map<K, V> (empty map subsumed)
+        (PpirTy::Map { value: s_val, .. }, PpirTy::Map { .. })
+            if matches!(**s_val, PpirTy::Never { .. }) =>
+        {
+            d
+        }
+        (PpirTy::Map { .. }, PpirTy::Map { value: d_val, .. })
+            if matches!(**d_val, PpirTy::Never { .. }) =>
+        {
+            s
+        }
         _ => PpirTy::union(vec![s, d]),
     }
 }
@@ -437,10 +467,15 @@ pub(crate) fn synthesize_bridge_class(expanded: &PpirExpandedClass) -> Class {
         let s = match &ef.sap_missing {
             PpirSapMissing::Never => PpirTy::Never { attrs: PpirTypeAttrs::default() },
             PpirSapMissing::Default(ty) => ty.clone(),
-            PpirSapMissing::Explicit(_node) => {
-                // For the bridge, use default S since we can't parse the node yet.
-                // The starts_as value is just metadata passed through.
-                default_starts_as(&ef.stream_type)
+            PpirSapMissing::Explicit(green) => {
+                // Parse the deferred @stream.starts_as(<arg>) value and compute typeof(S).
+                let text = extract_starts_as_text(green);
+                let starts_as = crate::normalize::parse_starts_as_value(&text);
+                match crate::normalize::infer_typeof_s(&starts_as) {
+                    Some(ty) => ty,
+                    // EmptyList/EmptyMap: typeof deferred, use Never so simplify gives D.
+                    None => PpirTy::Never { attrs: PpirTypeAttrs::default() },
+                }
             }
         };
 
@@ -451,8 +486,8 @@ pub(crate) fn synthesize_bridge_class(expanded: &PpirExpandedClass) -> Class {
             continue;
         }
 
-        // Build stream type = S | D
-        let stream_type_ref = make_union(s, d);
+        // Build stream type = simplify(S | D)
+        let stream_type_ref = crate::simplify::simplify_union(vec![s, d]);
 
         // Extract starts_as text for metadata
         let starts_as_text = match &ef.sap_missing {
@@ -467,6 +502,8 @@ pub(crate) fn synthesize_bridge_class(expanded: &PpirExpandedClass) -> Class {
             alias: ef.alias.clone(),
             description: ef.description.clone(),
             skip: ef.skip,
+            field_attr: compute_field_attr(ef),
+            ty_attr: compute_ty_attr(ef),
         });
     }
 
@@ -474,6 +511,54 @@ pub(crate) fn synthesize_bridge_class(expanded: &PpirExpandedClass) -> Class {
         name: SmolStr::new(format!("stream_{}", expanded.name)),
         fields: stream_fields,
         is_dynamic: expanded.is_dynamic,
+    }
+}
+
+/// Convert a `StartsAs` value to the corresponding `SapAttrValue` for `sap_missing`.
+fn starts_as_to_sap_missing(starts_as: &StartsAs) -> SapAttrValue {
+    match starts_as {
+        StartsAs::Never => SapAttrValue::Never,
+        StartsAs::Null => SapAttrValue::ConstValueExpr(SapConstValue::Null),
+        StartsAs::Literal(lit) => SapAttrValue::ConstValueExpr(match lit {
+            StartsAsLiteral::String(s) => SapConstValue::String(s.clone()),
+            StartsAsLiteral::Int(i) => SapConstValue::Int(*i),
+            StartsAsLiteral::Float(f) => SapConstValue::Float(f.clone()),
+            StartsAsLiteral::Bool(b) => SapConstValue::Bool(*b),
+        }),
+        StartsAs::EmptyList => SapAttrValue::ConstValueExpr(SapConstValue::EmptyList),
+        StartsAs::EmptyMap => SapAttrValue::ConstValueExpr(SapConstValue::EmptyMap),
+    }
+}
+
+/// Compute `FieldAttr` (sap_missing) from a `PpirExpandedField`.
+///
+/// Converts the Phase 1 `PpirSapMissing` into a runtime `FieldAttr`.
+/// For `Explicit` nodes, parses the GreenNode text and converts to SAP value.
+fn compute_field_attr(ef: &PpirExpandedField) -> FieldAttr {
+    let sap_value = match &ef.sap_missing {
+        PpirSapMissing::Never => SapAttrValue::Never,
+        PpirSapMissing::Default(ty) => {
+            let starts_as = crate::normalize::default_starts_as_semantic(ty);
+            starts_as_to_sap_missing(&starts_as)
+        }
+        PpirSapMissing::Explicit(green) => {
+            let text = extract_starts_as_text(green);
+            let starts_as = crate::normalize::parse_starts_as_value(&text);
+            starts_as_to_sap_missing(&starts_as)
+        }
+    };
+    FieldAttr::new(sap_value)
+}
+
+/// Compute `TyAttr` (sap_in_progress) from a `PpirExpandedField`.
+///
+/// When `sap_in_progress_never` is true (from `@stream.done`), sets
+/// `sap_in_progress = Never`. Otherwise returns default.
+fn compute_ty_attr(ef: &PpirExpandedField) -> TyAttr {
+    if ef.sap_in_progress_never {
+        TyAttr::new(SapAttrValue::Never, SapAttrValue::DefaultForType)
+    } else {
+        TyAttr::default()
     }
 }
 

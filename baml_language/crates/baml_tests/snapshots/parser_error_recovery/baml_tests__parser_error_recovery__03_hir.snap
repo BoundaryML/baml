@@ -20,11 +20,11 @@ client GPT4 {
 }
 
 class stream_User {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 class stream_Another {
-  field: null | int
+  field: null | int @sap.missing(null)
 }
 
 class Another {
@@ -44,11 +44,11 @@ function NextFunction() -> string {
 }
 
 class stream_Partial {
-  field1: null | str
-  field2: null | <error>
-  field3: null | string
-  field4: null | string
-  string: null | <error>
+  field1: null | str @sap.missing(null)
+  field2: null | <error> @sap.missing(null)
+  field3: null | string @sap.missing(null)
+  field4: null | string @sap.missing(null)
+  string: null | <error> @sap.missing(null)
 }
 
 class Partial {
@@ -73,9 +73,9 @@ class Test {
 }
 
 class stream_Test {
-  field1: null | string
-  field2: null | string
-  another: null | closed
+  field1: null | string @sap.missing(null)
+  field2: null | string @sap.missing(null)
+  another: null | closed @sap.missing(null)
   string: ")  // Should still parse this
-}"
+}" @sap.missing(never)
 }

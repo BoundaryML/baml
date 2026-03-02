@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_base::{FieldAttr, Name, Span};
+use baml_base::{Name, Span};
 use baml_compiler_hir::{
     self, Attribute, FunctionBody, ItemId, file_item_tree, file_items, function_body,
     function_signature,
@@ -119,13 +119,22 @@ fn lower_class(
         .iter()
         .map(|field| {
             let (tir_ty, _) = resolution_ctx.lower_type_ref(&field.type_ref, Span::default());
+            let mut ty = convert_ty(&tir_ty, type_aliases, recursive_aliases);
+
+            // Apply SAP type attribute (sap_in_progress) from Phase 3.
+            // Only generated stream_* class fields have non-default ty_attr.
+            if !field.ty_attr.is_default() {
+                ty = ty.with_attr(field.ty_attr.clone());
+            }
+
             VirField {
                 name: field.name.clone(),
-                ty: convert_ty(&tir_ty, type_aliases, recursive_aliases),
+                ty,
                 description: attr_to_option(&field.description),
                 alias: attr_to_option(&field.alias),
                 skip: attr_to_bool(&field.skip),
-                field_attr: FieldAttr::default(),
+                // Apply SAP field attribute (sap_missing) from Phase 3.
+                field_attr: field.field_attr.clone(),
             }
         })
         .collect();

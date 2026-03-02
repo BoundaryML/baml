@@ -3,8 +3,8 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 class stream_Education {
-  school: null | string
-  year: null | int
+  school: null | string @sap.missing(null)
+  year: null | int @sap.missing(null)
 }
 
 class Education {
@@ -32,22 +32,22 @@ class AllDefaults {
 }
 
 class stream_AllDefaults {
-  name: null | string
-  age: null | int
-  score: null | float
-  active: null | bool
-  type: "resume"
-  version: 42
-  status: null | Status
-  edu: null | stream_Education
-  scores: never[] | int[]
-  education: never[] | stream_Education[]
-  nested_edu: never[] | stream_Education[][]
-  edu_map: map<string, never> | map<string, stream_Education>
-  data: null | stream_AliasedType
-  mixed: null | int | stream_Education
-  maybe: null | string | null
-  maybe_list: null | int[] | null
+  name: null | string @sap.missing(null)
+  age: null | int @sap.missing(null)
+  score: null | float @sap.missing(null)
+  active: null | bool @sap.missing(null)
+  type: "resume" @sap.missing(never)
+  version: 42 @sap.missing(never)
+  status: null | Status @sap.missing(null)
+  edu: null | stream_Education @sap.missing(null)
+  scores: int[] @sap.missing([])
+  education: stream_Education[] @sap.missing([])
+  nested_edu: stream_Education[][] @sap.missing([])
+  edu_map: map<string, stream_Education> @sap.missing({})
+  data: null | stream_AliasedType @sap.missing(null)
+  mixed: null | int | stream_Education @sap.missing(null)
+  maybe: null | string @sap.missing(null)
+  maybe_list: null | int[] @sap.missing(null)
 }
 
 enum Status {

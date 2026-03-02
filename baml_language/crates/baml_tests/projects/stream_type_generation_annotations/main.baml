@@ -1,0 +1,35 @@
+// Test stream_* class generation with explicit annotations.
+
+class Education {
+    school string
+    year int
+}
+
+class AnnotatedResume {
+    // @stream.done: in_progress_never, S=null (default for primitive)
+    name string @stream.done
+
+    // @stream.not_null: S=never, D=float (default)
+    gpa float @stream.not_null
+
+    // Custom sentinel
+    title string @stream.starts_as("Loading...")
+
+    // Suppress field entirely
+    internal_id string @stream.type(never)
+
+    // @stream.done + @stream.not_null = absent until fully parsed
+    token string @stream.done @stream.not_null
+}
+
+class AtomicPoint {
+    @@stream.done
+    x float
+    y float
+}
+
+class AtomicWithOverride {
+    @@stream.done
+    x float
+    y float @stream.starts_as(null)
+}

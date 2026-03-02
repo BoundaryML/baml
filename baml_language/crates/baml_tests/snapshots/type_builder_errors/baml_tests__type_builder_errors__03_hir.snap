@@ -19,7 +19,7 @@ class Resume {
 }
 
 class stream_Resume {
-  name: null | string
+  name: null | string @sap.missing(null)
 }
 
 test MultipleTypeBuilderBlocks {

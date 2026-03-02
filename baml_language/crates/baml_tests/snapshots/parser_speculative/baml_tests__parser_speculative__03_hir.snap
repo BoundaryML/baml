@@ -40,8 +40,8 @@ class JsonData {
 }
 
 class stream_JsonData {
-  field1: null | int
-  field2: null | int
+  field1: null | int @sap.missing(null)
+  field2: null | int @sap.missing(null)
 }
 
 function ExtractData.render_prompt(text: string) -> baml.llm.PromptAst {
@@ -98,9 +98,9 @@ function ChainedProcess.render_prompt(input: string) -> baml.llm.PromptAst {
 }
 
 class stream_Analysis {
-  sentiment: null | string
-  keywords: never[] | string[]
-  score: null | float
+  sentiment: null | string @sap.missing(null)
+  keywords: string[] @sap.missing([])
+  score: null | float @sap.missing(null)
 }
 
 class Analysis {

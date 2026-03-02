@@ -21,6 +21,7 @@ use smol_str::SmolStr;
 
 mod expand;
 pub mod normalize;
+pub mod simplify;
 mod ty;
 
 pub use expand::{

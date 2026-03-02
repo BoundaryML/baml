@@ -23,5 +23,5 @@ class Broken {
 }
 
 class stream_Broken {
-  field: null | int
+  field: null | int @sap.missing(null)
 }
