@@ -1,5 +1,7 @@
 //! Semantic tokens for BAML files.
 
+use std::collections::HashMap;
+
 use baml_db::{
     Name, QualifiedName, SourceFile, baml_compiler_hir, baml_compiler_parser,
     baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxToken},
@@ -159,14 +161,10 @@ fn visit_node(
         SyntaxKind::CLASS_DEF => visit_word_as(db, file, node, SemanticTokenType::Class, out),
         SyntaxKind::FIELD => visit_word_as(db, file, node, SemanticTokenType::Property, out),
         SyntaxKind::FUNCTION_DEF => visit_function_def(db, file, node, out),
-        SyntaxKind::PARAMETER => visit_word_as(db, file, node, SemanticTokenType::Parameter, out),
         SyntaxKind::TYPE_EXPR => visit_type_expr(db, file, node, out),
         SyntaxKind::LET_STMT => {
+            // Highlight top-level let statements for now...
             visit_first_word_as(db, file, node, SemanticTokenType::Variable, out);
-        }
-        SyntaxKind::OBJECT_LITERAL => visit_object_literal(db, file, node, out),
-        SyntaxKind::OBJECT_FIELD => {
-            visit_first_word_as(db, file, node, SemanticTokenType::Property, out);
         }
         SyntaxKind::CLIENT_TYPE => visit_word_as(db, file, node, SemanticTokenType::Type, out),
         SyntaxKind::CONFIG_ITEM => visit_word_as(db, file, node, SemanticTokenType::Property, out),
@@ -338,7 +336,7 @@ fn visit_type_alias_def(
 fn resolve_type_name(db: &ProjectDatabase, name: &str) -> SemanticTokenType {
     if matches!(
         name,
-        "int" | "float" | "string" | "bool" | "map" | "unknown"
+        "int" | "float" | "string" | "bool" | "map" | "unknown" | "never"
     ) {
         return SemanticTokenType::Type;
     }
@@ -358,24 +356,6 @@ fn resolve_type_name(db: &ProjectDatabase, name: &str) -> SemanticTokenType {
 
 /// Visit a `TYPE_EXPR` node, resolving type names to their definitions.
 fn visit_type_expr(
-    db: &ProjectDatabase,
-    file: SourceFile,
-    node: &SyntaxNode,
-    out: &mut Vec<SemanticToken>,
-) {
-    for child in node.children_with_tokens() {
-        match child {
-            NodeOrToken::Node(n) => visit_node(db, file, &n, out),
-            NodeOrToken::Token(t) => match t.kind() {
-                SyntaxKind::WORD => emit_token(&t, resolve_type_name(db, t.text()), out),
-                _ => visit_token(&t, out),
-            },
-        }
-    }
-}
-
-/// Visit an `OBJECT_LITERAL` node, resolving type names to their definitions.
-fn visit_object_literal(
     db: &ProjectDatabase,
     file: SourceFile,
     node: &SyntaxNode,
@@ -425,85 +405,113 @@ fn visit_function_def(
 }
 
 /// Map a `ResolvedValue` to a semantic token type.
-fn resolved_value_to_token_type(resolved: &ResolvedValue) -> SemanticTokenType {
+/// Returns `None` for unknown/unresolved values so they don't get highlighted.
+fn resolved_value_to_token_type(resolved: &ResolvedValue) -> Option<SemanticTokenType> {
     match resolved {
         ResolvedValue::Local {
             definition_site, ..
-        } => match definition_site {
+        } => Some(match definition_site {
             Some(DefinitionSite::Statement(_)) => SemanticTokenType::Variable,
             Some(DefinitionSite::Parameter(_)) => SemanticTokenType::Parameter,
             Some(DefinitionSite::Pattern(_)) => SemanticTokenType::Variable,
-            None => SemanticTokenType::Variable,
-        },
-        ResolvedValue::Function(_) => SemanticTokenType::Function,
-        ResolvedValue::BuiltinFunction(_) => SemanticTokenType::Function,
-        ResolvedValue::Class(_) => SemanticTokenType::Class,
-        ResolvedValue::Enum(_) => SemanticTokenType::Enum,
-        ResolvedValue::TypeAlias(_) => SemanticTokenType::Type,
-        ResolvedValue::EnumVariant { .. } => SemanticTokenType::EnumMember,
-        ResolvedValue::Field { .. } => SemanticTokenType::Property,
-        ResolvedValue::ModuleItem { .. } => SemanticTokenType::Variable,
-        ResolvedValue::TypeMethod { .. } => SemanticTokenType::Method,
-        ResolvedValue::Unknown => SemanticTokenType::Variable,
+            None => return None,
+        }),
+        ResolvedValue::Function(_) => Some(SemanticTokenType::Function),
+        ResolvedValue::BuiltinFunction(_) => Some(SemanticTokenType::Function),
+        ResolvedValue::Class(_) => Some(SemanticTokenType::Class),
+        ResolvedValue::Enum(_) => Some(SemanticTokenType::Enum),
+        ResolvedValue::TypeAlias(_) => Some(SemanticTokenType::Type),
+        ResolvedValue::EnumVariant { .. } => Some(SemanticTokenType::EnumMember),
+        ResolvedValue::Field { .. } => Some(SemanticTokenType::Property),
+        ResolvedValue::ModuleItem { .. } => Some(SemanticTokenType::Variable),
+        ResolvedValue::TypeMethod { .. } => Some(SemanticTokenType::Method),
+        ResolvedValue::Unknown => None,
     }
 }
 
-/// Emit semantic tokens for an expression function body using HIR/TIR resolution.
+/// Build a lookup map from `TextRange → SemanticTokenType` using HIR/TIR resolution.
 ///
-/// Instead of walking the CST blindly, we query the HIR `ExprBody` and TIR `InferenceResult`
-/// to get resolution info for every expression, then emit tokens using the source map spans.
-/// We still fall back to the CST walk for keywords, operators, comments, and literals
-/// that don't have corresponding HIR expressions.
-fn emit_expr_body_tokens(
-    db: &ProjectDatabase,
-    file: SourceFile,
-    func_loc: baml_compiler_hir::FunctionId<'_>,
-    body_node: &SyntaxNode,
-    out: &mut Vec<SemanticToken>,
-) {
-    // Get the HIR body and TIR inference result
-    let body = baml_compiler_hir::function_body(db, func_loc);
-    let baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) = &*body else {
-        // If we can't get the HIR body, just visit the children normally.
-        visit_children(db, file, body_node, out);
-        return;
-    };
+/// This pre-computes the semantic classification for every token that has HIR resolution,
+/// keyed by the exact source range. The map is then consulted during a single CST walk
+/// so tokens are emitted in document order without needing a sort.
+fn build_resolution_map(
+    expr_body: &baml_compiler_hir::ExprBody,
+    source_map: &baml_compiler_hir::HirSourceMap,
+    inference: &baml_compiler_tir::InferenceResult,
+    file_text: &str,
+) -> HashMap<TextRange, SemanticTokenType> {
+    let mut map = HashMap::new();
 
-    let inference = baml_compiler_tir::function_type_inference(db, func_loc);
-
-    // Build a set of ranges covered by HIR-resolved expressions.
-    let mut resolved_ranges: Vec<TextRange> = Vec::new();
-    let mut body_tokens: Vec<SemanticToken> = Vec::new();
-    let file_text = file.text(db);
     for (expr_id, expr) in expr_body.exprs.iter() {
         let Some(span) = source_map.expr_span(expr_id) else {
             continue;
         };
 
         match expr {
-            // All references to functions, variables, etc. are path expressions.
             baml_compiler_hir::Expr::Path(segments) => {
                 let seg_resolutions = inference.path_segment_resolutions.get(&expr_id);
+                let seg_types = inference.path_segment_types.get(&expr_id);
                 let whole_resolution = inference.expr_resolutions.get(&expr_id);
-                // emit_path_segment_tokens returns the ranges it actually emitted.
-                // For compiler-generated synthetic paths (e.g. for-in desugaring),
-                // the segment names won't appear in the source text, so nothing
-                // is emitted and the CST fallback isn't blocked.
-                let emitted = emit_path_segment_tokens(
-                    segments,
-                    seg_resolutions,
-                    whole_resolution,
-                    span.range,
-                    file_text,
-                    &mut body_tokens,
-                );
-                resolved_ranges.extend(emitted);
+
+                let path_start: usize = span.range.start().into();
+                let path_end: usize = span.range.end().into();
+                if path_end > file_text.len() {
+                    continue;
+                }
+                let path_text = &file_text[path_start..path_end];
+
+                let mut cursor = 0usize;
+                for (i, seg_name) in segments.iter().enumerate() {
+                    let name_str = seg_name.as_str();
+                    let Some(offset_in_path) = path_text[cursor..].find(name_str) else {
+                        continue;
+                    };
+                    let seg_start = path_start + cursor + offset_in_path;
+                    let seg_end = seg_start + name_str.len();
+                    let range =
+                        TextRange::new(seg_start.try_into().unwrap(), seg_end.try_into().unwrap());
+                    cursor += offset_in_path + name_str.len();
+
+                    // Skip segments whose inferred type is Unknown/Error (e.g. non-existent fields).
+                    if let Some(types) = seg_types {
+                        if let Some(ty) = types.get(i) {
+                            if ty.is_unknown() || ty.is_error() {
+                                continue;
+                            }
+                        }
+                    }
+
+                    let is_last = i + 1 == segments.len();
+                    let token_type = if let Some(resolutions) = seg_resolutions {
+                        resolutions.get(i).and_then(resolved_value_to_token_type)
+                    } else if let Some(resolved) = whole_resolution {
+                        // For compound resolutions (e.g. EnumVariant), prefix
+                        // segments get the container type and only the last
+                        // segment gets the member type.
+                        if is_last {
+                            resolved_value_to_token_type(resolved)
+                        } else {
+                            match resolved {
+                                ResolvedValue::EnumVariant { .. } => Some(SemanticTokenType::Enum),
+                                ResolvedValue::Field { .. } => Some(SemanticTokenType::Class),
+                                _ => resolved_value_to_token_type(resolved),
+                            }
+                        }
+                    } else {
+                        continue;
+                    };
+
+                    if let Some(token_type) = token_type {
+                        map.insert(range, token_type);
+                    }
+                }
             }
             baml_compiler_hir::Expr::FieldAccess { field, .. } => {
-                // The field name is at the end of the FieldAccess span (e.g. "obj.field").
-                // Use rfind to avoid matching a substring in the base expression.
                 let span_start: usize = span.range.start().into();
                 let span_end: usize = span.range.end().into();
+                if span_end > file_text.len() {
+                    continue;
+                }
                 let span_text = &file_text[span_start..span_end];
                 let field_str = field.as_str();
                 if let Some(offset) = span_text.rfind(field_str) {
@@ -514,84 +522,219 @@ fn emit_expr_body_tokens(
                         field_end.try_into().unwrap(),
                     );
 
-                    if let Some(resolved) = inference.expr_resolutions.get(&expr_id) {
-                        let token_type = resolved_value_to_token_type(resolved);
-                        body_tokens.push(SemanticToken { range, token_type });
-                        resolved_ranges.push(range);
+                    if let Some(token_type) = inference
+                        .expr_resolutions
+                        .get(&expr_id)
+                        .and_then(resolved_value_to_token_type)
+                    {
+                        map.insert(range, token_type);
                     }
+                }
+            }
+            baml_compiler_hir::Expr::Object {
+                type_name,
+                fields,
+                spreads: _,
+            } => {
+                let span_start: usize = span.range.start().into();
+                let span_end: usize = span.range.end().into();
+                if span_end > file_text.len() {
+                    continue;
+                }
+                let span_text = &file_text[span_start..span_end];
+
+                // Highlight the type name (e.g. `Point` in `Point { x: 1, y: 2 }`)
+                if let Some(name) = type_name {
+                    let name_str = name.as_str();
+                    if let Some(offset) = span_text.find(name_str) {
+                        let name_start = span_start + offset;
+                        let name_end = name_start + name_str.len();
+                        let range = TextRange::new(
+                            name_start.try_into().unwrap(),
+                            name_end.try_into().unwrap(),
+                        );
+                        // Use the expr resolution (Class) if available, fall back to Class
+                        let token_type = inference
+                            .expr_resolutions
+                            .get(&expr_id)
+                            .and_then(resolved_value_to_token_type)
+                            .unwrap_or(SemanticTokenType::Class);
+                        map.insert(range, token_type);
+                    }
+                }
+
+                // Highlight field names as properties
+                let mut cursor = 0usize;
+                for (field_name, _) in fields {
+                    let field_str = field_name.as_str();
+                    let Some(offset) = span_text[cursor..].find(field_str) else {
+                        continue;
+                    };
+                    let field_start = span_start + cursor + offset;
+                    let field_end = field_start + field_str.len();
+                    let range = TextRange::new(
+                        field_start.try_into().unwrap(),
+                        field_end.try_into().unwrap(),
+                    );
+                    map.insert(range, SemanticTokenType::Property);
+                    cursor += offset + field_str.len();
                 }
             }
             _ => {}
         }
     }
 
-    // Fallback: run the normal CST visitor for everything not covered by HIR.
-    let mut fallback_tokens: Vec<SemanticToken> = Vec::new();
-    visit_children(db, file, body_node, &mut fallback_tokens);
-    for tok in fallback_tokens {
-        // Skip tokens that overlap with HIR-resolved ranges.
-        if resolved_ranges.iter().any(|r| r.contains_range(tok.range)) {
+    // Walk patterns for match/catch bindings (e.g. `d` in `d: Color | never => d`)
+    for (pat_id, pattern) in expr_body.patterns.iter() {
+        let name = match pattern {
+            baml_compiler_hir::Pattern::Binding(name) => name,
+            baml_compiler_hir::Pattern::TypedBinding { name, .. } => name,
+            _ => continue,
+        };
+        let name_str = name.as_str();
+        if name_str == "_" {
             continue;
         }
-        body_tokens.push(tok);
+        let Some(span) = source_map.pattern_span(pat_id) else {
+            continue;
+        };
+        let span_start: usize = span.range.start().into();
+        let span_end: usize = span.range.end().into();
+        if span_end > file_text.len() {
+            continue;
+        }
+        let span_text = &file_text[span_start..span_end];
+        if let Some(offset) = span_text.find(name_str) {
+            let name_start = span_start + offset;
+            let name_end = name_start + name_str.len();
+            let range =
+                TextRange::new(name_start.try_into().unwrap(), name_end.try_into().unwrap());
+            map.insert(range, SemanticTokenType::Variable);
+        }
     }
 
-    // Sort by position so delta-encoding in the LSP layer doesn't overflow.
-    body_tokens.sort_by_key(|t| t.range.start());
-    out.extend(body_tokens);
+    map
 }
 
-/// Emit one semantic token per segment of a path expression (e.g. `Status.Active`).
+// ── Expression body visitor ─────────────────────────────────────────────────
+//
+// Mirrors the free-function CST visitors (`visit_node`, `visit_children`,
+// `visit_token`) but every leaf token is first checked against a pre-built
+// resolution map from HIR/TIR. This keeps the two worlds (CST-only vs
+// resolution-map-aware) cleanly separated: the free functions never see a
+// resolution map, and the struct methods always consult one.
+
+/// Visitor for expression function bodies.
 ///
-/// Returns the ranges of tokens that were actually emitted, so the caller can
-/// add them to `resolved_ranges` to prevent CST fallback from re-emitting them.
-///
-/// `seg_resolutions` comes from `InferenceResult::path_segment_resolutions` and has
-/// one entry per segment for multi-segment paths. For single-segment paths it may be
-/// absent, in which case we fall back to `whole_resolution`.
-fn emit_path_segment_tokens(
-    segments: &[Name],
-    seg_resolutions: Option<&Vec<ResolvedValue>>,
-    whole_resolution: Option<&ResolvedValue>,
-    path_range: TextRange,
-    file_text: &str,
-    out: &mut Vec<SemanticToken>,
-) -> Vec<TextRange> {
-    let path_start: usize = path_range.start().into();
-    let path_end: usize = path_range.end().into();
-    let path_text = &file_text[path_start..path_end];
+/// Pre-builds a `TextRange → SemanticTokenType` resolution map from HIR/TIR,
+/// then walks the CST in document order. Leaf tokens are checked against the
+/// map first; if there is no entry the normal syntactic classifier is used.
+struct ExprBodyVisitor<'a> {
+    db: &'a ProjectDatabase,
+    file: SourceFile,
+    resolution_map: HashMap<TextRange, SemanticTokenType>,
+}
 
-    let mut emitted_ranges = Vec::new();
-
-    // Walk through the path text finding each segment's position.
-    let mut cursor = 0usize;
-    for (i, seg_name) in segments.iter().enumerate() {
-        let name_str = seg_name.as_str();
-        // Find this segment name in the remaining path text.
-        let Some(offset_in_path) = path_text[cursor..].find(name_str) else {
-            continue;
+impl<'a> ExprBodyVisitor<'a> {
+    fn new(
+        db: &'a ProjectDatabase,
+        file: SourceFile,
+        func_loc: baml_compiler_hir::FunctionId<'_>,
+    ) -> Option<Self> {
+        let body = baml_compiler_hir::function_body(db, func_loc);
+        let baml_compiler_hir::FunctionBody::Expr(expr_body, source_map) = &*body else {
+            return None;
         };
-        let seg_start = path_start + cursor + offset_in_path;
-        let seg_end = seg_start + name_str.len();
-        let range = TextRange::new(seg_start.try_into().unwrap(), seg_end.try_into().unwrap());
-        cursor += offset_in_path + name_str.len();
-
-        // Resolve: prefer per-segment, then whole-expression, then default.
-        let token_type = if let Some(resolutions) = seg_resolutions {
-            resolutions
-                .get(i)
-                .map(resolved_value_to_token_type)
-                .unwrap_or(SemanticTokenType::Variable)
-        } else if let Some(resolved) = whole_resolution {
-            // Until we have namespaces, we just mark it as the whole resolution, TODO: fix this when we have namespaces
-            resolved_value_to_token_type(resolved)
-        } else {
-            continue;
-        };
-
-        out.push(SemanticToken { range, token_type });
-        emitted_ranges.push(range);
+        let inference = baml_compiler_tir::function_type_inference(db, func_loc);
+        let file_text = file.text(db);
+        let resolution_map = build_resolution_map(expr_body, source_map, &inference, file_text);
+        Some(Self {
+            db,
+            file,
+            resolution_map,
+        })
     }
 
-    emitted_ranges
+    /// Dispatch a single node. Mirrors `visit_node` for the subset of node
+    /// kinds that can appear inside expression bodies.
+    fn visit_node(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
+        match node.kind() {
+            ref n if n.is_comment() => emit_node(node, SemanticTokenType::Comment, out),
+            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL => {
+                emit_node(node, SemanticTokenType::String, out);
+            }
+            SyntaxKind::ATTRIBUTE | SyntaxKind::BLOCK_ATTRIBUTE => {
+                visit_attribute(self.db, self.file, node, out);
+            }
+            SyntaxKind::TYPE_EXPR => visit_type_expr(self.db, self.file, node, out),
+            SyntaxKind::LET_STMT => {
+                self.visit_first_word_as(node, SemanticTokenType::Variable, out);
+            }
+            SyntaxKind::OBJECT_FIELD => {
+                self.visit_first_word_as(node, SemanticTokenType::Property, out);
+            }
+            SyntaxKind::OBJECT_LITERAL => {
+                self.visit_children(node, out);
+            }
+            _ => self.visit_children(node, out),
+        }
+    }
+
+    /// Classify a leaf token. Resolution map wins; otherwise fall back to the
+    /// shared syntactic classifier.
+    fn visit_token(&self, token: &SyntaxToken, out: &mut Vec<SemanticToken>) {
+        if let Some(&token_type) = self.resolution_map.get(&token.text_range()) {
+            emit_token(token, token_type, out);
+        } else {
+            visit_token(token, out);
+        }
+    }
+
+    /// Walk all children, dispatching nodes and tokens.
+    fn visit_children(&self, node: &SyntaxNode, out: &mut Vec<SemanticToken>) {
+        for child in node.children_with_tokens() {
+            match child {
+                NodeOrToken::Node(n) => self.visit_node(&n, out),
+                NodeOrToken::Token(t) => self.visit_token(&t, out),
+            }
+        }
+    }
+
+    /// First WORD gets `word_type`, everything else dispatched normally.
+    fn visit_first_word_as(
+        &self,
+        node: &SyntaxNode,
+        word_type: SemanticTokenType,
+        out: &mut Vec<SemanticToken>,
+    ) {
+        let mut found_word = false;
+        for child in node.children_with_tokens() {
+            match child {
+                NodeOrToken::Node(n) => self.visit_node(&n, out),
+                NodeOrToken::Token(t) => {
+                    if !found_word && t.kind() == SyntaxKind::WORD {
+                        found_word = true;
+                        emit_token(&t, word_type, out);
+                    } else {
+                        self.visit_token(&t, out);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Emit semantic tokens for an expression function body using HIR/TIR resolution.
+fn emit_expr_body_tokens(
+    db: &ProjectDatabase,
+    file: SourceFile,
+    func_loc: baml_compiler_hir::FunctionId<'_>,
+    body_node: &SyntaxNode,
+    out: &mut Vec<SemanticToken>,
+) {
+    if let Some(visitor) = ExprBodyVisitor::new(db, file, func_loc) {
+        visitor.visit_children(body_node, out);
+    } else {
+        visit_children(db, file, body_node, out);
+    }
 }
