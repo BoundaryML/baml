@@ -5,8 +5,8 @@ use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
-    AnnotatedEnumVariant, EnumTy, FromLiteral, Literal, TyResolvedRef, TyWithMeta, TypeAnnotations,
-    TypeIdent, TypeValue,
+    AnnotatedEnumVariant, AttrLiteral, EnumTy, FromLiteral, TyResolvedRef, TyWithMeta,
+    TypeAnnotations, TypeIdent, TypeValue,
 };
 use anyhow::Result;
 
@@ -114,7 +114,7 @@ where
 
         if value.completion_state() == &CompletionState::Incomplete {
             match &meta.in_progress {
-                Some(Literal::Never) => return Ok(None),
+                Some(AttrLiteral::Never) => return Ok(None),
                 Some(lit) => {
                     let in_progress = enum_ty.from_literal(lit, ctx)?;
                     return Ok(Some(ValueWithFlags::new(
@@ -167,7 +167,7 @@ impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
             Ok(v)
         })
         .or_else(|err| match &target.meta.on_error {
-            Literal::Never => Err(err),
+            AttrLiteral::Never => Err(err),
             lit => {
                 let ret = target.ty.from_literal(lit, ctx)?;
                 let meta = DeserializerMeta {

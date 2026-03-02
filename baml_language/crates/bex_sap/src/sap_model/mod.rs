@@ -566,9 +566,9 @@ pub struct TypeAnnotations<'t, N: TypeIdent> {
     ///
     /// Example:
     /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
-    pub in_progress: Option<Literal<'t, N>>,
+    pub in_progress: Option<AttrLiteral<'t, N>>,
     /// Represents the behavior when completed but the value is invalid.
-    pub on_error: Literal<'t, N>,
+    pub on_error: AttrLiteral<'t, N>,
 
     pub asserts: Vec<Assertion<'t, N>>,
 }
@@ -576,7 +576,7 @@ impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
     fn default() -> Self {
         Self {
             in_progress: None,
-            on_error: Literal::Never,
+            on_error: AttrLiteral::Never,
             asserts: Vec::new(),
         }
     }
@@ -616,10 +616,10 @@ pub struct AnnotatedField<'t, N: TypeIdent> {
     pub ty: AnnotatedTy<'t, N>,
     /// If the parent object is incomplete and this field has not yet been started,
     /// use this value instead. If it is `never` then this causes an error.
-    pub before_started: Literal<'t, N>,
+    pub class_in_progress_field_missing: AttrLiteral<'t, N>,
     /// If the parent object is complete and this field is missing, use this value instead.
     /// If it is `never` then this causes an error.
-    pub missing: Literal<'t, N>,
+    pub class_completed_field_missing: AttrLiteral<'t, N>,
 
     pub aliases: Vec<Cow<'t, str>>,
 }
@@ -639,7 +639,7 @@ pub struct AnnotatedEnumVariant<'t> {
 ///
 /// Used in attributes like `@sap.in_progress(...)` and `@sap.class_completed_field_missing(...)`
 #[derive(Clone)]
-pub enum Literal<'t, N: TypeIdent> {
+pub enum AttrLiteral<'t, N: TypeIdent> {
     /// the `never` bottom type.
     Never,
     /// the `null` type
@@ -648,12 +648,12 @@ pub enum Literal<'t, N: TypeIdent> {
     Float(f64),
     String(Cow<'t, str>),
     Bool(bool),
-    Array(Vec<Literal<'t, N>>),
+    Array(Vec<AttrLiteral<'t, N>>),
     Object {
         name: &'t N,
-        data: IndexMap<Cow<'t, str>, Literal<'t, N>>,
+        data: IndexMap<Cow<'t, str>, AttrLiteral<'t, N>>,
     },
-    Map(IndexMap<Cow<'t, str>, Literal<'t, N>>),
+    Map(IndexMap<Cow<'t, str>, AttrLiteral<'t, N>>),
     EnumVariant {
         enum_name: &'t N,
         variant_name: Cow<'t, str>,

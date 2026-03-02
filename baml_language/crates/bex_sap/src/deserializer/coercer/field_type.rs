@@ -8,7 +8,7 @@ use crate::deserializer::types::DeserializerMeta;
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
-    ArrayTy, BoolLiteralTy, ClassTy, EnumTy, IntLiteralTy, Literal, MapTy, PrimitiveTy,
+    ArrayTy, AttrLiteral, BoolLiteralTy, ClassTy, EnumTy, IntLiteralTy, MapTy, PrimitiveTy,
     StreamStateTy, StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations,
     TypeIdent, UnionTy,
 };
@@ -278,7 +278,7 @@ where
         };
 
         match result {
-            Err(e) if matches!(target.meta.on_error, Literal::Never) => Err(e),
+            Err(e) if matches!(target.meta.on_error, AttrLiteral::Never) => Err(e),
             Err(e) => {
                 let value = target.ty.from_literal(&target.meta.on_error, ctx);
                 match value {
@@ -309,7 +309,7 @@ where
                     Ok(Some(ok.with_flag(Flag::Incomplete)))
                 }
                 // Incomplete value with `in_progress = never`
-                (CompletionState::Incomplete, Some(Literal::Never)) => Ok(None),
+                (CompletionState::Incomplete, Some(AttrLiteral::Never)) => Ok(None),
                 // Incomplete value with `in_progress = <value>`
                 (CompletionState::Incomplete, Some(in_progress)) => {
                     let in_progress = target.ty.from_literal(in_progress, ctx)?;

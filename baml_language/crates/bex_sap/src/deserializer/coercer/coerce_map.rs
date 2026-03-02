@@ -6,8 +6,8 @@ use crate::baml_value::{BamlMap, BamlValue};
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::CompletionState;
 use crate::sap_model::{
-    FromLiteral as _, Literal, MapTy, Ty, TyResolved, TyResolvedRef, TyWithMeta, TypeAnnotations,
-    TypeIdent,
+    AttrLiteral, FromLiteral as _, MapTy, Ty, TyResolved, TyResolvedRef, TyWithMeta,
+    TypeAnnotations, TypeIdent,
 };
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -164,7 +164,7 @@ where
         flags.add_flag(Flag::ObjectToMap(Cow::Borrowed(value)));
 
         let ret = match (&value, target.meta.in_progress.as_ref()) {
-            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Object(_, CompletionState::Incomplete), Some(lit)) => {
@@ -244,7 +244,7 @@ where
                 },
             ))),
             // Error path: we have an error and no on_error. Return the error.
-            (Err(e), Literal::Never) => Err(e),
+            (Err(e), AttrLiteral::Never) => Err(e),
             // Error correction path: we have an error and an on_error. Try to use the literal.
             (Err(e), lit) => match target.ty.from_literal(&lit, ctx) {
                 Ok(ret) => {

@@ -4,8 +4,8 @@ use std::collections::{HashMap, hash_map};
 use crate::baml_value::{BamlClass, BamlNull, BamlValue};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
-    AnnotatedField, ClassTy, FromLiteral as _, Literal, TyResolvedRef, TyWithMeta, TypeAnnotations,
-    TypeIdent,
+    AnnotatedField, AttrLiteral, ClassTy, FromLiteral as _, TyResolvedRef, TyWithMeta,
+    TypeAnnotations, TypeIdent,
 };
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -78,8 +78,8 @@ where
             let AnnotatedField {
                 name,
                 ty,
-                before_started,
-                missing,
+                class_in_progress_field_missing: before_started,
+                class_completed_field_missing: missing,
                 ..
             } = field;
             if field_data.contains_key(name.as_ref()) {
@@ -90,7 +90,7 @@ where
                 CompletionState::Incomplete => before_started,
                 CompletionState::Complete => missing,
             };
-            if matches!(replacement, Literal::Never) && ty.ty.is_optional(ctx.db) {
+            if matches!(replacement, AttrLiteral::Never) && ty.ty.is_optional(ctx.db) {
                 continue; // happy path: we don't need the field, it's optional
             }
 
@@ -168,7 +168,7 @@ where
 
         // There are a few possible approaches here:
         let ret = match (value, target.meta.in_progress.as_ref()) {
-            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Object(_, CompletionState::Incomplete), Some(lit)) => {
@@ -255,7 +255,7 @@ where
                     flags,
                 )
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
@@ -364,7 +364,7 @@ where
 
         match ret {
             Ok(ret) => Ok(Some(ret)),
-            Err(e) if matches!(meta.on_error, Literal::Never) => Err(e),
+            Err(e) if matches!(meta.on_error, AttrLiteral::Never) => Err(e),
             Err(e) => match target.ty.from_literal(&meta.on_error, ctx) {
                 Ok(ret) => {
                     let meta = DeserializerMeta {
@@ -398,8 +398,8 @@ where
         let AnnotatedField {
             name,
             ty,
-            before_started,
-            missing,
+            class_in_progress_field_missing: before_started,
+            class_completed_field_missing: missing,
             ..
         } = field;
         let ty = ctx
@@ -423,13 +423,13 @@ where
                 continue;
             }
             // Missing entry falls back to `before_started` when object is incomplete
-            None if is_incomplete && !matches!(before_started, Literal::Never) => {
+            None if is_incomplete && !matches!(before_started, AttrLiteral::Never) => {
                 let field_value = ty.ty.from_literal(before_started, ctx)?;
                 let field_meta = DeserializerMeta::new(ty);
                 ValueWithFlags::new(field_value, field_meta)
             }
             // Missing entry falls back to `missing` when object is complete
-            None if !is_incomplete && !matches!(missing, Literal::Never) => {
+            None if !is_incomplete && !matches!(missing, AttrLiteral::Never) => {
                 let field_value = ty.ty.from_literal(missing, ctx)?;
                 let field_meta = DeserializerMeta::new(ty);
                 ValueWithFlags::new(field_value, field_meta)

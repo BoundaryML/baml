@@ -4,8 +4,8 @@ use crate::{
     baml_value::{BamlNull, BamlValue},
     jsonish::CompletionState,
     sap_model::{
-        FromLiteral as _, Literal, NullTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
-        UnionTy,
+        AttrLiteral, FromLiteral as _, NullTy, TyResolvedRef, TyWithMeta, TypeAnnotations,
+        TypeIdent, UnionTy,
     },
 };
 use anyhow::Result;
@@ -39,7 +39,7 @@ where
         let mut add_flags = Vec::new();
         match (value.completion_state(), target.meta.in_progress.as_ref()) {
             // Incomplete value with `in_progress = never`, ignore
-            (CompletionState::Incomplete, Some(Literal::Never)) => return Ok(None),
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return Ok(None),
             // Incomplete value with `in_progress = <value>`, use that value
             (CompletionState::Incomplete, Some(lit)) => {
                 let ret = target.ty.from_literal(lit, ctx)?;
@@ -126,7 +126,7 @@ where
         best.map(|v| v.with_flags(add_flags))
             .or_else(|err| match &target.meta.on_error {
                 // No error fallback, return the error
-                Literal::Never => Err(err),
+                AttrLiteral::Never => Err(err),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     // Error fallback, return the literal
                     Ok(ret) => {

@@ -5,7 +5,9 @@ use crate::{
         types::{DeserializerMeta, ValueWithFlags},
     },
     jsonish::CompletionState,
-    sap_model::{Literal, StreamStateTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent},
+    sap_model::{
+        AttrLiteral, StreamStateTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+    },
 };
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for StreamStateTy<'t, N>
@@ -29,7 +31,7 @@ where
             "StreamState should not have attributes"
         );
         debug_assert!(
-            !matches!(target.meta.on_error, Literal::Never),
+            !matches!(target.meta.on_error, AttrLiteral::Never),
             "StreamState should not have attributes"
         );
 
@@ -68,7 +70,7 @@ where
             "StreamState should not have attributes"
         );
         debug_assert!(
-            !matches!(target.meta.on_error, Literal::Never),
+            !matches!(target.meta.on_error, AttrLiteral::Never),
             "StreamState should not have attributes"
         );
 

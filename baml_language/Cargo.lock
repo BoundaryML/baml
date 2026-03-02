@@ -792,27 +792,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_sap"
-version = "0.0.0-beta"
-dependencies = [
- "anyhow",
- "baml_db",
- "baml_project",
- "derive_more",
- "indexmap",
- "log",
- "ouroboros",
- "regex",
- "rowan 0.16.1",
- "salsa",
- "serde",
- "serde_json",
- "strsim",
- "thiserror 2.0.18",
- "unicode-normalization",
-]
-
-[[package]]
 name = "baml_tests"
 version = "0.0.0-beta"
 dependencies = [
@@ -1008,6 +987,27 @@ dependencies = [
 [[package]]
 name = "bex_resource_types"
 version = "0.0.0-beta"
+
+[[package]]
+name = "bex_sap"
+version = "0.0.0-beta"
+dependencies = [
+ "anyhow",
+ "baml_db",
+ "baml_project",
+ "derive_more",
+ "indexmap",
+ "log",
+ "ouroboros",
+ "regex",
+ "rowan 0.16.1",
+ "salsa",
+ "serde",
+ "serde_json",
+ "strsim",
+ "thiserror 2.0.18",
+ "unicode-normalization",
+]
 
 [[package]]
 name = "bex_vm"

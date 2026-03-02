@@ -18,7 +18,7 @@ where
     /// If the literal cannot be converted for the type.
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError>;
 }
@@ -30,11 +30,11 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
-            Literal::Int(i) => Ok(BamlInt { value: *i }),
+            AttrLiteral::Int(i) => Ok(BamlInt { value: *i }),
             _ => Err(ctx.error_internal("attribute literal must match the type: int")),
         }
     }
@@ -46,11 +46,11 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
-            Literal::Float(f) => Ok(BamlFloat { value: *f }),
+            AttrLiteral::Float(f) => Ok(BamlFloat { value: *f }),
             _ => Err(ctx.error_internal("attribute literal must match the type: float")),
         }
     }
@@ -62,11 +62,11 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
-            Literal::Bool(b) => Ok(BamlBool { value: *b }),
+            AttrLiteral::Bool(b) => Ok(BamlBool { value: *b }),
             _ => Err(ctx.error_internal("attribute literal must match the type: bool")),
         }
     }
@@ -78,11 +78,11 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
-            Literal::String(s) => Ok(BamlString {
+            AttrLiteral::String(s) => Ok(BamlString {
                 value: s.to_string().into(),
             }),
             _ => Err(ctx.error_internal("attribute literal must match the type: string")),
@@ -96,11 +96,11 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
-            Literal::Null => Ok(BamlNull),
+            AttrLiteral::Null => Ok(BamlNull),
             _ => Err(ctx.error_internal("attribute literal must match the type: null")),
         }
     }
@@ -112,7 +112,7 @@ where
 {
     fn from_literal(
         &'t self,
-        _literal: &'t Literal<'t, N>,
+        _literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         Err(ctx.error_internal("media literals are not currently supported"))
@@ -125,7 +125,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match self {
@@ -145,11 +145,11 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
-            Literal::Int(i) if *i == self.0 => Ok(BamlInt { value: *i }),
+            AttrLiteral::Int(i) if *i == self.0 => Ok(BamlInt { value: *i }),
             _ => Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
@@ -164,11 +164,11 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
-            Literal::Bool(b) if *b == self.0 => Ok(BamlBool { value: *b }),
+            AttrLiteral::Bool(b) if *b == self.0 => Ok(BamlBool { value: *b }),
             _ => Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
@@ -183,11 +183,11 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
-            Literal::String(s) if s == self.0.as_ref() => Ok(BamlString {
+            AttrLiteral::String(s) if s == self.0.as_ref() => Ok(BamlString {
                 value: s.to_string().into(),
             }),
             _ => Err(ctx.error_internal(format!(
@@ -204,7 +204,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match self {
@@ -222,10 +222,10 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        let Literal::Array(items) = literal else {
+        let AttrLiteral::Array(items) = literal else {
             return Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
@@ -268,10 +268,10 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        let Literal::Object { name: _, data } = literal else {
+        let AttrLiteral::Object { name: _, data } = literal else {
             return Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
@@ -311,10 +311,10 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        let Literal::Object { name, data } = literal else {
+        let AttrLiteral::Object { name, data } = literal else {
             return Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
@@ -362,10 +362,10 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        let Literal::String(s) = literal else {
+        let AttrLiteral::String(s) = literal else {
             return Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
@@ -401,7 +401,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         for TyWithMeta { ty, .. } in &self.variants {
@@ -423,7 +423,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let inner_ty = ctx
@@ -452,7 +452,7 @@ where
 {
     pub fn from_literal(
         self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<BamlValue<'s, 'v, 't, N>, ParsingError> {
         match self {
@@ -528,7 +528,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t Literal<'t, N>,
+        literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let resolved = ctx

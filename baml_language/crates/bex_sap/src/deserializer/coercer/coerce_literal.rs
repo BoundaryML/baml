@@ -5,7 +5,7 @@ use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::CompletionState;
 use crate::sap_model::{
-    BoolLiteralTy, BoolTy, FromLiteral as _, IntLiteralTy, IntTy, Literal, LiteralTy,
+    AttrLiteral, BoolLiteralTy, BoolTy, FromLiteral as _, IntLiteralTy, IntTy, LiteralTy,
     StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
 };
 use anyhow::Result;
@@ -74,7 +74,7 @@ where
         match res {
             Ok(ok) => Ok(ok),
             Err(e) => match &target.meta.on_error {
-                Literal::Never => Err(e),
+                AttrLiteral::Never => Err(e),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     Ok(ret) => {
                         let meta = DeserializerMeta {
@@ -107,7 +107,7 @@ where
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
                 // The object could be more than one key
                 match &target.meta.in_progress {
-                    Some(Literal::Never) => return Ok(None),
+                    Some(AttrLiteral::Never) => return Ok(None),
                     Some(lit) => {
                         let ret = target.ty.from_literal(lit, ctx).map(|ret| {
                             ValueWithFlags::new(
@@ -223,7 +223,7 @@ where
         match res {
             Ok(ok) => Ok(ok),
             Err(e) => match &target.meta.on_error {
-                Literal::Never => Err(e),
+                AttrLiteral::Never => Err(e),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     Ok(ret) => {
                         let meta = DeserializerMeta {
@@ -340,7 +340,7 @@ where
         match res {
             Ok(ok) => Ok(ok),
             Err(e) => match &target.meta.on_error {
-                Literal::Never => Err(e),
+                AttrLiteral::Never => Err(e),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     Ok(ret) => {
                         let meta = DeserializerMeta {

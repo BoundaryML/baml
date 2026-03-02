@@ -11,7 +11,7 @@ use crate::{
     },
     jsonish::CompletionState,
     sap_model::{
-        ArrayTy, FromLiteral, Literal, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+        ArrayTy, AttrLiteral, FromLiteral, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
     },
 };
 
@@ -134,7 +134,7 @@ where
             crate::jsonish::Value::Array(arr, completion_state) => {
                 if *completion_state == CompletionState::Incomplete {
                     match &target.meta.in_progress {
-                        Some(Literal::Never) => return Ok(None),
+                        Some(AttrLiteral::Never) => return Ok(None),
                         Some(lit) => {
                             let ret = target.ty.from_literal(lit, ctx)?;
                             let ret = ValueWithFlags::new(

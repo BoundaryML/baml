@@ -4,7 +4,7 @@ use crate::baml_value::{BamlBool, BamlFloat, BamlInt, BamlMedia, BamlNull, BamlS
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
-    BoolTy, FloatTy, FromLiteral as _, IntTy, Literal, MediaTy, NullTy, PrimitiveTy, StringTy,
+    AttrLiteral, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy, PrimitiveTy, StringTy,
     TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
 };
 use anyhow::Result;
@@ -94,7 +94,7 @@ where
         match res {
             Ok(ok) => Ok(ok),
             Err(e) => match &target.meta.on_error {
-                Literal::Never => Err(e),
+                AttrLiteral::Never => Err(e),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     Ok(ret) => {
                         let meta = DeserializerMeta {
@@ -155,7 +155,7 @@ where
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
-            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
@@ -179,7 +179,7 @@ where
                 target.meta.expect_asserts(&BamlValue::Int(res), ctx)?;
                 res
             }
-            (jsonish::Value::String(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
@@ -222,7 +222,7 @@ where
                 target.meta.expect_asserts(&BamlValue::Int(res), ctx)?;
                 res
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
@@ -285,7 +285,7 @@ where
         match res {
             Ok(ok) => Ok(ok),
             Err(e) => match &target.meta.on_error {
-                Literal::Never => Err(e),
+                AttrLiteral::Never => Err(e),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     Ok(ret) => {
                         let meta = DeserializerMeta {
@@ -345,7 +345,7 @@ where
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlFloat, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
-            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
@@ -368,7 +368,7 @@ where
                 target.meta.expect_asserts(&BamlValue::Float(res), ctx)?;
                 res
             }
-            (jsonish::Value::String(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
@@ -405,7 +405,7 @@ where
                 target.meta.expect_asserts(&BamlValue::Float(res), ctx)?;
                 res
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
@@ -468,7 +468,7 @@ where
         match res {
             Ok(ok) => Ok(ok),
             Err(e) => match &target.meta.on_error {
-                Literal::Never => Err(e),
+                AttrLiteral::Never => Err(e),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     Ok(ret) => {
                         let meta = DeserializerMeta {
@@ -531,7 +531,7 @@ where
                 target.meta.expect_asserts(&BamlValue::Bool(res), ctx)?;
                 res
             }
-            (jsonish::Value::String(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
@@ -581,7 +581,7 @@ where
                 target.meta.expect_asserts(&BamlValue::Bool(res), ctx)?;
                 res
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(Literal::Never)) => {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
@@ -644,7 +644,7 @@ where
         match res {
             Ok(ok) => Ok(ok),
             Err(e) => match &target.meta.on_error {
-                Literal::Never => Err(e),
+                AttrLiteral::Never => Err(e),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     Ok(ret) => {
                         let meta = DeserializerMeta {
@@ -693,7 +693,7 @@ where
 
         // Handle in_progress for all incomplete values
         match (value.completion_state(), target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(Literal::Never)) => return Ok(None),
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return Ok(None),
             (CompletionState::Incomplete, Some(lit)) => {
                 flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 let result = target.ty.from_literal(lit, ctx)?;
@@ -750,7 +750,7 @@ where
         match res {
             Ok(ok) => Ok(ok),
             Err(e) => match &target.meta.on_error {
-                Literal::Never => Err(e),
+                AttrLiteral::Never => Err(e),
                 lit => match target.ty.from_literal(&lit, ctx) {
                     Ok(ret) => {
                         let meta = DeserializerMeta {
@@ -812,7 +812,7 @@ where
 
         // Handle in_progress for all incomplete values
         match (value.completion_state(), target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(Literal::Never)) => return Ok(None),
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return Ok(None),
             (CompletionState::Incomplete, Some(lit)) => {
                 flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
                 let result = target.ty.from_literal(lit, ctx)?;

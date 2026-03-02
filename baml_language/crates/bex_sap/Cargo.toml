@@ -1,5 +1,5 @@
 [package]
-name = "baml_sap"
+name = "bex_sap"
 version = { workspace = true }
 publish = false
 authors = { workspace = true }
