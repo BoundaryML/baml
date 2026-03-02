@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# If in a jj repo, point GIT_DIR at jj's backing git store so gh works
+if [ -d .jj ]; then
+  jj_repo="$(cat .jj/repo)"
+  export GIT_DIR
+  GIT_DIR="$(realpath "$jj_repo/store/$(cat "$jj_repo/store/git_target")")"
+fi
+
 owner="$(gh repo view --json owner -q .owner.login)"
 repo="$(gh repo view --json name -q .name)"
-pr="$(gh pr view --json number -q .number)"
+
+if [ -d .jj ]; then
+  bookmark="$(jj log -r @ --no-graph -T 'bookmarks' | sed 's/\*$//')"
+  pr="$(gh pr view "$bookmark" --json number -q .number)"
+else
+  pr="$(gh pr view --json number -q .number)"
+fi
 
 gh api graphql -F owner="$owner" -F repo="$repo" -F pr="$pr" -f query='
 query($owner:String!, $repo:String!, $pr:Int!) {

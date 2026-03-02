@@ -99,6 +99,44 @@ Abort controllers allow you to cancel ongoing LLM operations, which is essential
     }
     ```
   </Tab>
+
+  <Tab title="Rust" language="rust">
+    ```rust
+    use baml::CancellationToken;
+    use myproject::baml_client::sync_client::B;
+    use std::time::Duration;
+
+    // Rust uses CancellationToken for cancellation and timeouts
+    // Create token with 5 second timeout
+    let token = CancellationToken::new_with_timeout(Duration::from_secs(5));
+
+    let result = B.ExtractResume
+        .with_cancellation_token(Some(token))
+        .call(text);
+
+    match result {
+        Ok(resume) => println!("Result: {:?}", resume),
+        Err(e) => {
+            let err = format!("{:?}", e).to_lowercase();
+            if err.contains("cancel") || err.contains("timeout") {
+                println!("Operation was cancelled or timed out");
+            }
+        }
+    }
+
+    // Manual cancellation
+    let token = CancellationToken::new();
+    let token_clone = token.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(5));
+        token_clone.cancel();
+    });
+
+    let result = B.ExtractResume
+        .with_cancellation_token(Some(token))
+        .call(text);
+    ```
+  </Tab>
 </Tabs>
 
 ## Basic Examples
@@ -186,7 +224,7 @@ Automatically cancel operations that take too long:
     func extractWithTimeout(text string, timeout time.Duration) (Result, error) {
         ctx, cancel := context.WithTimeout(context.Background(), timeout)
         defer cancel()
-        
+
         result, err := b.ExtractResume(ctx, text)
         if err != nil {
             if errors.Is(err, context.DeadlineExceeded) {
@@ -194,8 +232,25 @@ Automatically cancel operations that take too long:
             }
             return nil, err
         }
-        
+
         return result, nil
+    }
+    ```
+  </Tab>
+
+  <Tab title="Rust" language="rust">
+    ```rust
+    use baml::CancellationToken;
+    use myproject::baml_client::sync_client::B;
+    use std::time::Duration;
+
+    fn extract_with_timeout(text: &str, timeout: Duration) -> Result<Resume, String> {
+        let token = CancellationToken::new_with_timeout(timeout);
+
+        B.ExtractResume
+            .with_cancellation_token(Some(token))
+            .call(text)
+            .map_err(|e| format!("Operation failed: {}", e))
     }
     ```
   </Tab>
@@ -348,21 +403,51 @@ Abort controllers work seamlessly with streaming responses:
     ```go
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
-    
+
     stream := b.StreamGenerateStory(ctx, prompt)
-    
+
     wordCount := 0
     for chunk := range stream {
         wordCount += len(strings.Fields(chunk))
-        
+
         // Stop if we've generated enough
         if wordCount > 1000 {
             cancel()
             break
         }
-        
+
         // Process chunk
         fmt.Println(chunk)
+    }
+    ```
+  </Tab>
+
+  <Tab title="Rust" language="rust">
+    ```rust
+    use baml::CancellationToken;
+    use myproject::baml_client::sync_client::B;
+
+    let token = CancellationToken::new();
+    let token_clone = token.clone();
+
+    let mut stream = B.GenerateStory
+        .with_cancellation_token(Some(token))
+        .stream(prompt)
+        .unwrap();
+
+    let mut word_count = 0;
+    for partial in stream.partials() {
+        if let Ok(chunk) = partial {
+            word_count += chunk.split_whitespace().count();
+
+            // Stop if we've generated enough
+            if word_count > 1000 {
+                token_clone.cancel();
+                break;
+            }
+
+            println!("{}", chunk);
+        }
     }
     ```
   </Tab>
@@ -434,17 +519,48 @@ Properly handle abort errors to distinguish cancellations from other failures:
             // User cancelled - this is expected
             return Result{Success: false, Cancelled: true}, nil
         }
-        
+
         if errors.Is(err, context.DeadlineExceeded) {
             // Timeout occurred
             return Result{Success: false, TimedOut: true}, nil
         }
-        
+
         // Other error
         return Result{}, fmt.Errorf("extraction failed: %w", err)
     }
-    
+
     return Result{Success: true, Data: result}, nil
+    ```
+  </Tab>
+
+  <Tab title="Rust" language="rust">
+    ```rust
+    use baml::CancellationToken;
+    use myproject::baml_client::sync_client::B;
+
+    let result = B.ExtractResume
+        .with_cancellation_token(Some(token))
+        .call(text);
+
+    match result {
+        Ok(data) => {
+            // Success
+            println!("Extracted: {:?}", data);
+        }
+        Err(e) => {
+            let err_str = format!("{:?}", e).to_lowercase();
+            if err_str.contains("cancel") || err_str.contains("abort") {
+                // User cancelled - this is expected
+                println!("Operation was cancelled");
+            } else if err_str.contains("timeout") || err_str.contains("deadline") {
+                // Timeout occurred
+                println!("Operation timed out");
+            } else {
+                // Unexpected error
+                eprintln!("Extraction failed: {}", e);
+            }
+        }
+    }
     ```
   </Tab>
 </Tabs>

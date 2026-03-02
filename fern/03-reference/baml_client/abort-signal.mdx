@@ -14,6 +14,7 @@ BAML provides cancellation support for in-flight function calls across all langu
 | TypeScript | `AbortSignal` API | Built-in (Node.js 15+) |
 | Python | Custom `AbortController` | `from baml_py import AbortController` |
 | Go | `context.Context` | Built-in |
+| Rust | `CancellationToken` | `use baml::CancellationToken` |
 | Ruby | Not supported | - |
 
 ## API Reference
@@ -124,6 +125,43 @@ default:
 
 </Tab>
 
+<Tab title="Rust" language="rust">
+### Rust
+
+```rust
+use baml::CancellationToken;
+use myproject::baml_client::sync_client::B;
+use std::time::Duration;
+
+// Create a token with timeout
+let token = CancellationToken::new_with_timeout(Duration::from_secs(5));
+
+let result = B.FunctionName
+    .with_cancellation_token(Some(token))
+    .call(input);
+
+// Manual cancellation
+let token = CancellationToken::new();
+let token_clone = token.clone();
+std::thread::spawn(move || {
+    std::thread::sleep(Duration::from_secs(5));
+    token_clone.cancel();
+});
+
+let result = B.FunctionName
+    .with_cancellation_token(Some(token))
+    .call(input);
+```
+
+#### CancellationToken Methods
+
+- `CancellationToken::new() -> CancellationToken` - Creates a new cancellation token
+- `CancellationToken::new_with_timeout(duration: Duration) -> CancellationToken` - Creates a token that auto-cancels after the specified duration
+- `cancel() -> ()` - Cancels the associated operation(s)
+- `clone() -> CancellationToken` - Clones the token for sharing across threads
+
+</Tab>
+
 <Tab title="Ruby" language="ruby">
 ### Ruby
 
@@ -183,9 +221,9 @@ Abort controllers work seamlessly with streaming responses:
     ```go
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
-    
+
     stream := b.StreamFunctionName(ctx, input)
-    
+
     for chunk := range stream {
         // Process chunk
         if someCondition {
@@ -195,7 +233,30 @@ Abort controllers work seamlessly with streaming responses:
     }
     ```
   </Tab>
-  
+
+  <Tab title="Rust" language="rust">
+    ```rust
+    use baml::CancellationToken;
+    use myproject::baml_client::sync_client::B;
+
+    let token = CancellationToken::new();
+    let token_clone = token.clone();
+
+    let mut stream = B.FunctionName
+        .with_cancellation_token(Some(token))
+        .stream(input)
+        .unwrap();
+
+    for partial in stream.partials() {
+        // Process chunk
+        if some_condition {
+            token_clone.cancel(); // Stops the stream
+            break;
+        }
+    }
+    ```
+  </Tab>
+
 </Tabs>
 
 ## Error Types
@@ -205,6 +266,7 @@ When an operation is aborted, language-specific errors are thrown:
 - **TypeScript**: `BamlAbortError`
 - **Python**: `BamlAbortError`
 - **Go**: `context.Canceled` or `context.DeadlineExceeded`
+- **Rust**: Error containing "cancel" or "timeout" in debug representation
 - **Ruby**: Not supported
 
 See [BamlAbortError](/ref/baml_client/errors/baml-abort-error) for detailed error handling information.
@@ -227,6 +289,10 @@ The BAML `AbortController` implementation is thread-safe and can be used across 
 
 <Tab title="Go" language="go">
 Go's `context.Context` is designed for concurrent use and is safe to pass to multiple goroutines.
+</Tab>
+
+<Tab title="Rust" language="rust">
+Rust's `CancellationToken` is thread-safe (`Send + Sync`) and can be cloned and shared across threads safely.
 </Tab>
 
 <Tab title="Ruby" language="ruby">
@@ -325,7 +391,7 @@ AbortController is not supported in Ruby.
     defer cancel()
 
     errChan := make(chan error, 3)
-    
+
     // Start multiple concurrent operations
     for i := 0; i < 3; i++ {
       go func(idx int) {
@@ -333,11 +399,37 @@ AbortController is not supported in Ruby.
         errChan <- err
       }(i)
     }
-    
+
     // Cancel all operations after 100ms
     time.Sleep(100 * time.Millisecond)
     cancel()
-	
+
+    ```
+  </Tab>
+
+  <Tab title="Rust" language="rust">
+    ```rust
+    use baml::CancellationToken;
+    use myproject::baml_client::sync_client::B;
+    use std::thread;
+
+    // Shared token cancels all operations
+    let token = CancellationToken::new();
+
+    let input = input(); // Your input data
+    let handles: Vec<_> = (0..3).map(|_| {
+        let t = token.clone();
+        let input = input.clone();
+        thread::spawn(move || {
+            B.Operation1
+                .with_cancellation_token(Some(t))
+                .call(input)
+        })
+    }).collect();
+
+    // Cancel all after 100ms
+    thread::sleep(std::time::Duration::from_millis(100));
+    token.cancel();
     ```
   </Tab>
 </Tabs>

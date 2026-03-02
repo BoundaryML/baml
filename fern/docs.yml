@@ -334,6 +334,9 @@ navigation:
           - page: Ruby
             icon: fa-regular fa-gem
             path: 01-guide/02-languages/ruby.mdx
+          - page: Rust
+            icon: fa-brands fa-rust
+            path: 01-guide/02-languages/rust.mdx
           - page: REST API (other languages)
             icon: fa-regular fa-network-wired
             path: 01-guide/02-languages/rest.mdx

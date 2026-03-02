@@ -75,6 +75,32 @@ func main() {
 }
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+
+fn main() {
+    // Use shorthand provider/model syntax
+    let result = B.ExtractResume
+        .with_client("openai/gpt-4o-mini")
+        .call("...")
+        .unwrap();
+
+    // Use OpenRouter for open-source models
+    let result = B.ExtractResume
+        .with_client("openrouter/meta-llama/llama-3.1-70b-instruct")
+        .call("...")
+        .unwrap();
+
+    // Or reference a client defined in your .baml files
+    let result = B.ExtractResume
+        .with_client("MyCustomClient")
+        .call("...")
+        .unwrap();
+}
+```
+</Tab>
 </Tabs>
 
 ## When to Use
@@ -131,6 +157,23 @@ cr.SetPrimaryClient("ModelA")
 result, err := b.ExtractResume(ctx, "...",
     b.WithClient("ModelB"),
     b.WithClientRegistry(cr))
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use baml::ClientRegistry;
+use myproject::baml_client::sync_client::B;
+
+let mut registry = ClientRegistry::new();
+registry.set_primary_client("ModelA");
+
+// "ModelB" will be used, not "ModelA"
+let result = B.ExtractResume
+    .with_client("ModelB")
+    .with_client_registry(&registry)
+    .call("...")
+    .unwrap();
 ```
 </Tab>
 </Tabs>

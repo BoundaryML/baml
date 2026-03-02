@@ -125,6 +125,18 @@ func testPdfInput() error {
 }
 ```
 
+```rust Rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_pdf_from_base64;
+
+fn test_pdf_input() {
+    // Create a PDF from Base64 data
+    let b64 = "JVBERi0K....";
+    let pdf = new_pdf_from_base64(b64, None);
+    let res = B.TestPdfInput.call(&pdf).unwrap();
+}
+```
+
 ```ruby
 # Ruby implementation is in development.
 ```
@@ -319,6 +331,18 @@ test PdfFileTest {
   type="() (map[string]interface{}, error)"
 >
   Convert the PDF to a map representation. Returns either `{"url": string}` or `{"base64": string, "media_type": string}`.
+</ParamField>
+
+</Tab>
+<Tab title="Rust" language="rust">
+
+### Static Methods
+
+<ParamField
+  path="new_pdf_from_base64"
+  type="(base64: &str, media_type: Option<&str>) -> BamlPdf"
+>
+  Creates a PDF from Base64 encoded data. The media type defaults to `application/pdf`.
 </ParamField>
 
 </Tab>

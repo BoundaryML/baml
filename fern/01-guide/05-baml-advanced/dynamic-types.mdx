@@ -100,13 +100,13 @@ package main
 import (
     "context"
     "fmt"
-    
+
     b "example.com/baml_client"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     tb := b.NewTypeBuilder()
     _, err := tb.Category.AddValue("VALUE3")
     if err != nil {
@@ -116,15 +116,33 @@ func main() {
     if err != nil {
         panic(fmt.Sprintf("Failed to add value: %v", err))
     }
-    
+
     // Pass the typebuilder
     res, err := b.DynamicCategorizer(ctx, "some input", b.WithTypeBuilder(tb))
     if err != nil {
         panic(fmt.Sprintf("Failed to categorize: %v", err))
     }
-    
+
     // Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
     fmt.Printf("Result: %v\n", res)
+}
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::type_builder::TypeBuilder;
+
+fn main() {
+    let tb = TypeBuilder::new();
+    tb.Category().inner().add_value("VALUE3").unwrap();
+    tb.Category().inner().add_value("VALUE4").unwrap();
+
+    // Pass the typebuilder
+    let res = B.DynamicCategorizer.with_type_builder(&tb).call("some input").unwrap();
+    // Now res can be VALUE1, VALUE2, VALUE3, or VALUE4
+    println!("Result: {:?}", res);
 }
 ```
 </Tab>
@@ -224,13 +242,13 @@ package main
 import (
     "context"
     "fmt"
-    
+
     b "example.com/baml_client"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     tb := b.NewTypeBuilder()
     _, err := tb.User.AddProperty("email", tb.String())
     if err != nil {
@@ -244,14 +262,31 @@ func main() {
     if err != nil {
         panic(fmt.Sprintf("Failed to set description: %v", err))
     }
-    
+
     res, err := b.DynamicUserCreator(ctx, "some user info", b.WithTypeBuilder(tb))
     if err != nil {
         panic(fmt.Sprintf("Failed to create user: %v", err))
     }
-    
+
     // Now res can have email and address fields
     fmt.Printf("Result: %+v\n", res)
+}
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::type_builder::TypeBuilder;
+
+fn main() {
+    let tb = TypeBuilder::new();
+    tb.User().inner().add_property("email", &tb.string()).unwrap();
+    tb.User().inner().add_property("address", &tb.string()).unwrap();
+
+    let res = B.DynamicUserCreator.with_type_builder(&tb).call("some user info").unwrap();
+    // Now res can have email and address fields
+    println!("Result: {:?}", res);
 }
 ```
 </Tab>
@@ -340,20 +375,20 @@ package main
 import (
     "context"
     "fmt"
-    
+
     b "example.com/baml_client"
 )
 
 func main() {
     ctx := context.Background()
-    
+
     tb := b.NewTypeBuilder()
     toolsField, err := tb.Union([]baml.FieldType{
         // we could comment one of these if we wanted!
-        tb.GetWeather.Type(), 
+        tb.GetWeather.Type(),
         tb.GetNews.Type()
     }).List()
-    
+
     toolsField, err := tb.ChatResponse.AddProperty("tools", toolsField)
     if err != nil {
         panic(fmt.Sprintf("Failed to add property: %v", err))
@@ -362,7 +397,7 @@ func main() {
     if err != nil {
         panic(fmt.Sprintf("Failed to set description: %v", err))
     }
-    
+
     // Example usage would depend on having a Chat function defined
     // res, err := b.Chat(ctx, messages, b.WithTypeBuilder(tb))
     // if err != nil {
@@ -370,6 +405,19 @@ func main() {
     // }
     // fmt.Printf("Result: %+v\n", res)
 }
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::type_builder::TypeBuilder;
+
+let tb = TypeBuilder::new();
+let weather_type = tb.GetWeather().r#type();
+let news_type = tb.GetNews().r#type();
+let tools_type = tb.union(&[&weather_type, &news_type]);
+let tools_list = tb.list(&tools_type);
+tb.ChatResponse().inner().add_property("tools", &tools_list).unwrap();
 ```
 </Tab>
 
@@ -507,6 +555,38 @@ Note that you must attach the new types to the existing Return Type of your BAML
     }
     ```
   </Tab>
+
+  <Tab title="Rust" language="rust">
+    ```rust Rust
+    use myproject::baml_client::sync_client::B;
+    use myproject::baml_client::type_builder::TypeBuilder;
+
+    fn main() {
+        let tb = TypeBuilder::new();
+        let hobbies_enum = tb.add_enum("Hobbies").unwrap();
+        hobbies_enum.add_value("Soccer").unwrap();
+        hobbies_enum.add_value("Reading").unwrap();
+
+        let address_class = tb.add_class("Address").unwrap();
+        address_class.add_property("street", &tb.string()).unwrap();
+
+        let hobbies_type = hobbies_enum.as_type().unwrap();
+        let optional_hobbies = tb.optional(&hobbies_type);
+        tb.User().inner().add_property("hobby", &optional_hobbies).unwrap();
+
+        let address_type = address_class.as_type().unwrap();
+        let optional_address = tb.optional(&address_type);
+        tb.User().inner().add_property("address", &optional_address).unwrap();
+
+        let res = B.DynamicUserCreator
+            .with_type_builder(&tb)
+            .call("some user info")
+            .unwrap();
+        // Now res might have the hobby property, which can be Soccer or Reading
+        println!("Result: {:?}", res);
+    }
+    ```
+  </Tab>
 </Tabs>
 
 
@@ -564,6 +644,16 @@ err = email.SetDescription("The user's email")
 if err != nil {
     panic(fmt.Sprintf("Failed to set description: %v", err))
 }
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::type_builder::TypeBuilder;
+
+let tb = TypeBuilder::new();
+tb.User().inner().add_property("email", &tb.string()).unwrap()
+    .description("The user's email");
 ```
 </Tab>
 </Tabs>
@@ -669,6 +759,32 @@ tb.AddBaml(`
     VALUE5
   }
 `)
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust Rust
+use myproject::baml_client::type_builder::TypeBuilder;
+
+let tb = TypeBuilder::new();
+tb.add_baml(r#"
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynamic enum Category {
+    VALUE5
+  }
+"#).unwrap();
 ```
 </Tab>
 

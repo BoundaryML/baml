@@ -136,6 +136,35 @@ BAML Ruby (beta) does not currently support async/concurrent calls.
 Please [contact us](/contact) if this is something you need.
 
 </Tab>
+
+<Tab title="Rust" language="rust">
+
+You can make concurrent `B.ClassifyMessage.call()` calls using threads:
+
+```rust main.rs
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::types::*;
+use std::thread;
+
+fn main() {
+    let handles: Vec<_> = vec![
+        "I want to cancel my order",
+        "I want a refund",
+    ]
+    .into_iter()
+    .map(|msg| {
+        let msg = msg.to_string();
+        thread::spawn(move || B.ClassifyMessage.call(&msg))
+    })
+    .collect();
+
+    let results: Vec<Category> = handles
+        .into_iter()
+        .map(|h| h.join().unwrap().unwrap())
+        .collect();
+}
+```
+</Tab>
 </Tabs>
 
 ## Cancelling Parallel Operations
@@ -227,28 +256,28 @@ import (
     "fmt"
     "sync"
     "time"
-    
+
     b "example.com/myproject/baml_client"
 )
 
 func main() {
     // Create a cancellable context
     ctx, cancel := context.WithCancel(context.Background())
-    
+
     // Cancel all operations after 2 seconds
     go func() {
         time.Sleep(2 * time.Second)
         cancel()
         fmt.Println("All operations cancelled")
     }()
-    
+
     var wg sync.WaitGroup
     messages := []string{
         "I want to cancel my order",
         "I want a refund",
         "Is my package shipped?",
     }
-    
+
     for _, msg := range messages {
         wg.Add(1)
         go func(message string) {
@@ -263,8 +292,56 @@ func main() {
             fmt.Printf("Completed: %s -> %v\n", message, result)
         }(msg)
     }
-    
+
     wg.Wait()
+}
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use baml::CancellationToken;
+use myproject::baml_client::sync_client::B;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    // Create a shared cancellation token
+    let token = CancellationToken::new();
+    let token_for_cancel = token.clone();
+
+    // Cancel all operations after 2 seconds
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(2));
+        token_for_cancel.cancel();
+        println!("All operations cancelled");
+    });
+
+    let messages = vec![
+        "I want to cancel my order",
+        "I want a refund",
+        "Is my package shipped?",
+    ];
+
+    let handles: Vec<_> = messages
+        .into_iter()
+        .map(|msg| {
+            let t = token.clone();
+            thread::spawn(move || {
+                let result = B.ClassifyMessage
+                    .with_cancellation_token(Some(t))
+                    .call(msg);
+                match result {
+                    Ok(category) => println!("Completed: {} -> {:?}", msg, category),
+                    Err(e) => println!("Cancelled: {}", msg),
+                }
+            })
+        })
+        .collect();
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
 }
 ```
 </Tab>
@@ -605,6 +682,71 @@ func fastestProviderWins(message string) (interface{}, error) {
 }
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use baml::{CancellationToken, ClientRegistry};
+use myproject::baml_client::sync_client::B;
+use std::collections::HashMap;
+use std::sync::mpsc;
+use std::thread;
+
+fn fastest_provider_wins(message: &str) -> Result<String, String> {
+    let (tx, rx) = mpsc::channel();
+    let cancel_token = CancellationToken::new();
+
+    // OpenAI
+    let msg = message.to_string();
+    let tx1 = tx.clone();
+    let t1 = cancel_token.clone();
+    thread::spawn(move || {
+        let mut registry = ClientRegistry::new();
+        let mut options = HashMap::new();
+        options.insert("model".to_string(), serde_json::json!("gpt-5-mini"));
+        registry.add_llm_client("OpenAI", "openai", options);
+        registry.set_primary_client("OpenAI");
+        if let Ok(result) = B.ClassifyMessage
+            .with_client_registry(&registry)
+            .with_cancellation_token(Some(t1))
+            .call(&msg)
+        {
+            let _ = tx1.send(("OpenAI", result));
+        }
+    });
+
+    // Anthropic
+    let msg = message.to_string();
+    let tx2 = tx.clone();
+    let t2 = cancel_token.clone();
+    thread::spawn(move || {
+        let mut registry = ClientRegistry::new();
+        let mut options = HashMap::new();
+        options.insert("model".to_string(), serde_json::json!("claude-3-5-haiku-20241022"));
+        registry.add_llm_client("Anthropic", "anthropic", options);
+        registry.set_primary_client("Anthropic");
+        if let Ok(result) = B.ClassifyMessage
+            .with_client_registry(&registry)
+            .with_cancellation_token(Some(t2))
+            .call(&msg)
+        {
+            let _ = tx2.send(("Anthropic", result));
+        }
+    });
+
+    drop(tx);
+
+    // Wait for the first result and cancel slower operations
+    match rx.recv() {
+        Ok((provider, result)) => {
+            cancel_token.cancel();
+            println!("Provider {} won", provider);
+            Ok(format!("{:?}", result))
+        }
+        Err(_) => Err("All providers failed".to_string()),
+    }
+}
+```
+</Tab>
 </Tabs>
 
 ### Implementing Timeouts for Parallel Operations
@@ -678,11 +820,11 @@ async def classify_with_timeout(messages: list[str], timeout_seconds: float = 5)
 func classifyWithTimeout(messages []string, timeout time.Duration) ([]types.Category, error) {
     ctx, cancel := context.WithTimeout(context.Background(), timeout)
     defer cancel()
-    
+
     results := make([]types.Category, len(messages))
     errors := make([]error, len(messages))
     var wg sync.WaitGroup
-    
+
     for i, msg := range messages {
         wg.Add(1)
         go func(index int, message string) {
@@ -692,9 +834,9 @@ func classifyWithTimeout(messages []string, timeout time.Duration) ([]types.Cate
             errors[index] = err
         }(i, msg)
     }
-    
+
     wg.Wait()
-    
+
     // Check for errors
     for i, err := range errors {
         if err != nil {
@@ -704,8 +846,48 @@ func classifyWithTimeout(messages []string, timeout time.Duration) ([]types.Cate
             return nil, fmt.Errorf("message %d failed: %w", i, err)
         }
     }
-    
+
     return results, nil
+}
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use baml::CancellationToken;
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::types::*;
+use std::thread;
+use std::time::Duration;
+
+fn classify_with_timeout(
+    messages: &[&str],
+    timeout: Duration,
+) -> Result<Vec<Category>, String> {
+    let token = CancellationToken::new_with_timeout(timeout);
+
+    let handles: Vec<_> = messages
+        .iter()
+        .map(|msg| {
+            let t = token.clone();
+            let msg = msg.to_string();
+            thread::spawn(move || {
+                B.ClassifyMessage
+                    .with_cancellation_token(Some(t))
+                    .call(&msg)
+            })
+        })
+        .collect();
+
+    let mut results = Vec::new();
+    for handle in handles {
+        match handle.join().unwrap() {
+            Ok(result) => results.push(result),
+            Err(e) => return Err(format!("Classification failed: {}", e)),
+        }
+    }
+
+    Ok(results)
 }
 ```
 </Tab>

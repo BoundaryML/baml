@@ -117,6 +117,19 @@ Setting can also be modified via functions in `baml_client.config`.
   ```  
   
   </Tab>
+  <Tab title="rust" language="rust">
+```rust
+// Rust uses environment variables directly.
+// Set BAML_LOG, BAML_LOG_JSON, etc. before running your application,
+// or use .with_env_var() on function calls to override per-call.
+use myproject::baml_client::sync_client::B;
+
+let result = B.ExtractResume
+    .with_env_var("BAML_LOG", "DEBUG")
+    .call("...")
+    .unwrap();
+```
+  </Tab>
   <Tab title="ruby" language="ruby">
 ```ruby
 # not implemented yet

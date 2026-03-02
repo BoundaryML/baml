@@ -65,6 +65,28 @@ print(collector.last.calls[-1].http_response)  # Print final response
 print(collector.last.raw_llm_response) # a string of the last response made
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+
+// Create a collector with optional name
+let collector = new_collector("my-collector");
+
+// Use it with a function call
+let result = B.ExtractResume
+    .with_collector(&collector)
+    .call("...")
+    .unwrap();
+
+// Access logging information
+let logs = collector.logs();
+if let Some(log) = logs.last() {
+    println!("{:?}", log.usage());
+}
+```
+</Tab>
 </Tabs>
 
 ## Common Use Cases
@@ -170,6 +192,34 @@ end
 run
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+
+fn run() {
+    let collector = new_collector("my-collector");
+    let res = B.ExtractResume
+        .with_collector(&collector)
+        .call("...")
+        .unwrap();
+    println!("{:?}", res);
+
+    let logs = collector.logs();
+    let last = logs.last().expect("Should have at least one log");
+
+    // Print the id of the last request
+    println!("{}", last.id());
+
+    // Print usage (aggregated from all retries)
+    println!("{:?}", last.usage());
+
+    // Print function name
+    println!("{}", last.function_name());
+}
+```
+</Tab>
 </Tabs>
 
 
@@ -240,6 +290,26 @@ if len(logs) > 0 {
 }
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+
+let collector = new_collector("tags-collector");
+let result = B.TestOpenAIGPT4oMini
+    .with_collector(&collector)
+    .with_tag("call_id", "first")
+    .with_tag("version", "v1")
+    .call("hi")
+    .unwrap();
+
+let logs = collector.logs();
+if let Some(log) = logs.last() {
+    println!("Tags: {:?}", log.tags());
+}
+```
+</Tab>
 </Tabs>
 
 
@@ -287,6 +357,25 @@ def run
     # Reuse the same collector
     res = b.ExtractResume(input: 'Second call', baml_options: { collector: collector })
 end
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+
+let collector = new_collector("reusable-collector");
+let res = B.ExtractResume
+    .with_collector(&collector)
+    .call("First call")
+    .unwrap();
+
+// Reuse the same collector
+let res2 = B.ExtractResume
+    .with_collector(&collector)
+    .call("Second call")
+    .unwrap();
 ```
 </Tab>
 </Tabs>
@@ -355,20 +444,46 @@ def run
     # Create separate collectors for different parts of your application
     collector_a = Baml::Collector.new(name: "collector-a")
     collector_b = Baml::Collector.new(name: "collector-b")
-    
+
     # Use both collectors for the same function call
     res = b.ExtractResume(input: 'hi there', baml_options: { collector: [collector_a, collector_b] })
-    
+
     # Both collectors will have the same logs
     raise "Assertion failed" unless collector_a.last.usage.input_tokens == collector_b.last.usage.input_tokens
-    
+
     # Use only collector_a for another call
     res2 = b.ExtractResume(input: 'another call', baml_options: { collector: collector_a })
-    
+
     # collector_a will have 2 logs, collector_b will still have 1
     raise "Assertion failed" unless collector_a.logs.length == 2
     raise "Assertion failed" unless collector_b.logs.length == 1
 end
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+
+let collector_a = new_collector("collector-a");
+let collector_b = new_collector("collector-b");
+
+// Use both collectors for the same function call
+let res = B.ExtractResume
+    .with_collectors(&[collector_a.clone(), collector_b.clone()])
+    .call("...")
+    .unwrap();
+
+// Use only collector_a for another call
+let res2 = B.ExtractResume
+    .with_collector(&collector_a)
+    .call("another call")
+    .unwrap();
+
+// collector_a will have 2 logs, collector_b will still have 1
+assert_eq!(collector_a.logs().len(), 2);
+assert_eq!(collector_b.logs().len(), 1);
 ```
 </Tab>
 </Tabs>
@@ -428,6 +543,29 @@ def run
     print(collector_a.usage)
     print(collector_b.usage)
 end
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_collector;
+
+let collector_a = new_collector("collector-a");
+let res = B.ExtractResume
+    .with_collector(&collector_a)
+    .call("...")
+    .unwrap();
+
+let collector_b = new_collector("collector-b");
+let res2 = B.ExtractResume
+    .with_collector(&collector_b)
+    .call("...")
+    .unwrap();
+
+// The total usage of both logs is now available
+println!("{:?}", collector_a.usage());
+println!("{:?}", collector_b.usage());
 ```
 </Tab>
 </Tabs>

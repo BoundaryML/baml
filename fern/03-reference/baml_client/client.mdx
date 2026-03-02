@@ -93,6 +93,19 @@ def example
 end
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::async_client::B;
+
+async fn example() -> Result<(), baml_client::Error> {
+    // Call your BAML functions.
+    let story = B.TellMeAStory.call().await?;
+    let poem = B.WriteAPoemAbout.call("Roses").await?;
+    Ok(())
+}
+```
+</Tab>
 </Tabs>
 
 The sync client is exactly the same but it doesn't need an async runtime,
@@ -161,6 +174,19 @@ def example
   story = b.TellMeAStory()
   poem = b.WriteAPoemAbout("Roses")
 end
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+
+fn example() -> Result<(), baml_client::Error> {
+    // Call your BAML functions.
+    let story = B.TellMeAStory.call()?;
+    let poem = B.WriteAPoemAbout.call("Roses")?;
+    Ok(())
+}
 ```
 </Tab>
 </Tabs>
@@ -262,6 +288,24 @@ def example
 end
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+
+fn example() -> Result<(), baml_client::Error> {
+    let mut stream = B.TellMeAStory.stream()?;
+
+    for partial in stream.partials() {
+        println!("{:?}", partial?);
+    }
+
+    let final_response = stream.get_final_response()?;
+    println!("{:?}", final_response);
+    Ok(())
+}
+```
+</Tab>
 </Tabs>
 
 ### `.request`
@@ -315,6 +359,12 @@ def example
 end
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+// Rust modular API coming soon!
+```
+</Tab>
 </Tabs>
 
 ### `.stream_request`
@@ -363,6 +413,12 @@ def example
   puts request.headers
   puts request.body.json
 end
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+// Rust modular API coming soon!
 ```
 </Tab>
 </Tabs>
@@ -460,6 +516,19 @@ def run
   # Fully parsed Resume type.
   puts parsed
 end
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+
+fn example() -> Result<(), baml_client::Error> {
+    // Parse an LLM response string into the typed output.
+    let parsed = B.TellMeAStory.parse("Once upon a time...")?;
+    println!("{:?}", parsed);
+    Ok(())
+}
 ```
 </Tab>
 </Tabs>

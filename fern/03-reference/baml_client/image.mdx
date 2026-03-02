@@ -109,6 +109,26 @@ func stringPtr(s string) *string {
 }
 ```
 
+```rust Rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::new_image_from_url;
+use myproject::baml_client::new_image_from_base64;
+
+fn test_image_input() {
+    // Create an Image from a URL
+    let img = new_image_from_url(
+        "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png",
+        None,
+    );
+    let res = B.TestImageInput.call(&img).unwrap();
+
+    // Create an Image from Base64 data
+    let image_b64 = "iVB0xyz...";
+    let img = new_image_from_base64(image_b64, Some("image/png"));
+    let res = B.TestImageInput.call(&img).unwrap();
+}
+```
+
 ```ruby
 # Ruby implementation is in development.
 ```
@@ -285,6 +305,25 @@ func stringPtr(s string) *string {
   type="() (map[string]interface{}, error)"
 >
   Convert the image to a map representation. Returns either `{"url": string}` or `{"base64": string, "media_type": string}`.
+</ParamField>
+
+</Tab>
+<Tab title="Rust" language="rust">
+
+### Static Methods
+
+<ParamField
+  path="new_image_from_url"
+  type="(url: &str, media_type: Option<&str>) -> BamlImage"
+>
+  Creates an Image from a URL. Optionally specify the media type.
+</ParamField>
+
+<ParamField
+  path="new_image_from_base64"
+  type="(base64: &str, media_type: Option<&str>) -> BamlImage"
+>
+  Creates an Image from Base64 encoded data with an optional MIME type.
 </ParamField>
 
 </Tab>

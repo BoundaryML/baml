@@ -76,6 +76,22 @@ async function example() {
 ```ruby Ruby
 # Example coming soon
 ```
+
+```rust Rust
+use myproject::baml_client::sync_client::B;
+
+fn main() {
+    match B.CallFunctionThatRaisesError.call() {
+        Ok(result) => println!("Result: {:?}", result),
+        Err(e) => {
+            // All BAML errors implement Display and Debug
+            eprintln!("Error: {}", e);
+            // Use Debug format for detailed error info
+            eprintln!("Details: {:?}", e);
+        }
+    }
+}
+```
 </CodeGroup>
 
 
@@ -337,6 +353,33 @@ rescue Baml::ValidationError => e
   puts "Validation failed: #{e.message}"
 end
 ```
+
+```rust Rust
+use baml::CancellationToken;
+use myproject::baml_client::sync_client::B;
+use std::time::Duration;
+
+fn main() {
+    // Cancel after 5 seconds
+    let token = CancellationToken::new_with_timeout(Duration::from_secs(5));
+
+    let result = B.ExtractData
+        .with_cancellation_token(Some(token))
+        .call(input_text);
+
+    match result {
+        Ok(data) => println!("Result: {:?}", data),
+        Err(e) => {
+            let error_str = format!("{:?}", e).to_lowercase();
+            if error_str.contains("cancel") || error_str.contains("timeout") {
+                println!("Operation timed out after 5 seconds");
+            } else {
+                eprintln!("Error: {}", e);
+            }
+        }
+    }
+}
+```
 </CodeGroup>
 
 For more information on using abort controllers, see the [Abort Controllers guide](/guide/baml-basics/abort-signal).
@@ -401,6 +444,18 @@ begin
 rescue Baml::ValidationError => e
   result = b.fixup_foo(JSON.generate(e))
 end
+```
+
+```rust Rust
+use myproject::baml_client::sync_client::B;
+
+let result = match B.Foo.call(my_data) {
+    Ok(result) => result,
+    Err(e) => {
+        // Attempt fixup on errors
+        B.FixupFoo.call(&format!("{:?}", e)).unwrap()
+    }
+};
 ```
 </CodeGroup>
 

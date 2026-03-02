@@ -127,6 +127,29 @@ result = Baml::Client.categorize(text: "The sun is bright", baml_options: { tb: 
 # result can now be RED, BLUE, GREEN, or YELLOW
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+use myproject::baml_client::sync_client::B;
+use myproject::baml_client::type_builder::TypeBuilder;
+
+fn main() {
+    // Create a TypeBuilder instance
+    let tb = TypeBuilder::new();
+
+    // Add new values to the Category enum
+    tb.Category().inner().add_value("GREEN").unwrap();
+    tb.Category().inner().add_value("YELLOW").unwrap();
+
+    // Pass the typebuilder when calling the function
+    let result = B.Categorize
+        .with_type_builder(&tb)
+        .call("The sun is bright")
+        .unwrap();
+    // result can now be RED, BLUE, GREEN, or YELLOW
+}
+```
+</Tab>
 </Tabs>
 
 ## Dynamic Types
@@ -173,6 +196,14 @@ tb.User.add_property('email', tb.string)
 tb.User.add_property('address', tb.string)
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+let tb = TypeBuilder::new();
+tb.User().inner().add_property("email", tb.string()).unwrap();
+tb.User().inner().add_property("address", tb.string()).unwrap();
+```
+</Tab>
 </Tabs>
 </ParamField>
 
@@ -208,6 +239,14 @@ tb.Category.addValue('VALUE4')
 tb = Baml::TypeBuilder.new
 tb.Category.add_value('VALUE3')
 tb.Category.add_value('VALUE4')
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+let tb = TypeBuilder::new();
+tb.Category().inner().add_value("VALUE3").unwrap();
+tb.Category().inner().add_value("VALUE4").unwrap();
 ```
 </Tab>
 </Tabs>
@@ -275,6 +314,26 @@ address.add_property("city", tb.string)
 # Attach new types to existing BAML type
 tb.User.add_property("hobbies", hobbies.type.list)
 tb.User.add_property("address", address.type)
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+let tb = TypeBuilder::new();
+
+// Create a new enum
+let hobbies = tb.add_enum("Hobbies").unwrap();
+hobbies.add_value("Soccer").unwrap();
+hobbies.add_value("Reading").unwrap();
+
+// Create a new class
+let address = tb.add_class("Address").unwrap();
+address.add_property("street", tb.string()).unwrap();
+address.add_property("city", tb.string()).unwrap();
+
+// Attach new types to existing BAML type
+tb.User().inner().add_property("hobbies", hobbies.as_type().unwrap().list()).unwrap();
+tb.User().inner().add_property("address", address.as_type().unwrap()).unwrap();
 ```
 </Tab>
 </Tabs>
@@ -411,6 +470,20 @@ tb.Category.add_value("URGENT")
    .description("Needs immediate attention")
 ```
 </Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+let tb = TypeBuilder::new();
+
+// Add description to a property
+tb.User().inner().add_property("email", tb.string()).unwrap()
+    .description("User's primary email address");
+
+// Add description to an enum value
+tb.Category().inner().add_value("URGENT").unwrap()
+    .description("Needs immediate attention");
+```
+</Tab>
 </Tabs>
 
 ## Creating/modyfing dynamic types with the `add_baml` method
@@ -436,7 +509,7 @@ tb.add_baml("""
   }
 
   // Modifies the existing @@dynamic Category enum to add a new variant.
-  dynmic enum Category {
+  dynamic enum Category {
     PURPLE
   }
 """)
@@ -460,7 +533,7 @@ tb.addBaml(`
   }
 
   // Modifies the existing @@dynamic Category enum to add a new variant.
-  dynmic enum Category {
+  dynamic enum Category {
     PURPLE
   }
 `)
@@ -484,10 +557,34 @@ tb.add_baml("
   }
 
   // Modifies the existing @@dynamic Category enum to add a new variant.
-  dynmic enum Category {
+  dynamic enum Category {
     PURPLE
   }
 ")
+```
+</Tab>
+
+<Tab title="Rust" language="rust">
+```rust
+let tb = TypeBuilder::new();
+tb.add_baml(r#"
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
+
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynamic enum Category {
+    PURPLE
+  }
+"#).unwrap();
 ```
 </Tab>
 </Tabs>

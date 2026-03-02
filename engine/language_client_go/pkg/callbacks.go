@@ -9,10 +9,10 @@ import "C"
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -68,6 +68,7 @@ type OnTickCallbackData interface {
 var (
 	dynamicCallbacks  = make(map[uint32]CallbackData)
 	callbackMutex     sync.RWMutex
+	nextCallbackID    atomic.Uint32
 	typeMap           serde.TypeMap
 	callbackLogFile   *os.File
 	callbackLogFileMu sync.Mutex
@@ -116,6 +117,12 @@ func SetTypeMap(t map[string]reflect.Type) {
 
 //export on_tick_callback
 func on_tick_callback(id C.uint32_t) {
+	defer func() {
+		if r := recover(); r != nil {
+			callbackLog("[CLIENT_GO_CALLBACK_PANIC] on_tick id=%d panic=%v", uint32(id), r)
+		}
+	}()
+
 	callbackMutex.RLock()
 	id_uint := uint32(id)
 	callback, exists := dynamicCallbacks[id_uint]
@@ -149,14 +156,14 @@ func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int
 		// Send the error to the callback
 		if content_str == "AbortError" {
 			// Special handling for AbortError
-			callback.channel <- ResultCallback{Error: callback.ctx.Err()}
+			safeSend(callback.channel, ResultCallback{Error: callback.ctx.Err()})
 		} else {
 			// TODO: cast to the right error type
 			err := BamlError{Message: content_str}
-			callback.channel <- ResultCallback{Error: err}
+			safeSend(callback.channel, ResultCallback{Error: err})
 		}
 
-		close(callback.channel)
+		safeClose(callback.channel)
 		callbackMutex.Lock()
 		defer callbackMutex.Unlock()
 		deleteCallback(id_uint)
@@ -181,8 +188,8 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 		var content_holder cffi.CFFIValueHolder
 		err := proto.Unmarshal(content_bytes, &content_holder)
 		if err != nil {
-			callback.channel <- ResultCallback{Error: err}
-			close(callback.channel)
+			safeSend(callback.channel, ResultCallback{Error: err})
+			safeClose(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()
 			deleteCallback(id_uint)
@@ -202,9 +209,9 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 			res = ResultCallback{HasStreamData: true, StreamData: decoded_data}
 		}
 
-		callback.channel <- res
+		safeSend(callback.channel, res)
 		if isDone == 1 {
-			close(callback.channel)
+			safeClose(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()
 			deleteCallback(id_uint)
@@ -218,8 +225,8 @@ func trigger_callback_object_handle(id uint32, callback CallbackData, content_by
 	var response cffi.InvocationResponse
 	err := proto.Unmarshal(content_bytes, &response)
 	if err != nil {
-		callback.channel <- ResultCallback{Error: fmt.Errorf("failed to unmarshal InvocationResponse: %w", err)}
-		close(callback.channel)
+		safeSend(callback.channel, ResultCallback{Error: fmt.Errorf("failed to unmarshal InvocationResponse: %w", err)})
+		safeClose(callback.channel)
 		callbackMutex.Lock()
 		defer callbackMutex.Unlock()
 		deleteCallback(id)
@@ -228,42 +235,39 @@ func trigger_callback_object_handle(id uint32, callback CallbackData, content_by
 
 	switch resp := response.GetResponse().(type) {
 	case *cffi.InvocationResponse_Error:
-		callback.channel <- ResultCallback{Error: BamlError{Message: resp.Error}}
+		safeSend(callback.channel, ResultCallback{Error: BamlError{Message: resp.Error}})
 	case *cffi.InvocationResponse_Success:
 		success := resp.Success
 		if success == nil {
-			callback.channel <- ResultCallback{Error: fmt.Errorf("nil success in InvocationResponse")}
+			safeSend(callback.channel, ResultCallback{Error: fmt.Errorf("nil success in InvocationResponse")})
 		} else {
 			switch result := success.GetResult().(type) {
 			case *cffi.InvocationResponseSuccess_Object:
 				decoded, decodeErr := decodeRawObjectImpl(callback.runtime, result.Object)
 				if decodeErr != nil {
-					callback.channel <- ResultCallback{Error: fmt.Errorf("failed to decode object handle: %w", decodeErr)}
+					safeSend(callback.channel, ResultCallback{Error: fmt.Errorf("failed to decode object handle: %w", decodeErr)})
 				} else {
-					callback.channel <- ResultCallback{HasData: true, Data: decoded}
+					safeSend(callback.channel, ResultCallback{HasData: true, Data: decoded})
 				}
 			default:
-				callback.channel <- ResultCallback{Error: fmt.Errorf("unexpected result type in InvocationResponse: %T", success.GetResult())}
+				safeSend(callback.channel, ResultCallback{Error: fmt.Errorf("unexpected result type in InvocationResponse: %T", success.GetResult())})
 			}
 		}
 	default:
-		callback.channel <- ResultCallback{Error: fmt.Errorf("unexpected response type in InvocationResponse")}
+		safeSend(callback.channel, ResultCallback{Error: fmt.Errorf("unexpected response type in InvocationResponse")})
 	}
 
-	close(callback.channel)
+	safeClose(callback.channel)
 	callbackMutex.Lock()
 	defer callbackMutex.Unlock()
 	deleteCallback(id)
 }
 
 func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, chan ResultCallback) {
+	id := nextCallbackID.Add(1)
 	callbackMutex.Lock()
 	defer callbackMutex.Unlock()
-	id := uint32(rand.Intn(1000000))
-	for _, exists := dynamicCallbacks[id]; exists; {
-		id = uint32(rand.Intn(1000000))
-	}
-	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback), ctx: ctx, onTick: onTick, responseType: responseTypeValue}
+	dynamicCallbacks[id] = CallbackData{channel: make(chan ResultCallback, 64), ctx: ctx, onTick: onTick, responseType: responseTypeValue}
 	callbackLog("[CLIENT_GO_CALLBACK_ADD] id=%d map_size=%d", id, len(dynamicCallbacks))
 	return id, dynamicCallbacks[id].channel
 }
@@ -271,20 +275,52 @@ func create_unique_id(ctx context.Context, onTick OnTickCallbackData) (uint32, c
 // create_unique_id_for_object creates a callback ID for object-handle responses (e.g. build_request).
 // The runtime pointer is needed to decode the object handle on the Go side.
 func create_unique_id_for_object(ctx context.Context, runtime unsafe.Pointer) (uint32, chan ResultCallback) {
+	id := nextCallbackID.Add(1)
 	callbackMutex.Lock()
 	defer callbackMutex.Unlock()
-	id := uint32(rand.Intn(1000000))
-	for _, exists := dynamicCallbacks[id]; exists; {
-		id = uint32(rand.Intn(1000000))
-	}
 	dynamicCallbacks[id] = CallbackData{
-		channel:      make(chan ResultCallback),
+		channel:      make(chan ResultCallback, 1),
 		ctx:          ctx,
 		responseType: responseTypeObjectHandle,
 		runtime:      runtime,
 	}
 	callbackLog("[CLIENT_GO_CALLBACK_ADD] id=%d type=object_handle map_size=%d", id, len(dynamicCallbacks))
 	return id, dynamicCallbacks[id].channel
+}
+
+// safeSend sends a result on a callback channel, recovering from panic if
+// the channel has already been closed by a concurrent callback (e.g.
+// error_callback closing the channel while trigger_callback is sending).
+func safeSend(ch chan ResultCallback, res ResultCallback) (sent bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			callbackLog("[CLIENT_GO_CALLBACK_PANIC] safeSend panic=%v", r)
+			sent = false
+		}
+	}()
+	ch <- res
+	return true
+}
+
+// safeClose closes a callback channel, recovering from panic if it has
+// already been closed by a concurrent callback.
+func safeClose(ch chan ResultCallback) {
+	defer func() {
+		if r := recover(); r != nil {
+			callbackLog("[CLIENT_GO_CALLBACK_PANIC] safeClose panic=%v", r)
+		}
+	}()
+	close(ch)
+}
+
+// cleanupCallback safely closes the channel and removes the callback entry.
+// Used by runtime.go when a C FFI call fails synchronously — the Rust side
+// won't invoke error_callback/trigger_callback, so we must clean up ourselves.
+func cleanupCallback(id uint32, ch chan ResultCallback) {
+	safeClose(ch)
+	callbackMutex.Lock()
+	defer callbackMutex.Unlock()
+	deleteCallback(id)
 }
 
 // Helper to log callback removal
