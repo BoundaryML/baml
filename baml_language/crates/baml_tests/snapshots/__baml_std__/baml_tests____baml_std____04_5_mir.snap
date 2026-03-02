@@ -400,7 +400,7 @@ fn build_plan_with_state(llm_client: baml.llm.Client, planner_state: baml.llm.Pl
     }
 
     bb5: {
-        _9 = is_type(copy _3, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }));
+        _9 = is_type(copy _3, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, TyAttr(None)));
         branch copy _9 -> [bb8, bb3];
     }
 
@@ -816,7 +816,7 @@ fn execute_client(llm_client: baml.llm.Client, context: baml.llm.ExecutionContex
     }
 
     bb5: {
-        _11 = is_type(copy _4, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }));
+        _11 = is_type(copy _4, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, TyAttr(None)));
         branch copy _11 -> [bb8, bb3];
     }
 

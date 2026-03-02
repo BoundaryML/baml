@@ -29,7 +29,7 @@ fn CatchAllTyped(x: int) -> string {
 
     bb3: {
         _3 = copy _2;
-        _4 = is_type(copy _2, String);
+        _4 = is_type(copy _2, String { attr: TyAttr(None) });
         branch copy _4 -> [bb7, bb6];
     }
 
@@ -43,7 +43,7 @@ fn CatchAllTyped(x: int) -> string {
     }
 
     bb6: {
-        _5 = is_type(copy _2, Int);
+        _5 = is_type(copy _2, Int { attr: TyAttr(None) });
         branch copy _5 -> [bb9, bb4];
     }
 
@@ -138,7 +138,7 @@ fn CatchThenCatchAll(x: int) -> string {
 
     bb3: {
         _5 = copy _2;
-        _6 = is_type(copy _2, String);
+        _6 = is_type(copy _2, String { attr: TyAttr(None) });
         branch copy _6 -> [bb9, bb7];
     }
 
@@ -201,7 +201,7 @@ fn PartialCatch(x: int) -> string {
 
     bb3: {
         _3 = copy _2;
-        _4 = is_type(copy _2, String);
+        _4 = is_type(copy _2, String { attr: TyAttr(None) });
         branch copy _4 -> [bb6, bb4];
     }
 

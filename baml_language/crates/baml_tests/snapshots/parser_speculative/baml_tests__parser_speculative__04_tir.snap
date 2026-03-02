@@ -3,38 +3,38 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function AnotherLLM:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function AnotherLLM.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function Ambiguous.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function AnotherLLM.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Ambiguous.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function Ambiguous:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ProcessData:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ExtractData.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function ExtractData:
-    Return: Class(QualifiedName { namespace: Local, name: "JsonData" })
+    Return: Class(QualifiedName { namespace: Local, name: "JsonData" }, TyAttr(None))
   Function ExtractData.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function SimpleCalc:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function ChainedProcess.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function LLMAnalyze.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function ProcessAnalysis:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function LLMAnalyze:
-    Return: Class(QualifiedName { namespace: Local, name: "Analysis" })
+    Return: Class(QualifiedName { namespace: Local, name: "Analysis" }, TyAttr(None))
   Function ChainedProcess:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function LLMAnalyze.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function ChainedProcess.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))

@@ -77,11 +77,11 @@ pub struct HintContext<'a> {
 fn display_ty(ty: &baml_db::baml_compiler_tir::Ty) -> Option<baml_db::baml_compiler_tir::Ty> {
     use baml_db::baml_compiler_tir::{LiteralValue, Ty};
     match ty {
-        Ty::Unknown | Ty::Error | Ty::BuiltinUnknown => None,
-        Ty::Literal(LiteralValue::Int(_)) => Some(Ty::Int),
-        Ty::Literal(LiteralValue::Float(_)) => Some(Ty::Float),
-        Ty::Literal(LiteralValue::String(_)) => Some(Ty::String),
-        Ty::Literal(LiteralValue::Bool(_)) => Some(Ty::Bool),
+        Ty::Unknown { .. } | Ty::Error { .. } | Ty::BuiltinUnknown { .. } => None,
+        Ty::Literal(LiteralValue::Int(_), attr) => Some(Ty::Int { attr: attr.clone() }),
+        Ty::Literal(LiteralValue::Float(_), attr) => Some(Ty::Float { attr: attr.clone() }),
+        Ty::Literal(LiteralValue::String(_), attr) => Some(Ty::String { attr: attr.clone() }),
+        Ty::Literal(LiteralValue::Bool(_), attr) => Some(Ty::Bool { attr: attr.clone() }),
         other => Some(other.clone()),
     }
 }
@@ -97,7 +97,7 @@ fn plain_label(text: impl Into<String>) -> Vec<InlayHintLabelPart> {
 /// Convert a [`Ty`] into label parts, wrapping in parentheses if it's a
 /// compound type (union or function) that would be ambiguous without them.
 fn wrap_if_compound(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
-    if matches!(ty, Ty::Union(_) | Ty::Function { .. }) {
+    if matches!(ty, Ty::Union(..) | Ty::Function { .. }) {
         let mut parts = vec![InlayHintLabelPart {
             value: "(".into(),
             target: None,
@@ -116,14 +116,14 @@ fn wrap_if_compound(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 /// Convert a [`Ty`] into label parts, resolving named types to clickable links.
 fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
     match ty {
-        Ty::Class(fqn) | Ty::Enum(fqn) | Ty::TypeAlias(fqn) => {
+        Ty::Class(fqn, _) | Ty::Enum(fqn, _) | Ty::TypeAlias(fqn, _) => {
             let target = lookup_symbol_definition(db, fqn);
             vec![InlayHintLabelPart {
                 value: fqn.to_string(),
                 target,
             }]
         }
-        Ty::Optional(inner) => {
+        Ty::Optional(inner, _) => {
             let mut parts = wrap_if_compound(db, inner);
             parts.push(InlayHintLabelPart {
                 value: "?".into(),
@@ -132,7 +132,7 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 
             parts
         }
-        Ty::List(inner) => {
+        Ty::List(inner, _) => {
             let mut parts = wrap_if_compound(db, inner);
             parts.push(InlayHintLabelPart {
                 value: "[]".into(),
@@ -141,7 +141,7 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 
             parts
         }
-        Ty::Map { key, value } => {
+        Ty::Map { key, value, .. } => {
             let mut parts = vec![InlayHintLabelPart {
                 value: "map<".into(),
                 target: None,
@@ -159,7 +159,7 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 
             parts
         }
-        Ty::Union(types) => {
+        Ty::Union(types, _) => {
             let mut parts = Vec::new();
             for (i, t) in types.iter().enumerate() {
                 if i > 0 {
@@ -173,7 +173,7 @@ fn ty_to_label_parts(db: &ProjectDatabase, ty: &Ty) -> Vec<InlayHintLabelPart> {
 
             parts
         }
-        Ty::Function { params, ret } => {
+        Ty::Function { params, ret, .. } => {
             let mut parts = vec![InlayHintLabelPart {
                 value: "(".into(),
                 target: None,

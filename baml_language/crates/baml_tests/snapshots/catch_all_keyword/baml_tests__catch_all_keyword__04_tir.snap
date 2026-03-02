@@ -3,12 +3,12 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function CatchAllTyped:
-    Return: Union([String, Literal(String("caught string")), Literal(String("caught int"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught string"), TyAttr(None)), Literal(String("caught int"), TyAttr(None))], TyAttr(None))
   Function MayFailIntOrString:
-    Return: Literal(String("ok"))
+    Return: Literal(String("ok"), TyAttr(None))
   Function CatchThenCatchAll:
-    Return: Union([String, Literal(String("caught string")), Literal(String("caught rest"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught string"), TyAttr(None)), Literal(String("caught rest"), TyAttr(None))], TyAttr(None))
   Function PartialCatch:
-    Return: Union([String, Literal(String("caught string"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught string"), TyAttr(None))], TyAttr(None))
   Function CatchAllWildcard:
-    Return: Union([String, Literal(String("caught all"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught all"), TyAttr(None))], TyAttr(None))

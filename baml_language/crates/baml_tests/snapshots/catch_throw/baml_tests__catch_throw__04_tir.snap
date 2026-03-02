@@ -3,26 +3,26 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function CatchWithTypedArm:
-    Return: Union([String, Literal(String("caught string"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught string"), TyAttr(None))], TyAttr(None))
   Function CatchAndRethrow:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ChainedCatchClauses:
-    Return: Union([String, Literal(String("first handler")), Literal(String("second handler"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("first handler"), TyAttr(None)), Literal(String("second handler"), TyAttr(None))], TyAttr(None))
   Function SingleCatchWildcard:
-    Return: Union([String, Literal(String("caught"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught"), TyAttr(None))], TyAttr(None))
   Function ThrowStatement:
-    Return: Never
+    Return: Never { attr: TyAttr(None) }
   Function MayFailIntOrString:
-    Return: Literal(String("ok"))
+    Return: Literal(String("ok"), TyAttr(None))
   Function MayFail:
-    Return: Literal(String("ok"))
+    Return: Literal(String("ok"), TyAttr(None))
   Function SingleCatchTyped:
-    Return: Union([String, Literal(String("caught string"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught string"), TyAttr(None))], TyAttr(None))
   Function AlsoMayFail:
-    Return: Literal(String("also ok"))
+    Return: Literal(String("also ok"), TyAttr(None))
   Function NestedCatch:
-    Return: Union([String, Union([String, Literal(String("inner caught"))])])
+    Return: Union([String { attr: TyAttr(None) }, Union([String { attr: TyAttr(None) }, Literal(String("inner caught"), TyAttr(None))], TyAttr(None))], TyAttr(None))
   Function CatchWithFallback:
-    Return: Union([String, Literal(String("caught string")), Literal(String("caught int fallback"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught string"), TyAttr(None)), Literal(String("caught int fallback"), TyAttr(None))], TyAttr(None))
   Function MultipleCatchArms:
-    Return: Union([String, Literal(String("caught string")), Literal(String("caught int"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("caught string"), TyAttr(None)), Literal(String("caught int"), TyAttr(None))], TyAttr(None))

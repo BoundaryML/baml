@@ -45,6 +45,21 @@ pub fn inbound_to_external(
     }
 }
 
+/// Build the default "any scalar" union type for untyped inbound values.
+fn default_scalar_union_ty() -> Ty {
+    let d = baml_type::TyAttr::default();
+    Ty::Union(
+        vec![
+            Ty::Int { attr: d.clone() },
+            Ty::Float { attr: d.clone() },
+            Ty::String { attr: d.clone() },
+            Ty::Bool { attr: d.clone() },
+            Ty::Null { attr: d.clone() },
+        ],
+        d,
+    )
+}
+
 fn convert_list(
     list: InboundListValue,
     handle_table: &HandleTable,
@@ -55,7 +70,7 @@ fn convert_list(
         .map(|v| inbound_to_external(v, handle_table))
         .collect();
     Ok(BexExternalValue::Array {
-        element_type: Ty::Union(vec![Ty::Int, Ty::Float, Ty::String, Ty::Bool, Ty::Null]),
+        element_type: default_scalar_union_ty(),
         items: items?,
     })
 }
@@ -75,8 +90,10 @@ fn convert_map(
         entries.insert(key, value);
     }
     Ok(BexExternalValue::Map {
-        key_type: Ty::String,
-        value_type: Ty::Union(vec![Ty::Int, Ty::Float, Ty::String, Ty::Bool, Ty::Null]),
+        key_type: Ty::String {
+            attr: baml_type::TyAttr::default(),
+        },
+        value_type: default_scalar_union_ty(),
         entries,
     })
 }

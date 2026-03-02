@@ -3,14 +3,14 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function Bar:
-    Return: Literal(Int(1))
+    Return: Literal(Int(1), TyAttr(None))
     Errors:
       - Unknown type unknown_param_type
   Function Foo:
-    Return: Literal(Int(1))
+    Return: Literal(Int(1), TyAttr(None))
     Errors:
       - Unknown type blah
   Function Baz:
-    Return: Null
+    Return: Null { attr: TyAttr(None) }
     Errors:
       - Unknown type unknown_optional

@@ -200,32 +200,36 @@ impl JinjaType {
 impl From<&Ty> for JinjaType {
     fn from(ty: &Ty) -> Self {
         match ty {
-            Ty::Unknown => JinjaType::Unknown,
-            Ty::Null => JinjaType::None,
-            Ty::Int => JinjaType::Int,
-            Ty::Float => JinjaType::Float,
-            Ty::String => JinjaType::String,
-            Ty::Bool => JinjaType::Bool,
-            Ty::List(elem) => JinjaType::List(Box::new(JinjaType::from(elem.as_ref()))),
-            Ty::Map { key, value } => JinjaType::Map(
+            Ty::Unknown { .. } => JinjaType::Unknown,
+            Ty::Null { .. } => JinjaType::None,
+            Ty::Int { .. } => JinjaType::Int,
+            Ty::Float { .. } => JinjaType::Float,
+            Ty::String { .. } => JinjaType::String,
+            Ty::Bool { .. } => JinjaType::Bool,
+            Ty::List(elem, _) => JinjaType::List(Box::new(JinjaType::from(elem.as_ref()))),
+            Ty::Map { key, value, .. } => JinjaType::Map(
                 Box::new(JinjaType::from(key.as_ref())),
                 Box::new(JinjaType::from(value.as_ref())),
             ),
-            Ty::Union(items) => JinjaType::Union(items.iter().map(JinjaType::from).collect()),
-            Ty::Optional(inner) => {
+            Ty::Union(items, _) => JinjaType::Union(items.iter().map(JinjaType::from).collect()),
+            Ty::Optional(inner, _) => {
                 JinjaType::Union(vec![JinjaType::None, JinjaType::from(inner.as_ref())])
             }
-            Ty::Class(name) => JinjaType::ClassRef(name.to_string()),
-            Ty::Literal(crate::LiteralValue::String(s)) => {
+            Ty::Class(name, _) => JinjaType::ClassRef(name.to_string()),
+            Ty::Literal(crate::LiteralValue::String(s), _) => {
                 JinjaType::Literal(LiteralValue::String(s.clone()))
             }
-            Ty::Literal(crate::LiteralValue::Int(i)) => JinjaType::Literal(LiteralValue::Int(*i)),
-            Ty::Literal(crate::LiteralValue::Bool(b)) => JinjaType::Literal(LiteralValue::Bool(*b)),
-            Ty::Literal(crate::LiteralValue::Float(_)) => JinjaType::Float,
-            Ty::Enum(name) => JinjaType::EnumRef(name.to_string()),
-            Ty::Media(baml_base::MediaKind::Image) => JinjaType::Image,
-            Ty::Media(baml_base::MediaKind::Audio) => JinjaType::Audio,
-            Ty::Media(_) => JinjaType::Audio, // TODO: Do we need more jinja media types?
+            Ty::Literal(crate::LiteralValue::Int(i), _) => {
+                JinjaType::Literal(LiteralValue::Int(*i))
+            }
+            Ty::Literal(crate::LiteralValue::Bool(b), _) => {
+                JinjaType::Literal(LiteralValue::Bool(*b))
+            }
+            Ty::Literal(crate::LiteralValue::Float(_), _) => JinjaType::Float,
+            Ty::Enum(name, _) => JinjaType::EnumRef(name.to_string()),
+            Ty::Media(baml_base::MediaKind::Image, _) => JinjaType::Image,
+            Ty::Media(baml_base::MediaKind::Audio, _) => JinjaType::Audio,
+            Ty::Media(_, _) => JinjaType::Audio, // TODO: Do we need more jinja media types?
             _ => JinjaType::Unknown,
         }
     }
@@ -247,7 +251,7 @@ impl JinjaType {
         expanding: &mut HashSet<baml_base::Name>,
     ) -> Self {
         match ty {
-            Ty::TypeAlias(fqn) => {
+            Ty::TypeAlias(fqn, _) => {
                 if expanding.contains(&fqn.name) {
                     return JinjaType::RecursiveTypeAlias(fqn.name.to_string());
                 }
@@ -263,20 +267,20 @@ impl JinjaType {
                     JinjaType::RecursiveTypeAlias(fqn.name.to_string())
                 }
             }
-            Ty::List(elem) => {
+            Ty::List(elem, _) => {
                 JinjaType::List(Box::new(Self::from_ty_impl(elem, aliases, expanding)))
             }
-            Ty::Map { key, value } => JinjaType::Map(
+            Ty::Map { key, value, .. } => JinjaType::Map(
                 Box::new(Self::from_ty_impl(key, aliases, expanding)),
                 Box::new(Self::from_ty_impl(value, aliases, expanding)),
             ),
-            Ty::Union(items) => JinjaType::Union(
+            Ty::Union(items, _) => JinjaType::Union(
                 items
                     .iter()
                     .map(|t| Self::from_ty_impl(t, aliases, expanding))
                     .collect(),
             ),
-            Ty::Optional(inner) => JinjaType::Union(vec![
+            Ty::Optional(inner, _) => JinjaType::Union(vec![
                 JinjaType::None,
                 Self::from_ty_impl(inner, aliases, expanding),
             ]),

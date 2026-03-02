@@ -254,19 +254,19 @@ fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
 
 fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
     let field_type = match ty {
-        Ty::Null => Some(FieldType::NullType(BamlFieldTypeNull {})),
-        Ty::Int => Some(FieldType::IntType(BamlFieldTypeInt {})),
-        Ty::Float => Some(FieldType::FloatType(BamlFieldTypeFloat {})),
-        Ty::Bool => Some(FieldType::BoolType(BamlFieldTypeBool {})),
-        Ty::String => Some(FieldType::StringType(BamlFieldTypeString {})),
-        Ty::List(inner) => Some(FieldType::ListType(Box::new(BamlFieldTypeList {
+        Ty::Null { .. } => Some(FieldType::NullType(BamlFieldTypeNull {})),
+        Ty::Int { .. } => Some(FieldType::IntType(BamlFieldTypeInt {})),
+        Ty::Float { .. } => Some(FieldType::FloatType(BamlFieldTypeFloat {})),
+        Ty::Bool { .. } => Some(FieldType::BoolType(BamlFieldTypeBool {})),
+        Ty::String { .. } => Some(FieldType::StringType(BamlFieldTypeString {})),
+        Ty::List(inner, _) => Some(FieldType::ListType(Box::new(BamlFieldTypeList {
             item_type: Some(Box::new(ty_to_field_type(inner))),
         }))),
-        Ty::Map { key, value } => Some(FieldType::MapType(Box::new(BamlFieldTypeMap {
+        Ty::Map { key, value, .. } => Some(FieldType::MapType(Box::new(BamlFieldTypeMap {
             key_type: Some(Box::new(ty_to_field_type(key))),
             value_type: Some(Box::new(ty_to_field_type(value))),
         }))),
-        Ty::Class(tn) => Some(FieldType::ClassType(
+        Ty::Class(tn, _) => Some(FieldType::ClassType(
             crate::baml::cffi::BamlFieldTypeClass {
                 name: Some(BamlTypeName {
                     namespace: BamlTypeNamespace::Types as i32,
@@ -274,27 +274,27 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
                 }),
             },
         )),
-        Ty::Enum(tn) => Some(FieldType::EnumType(crate::baml::cffi::BamlFieldTypeEnum {
+        Ty::Enum(tn, _) => Some(FieldType::EnumType(crate::baml::cffi::BamlFieldTypeEnum {
             name: tn.display_name.to_string(),
         })),
-        Ty::Union(_) => Some(FieldType::UnionVariantType(BamlFieldTypeUnionVariant {
+        Ty::Union(_, _) => Some(FieldType::UnionVariantType(BamlFieldTypeUnionVariant {
             name: None,
         })),
-        Ty::Optional(inner) => Some(FieldType::OptionalType(Box::new(BamlFieldTypeOptional {
+        Ty::Optional(inner, _) => Some(FieldType::OptionalType(Box::new(BamlFieldTypeOptional {
             value: Some(Box::new(ty_to_field_type(inner))),
         }))),
-        Ty::Media(kind) => Some(FieldType::MediaType(BamlFieldTypeMedia {
+        Ty::Media(kind, _) => Some(FieldType::MediaType(BamlFieldTypeMedia {
             media: media_kind_to_proto_enum(*kind).into(),
         })),
-        Ty::Literal(lit) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
-        Ty::Opaque(tn) => {
+        Ty::Literal(lit, _) => Some(FieldType::LiteralType(literal_to_field_type_literal(lit))),
+        Ty::Opaque(tn, _) => {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
-        Ty::TypeAlias(_)
+        Ty::TypeAlias(_, _)
         | Ty::Function { .. }
-        | Ty::Void
-        | Ty::WatchAccessor(_)
-        | Ty::BuiltinUnknown => unreachable!("compiler-only variant should not reach FFI"),
+        | Ty::Void { .. }
+        | Ty::WatchAccessor(_, _)
+        | Ty::BuiltinUnknown { .. } => unreachable!("compiler-only variant should not reach FFI"),
     };
 
     BamlFieldType { r#type: field_type }

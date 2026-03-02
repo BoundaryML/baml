@@ -178,11 +178,11 @@ impl HostSpanManager {
             },
             call_stack,
             timestamp: std::time::SystemTime::now(),
-            event: EventKind::Function(FunctionEvent::End(bex_events::FunctionEnd {
+            event: EventKind::Function(FunctionEvent::End(Box::new(bex_events::FunctionEnd {
                 name: entry.function_name,
                 result,
                 duration: entry.started_at.elapsed(),
-            })),
+            }))),
         };
         event_store::emit(&event);
         if let Some(sink) = &self.sink {
@@ -227,12 +227,18 @@ fn json_value_to_bex(value: &serde_json::Value) -> bex_project::BexExternalValue
         }
         serde_json::Value::String(s) => BexExternalValue::String(s.clone()),
         serde_json::Value::Array(items) => BexExternalValue::Array {
-            element_type: bex_project::Ty::Null,
+            element_type: bex_project::Ty::Null {
+                attr: bex_project::TyAttr::default(),
+            },
             items: items.iter().map(json_value_to_bex).collect(),
         },
         serde_json::Value::Object(map) => BexExternalValue::Map {
-            key_type: bex_project::Ty::String,
-            value_type: bex_project::Ty::Null,
+            key_type: bex_project::Ty::String {
+                attr: bex_project::TyAttr::default(),
+            },
+            value_type: bex_project::Ty::Null {
+                attr: bex_project::TyAttr::default(),
+            },
             entries: map
                 .iter()
                 .map(|(k, v)| (k.clone(), json_value_to_bex(v)))

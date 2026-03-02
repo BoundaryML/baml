@@ -3,22 +3,22 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function AlwaysThrowsStatus:
-    Return: Never
+    Return: Never { attr: TyAttr(None) }
   Function ThrowsAllStatusVariants:
-    Return: Never
+    Return: Never { attr: TyAttr(None) }
   Function CatchAlwaysThrows:
-    Return: Union([Literal(String("http!")), Literal(String("index!"))])
+    Return: Union([Literal(String("http!"), TyAttr(None)), Literal(String("index!"), TyAttr(None))], TyAttr(None))
   Function RecA:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function WrapperAlwaysThrows:
-    Return: Never
+    Return: Never { attr: TyAttr(None) }
   Function UnreachableTailStillChecked:
-    Return: Never
+    Return: Never { attr: TyAttr(None) }
     Errors:
       - int has no field missing
   Function RecB:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function CatchAllStatusVariants:
-    Return: Union([Literal(String("http!")), Literal(String("index!")), Literal(String("auth!")), Literal(String("other!"))])
+    Return: Union([Literal(String("http!"), TyAttr(None)), Literal(String("index!"), TyAttr(None)), Literal(String("auth!"), TyAttr(None)), Literal(String("other!"), TyAttr(None))], TyAttr(None))
   Function CatchRecursiveThrow:
-    Return: Union([String, Literal(String("handled"))])
+    Return: Union([String { attr: TyAttr(None) }, Literal(String("handled"), TyAttr(None))], TyAttr(None))

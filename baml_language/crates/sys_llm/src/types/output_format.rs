@@ -78,7 +78,8 @@ impl OutputFormatContent {
 
     fn render_impl(&self, options: &RenderOptions) -> Result<Option<String>, RenderError> {
         // For string target with no explicit prefix, return None
-        if matches!(self.target, Ty::String) && matches!(options.prefix, RenderSetting::Auto) {
+        if matches!(self.target, Ty::String { .. }) && matches!(options.prefix, RenderSetting::Auto)
+        {
             return Ok(None);
         }
 
@@ -86,8 +87,10 @@ impl OutputFormatContent {
 
         // For simple primitives (int, float, bool) with Auto prefix, the prefix IS the full message
         // But with explicit prefix, we need to append the type
-        if matches!(self.target, Ty::Int | Ty::Float | Ty::Bool)
-            && matches!(options.prefix, RenderSetting::Auto)
+        if matches!(
+            self.target,
+            Ty::Int { .. } | Ty::Float { .. } | Ty::Bool { .. }
+        ) && matches!(options.prefix, RenderSetting::Auto)
         {
             return Ok(prefix);
         }
@@ -107,17 +110,17 @@ impl OutputFormatContent {
             RenderSetting::Always(p) => Some(p.clone()),
             RenderSetting::Never => None,
             RenderSetting::Auto => match &self.target {
-                Ty::String => None,
-                Ty::Int => Some("Answer as an int".to_string()),
-                Ty::Float => Some("Answer as a float".to_string()),
-                Ty::Bool => Some("Answer as a bool".to_string()),
-                Ty::List(_) => Some("Answer with a JSON Array using this schema:\n".to_string()),
-                Ty::Class(_) | Ty::Map { .. } => {
+                Ty::String { .. } => None,
+                Ty::Int { .. } => Some("Answer as an int".to_string()),
+                Ty::Float { .. } => Some("Answer as a float".to_string()),
+                Ty::Bool { .. } => Some("Answer as a bool".to_string()),
+                Ty::List(..) => Some("Answer with a JSON Array using this schema:\n".to_string()),
+                Ty::Class(..) | Ty::Map { .. } => {
                     Some("Answer in JSON using this schema:\n".to_string())
                 }
-                Ty::Enum(_) => None, // Enum prefix handled differently
-                Ty::Union(_) => Some("Answer in JSON using this schema:\n".to_string()),
-                Ty::Literal(_) => Some("Answer using this specific value:\n".to_string()),
+                Ty::Enum(..) => None, // Enum prefix handled differently
+                Ty::Union(..) => Some("Answer in JSON using this schema:\n".to_string()),
+                Ty::Literal(..) => Some("Answer using this specific value:\n".to_string()),
                 _ => None,
             },
         }
@@ -125,27 +128,27 @@ impl OutputFormatContent {
 
     fn render_type(&self, ty: &Ty, options: &RenderOptions) -> Result<Option<String>, RenderError> {
         match ty {
-            Ty::String => Ok(Some("string".to_string())),
-            Ty::Int => Ok(Some("int".to_string())),
-            Ty::Float => Ok(Some("float".to_string())),
-            Ty::Bool => Ok(Some("bool".to_string())),
-            Ty::Null => Ok(Some("null".to_string())),
+            Ty::String { .. } => Ok(Some("string".to_string())),
+            Ty::Int { .. } => Ok(Some("int".to_string())),
+            Ty::Float { .. } => Ok(Some("float".to_string())),
+            Ty::Bool { .. } => Ok(Some("bool".to_string())),
+            Ty::Null { .. } => Ok(Some("null".to_string())),
 
-            Ty::Optional(inner) => {
+            Ty::Optional(inner, _) => {
                 let inner_str = self
                     .render_type(inner, options)?
                     .unwrap_or_else(|| "unknown".to_string());
                 Ok(Some(format!("{inner_str} | null")))
             }
 
-            Ty::List(inner) => {
+            Ty::List(inner, _) => {
                 let inner_str = self
                     .render_type(inner, options)?
                     .unwrap_or_else(|| "unknown".to_string());
                 Ok(Some(format!("{inner_str}[]")))
             }
 
-            Ty::Map { key, value } => {
+            Ty::Map { key, value, .. } => {
                 let key_str = self
                     .render_type(key, options)?
                     .unwrap_or_else(|| "string".to_string());
@@ -160,7 +163,7 @@ impl OutputFormatContent {
                 }
             }
 
-            Ty::Union(variants) => {
+            Ty::Union(variants, _) => {
                 let rendered: Vec<String> = variants
                     .iter()
                     .filter_map(|v| self.render_type(v, options).ok().flatten())
@@ -172,7 +175,7 @@ impl OutputFormatContent {
                 Ok(Some(rendered.join(splitter)))
             }
 
-            Ty::Enum(tn) => {
+            Ty::Enum(tn, _) => {
                 if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
                     Ok(Some(self.render_enum(enm, options)))
                 } else {
@@ -180,7 +183,7 @@ impl OutputFormatContent {
                 }
             }
 
-            Ty::Class(tn) => {
+            Ty::Class(tn, _) => {
                 if let Some(cls) = self.find_class(tn.display_name.as_str()) {
                     Ok(Some(self.render_class(cls, options)?))
                 } else {
@@ -188,23 +191,23 @@ impl OutputFormatContent {
                 }
             }
 
-            Ty::Media(_) => Err(RenderError::UnsupportedType("media".to_string())),
+            Ty::Media(_, _) => Err(RenderError::UnsupportedType("media".to_string())),
 
             // Literal rendering follows LiteralValue::Display from engine:
             // - String: "value" (quoted with double quotes)
             // - Int: 42 (plain number)
             // - Bool: true/false
-            Ty::Literal(lit) => Ok(Some(render_literal(lit))),
+            Ty::Literal(lit, _) => Ok(Some(render_literal(lit))),
 
             // Runtime-only variants that shouldn't appear in LLM prompts
-            Ty::Opaque(tn) => Err(RenderError::UnsupportedType(tn.to_string())),
+            Ty::Opaque(tn, _) => Err(RenderError::UnsupportedType(tn.to_string())),
 
             // Compiler-only variants should never reach runtime
-            Ty::TypeAlias(_)
+            Ty::TypeAlias(..)
             | Ty::Function { .. }
-            | Ty::Void
-            | Ty::WatchAccessor(_)
-            | Ty::BuiltinUnknown => {
+            | Ty::Void { .. }
+            | Ty::WatchAccessor(..)
+            | Ty::BuiltinUnknown { .. } => {
                 unreachable!(
                     "compiler-only variant {:?} should not reach output_format",
                     ty
@@ -349,39 +352,54 @@ impl RenderOptions {
 
 #[cfg(test)]
 mod tests {
+    use baml_type::TyAttr;
+
     use super::*;
 
     #[test]
     fn test_render_string() {
-        let content = OutputFormatContent::new(Ty::String);
+        let content = OutputFormatContent::new(Ty::String {
+            attr: TyAttr::default(),
+        });
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, None);
     }
 
     #[test]
     fn test_render_int() {
-        let content = OutputFormatContent::new(Ty::Int);
+        let content = OutputFormatContent::new(Ty::Int {
+            attr: TyAttr::default(),
+        });
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as an int".to_string()));
     }
 
     #[test]
     fn test_render_float() {
-        let content = OutputFormatContent::new(Ty::Float);
+        let content = OutputFormatContent::new(Ty::Float {
+            attr: TyAttr::default(),
+        });
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as a float".to_string()));
     }
 
     #[test]
     fn test_render_bool() {
-        let content = OutputFormatContent::new(Ty::Bool);
+        let content = OutputFormatContent::new(Ty::Bool {
+            attr: TyAttr::default(),
+        });
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("Answer as a bool".to_string()));
     }
 
     #[test]
     fn test_render_list() {
-        let content = OutputFormatContent::new(Ty::List(Box::new(Ty::String)));
+        let content = OutputFormatContent::new(Ty::List(
+            Box::new(Ty::String {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -391,7 +409,12 @@ mod tests {
 
     #[test]
     fn test_render_list_of_int() {
-        let content = OutputFormatContent::new(Ty::List(Box::new(Ty::Int)));
+        let content = OutputFormatContent::new(Ty::List(
+            Box::new(Ty::Int {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -401,7 +424,12 @@ mod tests {
 
     #[test]
     fn test_render_optional() {
-        let content = OutputFormatContent::new(Ty::Optional(Box::new(Ty::String)));
+        let content = OutputFormatContent::new(Ty::Optional(
+            Box::new(Ty::String {
+                attr: TyAttr::default(),
+            }),
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(rendered, Some("string | null".to_string()));
     }
@@ -409,8 +437,13 @@ mod tests {
     #[test]
     fn test_render_map() {
         let content = OutputFormatContent::new(Ty::Map {
-            key: Box::new(Ty::String),
-            value: Box::new(Ty::Int),
+            key: Box::new(Ty::String {
+                attr: TyAttr::default(),
+            }),
+            value: Box::new(Ty::Int {
+                attr: TyAttr::default(),
+            }),
+            attr: TyAttr::default(),
         });
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -425,14 +458,28 @@ mod tests {
             name: "Person".to_string(),
             description: Some("A person".to_string()),
             fields: vec![
-                ("name".to_string(), Ty::String, None),
-                ("age".to_string(), Ty::Int, Some("Age in years".to_string())),
+                (
+                    "name".to_string(),
+                    Ty::String {
+                        attr: TyAttr::default(),
+                    },
+                    None,
+                ),
+                (
+                    "age".to_string(),
+                    Ty::Int {
+                        attr: TyAttr::default(),
+                    },
+                    Some("Age in years".to_string()),
+                ),
             ],
         };
 
-        let content =
-            OutputFormatContent::new(Ty::Class(baml_type::TypeName::local("Person".into())))
-                .with_class(cls);
+        let content = OutputFormatContent::new(Ty::Class(
+            baml_type::TypeName::local("Person".into()),
+            TyAttr::default(),
+        ))
+        .with_class(cls);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -455,14 +502,28 @@ mod tests {
             name: "Point".to_string(),
             description: None,
             fields: vec![
-                ("x".to_string(), Ty::Int, None),
-                ("y".to_string(), Ty::Int, None),
+                (
+                    "x".to_string(),
+                    Ty::Int {
+                        attr: TyAttr::default(),
+                    },
+                    None,
+                ),
+                (
+                    "y".to_string(),
+                    Ty::Int {
+                        attr: TyAttr::default(),
+                    },
+                    None,
+                ),
             ],
         };
 
-        let content =
-            OutputFormatContent::new(Ty::Class(baml_type::TypeName::local("Point".into())))
-                .with_class(cls);
+        let content = OutputFormatContent::new(Ty::Class(
+            baml_type::TypeName::local("Point".into()),
+            TyAttr::default(),
+        ))
+        .with_class(cls);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -489,9 +550,11 @@ mod tests {
             ],
         };
 
-        let content =
-            OutputFormatContent::new(Ty::Enum(baml_type::TypeName::local("Color".into())))
-                .with_enum(enm);
+        let content = OutputFormatContent::new(Ty::Enum(
+            baml_type::TypeName::local("Color".into()),
+            TyAttr::default(),
+        ))
+        .with_enum(enm);
 
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
@@ -507,7 +570,20 @@ mod tests {
 
     #[test]
     fn test_render_union() {
-        let content = OutputFormatContent::new(Ty::Union(vec![Ty::String, Ty::Int, Ty::Bool]));
+        let content = OutputFormatContent::new(Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+                Ty::Bool {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -517,7 +593,17 @@ mod tests {
 
     #[test]
     fn test_render_with_custom_or_splitter() {
-        let content = OutputFormatContent::new(Ty::Union(vec![Ty::String, Ty::Int]));
+        let content = OutputFormatContent::new(Ty::Union(
+            vec![
+                Ty::String {
+                    attr: TyAttr::default(),
+                },
+                Ty::Int {
+                    attr: TyAttr::default(),
+                },
+            ],
+            TyAttr::default(),
+        ));
         let options = RenderOptions {
             or_splitter: RenderSetting::Always(" | ".to_string()),
             ..Default::default()
@@ -531,8 +617,10 @@ mod tests {
 
     #[test]
     fn test_render_literal_string() {
-        let content =
-            OutputFormatContent::new(Ty::Literal(LiteralValue::String("hello".to_string())));
+        let content = OutputFormatContent::new(Ty::Literal(
+            LiteralValue::String("hello".to_string()),
+            TyAttr::default(),
+        ));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -542,7 +630,8 @@ mod tests {
 
     #[test]
     fn test_render_literal_int() {
-        let content = OutputFormatContent::new(Ty::Literal(LiteralValue::Int(42)));
+        let content =
+            OutputFormatContent::new(Ty::Literal(LiteralValue::Int(42), TyAttr::default()));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,
@@ -552,7 +641,8 @@ mod tests {
 
     #[test]
     fn test_render_literal_bool() {
-        let content = OutputFormatContent::new(Ty::Literal(LiteralValue::Bool(true)));
+        let content =
+            OutputFormatContent::new(Ty::Literal(LiteralValue::Bool(true), TyAttr::default()));
         let rendered = content.render(&RenderOptions::default()).unwrap();
         assert_eq!(
             rendered,

@@ -69,64 +69,74 @@ pub fn convert_tir_ty(
     recursive_aliases: &HashSet<Name>,
 ) -> Result<Ty, String> {
     match tir_ty {
-        baml_compiler_tir::Ty::Int => Ok(Ty::Int),
-        baml_compiler_tir::Ty::Float => Ok(Ty::Float),
-        baml_compiler_tir::Ty::String => Ok(Ty::String),
-        baml_compiler_tir::Ty::Bool => Ok(Ty::Bool),
-        baml_compiler_tir::Ty::Null => Ok(Ty::Null),
-        baml_compiler_tir::Ty::Media(kind) => Ok(Ty::Media(*kind)),
+        baml_compiler_tir::Ty::Int { attr } => Ok(Ty::Int { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Float { attr } => Ok(Ty::Float { attr: attr.clone() }),
+        baml_compiler_tir::Ty::String { attr } => Ok(Ty::String { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Bool { attr } => Ok(Ty::Bool { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Null { attr } => Ok(Ty::Null { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Media(kind, attr) => Ok(Ty::Media(*kind, attr.clone())),
 
-        baml_compiler_tir::Ty::Literal(lit) => Ok(Ty::Literal(convert_literal(lit))),
+        baml_compiler_tir::Ty::Literal(lit, attr) => {
+            Ok(Ty::Literal(convert_literal(lit), attr.clone()))
+        }
 
-        baml_compiler_tir::Ty::Class(fqn) => {
+        baml_compiler_tir::Ty::Class(fqn, attr) => {
             // Check if this builtin type has a dedicated VM heap variant.
             // Most builtins are Object::Instance, but PromptAst wraps an opaque
             // Rust ADT and has its own Object variant.
             if baml_compiler_tir::is_prompt_ast_class(fqn) {
-                return Ok(Ty::prompt_ast());
+                return Ok(Ty::opaque_builtin(
+                    "baml.llm.PromptAst",
+                    "baml.llm.PromptAst",
+                    attr.clone(),
+                ));
             }
-            Ok(Ty::Class(fqn_to_type_name(fqn)))
+            Ok(Ty::Class(fqn_to_type_name(fqn), attr.clone()))
         }
-        baml_compiler_tir::Ty::Enum(fqn) => Ok(Ty::Enum(fqn_to_type_name(fqn))),
+        baml_compiler_tir::Ty::Enum(fqn, attr) => Ok(Ty::Enum(fqn_to_type_name(fqn), attr.clone())),
 
-        baml_compiler_tir::Ty::TypeAlias(fqn) => {
+        baml_compiler_tir::Ty::TypeAlias(fqn, attr) => {
             let name = &fqn.name;
             if recursive_aliases.contains(name) {
                 // Recursive alias — cannot expand. Return as TypeAlias for
                 // compiler-level subtyping, or error at runtime boundary.
-                Ok(Ty::TypeAlias(fqn_to_type_name(fqn)))
+                Ok(Ty::TypeAlias(fqn_to_type_name(fqn), attr.clone()))
             } else if let Some(resolved) = aliases.get(name) {
-                // Non-recursive alias — expand inline
-                convert_tir_ty(resolved, aliases, recursive_aliases)
+                // Non-recursive alias — expand inline, preserving source attr if non-default
+                let expanded = convert_tir_ty(resolved, aliases, recursive_aliases)?;
+                if attr.is_default() {
+                    Ok(expanded)
+                } else {
+                    Ok(expanded.with_attr(attr.clone()))
+                }
             } else {
                 // Alias not found — shouldn't happen after validation
-                Ok(Ty::Null)
+                Ok(Ty::Null { attr: attr.clone() })
             }
         }
 
-        baml_compiler_tir::Ty::Optional(inner) => Ok(Ty::Optional(Box::new(convert_tir_ty(
-            inner,
-            aliases,
-            recursive_aliases,
-        )?))),
-        baml_compiler_tir::Ty::List(inner) => Ok(Ty::List(Box::new(convert_tir_ty(
-            inner,
-            aliases,
-            recursive_aliases,
-        )?))),
-        baml_compiler_tir::Ty::Map { key, value } => Ok(Ty::Map {
+        baml_compiler_tir::Ty::Optional(inner, attr) => Ok(Ty::Optional(
+            Box::new(convert_tir_ty(inner, aliases, recursive_aliases)?),
+            attr.clone(),
+        )),
+        baml_compiler_tir::Ty::List(inner, attr) => Ok(Ty::List(
+            Box::new(convert_tir_ty(inner, aliases, recursive_aliases)?),
+            attr.clone(),
+        )),
+        baml_compiler_tir::Ty::Map { key, value, attr } => Ok(Ty::Map {
             key: Box::new(convert_tir_ty(key, aliases, recursive_aliases)?),
             value: Box::new(convert_tir_ty(value, aliases, recursive_aliases)?),
+            attr: attr.clone(),
         }),
-        baml_compiler_tir::Ty::Union(types) => {
+        baml_compiler_tir::Ty::Union(types, attr) => {
             let converted: Result<Vec<_>, _> = types
                 .iter()
                 .map(|t| convert_tir_ty(t, aliases, recursive_aliases))
                 .collect();
-            Ok(Ty::Union(converted?))
+            Ok(Ty::Union(converted?, attr.clone()))
         }
 
-        baml_compiler_tir::Ty::Function { params, ret } => {
+        baml_compiler_tir::Ty::Function { params, ret, attr } => {
             let converted_params: Result<Vec<_>, _> = params
                 .iter()
                 .map(|(_, t)| convert_tir_ty(t, aliases, recursive_aliases))
@@ -134,25 +144,36 @@ pub fn convert_tir_ty(
             Ok(Ty::Function {
                 params: converted_params?,
                 ret: Box::new(convert_tir_ty(ret, aliases, recursive_aliases)?),
+                attr: attr.clone(),
             })
         }
 
         // Unknown and Error are TIR-only error recovery types.
         // All real type checking happens in TIR; by the time we convert to
         // baml_type, these just mean "no meaningful type" → map to Null.
-        baml_compiler_tir::Ty::Unknown => Ok(Ty::Null),
-        baml_compiler_tir::Ty::Error => Ok(Ty::Null),
-        baml_compiler_tir::Ty::Void => Ok(Ty::Void),
-        baml_compiler_tir::Ty::Resource => Ok(Ty::resource()),
+        baml_compiler_tir::Ty::Unknown { attr } => Ok(Ty::Null { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Error { attr, .. } => Ok(Ty::Null { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Void { attr } => Ok(Ty::Void { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Resource { attr } => Ok(Ty::opaque_builtin(
+            "baml.llm.Resource",
+            "baml.llm.Resource",
+            attr.clone(),
+        )),
         // BuiltinUnknown is preserved for VIR type checking at call sites.
-        baml_compiler_tir::Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
-        baml_compiler_tir::Ty::Type => Ok(Ty::type_type()),
+        baml_compiler_tir::Ty::BuiltinUnknown { attr } => {
+            Ok(Ty::BuiltinUnknown { attr: attr.clone() })
+        }
+        baml_compiler_tir::Ty::Type { attr } => Ok(Ty::opaque_builtin(
+            "baml.reflect.Type",
+            "type",
+            attr.clone(),
+        )),
 
-        baml_compiler_tir::Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(
-            convert_tir_ty(inner, aliases, recursive_aliases)?,
-        ))),
-        // Never is the bottom type — no runtime value exists. Map to Null for safety.
-        baml_compiler_tir::Ty::Never => Ok(Ty::Null),
+        baml_compiler_tir::Ty::WatchAccessor(inner, attr) => Ok(Ty::WatchAccessor(
+            Box::new(convert_tir_ty(inner, aliases, recursive_aliases)?),
+            attr.clone(),
+        )),
+        baml_compiler_tir::Ty::Never { attr } => Ok(Ty::Null { attr: attr.clone() }),
     }
 }
 
@@ -166,33 +187,42 @@ pub fn sanitize_for_runtime(ty: Ty) -> Result<Ty, String> {
         // Compiler-only → Null (preserves backwards compatibility)
         // Note: Unknown/Error/Never don't exist in baml_type::Ty — they were
         // already mapped to Null/Void during convert_tir_ty.
-        Ty::Void => Ok(Ty::Null),
-        Ty::BuiltinUnknown => Ok(Ty::BuiltinUnknown),
-        Ty::Function { params, ret } => Ok(Ty::Function {
+        Ty::Void { attr } => Ok(Ty::Null { attr }),
+        Ty::BuiltinUnknown { attr } => Ok(Ty::BuiltinUnknown { attr }),
+        Ty::Function {
+            params, ret, attr, ..
+        } => Ok(Ty::Function {
             params: params
                 .into_iter()
                 .map(sanitize_for_runtime)
                 .collect::<Result<Vec<_>, _>>()?,
             ret: Box::new(sanitize_for_runtime(*ret)?),
+            attr,
         }),
         // WatchAccessor → recursively sanitize inner type, preserving wrapper
-        Ty::WatchAccessor(inner) => Ok(Ty::WatchAccessor(Box::new(sanitize_for_runtime(*inner)?))),
+        Ty::WatchAccessor(inner, attr) => Ok(Ty::WatchAccessor(
+            Box::new(sanitize_for_runtime(*inner)?),
+            attr,
+        )),
         // Recursive TypeAlias → error
-        Ty::TypeAlias(ref tn) => Err(format!(
+        Ty::TypeAlias(ref tn, _) => Err(format!(
             "Recursive type alias '{}' cannot be used in class fields or function return types",
             tn.display_name
         )),
         // Recurse into containers
-        Ty::Optional(inner) => Ok(Ty::Optional(Box::new(sanitize_for_runtime(*inner)?))),
-        Ty::List(inner) => Ok(Ty::List(Box::new(sanitize_for_runtime(*inner)?))),
-        Ty::Map { key, value } => Ok(Ty::Map {
+        Ty::Optional(inner, attr) => {
+            Ok(Ty::Optional(Box::new(sanitize_for_runtime(*inner)?), attr))
+        }
+        Ty::List(inner, attr) => Ok(Ty::List(Box::new(sanitize_for_runtime(*inner)?), attr)),
+        Ty::Map { key, value, attr } => Ok(Ty::Map {
             key: Box::new(sanitize_for_runtime(*key)?),
             value: Box::new(sanitize_for_runtime(*value)?),
+            attr,
         }),
-        Ty::Union(members) => {
+        Ty::Union(members, attr) => {
             let sanitized: Result<Vec<_>, _> =
                 members.into_iter().map(sanitize_for_runtime).collect();
-            Ok(Ty::Union(sanitized?))
+            Ok(Ty::Union(sanitized?, attr))
         }
         // All other variants pass through
         other => Ok(other),

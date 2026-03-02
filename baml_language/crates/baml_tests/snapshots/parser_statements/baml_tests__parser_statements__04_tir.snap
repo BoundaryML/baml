@@ -3,44 +3,44 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function mul_assign:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function assign_in_loop:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function multi_assign:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function sub_assign:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function add_assign:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function simple_assign:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function block_with_tail:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function break_in_for:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function simple_continue:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function continue_with_locals:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function simple_break:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function nested_break:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function continue_in_for:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function break_with_locals:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function c_style_for_loop:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function iterator_style_for_loop:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function nested_for_loop:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function ConditionalLogic:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function let_statements:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function simple_while_loop:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function nested_while_loop:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }

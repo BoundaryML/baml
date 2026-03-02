@@ -3,9 +3,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TYPE INFERENCE ===
   Function BinaryExprs:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function ChainExprs:
-    Return: String
+    Return: String { attr: TyAttr(None) }
     Errors:
       - string has no field len
       - ChainItem[] has no field len
@@ -197,177 +197,177 @@ source: crates/baml_tests/src/generated_tests.rs
       - string has no field len
       - string has no field len
   Function WithMethod.greet:
-    Return: Literal(String("hello"))
+    Return: Literal(String("hello"), TyAttr(None))
   Function WithLongMethod.processData:
-    Return: Map { key: String, value: Union([Int, String, Bool]) }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Union([Int { attr: TyAttr(None) }, String { attr: TyAttr(None) }, Bool { attr: TyAttr(None) }], TyAttr(None)), attr: TyAttr(None) }
   Function ManyOptionsClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TestTarget:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function TriviaDeeplyNestedClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function LongArrayOfObjectsClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TestTarget.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function StringProviderClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TriviaClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TypedValuesClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function FullClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function SameLineClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function LongArrayClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TriviaLongValueClientBlock.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function EnvClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function LongNestedValuesClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function DeeplyNestedClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TriviaLongValueClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function BasicClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function ExtraWhitespaceClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function CommaClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function C.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function RawStringConfigClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function ArrayOfObjectsClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function NestedConfigClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TriviaDeeplyNestedClientBlock.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function ArrayConfigClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function MixedValuesClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TestTarget.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function LongOptionClient.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TriviaClientBlock.resolve:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PrimitiveClient" }, TyAttr(None))
   Function TriviaWrapParamsBlock:
-    Return: Literal(String("result"))
+    Return: Literal(String("result"), TyAttr(None))
   Function SingleParam:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function SixLongParams:
-    Return: Literal(String("result"))
+    Return: Literal(String("result"), TyAttr(None))
   Function LlmMultiLine:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function NestedGenericReturn:
-    Return: Map { key: String, value: Map { key: String, value: Map { key: String, value: Union([Int, String, Bool, Null, Float]) } } }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Map { key: String { attr: TyAttr(None) }, value: Map { key: String { attr: TyAttr(None) }, value: Union([Int { attr: TyAttr(None) }, String { attr: TyAttr(None) }, Bool { attr: TyAttr(None) }, Null { attr: TyAttr(None) }, Float { attr: TyAttr(None) }], TyAttr(None)), attr: TyAttr(None) }, attr: TyAttr(None) }, attr: TyAttr(None) }
   Function LlmBasic.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function MultiParamTrivia:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function F:
-    Return: Literal(Int(1))
+    Return: Literal(Int(1), TyAttr(None))
   Function LlmMultiLine.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function MultipleParams:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function ConstrainedParams:
-    Return: Literal(String("done"))
+    Return: Literal(String("done"), TyAttr(None))
   Function ExtraWhitespace:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded:
-    Return: Literal(Int(1))
+    Return: Literal(Int(1), TyAttr(None))
   Function NestedLoops:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function TriviaEverythingLong_NameAndParamsAndReturn:
-    Return: Map { key: String, value: Union([Int, String, Bool, Float, Null]) }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Union([Int { attr: TyAttr(None) }, String { attr: TyAttr(None) }, Bool { attr: TyAttr(None) }, Float { attr: TyAttr(None) }, Null { attr: TyAttr(None) }], TyAttr(None)), attr: TyAttr(None) }
   Function LlmBasic:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function LongNameWithManyParameters_ThisFunctionExceedsLimit:
-    Return: Literal(String("result"))
+    Return: Literal(String("result"), TyAttr(None))
   Function LlmBasic.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function LlmStringClient.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function TriviaEverythingLong_NameAndParamsAndReturnBlock:
-    Return: Map { key: String, value: Union([Int, String, Bool, Float, Null]) }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Union([Int { attr: TyAttr(None) }, String { attr: TyAttr(None) }, Bool { attr: TyAttr(None) }, Float { attr: TyAttr(None) }, Null { attr: TyAttr(None) }], TyAttr(None)), attr: TyAttr(None) }
   Function LlmWithLongSignature.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function LlmReversedOrder:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function VeryLongParamList:
-    Return: Literal(String("result"))
+    Return: Literal(String("result"), TyAttr(None))
   Function LlmStringClient:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function DeepParamTypes:
-    Return: Literal(String("done"))
+    Return: Literal(String("done"), TyAttr(None))
   Function NoColonParams:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function TriviaWrapReturnTypeBlock:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function LlmWithLongSignature:
-    Return: String
+    Return: String { attr: TyAttr(None) }
   Function ManyNestedExprs:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function LongNameWithLongReturnType_ExceedsTheLineLimit:
-    Return: Map { key: String, value: Map { key: String, value: Union([Int, String, Bool, Float, Null]) } }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Map { key: String { attr: TyAttr(None) }, value: Union([Int { attr: TyAttr(None) }, String { attr: TyAttr(None) }, Bool { attr: TyAttr(None) }, Float { attr: TyAttr(None) }, Null { attr: TyAttr(None) }], TyAttr(None)), attr: TyAttr(None) }, attr: TyAttr(None) }
   Function ManyParams:
-    Return: Literal(String("result"))
+    Return: Literal(String("result"), TyAttr(None))
   Function Minimal:
-    Return: Literal(Int(1))
+    Return: Literal(Int(1), TyAttr(None))
   Function LlmReversedOrder.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function TriviaWrapParams:
-    Return: Literal(String("result"))
+    Return: Literal(String("result"), TyAttr(None))
   Function LlmWithLongSignature.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function ComplexReturn:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function LlmMultiLine.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function LlmStringClient.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
   Function EverythingIsLong_NameParamsReturnType:
-    Return: Map { key: String, value: Union([Int, String, Bool, Float, Null]) }
+    Return: Map { key: String { attr: TyAttr(None) }, value: Union([Int { attr: TyAttr(None) }, String { attr: TyAttr(None) }, Bool { attr: TyAttr(None) }, Float { attr: TyAttr(None) }, Null { attr: TyAttr(None) }], TyAttr(None)), attr: TyAttr(None) }
   Function TriviaFuncBlock:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function TriviaFunc:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function LlmReversedOrder.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" })
+    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
   Function DeepNestLongExpr:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function MultiStatement:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function DeepFnReturn:
-    Return: Literal(Int(1))
+    Return: Literal(Int(1), TyAttr(None))
     Errors:
       - Expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>. Found int
   Function TriviaWrapReturnType:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function DeeplyNestedBody:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function FinalExpr:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function MultiParamTriviaBlock:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function MyFunction:
-    Return: Literal(Int(1))
+    Return: Literal(Int(1), TyAttr(None))
   Function AssertStmts:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function LoopStmts:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }
   Function MatchExprs:
-    Return: Union([Literal(String("zero")), Literal(String("other"))])
+    Return: Union([Literal(String("zero"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
     Errors:
       - Unreachable match arm
       - Unreachable match arm
@@ -377,4 +377,4 @@ source: crates/baml_tests/src/generated_tests.rs
       - Invalid op Mul for int and bool
       - Invalid op Mul for bool and int
   Function OtherExprs:
-    Return: Int
+    Return: Int { attr: TyAttr(None) }

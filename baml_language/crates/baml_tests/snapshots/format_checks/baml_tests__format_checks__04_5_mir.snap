@@ -9812,7 +9812,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb245: {
-        _787 = is_type(copy _782, Int);
+        _787 = is_type(copy _782, Int { attr: TyAttr(None) });
         branch copy _787 -> [bb248, bb247];
     }
 
@@ -9824,7 +9824,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb247: {
-        _793 = is_type(copy _782, Int);
+        _793 = is_type(copy _782, Int { attr: TyAttr(None) });
         branch copy _793 -> [bb251, bb243];
     }
 
@@ -10787,7 +10787,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb18: {
-        _16 = is_type(copy _1, Int);
+        _16 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _16 -> [bb25, bb24];
     }
 
@@ -10802,7 +10802,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb21: {
-        _22 = is_type(copy _1, Int);
+        _22 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _22 -> [bb32, bb31];
     }
 
@@ -10953,7 +10953,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb52: {
-        _38 = is_type(copy _1, Int);
+        _38 = is_type(copy _1, Int { attr: TyAttr(None) });
         branch copy _38 -> [bb58, bb56];
     }
 
@@ -11050,7 +11050,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb72: {
-        _47 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }));
+        _47 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)));
         branch copy _47 -> [bb80, bb79];
     }
 
@@ -11069,7 +11069,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb76: {
-        _54 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }), Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" })]));
+        _54 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)), Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None))], TyAttr(None)));
         branch copy _54 -> [bb86, bb84];
     }
 
@@ -11084,7 +11084,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb79: {
-        _50 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }));
+        _50 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None)));
         branch copy _50 -> [bb82, bb77];
     }
 
@@ -11123,7 +11123,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb87: {
-        _58 = is_type(copy _55, Int);
+        _58 = is_type(copy _55, Int { attr: TyAttr(None) });
         branch copy _58 -> [bb94, bb93];
     }
 
@@ -11138,7 +11138,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb90: {
-        _69 = is_type(copy _55, Int);
+        _69 = is_type(copy _55, Int { attr: TyAttr(None) });
         branch copy _69 -> [bb105, bb104];
     }
 
@@ -11154,7 +11154,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb93: {
-        _63 = is_type(copy _55, Int);
+        _63 = is_type(copy _55, Int { attr: TyAttr(None) });
         branch copy _63 -> [bb98, bb97];
     }
 
@@ -11356,7 +11356,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb133: {
-        _97 = is_type(copy _55, Int);
+        _97 = is_type(copy _55, Int { attr: TyAttr(None) });
         branch copy _97 -> [bb143, bb142];
     }
 
@@ -11386,7 +11386,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb139: {
-        _115 = is_type(copy _55, Int);
+        _115 = is_type(copy _55, Int { attr: TyAttr(None) });
         branch copy _115 -> [bb162, bb161];
     }
 
@@ -11730,7 +11730,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb199: {
-        _188 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }));
+        _188 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)));
         branch copy _188 -> [bb215, bb214];
     }
 
@@ -11799,7 +11799,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -
     }
 
     bb214: {
-        _193 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }));
+        _193 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None)));
         branch copy _193 -> [bb222, bb212];
     }
 

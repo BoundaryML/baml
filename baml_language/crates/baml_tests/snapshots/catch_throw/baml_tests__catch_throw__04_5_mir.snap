@@ -28,7 +28,7 @@ fn CatchWithTypedArm(x: int) -> string {
 
     bb3: {
         _3 = copy _2;
-        _4 = is_type(copy _2, String);
+        _4 = is_type(copy _2, String { attr: TyAttr(None) });
         branch copy _4 -> [bb6, bb4];
     }
 
@@ -127,13 +127,13 @@ fn ChainedCatchClauses(x: int) -> string {
 
     bb3: {
         _6 = copy _2;
-        _7 = is_type(copy _2, String);
+        _7 = is_type(copy _2, String { attr: TyAttr(None) });
         branch copy _7 -> [bb10, bb8];
     }
 
     bb4: {
         _4 = copy _3;
-        _5 = is_type(copy _3, Int);
+        _5 = is_type(copy _3, Int { attr: TyAttr(None) });
         branch copy _5 -> [bb7, bb5];
     }
 
@@ -339,7 +339,7 @@ fn SingleCatchTyped(x: int) -> string {
 
     bb3: {
         _3 = copy _2;
-        _4 = is_type(copy _2, String);
+        _4 = is_type(copy _2, String { attr: TyAttr(None) });
         branch copy _4 -> [bb6, bb4];
     }
 
@@ -495,13 +495,13 @@ fn CatchWithFallback(x: int) -> string {
 
     bb3: {
         _6 = copy _2;
-        _7 = is_type(copy _2, String);
+        _7 = is_type(copy _2, String { attr: TyAttr(None) });
         branch copy _7 -> [bb10, bb8];
     }
 
     bb4: {
         _4 = copy _3;
-        _5 = is_type(copy _3, Int);
+        _5 = is_type(copy _3, Int { attr: TyAttr(None) });
         branch copy _5 -> [bb7, bb5];
     }
 
@@ -564,7 +564,7 @@ fn MultipleCatchArms(x: int) -> string {
 
     bb3: {
         _3 = copy _2;
-        _4 = is_type(copy _2, String);
+        _4 = is_type(copy _2, String { attr: TyAttr(None) });
         branch copy _4 -> [bb7, bb6];
     }
 
@@ -578,7 +578,7 @@ fn MultipleCatchArms(x: int) -> string {
     }
 
     bb6: {
-        _5 = is_type(copy _2, Int);
+        _5 = is_type(copy _2, Int { attr: TyAttr(None) });
         branch copy _5 -> [bb9, bb4];
     }
 

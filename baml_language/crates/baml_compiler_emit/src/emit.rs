@@ -270,7 +270,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
-                    Ty::Class(type_name) => {
+                    Ty::Class(type_name, _) => {
                         let &obj_idx = self
                             .class_object_indices
                             .get(type_name.display_name.as_str())?;
@@ -287,7 +287,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             Place::Index { base, .. } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match base_ty {
-                    Ty::List(inner) => Some(*inner),
+                    Ty::List(inner, _) => Some(*inner),
                     Ty::Map { value, .. } => Some(*value),
                     _ => None,
                 }
@@ -422,7 +422,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             span: mir.span.unwrap_or_else(Span::fake),
             block_notifications: self.block_notifications,
             viz_nodes,
-            return_type: baml_type::Ty::Null,
+            return_type: baml_type::Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            },
             param_names: Vec::new(),
             param_types: Vec::new(),
             body_meta: None,
@@ -1861,7 +1863,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error> {
         // Emit instanceof check for nominal class checks.
-        if let Ty::Class(tn) | Ty::TypeAlias(tn) = ty {
+        if let Ty::Class(tn, _) | Ty::TypeAlias(tn, _) = ty {
             let class_name_str = tn.display_name.as_str();
             if let Some(&class_obj_idx) = self.class_object_indices.get(class_name_str) {
                 let class_const =
@@ -1883,29 +1885,29 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
         // Primitive and builtin runtime kinds use type tags.
         let type_tag = match ty {
-            Ty::Int => Some(baml_type::typetag::INT),
-            Ty::String => Some(baml_type::typetag::STRING),
-            Ty::Bool => Some(baml_type::typetag::BOOL),
-            Ty::Null => Some(baml_type::typetag::NULL),
-            Ty::Float => Some(baml_type::typetag::FLOAT),
-            Ty::Enum(_) => Some(baml_type::typetag::ENUM),
-            Ty::List(_) => Some(baml_type::typetag::LIST),
+            Ty::Int { .. } => Some(baml_type::typetag::INT),
+            Ty::String { .. } => Some(baml_type::typetag::STRING),
+            Ty::Bool { .. } => Some(baml_type::typetag::BOOL),
+            Ty::Null { .. } => Some(baml_type::typetag::NULL),
+            Ty::Float { .. } => Some(baml_type::typetag::FLOAT),
+            Ty::Enum(..) => Some(baml_type::typetag::ENUM),
+            Ty::List(..) => Some(baml_type::typetag::LIST),
             Ty::Map { .. } => Some(baml_type::typetag::MAP),
             Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
-            Ty::Media(_) => Some(baml_type::typetag::MEDIA),
-            Ty::Literal(lit) => Some(match lit {
+            Ty::Media(..) => Some(baml_type::typetag::MEDIA),
+            Ty::Literal(lit, _) => Some(match lit {
                 baml_base::Literal::Int(_) => baml_type::typetag::INT,
                 baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
                 baml_base::Literal::String(_) => baml_type::typetag::STRING,
                 baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
             }),
-            Ty::Opaque(_) if ty.is_opaque("baml.llm.Resource") => {
+            Ty::Opaque(..) if ty.is_opaque("baml.llm.Resource") => {
                 Some(baml_type::typetag::RESOURCE)
             }
-            Ty::Opaque(_) if ty.is_opaque("baml.llm.PromptAst") => {
+            Ty::Opaque(..) if ty.is_opaque("baml.llm.PromptAst") => {
                 Some(baml_type::typetag::PROMPT_AST)
             }
-            Ty::Opaque(_) if ty.is_opaque("baml.reflect.Type") => Some(baml_type::typetag::TYPE),
+            Ty::Opaque(..) if ty.is_opaque("baml.reflect.Type") => Some(baml_type::typetag::TYPE),
             _ => None,
         };
 
@@ -1926,7 +1928,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
 
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class_name = match self.resolve_place_type(base) {
-            Some(Ty::Class(tn)) => tn.display_name.to_string(),
+            Some(Ty::Class(tn, _)) => tn.display_name.to_string(),
             _ => return format!("{field_idx}"),
         };
         self.lookup_class_field_name(&class_name, field_idx)

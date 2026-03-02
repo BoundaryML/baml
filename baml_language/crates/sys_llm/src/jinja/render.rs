@@ -338,7 +338,9 @@ mod tests {
                     "system".to_string(),
                 ],
             },
-            output_format: OutputFormatContent::new(Ty::String),
+            output_format: OutputFormatContent::new(Ty::String {
+                attr: baml_type::TyAttr::default(),
+            }),
             tags: IndexMap::new(),
             enums: HashMap::new(),
         }
@@ -461,7 +463,9 @@ mod tests {
         args.insert(
             "items".to_string(),
             BexExternalValue::Array {
-                element_type: Ty::String,
+                element_type: Ty::String {
+                    attr: baml_type::TyAttr::default(),
+                },
                 items: vec![
                     BexExternalValue::String("apple".to_string()),
                     BexExternalValue::String("banana".to_string()),
@@ -482,7 +486,9 @@ mod tests {
 
         // Create a context with an int output format
         let mut ctx = test_ctx();
-        ctx.output_format = OutputFormatContent::new(Ty::Int);
+        ctx.output_format = OutputFormatContent::new(Ty::Int {
+            attr: baml_type::TyAttr::default(),
+        });
 
         let result = render_prompt(template, &args, &ctx).unwrap();
 
@@ -495,7 +501,9 @@ mod tests {
         let args = IndexMap::new();
 
         let mut ctx = test_ctx();
-        ctx.output_format = OutputFormatContent::new(Ty::Int);
+        ctx.output_format = OutputFormatContent::new(Ty::Int {
+            attr: baml_type::TyAttr::default(),
+        });
 
         let result = render_prompt(template, &args, &ctx).unwrap();
 
