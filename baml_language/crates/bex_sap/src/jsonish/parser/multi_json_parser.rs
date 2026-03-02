@@ -3,7 +3,7 @@ use anyhow::Result;
 use super::{ParseOptions, entry};
 use crate::jsonish::Value;
 
-pub fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Value<'s>>> {
+pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Value<'s>>> {
     // Find all balanced JSON objects but w/o any fixes.
     let mut stack = Vec::new();
     let mut json_str_start = None;

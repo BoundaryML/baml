@@ -1,14 +1,16 @@
+use std::borrow::Cow;
+
 use super::super::dedent::dedent;
 use crate::jsonish::{CompletionState, Value};
 
 #[derive(Debug)]
 pub enum JsonCollection<'s> {
     // Key, Value
-    Object(Vec<String>, Vec<Value<'s>>, CompletionState),
+    Object(Vec<Cow<'s, str>>, Vec<Value<'s>>, CompletionState),
     Array(Vec<Value<'s>>, CompletionState),
-    QuotedString(String, CompletionState),
-    TripleQuotedString(String, CompletionState),
-    SingleQuotedString(String, CompletionState),
+    QuotedString(Cow<'s, str>, CompletionState),
+    TripleQuotedString(Cow<'s, str>, CompletionState),
+    SingleQuotedString(Cow<'s, str>, CompletionState),
     // edge cases that need handling:
     // - triple backticks in a triple backtick string
     // - will the LLM terminate a triple backtick with a single backtick? probably not
@@ -18,17 +20,17 @@ pub enum JsonCollection<'s> {
     // - do we dedent the output?
     // - is it an acceptable heuristic to discard the first line of a triple backtick block?
     TripleBacktickString {
-        lang: Option<(String, CompletionState)>,
-        path: Option<(String, CompletionState)>,
-        content: (String, CompletionState),
+        lang: Option<(Cow<'s, str>, CompletionState)>,
+        path: Option<(Cow<'s, str>, CompletionState)>,
+        content: (Cow<'s, str>, CompletionState),
     },
-    BacktickString(String, CompletionState),
+    BacktickString(Cow<'s, str>, CompletionState),
     // Handles numbers, booleans, null, and unquoted strings
-    UnquotedString(String, CompletionState),
+    UnquotedString(Cow<'s, str>, CompletionState),
     // Starting with // or #
-    TrailingComment(String, CompletionState),
+    TrailingComment(Cow<'s, str>, CompletionState),
     // Content between /* and */
-    BlockComment(String, CompletionState),
+    BlockComment(Cow<'s, str>, CompletionState),
 }
 
 impl JsonCollection<'_> {
@@ -47,18 +49,20 @@ impl JsonCollection<'_> {
         }
     }
 
-    pub fn completion_state(&self) -> &CompletionState {
+    pub fn completion_state(&self) -> CompletionState {
         match self {
-            JsonCollection::Object(_, _, s) => s,
-            JsonCollection::Array(_, s) => s,
-            JsonCollection::QuotedString(_, s) => s,
-            JsonCollection::SingleQuotedString(_, s) => s,
-            JsonCollection::TripleBacktickString { content, .. } => &content.1, // TODO: correct?
-            JsonCollection::BacktickString(_, s) => s,
-            JsonCollection::TripleQuotedString(_, s) => s,
-            JsonCollection::UnquotedString(_, s) => s,
-            JsonCollection::TrailingComment(_, s) => s,
-            JsonCollection::BlockComment(_, s) => s,
+            &JsonCollection::Object(_, _, s) => s,
+            &JsonCollection::Array(_, s) => s,
+            &JsonCollection::QuotedString(_, s) => s,
+            &JsonCollection::SingleQuotedString(_, s) => s,
+            &JsonCollection::TripleBacktickString {
+                content: (_, s), ..
+            } => s, // TODO: correct?
+            &JsonCollection::BacktickString(_, s) => s,
+            &JsonCollection::TripleQuotedString(_, s) => s,
+            &JsonCollection::UnquotedString(_, s) => s,
+            &JsonCollection::TrailingComment(_, s) => s,
+            &JsonCollection::BlockComment(_, s) => s,
         }
     }
 }
@@ -80,9 +84,11 @@ impl<'s> From<JsonCollection<'s>> for Option<Value<'s>> {
             JsonCollection::Array(values, completion_state) => {
                 Value::Array(values, completion_state)
             }
-            JsonCollection::QuotedString(s, completion_state) => Value::String(s.into(), completion_state),
+            JsonCollection::QuotedString(s, completion_state) => {
+                Value::String(s.into(), completion_state)
+            }
             JsonCollection::TripleQuotedString(s, completion_state) => {
-                Value::String(dedent(s.as_str()).content.into(), completion_state)
+                Value::String(dedent(&*s).content.into(), completion_state)
             }
             JsonCollection::SingleQuotedString(s, completion_state) => {
                 Value::String(s.into(), completion_state)

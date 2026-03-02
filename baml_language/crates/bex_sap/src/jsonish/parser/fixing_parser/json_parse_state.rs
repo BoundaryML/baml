@@ -18,6 +18,10 @@ struct StringQuoteTracking {
     unescaped_quote_count: usize,
 }
 
+/// Incremental JSON parser state machine that assembles JSON values from a
+/// stream of characters. Handles malformed JSON commonly produced by LLMs,
+/// including unquoted strings, single-quoted strings, trailing commas, and
+/// unterminated structures.
 #[derive(Debug)]
 pub(super) struct JsonParseState<'s> {
     /// The stack of Json collection values being assembled.
@@ -35,6 +39,9 @@ pub(super) struct JsonParseState<'s> {
     string_quote_tracking: StringQuoteTracking,
 }
 
+/// The position context of the current unquoted string relative to its
+/// enclosing collection. Used by `should_close_unescaped_string` to determine
+/// which delimiters terminate the string.
 #[derive(Clone, Debug)]
 enum Pos {
     InNothing,     // 0
@@ -105,9 +112,9 @@ impl<'s> JsonParseState<'s> {
                 JsonCollection::Object(keys, values, _) => {
                     if keys.len() == values.len() {
                         match value {
-                            Value::String(s, _) => keys.push(s.into_owned()),
-                            Value::AnyOf(_, s) => keys.push(s.into_owned()),
-                            _ => keys.push(value.to_string()),
+                            Value::String(s, _) => keys.push(s),
+                            Value::AnyOf(_, s) => keys.push(s),
+                            _ => keys.push(value.to_string().into()),
                         }
                     } else {
                         values.push(value);
@@ -126,6 +133,8 @@ impl<'s> JsonParseState<'s> {
         }
     }
 
+    /// Appends a character to the current string-like collection on top of the stack.
+    /// Returns `Ok(0)` on success (no additional characters to skip).
     fn consume(&mut self, token: char) -> Result<usize> {
         // First check if we're in a QuotedString and need to update tracking
         // (done before getting mutable borrow to avoid borrow checker conflict)
@@ -157,7 +166,7 @@ impl<'s> JsonParseState<'s> {
             | JsonCollection::UnquotedString(s, _)
             | JsonCollection::TrailingComment(s, _) => {
                 // println!("Consuming: {s} + {:?}", token);
-                s.push(token);
+                s.to_mut().push(token);
             }
             JsonCollection::Object(_, _, _) | JsonCollection::Array(_, _) => {
                 panic!("Unexpected token: {token:?} in: {last:?}");
@@ -166,6 +175,8 @@ impl<'s> JsonParseState<'s> {
         Ok(0)
     }
 
+    /// Returns `true` if the current unquoted string on the stack represents a
+    /// complete JSON literal (`true`, `false`, `null`, or a valid number).
     #[allow(dead_code)]
     fn is_string_complete(&self) -> bool {
         let Some((JsonCollection::UnquotedString(v, _), _)) = self.collection_stack.last() else {
@@ -173,7 +184,7 @@ impl<'s> JsonParseState<'s> {
         };
 
         // Check if the token is a valid json character
-        match v.as_str() {
+        match &**v {
             "true" | "false" | "null" => true,
             _ => {
                 // Check if the token parses as a number
@@ -185,6 +196,18 @@ impl<'s> JsonParseState<'s> {
         }
     }
 
+    /// Determines whether the current unquoted string should be closed based on
+    /// upcoming characters. Consumes characters from `next` looking for a
+    /// structural delimiter appropriate to the string's context (`:` for object
+    /// keys, `,`/`}` for object values, `,`/`]` for arrays, `{`/`[` for
+    /// top-level). Returns the number of characters consumed so the caller can
+    /// advance the outer iterator accordingly.
+    ///
+    /// When the iterator is exhausted without finding a delimiter (stream
+    /// incomplete), returns `Close(counter, Incomplete)` where `counter` is the
+    /// number of characters consumed. The `counter += 1` before each such return
+    /// accounts for the last character yielded by the iterator — without it, the
+    /// outer loop would re-process that character, causing duplication.
     fn should_close_unescaped_string(
         &mut self,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
@@ -223,7 +246,7 @@ impl<'s> JsonParseState<'s> {
                         }
                     }
                 }
-                CloseStringResult::Close(counter, CompletionState::Incomplete)
+                CloseStringResult::Close(counter + 1, CompletionState::Incomplete)
             }
             Pos::Unknown => CloseStringResult::Continue,
             Pos::InObjectKey => {
@@ -238,7 +261,7 @@ impl<'s> JsonParseState<'s> {
                         }
                     }
                 }
-                CloseStringResult::Close(counter, CompletionState::Incomplete)
+                CloseStringResult::Close(counter + 1, CompletionState::Incomplete)
             }
             Pos::InObjectValue => {
                 // in object value
@@ -357,7 +380,7 @@ impl<'s> JsonParseState<'s> {
                         }
                     }
                 }
-                CloseStringResult::Close(counter, CompletionState::Incomplete)
+                CloseStringResult::Close(counter + 1, CompletionState::Incomplete)
             }
             Pos::InArray => {
                 // in array
@@ -378,6 +401,9 @@ impl<'s> JsonParseState<'s> {
         }
     }
 
+    /// Determines whether a quoted string (double-quoted, single-quoted, or
+    /// backtick) should be closed at the current position by peeking at
+    /// upcoming characters and checking for structural delimiters.
     fn should_close_string(
         &mut self,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
@@ -495,6 +521,9 @@ impl<'s> JsonParseState<'s> {
         }
     }
 
+    /// Processes a single character token in the context of the current parser
+    /// state. Returns the number of additional characters consumed from `next`
+    /// that the caller should skip in the outer iteration loop.
     pub(super) fn process_token(
         &mut self,
         token: char,
@@ -735,7 +764,9 @@ impl<'s> JsonParseState<'s> {
         }
     }
 
-    // Returns the number of increments to skip after processing the token
+    /// Attempts to start parsing a new JSON value from the given token character.
+    /// Pushes the appropriate collection type onto the stack and returns the
+    /// number of additional characters consumed from `next`.
     fn find_any_starting_value(
         &mut self,
         token: char,
@@ -764,10 +795,7 @@ impl<'s> JsonParseState<'s> {
 
                 if is_triple_quoted {
                     self.collection_stack.push((
-                        JsonCollection::TripleQuotedString(
-                            String::new(),
-                            CompletionState::Incomplete,
-                        ),
+                        JsonCollection::TripleQuotedString("".into(), CompletionState::Incomplete),
                         Default::default(),
                     ));
                     return Ok(2);
@@ -775,14 +803,14 @@ impl<'s> JsonParseState<'s> {
                     // Reset quote tracking for the new string
                     self.reset_quote_tracking();
                     self.collection_stack.push((
-                        JsonCollection::QuotedString(String::new(), CompletionState::Incomplete),
+                        JsonCollection::QuotedString("".into(), CompletionState::Incomplete),
                         Default::default(),
                     ))
                 }
             }
             '\'' => {
                 self.collection_stack.push((
-                    JsonCollection::SingleQuotedString(String::new(), CompletionState::Incomplete),
+                    JsonCollection::SingleQuotedString("".into(), CompletionState::Incomplete),
                     Default::default(),
                 ));
             }
@@ -799,14 +827,14 @@ impl<'s> JsonParseState<'s> {
                         JsonCollection::TripleBacktickString {
                             lang: None,
                             path: None,
-                            content: (String::new(), CompletionState::Incomplete),
+                            content: ("".into(), CompletionState::Incomplete),
                         },
                         Default::default(),
                     ));
                     return Ok(2);
                 } else {
                     self.collection_stack.push((
-                        JsonCollection::BacktickString(String::new(), CompletionState::Incomplete),
+                        JsonCollection::BacktickString("".into(), CompletionState::Incomplete),
                         Default::default(),
                     ))
                 }
@@ -816,20 +844,14 @@ impl<'s> JsonParseState<'s> {
                 match next.peek() {
                     Some((_, '/')) => {
                         self.collection_stack.push((
-                            JsonCollection::TrailingComment(
-                                String::new(),
-                                CompletionState::Incomplete,
-                            ),
+                            JsonCollection::TrailingComment("".into(), CompletionState::Incomplete),
                             Default::default(),
                         ));
                         return Ok(1);
                     }
                     Some((_, '*')) => {
                         self.collection_stack.push((
-                            JsonCollection::BlockComment(
-                                String::new(),
-                                CompletionState::Incomplete,
-                            ),
+                            JsonCollection::BlockComment("".into(), CompletionState::Incomplete),
                             Default::default(),
                         ));
                         return Ok(1);
@@ -843,7 +865,7 @@ impl<'s> JsonParseState<'s> {
                         ) {
                             self.collection_stack.push((
                                 JsonCollection::UnquotedString(
-                                    token.into(),
+                                    token.to_string().into(),
                                     CompletionState::Incomplete,
                                 ),
                                 Default::default(),
@@ -856,7 +878,10 @@ impl<'s> JsonParseState<'s> {
             x if x.is_whitespace() => {}
             x => {
                 self.collection_stack.push((
-                    JsonCollection::UnquotedString(x.into(), CompletionState::Incomplete),
+                    JsonCollection::UnquotedString(
+                        x.to_string().into(),
+                        CompletionState::Incomplete,
+                    ),
                     Default::default(),
                 ));
                 if let CloseStringResult::Close(count, completion) =
@@ -872,8 +897,47 @@ impl<'s> JsonParseState<'s> {
     }
 }
 
+/// Result of `should_close_unescaped_string`: either close the string with a
+/// character count and completion state, or continue accumulating characters.
 #[derive(Debug, PartialEq)]
 enum CloseStringResult {
     Close(usize, CompletionState),
     Continue,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test the InObjectValue branch of should_close_unescaped_string directly.
+    ///
+    /// The off-by-one bug on this branch only manifests during streaming (multiple
+    /// parse() calls on successive chunks), not in single-pass parsing. Testing
+    /// through the public parse() API cannot catch it because the re-processed
+    /// character gets absorbed harmlessly. So we test the private function directly
+    /// by setting up the collection stack to simulate being inside an object value.
+    #[test]
+    fn test_should_close_unescaped_string_in_object_value_exhausted() {
+        let mut state = JsonParseState::new();
+        // Set up stack: Object with one key but no value yet (InObjectValue),
+        // then an UnquotedString being accumulated on top.
+        state.collection_stack.push((
+            JsonCollection::Object(vec!["key".into()], vec![], CompletionState::Incomplete),
+            Default::default(),
+        ));
+        state.collection_stack.push((
+            JsonCollection::UnquotedString("hello".into(), CompletionState::Incomplete),
+            Default::default(),
+        ));
+
+        // Remaining chars: "world" — no ',' or '}' to trigger Complete
+        let remaining: Vec<(usize, char)> = vec![(0, 'w'), (1, 'o'), (2, 'r'), (3, 'l'), (4, 'd')];
+        let result = state.should_close_unescaped_string(remaining.into_iter().peekable());
+
+        // counter should be 5 (last idx=4, +1), not 4
+        assert_eq!(
+            result,
+            CloseStringResult::Close(5, CompletionState::Incomplete)
+        );
+    }
 }

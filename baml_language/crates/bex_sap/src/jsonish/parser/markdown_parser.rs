@@ -3,10 +3,7 @@ use std::sync::LazyLock;
 use anyhow::Result;
 
 use super::ParseOptions;
-use crate::jsonish::{
-    Value,
-    parser::ParsingMode,
-};
+use crate::jsonish::{Value, parser::ParsingMode};
 
 #[derive(Debug)]
 pub(super) enum MarkdownResult<'s> {
