@@ -13,13 +13,13 @@ use std::{
 // instead of baml_base directly.
 pub use baml_base::{Literal, MediaKind, Name, Span};
 
+mod attr;
 mod convert;
 mod defs;
-mod sap;
 pub mod typetag;
+pub use attr::*;
 pub use convert::{convert_tir_ty, fqn_to_type_name, sanitize_for_runtime};
 pub use defs::*;
-pub use sap::*;
 
 /// A lightweight name type for class/enum/type-alias references.
 ///
