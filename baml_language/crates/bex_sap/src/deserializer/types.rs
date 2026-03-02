@@ -2,8 +2,7 @@ use std::{borrow::Cow, collections::HashSet};
 
 use crate::{
     baml_value::{BamlValue, BamlValueWithMeta, ValueWithMeta},
-    deserializer::coercer::ParsingContext,
-    sap_model::{Literal, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName},
+    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName},
 };
 use serde_json::json;
 
@@ -34,8 +33,7 @@ impl<'s, 'v, 't, N: TypeIdent> DeserializerMeta<'s, 'v, 't, N> {
     }
 }
 
-pub type ValueWithFlags<'s, 'v, 't, T, N> =
-    ValueWithMeta<T, DeserializerMeta<'s, 'v, 't, N>>;
+pub type ValueWithFlags<'s, 'v, 't, T, N> = ValueWithMeta<T, DeserializerMeta<'s, 'v, 't, N>>;
 pub type BamlValueWithFlags<'s, 'v, 't, N> =
     ValueWithFlags<'s, 'v, 't, BamlValue<'s, 'v, 't, N>, N>;
 

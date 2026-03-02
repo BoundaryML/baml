@@ -16,15 +16,6 @@ use crate::deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
 };
 
-// Constants for constructing TyResolvedRef::Primitive in DeserializerMeta.
-// Needed because the specific type impls (IntTy, FloatTy, etc.) only have &IntTy etc.,
-// not PrimitiveTy, and TyResolvedRef::Primitive requires PrimitiveTy by value.
-const PRIM_INT: PrimitiveTy = PrimitiveTy::Int(IntTy);
-const PRIM_FLOAT: PrimitiveTy = PrimitiveTy::Float(FloatTy);
-const PRIM_STRING: PrimitiveTy = PrimitiveTy::String(StringTy);
-const PRIM_BOOL: PrimitiveTy = PrimitiveTy::Bool(BoolTy);
-const PRIM_NULL: PrimitiveTy = PrimitiveTy::Null(NullTy);
-
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for PrimitiveTy
 where
     't: 's,
@@ -109,7 +100,7 @@ where
                         let meta = DeserializerMeta {
                             flags: DeserializerConditions::new()
                                 .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_INT)),
+                            ty: target.map_ty(|_| TyResolvedRef::Int(IntTy)),
                         };
                         Ok(Some(ValueWithFlags::new(ret, meta)))
                     }
@@ -130,7 +121,7 @@ where
                     BamlInt { value: i },
                     DeserializerMeta {
                         flags: DeserializerConditions::new(),
-                        ty: TyWithMeta::new(TyResolvedRef::Primitive(PRIM_INT), target.meta),
+                        ty: TyWithMeta::new(TyResolvedRef::Int(IntTy), target.meta),
                     },
                 )
             }),
@@ -246,8 +237,8 @@ where
                 let target_meta = target.meta;
                 let singular = coerce_array_to_singular(
                     ctx,
-                    TyWithMeta::new(TyResolvedRef::Primitive(PRIM_INT), target_meta),
-                    &items.iter().collect::<Vec<_>>(),
+                    TyWithMeta::new(TyResolvedRef::Int(IntTy), target_meta),
+                    items.iter(),
                     &|value| {
                         Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
                             .map(|v| v.map(|v| v.map_value(Into::into)))
@@ -266,7 +257,7 @@ where
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_INT)),
+                ty: target.map_ty(|_| TyResolvedRef::Int(IntTy)),
             },
         );
         Ok(Some(result))
@@ -300,7 +291,7 @@ where
                         let meta = DeserializerMeta {
                             flags: DeserializerConditions::new()
                                 .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_FLOAT)),
+                            ty: target.map_ty(|_| TyResolvedRef::Float(FloatTy)),
                         };
                         Ok(Some(ValueWithFlags::new(ret, meta)))
                     }
@@ -321,7 +312,7 @@ where
                     BamlFloat { value: f },
                     DeserializerMeta {
                         flags: DeserializerConditions::new(),
-                        ty: TyWithMeta::new(TyResolvedRef::Primitive(PRIM_FLOAT), target.meta),
+                        ty: TyWithMeta::new(TyResolvedRef::Float(FloatTy), target.meta),
                     },
                 )
             }),
@@ -429,8 +420,8 @@ where
                 let target_meta = target.meta;
                 let singular = coerce_array_to_singular(
                     ctx,
-                    TyWithMeta::new(TyResolvedRef::Primitive(PRIM_FLOAT), target_meta),
-                    &items.iter().collect::<Vec<_>>(),
+                    TyWithMeta::new(TyResolvedRef::Float(FloatTy), target_meta),
+                    items.iter(),
                     &|value| {
                         Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
                             .map(|v| v.map(|v| v.map_value(Into::into)))
@@ -449,7 +440,7 @@ where
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_FLOAT)),
+                ty: target.map_ty(|_| TyResolvedRef::Float(FloatTy)),
             },
         );
         Ok(Some(result))
@@ -483,7 +474,7 @@ where
                         let meta = DeserializerMeta {
                             flags: DeserializerConditions::new()
                                 .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_BOOL)),
+                            ty: target.map_ty(|_| TyResolvedRef::Bool(BoolTy)),
                         };
                         Ok(Some(ValueWithFlags::new(ret, meta)))
                     }
@@ -503,7 +494,7 @@ where
                 BamlBool { value: *b },
                 DeserializerMeta {
                     flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(TyResolvedRef::Primitive(PRIM_BOOL), target.meta),
+                    ty: TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
                 },
             )),
             _ => None,
@@ -564,7 +555,7 @@ where
                     _ => {
                         match super::match_string::match_string(
                             ctx,
-                            TyWithMeta::new(TyResolvedRef::Primitive(PRIM_BOOL), target.meta),
+                            TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
                             Cow::Borrowed(value),
                             &[
                                 ("true", vec!["true", "True", "TRUE"]),
@@ -605,8 +596,8 @@ where
                 let target_meta = target.meta;
                 let singular = coerce_array_to_singular(
                     ctx,
-                    TyWithMeta::new(TyResolvedRef::Primitive(PRIM_BOOL), target_meta),
-                    &items.iter().collect::<Vec<_>>(),
+                    TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target_meta),
+                    items.iter(),
                     &|value| {
                         Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
                             .map(|v| v.map(|v| v.map_value(Into::into)))
@@ -625,7 +616,7 @@ where
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_BOOL)),
+                ty: target.map_ty(|_| TyResolvedRef::Bool(BoolTy)),
             },
         );
         Ok(Some(value))
@@ -659,7 +650,7 @@ where
                         let meta = DeserializerMeta {
                             flags: DeserializerConditions::new()
                                 .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_NULL)),
+                            ty: target.map_ty(|_| TyResolvedRef::Null(NullTy)),
                         };
                         Ok(Some(ValueWithFlags::new(ret, meta)))
                     }
@@ -679,7 +670,7 @@ where
                 BamlNull,
                 DeserializerMeta {
                     flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(TyResolvedRef::Primitive(PRIM_NULL), target.meta),
+                    ty: TyWithMeta::new(TyResolvedRef::Null(NullTy), target.meta),
                 },
             )),
             _ => None,
@@ -710,7 +701,7 @@ where
                     result,
                     DeserializerMeta {
                         flags,
-                        ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_NULL)),
+                        ty: target.map_ty(|_| TyResolvedRef::Null(NullTy)),
                     },
                 )));
             }
@@ -732,7 +723,7 @@ where
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_NULL)),
+                ty: target.map_ty(|_| TyResolvedRef::Null(NullTy)),
             },
         )))
     }
@@ -765,7 +756,7 @@ where
                         let meta = DeserializerMeta {
                             flags: DeserializerConditions::new()
                                 .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_STRING)),
+                            ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
                         };
                         Ok(Some(ValueWithFlags::new(ret, meta)))
                     }
@@ -787,7 +778,7 @@ where
                 },
                 DeserializerMeta {
                     flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(TyResolvedRef::Primitive(PRIM_STRING), target.meta),
+                    ty: TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
                 },
             )),
             _ => None,
@@ -829,7 +820,7 @@ where
                     result,
                     DeserializerMeta {
                         flags,
-                        ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_STRING)),
+                        ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
                     },
                 )));
             }
@@ -884,7 +875,7 @@ where
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Primitive(PRIM_STRING)),
+                ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
             },
         )))
     }

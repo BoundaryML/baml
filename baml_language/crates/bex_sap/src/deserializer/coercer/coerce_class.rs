@@ -4,8 +4,8 @@ use std::collections::{HashMap, hash_map};
 use crate::baml_value::{BamlClass, BamlNull, BamlValue};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
-    AnnotatedField, ClassTy, FromLiteral as _, Literal, NullTy, PrimitiveTy, TyResolvedRef,
-    TyWithMeta, TypeAnnotations, TypeIdent,
+    AnnotatedField, ClassTy, FromLiteral as _, Literal, TyResolvedRef, TyWithMeta, TypeAnnotations,
+    TypeIdent,
 };
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -16,20 +16,6 @@ use crate::deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
 };
-
-/// Helper to construct a null BamlValueWithFlags with the given flags.
-fn null_value_with_flags<'s, 'v, 't, N: TypeIdent>(
-    flags: DeserializerConditions<'s, 'v, 't, N>,
-    meta: &'t TypeAnnotations<'t, N>,
-) -> BamlValueWithFlags<'s, 'v, 't, N> {
-    BamlValueWithFlags::new(
-        BamlValue::Null(BamlNull),
-        DeserializerMeta {
-            flags,
-            ty: TyWithMeta::new(TyResolvedRef::Primitive(PrimitiveTy::Null(NullTy)), meta),
-        },
-    )
-}
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for ClassTy<'t, N>
 where
@@ -314,7 +300,7 @@ where
                 let singular = array_helper::coerce_array_to_singular(
                     ctx,
                     TyWithMeta::new(TyResolvedRef::Class(class_ty), meta),
-                    &items.iter().collect::<Vec<_>>(),
+                    items.iter(),
                     &|value| {
                         Self::coerce(ctx, TyWithMeta::new(class_ty, meta), value)
                             .map(|v| v.map(|v| v.map_value(BamlValue::Class)))

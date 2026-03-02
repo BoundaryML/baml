@@ -99,8 +99,15 @@ where
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, From)]
 pub enum TyResolved<'t, N: TypeIdent> {
-    Primitive(PrimitiveTy),
-    Literal(LiteralTy<'t>),
+    Int(IntTy),
+    Float(FloatTy),
+    String(StringTy),
+    Bool(BoolTy),
+    Null(NullTy),
+    Media(MediaTy),
+    LiteralString(StringLiteralTy<'t>),
+    LiteralInt(IntLiteralTy),
+    LiteralBool(BoolLiteralTy),
     Array(ArrayTy<'t, N>),
     Map(MapTy<'t, N>),
     Class(ClassTy<'t, N>),
@@ -108,6 +115,27 @@ pub enum TyResolved<'t, N: TypeIdent> {
     Union(UnionTy<'t, N>),
     /// A type that tells you if it is completed or not.
     StreamState(StreamStateTy<'t, N>),
+}
+impl<'t, N: TypeIdent> From<PrimitiveTy> for TyResolved<'t, N> {
+    fn from(p: PrimitiveTy) -> Self {
+        match p {
+            PrimitiveTy::Int(v) => TyResolved::Int(v),
+            PrimitiveTy::Float(v) => TyResolved::Float(v),
+            PrimitiveTy::String(v) => TyResolved::String(v),
+            PrimitiveTy::Bool(v) => TyResolved::Bool(v),
+            PrimitiveTy::Null(v) => TyResolved::Null(v),
+            PrimitiveTy::Media(v) => TyResolved::Media(v),
+        }
+    }
+}
+impl<'t, N: TypeIdent> From<LiteralTy<'t>> for TyResolved<'t, N> {
+    fn from(l: LiteralTy<'t>) -> Self {
+        match l {
+            LiteralTy::String(v) => TyResolved::LiteralString(v),
+            LiteralTy::Int(v) => TyResolved::LiteralInt(v),
+            LiteralTy::Bool(v) => TyResolved::LiteralBool(v),
+        }
+    }
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for TyResolved<'t, N>
 where
@@ -118,8 +146,15 @@ where
 impl<'t, N: TypeIdent> TyResolved<'t, N> {
     pub fn as_ref(&'t self) -> TyResolvedRef<'t, N> {
         match self {
-            TyResolved::Primitive(p) => TyResolvedRef::Primitive(*p),
-            TyResolved::Literal(l) => TyResolvedRef::Literal(l),
+            TyResolved::Int(v) => TyResolvedRef::Int(*v),
+            TyResolved::Float(v) => TyResolvedRef::Float(*v),
+            TyResolved::String(v) => TyResolvedRef::String(*v),
+            TyResolved::Bool(v) => TyResolvedRef::Bool(*v),
+            TyResolved::Null(v) => TyResolvedRef::Null(*v),
+            TyResolved::Media(v) => TyResolvedRef::Media(*v),
+            TyResolved::LiteralString(v) => TyResolvedRef::LiteralString(v),
+            TyResolved::LiteralInt(v) => TyResolvedRef::LiteralInt(v),
+            TyResolved::LiteralBool(v) => TyResolvedRef::LiteralBool(v),
             TyResolved::Array(a) => TyResolvedRef::Array(a),
             TyResolved::Map(m) => TyResolvedRef::Map(m),
             TyResolved::Class(c) => TyResolvedRef::Class(c),
@@ -136,8 +171,15 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
 /// At the top-level, any type references (identified by `N`) are resolved in this type.
 #[derive(Clone, From)]
 pub enum TyResolvedRef<'t, N: TypeIdent> {
-    Primitive(PrimitiveTy),
-    Literal(&'t LiteralTy<'t>),
+    Int(IntTy),
+    Float(FloatTy),
+    String(StringTy),
+    Bool(BoolTy),
+    Null(NullTy),
+    Media(MediaTy),
+    LiteralString(&'t StringLiteralTy<'t>),
+    LiteralInt(&'t IntLiteralTy),
+    LiteralBool(&'t BoolLiteralTy),
     Array(&'t ArrayTy<'t, N>),
     Map(&'t MapTy<'t, N>),
     Class(&'t ClassTy<'t, N>),
@@ -146,8 +188,29 @@ pub enum TyResolvedRef<'t, N: TypeIdent> {
     /// A type that tells you if it is completed or not.
     StreamState(&'t StreamStateTy<'t, N>),
 }
+impl<'t, N: TypeIdent> From<PrimitiveTy> for TyResolvedRef<'t, N> {
+    fn from(p: PrimitiveTy) -> Self {
+        match p {
+            PrimitiveTy::Int(v) => TyResolvedRef::Int(v),
+            PrimitiveTy::Float(v) => TyResolvedRef::Float(v),
+            PrimitiveTy::String(v) => TyResolvedRef::String(v),
+            PrimitiveTy::Bool(v) => TyResolvedRef::Bool(v),
+            PrimitiveTy::Null(v) => TyResolvedRef::Null(v),
+            PrimitiveTy::Media(v) => TyResolvedRef::Media(v),
+        }
+    }
+}
+impl<'t, N: TypeIdent> From<&'t LiteralTy<'t>> for TyResolvedRef<'t, N> {
+    fn from(l: &'t LiteralTy<'t>) -> Self {
+        match l {
+            LiteralTy::String(v) => TyResolvedRef::LiteralString(v),
+            LiteralTy::Int(v) => TyResolvedRef::LiteralInt(v),
+            LiteralTy::Bool(v) => TyResolvedRef::LiteralBool(v),
+        }
+    }
+}
 // Manual Copy impl because derive(Copy) adds an unnecessary `N: Copy` bound.
-// All variants are either Copy-by-value (PrimitiveTy) or references (&'t T),
+// All variants are either Copy-by-value (primitives) or references (&'t T),
 // so Copy is valid regardless of N.
 impl<'t, N: TypeIdent> Copy for TyResolvedRef<'t, N> {}
 impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
@@ -156,7 +219,7 @@ impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
     /// Requires `db` in case we need to look up type aliases that may contain optional unions.
     pub fn is_optional(&self, db: &TypeRefDb<'t, N>) -> bool {
         match self {
-            TyResolvedRef::Primitive(PrimitiveTy::Null(..)) => true,
+            TyResolvedRef::Null(..) => true,
             TyResolvedRef::Union(u) => u.is_optional(db),
             TyResolvedRef::StreamState(s) => s.value.ty.is_optional(db),
             _ => false,
@@ -172,9 +235,9 @@ where
 
 #[derive(Clone, From)]
 pub enum Ty<'t, N: TypeIdent> {
-    #[from(TyResolved<'t, N>, LiteralTy<'t>, ArrayTy<'t, N>, MapTy<'t, N>, ClassTy<'t, N>, EnumTy<'t, N>, UnionTy<'t, N>)]
+    #[from(TyResolved<'t, N>, LiteralTy<'t>, StringLiteralTy<'t>, IntLiteralTy, BoolLiteralTy, ArrayTy<'t, N>, MapTy<'t, N>, ClassTy<'t, N>, EnumTy<'t, N>, UnionTy<'t, N>)]
     Resolved(TyResolved<'t, N>),
-    #[from(TyResolvedRef<'t, N>, PrimitiveTy, &'t LiteralTy<'t>, &'t ArrayTy<'t, N>, &'t MapTy<'t, N>, &'t ClassTy<'t, N>, &'t EnumTy<'t, N>, &'t UnionTy<'t, N>)]
+    #[from(TyResolvedRef<'t, N>, PrimitiveTy, IntTy, FloatTy, StringTy, BoolTy, NullTy, MediaTy, &'t LiteralTy<'t>, &'t StringLiteralTy<'t>, &'t IntLiteralTy, &'t BoolLiteralTy, &'t ArrayTy<'t, N>, &'t MapTy<'t, N>, &'t ClassTy<'t, N>, &'t EnumTy<'t, N>, &'t UnionTy<'t, N>)]
     ResolvedRef(TyResolvedRef<'t, N>),
     /// Type needs to be looked up in the [`TypeRefDb`].
     /// This is since types may be recursive so we need some indirection.
@@ -574,7 +637,7 @@ pub struct AnnotatedEnumVariant<'t> {
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 ///
-/// Used in attributes like `@sap.missing(...)` and `@sap.default(...)`
+/// Used in attributes like `@sap.in_progress(...)` and `@sap.class_completed_field_missing(...)`
 #[derive(Clone)]
 pub enum Literal<'t, N: TypeIdent> {
     /// the `never` bottom type.

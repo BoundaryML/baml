@@ -6,8 +6,8 @@ use crate::baml_value::{BamlMap, BamlValue};
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::CompletionState;
 use crate::sap_model::{
-    FromLiteral as _, Literal, LiteralTy, MapTy, PrimitiveTy, Ty, TyResolved, TyResolvedRef,
-    TyWithMeta, TypeAnnotations, TypeIdent,
+    FromLiteral as _, Literal, MapTy, Ty, TyResolved, TyResolvedRef, TyWithMeta, TypeAnnotations,
+    TypeIdent,
 };
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -135,17 +135,16 @@ where
         // this logic and skip the loops & allocs in the the union branch.
         match key_type.ty {
             // String, enum or just one literal string, OK.
-            TyResolvedRef::Primitive(PrimitiveTy::String(_))
-            | TyResolvedRef::Enum(_)
-            | TyResolvedRef::Literal(LiteralTy::String(_)) => {}
+            TyResolvedRef::String(_) | TyResolvedRef::Enum(_) | TyResolvedRef::LiteralString(_) => {
+            }
 
             // For unions we need to check if all the items are literal strings.
             TyResolvedRef::Union(sub_union) => {
                 let mut queue = VecDeque::from_iter(&sub_union.variants);
                 while let Some(item) = queue.pop_front() {
                     match &item.ty {
-                        Ty::ResolvedRef(TyResolvedRef::Literal(LiteralTy::String(_)))
-                        | Ty::Resolved(TyResolved::Literal(LiteralTy::String(_))) => continue,
+                        Ty::ResolvedRef(TyResolvedRef::LiteralString(_))
+                        | Ty::Resolved(TyResolved::LiteralString(_)) => continue,
                         Ty::ResolvedRef(TyResolvedRef::Union(nested)) => {
                             queue.extend(&nested.variants);
                         }
@@ -264,7 +263,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::sap_model::{NullTy, StringTy, TypeRefDb};
+    use crate::sap_model::{NullTy, PrimitiveTy, StringTy, TypeRefDb};
 
     use super::*;
 

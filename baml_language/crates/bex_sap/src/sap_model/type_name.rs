@@ -136,8 +136,15 @@ impl<N: TypeIdent> TypeName for UnionTy<'_, N> {
 impl<N: TypeIdent> TypeName for TyResolved<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
         match self {
-            TyResolved::Primitive(p) => p.type_name(),
-            TyResolved::Literal(l) => l.type_name(),
+            TyResolved::Int(v) => v.type_name(),
+            TyResolved::Float(v) => v.type_name(),
+            TyResolved::String(v) => v.type_name(),
+            TyResolved::Bool(v) => v.type_name(),
+            TyResolved::Null(v) => v.type_name(),
+            TyResolved::Media(v) => v.type_name(),
+            TyResolved::LiteralString(v) => v.type_name(),
+            TyResolved::LiteralInt(v) => v.type_name(),
+            TyResolved::LiteralBool(v) => v.type_name(),
             TyResolved::Array(a) => a.type_name(),
             TyResolved::Map(m) => m.type_name(),
             TyResolved::Class(c) => c.type_name(),
@@ -157,8 +164,15 @@ impl<N: TypeIdent> TypeName for StreamStateTy<'_, N> {
 impl<N: TypeIdent> TypeName for TyResolvedRef<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
         match self {
-            TyResolvedRef::Primitive(p) => p.type_name(),
-            TyResolvedRef::Literal(l) => l.type_name(),
+            TyResolvedRef::Int(v) => v.type_name(),
+            TyResolvedRef::Float(v) => v.type_name(),
+            TyResolvedRef::String(v) => v.type_name(),
+            TyResolvedRef::Bool(v) => v.type_name(),
+            TyResolvedRef::Null(v) => v.type_name(),
+            TyResolvedRef::Media(v) => v.type_name(),
+            TyResolvedRef::LiteralString(v) => v.type_name(),
+            TyResolvedRef::LiteralInt(v) => v.type_name(),
+            TyResolvedRef::LiteralBool(v) => v.type_name(),
             TyResolvedRef::Array(a) => a.type_name(),
             TyResolvedRef::Map(m) => m.type_name(),
             TyResolvedRef::Class(c) => c.type_name(),

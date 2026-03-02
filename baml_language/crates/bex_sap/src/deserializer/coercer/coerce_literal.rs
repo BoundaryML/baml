@@ -5,7 +5,7 @@ use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::CompletionState;
 use crate::sap_model::{
-    BoolLiteralTy, BoolTy, FromLiteral as _, IntLiteralTy, IntTy, Literal, LiteralTy, PrimitiveTy,
+    BoolLiteralTy, BoolTy, FromLiteral as _, IntLiteralTy, IntTy, Literal, LiteralTy,
     StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
 };
 use anyhow::Result;
@@ -39,10 +39,7 @@ where
                     },
                     DeserializerMeta {
                         flags: DeserializerConditions::new(),
-                        ty: TyWithMeta::new(
-                            TyResolvedRef::Primitive(PrimitiveTy::Int(IntTy)),
-                            target.meta,
-                        ),
+                        ty: TyWithMeta::new(TyResolvedRef::Int(IntTy), target.meta),
                     },
                 ))
             }
@@ -83,8 +80,7 @@ where
                         let meta = DeserializerMeta {
                             flags: DeserializerConditions::new()
                                 .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target
-                                .map_ty(|_| TyResolvedRef::Primitive(PrimitiveTy::Int(IntTy))),
+                            ty: target.map_ty(|_| TyResolvedRef::Int(IntTy)),
                         };
                         Ok(Some(ValueWithFlags::new(ret, meta)))
                     }
@@ -120,9 +116,7 @@ where
                                     flags: DeserializerConditions::new().with_flag(
                                         Flag::DefaultFromInProgress(Cow::Borrowed(value)),
                                     ),
-                                    ty: target.clone().map_ty(|_| {
-                                        TyResolvedRef::Primitive(PrimitiveTy::Int(IntTy))
-                                    }),
+                                    ty: target.clone().map_ty(|_| TyResolvedRef::Int(IntTy)),
                                 },
                             )
                         });
@@ -136,9 +130,7 @@ where
                             BamlInt { value: target.ty.0 },
                             DeserializerMeta {
                                 flags,
-                                ty: target
-                                    .clone()
-                                    .map_ty(|_| TyResolvedRef::Primitive(PrimitiveTy::Int(IntTy))),
+                                ty: target.clone().map_ty(|_| TyResolvedRef::Int(IntTy)),
                             },
                         )))
                     }
@@ -197,10 +189,7 @@ where
                 Self::Value { value: *b },
                 DeserializerMeta {
                     flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(
-                        TyResolvedRef::Primitive(PrimitiveTy::Bool(BoolTy)),
-                        target.meta,
-                    ),
+                    ty: TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
                 },
             )),
             _ => None,
@@ -240,8 +229,7 @@ where
                         let meta = DeserializerMeta {
                             flags: DeserializerConditions::new()
                                 .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target
-                                .map_ty(|_| TyResolvedRef::Primitive(PrimitiveTy::Bool(BoolTy))),
+                            ty: target.map_ty(|_| TyResolvedRef::Bool(BoolTy)),
                         };
                         Ok(Some(ValueWithFlags::new(ret, meta)))
                     }
@@ -317,10 +305,7 @@ where
                     },
                     DeserializerMeta {
                         flags: DeserializerConditions::new(),
-                        ty: TyWithMeta::new(
-                            TyResolvedRef::Primitive(PrimitiveTy::String(StringTy)),
-                            target.meta,
-                        ),
+                        ty: TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
                     },
                 ))
             }
@@ -361,9 +346,7 @@ where
                         let meta = DeserializerMeta {
                             flags: DeserializerConditions::new()
                                 .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| {
-                                TyResolvedRef::Primitive(PrimitiveTy::String(StringTy))
-                            }),
+                            ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
                         };
                         Ok(Some(ValueWithFlags::new(ret, meta)))
                     }
@@ -410,10 +393,7 @@ where
         // so use Primitive(String) which is semantically close for error messages.
         let literal_match = match_string(
             ctx,
-            TyWithMeta::new(
-                TyResolvedRef::Primitive(PrimitiveTy::String(StringTy)),
-                target.meta,
-            ),
+            TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
             Cow::Borrowed(value),
             &candidates,
             true,

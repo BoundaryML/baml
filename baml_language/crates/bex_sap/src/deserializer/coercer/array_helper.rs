@@ -9,13 +9,13 @@ use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
     target: TyWithMeta<TyResolvedRef<'t, N>, &TypeAnnotations<'t, N>>,
-    items: &[&'v crate::jsonish::Value<'s>],
+    items: impl IntoIterator<Item = &'v crate::jsonish::Value<'s>>,
     coercion: &dyn Fn(
         &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>,
 ) -> Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError> {
     let parsed = items
-        .iter()
+        .into_iter()
         .filter_map(|item| coercion(item).transpose())
         .collect::<Vec<_>>();
 

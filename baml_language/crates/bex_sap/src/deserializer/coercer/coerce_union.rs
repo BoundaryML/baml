@@ -4,8 +4,8 @@ use crate::{
     baml_value::{BamlNull, BamlValue},
     jsonish::CompletionState,
     sap_model::{
-        FromLiteral as _, Literal, NullTy, PrimitiveTy, TyResolvedRef, TyWithMeta, TypeAnnotations,
-        TypeIdent, UnionTy,
+        FromLiteral as _, Literal, NullTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+        UnionTy,
     },
 };
 use anyhow::Result;
@@ -154,10 +154,7 @@ where
                 BamlValue::Null(BamlNull),
                 DeserializerMeta {
                     flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(
-                        TyResolvedRef::Primitive(PrimitiveTy::Null(NullTy)),
-                        target.meta,
-                    ),
+                    ty: TyWithMeta::new(TyResolvedRef::Null(NullTy), target.meta),
                 },
             );
 
@@ -182,7 +179,7 @@ where
 
         let all_options: Vec<_> = variants
             .iter()
-            .filter(|v| !matches!(v.ty, TyResolvedRef::Primitive(PrimitiveTy::Null(_))))
+            .filter(|v| !matches!(v.ty, TyResolvedRef::Null(_)))
             .collect();
 
         // Optimization: If we have a hint from a previous array element, try that variant first.

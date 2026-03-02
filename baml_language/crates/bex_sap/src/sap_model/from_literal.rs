@@ -456,11 +456,59 @@ where
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<BamlValue<'s, 'v, 't, N>, ParsingError> {
         match self {
-            TyResolvedRef::Primitive(ty) => ty
-                .as_static_ref()
+            TyResolvedRef::Int(_) => {
+                const TY: &IntTy = &IntTy;
+                TY.from_literal(literal, ctx)
+                    .map(BamlPrimitive::Int)
+                    .map(BamlValue::from)
+            }
+            TyResolvedRef::Float(_) => {
+                const TY: &FloatTy = &FloatTy;
+                TY.from_literal(literal, ctx)
+                    .map(BamlPrimitive::Float)
+                    .map(BamlValue::from)
+            }
+            TyResolvedRef::String(_) => {
+                const TY: &StringTy = &StringTy;
+                TY.from_literal(literal, ctx)
+                    .map(BamlPrimitive::String)
+                    .map(BamlValue::from)
+            }
+            TyResolvedRef::Bool(_) => {
+                const TY: &BoolTy = &BoolTy;
+                TY.from_literal(literal, ctx)
+                    .map(BamlPrimitive::Bool)
+                    .map(BamlValue::from)
+            }
+            TyResolvedRef::Null(_) => {
+                const TY: &NullTy = &NullTy;
+                TY.from_literal(literal, ctx)
+                    .map(BamlPrimitive::Null)
+                    .map(BamlValue::from)
+            }
+            TyResolvedRef::Media(m) => {
+                let ty: &'static MediaTy = match m {
+                    MediaTy::Image => &MediaTy::Image,
+                    MediaTy::Audio => &MediaTy::Audio,
+                    MediaTy::Pdf => &MediaTy::Pdf,
+                    MediaTy::Video => &MediaTy::Video,
+                };
+                ty.from_literal(literal, ctx)
+                    .map(BamlPrimitive::Media)
+                    .map(BamlValue::from)
+            }
+            TyResolvedRef::LiteralString(ty) => ty
                 .from_literal(literal, ctx)
+                .map(BamlPrimitive::String)
                 .map(BamlValue::from),
-            TyResolvedRef::Literal(ty) => ty.from_literal(literal, ctx).map(BamlValue::from),
+            TyResolvedRef::LiteralInt(ty) => ty
+                .from_literal(literal, ctx)
+                .map(BamlPrimitive::Int)
+                .map(BamlValue::from),
+            TyResolvedRef::LiteralBool(ty) => ty
+                .from_literal(literal, ctx)
+                .map(BamlPrimitive::Bool)
+                .map(BamlValue::from),
             TyResolvedRef::Array(ty) => ty.from_literal(literal, ctx).map(BamlValue::Array),
             TyResolvedRef::Map(ty) => ty.from_literal(literal, ctx).map(BamlValue::Map),
             TyResolvedRef::Class(ty) => ty.from_literal(literal, ctx).map(BamlValue::Class),
