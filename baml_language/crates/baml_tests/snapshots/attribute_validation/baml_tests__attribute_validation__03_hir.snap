@@ -2,10 +2,24 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+class stream_HasDuplicateDescription {
+  name: null | string
+}
+
 class HasDuplicateField {
   name: string
   age: int
   name: int
+}
+
+class stream_HasDuplicateFieldAttr {
+  name: null | string
+}
+
+class stream_HasDuplicateField {
+  name: null | string
+  age: null | int
+  name: null | int
 }
 
 class HasDuplicateDescription {

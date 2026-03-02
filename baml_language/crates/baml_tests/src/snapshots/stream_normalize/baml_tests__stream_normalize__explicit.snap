@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/stream_normalize.rs
+---
+class Education {
+  school: string  D=string S=null typeof_s=null
+  year: int  D=int S=null typeof_s=null
+}
+
+class ExplicitAnnotations {
+  name: string  D=string S="Loading..." typeof_s="Loading..."
+  gpa: float  D=float S=never typeof_s=never
+  certifications: Education[][]  D=Education S=null typeof_s=null
+  internal: string  D=never S=never typeof_s=never
+}

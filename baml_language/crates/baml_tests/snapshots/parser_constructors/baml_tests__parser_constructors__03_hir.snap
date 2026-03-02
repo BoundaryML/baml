@@ -26,6 +26,11 @@ function intArray() -> int[] {
     [1, 2, 3]
 }
 
+class stream_Point {
+  x: null | int
+  y: null | int
+}
+
 class Point {
   x: int
   y: int
@@ -39,6 +44,11 @@ function vec2d() -> Vec2D {
     Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } }
 }
 
+class stream_Point {
+  x: null | int
+  y: null | int
+}
+
 class Vec2D {
   p: Point
   q: Point
@@ -47,6 +57,11 @@ class Vec2D {
 class Point {
   x: int
   y: int
+}
+
+class stream_Vec2D {
+  p: null | stream_Point
+  q: null | stream_Point
 }
 
 function boolValues() -> map<string, bool> {

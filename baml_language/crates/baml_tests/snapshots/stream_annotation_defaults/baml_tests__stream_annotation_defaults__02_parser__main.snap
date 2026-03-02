@@ -1,0 +1,132 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Status"
+    L_BRACE "{"
+    ENUM_VARIANT "Active"
+      WORD "Active"
+    ENUM_VARIANT "Inactive"
+      WORD "Inactive"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Education"
+    L_BRACE "{"
+    FIELD
+      WORD "school"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "year"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "AliasedType"
+    EQUALS "="
+    TYPE_EXPR "string | int"
+      WORD "string"
+      PIPE "|"
+      WORD "int"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "AllDefaults"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "age"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "score"
+      TYPE_EXPR "float"
+        WORD "float"
+    FIELD
+      WORD "active"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    FIELD
+      WORD "type"
+      TYPE_EXPR
+        STRING_LITERAL "resume"
+          QUOTE """
+          WORD "resume"
+          QUOTE """
+    FIELD
+      WORD "version"
+      TYPE_EXPR "42"
+        INTEGER_LITERAL "42"
+    FIELD
+      WORD "status"
+      TYPE_EXPR "Status"
+        WORD "Status"
+    FIELD
+      WORD "edu"
+      TYPE_EXPR "Education"
+        WORD "Education"
+    FIELD
+      WORD "scores"
+      TYPE_EXPR "int[]"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "education"
+      TYPE_EXPR "Education[]"
+        WORD "Education"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "nested_edu"
+      TYPE_EXPR "Education[][]"
+        WORD "Education"
+        L_BRACKET "["
+        R_BRACKET "]"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "edu_map"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR "Education"
+            WORD "Education"
+          GREATER ">"
+    FIELD
+      WORD "data"
+      TYPE_EXPR "AliasedType"
+        WORD "AliasedType"
+    FIELD
+      WORD "mixed"
+      TYPE_EXPR "int | Education"
+        WORD "int"
+        PIPE "|"
+        WORD "Education"
+    FIELD
+      WORD "maybe"
+      TYPE_EXPR "string?"
+        WORD "string"
+        QUESTION "?"
+    FIELD
+      WORD "maybe_list"
+      TYPE_EXPR "int[]?"
+        WORD "int"
+        L_BRACKET "["
+        R_BRACKET "]"
+        QUESTION "?"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/stream_normalize.rs
+---
+class Education {
+  school: string  D=string S=null typeof_s=null
+  year: int  D=int S=null typeof_s=null
+}
+
+class AllDefaults {
+  name: string  D=string S=null typeof_s=null
+  age: int  D=int S=null typeof_s=null
+  score: float  D=float S=null typeof_s=null
+  active: bool  D=bool S=null typeof_s=null
+  type: "resume"  D="resume" S=never typeof_s=never
+  version: 42  D=42 S=never typeof_s=never
+  status: Status  D=Status S=null typeof_s=null
+  edu: Education  D=stream_Education S=null typeof_s=null
+  scores: int[]  D=int[] S=[] typeof_s=deferred
+  education: Education[]  D=stream_Education[] S=[] typeof_s=deferred
+  nested_edu: Education[][]  D=stream_Education[][] S=[] typeof_s=deferred
+  edu_map: map<string, Education>  D=map<string, stream_Education> S={} typeof_s=deferred
+  data: AliasedType  D=stream_AliasedType S=null typeof_s=null
+  mixed: int | Education  D=int | stream_Education S=null typeof_s=null
+  maybe: string?  D=string | null S=null typeof_s=null
+  maybe_list: int[]?  D=int[] | null S=null typeof_s=null
+}

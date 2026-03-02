@@ -1,0 +1,85 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "WithDesugaring"
+    L_BRACE "{"
+    FIELD
+      WORD "done_string"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "not_null_string"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "not_null_class"
+      TYPE_EXPR
+        WORD "Inner"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "done_and_not_null"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+        ATTRIBUTE "@stream.not_null"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "not_null"
+    FIELD
+      WORD "type_never"
+      TYPE_EXPR
+        WORD "string"
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "never"
+              WORD "never"
+            R_PAREN ")"
+    FIELD
+      WORD "type_never_literal"
+      TYPE_EXPR
+        STRING_LITERAL "resume"
+          QUOTE """
+          WORD "resume"
+          QUOTE """
+        ATTRIBUTE
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "type"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            UNQUOTED_STRING "never"
+              WORD "never"
+            R_PAREN ")"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Primitives"
+    L_BRACE "{"
+    FIELD
+      WORD "name"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "count"
+      TYPE_EXPR "int"
+        WORD "int"
+    FIELD
+      WORD "flag"
+      TYPE_EXPR "bool"
+        WORD "bool"
+    FIELD
+      WORD "score"
+      TYPE_EXPR "float"
+        WORD "float"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

@@ -193,6 +193,11 @@ function let_statements() -> int {
     return point.x + point.y;
 }
 
+class stream_Point {
+  x: null | int
+  y: null | int
+}
+
 class Point {
   x: int
   y: int

@@ -2,6 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+class stream_StringTorture {
+  raw1: null | string
+  raw2: null | string
+  raw3: null | string
+  emoji: null | string
+  rtl: null | string
+  zalgo: null | string
+  long: null | string
+}
+
 class StringTorture {
   raw1: string
   raw2: string
@@ -20,6 +30,18 @@ function DeepExpression() -> int {
     return 1 + 2 * 3 - 4 / 5 + 6 * 7 - 8 / 9 + 10;
 }
 
+class stream_Level3 {
+  field: null | stream_Level4
+}
+
+class stream_Level4 {
+  field: null | stream_Level5
+}
+
+class stream_Level1 {
+  field: null | stream_Level2
+}
+
 class Level5 {
   value: string
 }
@@ -30,6 +52,14 @@ class Level2 {
 
 class Level4 {
   field: Level5
+}
+
+class stream_Level2 {
+  field: null | stream_Level3
+}
+
+class stream_Level5 {
+  value: null | string
 }
 
 class Level1 {
@@ -1240,10 +1270,28 @@ function Process57(input: string) -> string {
     baml.llm.call_llm_function("Process57", { "input": input })
 }
 
+class stream_User296 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User209 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User260 {
   name: string
   email: string
   age: int
+}
+
+class stream_User225 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User994 {
@@ -1258,10 +1306,34 @@ class User615 {
   age: int
 }
 
+class stream_User199 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User67 {
   name: string
   email: string
   age: int
+}
+
+class stream_User520 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User366 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User335 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User268 {
@@ -1274,6 +1346,12 @@ class User257 {
   name: string
   email: string
   age: int
+}
+
+class stream_User724 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User142 {
@@ -1300,10 +1378,34 @@ class User906 {
   age: int
 }
 
+class stream_User142 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User791 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User794 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User897 {
   name: string
   email: string
   age: int
+}
+
+class stream_User63 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User485 {
@@ -1318,10 +1420,64 @@ class User220 {
   age: int
 }
 
+class stream_User705 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User873 {
   name: string
   email: string
   age: int
+}
+
+class stream_User660 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User829 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User239 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User890 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User96 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User756 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User77 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User911 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User978 {
@@ -1330,10 +1486,34 @@ class User978 {
   age: int
 }
 
+class stream_User207 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User680 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User359 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User929 {
   name: string
   email: string
   age: int
+}
+
+class stream_User493 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User798 {
@@ -1342,10 +1522,22 @@ class User798 {
   age: int
 }
 
+class stream_User214 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User866 {
   name: string
   email: string
   age: int
+}
+
+class stream_User274 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User102 {
@@ -1360,16 +1552,52 @@ class User802 {
   age: int
 }
 
+class stream_User109 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User160 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User316 {
   name: string
   email: string
   age: int
 }
 
+class stream_User318 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User100 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User700 {
   name: string
   email: string
   age: int
+}
+
+class stream_User99 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User772 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User652 {
@@ -1396,10 +1624,22 @@ class User773 {
   age: int
 }
 
+class stream_User270 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User84 {
   name: string
   email: string
   age: int
+}
+
+class stream_User528 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User616 {
@@ -1412,6 +1652,54 @@ class User825 {
   name: string
   email: string
   age: int
+}
+
+class stream_User529 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User278 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User832 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User34 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User594 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User875 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User617 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User996 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User394 {
@@ -1432,6 +1720,18 @@ class User470 {
   age: int
 }
 
+class stream_User647 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User134 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User374 {
   name: string
   email: string
@@ -1444,10 +1744,22 @@ class User149 {
   age: int
 }
 
+class stream_User625 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User438 {
   name: string
   email: string
   age: int
+}
+
+class stream_User690 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User240 {
@@ -1462,10 +1774,22 @@ class User785 {
   age: int
 }
 
+class stream_User62 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User361 {
   name: string
   email: string
   age: int
+}
+
+class stream_User553 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User462 {
@@ -1486,16 +1810,40 @@ class User801 {
   age: int
 }
 
+class stream_User648 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User96 {
   name: string
   email: string
   age: int
 }
 
+class stream_User364 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User854 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User719 {
   name: string
   email: string
   age: int
+}
+
+class stream_User790 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User104 {
@@ -1516,6 +1864,18 @@ class User383 {
   age: int
 }
 
+class stream_User125 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User150 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User270 {
   name: string
   email: string
@@ -1534,6 +1894,18 @@ class User356 {
   age: int
 }
 
+class stream_User847 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User575 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User426 {
   name: string
   email: string
@@ -1544,6 +1916,24 @@ class User105 {
   name: string
   email: string
   age: int
+}
+
+class stream_User580 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User180 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User985 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User11 {
@@ -1570,6 +1960,12 @@ class User614 {
   age: int
 }
 
+class stream_User750 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User461 {
   name: string
   email: string
@@ -1580,6 +1976,12 @@ class User456 {
   name: string
   email: string
   age: int
+}
+
+class stream_User192 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User744 {
@@ -1612,6 +2014,24 @@ class User72 {
   age: int
 }
 
+class stream_User545 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User428 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User693 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User398 {
   name: string
   email: string
@@ -1624,10 +2044,34 @@ class User781 {
   age: int
 }
 
+class stream_User343 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User490 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User698 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User862 {
   name: string
   email: string
   age: int
+}
+
+class stream_User273 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User949 {
@@ -1678,10 +2122,40 @@ class User821 {
   age: int
 }
 
+class stream_User421 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User965 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User566 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User687 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User43 {
   name: string
   email: string
   age: int
+}
+
+class stream_User333 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User349 {
@@ -1696,10 +2170,28 @@ class User34 {
   age: int
 }
 
+class stream_User116 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User442 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User525 {
   name: string
   email: string
   age: int
+}
+
+class stream_User98 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User984 {
@@ -1708,10 +2200,28 @@ class User984 {
   age: int
 }
 
+class stream_User888 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User865 {
   name: string
   email: string
   age: int
+}
+
+class stream_User478 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User634 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User378 {
@@ -1720,16 +2230,34 @@ class User378 {
   age: int
 }
 
+class stream_User424 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User809 {
   name: string
   email: string
   age: int
 }
 
+class stream_User298 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User678 {
   name: string
   email: string
   age: int
+}
+
+class stream_User253 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User480 {
@@ -1744,10 +2272,22 @@ class User725 {
   age: int
 }
 
+class stream_User477 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User739 {
   name: string
   email: string
   age: int
+}
+
+class stream_User290 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User566 {
@@ -1762,10 +2302,46 @@ class User463 {
   age: int
 }
 
+class stream_User808 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User391 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User751 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User376 {
   name: string
   email: string
   age: int
+}
+
+class stream_User40 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User71 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User884 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User126 {
@@ -1780,6 +2356,12 @@ class User936 {
   age: int
 }
 
+class stream_User341 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User295 {
   name: string
   email: string
@@ -1792,10 +2374,58 @@ class User624 {
   age: int
 }
 
+class stream_User76 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User401 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User813 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User320 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User460 {
   name: string
   email: string
   age: int
+}
+
+class stream_User503 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User329 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User381 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User936 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User325 {
@@ -1816,6 +2446,30 @@ class User173 {
   age: int
 }
 
+class stream_User859 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User188 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User585 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User215 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User66 {
   name: string
   email: string
@@ -1826,6 +2480,12 @@ class User494 {
   name: string
   email: string
   age: int
+}
+
+class stream_User368 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User229 {
@@ -1846,16 +2506,40 @@ class User760 {
   age: int
 }
 
+class stream_User833 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User723 {
   name: string
   email: string
   age: int
 }
 
+class stream_User12 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User793 {
   name: string
   email: string
   age: int
+}
+
+class stream_User874 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User50 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User761 {
@@ -1868,6 +2552,18 @@ class User654 {
   name: string
   email: string
   age: int
+}
+
+class stream_User973 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User132 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User65 {
@@ -1888,10 +2584,22 @@ class User792 {
   age: int
 }
 
+class stream_User939 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User418 {
   name: string
   email: string
   age: int
+}
+
+class stream_User933 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User746 {
@@ -1912,6 +2620,18 @@ class User434 {
   age: int
 }
 
+class stream_User623 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User450 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User685 {
   name: string
   email: string
@@ -1930,6 +2650,18 @@ class User985 {
   age: int
 }
 
+class stream_User983 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User456 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User724 {
   name: string
   email: string
@@ -1942,10 +2674,52 @@ class User234 {
   age: int
 }
 
+class stream_User334 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User272 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User19 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User28 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User306 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User37 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User343 {
   name: string
   email: string
   age: int
+}
+
+class stream_User711 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User933 {
@@ -1990,6 +2764,24 @@ class User25 {
   age: int
 }
 
+class stream_User25 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User776 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User286 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User59 {
   name: string
   email: string
@@ -2014,10 +2806,34 @@ class User776 {
   age: int
 }
 
+class stream_User249 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User787 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User320 {
   name: string
   email: string
   age: int
+}
+
+class stream_User84 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User913 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User828 {
@@ -2026,10 +2842,28 @@ class User828 {
   age: int
 }
 
+class stream_User935 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User476 {
   name: string
   email: string
   age: int
+}
+
+class stream_User97 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User602 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User283 {
@@ -2044,10 +2878,28 @@ class User347 {
   age: int
 }
 
+class stream_User152 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User203 {
   name: string
   email: string
   age: int
+}
+
+class stream_User725 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User878 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User991 {
@@ -2056,10 +2908,28 @@ class User991 {
   age: int
 }
 
+class stream_User881 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User42 {
   name: string
   email: string
   age: int
+}
+
+class stream_User759 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User324 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User909 {
@@ -2074,6 +2944,18 @@ class User574 {
   age: int
 }
 
+class stream_User691 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User79 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User751 {
   name: string
   email: string
@@ -2086,10 +2968,22 @@ class User918 {
   age: int
 }
 
+class stream_User183 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User610 {
   name: string
   email: string
   age: int
+}
+
+class stream_User361 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User352 {
@@ -2134,6 +3028,12 @@ class User246 {
   age: int
 }
 
+class stream_User519 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User167 {
   name: string
   email: string
@@ -2158,10 +3058,22 @@ class User284 {
   age: int
 }
 
+class stream_User980 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User955 {
   name: string
   email: string
   age: int
+}
+
+class stream_User918 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User950 {
@@ -2176,10 +3088,34 @@ class User170 {
   age: int
 }
 
+class stream_User7 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User395 {
   name: string
   email: string
   age: int
+}
+
+class stream_User472 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User495 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User206 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User168 {
@@ -2206,10 +3142,46 @@ class User140 {
   age: int
 }
 
+class stream_User514 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User892 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User780 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User533 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User675 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User639 {
   name: string
   email: string
   age: int
+}
+
+class stream_User658 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User696 {
@@ -2218,16 +3190,52 @@ class User696 {
   age: int
 }
 
+class stream_User390 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User984 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User892 {
   name: string
   email: string
   age: int
 }
 
+class stream_User644 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User412 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User680 {
   name: string
   email: string
   age: int
+}
+
+class stream_User846 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User822 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User581 {
@@ -2254,6 +3262,12 @@ class User335 {
   age: int
 }
 
+class stream_User767 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User665 {
   name: string
   email: string
@@ -2264,6 +3278,18 @@ class User453 {
   name: string
   email: string
   age: int
+}
+
+class stream_User614 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User78 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User63 {
@@ -2282,6 +3308,18 @@ class User97 {
   name: string
   email: string
   age: int
+}
+
+class stream_User817 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User726 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User980 {
@@ -2308,10 +3346,22 @@ class User261 {
   age: int
 }
 
+class stream_User938 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User975 {
   name: string
   email: string
   age: int
+}
+
+class stream_User959 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User713 {
@@ -2320,10 +3370,34 @@ class User713 {
   age: int
 }
 
+class stream_User840 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User204 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User412 {
   name: string
   email: string
   age: int
+}
+
+class stream_User403 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User212 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User313 {
@@ -2344,16 +3418,46 @@ class User779 {
   age: int
 }
 
+class stream_User332 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User230 {
   name: string
   email: string
   age: int
 }
 
+class stream_User489 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User507 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User938 {
   name: string
   email: string
   age: int
+}
+
+class stream_User715 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User863 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User783 {
@@ -2368,10 +3472,40 @@ class User323 {
   age: int
 }
 
+class stream_User986 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User567 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User67 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User816 {
   name: string
   email: string
   age: int
+}
+
+class stream_User419 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User998 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User466 {
@@ -2386,10 +3520,52 @@ class User183 {
   age: int
 }
 
+class stream_User927 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User293 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User141 {
   name: string
   email: string
   age: int
+}
+
+class stream_User917 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User326 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User164 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User383 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User804 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User657 {
@@ -2398,10 +3574,28 @@ class User657 {
   age: int
 }
 
+class stream_User908 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User872 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User855 {
   name: string
   email: string
   age: int
+}
+
+class stream_User928 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User954 {
@@ -2410,10 +3604,28 @@ class User954 {
   age: int
 }
 
+class stream_User170 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User699 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User913 {
   name: string
   email: string
   age: int
+}
+
+class stream_User500 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User560 {
@@ -2422,10 +3634,46 @@ class User560 {
   age: int
 }
 
+class stream_User588 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User512 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User113 {
   name: string
   email: string
   age: int
+}
+
+class stream_User423 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User447 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User287 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User348 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User962 {
@@ -2452,16 +3700,34 @@ class User846 {
   age: int
 }
 
+class stream_User898 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User431 {
   name: string
   email: string
   age: int
 }
 
+class stream_User867 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User427 {
   name: string
   email: string
   age: int
+}
+
+class stream_User432 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User280 {
@@ -2476,10 +3742,22 @@ class User51 {
   age: int
 }
 
+class stream_User613 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User806 {
   name: string
   email: string
   age: int
+}
+
+class stream_User486 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User155 {
@@ -2500,6 +3778,12 @@ class User179 {
   age: int
 }
 
+class stream_User501 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User61 {
   name: string
   email: string
@@ -2512,10 +3796,34 @@ class User129 {
   age: int
 }
 
+class stream_User712 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User244 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User46 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User407 {
   name: string
   email: string
   age: int
+}
+
+class stream_User905 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User971 {
@@ -2536,6 +3844,12 @@ class User1000 {
   age: int
 }
 
+class stream_User599 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User636 {
   name: string
   email: string
@@ -2548,10 +3862,52 @@ class User666 {
   age: int
 }
 
+class stream_User737 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User948 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User295 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User36 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User695 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User415 {
   name: string
   email: string
   age: int
+}
+
+class stream_User107 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User454 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User517 {
@@ -2566,6 +3922,12 @@ class User35 {
   age: int
 }
 
+class stream_User952 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User915 {
   name: string
   email: string
@@ -2576,6 +3938,18 @@ class User827 {
   name: string
   email: string
   age: int
+}
+
+class stream_User18 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User387 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User562 {
@@ -2590,10 +3964,40 @@ class User586 {
   age: int
 }
 
+class stream_User900 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User339 {
   name: string
   email: string
   age: int
+}
+
+class stream_User603 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User656 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User317 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User210 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User397 {
@@ -2614,6 +4018,12 @@ class User520 {
   age: int
 }
 
+class stream_User880 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User53 {
   name: string
   email: string
@@ -2626,6 +4036,24 @@ class User209 {
   age: int
 }
 
+class stream_User52 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User1 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User93 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User24 {
   name: string
   email: string
@@ -2636,6 +4064,48 @@ class User278 {
   name: string
   email: string
   age: int
+}
+
+class stream_User626 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User230 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User211 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User941 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User994 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User583 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User149 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User709 {
@@ -2656,10 +4126,52 @@ class User910 {
   age: int
 }
 
+class stream_User114 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User742 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User902 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User774 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User906 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User508 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User702 {
   name: string
   email: string
   age: int
+}
+
+class stream_User240 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User597 {
@@ -2680,16 +4192,40 @@ class User70 {
   age: int
 }
 
+class stream_User299 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User919 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User820 {
   name: string
   email: string
   age: int
 }
 
+class stream_User365 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User399 {
   name: string
   email: string
   age: int
+}
+
+class stream_User250 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User876 {
@@ -2714,6 +4250,18 @@ class User91 {
   name: string
   email: string
   age: int
+}
+
+class stream_User345 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User930 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User273 {
@@ -2746,6 +4294,12 @@ class User226 {
   age: int
 }
 
+class stream_User943 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User628 {
   name: string
   email: string
@@ -2764,10 +4318,40 @@ class User902 {
   age: int
 }
 
+class stream_User967 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User472 {
   name: string
   email: string
   age: int
+}
+
+class stream_User446 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User415 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User678 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User522 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User366 {
@@ -2776,10 +4360,58 @@ class User366 {
   age: int
 }
 
+class stream_User330 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User505 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User311 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User29 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User618 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User94 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User275 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User324 {
   name: string
   email: string
   age: int
+}
+
+class stream_User537 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User148 {
@@ -2794,6 +4426,18 @@ class User826 {
   age: int
 }
 
+class stream_User679 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User873 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User154 {
   name: string
   email: string
@@ -2806,16 +4450,40 @@ class User514 {
   age: int
 }
 
+class stream_User88 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User98 {
   name: string
   email: string
   age: int
 }
 
+class stream_User398 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User722 {
   name: string
   email: string
   age: int
+}
+
+class stream_User600 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User806 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User232 {
@@ -2836,16 +4504,34 @@ class User553 {
   age: int
 }
 
+class stream_User556 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User79 {
   name: string
   email: string
   age: int
 }
 
+class stream_User778 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User443 {
   name: string
   email: string
   age: int
+}
+
+class stream_User291 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User904 {
@@ -2860,6 +4546,12 @@ class User348 {
   age: int
 }
 
+class stream_User264 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User789 {
   name: string
   email: string
@@ -2870,6 +4562,24 @@ class User163 {
   name: string
   email: string
   age: int
+}
+
+class stream_User218 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User465 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User775 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User567 {
@@ -2884,10 +4594,22 @@ class User835 {
   age: int
 }
 
+class stream_User201 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User937 {
   name: string
   email: string
   age: int
+}
+
+class stream_User999 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User836 {
@@ -2896,10 +4618,34 @@ class User836 {
   age: int
 }
 
+class stream_User237 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User690 {
   name: string
   email: string
   age: int
+}
+
+class stream_User437 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User960 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User347 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User360 {
@@ -2914,10 +4660,34 @@ class User571 {
   age: int
 }
 
+class stream_User800 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User388 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User23 {
   name: string
   email: string
   age: int
+}
+
+class stream_User82 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User106 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User221 {
@@ -2944,10 +4714,28 @@ class User336 {
   age: int
 }
 
+class stream_User487 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User19 {
   name: string
   email: string
   age: int
+}
+
+class stream_User232 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User558 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User369 {
@@ -2956,10 +4744,28 @@ class User369 {
   age: int
 }
 
+class stream_User916 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User81 {
   name: string
   email: string
   age: int
+}
+
+class stream_User651 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User448 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User166 {
@@ -2986,6 +4792,12 @@ class User164 {
   age: int
 }
 
+class stream_User524 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User889 {
   name: string
   email: string
@@ -2998,10 +4810,34 @@ class User540 {
   age: int
 }
 
+class stream_User951 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User127 {
   name: string
   email: string
   age: int
+}
+
+class stream_User968 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User331 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User559 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User408 {
@@ -3010,16 +4846,34 @@ class User408 {
   age: int
 }
 
+class stream_User85 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User94 {
   name: string
   email: string
   age: int
 }
 
+class stream_User557 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User213 {
   name: string
   email: string
   age: int
+}
+
+class stream_User231 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User190 {
@@ -3034,10 +4888,46 @@ class User437 {
   age: int
 }
 
+class stream_User289 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User707 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User616 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User231 {
   name: string
   email: string
   age: int
+}
+
+class stream_User258 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User309 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User42 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User964 {
@@ -3046,10 +4936,22 @@ class User964 {
   age: int
 }
 
+class stream_User802 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User13 {
   name: string
   email: string
   age: int
+}
+
+class stream_User734 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User321 {
@@ -3058,10 +4960,40 @@ class User321 {
   age: int
 }
 
+class stream_User377 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User633 {
   name: string
   email: string
   age: int
+}
+
+class stream_User83 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User688 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User117 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User839 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User464 {
@@ -3070,10 +5002,40 @@ class User464 {
   age: int
 }
 
+class stream_User564 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User184 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User144 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User193 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User585 {
   name: string
   email: string
   age: int
+}
+
+class stream_User517 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User160 {
@@ -3094,10 +5056,22 @@ class User997 {
   age: int
 }
 
+class stream_User457 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User474 {
   name: string
   email: string
   age: int
+}
+
+class stream_User717 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User328 {
@@ -3118,10 +5092,28 @@ class User362 {
   age: int
 }
 
+class stream_User569 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User314 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User681 {
   name: string
   email: string
   age: int
+}
+
+class stream_User41 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User810 {
@@ -3136,10 +5128,64 @@ class User755 {
   age: int
 }
 
+class stream_User380 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User86 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User349 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User104 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User988 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User167 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User292 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User664 {
   name: string
   email: string
   age: int
+}
+
+class stream_User411 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User576 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User730 {
@@ -3148,10 +5194,28 @@ class User730 {
   age: int
 }
 
+class stream_User573 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User378 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User774 {
   name: string
   email: string
   age: int
+}
+
+class stream_User247 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User73 {
@@ -3160,10 +5224,52 @@ class User73 {
   age: int
 }
 
+class stream_User697 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User530 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User124 {
   name: string
   email: string
   age: int
+}
+
+class stream_User810 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User766 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User560 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User730 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User836 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User327 {
@@ -3178,10 +5284,28 @@ class User754 {
   age: int
 }
 
+class stream_User945 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User797 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User925 {
   name: string
   email: string
   age: int
+}
+
+class stream_User248 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User439 {
@@ -3208,10 +5332,52 @@ class User1 {
   age: int
 }
 
+class stream_User773 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User482 {
   name: string
   email: string
   age: int
+}
+
+class stream_User112 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User877 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User176 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User475 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User186 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User261 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User193 {
@@ -3226,6 +5392,12 @@ class User216 {
   age: int
 }
 
+class stream_User899 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User237 {
   name: string
   email: string
@@ -3238,10 +5410,40 @@ class User252 {
   age: int
 }
 
+class stream_User26 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User315 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User752 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User224 {
   name: string
   email: string
   age: int
+}
+
+class stream_User227 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User795 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User298 {
@@ -3274,10 +5476,34 @@ class User522 {
   age: int
 }
 
+class stream_User893 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User701 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User791 {
   name: string
   email: string
   age: int
+}
+
+class stream_User815 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User172 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User843 {
@@ -3304,6 +5530,12 @@ class User716 {
   age: int
 }
 
+class stream_User115 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User483 {
   name: string
   email: string
@@ -3328,10 +5560,70 @@ class User401 {
   age: int
 }
 
+class stream_User420 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User621 {
   name: string
   email: string
   age: int
+}
+
+class stream_User521 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User828 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User301 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User506 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User667 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User374 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User307 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User864 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User179 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User392 {
@@ -3346,10 +5638,22 @@ class User379 {
   age: int
 }
 
+class stream_User110 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User986 {
   name: string
   email: string
   age: int
+}
+
+class stream_User850 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User884 {
@@ -3364,10 +5668,28 @@ class User979 {
   age: int
 }
 
+class stream_User733 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User495 {
   name: string
   email: string
   age: int
+}
+
+class stream_User56 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User358 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User409 {
@@ -3376,10 +5698,46 @@ class User409 {
   age: int
 }
 
+class stream_User551 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User422 {
   name: string
   email: string
   age: int
+}
+
+class stream_User926 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User356 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User663 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User970 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User694 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User77 {
@@ -3392,6 +5750,24 @@ class User943 {
   name: string
   email: string
   age: int
+}
+
+class stream_User683 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User288 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User302 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User225 {
@@ -3412,6 +5788,30 @@ class User364 {
   age: int
 }
 
+class stream_User637 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User931 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User474 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User280 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User762 {
   name: string
   email: string
@@ -3430,6 +5830,12 @@ class User872 {
   age: int
 }
 
+class stream_User549 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User642 {
   name: string
   email: string
@@ -3440,6 +5846,30 @@ class User468 {
   name: string
   email: string
   age: int
+}
+
+class stream_User950 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User649 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User942 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User105 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User694 {
@@ -3454,16 +5884,64 @@ class User630 {
   age: int
 }
 
+class stream_User375 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User169 {
   name: string
   email: string
   age: int
 }
 
+class stream_User479 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User561 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User668 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User979 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User852 {
   name: string
   email: string
   age: int
+}
+
+class stream_User673 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User611 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User755 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User550 {
@@ -3484,16 +5962,34 @@ class User608 {
   age: int
 }
 
+class stream_User429 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User650 {
   name: string
   email: string
   age: int
 }
 
+class stream_User920 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User103 {
   name: string
   email: string
   age: int
+}
+
+class stream_User914 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User44 {
@@ -3508,10 +6004,22 @@ class User830 {
   age: int
 }
 
+class stream_User312 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User590 {
   name: string
   email: string
   age: int
+}
+
+class stream_User499 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User969 {
@@ -3526,10 +6034,22 @@ class User875 {
   age: int
 }
 
+class stream_User386 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User400 {
   name: string
   email: string
   age: int
+}
+
+class stream_User75 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User279 {
@@ -3538,16 +6058,40 @@ class User279 {
   age: int
 }
 
+class stream_User369 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User926 {
   name: string
   email: string
   age: int
 }
 
+class stream_User716 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User139 {
   name: string
   email: string
   age: int
+}
+
+class stream_User527 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User929 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User235 {
@@ -3586,6 +6130,12 @@ class User337 {
   age: int
 }
 
+class stream_User49 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User524 {
   name: string
   email: string
@@ -3598,10 +6148,58 @@ class User898 {
   age: int
 }
 
+class stream_User440 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User509 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User606 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User55 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User591 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User153 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User330 {
   name: string
   email: string
   age: int
+}
+
+class stream_User9 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User402 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User959 {
@@ -3616,6 +6214,12 @@ class User552 {
   age: int
 }
 
+class stream_User178 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User488 {
   name: string
   email: string
@@ -3628,16 +6232,64 @@ class User442 {
   age: int
 }
 
+class stream_User469 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User577 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User32 {
   name: string
   email: string
   age: int
 }
 
+class stream_User459 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User671 {
   name: string
   email: string
   age: int
+}
+
+class stream_User484 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User526 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User610 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User102 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User630 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User340 {
@@ -3652,10 +6304,64 @@ class User41 {
   age: int
 }
 
+class stream_User362 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User904 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User64 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User891 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User915 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User565 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User855 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User265 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User436 {
   name: string
   email: string
   age: int
+}
+
+class stream_User441 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User471 {
@@ -3670,10 +6376,34 @@ class User635 {
   age: int
 }
 
+class stream_User159 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User223 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User510 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User857 {
   name: string
   email: string
   age: int
+}
+
+class stream_User38 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User845 {
@@ -3688,6 +6418,18 @@ class User551 {
   age: int
 }
 
+class stream_User793 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User982 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User957 {
   name: string
   email: string
@@ -3698,6 +6440,24 @@ class User15 {
   name: string
   email: string
   age: int
+}
+
+class stream_User498 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User627 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User13 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User317 {
@@ -3718,10 +6478,40 @@ class User840 {
   age: int
 }
 
+class stream_User581 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User496 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User608 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User370 {
   name: string
   email: string
   age: int
+}
+
+class stream_User234 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User964 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User477 {
@@ -3730,10 +6520,28 @@ class User477 {
   age: int
 }
 
+class stream_User586 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User674 {
   name: string
   email: string
   age: int
+}
+
+class stream_User706 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User392 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User677 {
@@ -3748,6 +6556,12 @@ class User634 {
   age: int
 }
 
+class stream_User118 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User598 {
   name: string
   email: string
@@ -3760,6 +6574,12 @@ class User175 {
   age: int
 }
 
+class stream_User993 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User531 {
   name: string
   email: string
@@ -3770,6 +6590,18 @@ class User676 {
   name: string
   email: string
   age: int
+}
+
+class stream_User845 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User308 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User353 {
@@ -3790,6 +6622,18 @@ class User119 {
   age: int
 }
 
+class stream_User895 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User87 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User359 {
   name: string
   email: string
@@ -3802,10 +6646,40 @@ class User945 {
   age: int
 }
 
+class stream_User434 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User788 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User640 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User545 {
   name: string
   email: string
   age: int
+}
+
+class stream_User882 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User92 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User814 {
@@ -3820,10 +6694,34 @@ class User561 {
   age: int
 }
 
+class stream_User785 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User844 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User721 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User708 {
   name: string
   email: string
   age: int
+}
+
+class stream_User123 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User385 {
@@ -3844,6 +6742,36 @@ class User263 {
   age: int
 }
 
+class stream_User664 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User57 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User173 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User91 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User242 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User973 {
   name: string
   email: string
@@ -3856,6 +6784,12 @@ class User839 {
   age: int
 }
 
+class stream_User538 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User911 {
   name: string
   email: string
@@ -3866,6 +6800,18 @@ class User833 {
   name: string
   email: string
   age: int
+}
+
+class stream_User426 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User382 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User277 {
@@ -3884,6 +6830,24 @@ class User537 {
   name: string
   email: string
   age: int
+}
+
+class stream_User547 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User322 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User579 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User414 {
@@ -3910,16 +6874,40 @@ class User557 {
   age: int
 }
 
+class stream_User257 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User592 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User50 {
   name: string
   email: string
   age: int
 }
 
+class stream_User646 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User958 {
   name: string
   email: string
   age: int
+}
+
+class stream_User458 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User264 {
@@ -3932,6 +6920,18 @@ class User14 {
   name: string
   email: string
   age: int
+}
+
+class stream_User396 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User550 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User653 {
@@ -3952,16 +6952,52 @@ class User368 {
   age: int
 }
 
+class stream_User89 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User989 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User659 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User714 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User568 {
   name: string
   email: string
   age: int
 }
 
+class stream_User757 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User425 {
   name: string
   email: string
   age: int
+}
+
+class stream_User338 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User144 {
@@ -3974,6 +7010,12 @@ class User424 {
   name: string
   email: string
   age: int
+}
+
+class stream_User425 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User555 {
@@ -4036,6 +7078,18 @@ class User718 {
   age: int
 }
 
+class stream_User337 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User657 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User508 {
   name: string
   email: string
@@ -4078,16 +7132,46 @@ class User188 {
   age: int
 }
 
+class stream_User684 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User764 {
   name: string
   email: string
   age: int
 }
 
+class stream_User578 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User371 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User131 {
   name: string
   email: string
   age: int
+}
+
+class stream_User235 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User171 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User659 {
@@ -4102,16 +7186,82 @@ class User68 {
   age: int
 }
 
+class stream_User922 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User80 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User108 {
   name: string
   email: string
   age: int
 }
 
+class stream_User727 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User33 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User444 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User471 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User363 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User376 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User620 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User431 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User215 {
   name: string
   email: string
   age: int
+}
+
+class stream_User198 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User534 {
@@ -4150,6 +7300,12 @@ class User660 {
   age: int
 }
 
+class stream_User754 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User518 {
   name: string
   email: string
@@ -4160,6 +7316,24 @@ class User269 {
   name: string
   email: string
   age: int
+}
+
+class stream_User981 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User269 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User48 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User930 {
@@ -4178,6 +7352,12 @@ class User109 {
   name: string
   email: string
   age: int
+}
+
+class stream_User323 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User914 {
@@ -4210,6 +7390,12 @@ class User743 {
   age: int
 }
 
+class stream_User399 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User606 {
   name: string
   email: string
@@ -4220,6 +7406,30 @@ class User305 {
   name: string
   email: string
   age: int
+}
+
+class stream_User655 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User310 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User801 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User126 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User244 {
@@ -4238,6 +7448,12 @@ class User638 {
   name: string
   email: string
   age: int
+}
+
+class stream_User476 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User987 {
@@ -4270,10 +7486,22 @@ class User766 {
   age: int
 }
 
+class stream_User889 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User831 {
   name: string
   email: string
   age: int
+}
+
+class stream_User587 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User4 {
@@ -4286,6 +7514,12 @@ class User371 {
   name: string
   email: string
   age: int
+}
+
+class stream_User819 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User54 {
@@ -4306,10 +7540,22 @@ class User319 {
   age: int
 }
 
+class stream_User255 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User797 {
   name: string
   email: string
   age: int
+}
+
+class stream_User281 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User440 {
@@ -4324,16 +7570,46 @@ class User420 {
   age: int
 }
 
+class stream_User887 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User955 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User327 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User704 {
   name: string
   email: string
   age: int
 }
 
+class stream_User870 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User162 {
   name: string
   email: string
   age: int
+}
+
+class stream_User174 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User153 {
@@ -4354,6 +7630,24 @@ class User411 {
   age: int
 }
 
+class stream_User572 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User127 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User782 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User500 {
   name: string
   email: string
@@ -4372,6 +7666,12 @@ class User451 {
   age: int
 }
 
+class stream_User866 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User78 {
   name: string
   email: string
@@ -4384,16 +7684,34 @@ class User491 {
   age: int
 }
 
+class stream_User956 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User675 {
   name: string
   email: string
   age: int
 }
 
+class stream_User568 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User156 {
   name: string
   email: string
   age: int
+}
+
+class stream_User764 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User419 {
@@ -4408,10 +7726,22 @@ class User507 {
   age: int
 }
 
+class stream_User969 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User869 {
   name: string
   email: string
   age: int
+}
+
+class stream_User169 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User55 {
@@ -4432,6 +7762,12 @@ class User931 {
   age: int
 }
 
+class stream_User735 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User947 {
   name: string
   email: string
@@ -4442,6 +7778,12 @@ class User49 {
   name: string
   email: string
   age: int
+}
+
+class stream_User827 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User784 {
@@ -4474,6 +7816,12 @@ class User644 {
   age: int
 }
 
+class stream_User355 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User667 {
   name: string
   email: string
@@ -4492,6 +7840,18 @@ class User710 {
   age: int
 }
 
+class stream_User925 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User539 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User815 {
   name: string
   email: string
@@ -4502,6 +7862,24 @@ class User382 {
   name: string
   email: string
   age: int
+}
+
+class stream_User605 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User861 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User266 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User637 {
@@ -4522,6 +7900,12 @@ class User95 {
   age: int
 }
 
+class stream_User435 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User727 {
   name: string
   email: string
@@ -4532,6 +7916,12 @@ class User381 {
   name: string
   email: string
   age: int
+}
+
+class stream_User243 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User881 {
@@ -4546,6 +7936,12 @@ class User288 {
   age: int
 }
 
+class stream_User284 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User363 {
   name: string
   email: string
@@ -4556,6 +7952,12 @@ class User120 {
   name: string
   email: string
   age: int
+}
+
+class stream_User555 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User467 {
@@ -4570,16 +7972,46 @@ class User253 {
   age: int
 }
 
+class stream_User443 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User168 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User609 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User886 {
   name: string
   email: string
   age: int
 }
 
+class stream_User451 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User243 {
   name: string
   email: string
   age: int
+}
+
+class stream_User997 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User763 {
@@ -4594,10 +8026,46 @@ class User487 {
   age: int
 }
 
+class stream_User285 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User480 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User158 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User263 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User701 {
   name: string
   email: string
   age: int
+}
+
+class stream_User119 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User681 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User527 {
@@ -4606,10 +8074,28 @@ class User527 {
   age: int
 }
 
+class stream_User686 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User47 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User110 {
   name: string
   email: string
   age: int
+}
+
+class stream_User256 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User996 {
@@ -4622,6 +8108,24 @@ class User452 {
   name: string
   email: string
   age: int
+}
+
+class stream_User154 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User653 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User128 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User248 {
@@ -4642,6 +8146,12 @@ class User684 {
   age: int
 }
 
+class stream_User452 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User76 {
   name: string
   email: string
@@ -4660,10 +8170,28 @@ class User818 {
   age: int
 }
 
+class stream_User328 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User977 {
   name: string
   email: string
   age: int
+}
+
+class stream_User685 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User325 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User344 {
@@ -4682,6 +8210,48 @@ class User509 {
   name: string
   email: string
   age: int
+}
+
+class stream_User439 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User720 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User485 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User831 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User35 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User858 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User351 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User247 {
@@ -4708,10 +8278,22 @@ class User683 {
   age: int
 }
 
+class stream_User297 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User475 {
   name: string
   email: string
   age: int
+}
+
+class stream_User497 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User888 {
@@ -4726,6 +8308,18 @@ class User993 {
   age: int
 }
 
+class stream_User139 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User400 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User350 {
   name: string
   email: string
@@ -4736,6 +8330,12 @@ class User686 {
   name: string
   email: string
   age: int
+}
+
+class stream_User222 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User812 {
@@ -4750,16 +8350,64 @@ class User387 {
   age: int
 }
 
+class stream_User66 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User868 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User146 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User613 {
   name: string
   email: string
   age: int
 }
 
+class stream_User860 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User133 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User519 {
   name: string
   email: string
   age: int
+}
+
+class stream_User449 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User395 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User736 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User151 {
@@ -4774,6 +8422,18 @@ class User688 {
   age: int
 }
 
+class stream_User596 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User407 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User286 {
   name: string
   email: string
@@ -4786,6 +8446,24 @@ class User26 {
   age: int
 }
 
+class stream_User162 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User563 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User876 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User489 {
   name: string
   email: string
@@ -4796,6 +8474,12 @@ class User510 {
   name: string
   email: string
   age: int
+}
+
+class stream_User853 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User64 {
@@ -4834,6 +8518,18 @@ class User593 {
   age: int
 }
 
+class stream_User354 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User463 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User186 {
   name: string
   email: string
@@ -4852,10 +8548,22 @@ class User679 {
   age: int
 }
 
+class stream_User45 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User249 {
   name: string
   email: string
   age: int
+}
+
+class stream_User571 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User69 {
@@ -4882,10 +8590,28 @@ class User848 {
   age: int
 }
 
+class stream_User166 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User632 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User9 {
   name: string
   email: string
   age: int
+}
+
+class stream_User251 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User960 {
@@ -4912,6 +8638,18 @@ class User181 {
   age: int
 }
 
+class stream_User972 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User385 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User272 {
   name: string
   email: string
@@ -4924,10 +8662,28 @@ class User40 {
   age: int
 }
 
+class stream_User224 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User83 {
   name: string
   email: string
   age: int
+}
+
+class stream_User262 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User728 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User658 {
@@ -4948,6 +8704,24 @@ class User577 {
   age: int
 }
 
+class stream_User384 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User69 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User417 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User733 {
   name: string
   email: string
@@ -4958,6 +8732,12 @@ class User981 {
   name: string
   email: string
   age: int
+}
+
+class stream_User502 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User136 {
@@ -4984,6 +8764,12 @@ class User749 {
   age: int
 }
 
+class stream_User187 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User861 {
   name: string
   email: string
@@ -5002,10 +8788,28 @@ class User735 {
   age: int
 }
 
+class stream_User760 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User841 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User405 {
   name: string
   email: string
   age: int
+}
+
+class stream_User124 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User899 {
@@ -5032,10 +8836,28 @@ class User602 {
   age: int
 }
 
+class stream_User494 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User409 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User227 {
   name: string
   email: string
   age: int
+}
+
+class stream_User430 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User287 {
@@ -5044,10 +8866,52 @@ class User287 {
   age: int
 }
 
+class stream_User156 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User896 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User824 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User238 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User796 {
   name: string
   email: string
   age: int
+}
+
+class stream_User702 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User762 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User54 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User583 {
@@ -5056,16 +8920,64 @@ class User583 {
   age: int
 }
 
+class stream_User17 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User7 {
   name: string
   email: string
   age: int
 }
 
+class stream_User903 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User136 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User865 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User43 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User8 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User953 {
   name: string
   email: string
   age: int
+}
+
+class stream_User155 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User744 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User775 {
@@ -5078,6 +8990,12 @@ class User584 {
   name: string
   email: string
   age: int
+}
+
+class stream_User789 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User271 {
@@ -5104,10 +9022,40 @@ class User111 {
   age: int
 }
 
+class stream_User65 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User491 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User536 {
   name: string
   email: string
   age: int
+}
+
+class stream_User141 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User32 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User803 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User919 {
@@ -5128,16 +9076,58 @@ class User504 {
   age: int
 }
 
+class stream_User436 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User351 {
   name: string
   email: string
   age: int
 }
 
+class stream_User422 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User165 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User976 {
   name: string
   email: string
   age: int
+}
+
+class stream_User72 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User622 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User321 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User932 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User944 {
@@ -5170,6 +9160,24 @@ class User199 {
   age: int
 }
 
+class stream_User59 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User544 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User629 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User769 {
   name: string
   email: string
@@ -5188,6 +9196,18 @@ class User951 {
   age: int
 }
 
+class stream_User710 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User897 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User879 {
   name: string
   email: string
@@ -5198,6 +9218,24 @@ class User611 {
   name: string
   email: string
   age: int
+}
+
+class stream_User445 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User191 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User137 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User533 {
@@ -5230,16 +9268,34 @@ class User281 {
   age: int
 }
 
+class stream_User205 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User668 {
   name: string
   email: string
   age: int
 }
 
+class stream_User739 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User194 {
   name: string
   email: string
   age: int
+}
+
+class stream_User534 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User692 {
@@ -5284,10 +9340,58 @@ class User643 {
   age: int
 }
 
+class stream_User745 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User433 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User129 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User211 {
   name: string
   email: string
   age: int
+}
+
+class stream_User947 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User143 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User729 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User812 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User147 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User920 {
@@ -5302,6 +9406,18 @@ class User130 {
   age: int
 }
 
+class stream_User427 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User4 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User594 {
   name: string
   email: string
@@ -5312,6 +9428,12 @@ class User222 {
   name: string
   email: string
   age: int
+}
+
+class stream_User360 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User228 {
@@ -5326,10 +9448,22 @@ class User543 {
   age: int
 }
 
+class stream_User103 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User454 {
   name: string
   email: string
   age: int
+}
+
+class stream_User907 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User880 {
@@ -5350,10 +9484,52 @@ class User900 {
   age: int
 }
 
+class stream_User862 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User554 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User562 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User518 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User635 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User736 {
   name: string
   email: string
   age: int
+}
+
+class stream_User740 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User148 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User731 {
@@ -5374,16 +9550,40 @@ class User275 {
   age: int
 }
 
+class stream_User783 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User707 {
   name: string
   email: string
   age: int
 }
 
+class stream_User90 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User703 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User125 {
   name: string
   email: string
   age: int
+}
+
+class stream_User731 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User673 {
@@ -5398,6 +9598,24 @@ class User413 {
   age: int
 }
 
+class stream_User535 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User460 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User304 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User988 {
   name: string
   email: string
@@ -5410,16 +9628,52 @@ class User720 {
   age: int
 }
 
+class stream_User769 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User403 {
   name: string
   email: string
   age: int
 }
 
+class stream_User946 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User582 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User569 {
   name: string
   email: string
   age: int
+}
+
+class stream_User271 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User466 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User957 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User469 {
@@ -5464,6 +9718,30 @@ class User473 {
   age: int
 }
 
+class stream_User944 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User738 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User151 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User140 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User849 {
   name: string
   email: string
@@ -5482,6 +9760,18 @@ class User934 {
   age: int
 }
 
+class stream_User843 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User753 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User47 {
   name: string
   email: string
@@ -5492,6 +9782,24 @@ class User607 {
   name: string
   email: string
   age: int
+}
+
+class stream_User834 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User303 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User570 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User457 {
@@ -5512,6 +9820,30 @@ class User663 {
   age: int
 }
 
+class stream_User111 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User393 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User894 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User157 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User655 {
   name: string
   email: string
@@ -5530,10 +9862,52 @@ class User447 {
   age: int
 }
 
+class stream_User852 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User246 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User515 {
   name: string
   email: string
   age: int
+}
+
+class stream_User344 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User669 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User259 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User641 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User532 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User85 {
@@ -5542,16 +9916,34 @@ class User85 {
   age: int
 }
 
+class stream_User394 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User689 {
   name: string
   email: string
   age: int
 }
 
+class stream_User196 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User867 {
   name: string
   email: string
   age: int
+}
+
+class stream_User515 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User17 {
@@ -5572,6 +9964,30 @@ class User274 {
   age: int
 }
 
+class stream_User604 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User642 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User203 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User761 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User715 {
   name: string
   email: string
@@ -5584,10 +10000,22 @@ class User441 {
   age: int
 }
 
+class stream_User689 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User752 {
   name: string
   email: string
   age: int
+}
+
+class stream_User786 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User807 {
@@ -5602,16 +10030,58 @@ class User217 {
   age: int
 }
 
+class stream_User851 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User580 {
   name: string
   email: string
   age: int
 }
 
+class stream_User798 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User504 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User346 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User552 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User31 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User492 {
   name: string
   email: string
   age: int
+}
+
+class stream_User708 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User532 {
@@ -5626,10 +10096,46 @@ class User29 {
   age: int
 }
 
+class stream_User252 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User825 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User159 {
   name: string
   email: string
   age: int
+}
+
+class stream_User763 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User177 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User639 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User661 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User251 {
@@ -5642,6 +10148,12 @@ class User745 {
   name: string
   email: string
   age: int
+}
+
+class stream_User182 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User693 {
@@ -5662,10 +10174,40 @@ class User989 {
   age: int
 }
 
+class stream_User747 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User601 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User406 {
   name: string
   email: string
   age: int
+}
+
+class stream_User473 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User879 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User818 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User171 {
@@ -5684,6 +10226,30 @@ class User847 {
   name: string
   email: string
   age: int
+}
+
+class stream_User816 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User14 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User51 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User991 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User404 {
@@ -5710,16 +10276,46 @@ class User946 {
   age: int
 }
 
+class stream_User743 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User132 {
   name: string
   email: string
   age: int
 }
 
+class stream_User975 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User342 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User822 {
   name: string
   email: string
   age: int
+}
+
+class stream_User300 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User807 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User582 {
@@ -5732,6 +10328,18 @@ class User74 {
   name: string
   email: string
   age: int
+}
+
+class stream_User220 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User70 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User627 {
@@ -5764,10 +10372,22 @@ class User254 {
   age: int
 }
 
+class stream_User652 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User799 {
   name: string
   email: string
   age: int
+}
+
+class stream_User372 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User982 {
@@ -5780,6 +10400,30 @@ class User16 {
   name: string
   email: string
   age: int
+}
+
+class stream_User340 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User22 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User11 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User912 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User767 {
@@ -5800,6 +10444,12 @@ class User82 {
   age: int
 }
 
+class stream_User23 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User868 {
   name: string
   email: string
@@ -5810,6 +10460,18 @@ class User625 {
   name: string
   email: string
   age: int
+}
+
+class stream_User987 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User768 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User304 {
@@ -5824,6 +10486,18 @@ class User963 {
   age: int
 }
 
+class stream_User181 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User809 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User740 {
   name: string
   email: string
@@ -5836,10 +10510,28 @@ class User423 {
   age: int
 }
 
+class stream_User995 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User965 {
   name: string
   email: string
   age: int
+}
+
+class stream_User101 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User367 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User417 {
@@ -5854,6 +10546,12 @@ class User296 {
   age: int
 }
 
+class stream_User654 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User99 {
   name: string
   email: string
@@ -5864,6 +10562,12 @@ class User940 {
   name: string
   email: string
   age: int
+}
+
+class stream_User615 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User354 {
@@ -5884,6 +10588,42 @@ class User259 {
   age: int
 }
 
+class stream_User593 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User3 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User413 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User30 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User966 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User108 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User80 {
   name: string
   email: string
@@ -5896,16 +10636,34 @@ class User52 {
   age: int
 }
 
+class stream_User857 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User882 {
   name: string
   email: string
   age: int
 }
 
+class stream_User276 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User6 {
   name: string
   email: string
   age: int
+}
+
+class stream_User241 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User691 {
@@ -5938,6 +10696,12 @@ class User662 {
   age: int
 }
 
+class stream_User619 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User318 {
   name: string
   email: string
@@ -5950,10 +10714,22 @@ class User811 {
   age: int
 }
 
+class stream_User746 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User57 {
   name: string
   email: string
   age: int
+}
+
+class stream_User628 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User714 {
@@ -5962,10 +10738,22 @@ class User714 {
   age: int
 }
 
+class stream_User722 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User854 {
   name: string
   email: string
   age: int
+}
+
+class stream_User590 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User380 {
@@ -5974,16 +10762,46 @@ class User380 {
   age: int
 }
 
+class stream_User974 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User923 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User595 {
   name: string
   email: string
   age: int
 }
 
+class stream_User665 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User31 {
   name: string
   email: string
   age: int
+}
+
+class stream_User468 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User190 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User161 {
@@ -5998,6 +10816,18 @@ class User748 {
   age: int
 }
 
+class stream_User313 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User541 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User332 {
   name: string
   email: string
@@ -6008,6 +10838,12 @@ class User548 {
   name: string
   email: string
   age: int
+}
+
+class stream_User408 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User841 {
@@ -6022,10 +10858,64 @@ class User39 {
   age: int
 }
 
+class stream_User805 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User907 {
   name: string
   email: string
   age: int
+}
+
+class stream_User901 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User195 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User531 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User370 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User633 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User175 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User842 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User131 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User210 {
@@ -6040,10 +10930,28 @@ class User805 {
   age: int
 }
 
+class stream_User95 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User643 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User823 {
   name: string
   email: string
   age: int
+}
+
+class stream_User612 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User682 {
@@ -6064,6 +10972,12 @@ class User218 {
   age: int
 }
 
+class stream_User277 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User178 {
   name: string
   email: string
@@ -6080,6 +10994,12 @@ class User728 {
   name: string
   email: string
   age: int
+}
+
+class stream_User958 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User697 {
@@ -6100,10 +11020,46 @@ class User777 {
   age: int
 }
 
+class stream_User213 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User276 {
   name: string
   email: string
   age: int
+}
+
+class stream_User595 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User909 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User781 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User373 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User883 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User5 {
@@ -6124,16 +11080,52 @@ class User808 {
   age: int
 }
 
+class stream_User849 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User738 {
   name: string
   email: string
   age: int
 }
 
+class stream_User796 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User226 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User758 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User20 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User587 {
   name: string
   email: string
   age: int
+}
+
+class stream_User138 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User706 {
@@ -6178,10 +11170,28 @@ class User20 {
   age: int
 }
 
+class stream_User113 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User883 {
   name: string
   email: string
   age: int
+}
+
+class stream_User462 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User650 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User851 {
@@ -6190,10 +11200,28 @@ class User851 {
   age: int
 }
 
+class stream_User990 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User379 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User294 {
   name: string
   email: string
   age: int
+}
+
+class stream_User886 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User355 {
@@ -6202,10 +11230,34 @@ class User355 {
   age: int
 }
 
+class stream_User662 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User704 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User821 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User214 {
   name: string
   email: string
   age: int
+}
+
+class stream_User718 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User416 {
@@ -6214,16 +11266,58 @@ class User416 {
   age: int
 }
 
+class stream_User217 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User145 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User165 {
   name: string
   email: string
   age: int
 }
 
+class stream_User962 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User670 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User607 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User605 {
   name: string
   email: string
   age: int
+}
+
+class stream_User682 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User692 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User450 {
@@ -6236,6 +11330,24 @@ class User813 {
   name: string
   email: string
   age: int
+}
+
+class stream_User871 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User934 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User523 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User609 {
@@ -6256,6 +11368,12 @@ class User117 {
   age: int
 }
 
+class stream_User414 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User995 {
   name: string
   email: string
@@ -6266,6 +11384,24 @@ class User757 {
   name: string
   email: string
   age: int
+}
+
+class stream_User185 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User163 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User937 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User858 {
@@ -6286,10 +11422,28 @@ class User623 {
   age: int
 }
 
+class stream_User835 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User245 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User896 {
   name: string
   email: string
   age: int
+}
+
+class stream_User771 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User647 {
@@ -6304,10 +11458,22 @@ class User878 {
   age: int
 }
 
+class stream_User954 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User860 {
   name: string
   email: string
   age: int
+}
+
+class stream_User848 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User912 {
@@ -6316,10 +11482,22 @@ class User912 {
   age: int
 }
 
+class stream_User910 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User101 {
   name: string
   email: string
   age: int
+}
+
+class stream_User282 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User905 {
@@ -6352,6 +11530,12 @@ class User384 {
   age: int
 }
 
+class stream_User589 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User817 {
   name: string
   email: string
@@ -6364,10 +11548,34 @@ class User768 {
   age: int
 }
 
+class stream_User765 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User135 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User21 {
   name: string
   email: string
   age: int
+}
+
+class stream_User24 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User200 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User523 {
@@ -6388,6 +11596,12 @@ class User302 {
   age: int
 }
 
+class stream_User470 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User185 {
   name: string
   email: string
@@ -6398,6 +11612,18 @@ class User435 {
   name: string
   email: string
   age: int
+}
+
+class stream_User548 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User885 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User152 {
@@ -6430,6 +11656,18 @@ class User28 {
   age: int
 }
 
+class stream_User229 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User492 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User732 {
   name: string
   email: string
@@ -6448,6 +11686,48 @@ class User88 {
   age: int
 }
 
+class stream_User482 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User748 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User719 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User416 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User814 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User741 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User696 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User446 {
   name: string
   email: string
@@ -6460,10 +11740,40 @@ class User373 {
   age: int
 }
 
+class stream_User418 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User488 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User525 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User823 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User122 {
   name: string
   email: string
   age: int
+}
+
+class stream_User940 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User498 {
@@ -6478,16 +11788,52 @@ class User998 {
   age: int
 }
 
+class stream_User811 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User197 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User388 {
   name: string
   email: string
   age: int
 }
 
+class stream_User74 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User778 {
   name: string
   email: string
   age: int
+}
+
+class stream_User481 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User68 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User39 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User824 {
@@ -6502,6 +11848,18 @@ class User386 {
   age: int
 }
 
+class stream_User674 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User597 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User503 {
   name: string
   email: string
@@ -6512,6 +11870,12 @@ class User782 {
   name: string
   email: string
   age: int
+}
+
+class stream_User189 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User750 {
@@ -6544,16 +11908,52 @@ class User115 {
   age: int
 }
 
+class stream_User350 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User961 {
   name: string
   email: string
   age: int
 }
 
+class stream_User464 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User194 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User455 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User856 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User18 {
   name: string
   email: string
   age: int
+}
+
+class stream_User10 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User191 {
@@ -6568,10 +11968,28 @@ class User38 {
   age: int
 }
 
+class stream_User279 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User397 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User544 {
   name: string
   email: string
   age: int
+}
+
+class stream_User483 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User711 {
@@ -6586,6 +12004,12 @@ class User546 {
   age: int
 }
 
+class stream_User283 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User541 {
   name: string
   email: string
@@ -6598,10 +12022,58 @@ class User787 {
   age: int
 }
 
+class stream_User44 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User339 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User830 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User676 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User268 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User106 {
   name: string
   email: string
   age: int
+}
+
+class stream_User221 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User305 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User784 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User27 {
@@ -6628,6 +12100,12 @@ class User223 {
   age: int
 }
 
+class stream_User516 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User572 {
   name: string
   email: string
@@ -6644,6 +12122,12 @@ class User100 {
   name: string
   email: string
   age: int
+}
+
+class stream_User61 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User620 {
@@ -6664,16 +12148,64 @@ class User505 {
   age: int
 }
 
+class stream_User837 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User543 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User432 {
   name: string
   email: string
   age: int
 }
 
+class stream_User978 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User236 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User233 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User709 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User2 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User497 {
   name: string
   email: string
   age: int
+}
+
+class stream_User202 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User239 {
@@ -6694,6 +12226,18 @@ class User895 {
   age: int
 }
 
+class stream_User336 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User723 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User513 {
   name: string
   email: string
@@ -6704,6 +12248,12 @@ class User617 {
   name: string
   email: string
   age: int
+}
+
+class stream_User5 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User721 {
@@ -6718,6 +12268,18 @@ class User972 {
   age: int
 }
 
+class stream_User732 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User820 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User265 {
   name: string
   email: string
@@ -6730,16 +12292,58 @@ class User916 {
   age: int
 }
 
+class stream_User992 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User621 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User294 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User671 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User887 {
   name: string
   email: string
   age: int
 }
 
+class stream_User624 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User636 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User526 {
   name: string
   email: string
   age: int
+}
+
+class stream_User977 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User48 {
@@ -6766,10 +12370,34 @@ class User786 {
   age: int
 }
 
+class stream_User21 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User949 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User971 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User648 {
   name: string
   email: string
   age: int
+}
+
+class stream_User208 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User726 {
@@ -6778,10 +12406,28 @@ class User726 {
   age: int
 }
 
+class stream_User961 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User589 {
   name: string
   email: string
   age: int
+}
+
+class stream_User799 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User254 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User649 {
@@ -6790,10 +12436,28 @@ class User649 {
   age: int
 }
 
+class stream_User120 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User73 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User233 {
   name: string
   email: string
   age: int
+}
+
+class stream_User461 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User712 {
@@ -6806,6 +12470,24 @@ class User201 {
   name: string
   email: string
   age: int
+}
+
+class stream_User511 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User963 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User513 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User390 {
@@ -6826,10 +12508,28 @@ class User974 {
   age: int
 }
 
+class stream_User406 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User917 {
   name: string
   email: string
   age: int
+}
+
+class stream_User749 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User713 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User563 {
@@ -6856,10 +12556,34 @@ class User570 {
   age: int
 }
 
+class stream_User121 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User16 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User309 {
   name: string
   email: string
   age: int
+}
+
+class stream_User953 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User410 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User334 {
@@ -6868,10 +12592,34 @@ class User334 {
   age: int
 }
 
+class stream_User27 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User600 {
   name: string
   email: string
   age: int
+}
+
+class stream_User260 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User638 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User319 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User123 {
@@ -6886,10 +12634,34 @@ class User174 {
   age: int
 }
 
+class stream_User777 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User819 {
   name: string
   email: string
   age: int
+}
+
+class stream_User453 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User130 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User631 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User219 {
@@ -6902,6 +12674,12 @@ class User596 {
   name: string
   email: string
   age: int
+}
+
+class stream_User666 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User262 {
@@ -6934,10 +12712,28 @@ class User547 {
   age: int
 }
 
+class stream_User1000 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User353 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User86 {
   name: string
   email: string
   age: int
+}
+
+class stream_User58 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User87 {
@@ -6964,6 +12760,12 @@ class User145 {
   age: int
 }
 
+class stream_User542 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User37 {
   name: string
   email: string
@@ -6988,10 +12790,28 @@ class User345 {
   age: int
 }
 
+class stream_User228 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User826 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User391 {
   name: string
   email: string
   age: int
+}
+
+class stream_User467 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User291 {
@@ -7006,16 +12826,58 @@ class User619 {
   age: int
 }
 
+class stream_User976 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User869 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User677 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User137 {
   name: string
   email: string
   age: int
 }
 
+class stream_User122 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User923 {
   name: string
   email: string
   age: int
+}
+
+class stream_User316 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User540 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User15 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User856 {
@@ -7042,6 +12904,12 @@ class User853 {
   age: int
 }
 
+class stream_User584 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User389 {
   name: string
   email: string
@@ -7054,10 +12922,28 @@ class User303 {
   age: int
 }
 
+class stream_User546 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User146 {
   name: string
   email: string
   age: int
+}
+
+class stream_User770 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User216 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User800 {
@@ -7090,6 +12976,18 @@ class User197 {
   age: int
 }
 
+class stream_User53 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User792 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User22 {
   name: string
   email: string
@@ -7106,6 +13004,24 @@ class User208 {
   name: string
   email: string
   age: int
+}
+
+class stream_User161 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User357 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User6 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User75 {
@@ -7138,6 +13054,12 @@ class User932 {
   age: int
 }
 
+class stream_User838 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User172 {
   name: string
   email: string
@@ -7150,16 +13072,70 @@ class User939 {
   age: int
 }
 
+class stream_User779 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User559 {
   name: string
   email: string
   age: int
 }
 
+class stream_User438 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User389 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User921 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User645 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User121 {
   name: string
   email: string
   age: int
+}
+
+class stream_User352 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User536 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User405 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User598 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User204 {
@@ -7180,6 +13156,12 @@ class User622 {
   age: int
 }
 
+class stream_User700 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User521 {
   name: string
   email: string
@@ -7192,16 +13174,34 @@ class User578 {
   age: int
 }
 
+class stream_User219 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User297 {
   name: string
   email: string
   age: int
 }
 
+class stream_User60 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User832 {
   name: string
   email: string
   age: int
+}
+
+class stream_User672 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 class User844 {
@@ -7228,16 +13228,46 @@ class User632 {
   age: int
 }
 
+class stream_User81 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User921 {
   name: string
   email: string
   age: int
 }
 
+class stream_User924 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
 class User306 {
   name: string
   email: string
   age: int
+}
+
+class stream_User574 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User404 {
+  name: null | string
+  email: null | string
+  age: null | int
+}
+
+class stream_User267 {
+  name: null | string
+  email: null | string
+  age: null | int
 }
 
 enum Status30 {
@@ -7850,6 +13880,8 @@ enum Item {
   TemplateString
   TypeAlias
 }
+
+type stream_Language = crate
 
 type Language = crate
 

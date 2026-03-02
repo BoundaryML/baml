@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function FetchDatax(user_id: string) -> Hi {
@@ -17,6 +16,10 @@ function FetchDatax.build_request(user_id: string) -> baml.http.Request {
 
 function FetchDatax.render_prompt(user_id: string) -> baml.llm.PromptAst {
     baml.llm.render_prompt("FetchDatax", { "user_id": user_id })
+}
+
+class stream_Hi {
+  name: null | string
 }
 
 class Hi {

@@ -21,3 +21,7 @@ function Broken.BadUnionPattern(x: int | bool) -> string {
 class Broken {
   field: int
 }
+
+class stream_Broken {
+  field: null | int
+}

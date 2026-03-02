@@ -1,0 +1,55 @@
+// Test default D/S computation for all type categories (no user annotations).
+
+enum Status {
+    Active
+    Inactive
+}
+
+class Education {
+    school string
+    year int
+}
+
+type AliasedType = string | int
+
+class AllDefaults {
+    // Primitives: D=T, S=null
+    name string
+    age int
+    score float
+    active bool
+
+    // Literal: D=T, S=never
+    type "resume"
+    version 42
+
+    // Enum: D=T, S=null
+    status Status
+
+    // Class: D=stream_Education, S=null
+    edu Education
+
+    // List of primitives: D=int[], S=[]
+    scores int[]
+
+    // List of classes: D=stream_Education[], S=[]
+    education Education[]
+
+    // Nested list: D=stream_Education[][], S=[]
+    nested_edu Education[][]
+
+    // Map: D=map<string, stream_Education>, S={}
+    edu_map map<string, Education>
+
+    // Type alias: D=stream_AliasedType, S=null
+    data AliasedType
+
+    // Union: D=int | stream_Education, S=null
+    mixed int | Education
+
+    // Optional: D=string | null, S=null
+    maybe string?
+
+    // Optional container: D=int[] | null, S=null (NOT [])
+    maybe_list int[]?
+}

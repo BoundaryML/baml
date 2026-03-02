@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function GetUser.build_request() -> baml.http.Request {
@@ -13,6 +12,11 @@ function GetUser() -> MyClass {
 
 function GetUser.render_prompt() -> baml.llm.PromptAst {
     baml.llm.render_prompt("GetUser", {  })
+}
+
+class stream_MyClass {
+  name: null | string
+  age: null | int
 }
 
 class MyClass {

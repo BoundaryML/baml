@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Test legacy attribute desugaring.
+// @stream.done → D=original_type (not stream-expanded), has_completed flag
+// @stream.not_null → S=never (field absent until starts)
+// @stream.starts_as → explicit S value
+// @stream.type → explicit D value
+
+class WithDesugaring {
+    // @stream.done on string: D=string (original), S=null → null | string
+    done_string: string @stream.done
+
+    // @stream.not_null on string: S=never, D=string → string
+    not_null_string: string @stream.not_null
+
+    // @stream.not_null on class: S=never, D=stream_Inner → stream_Inner
+    not_null_class: Inner @stream.not_null
+
+    // @stream.done + @stream.not_null: D=original_type, S=never → original_type
+    done_and_not_null: string @stream.done @stream.not_null
+
+    // @stream.type(never) on string: D=never, S=null → null
+    type_never: string @stream.type(never)
+
+    // @stream.type(never) on literal: D=never, S=never → field omitted
+    type_never_literal: "resume" @stream.type(never)
+}

@@ -630,6 +630,10 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
 
             let mut lowered_fields: HashMap<Name, Ty> = HashMap::new();
 
+            // Synthetic stream_* classes duplicate the original class's types;
+            // suppress error collection to avoid duplicate diagnostics.
+            let is_synthetic = class_data.name.starts_with("stream_");
+
             // Lower each field's type with position-independent error location
             for (field_index, field_data) in class_data.fields.iter().enumerate() {
                 // Use position-independent error location for cacheability
@@ -640,7 +644,9 @@ pub fn class_field_types(db: &dyn Db, project: Project) -> ClassFieldTypesMap<'_
 
                 let (ty, field_errors) =
                     resolution_ctx.lower_type_ref(&field_data.type_ref, error_location);
-                errors.extend(field_errors);
+                if !is_synthetic {
+                    errors.extend(field_errors);
+                }
                 lowered_fields.insert(field_data.name.clone(), ty);
             }
 
@@ -687,7 +693,11 @@ pub fn type_aliases(db: &dyn Db, project: Project) -> TypeAliasesMap<'_> {
 
             let (lowered_ty, alias_errors) =
                 resolution_ctx.lower_type_ref(&alias_data.type_ref, error_location);
-            errors.extend(alias_errors);
+            // Synthetic stream_* aliases duplicate the original alias's types;
+            // suppress error collection to avoid duplicate diagnostics.
+            if !alias_data.name.starts_with("stream_") {
+                errors.extend(alias_errors);
+            }
             aliases.insert(alias_data.name.clone(), lowered_ty);
         }
     }

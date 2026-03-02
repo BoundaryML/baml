@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+class stream_Education {
+  school: null | string
+  year: null | int
+}
+
+class stream_ExplicitAnnotations {
+  name: null | string
+  gpa: float
+  certifications: null | Education
+}
+
+class Education {
+  school: string
+  year: int
+}
+
+class ExplicitAnnotations {
+  name: string
+  gpa: float
+  certifications: Education[][]
+  internal: string
+}

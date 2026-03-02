@@ -446,6 +446,7 @@ dependencies = [
  "baml_builtins",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
+ "baml_compiler_ppir",
  "baml_compiler_syntax",
  "baml_workspace",
  "indexmap",
@@ -492,6 +493,20 @@ dependencies = [
  "rowan 0.16.1",
  "salsa",
  "text-size",
+]
+
+[[package]]
+name = "baml_compiler_ppir"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_compiler_parser",
+ "baml_compiler_syntax",
+ "baml_workspace",
+ "rowan 0.16.1",
+ "rustc-hash 2.1.1",
+ "salsa",
+ "smol_str",
 ]
 
 [[package]]
@@ -664,6 +679,7 @@ dependencies = [
  "baml_compiler_emit",
  "baml_compiler_hir",
  "baml_compiler_mir",
+ "baml_compiler_ppir",
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_db",

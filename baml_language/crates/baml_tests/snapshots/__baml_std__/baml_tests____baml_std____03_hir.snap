@@ -220,9 +220,29 @@ function PlannerState.rr_pick_index(self: PlannerState, client_name: string, sub
     base + local_offset % sub_client_count
 }
 
+class stream_OrchestrationStep {
+  primitive_client: null | baml.llm.PrimitiveClient
+  delay_ms: null | int
+}
+
 class ExecutionResult {
   ok: bool
   value: unknown
+}
+
+class stream_ExecutionResult {
+  ok: null | bool
+  value: null | unknown
+}
+
+class stream_PlannerState {
+  rr_client_names: never[] | string[]
+}
+
+class stream_ExecutionContext {
+  jinja_string: null | string
+  args: map<string, never> | map<string, unknown>
+  function_name: null | string
 }
 
 class ExecutionContext {

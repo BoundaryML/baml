@@ -16,9 +16,15 @@ function Baz() -> Json {
 
 type bar = int
 
+type stream_bar = int
+
+type stream_Json = int | float | string | stream_Json[] | map<string, stream_Json>
+
 type Json = int | float | string | Json[] | map<string, Json>
 
 type foo = bar
+
+type stream_foo = stream_bar
 
 function EchoJSON(i: JSON) -> JSON {
     NotJSON { inner: "Whoops" }
@@ -32,4 +38,10 @@ class NotJSON {
   inner: name
 }
 
+class stream_NotJSON {
+  inner: null | name
+}
+
 type JSON = int | float | string | bool | JSON[] | map<string, json>
+
+type stream_JSON = int | float | string | bool | stream_JSON[] | map<string, json>

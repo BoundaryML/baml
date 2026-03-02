@@ -2,6 +2,10 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
+class stream_A {
+  field: null | string
+}
+
 class A {
   field: string
 }
@@ -9,5 +13,7 @@ class A {
 class A {
   field: string
 }
+
+type stream_A = int
 
 type A = int

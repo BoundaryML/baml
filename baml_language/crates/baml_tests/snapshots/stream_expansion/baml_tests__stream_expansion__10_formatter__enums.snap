@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Test stream expansion for enum fields.
+// Expected: enum fields get null | EnumName (NOT stream_EnumName).
+
+enum Status {
+    Active,
+    Inactive,
+}
+
+class WithEnum {
+    status: Status
+}

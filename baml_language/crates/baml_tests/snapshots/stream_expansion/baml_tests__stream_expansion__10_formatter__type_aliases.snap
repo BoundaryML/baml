@@ -1,0 +1,14 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Test stream expansion for type alias definitions and fields referencing them.
+// Expected: type alias bodies are stream-expanded (classes get stream_ prefix).
+// Expected: fields of alias type get null | stream_AliasName.
+
+type SimpleAlias = string;
+
+type ClassAlias = Inner;
+
+type UnionAlias = int | Inner;
+
+type OptionalAlias = Inner?;

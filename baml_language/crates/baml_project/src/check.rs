@@ -123,8 +123,13 @@ pub fn collect_diagnostics(
         );
     }
 
-    // Collect cycle detection errors
-    let alias_cycle_errors = baml_compiler_tir::validate_type_alias_cycles(&type_aliases_map);
+    // Collect cycle detection errors (exclude synthetic stream_* items to avoid duplicates)
+    let user_aliases: HashMap<_, _> = type_aliases_map
+        .iter()
+        .filter(|(k, _)| !k.starts_with("stream_"))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    let alias_cycle_errors = baml_compiler_tir::validate_type_alias_cycles(&user_aliases);
     for error in &alias_cycle_errors {
         diagnostics.push(
             error.to_diagnostic(std::string::ToString::to_string, |loc| {
@@ -133,8 +138,13 @@ pub fn collect_diagnostics(
         );
     }
 
+    let user_class_fields: HashMap<_, _> = class_fields
+        .iter()
+        .filter(|(k, _)| !k.starts_with("stream_"))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
     let class_cycle_errors =
-        baml_compiler_tir::validate_class_cycles(&class_fields, &type_aliases_map);
+        baml_compiler_tir::validate_class_cycles(&user_class_fields, &user_aliases);
     for error in &class_cycle_errors {
         diagnostics.push(
             error.to_diagnostic(std::string::ToString::to_string, |loc| {
