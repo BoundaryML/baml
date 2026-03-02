@@ -2307,7 +2307,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                         ResolvedValue::BuiltinFunction(baml_base::QualifiedName::from_builtin_path(
                             def.path,
                         ))
-                    } else if let Ty::Class(class_fqn) | Ty::TypeAlias(class_fqn) = &ty {
+                    } else if let Ty::Class(class_fqn, _) | Ty::TypeAlias(class_fqn, _) = &ty {
                         // Check if this is a method (function type) or a data field
                         if matches!(field_ty, Ty::Function { .. }) {
                             // Method reference - use qualified name
@@ -4676,7 +4676,7 @@ fn infer_field_access(
     if let Some(ty) = found_field {
         if let Some(expr_id) = expr_id {
             let class_fqn = match base {
-                Ty::Class(fqn) | Ty::TypeAlias(fqn) => fqn.clone(),
+                Ty::Class(fqn, _) | Ty::TypeAlias(fqn, _) => fqn.clone(),
                 _ => return ty, // Short circuit if not a class or type alias, not sure how this could happen
             };
             ctx.set_expr_resolution(

@@ -2,12 +2,14 @@
 
 use baml_db::{
     Name, QualifiedName, SourceFile, baml_compiler_hir, baml_compiler_parser,
-    baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, SyntaxToken},
+    baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxToken},
     baml_compiler_tir::{self, DefinitionSite, ResolvedValue},
 };
 use baml_project::ProjectDatabase;
 use rowan::NodeOrToken;
 use text_size::TextRange;
+
+use crate::utils::find_function_at_position;
 
 /// The semantic token type for a BAML file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -403,7 +405,9 @@ fn visit_function_def(
         match child {
             NodeOrToken::Node(n) => {
                 if n.kind() == SyntaxKind::EXPR_FUNCTION_BODY {
-                    if let Some(func_loc) = find_function_loc(db, file, node) {
+                    if let Some(func_loc) =
+                        find_function_at_position(db, file, node.text_range().start())
+                    {
                         emit_expr_body_tokens(db, file, func_loc, &n, out);
                     } else {
                         visit_children(db, file, &n, out);
@@ -420,44 +424,6 @@ fn visit_function_def(
     }
 }
 
-/// Find the `FunctionLoc` for a `FUNCTION_DEF` CST node by matching its name
-/// against the `ItemTree`. Handles both top-level functions and class methods.
-fn find_function_loc<'db>(
-    db: &'db ProjectDatabase,
-    file: SourceFile,
-    func_def_node: &SyntaxNode,
-) -> Option<baml_compiler_hir::FunctionId<'db>> {
-    // Get the function name from the CST node.
-    let func_name_token = func_def_node.first_child_token_of_kind(SyntaxKind::WORD)?;
-    let func_name = func_name_token.text();
-
-    // Check if this is a method inside a CLASS_DEF by walking up.
-    let qualified_name = if let Some(parent) = func_def_node.parent() {
-        if parent.kind() == SyntaxKind::CLASS_DEF {
-            // Find the class name (first WORD in the CLASS_DEF).
-            let class_name_token = parent.first_child_token_of_kind(SyntaxKind::WORD)?;
-            let class_name = class_name_token.text();
-            QualifiedName::local_method_from_str(class_name, func_name).to_string()
-        } else {
-            func_name.to_string()
-        }
-    } else {
-        func_name.to_string()
-    };
-
-    let file_items = baml_compiler_hir::file_items(db, file);
-    let item_tree = baml_compiler_hir::file_item_tree(db, file);
-    for item in file_items.items(db) {
-        if let baml_compiler_hir::ItemId::Function(loc) = item {
-            let func = &item_tree[loc.id(db)];
-            if func.name.as_str() == qualified_name {
-                return Some(*loc);
-            }
-        }
-    }
-    None
-}
-
 /// Map a `ResolvedValue` to a semantic token type.
 fn resolved_value_to_token_type(resolved: &ResolvedValue) -> SemanticTokenType {
     match resolved {
@@ -466,6 +432,7 @@ fn resolved_value_to_token_type(resolved: &ResolvedValue) -> SemanticTokenType {
         } => match definition_site {
             Some(DefinitionSite::Statement(_)) => SemanticTokenType::Variable,
             Some(DefinitionSite::Parameter(_)) => SemanticTokenType::Parameter,
+            Some(DefinitionSite::Pattern(_)) => SemanticTokenType::Variable,
             None => SemanticTokenType::Variable,
         },
         ResolvedValue::Function(_) => SemanticTokenType::Function,
