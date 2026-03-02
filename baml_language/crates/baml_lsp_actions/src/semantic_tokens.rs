@@ -131,7 +131,7 @@ fn emit_node(node: &SyntaxNode, token_type: SemanticTokenType, out: &mut Vec<Sem
     }
 }
 
-/// Emit semantic tokens for a single file.
+/// Emit semantic tokens for a single file. Always returns semantic tokens in document order.
 pub fn semantic_tokens(db: &ProjectDatabase, file: SourceFile) -> Vec<SemanticToken> {
     let root = baml_compiler_parser::syntax_tree(db, file);
     let mut out = Vec::new();
@@ -425,7 +425,7 @@ fn resolved_value_to_token_type(resolved: &ResolvedValue) -> Option<SemanticToke
     }
 }
 
-/// Build a lookup map from `TextRange → SemanticTokenType` using HIR/TIR resolution.
+/// Build a lookup map from `TextRange` to `SemanticTokenType` using HIR/TIR resolution.
 ///
 /// This pre-computes the semantic classification for every token that has HIR resolution,
 /// keyed by the exact source range. The map is then consulted during a single CST walk
@@ -465,29 +465,16 @@ fn build_resolution_map(
         .map(|p| baml_compiler_tir::class_field_types(db, p));
 
     for (expr_id, expr) in expr_body.exprs.iter() {
-        let Some(span) = source_map.expr_span(expr_id) else {
-            continue;
-        };
-
-        let Some((span_start, text)) = span_text(&span, file_text) else {
-            continue;
-        };
-
         match expr {
-            baml_compiler_hir::Expr::Path(segments) => {
+            baml_compiler_hir::Expr::Path(_) => {
+                let Some(seg_spans) = source_map.path_segment_spans(expr_id) else {
+                    continue;
+                };
                 let seg_resolutions = inference.path_segment_resolutions.get(&expr_id);
                 let seg_types = inference.path_segment_types.get(&expr_id);
                 let whole_resolution = inference.expr_resolutions.get(&expr_id);
 
-                let mut cursor = 0usize;
-                for (i, seg_name) in segments.iter().enumerate() {
-                    let name_str = seg_name.as_str();
-                    let Some(offset) = text[cursor..].find(name_str) else {
-                        continue;
-                    };
-                    let range = text_range_at(span_start + cursor, offset, name_str.len());
-                    cursor += offset + name_str.len();
-
+                for (i, range) in seg_spans.iter().enumerate() {
                     // Skip segments whose inferred type is Unknown/Error (e.g. non-existent fields).
                     if let Some(types) = seg_types {
                         if let Some(ty) = types.get(i) {
@@ -506,14 +493,12 @@ fn build_resolution_map(
                     };
 
                     if let Some(token_type) = token_type {
-                        map.insert(range, token_type);
+                        map.insert(*range, token_type);
                     }
                 }
             }
-            baml_compiler_hir::Expr::FieldAccess { field, .. } => {
-                let field_str = field.as_str();
-                if let Some(offset) = text.rfind(field_str) {
-                    let range = text_range_at(span_start, offset, field_str.len());
+            baml_compiler_hir::Expr::FieldAccess { .. } => {
+                if let Some(range) = source_map.field_access_field_span(expr_id) {
                     if let Some(token_type) = inference
                         .expr_resolutions
                         .get(&expr_id)
@@ -524,16 +509,20 @@ fn build_resolution_map(
                 }
             }
             baml_compiler_hir::Expr::Object {
-                type_name,
-                fields,
-                spreads: _,
+                type_name, fields, ..
             } => {
                 // Highlight the type name (e.g. `Point` in `Point { x: 1, y: 2 }`)
+                // Type name still uses text scanning since it's not stored per-segment.
                 if let Some(name) = type_name {
+                    let Some(span) = source_map.expr_span(expr_id) else {
+                        continue;
+                    };
+                    let Some((span_start, text)) = span_text(&span, file_text) else {
+                        continue;
+                    };
                     let name_str = name.as_str();
                     if let Some(offset) = text.find(name_str) {
                         let range = text_range_at(span_start, offset, name_str.len());
-                        // Use the expr resolution (Class) if available, fall back to Class
                         let token_type = inference
                             .expr_resolutions
                             .get(&expr_id)
@@ -552,22 +541,18 @@ fn build_resolution_map(
                         _ => None,
                     }
                 });
-                let mut cursor = 0usize;
-                for (field_name, _) in fields {
-                    let field_str = field_name.as_str();
-                    let Some(offset) = text[cursor..].find(field_str) else {
-                        continue;
-                    };
-                    let range = text_range_at(span_start + cursor, offset, field_str.len());
-                    // Only highlight if we couldn't resolve the class (untyped
-                    // object literal) or the field exists on the class.
-                    if known_fields
-                        .as_ref()
-                        .is_none_or(|f| f.contains_key(field_name))
-                    {
-                        map.insert(range, SemanticTokenType::Property);
+                if let Some(field_spans) = source_map.object_field_name_spans(expr_id) {
+                    for (i, (field_name, _)) in fields.iter().enumerate() {
+                        let Some(range) = field_spans.get(i) else {
+                            continue;
+                        };
+                        if known_fields
+                            .as_ref()
+                            .is_none_or(|f| f.contains_key(field_name))
+                        {
+                            map.insert(*range, SemanticTokenType::Property);
+                        }
                     }
-                    cursor += offset + field_str.len();
                 }
             }
             _ => {}

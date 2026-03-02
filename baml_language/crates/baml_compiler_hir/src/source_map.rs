@@ -252,6 +252,15 @@ pub struct HirSourceMap {
 
     /// Type annotation spans
     type_spans: HashMap<TypeId, Span>,
+
+    /// Per-segment spans for path expressions (e.g. each WORD token in `Color.Red`).
+    path_segment_spans: HashMap<ExprId, Vec<TextRange>>,
+
+    /// Per-field-name spans for object literals (e.g. the `x` and `y` tokens in `Point { x: 1, y: 2 }`).
+    object_field_name_spans: HashMap<ExprId, Vec<TextRange>>,
+
+    /// Field token span for field access expressions (e.g. the `name` token in `user.name`).
+    field_access_field_span: HashMap<ExprId, TextRange>,
 }
 
 impl HirSourceMap {
@@ -342,6 +351,44 @@ impl HirSourceMap {
     /// Get the span for a type annotation.
     pub fn type_span(&self, id: TypeId) -> Option<Span> {
         self.type_spans.get(&id).copied()
+    }
+
+    // ========================================================================
+    // Sub-expression span mappings
+    // ========================================================================
+
+    /// Insert per-segment spans for a path expression.
+    pub fn insert_path_segment_spans(&mut self, id: ExprId, spans: Vec<TextRange>) {
+        self.path_segment_spans.insert(id, spans);
+    }
+
+    /// Get per-segment spans for a path expression.
+    pub fn path_segment_spans(&self, id: ExprId) -> Option<&[TextRange]> {
+        self.path_segment_spans
+            .get(&id)
+            .map(std::vec::Vec::as_slice)
+    }
+
+    /// Insert per-field-name spans for an object literal.
+    pub fn insert_object_field_name_spans(&mut self, id: ExprId, spans: Vec<TextRange>) {
+        self.object_field_name_spans.insert(id, spans);
+    }
+
+    /// Get per-field-name spans for an object literal.
+    pub fn object_field_name_spans(&self, id: ExprId) -> Option<&[TextRange]> {
+        self.object_field_name_spans
+            .get(&id)
+            .map(std::vec::Vec::as_slice)
+    }
+
+    /// Insert the field token span for a field access expression.
+    pub fn insert_field_access_field_span(&mut self, id: ExprId, span: TextRange) {
+        self.field_access_field_span.insert(id, span);
+    }
+
+    /// Get the field token span for a field access expression.
+    pub fn field_access_field_span(&self, id: ExprId) -> Option<TextRange> {
+        self.field_access_field_span.get(&id).copied()
     }
 }
 

@@ -335,6 +335,7 @@ impl BexLspRequest for BexMulitProject {
         };
         let text = source_file.text(lsp_db);
 
+        // Get the semantic tokens, this function always returns tokens in document order.
         let tokens = baml_lsp_actions::semantic_tokens(lsp_db, source_file);
 
         // Convert to LSP delta-encoded format

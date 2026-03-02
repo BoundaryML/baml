@@ -992,8 +992,15 @@ impl LoweringContext {
     }
 
     fn alloc_expr(&mut self, expr: Expr, range: TextRange) -> ExprId {
+        // For Path expressions created inline (not via lower_path_expr),
+        // store the whole expression range as a single segment span so
+        // that semantic tokens can resolve them without text scanning.
+        let is_single_segment_path = matches!(&expr, Expr::Path(segs) if segs.len() == 1);
         let id = self.exprs.alloc(expr);
         self.source_map.insert_expr(id, self.span_from_range(range));
+        if is_single_segment_path {
+            self.source_map.insert_path_segment_spans(id, vec![range]);
+        }
         id
     }
 
@@ -2677,15 +2684,19 @@ impl LoweringContext {
             .map(|n| self.lower_expr(&n))
             .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
 
-        let field = field_access
+        let (field, field_range) = field_access
             .field()
-            .map(|token| Name::new(token.text()))
-            .unwrap_or_else(|| Name::new(""));
+            .map(|token| (Name::new(token.text()), Some(token.text_range())))
+            .unwrap_or_else(|| (Name::new(""), None));
 
-        self.alloc_expr(
+        let id = self.alloc_expr(
             Expr::FieldAccess { base, field },
             Self::text_range_skip_trivia(node),
-        )
+        );
+        if let Some(range) = field_range {
+            self.source_map.insert_field_access_field_span(id, range);
+        }
+        id
     }
 
     /// Lower an `ENV_ACCESS_EXPR` to a desugared call.
@@ -2819,16 +2830,20 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.text_range());
         };
 
-        let segments: Vec<Name> = path_expr
-            .segments()
-            .map(|token| Name::new(token.text()))
-            .collect();
+        let mut segments = Vec::new();
+        let mut segment_spans = Vec::new();
+        for token in path_expr.segments() {
+            segments.push(Name::new(token.text()));
+            segment_spans.push(token.text_range());
+        }
 
         if segments.is_empty() {
             return self.alloc_expr(Expr::Missing, node.text_range());
         }
 
-        self.alloc_expr(Expr::Path(segments), Self::text_range_skip_trivia(node))
+        let id = self.alloc_expr(Expr::Path(segments), Self::text_range_skip_trivia(node));
+        self.source_map.insert_path_segment_spans(id, segment_spans);
+        id
     }
 
     fn lower_string_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
@@ -2919,6 +2934,7 @@ impl LoweringContext {
         // Track position for override semantics
         let mut position = 0;
         let mut fields = Vec::new();
+        let mut field_name_spans = Vec::new();
         let mut spreads = Vec::new();
 
         // Process children in order to track positions correctly
@@ -2927,13 +2943,14 @@ impl LoweringContext {
                 SyntaxKind::OBJECT_FIELD => {
                     let field_span = child.text_range();
                     // OBJECT_FIELD has: WORD (field name), COLON, value (EXPR or literal token)
-                    let field_name = child
+                    let field_name_token = child
                         .children_with_tokens()
                         .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
-                        .find(|token| token.kind() == SyntaxKind::WORD)
-                        .map(|token| Name::new(token.text()));
+                        .find(|token| token.kind() == SyntaxKind::WORD);
 
-                    if let Some(field_name) = field_name {
+                    if let Some(ref token) = field_name_token {
+                        let field_name = Name::new(token.text());
+                        field_name_spans.push(token.text_range());
                         // Try to get value as a child node first
                         let value = child
                             .children()
@@ -2982,14 +2999,19 @@ impl LoweringContext {
             }
         }
 
-        self.alloc_expr(
+        let id = self.alloc_expr(
             Expr::Object {
                 type_name,
                 fields,
                 spreads,
             },
             node.text_range(),
-        )
+        );
+        if !field_name_spans.is_empty() {
+            self.source_map
+                .insert_object_field_name_spans(id, field_name_spans);
+        }
+        id
     }
 
     fn lower_map_literal(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
