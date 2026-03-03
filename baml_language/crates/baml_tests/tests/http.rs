@@ -7,6 +7,30 @@ use wiremock::{
     matchers::{method, path},
 };
 
+struct MockEndpoint {
+    path: &'static str,
+    status: u16,
+    body: Option<&'static str>,
+}
+
+/// Start a mock server with the given GET endpoints. Returns (server, uri).
+async fn mock(endpoints: &[MockEndpoint]) -> (MockServer, String) {
+    let server = MockServer::start().await;
+    for ep in endpoints {
+        let mut response = ResponseTemplate::new(ep.status);
+        if let Some(b) = ep.body {
+            response = response.set_body_string(b);
+        }
+        Mock::given(method("GET"))
+            .and(path(ep.path))
+            .respond_with(response)
+            .mount(&server)
+            .await;
+    }
+    let uri = server.uri();
+    (server, uri)
+}
+
 /// Replace the mock server URI in bytecode with a stable placeholder.
 fn stabilize_bytecode(bytecode: &str, uri: &str) -> String {
     bytecode.replace(uri, "<URI>")
@@ -14,14 +38,13 @@ fn stabilize_bytecode(bytecode: &str, uri: &str) -> String {
 
 #[tokio::test]
 async fn http_fetch_and_text() {
-    let mock_server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/data"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("Hello from HTTP!"))
-        .mount(&mock_server)
-        .await;
+    let (_server, uri) = mock(&[MockEndpoint {
+        path: "/data",
+        status: 200,
+        body: Some("Hello from HTTP!"),
+    }])
+    .await;
 
-    let uri = mock_server.uri();
     let output = baml_test!(&format!(
         r#"
             function main() -> string {{
@@ -49,14 +72,13 @@ async fn http_fetch_and_text() {
 
 #[tokio::test]
 async fn http_response_status() {
-    let mock_server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/status"))
-        .respond_with(ResponseTemplate::new(201))
-        .mount(&mock_server)
-        .await;
+    let (_server, uri) = mock(&[MockEndpoint {
+        path: "/status",
+        status: 201,
+        body: None,
+    }])
+    .await;
 
-    let uri = mock_server.uri();
     let output = baml_test!(&format!(
         r#"
             function main() -> int {{
@@ -80,14 +102,13 @@ async fn http_response_status() {
 
 #[tokio::test]
 async fn http_response_ok_true() {
-    let mock_server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/ok"))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&mock_server)
-        .await;
+    let (_server, uri) = mock(&[MockEndpoint {
+        path: "/ok",
+        status: 200,
+        body: None,
+    }])
+    .await;
 
-    let uri = mock_server.uri();
     let output = baml_test!(&format!(
         r#"
             function main() -> bool {{
@@ -112,14 +133,13 @@ async fn http_response_ok_true() {
 
 #[tokio::test]
 async fn http_response_ok_false() {
-    let mock_server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/notfound"))
-        .respond_with(ResponseTemplate::new(404))
-        .mount(&mock_server)
-        .await;
+    let (_server, uri) = mock(&[MockEndpoint {
+        path: "/notfound",
+        status: 404,
+        body: None,
+    }])
+    .await;
 
-    let uri = mock_server.uri();
     let output = baml_test!(&format!(
         r#"
             function main() -> bool {{
@@ -144,15 +164,14 @@ async fn http_response_ok_false() {
 
 #[tokio::test]
 async fn http_response_url() {
-    let mock_server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/endpoint"))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&mock_server)
-        .await;
+    let (_server, uri) = mock(&[MockEndpoint {
+        path: "/endpoint",
+        status: 200,
+        body: None,
+    }])
+    .await;
+    let expected_url = format!("{uri}/endpoint");
 
-    let expected_url = format!("{}/endpoint", mock_server.uri());
-    let uri = mock_server.uri();
     let output = baml_test!(&format!(
         r#"
             function main() -> string {{
@@ -199,14 +218,13 @@ async fn http_fetch_network_error() {
 
 #[tokio::test]
 async fn http_response_text_consumed() {
-    let mock_server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/once"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("body"))
-        .mount(&mock_server)
-        .await;
+    let (_server, uri) = mock(&[MockEndpoint {
+        path: "/once",
+        status: 200,
+        body: Some("body"),
+    }])
+    .await;
 
-    let uri = mock_server.uri();
     let output = baml_test!(&format!(
         r#"
             function main() -> string {{

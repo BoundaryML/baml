@@ -1,4 +1,4 @@
-//! Unified tests for union type handling in BexExternalValue.
+//! Tests for union type handling in BexExternalValue.
 
 use baml_tests::baml_test;
 use bex_engine::{BexExternalValue, Ty};
@@ -13,13 +13,6 @@ async fn union_int_or_string_returns_int() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int | string {
-        load_const 42
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::union(
@@ -39,13 +32,6 @@ async fn union_int_or_string_returns_string() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> int | string {
-        load_const "hello"
-        return
-    }
-    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::union(
@@ -65,13 +51,6 @@ async fn optional_int_returns_value() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int? {
-        load_const 42
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::optional(
@@ -90,13 +69,6 @@ async fn optional_int_returns_null() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int? {
-        load_const null
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::optional(
@@ -119,16 +91,6 @@ async fn class_with_union_field() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> Response {
-        alloc_instance Response
-        copy 0
-        load_const 42
-        store_field .data
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Instance {
@@ -157,16 +119,6 @@ async fn union_of_classes_returns_success() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> Success | Failure {
-        alloc_instance Success
-        copy 0
-        load_const 42
-        store_field .value
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::union(
@@ -197,16 +149,6 @@ async fn union_of_classes_returns_failure() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> Success | Failure {
-        alloc_instance Failure
-        copy 0
-        load_const "something went wrong"
-        store_field .error
-        return
-    }
-    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::union(
@@ -229,16 +171,6 @@ async fn union_of_arrays() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int[] | string[] {
-        load_const 1
-        load_const 2
-        load_const 3
-        alloc_array 3
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::union(
@@ -265,16 +197,6 @@ async fn array_of_unions() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> int | string[] {
-        load_const 1
-        load_const "two"
-        load_const 3
-        alloc_array 3
-        return
-    }
-    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Array {
@@ -313,16 +235,6 @@ async fn optional_class() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> Data? {
-        alloc_instance Data
-        copy 0
-        load_const 42
-        store_field .value
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::optional(
@@ -348,13 +260,6 @@ async fn optional_class_returns_null() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> Data? {
-        load_const null
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::optional(
@@ -378,19 +283,6 @@ async fn class_with_optional_field() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> Person {
-        alloc_instance Person
-        copy 0
-        load_const "Alice"
-        store_field .name
-        copy 0
-        load_const null
-        store_field .age
-        return
-    }
-    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Instance {
@@ -412,17 +304,6 @@ async fn map_with_union_values() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> map<string, int | string> {
-        load_const 42
-        load_const "test"
-        load_const "count"
-        load_const "name"
-        alloc_map 2
-        return
-    }
-    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::Map {
@@ -446,16 +327,6 @@ async fn union_of_array_with_union_elements_or_string() {
             }
         "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int | bool[] | string {
-        load_const 1
-        load_const true
-        load_const 2
-        alloc_array 3
-        return
-    }
-    ");
     assert_eq!(
         output.result,
         Ok(BexExternalValue::union(

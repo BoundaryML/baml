@@ -2,6 +2,18 @@
 
 use baml_tests::baml_test;
 use bex_external_types::BexExternalValue;
+use indexmap::IndexMap;
+
+/// Create a temp dir with the given files, return (TempDir, root path string).
+/// TempDir must be kept alive so the directory isn't deleted.
+fn tmp(files: IndexMap<&str, &str>) -> (tempfile::TempDir, String) {
+    let tmp = tempfile::TempDir::new().unwrap();
+    for (name, contents) in files {
+        std::fs::write(tmp.path().join(name), contents).unwrap();
+    }
+    let root = tmp.path().display().to_string();
+    (tmp, root)
+}
 
 /// Replace the temp dir path with a stable placeholder.
 fn stabilize(s: &str, root: &str) -> String {
@@ -10,9 +22,7 @@ fn stabilize(s: &str, root: &str) -> String {
 
 #[tokio::test]
 async fn fs_open_only() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("hello.txt"), "Hello from BAML!").unwrap();
-    let root = tmp.path().display().to_string();
+    let (_tmp, root) = tmp(indexmap::indexmap! { "hello.txt" => "Hello from BAML!" });
 
     let output = baml_test!(&format!(
         r#"
@@ -38,9 +48,7 @@ async fn fs_open_only() {
 
 #[tokio::test]
 async fn fs_open_and_read() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(tmp.path().join("hello.txt"), "Hello from BAML!").unwrap();
-    let root = tmp.path().display().to_string();
+    let (_tmp, root) = tmp(indexmap::indexmap! { "hello.txt" => "Hello from BAML!" });
 
     let output = baml_test!(&format!(
         r#"
@@ -69,8 +77,7 @@ async fn fs_open_and_read() {
 
 #[tokio::test]
 async fn fs_open_nonexistent_file() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    let root = tmp.path().display().to_string();
+    let (_tmp, root) = tmp(indexmap::indexmap! {});
 
     let output = baml_test!(&format!(
         r#"
