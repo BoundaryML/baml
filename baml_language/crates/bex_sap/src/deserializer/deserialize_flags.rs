@@ -64,6 +64,7 @@ where
     /// The type of `in_progress` should match the expected type.
     ///
     /// Includes the partial value that was present in the input.
+    /// Implies `Self::Incomplete`.
     DefaultFromInProgress(Cow<'v, crate::jsonish::Value<'s>>),
     DefaultButHadValue(Cow<'v, crate::jsonish::Value<'s>>),
     OptionalDefaultFromNoValue,

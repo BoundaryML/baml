@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::baml_value::{BamlBool, BamlInt, BamlString, BamlValue};
+use crate::baml_value::{BamlInt, BamlString, BamlValue};
 use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::CompletionState;
@@ -70,38 +70,6 @@ where
             current = value.r#type()
         );
 
-        let res = Self::coerce_impl(ctx, target.clone(), value);
-        match res {
-            Ok(ok) => Ok(ok),
-            Err(e) => match &target.meta.on_error {
-                AttrLiteral::Never => Err(e),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Int(IntTy)),
-                        };
-                        Ok(Some(ValueWithFlags::new(ret, meta)))
-                    }
-                    Err(lit_err) => Err(lit_err.with_cause(e)),
-                },
-            },
-        }
-    }
-}
-
-impl<'s, 'v, 't> IntLiteralTy
-where
-    't: 's,
-    's: 'v,
-{
-    /// Handles `in_progress` and `asserts` but not `on_error`.
-    fn coerce_impl<N: TypeIdent>(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v jsonish::Value<'s>,
-    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>>, ParsingError> {
         let ret = match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
@@ -219,38 +187,6 @@ where
             current = value.r#type()
         );
 
-        let res = Self::coerce_impl(ctx, target.clone(), value);
-        match res {
-            Ok(ok) => Ok(ok),
-            Err(e) => match &target.meta.on_error {
-                AttrLiteral::Never => Err(e),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Bool(BoolTy)),
-                        };
-                        Ok(Some(ValueWithFlags::new(ret, meta)))
-                    }
-                    Err(lit_err) => Err(lit_err.with_cause(e)),
-                },
-            },
-        }
-    }
-}
-
-impl<'s, 'v, 't> BoolLiteralTy
-where
-    't: 's,
-    's: 'v,
-{
-    /// Handles `in_progress` and `asserts` but not `on_error`.
-    fn coerce_impl<N: TypeIdent>(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v jsonish::Value<'s>,
-    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>>, ParsingError> {
         if matches!(value, jsonish::Value::Null) {
             return Err(ctx.error_unexpected_null(&target));
         }
@@ -336,38 +272,6 @@ where
             current = value.r#type()
         );
 
-        let res = Self::coerce_impl(ctx, target.clone(), value);
-        match res {
-            Ok(ok) => Ok(ok),
-            Err(e) => match &target.meta.on_error {
-                AttrLiteral::Never => Err(e),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
-                        };
-                        Ok(Some(ValueWithFlags::new(ret, meta)))
-                    }
-                    Err(lit_err) => Err(lit_err.with_cause(e)),
-                },
-            },
-        }
-    }
-}
-
-impl<'s, 'v, 't> StringLiteralTy<'t>
-where
-    't: 's,
-    's: 'v,
-{
-    /// Handles `in_progress` and `asserts` but not `on_error`.
-    fn coerce_impl<N: TypeIdent>(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v jsonish::Value<'s>,
-    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlString<'t>, N>>, ParsingError> {
         if matches!(value, jsonish::Value::Null) {
             return Err(ctx.error_unexpected_null(&target));
         }
@@ -393,7 +297,7 @@ where
         // so use Primitive(String) which is semantically close for error messages.
         let literal_match = match_string(
             ctx,
-            TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
+            target.clone().map_ty(TyResolvedRef::LiteralString),
             Cow::Borrowed(value),
             &candidates,
             true,

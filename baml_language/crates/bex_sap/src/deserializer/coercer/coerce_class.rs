@@ -167,7 +167,7 @@ where
         let ctx = nested_ctx.as_ref().unwrap_or(ctx);
 
         // There are a few possible approaches here:
-        let ret = match (value, target.meta.in_progress.as_ref()) {
+        match (value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Object(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
@@ -360,23 +360,8 @@ where
                 }
             }
             _ => Err(ctx.error_unexpected_type(&target, value)),
-        };
-
-        match ret {
-            Ok(ret) => Ok(Some(ret)),
-            Err(e) if matches!(meta.on_error, AttrLiteral::Never) => Err(e),
-            Err(e) => match target.ty.from_literal(&meta.on_error, ctx) {
-                Ok(ret) => {
-                    let meta = DeserializerMeta {
-                        flags: DeserializerConditions::new()
-                            .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                        ty: target.map_ty(TyResolvedRef::Class),
-                    };
-                    Ok(Some(ValueWithFlags::new(ret, meta)))
-                }
-                Err(lit_err) => Err(lit_err.with_cause(e)),
-            },
         }
+        .map(Some)
     }
 }
 

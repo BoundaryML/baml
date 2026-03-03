@@ -105,9 +105,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        let map_ty = target.ty;
-        let meta = target.meta;
-
         log::debug!(
             "scope: {scope} :: coercing to: {name} (current: {current})",
             name = target,
@@ -121,11 +118,11 @@ where
 
         let key_type = ctx
             .db
-            .resolve_with_meta(map_ty.key.deref().as_ref())
+            .resolve_with_meta(target.ty.key.deref().as_ref())
             .map_err(|ident| ctx.error_type_resolution(ident))?;
         let value_type = ctx
             .db
-            .resolve_with_meta(map_ty.value.deref().as_ref())
+            .resolve_with_meta(target.ty.value.deref().as_ref())
             .map_err(|ident| ctx.error_type_resolution(ident))?;
 
         // TODO: Do we actually need to check the key type here in the coercion
@@ -169,7 +166,7 @@ where
             }
             (jsonish::Value::Object(_, CompletionState::Incomplete), Some(lit)) => {
                 flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                target.ty.from_literal(lit, ctx)
+                target.ty.from_literal(lit, ctx)?
             }
             (jsonish::Value::Object(obj, completion_state), _) => {
                 let mut items = IndexMap::new();
@@ -200,8 +197,7 @@ where
                     // TODO: Is it Ok that we assume keys are complete?
                     let key_as_jsonish =
                         jsonish::Value::String(key.to_owned(), CompletionState::Complete);
-                    let kt_ref = TyWithMeta::new(key_type.ty, key_type.meta);
-                    match TyResolvedRef::coerce(ctx, kt_ref, &key_as_jsonish) {
+                    match TyResolvedRef::coerce(ctx, key_type.clone(), &key_as_jsonish) {
                         Ok(None) => {
                             unreachable!("key_as_jsonish is defined to be complete");
                         }
@@ -219,45 +215,20 @@ where
                 if *completion_state == CompletionState::Incomplete {
                     flags.add_flag(Flag::Incomplete);
                 }
-                Ok(BamlMap { value: items })
+                BamlMap { value: items }
             }
             // TODO: first map in an array that matches
-            _ => Err(ctx.error_unexpected_type(&target, value)),
+            _ => return Err(ctx.error_unexpected_type(&target, value)),
         };
 
-        let ret = ret.and_then(|ret| {
-            let ret = BamlValue::Map(ret);
-            target.meta.expect_asserts(&ret, ctx).and_then(|()| {
-                let BamlValue::Map(ret) = ret else {
-                    unreachable!("we just wrapped it in a BamlValue::Map");
-                };
-                Ok(ret)
-            })
-        });
-        match (ret, &target.meta.on_error) {
-            // Happy path: we have a value. Just return it.
-            (Ok(ret), _) => Ok(Some(ValueWithFlags::new(
-                ret,
-                DeserializerMeta {
-                    flags,
-                    ty: TyWithMeta::new(TyResolvedRef::Map(map_ty), meta),
-                },
-            ))),
-            // Error path: we have an error and no on_error. Return the error.
-            (Err(e), AttrLiteral::Never) => Err(e),
-            // Error correction path: we have an error and an on_error. Try to use the literal.
-            (Err(e), lit) => match target.ty.from_literal(&lit, ctx) {
-                Ok(ret) => {
-                    let meta = DeserializerMeta {
-                        flags: DeserializerConditions::new()
-                            .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                        ty: target.map_ty(|_| TyResolvedRef::Map(map_ty)),
-                    };
-                    Ok(Some(ValueWithFlags::new(ret, meta)))
-                }
-                Err(lit_err) => Err(lit_err.with_cause(e)),
-            },
-        }
+        let ret = BamlValue::Map(ret);
+        target.meta.expect_asserts(&ret, ctx)?;
+        let BamlValue::Map(ret) = ret else {
+            unreachable!("we just wrapped it in a BamlValue::Map");
+        };
+        Ok(Some(
+            ValueWithFlags::new(ret, DeserializerMeta::new(target)).with_flags(flags.flags),
+        ))
     }
 }
 

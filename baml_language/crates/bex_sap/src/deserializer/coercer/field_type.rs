@@ -3,14 +3,13 @@ use std::borrow::Cow;
 use crate::baml_value::{BamlPrimitive, BamlString, BamlValue};
 use crate::deserializer::coercer::match_string::match_string;
 use crate::deserializer::coercer::{ParsingContext, ParsingError, TypeCoercer, array_helper};
-use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::DeserializerMeta;
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
-    ArrayTy, AttrLiteral, BoolLiteralTy, ClassTy, EnumTy, IntLiteralTy, MapTy, PrimitiveTy,
-    StreamStateTy, StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations,
-    TypeIdent, UnionTy,
+    ArrayTy, AttrLiteral, BoolLiteralTy, BoolTy, ClassTy, EnumTy, FloatTy, IntLiteralTy, IntTy,
+    MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, TyResolvedRef,
+    TyWithMeta, TypeAnnotations, TypeIdent, UnionTy,
 };
 
 /// Dispatch methods for `TyResolvedRef` that delegate to the appropriate
@@ -105,6 +104,20 @@ where
         // Extract fields - both are Copy.
         let target_meta = target.meta;
 
+        if value.completion_state() == &CompletionState::Incomplete {
+            match &target.meta.in_progress {
+                Some(AttrLiteral::Never) => return Ok(None),
+                Some(lit) => {
+                    let ret = target.ty.from_literal(lit, ctx)?;
+                    return Ok(Some(BamlValueWithFlags::new(
+                        ret,
+                        DeserializerMeta::new(target.clone()),
+                    )));
+                }
+                None => {}
+            }
+        }
+
         let result = match value {
             jsonish::Value::AnyOf(candidates, primitive) => {
                 log::debug!(
@@ -115,48 +128,43 @@ where
                 );
 
                 match target.ty {
-                    TyResolvedRef::String(_) => Ok(Some(BamlValueWithFlags::new(
+                    TyResolvedRef::String(_) => BamlValueWithFlags::new(
                         BamlValue::String(BamlString {
                             value: primitive.clone(),
                         }),
                         DeserializerMeta::new(target.clone()),
-                    ))),
+                    ),
                     TyResolvedRef::Enum(enum_ty) => {
                         let primitive =
                             jsonish::Value::String(primitive.clone(), CompletionState::Complete);
-                        EnumTy::coerce_from_cow(
+                        let ret = EnumTy::coerce_from_cow(
                             ctx,
                             TyWithMeta::new(enum_ty, target_meta),
                             Cow::Owned(primitive),
                             [],
-                        )
-                        .map(|v| v.map(|v| v.map_value(BamlValue::Enum)))
+                        )?;
+                        match ret {
+                            Some(v) => v.map_value(BamlValue::Enum),
+                            None => return Ok(None),
+                        }
                     }
                     TyResolvedRef::LiteralString(s) => {
                         let candidates = [(&*s.0, vec![&*s.0])];
-                        match_string(
+                        let ret = match_string(
                             ctx,
                             TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
                             Cow::Borrowed(value),
                             &candidates,
                             true,
-                        )
-                        .map(|v| {
-                            v.map_value(|value| {
-                                BamlValue::String(BamlString {
-                                    value: value.into(),
-                                })
-                            })
-                        })
-                        .map(Some)
+                        )?;
+                        ret.map_value(|v| BamlValue::String(BamlString { value: v.into() }))
                     }
                     _ => array_helper::coerce_array_to_singular(
                         ctx,
                         target.clone(),
                         candidates.iter(),
                         &|val| Self::coerce(ctx, target.clone(), val),
-                    )
-                    .map(Some),
+                    )?,
                 }
             }
             crate::jsonish::Value::Markdown(_t, v, _completion) => {
@@ -166,16 +174,16 @@ where
                     scope = ctx.display_scope(),
                     current = value.r#type()
                 );
-                Self::coerce(ctx, target.clone(), v).map(|v| {
-                    v.map(|v| {
-                        let flag = if matches!(target.ty, TyResolvedRef::String(_)) {
-                            Flag::ObjectFromMarkdown(1)
-                        } else {
-                            Flag::ObjectFromMarkdown(0)
-                        };
-                        v.with_flag(flag)
-                    })
-                })
+                let Some(ret) = Self::coerce(ctx, target.clone(), v)? else {
+                    return Ok(None);
+                };
+
+                let flag = if matches!(target.ty, TyResolvedRef::String(_)) {
+                    Flag::ObjectFromMarkdown(1)
+                } else {
+                    Flag::ObjectFromMarkdown(0)
+                };
+                ret.with_flag(flag)
             }
             crate::jsonish::Value::FixedJson(v, fixes) => {
                 log::debug!(
@@ -184,147 +192,105 @@ where
                     scope = ctx.display_scope(),
                     current = value.r#type()
                 );
-                Self::coerce(ctx, target.clone(), v)
-                    .map(|v| v.map(|v| v.with_flag(Flag::ObjectFromFixedJson(fixes.to_vec()))))
+                let Some(ret) = Self::coerce(ctx, target.clone(), v)? else {
+                    return Ok(None);
+                };
+                ret.with_flag(Flag::ObjectFromFixedJson(fixes.to_vec()))
             }
             _ => {
                 if let Some(value) = Self::try_cast(ctx, target.clone(), value) {
-                    Ok(Some(value))
+                    value
                 } else {
-                    match target.ty {
+                    let ret = match target.ty {
                         // Primitives: reconstruct PrimitiveTy and delegate
-                        TyResolvedRef::Int(v) => PrimitiveTy::coerce(
-                            ctx,
-                            TyWithMeta::new(PrimitiveTy::Int(v).as_static_ref(), target_meta),
-                            value,
-                        )
-                        .map(|v| v.map(|v| v.map_value(Into::into))),
-                        TyResolvedRef::Float(v) => PrimitiveTy::coerce(
-                            ctx,
-                            TyWithMeta::new(PrimitiveTy::Float(v).as_static_ref(), target_meta),
-                            value,
-                        )
-                        .map(|v| v.map(|v| v.map_value(Into::into))),
-                        TyResolvedRef::String(v) => PrimitiveTy::coerce(
-                            ctx,
-                            TyWithMeta::new(PrimitiveTy::String(v).as_static_ref(), target_meta),
-                            value,
-                        )
-                        .map(|v| v.map(|v| v.map_value(Into::into))),
-                        TyResolvedRef::Bool(v) => PrimitiveTy::coerce(
-                            ctx,
-                            TyWithMeta::new(PrimitiveTy::Bool(v).as_static_ref(), target_meta),
-                            value,
-                        )
-                        .map(|v| v.map(|v| v.map_value(Into::into))),
-                        TyResolvedRef::Null(v) => PrimitiveTy::coerce(
-                            ctx,
-                            TyWithMeta::new(PrimitiveTy::Null(v).as_static_ref(), target_meta),
-                            value,
-                        )
-                        .map(|v| v.map(|v| v.map_value(Into::into))),
-                        TyResolvedRef::Media(v) => PrimitiveTy::coerce(
-                            ctx,
-                            TyWithMeta::new(PrimitiveTy::Media(v).as_static_ref(), target_meta),
-                            value,
-                        )
-                        .map(|v| v.map(|v| v.map_value(Into::into))),
-                        TyResolvedRef::LiteralString(l) => {
-                            StringLiteralTy::coerce(ctx, TyWithMeta::new(l, target_meta), value)
-                                .map(|v| {
-                                    v.map(|v| {
-                                        v.map_value(BamlPrimitive::String).map_value(Into::into)
-                                    })
-                                })
+                        TyResolvedRef::Int(_) => {
+                            IntTy::coerce(ctx, TyWithMeta::new(&IntTy, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Int))
                         }
-                        TyResolvedRef::LiteralInt(l) => IntLiteralTy::coerce(
+                        TyResolvedRef::Float(_) => {
+                            FloatTy::coerce(ctx, TyWithMeta::new(&FloatTy, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Float))
+                        }
+                        TyResolvedRef::String(_) => {
+                            StringTy::coerce(ctx, TyWithMeta::new(&StringTy, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::String))
+                        }
+                        TyResolvedRef::Bool(_) => {
+                            BoolTy::coerce(ctx, TyWithMeta::new(&BoolTy, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Bool))
+                        }
+                        TyResolvedRef::Null(_) => {
+                            NullTy::coerce(ctx, TyWithMeta::new(&NullTy, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Null))
+                        }
+                        TyResolvedRef::Media(MediaTy::Image) => MediaTy::coerce(
                             ctx,
-                            TyWithMeta::new(l, target_meta),
+                            TyWithMeta::new(&MediaTy::Image, target_meta),
                             value,
-                        )
-                        .map(|v| v.map(|v| v.map_value(BamlPrimitive::Int).map_value(Into::into))),
-                        TyResolvedRef::LiteralBool(l) => BoolLiteralTy::coerce(
+                        )?
+                        .map(|v| v.map_value(BamlValue::Media)),
+                        TyResolvedRef::Media(MediaTy::Audio) => MediaTy::coerce(
                             ctx,
-                            TyWithMeta::new(l, target_meta),
+                            TyWithMeta::new(&MediaTy::Audio, target_meta),
                             value,
-                        )
-                        .map(|v| v.map(|v| v.map_value(BamlPrimitive::Bool).map_value(Into::into))),
+                        )?
+                        .map(|v| v.map_value(BamlValue::Media)),
+                        TyResolvedRef::Media(MediaTy::Pdf) => MediaTy::coerce(
+                            ctx,
+                            TyWithMeta::new(&MediaTy::Pdf, target_meta),
+                            value,
+                        )?
+                        .map(|v| v.map_value(BamlValue::Media)),
+                        TyResolvedRef::Media(MediaTy::Video) => MediaTy::coerce(
+                            ctx,
+                            TyWithMeta::new(&MediaTy::Video, target_meta),
+                            value,
+                        )?
+                        .map(|v| v.map_value(BamlValue::Media)),
+                        TyResolvedRef::LiteralString(l) => {
+                            StringLiteralTy::coerce(ctx, TyWithMeta::new(l, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::String))
+                        }
+                        TyResolvedRef::LiteralInt(l) => {
+                            IntLiteralTy::coerce(ctx, TyWithMeta::new(l, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Int))
+                        }
+                        TyResolvedRef::LiteralBool(l) => {
+                            BoolLiteralTy::coerce(ctx, TyWithMeta::new(l, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Bool))
+                        }
                         TyResolvedRef::Array(a) => {
-                            ArrayTy::coerce(ctx, TyWithMeta::new(a, target_meta), value)
-                                .map(|v| v.map(|v| v.map_value(BamlValue::Array)))
+                            ArrayTy::coerce(ctx, TyWithMeta::new(a, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Array))
                         }
                         TyResolvedRef::Map(m) => {
-                            MapTy::coerce(ctx, TyWithMeta::new(m, target_meta), value)
-                                .map(|v| v.map(|v| v.map_value(BamlValue::Map)))
+                            MapTy::coerce(ctx, TyWithMeta::new(m, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Map))
                         }
                         TyResolvedRef::Class(c) => {
-                            ClassTy::coerce(ctx, TyWithMeta::new(c, target_meta), value)
-                                .map(|v| v.map(|v| v.map_value(BamlValue::Class)))
+                            ClassTy::coerce(ctx, TyWithMeta::new(c, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Class))
                         }
                         TyResolvedRef::Enum(e) => {
-                            EnumTy::coerce(ctx, TyWithMeta::new(e, target_meta), value)
-                                .map(|v| v.map(|v| v.map_value(BamlValue::Enum)))
+                            EnumTy::coerce(ctx, TyWithMeta::new(e, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Enum))
                         }
                         TyResolvedRef::Union(u) => {
-                            UnionTy::coerce(ctx, TyWithMeta::new(u, target_meta), value)
+                            UnionTy::coerce(ctx, TyWithMeta::new(u, target_meta), value)?
                         }
                         TyResolvedRef::StreamState(s) => {
-                            StreamStateTy::coerce(ctx, TyWithMeta::new(s, target_meta), value)
-                                .map(|v| v.map(|v| v.map_value(BamlValue::StreamState)))
+                            StreamStateTy::coerce(ctx, TyWithMeta::new(s, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::StreamState))
                         }
-                    }
+                    };
+                    let Some(ret) = ret else {
+                        return Ok(None);
+                    };
+                    ret
                 }
             }
         };
-
-        match result {
-            Err(e) if matches!(target.meta.on_error, AttrLiteral::Never) => Err(e),
-            Err(e) => {
-                let value = target.ty.from_literal(&target.meta.on_error, ctx);
-                match value {
-                    Ok(value) => {
-                        let value = BamlValueWithFlags::new(
-                            value,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                                ty: target,
-                            },
-                        );
-                        Ok(Some(value))
-                    }
-                    Err(literal_err) => Err(literal_err.with_cause(e)),
-                }
-            }
-            Ok(None) => Ok(None),
-            Ok(Some(ok)) => match (value.completion_state(), target.meta.in_progress.as_ref()) {
-                // Happy path: complete value
-                (CompletionState::Complete, _) => {
-                    target.meta.expect_asserts(&ok.value, ctx)?;
-                    Ok(Some(ok))
-                }
-                // Incomplete value kept as-is
-                (CompletionState::Incomplete, None) => {
-                    target.meta.expect_asserts(&ok.value, ctx)?;
-                    Ok(Some(ok.with_flag(Flag::Incomplete)))
-                }
-                // Incomplete value with `in_progress = never`
-                (CompletionState::Incomplete, Some(AttrLiteral::Never)) => Ok(None),
-                // Incomplete value with `in_progress = <value>`
-                (CompletionState::Incomplete, Some(in_progress)) => {
-                    let in_progress = target.ty.from_literal(in_progress, ctx)?;
-                    let ret = BamlValueWithFlags::new(
-                        in_progress,
-                        DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                            ty: target,
-                        },
-                    );
-                    Ok(Some(ret))
-                }
-            },
-        }
+        Ok(Some(result))
     }
 }
 

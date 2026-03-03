@@ -568,8 +568,6 @@ pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// Example:
     /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
     pub in_progress: Option<AttrLiteral<'t, N>>,
-    /// Represents the behavior when completed but the value is invalid.
-    pub on_error: AttrLiteral<'t, N>,
 
     pub asserts: Vec<Assertion<'t, N>>,
 }
@@ -577,7 +575,6 @@ impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
     fn default() -> Self {
         Self {
             in_progress: None,
-            on_error: AttrLiteral::Never,
             asserts: Vec::new(),
         }
     }

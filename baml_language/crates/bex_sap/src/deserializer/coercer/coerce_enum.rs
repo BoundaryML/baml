@@ -166,18 +166,6 @@ impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
                 .expect_asserts(&BamlValue::Enum(v.value.clone()), ctx)?;
             Ok(v)
         })
-        .or_else(|err| match &target.meta.on_error {
-            AttrLiteral::Never => Err(err),
-            lit => {
-                let ret = target.ty.from_literal(lit, ctx)?;
-                let meta = DeserializerMeta {
-                    flags: DeserializerConditions::new()
-                        .with_flag(Flag::DefaultButHadUnparseableValue(err)),
-                    ty: target.map_ty(TyResolvedRef::Enum),
-                };
-                return Ok(ValueWithFlags::new(ret, meta));
-            }
-        })
         .map(Some)
     }
 }

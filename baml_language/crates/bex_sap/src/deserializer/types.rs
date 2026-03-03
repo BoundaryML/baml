@@ -31,6 +31,14 @@ impl<'s, 'v, 't, N: TypeIdent> DeserializerMeta<'s, 'v, 't, N> {
             ty: ty.map_ty(Into::into),
         }
     }
+    pub fn with_flags(mut self, flags: impl IntoIterator<Item = Flag<'s, 'v, 't, N>>) -> Self {
+        self.flags.flags.extend(flags);
+        self
+    }
+    pub fn with_flag(mut self, flag: Flag<'s, 'v, 't, N>) -> Self {
+        self.flags.flags.push(flag);
+        self
+    }
 }
 
 pub type ValueWithFlags<'s, 'v, 't, T, N> = ValueWithMeta<T, DeserializerMeta<'s, 'v, 't, N>>;

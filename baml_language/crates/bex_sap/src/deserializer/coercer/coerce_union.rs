@@ -123,25 +123,7 @@ where
             TyWithMeta::new(TyResolvedRef::Union(target.ty), target.meta),
             variants,
         );
-        best.map(|v| v.with_flags(add_flags))
-            .or_else(|err| match &target.meta.on_error {
-                // No error fallback, return the error
-                AttrLiteral::Never => Err(err),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    // Error fallback, return the literal
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(err)),
-                            ty: target.map_ty(TyResolvedRef::Union),
-                        };
-                        Ok(BamlValueWithFlags::new(ret, meta))
-                    }
-                    // Error fallback failed, return the error with cause
-                    Err(lit_err) => Err(lit_err.with_cause(err)),
-                },
-            })
-            .map(Some)
+        best.map(|v| v.with_flags(add_flags)).map(Some)
     }
 
     fn try_cast(

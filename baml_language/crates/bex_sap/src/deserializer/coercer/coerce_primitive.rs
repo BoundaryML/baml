@@ -90,69 +90,6 @@ where
         );
         log::trace!("content: {}", value);
 
-        let res = Self::coerce_impl(ctx, target.clone(), value);
-        match res {
-            Ok(ok) => Ok(ok),
-            Err(e) => match &target.meta.on_error {
-                AttrLiteral::Never => Err(e),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Int(IntTy)),
-                        };
-                        Ok(Some(ValueWithFlags::new(ret, meta)))
-                    }
-                    Err(lit_err) => Err(lit_err.with_cause(e)),
-                },
-            },
-        }
-    }
-
-    fn try_cast(
-        _ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>> {
-        let mut result = match value {
-            crate::jsonish::Value::Number(n, _) => n.as_i64().map(|i| {
-                ValueWithFlags::new(
-                    BamlInt { value: i },
-                    DeserializerMeta {
-                        flags: DeserializerConditions::new(),
-                        ty: TyWithMeta::new(TyResolvedRef::Int(IntTy), target.meta),
-                    },
-                )
-            }),
-            _ => None,
-        };
-
-        // Check completion state exactly like coerce methods do
-        match value.completion_state() {
-            CompletionState::Complete => {}
-            CompletionState::Incomplete => {
-                result
-                    .iter_mut()
-                    .for_each(|v| v.meta.flags.add_flag(Flag::Incomplete));
-            }
-        }
-
-        result
-    }
-}
-
-impl<'s, 'v, 't> IntTy
-where
-    't: 's,
-    's: 'v,
-{
-    /// Handles `in_progress` and `asserts` but not `on_error`.
-    fn coerce_impl<N: TypeIdent>(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
@@ -262,6 +199,37 @@ where
         );
         Ok(Some(result))
     }
+
+    fn try_cast(
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>> {
+        let mut result = match value {
+            crate::jsonish::Value::Number(n, _) => n.as_i64().map(|i| {
+                ValueWithFlags::new(
+                    BamlInt { value: i },
+                    DeserializerMeta {
+                        flags: DeserializerConditions::new(),
+                        ty: TyWithMeta::new(TyResolvedRef::Int(IntTy), target.meta),
+                    },
+                )
+            }),
+            _ => None,
+        };
+
+        // Check completion state exactly like coerce methods do
+        match value.completion_state() {
+            CompletionState::Complete => {}
+            CompletionState::Incomplete => {
+                result
+                    .iter_mut()
+                    .for_each(|v| v.meta.flags.add_flag(Flag::Incomplete));
+            }
+        }
+
+        result
+    }
 }
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for FloatTy
@@ -281,68 +249,6 @@ where
         );
         log::trace!("content: {}", value);
 
-        let res = Self::coerce_impl(ctx, target.clone(), value);
-        match res {
-            Ok(ok) => Ok(ok),
-            Err(e) => match &target.meta.on_error {
-                AttrLiteral::Never => Err(e),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Float(FloatTy)),
-                        };
-                        Ok(Some(ValueWithFlags::new(ret, meta)))
-                    }
-                    Err(lit_err) => Err(lit_err.with_cause(e)),
-                },
-            },
-        }
-    }
-
-    fn try_cast(
-        _ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlFloat, N>> {
-        let mut result = match value {
-            crate::jsonish::Value::Number(n, _) => n.as_f64().map(|f| {
-                ValueWithFlags::new(
-                    BamlFloat { value: f },
-                    DeserializerMeta {
-                        flags: DeserializerConditions::new(),
-                        ty: TyWithMeta::new(TyResolvedRef::Float(FloatTy), target.meta),
-                    },
-                )
-            }),
-            _ => None,
-        };
-
-        match value.completion_state() {
-            CompletionState::Complete => {}
-            CompletionState::Incomplete => {
-                result
-                    .iter_mut()
-                    .for_each(|v| v.meta.flags.add_flag(Flag::Incomplete));
-            }
-        }
-
-        result
-    }
-}
-
-impl<'s, 'v, 't> FloatTy
-where
-    't: 's,
-    's: 'v,
-{
-    /// Handles `in_progress` and `asserts` but not `on_error`.
-    fn coerce_impl<N: TypeIdent>(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlFloat, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
@@ -445,6 +351,36 @@ where
         );
         Ok(Some(result))
     }
+
+    fn try_cast(
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlFloat, N>> {
+        let mut result = match value {
+            crate::jsonish::Value::Number(n, _) => n.as_f64().map(|f| {
+                ValueWithFlags::new(
+                    BamlFloat { value: f },
+                    DeserializerMeta {
+                        flags: DeserializerConditions::new(),
+                        ty: TyWithMeta::new(TyResolvedRef::Float(FloatTy), target.meta),
+                    },
+                )
+            }),
+            _ => None,
+        };
+
+        match value.completion_state() {
+            CompletionState::Complete => {}
+            CompletionState::Incomplete => {
+                result
+                    .iter_mut()
+                    .for_each(|v| v.meta.flags.add_flag(Flag::Incomplete));
+            }
+        }
+
+        result
+    }
 }
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for BoolTy
@@ -464,66 +400,6 @@ where
         );
         log::trace!("content: {}", value);
 
-        let res = Self::coerce_impl(ctx, target.clone(), value);
-        match res {
-            Ok(ok) => Ok(ok),
-            Err(e) => match &target.meta.on_error {
-                AttrLiteral::Never => Err(e),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Bool(BoolTy)),
-                        };
-                        Ok(Some(ValueWithFlags::new(ret, meta)))
-                    }
-                    Err(lit_err) => Err(lit_err.with_cause(e)),
-                },
-            },
-        }
-    }
-
-    fn try_cast(
-        _ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>> {
-        let mut result = match value {
-            crate::jsonish::Value::Boolean(b) => Some(ValueWithFlags::new(
-                BamlBool { value: *b },
-                DeserializerMeta {
-                    flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
-                },
-            )),
-            _ => None,
-        };
-
-        match value.completion_state() {
-            CompletionState::Complete => {}
-            CompletionState::Incomplete => {
-                result
-                    .iter_mut()
-                    .for_each(|v| v.meta.flags.add_flag(Flag::Incomplete));
-            }
-        }
-
-        result
-    }
-}
-
-impl<'s, 'v, 't> BoolTy
-where
-    't: 's,
-    's: 'v,
-{
-    /// Handles `in_progress` and `asserts` but not `on_error`.
-    fn coerce_impl<N: TypeIdent>(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
             (crate::jsonish::Value::Boolean(b), _) => {
@@ -621,6 +497,34 @@ where
         );
         Ok(Some(value))
     }
+
+    fn try_cast(
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>> {
+        let mut result = match value {
+            crate::jsonish::Value::Boolean(b) => Some(ValueWithFlags::new(
+                BamlBool { value: *b },
+                DeserializerMeta {
+                    flags: DeserializerConditions::new(),
+                    ty: TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
+                },
+            )),
+            _ => None,
+        };
+
+        match value.completion_state() {
+            CompletionState::Complete => {}
+            CompletionState::Incomplete => {
+                result
+                    .iter_mut()
+                    .for_each(|v| v.meta.flags.add_flag(Flag::Incomplete));
+            }
+        }
+
+        result
+    }
 }
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for NullTy
@@ -640,55 +544,6 @@ where
         );
         log::trace!("content: {}", value);
 
-        let res = Self::coerce_impl(ctx, target.clone(), value);
-        match res {
-            Ok(ok) => Ok(ok),
-            Err(e) => match &target.meta.on_error {
-                AttrLiteral::Never => Err(e),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::Null(NullTy)),
-                        };
-                        Ok(Some(ValueWithFlags::new(ret, meta)))
-                    }
-                    Err(lit_err) => Err(lit_err.with_cause(e)),
-                },
-            },
-        }
-    }
-
-    fn try_cast(
-        _ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlNull, N>> {
-        match value {
-            crate::jsonish::Value::Null => Some(ValueWithFlags::new(
-                BamlNull,
-                DeserializerMeta {
-                    flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(TyResolvedRef::Null(NullTy), target.meta),
-                },
-            )),
-            _ => None,
-        }
-    }
-}
-
-impl<'s, 'v, 't> NullTy
-where
-    't: 's,
-    's: 'v,
-{
-    /// Handles `in_progress` and `asserts` but not `on_error`.
-    fn coerce_impl<N: TypeIdent>(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlNull, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
 
         // Handle in_progress for all incomplete values
@@ -727,6 +582,23 @@ where
             },
         )))
     }
+
+    fn try_cast(
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlNull, N>> {
+        match value {
+            crate::jsonish::Value::Null => Some(ValueWithFlags::new(
+                BamlNull,
+                DeserializerMeta {
+                    flags: DeserializerConditions::new(),
+                    ty: TyWithMeta::new(TyResolvedRef::Null(NullTy), target.meta),
+                },
+            )),
+            _ => None,
+        }
+    }
 }
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for StringTy
@@ -746,68 +618,6 @@ where
         );
         log::trace!("content: {}", value);
 
-        let res = Self::coerce_impl(ctx, target.clone(), value);
-        match res {
-            Ok(ok) => Ok(ok),
-            Err(e) => match &target.meta.on_error {
-                AttrLiteral::Never => Err(e),
-                lit => match target.ty.from_literal(&lit, ctx) {
-                    Ok(ret) => {
-                        let meta = DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-                            ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
-                        };
-                        Ok(Some(ValueWithFlags::new(ret, meta)))
-                    }
-                    Err(lit_err) => Err(lit_err.with_cause(e)),
-                },
-            },
-        }
-    }
-
-    fn try_cast(
-        _ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlString<'s>, N>> {
-        let mut result = match value {
-            crate::jsonish::Value::String(s, _) => Some(ValueWithFlags::new(
-                BamlString {
-                    value: s.to_string().into(),
-                },
-                DeserializerMeta {
-                    flags: DeserializerConditions::new(),
-                    ty: TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
-                },
-            )),
-            _ => None,
-        };
-
-        match value.completion_state() {
-            CompletionState::Complete => {}
-            CompletionState::Incomplete => {
-                result
-                    .iter_mut()
-                    .for_each(|v| v.meta.flags.add_flag(Flag::Incomplete));
-            }
-        }
-
-        result
-    }
-}
-
-impl<'s, 'v, 't> StringTy
-where
-    't: 's,
-    's: 'v,
-{
-    /// Handles `in_progress` and `asserts` but not `on_error`.
-    fn coerce_impl<N: TypeIdent>(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
-        value: &'v crate::jsonish::Value<'s>,
-    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlString<'s>, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
 
         // Handle in_progress for all incomplete values
@@ -878,6 +688,36 @@ where
                 ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
             },
         )))
+    }
+
+    fn try_cast(
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlString<'s>, N>> {
+        let mut result = match value {
+            crate::jsonish::Value::String(s, _) => Some(ValueWithFlags::new(
+                BamlString {
+                    value: s.to_string().into(),
+                },
+                DeserializerMeta {
+                    flags: DeserializerConditions::new(),
+                    ty: TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
+                },
+            )),
+            _ => None,
+        };
+
+        match value.completion_state() {
+            CompletionState::Complete => {}
+            CompletionState::Incomplete => {
+                result
+                    .iter_mut()
+                    .for_each(|v| v.meta.flags.add_flag(Flag::Incomplete));
+            }
+        }
+
+        result
     }
 }
 
