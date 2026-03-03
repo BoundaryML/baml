@@ -40,8 +40,11 @@ syn = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
+bex_external_types = { workspace = true }
 divan = { workspace = true }
-tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "net" ] }
+wiremock = { workspace = true }
 
 [[bench]]
 name = "compiler_benchmark"

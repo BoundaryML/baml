@@ -20,15 +20,43 @@
 //! }
 //! ```
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
+use baml_project::ProjectDatabase;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, Object, Program};
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
 
-use crate::bytecode::{assert_no_diagnostic_errors, setup_test_db};
+/// Set up a test database from BAML source code.
+fn setup_test_db(source: &str) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.set_project_root(Path::new("."));
+    db.add_file("test.baml", source);
+    db
+}
+
+/// Assert that a `ProjectDatabase` has no diagnostic errors.
+#[track_caller]
+fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
+    use baml_compiler_diagnostics::Severity;
+
+    let project = db.get_project().expect("project must be set");
+    let all_files = db.get_source_files();
+    let diagnostics = baml_project::collect_diagnostics(db, project, &all_files);
+    let errors: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| matches!(d.severity, Severity::Error))
+        .collect();
+    if !errors.is_empty() {
+        let mut msg = String::from("Compilation produced diagnostic errors:\n");
+        for (i, err) in errors.iter().enumerate() {
+            msg.push_str(&format!("  {}. [{}] {}\n", i + 1, err.code(), err.message));
+        }
+        panic!("{msg}");
+    }
+}
 
 /// Output of a unified test: bytecode display + execution result.
 pub struct TestOutput {
@@ -36,6 +64,11 @@ pub struct TestOutput {
     pub bytecode: String,
     /// VM execution result (may be an error for error-testing scenarios).
     pub result: Result<BexExternalValue, bex_engine::EngineError>,
+}
+
+/// Compile BAML source with default optimization (OptLevel::One).
+pub fn compile_source(source: &str) -> Program {
+    compile_source_with_opt(source, baml_compiler_emit::OptLevel::One)
 }
 
 /// Compile BAML source with a specific optimization level.

@@ -260,6 +260,28 @@ impl Ty {
         }
     }
 
+    // --- Compound constructors (default TyAttr) ---
+
+    /// `T?` (optional) with default attributes.
+    pub fn optional(inner: Ty) -> Self {
+        Ty::Optional(Box::new(inner), TyAttr::default())
+    }
+
+    /// `T[]` (list) with default attributes.
+    pub fn list(inner: Ty) -> Self {
+        Ty::List(Box::new(inner), TyAttr::default())
+    }
+
+    /// `A | B | ...` (union) with default attributes.
+    pub fn union(members: impl IntoIterator<Item = Ty>) -> Self {
+        Ty::Union(members.into_iter().collect(), TyAttr::default())
+    }
+
+    /// `Class(name)` with default attributes (local module path).
+    pub fn class(name: &str) -> Self {
+        Ty::Class(TypeName::local(name.into()), TyAttr::default())
+    }
+
     // --- Opaque type constructors ---
 
     /// Helper to build a TypeName for a builtin opaque type.

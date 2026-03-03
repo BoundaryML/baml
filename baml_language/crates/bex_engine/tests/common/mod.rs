@@ -8,7 +8,7 @@
 
 use std::{io::Write, sync::Arc};
 
-use baml_tests::bytecode::compile_source;
+use baml_tests::engine::compile_source;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm_types::Program;
 use indexmap::IndexMap;
