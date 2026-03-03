@@ -207,6 +207,7 @@ pub fn compile_files(
             description: None,
             alias: None,
             type_tag,
+            ty_attr: baml_type::TyAttr::default(),
         });
         class_type_tag_counter += 1;
         let class_obj_idx = program.add_object(class_obj);
@@ -271,6 +272,7 @@ pub fn compile_files(
                     description: class.description.value().cloned(),
                     alias: class.alias.value().cloned(),
                     type_tag,
+                    ty_attr: class.ty_attr.clone(),
                 });
                 class_type_tag_counter += 1;
                 let class_obj_idx = program.add_object(class_obj);
@@ -316,6 +318,7 @@ pub fn compile_files(
                     variants,
                     description: None, // HIR Enum doesn't carry description
                     alias: enum_def.alias.value().cloned(),
+                    ty_attr: enum_def.ty_attr.clone(),
                 });
                 let enum_obj_idx = program.add_object(enum_obj);
                 enum_object_indices.insert(enum_name.clone(), enum_obj_idx);
@@ -349,6 +352,7 @@ pub fn compile_files(
             variants,
             description: None,
             alias: None,
+            ty_attr: baml_type::TyAttr::default(),
         });
         let enum_obj_idx = program.add_object(enum_obj);
         enum_object_indices.insert(builtin_enum.path.to_string(), enum_obj_idx);
