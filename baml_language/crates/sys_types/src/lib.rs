@@ -55,7 +55,7 @@ impl std::fmt::Display for CallId {
 
 /// Errors that can occur during external operation execution.
 /// Every error is tied to the operation (`fn_name`) that was being called.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct OpError {
     pub fn_name: SysOp,
     pub kind: OpErrorKind,
@@ -100,7 +100,7 @@ pub use bex_vm_types::{SysOpErrorCategory, SysOpPanicCategory};
 // ============================================================================
 
 /// Errors that can occur during external operation execution.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum OpErrorKind {
     #[error("Invalid number of arguments: expected {expected}, got {actual}")]
     InvalidArgumentCount { expected: usize, actual: usize },

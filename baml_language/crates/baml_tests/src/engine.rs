@@ -34,8 +34,8 @@ use crate::bytecode::{assert_no_diagnostic_errors, setup_test_db};
 pub struct TestOutput {
     /// Textual bytecode display of all user-defined functions (for insta snapshots).
     pub bytecode: String,
-    /// VM execution result (panics in `run_test` if execution fails).
-    pub result: BexExternalValue,
+    /// VM execution result (may be an error for error-testing scenarios).
+    pub result: Result<BexExternalValue, bex_engine::EngineError>,
 }
 
 /// Compile BAML source with a specific optimization level.
@@ -106,7 +106,7 @@ fn resolve_args(
 /// 1. Compiles the source to bytecode
 /// 2. Displays all user-defined functions in textual format (for insta snapshots)
 /// 3. Resolves named arguments to positional order
-/// 4. Executes the entry function via `BexEngine` and returns the result as `BexExternalValue`
+/// 4. Executes the entry function via `BexEngine` and returns the result as `Result<BexExternalValue, EngineError>`
 pub async fn run_test(
     source: &str,
     entry: &str,
@@ -131,8 +131,7 @@ pub async fn run_test(
             positional_args,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         )
-        .await
-        .unwrap_or_else(|e| panic!("VM execution failed for function '{entry}': {e}"));
+        .await;
 
     TestOutput { bytecode, result }
 }

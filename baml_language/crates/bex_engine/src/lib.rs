@@ -226,7 +226,7 @@ struct SpanState {
 }
 
 /// Errors that can occur during engine execution.
-#[derive(Debug, Error)]
+#[derive(Debug, PartialEq, Error)]
 pub enum EngineError {
     #[error("Function call with ID {call_id} not found")]
     FunctionCallNotFound { call_id: CallId },

@@ -124,12 +124,12 @@ function http_status(code: int) -> string {
 
 function score(input: User | ErrorInfo, threshold: int) -> Report {
   45   0     load_var 1              (input)
-       1     load_const 0            (<class User>)
+       1     load_const 0            (User)
        2     cmp_op instanceof       
        3     pop_jump_if_false +2    (to 5)
        4     jump +11                (to 15)
        5     load_var 1              (input)
-       6     load_const 1            (<class ErrorInfo>)
+       6     load_const 1            (ErrorInfo)
        7     cmp_op instanceof       
        8     pop_jump_if_false +12   (to 20)
 
@@ -147,12 +147,12 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
        19    store_var 3             (name)
 
   50   20    load_var 1              (input)
-       21    load_const 0            (<class User>)
+       21    load_const 0            (User)
        22    cmp_op instanceof       
        23    pop_jump_if_false +2    (to 25)
        24    jump +12                (to 36)
        25    load_var 1              (input)
-       26    load_const 1            (<class ErrorInfo>)
+       26    load_const 1            (ErrorInfo)
        27    cmp_op instanceof       
        28    pop_jump_if_false +13   (to 41)
 
@@ -171,12 +171,12 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
        40    store_var 6             (age)
 
   55   41    load_var 1              (input)
-       42    load_const 0            (<class User>)
+       42    load_const 0            (User)
        43    cmp_op instanceof       
        44    pop_jump_if_false +2    (to 46)
        45    jump +10                (to 55)
        46    load_var 1              (input)
-       47    load_const 1            (<class ErrorInfo>)
+       47    load_const 1            (ErrorInfo)
        48    cmp_op instanceof       
        49    pop_jump_if_false +23   (to 72)
 

@@ -131,14 +131,14 @@ function http_status(code: int) -> string {
 
 function score(input: User | ErrorInfo, threshold: int) -> Report {
     load_var input
-    load_const <class User>
+    load_const User
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var input
-    load_const <class ErrorInfo>
+    load_const ErrorInfo
     cmp_op instanceof
     pop_jump_if_false L2
     load_var input
@@ -153,14 +153,14 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
 
   L2:
     load_var input
-    load_const <class User>
+    load_const User
     cmp_op instanceof
     pop_jump_if_false L3
     jump L4
 
   L3:
     load_var input
-    load_const <class ErrorInfo>
+    load_const ErrorInfo
     cmp_op instanceof
     pop_jump_if_false L5
     load_var input
@@ -176,14 +176,14 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
 
   L5:
     load_var input
-    load_const <class User>
+    load_const User
     cmp_op instanceof
     pop_jump_if_false L6
     jump L7
 
   L6:
     load_var input
-    load_const <class ErrorInfo>
+    load_const ErrorInfo
     cmp_op instanceof
     pop_jump_if_false L12
     load_const 0

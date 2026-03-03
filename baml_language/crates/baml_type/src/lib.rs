@@ -223,6 +223,43 @@ impl Ty {
         }
     }
 
+    // --- Primitive constructors (default TyAttr) ---
+
+    /// `int` with default attributes.
+    pub fn int() -> Self {
+        Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `float` with default attributes.
+    pub fn float() -> Self {
+        Ty::Float {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `string` with default attributes.
+    pub fn string() -> Self {
+        Ty::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bool` with default attributes.
+    pub fn bool() -> Self {
+        Ty::Bool {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `null` with default attributes.
+    pub fn null() -> Self {
+        Ty::Null {
+            attr: TyAttr::default(),
+        }
+    }
+
     // --- Opaque type constructors ---
 
     /// Helper to build a TypeName for a builtin opaque type.

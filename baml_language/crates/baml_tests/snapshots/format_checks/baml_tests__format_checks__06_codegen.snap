@@ -4212,14 +4212,14 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
   L22:
     pop 1
     load_var r
-    load_const <class MatchSuccess>
+    load_const MatchSuccess
     cmp_op instanceof
     pop_jump_if_false L23
     jump L24
 
   L23:
     load_var r
-    load_const <class MatchFailure>
+    load_const MatchFailure
     cmp_op instanceof
     pop_jump_if_false L24
 
@@ -4640,14 +4640,14 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
     pop 1
     jump L96
     load_var r
-    load_const <class MatchSuccess>
+    load_const MatchSuccess
     cmp_op instanceof
     pop_jump_if_false L88
     jump L89
 
   L88:
     load_var r
-    load_const <class MatchFailure>
+    load_const MatchFailure
     cmp_op instanceof
     pop_jump_if_false L96
     jump L96

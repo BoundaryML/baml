@@ -859,7 +859,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     .get(&name_str)
                     .unwrap_or_else(|| panic!("undefined function: {name_str}"));
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
-                self.set_operand(inst, OperandMeta::Global(format!("<fn {name_str}>")));
+                self.set_operand(inst, OperandMeta::Global(name_str));
             }
             Constant::Ty(_) => {
                 let idx = self.add_constant(ConstValue::Null);
@@ -885,9 +885,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let lc_inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(
                     lc_inst,
-                    OperandMeta::Const(format!(
-                        "{variant_idx} /* {enum_name_str}.{variant_str} */"
-                    )),
+                    OperandMeta::Const(format!("{enum_name_str}.{variant_str}")),
                 );
                 let inst = self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
                     enum_obj_idx,
@@ -1829,7 +1827,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
         let lc_inst = self.emit(Instruction::LoadConst(idx));
         self.set_operand(
             lc_inst,
-            OperandMeta::Const(format!("{variant_idx} /* {enum_name}.{variant} */")),
+            OperandMeta::Const(format!("{enum_name}.{variant}")),
         );
         let inst = self.emit(Instruction::AllocVariant(ObjectIndex::from_raw(
             enum_obj_idx,
@@ -1869,10 +1867,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 let class_const =
                     self.add_constant(ConstValue::Object(ObjectIndex::from_raw(class_obj_idx)));
                 let inst = self.emit(Instruction::LoadConst(class_const));
-                self.set_operand(
-                    inst,
-                    OperandMeta::Const(format!("<class {class_name_str}>")),
-                );
+                self.set_operand(inst, OperandMeta::Const(class_name_str.to_string()));
                 self.emit(Instruction::CmpOp(CmpOp::InstanceOf));
             } else {
                 self.emit(Instruction::Pop(1));

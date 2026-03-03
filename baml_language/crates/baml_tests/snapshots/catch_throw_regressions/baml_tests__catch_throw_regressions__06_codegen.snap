@@ -31,7 +31,7 @@ function CatchAllStatusVariants(n: int) -> string {
     load_var _2
     store_var e
     load_var _2
-    load_const 0 /* Status.HttpError */
+    load_const Status.HttpError
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L1
@@ -43,7 +43,7 @@ function CatchAllStatusVariants(n: int) -> string {
     load_var _3
     store_var e
     load_var _3
-    load_const 1 /* Status.IndexError */
+    load_const Status.IndexError
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L2
@@ -55,7 +55,7 @@ function CatchAllStatusVariants(n: int) -> string {
     load_var _4
     store_var e
     load_var _4
-    load_const 2 /* Status.AuthError */
+    load_const Status.AuthError
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L3
@@ -67,7 +67,7 @@ function CatchAllStatusVariants(n: int) -> string {
     load_var _5
     store_var e
     load_var _5
-    load_const 3 /* Status.SomeOtherError */
+    load_const Status.SomeOtherError
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L4
@@ -221,22 +221,22 @@ function ThrowsAllStatusVariants(n: int) -> Status {
 
   L2:
     pop 1
-    load_const 3 /* Status.SomeOtherError */
+    load_const Status.SomeOtherError
     alloc_variant Status
     throw
 
   L3:
-    load_const 2 /* Status.AuthError */
+    load_const Status.AuthError
     alloc_variant Status
     throw
 
   L4:
-    load_const 1 /* Status.IndexError */
+    load_const Status.IndexError
     alloc_variant Status
     throw
 
   L5:
-    load_const 0 /* Status.HttpError */
+    load_const Status.HttpError
     alloc_variant Status
     throw
 }

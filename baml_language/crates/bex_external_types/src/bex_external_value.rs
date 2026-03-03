@@ -202,6 +202,28 @@ impl BexExternalAdt {
 }
 
 impl BexExternalValue {
+    /// Construct an enum variant value.
+    pub fn variant(enum_name: impl Into<String>, variant_name: impl Into<String>) -> Self {
+        BexExternalValue::Variant {
+            enum_name: enum_name.into(),
+            variant_name: variant_name.into(),
+        }
+    }
+
+    /// Construct a class instance value.
+    pub fn instance(
+        class_name: impl Into<String>,
+        fields: IndexMap<&str, BexExternalValue>,
+    ) -> Self {
+        BexExternalValue::Instance {
+            class_name: class_name.into(),
+            fields: fields
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        }
+    }
+
     /// Get the type name for error messages.
     pub fn type_name(&self) -> &'static str {
         match self {

@@ -23,7 +23,7 @@ async fn return_literal_int() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(42));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
 
 #[tokio::test]
@@ -43,7 +43,7 @@ async fn return_literal_bool() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Bool(true));
+    assert_eq!(output.result, Ok(BexExternalValue::Bool(true)));
 }
 
 #[tokio::test]
@@ -63,7 +63,10 @@ async fn return_literal_string() {
         }
     "#);
 
-    assert_eq!(output.result, BexExternalValue::String("hello".to_string()));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("hello".to_string()))
+    );
 }
 
 #[tokio::test]
@@ -92,7 +95,7 @@ async fn return_function_call() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(1));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
 #[tokio::test]
@@ -124,7 +127,7 @@ async fn call_function_assign_to_variable() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(3));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
 #[tokio::test]
@@ -150,7 +153,7 @@ async fn mutable_variables() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(5));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(5)));
 }
 
 #[tokio::test]
@@ -182,7 +185,7 @@ async fn call_with_arguments() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(1));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
 #[tokio::test]
@@ -215,7 +218,10 @@ async fn unused_variable_does_not_affect_result() {
         }
     "#);
 
-    assert_eq!(output.result, BexExternalValue::String("Hello".to_string()));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("Hello".to_string()))
+    );
 }
 
 #[tokio::test]
@@ -251,7 +257,7 @@ async fn early_return() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(1));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
 #[tokio::test]
@@ -327,7 +333,7 @@ async fn early_return_from_nested_scopes() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(0));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(0)));
 }
 
 #[tokio::test]
@@ -386,7 +392,7 @@ async fn recursion() {
         }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(2));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
 #[tokio::test]
@@ -409,38 +415,38 @@ async fn function_as_value() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r"
-        function add(a: int, b: int) -> int {
-            load_var a
-            load_var b
-            bin_op +
-            return
-        }
+    function add(a: int, b: int) -> int {
+        load_var a
+        load_var b
+        bin_op +
+        return
+    }
 
-        function call_twice(f: (int, int) -> int, x: int, y: int) -> int {
-            load_var x
-            load_var y
-            load_var f
-            call_indirect
-            store_var _4
-            load_var x
-            load_var y
-            load_var f
-            call_indirect
-            store_var _8
-            load_var _4
-            load_var _8
-            bin_op +
-            return
-        }
+    function call_twice(f: (int, int) -> int, x: int, y: int) -> int {
+        load_var x
+        load_var y
+        load_var f
+        call_indirect
+        store_var _4
+        load_var x
+        load_var y
+        load_var f
+        call_indirect
+        store_var _8
+        load_var _4
+        load_var _8
+        bin_op +
+        return
+    }
 
-        function main() -> int {
-            load_global <fn add>
-            load_const 20
-            load_const 1
-            call call_twice
-            return
-        }
+    function main() -> int {
+        load_global add
+        load_const 20
+        load_const 1
+        call call_twice
+        return
+    }
     ");
 
-    assert_eq!(output.result, BexExternalValue::Int(42));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }

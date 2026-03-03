@@ -341,7 +341,7 @@ function ExhaustiveBool(b: bool) -> string {
 
 function ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
     load_var x
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
@@ -386,14 +386,14 @@ function ExhaustiveCustomBool(b: true | false) -> string {
 
 function ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
     load_var dm
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var dm
-    load_const <class Failure>
+    load_const Failure
     cmp_op instanceof
     pop_jump_if_false L1
     jump L2
@@ -588,7 +588,7 @@ function ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
 
 function ExhaustiveNullableEnum(s: Status?) -> string {
     load_var s
-    load_const 0 /* Status.Active */
+    load_const Status.Active
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L0
@@ -596,7 +596,7 @@ function ExhaustiveNullableEnum(s: Status?) -> string {
 
   L0:
     load_var s
-    load_const 1 /* Status.Inactive */
+    load_const Status.Inactive
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L1
@@ -604,7 +604,7 @@ function ExhaustiveNullableEnum(s: Status?) -> string {
 
   L1:
     load_var s
-    load_const 2 /* Status.Pending */
+    load_const Status.Pending
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L2
@@ -753,14 +753,14 @@ function ExhaustiveTrueType(t: true) -> string {
 
 function ExhaustiveTypeAlias(r: Success | Failure) -> string {
     load_var r
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var r
-    load_const <class Failure>
+    load_const Failure
     cmp_op instanceof
     pop_jump_if_false L2
     load_var r
@@ -777,7 +777,7 @@ function ExhaustiveTypeAlias(r: Success | Failure) -> string {
 
 function ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     load_var r
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
@@ -851,7 +851,7 @@ function ExhaustiveWithUnderscore(x: int) -> int {
 }
 
 function GetStatus() -> Status {
-    load_const 0 /* Status.Active */
+    load_const Status.Active
     alloc_variant Status
     return
 }
@@ -1544,14 +1544,14 @@ function NestedMatchSpans(x: int, y: bool) -> string {
 
 function NestedTypeAlias(mr: Success | Failure?) -> string {
     load_var mr
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var mr
-    load_const <class Failure>
+    load_const Failure
     cmp_op instanceof
     pop_jump_if_false L1
     jump L2
@@ -1586,7 +1586,7 @@ function NestedTypeBindings(r: Success | Failure) -> int {
 
   L0:
     load_var r
-    load_const <class Failure>
+    load_const Failure
     cmp_op instanceof
     pop_jump_if_false L2
     load_const 1
@@ -1659,7 +1659,7 @@ function NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
 
 function NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
     load_var x
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     load_var x
@@ -1682,14 +1682,14 @@ function NonExhaustiveCustomBoolMissing(b: true | false) -> string {
 
 function NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
     load_var dm
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var dm
-    load_const <class Failure>
+    load_const Failure
     cmp_op instanceof
     pop_jump_if_false L2
     load_var dm
@@ -1758,14 +1758,14 @@ function NonExhaustiveEnumMissingOne(s: Status) -> string {
 
 function NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
     load_var r
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
   L0:
     load_var r
-    load_const <class Failure>
+    load_const Failure
     cmp_op instanceof
     pop_jump_if_false L2
     load_var r
@@ -1881,7 +1881,7 @@ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
 
 function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     load_var s
-    load_const 0 /* Status.Active */
+    load_const Status.Active
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L0
@@ -1889,7 +1889,7 @@ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
 
   L0:
     load_var s
-    load_const 1 /* Status.Inactive */
+    load_const Status.Inactive
     alloc_variant Status
     cmp_op ==
     pop_jump_if_false L1
@@ -1978,7 +1978,7 @@ function NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
 
 function NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
     load_var r
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     load_var r
@@ -2008,7 +2008,7 @@ function OptionalWithCatchAll(x: int?) -> string {
 
 function OverlappingTypedPatterns(r: Success | Failure) -> string {
     load_var r
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
@@ -2030,7 +2030,7 @@ function OverlappingTypedPatterns(r: Success | Failure) -> string {
 
 function OverlappingWithBindings(r: Success | Failure) -> string {
     load_var r
-    load_const <class Success>
+    load_const Success
     cmp_op instanceof
     pop_jump_if_false L0
     jump L1
@@ -2089,7 +2089,7 @@ function PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
 
   L0:
     load_var r
-    load_const <class Pending>
+    load_const Pending
     cmp_op instanceof
     pop_jump_if_false L2
     load_const "pending"
