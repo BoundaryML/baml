@@ -1,5 +1,5 @@
 ---
-source: crates/baml_tests/src/codegen.rs
+source: crates/baml_tests/tests/bytecode_format/main.rs
 ---
 function User.promote(self: User, bonus: int) -> Report {
     load_var self
