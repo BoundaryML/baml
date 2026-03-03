@@ -691,6 +691,7 @@ dependencies = [
  "baml_project",
  "baml_type",
  "baml_workspace",
+ "bex_engine",
  "bex_vm",
  "bex_vm_types",
  "codspeed-divan-compat",
@@ -701,6 +702,9 @@ dependencies = [
  "quote",
  "salsa",
  "syn 2.0.116",
+ "sys_native",
+ "sys_types",
+ "tokio",
  "walkdir",
 ]
 

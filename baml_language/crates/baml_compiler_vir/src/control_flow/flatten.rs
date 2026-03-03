@@ -183,7 +183,7 @@ fn hoist_branch_arms(graph: &ControlFlowGraph) -> ControlFlowGraph {
         .collect();
 
     // Process deepest first
-    groups.sort_by(|a, b| b.depth.cmp(&a.depth));
+    groups.sort_by_key(|g| std::cmp::Reverse(g.depth));
 
     for info in groups {
         // Move outgoing edges from branch group onto each arm

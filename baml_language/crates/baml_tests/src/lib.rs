@@ -8,7 +8,120 @@
 
 pub mod bytecode;
 pub mod codegen;
+pub mod engine;
 pub mod vm;
+
+/// Compile BAML source and run the entry function, returning bytecode display + result.
+///
+/// # Variants
+///
+/// Simple (source only, entry defaults to `"main"`, opt defaults to `OptLevel::One`):
+/// ```ignore
+/// baml_test!("source")
+/// ```
+///
+/// Struct-style with named fields (all fields except `baml` are optional):
+/// ```ignore
+/// baml_test! {
+///     baml: "source",
+///     entry: "func",
+///     args: { "x" => val },
+///     opt: OptLevel::Zero,
+/// }
+/// ```
+#[macro_export]
+macro_rules! baml_test {
+    // Simple: source only
+    ($source:expr) => {
+        $crate::engine::run_test(
+            $source,
+            "main",
+            indexmap::IndexMap::new(),
+            baml_compiler_emit::OptLevel::One,
+        )
+        .await
+    };
+    // baml only
+    (baml: $source:expr $(,)?) => {
+        $crate::engine::run_test(
+            $source,
+            "main",
+            indexmap::IndexMap::new(),
+            baml_compiler_emit::OptLevel::One,
+        )
+        .await
+    };
+    // baml + entry
+    (baml: $source:expr, entry: $entry:expr $(,)?) => {
+        $crate::engine::run_test(
+            $source,
+            $entry,
+            indexmap::IndexMap::new(),
+            baml_compiler_emit::OptLevel::One,
+        )
+        .await
+    };
+    // baml + args
+    (baml: $source:expr, args: { $($k:literal => $v:expr),* $(,)? } $(,)?) => {
+        $crate::engine::run_test(
+            $source,
+            "main",
+            indexmap::indexmap! { $( $k => $v ),* },
+            baml_compiler_emit::OptLevel::One,
+        )
+        .await
+    };
+    // baml + entry + args
+    (baml: $source:expr, entry: $entry:expr, args: { $($k:literal => $v:expr),* $(,)? } $(,)?) => {
+        $crate::engine::run_test(
+            $source,
+            $entry,
+            indexmap::indexmap! { $( $k => $v ),* },
+            baml_compiler_emit::OptLevel::One,
+        )
+        .await
+    };
+    // baml + opt
+    (baml: $source:expr, opt: $opt:expr $(,)?) => {
+        $crate::engine::run_test(
+            $source,
+            "main",
+            indexmap::IndexMap::new(),
+            $opt,
+        )
+        .await
+    };
+    // baml + entry + opt
+    (baml: $source:expr, entry: $entry:expr, opt: $opt:expr $(,)?) => {
+        $crate::engine::run_test(
+            $source,
+            $entry,
+            indexmap::IndexMap::new(),
+            $opt,
+        )
+        .await
+    };
+    // baml + args + opt
+    (baml: $source:expr, args: { $($k:literal => $v:expr),* $(,)? }, opt: $opt:expr $(,)?) => {
+        $crate::engine::run_test(
+            $source,
+            "main",
+            indexmap::indexmap! { $( $k => $v ),* },
+            $opt,
+        )
+        .await
+    };
+    // baml + entry + args + opt
+    (baml: $source:expr, entry: $entry:expr, args: { $($k:literal => $v:expr),* $(,)? }, opt: $opt:expr $(,)?) => {
+        $crate::engine::run_test(
+            $source,
+            $entry,
+            indexmap::indexmap! { $( $k => $v ),* },
+            $opt,
+        )
+        .await
+    };
+}
 
 #[cfg(test)]
 pub mod incremental;
