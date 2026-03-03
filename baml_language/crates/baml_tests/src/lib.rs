@@ -31,8 +31,8 @@ macro_rules! baml_test {
         $crate::engine::run_test(
             $source,
             "main",
-            indexmap::IndexMap::new(),
-            baml_compiler_emit::OptLevel::One,
+            $crate::engine::IndexMap::new(),
+            $crate::engine::OptLevel::One,
         )
         .await
     };
@@ -41,8 +41,8 @@ macro_rules! baml_test {
         $crate::engine::run_test(
             $source,
             "main",
-            indexmap::IndexMap::new(),
-            baml_compiler_emit::OptLevel::One,
+            $crate::engine::IndexMap::new(),
+            $crate::engine::OptLevel::One,
         )
         .await
     };
@@ -51,37 +51,41 @@ macro_rules! baml_test {
         $crate::engine::run_test(
             $source,
             $entry,
-            indexmap::IndexMap::new(),
-            baml_compiler_emit::OptLevel::One,
+            $crate::engine::IndexMap::new(),
+            $crate::engine::OptLevel::One,
         )
         .await
     };
     // baml + args
-    (baml: $source:expr, args: { $($k:literal => $v:expr),* $(,)? } $(,)?) => {
+    (baml: $source:expr, args: { $($k:literal => $v:expr),* $(,)? } $(,)?) => {{
+        let mut __args = $crate::engine::IndexMap::new();
+        $( __args.insert($k, $v); )*
         $crate::engine::run_test(
             $source,
             "main",
-            indexmap::indexmap! { $( $k => $v ),* },
-            baml_compiler_emit::OptLevel::One,
+            __args,
+            $crate::engine::OptLevel::One,
         )
         .await
-    };
+    }};
     // baml + entry + args
-    (baml: $source:expr, entry: $entry:expr, args: { $($k:literal => $v:expr),* $(,)? } $(,)?) => {
+    (baml: $source:expr, entry: $entry:expr, args: { $($k:literal => $v:expr),* $(,)? } $(,)?) => {{
+        let mut __args = $crate::engine::IndexMap::new();
+        $( __args.insert($k, $v); )*
         $crate::engine::run_test(
             $source,
             $entry,
-            indexmap::indexmap! { $( $k => $v ),* },
-            baml_compiler_emit::OptLevel::One,
+            __args,
+            $crate::engine::OptLevel::One,
         )
         .await
-    };
+    }};
     // baml + opt
     (baml: $source:expr, opt: $opt:expr $(,)?) => {
         $crate::engine::run_test(
             $source,
             "main",
-            indexmap::IndexMap::new(),
+            $crate::engine::IndexMap::new(),
             $opt,
         )
         .await
@@ -91,31 +95,35 @@ macro_rules! baml_test {
         $crate::engine::run_test(
             $source,
             $entry,
-            indexmap::IndexMap::new(),
+            $crate::engine::IndexMap::new(),
             $opt,
         )
         .await
     };
     // baml + args + opt
-    (baml: $source:expr, args: { $($k:literal => $v:expr),* $(,)? }, opt: $opt:expr $(,)?) => {
+    (baml: $source:expr, args: { $($k:literal => $v:expr),* $(,)? }, opt: $opt:expr $(,)?) => {{
+        let mut __args = $crate::engine::IndexMap::new();
+        $( __args.insert($k, $v); )*
         $crate::engine::run_test(
             $source,
             "main",
-            indexmap::indexmap! { $( $k => $v ),* },
+            __args,
             $opt,
         )
         .await
-    };
+    }};
     // baml + entry + args + opt
-    (baml: $source:expr, entry: $entry:expr, args: { $($k:literal => $v:expr),* $(,)? }, opt: $opt:expr $(,)?) => {
+    (baml: $source:expr, entry: $entry:expr, args: { $($k:literal => $v:expr),* $(,)? }, opt: $opt:expr $(,)?) => {{
+        let mut __args = $crate::engine::IndexMap::new();
+        $( __args.insert($k, $v); )*
         $crate::engine::run_test(
             $source,
             $entry,
-            indexmap::indexmap! { $( $k => $v ),* },
+            __args,
             $opt,
         )
         .await
-    };
+    }};
 }
 
 #[cfg(test)]

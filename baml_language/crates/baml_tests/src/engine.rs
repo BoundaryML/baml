@@ -22,11 +22,12 @@
 
 use std::{path::Path, sync::Arc};
 
+pub use baml_compiler_emit::OptLevel;
 use baml_project::ProjectDatabase;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, Object, Program};
-use indexmap::IndexMap;
+pub use indexmap::IndexMap;
 use sys_native::SysOpsExt;
 
 /// Set up a test database from BAML source code.
@@ -106,10 +107,6 @@ fn resolve_args(
     entry: &str,
     args: IndexMap<&str, BexExternalValue>,
 ) -> Vec<BexExternalValue> {
-    if args.is_empty() {
-        return Vec::new();
-    }
-
     let function_idx = program
         .function_index(entry)
         .unwrap_or_else(|| panic!("function '{entry}' not found in program"));
@@ -121,6 +118,20 @@ fn resolve_args(
             other.map(std::mem::discriminant)
         ),
     };
+
+    for provided in args.keys() {
+        if !function.param_names.iter().any(|p| p == provided) {
+            panic!("unexpected argument '{provided}' for function '{entry}'");
+        }
+    }
+
+    if args.len() != function.param_names.len() {
+        panic!(
+            "argument count mismatch for function '{entry}': expected {}, got {}",
+            function.param_names.len(),
+            args.len()
+        );
+    }
 
     function
         .param_names
