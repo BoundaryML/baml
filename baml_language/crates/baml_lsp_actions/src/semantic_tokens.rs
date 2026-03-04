@@ -72,7 +72,10 @@ impl SemanticTokenType {
     /// Get the index of the token type in the legend.
     #[allow(clippy::cast_possible_truncation)]
     pub fn legend_index(self) -> u32 {
-        TOKEN_TYPES.iter().position(|t| *t == self).unwrap_or(0) as u32
+        TOKEN_TYPES
+            .iter()
+            .position(|t| *t == self)
+            .expect("SemanticTokenType missing in legend") as u32 // This should never happen if you made the legend correctly
     }
 
     /// Get the string representation of the token type.
