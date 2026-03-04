@@ -79,7 +79,7 @@ impl BexHeap {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum AccessError {
     #[error("Invalid handle: expected {expected}")]
     InvalidHandle { expected: &'static str },

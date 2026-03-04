@@ -1858,9 +1858,9 @@ type TriviaAliasBlock = int
 
 type TriviaLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
 
-type DoubleOptional = int?
+type DoubleOptional = int??
 
-type ComplexPostfix = (int | string)[]
+type ComplexPostfix = (int | string)?[][]
 
 type NestedMap = map<string, map<string, int[]>>
 
@@ -1886,7 +1886,7 @@ type DeepGeneric = map<string, map<string, map<string, map<string, int | string 
 
 type Name = string
 
-type OptionalArray = int[]
+type OptionalArray = int?[]
 
 type ConstrainedLong = map<string, int | string | bool>
 
@@ -1898,7 +1898,7 @@ type ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit = int | string
 
 type VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
 
-type DeepPostfix = (int | string | bool | float)[][]?
+type DeepPostfix = (int | string | bool | float)?[][]?
 
 type HttpOk = 200
 

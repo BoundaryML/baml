@@ -1,0 +1,328 @@
+---
+source: crates/baml_tests/tests/bytecode_format/main.rs
+---
+function User.promote(self: User, bonus: int) -> Report {
+    load_var self
+    load_var self
+    load_field .age
+    load_const 1
+    bin_op +
+    store_field .age
+    load_var self
+    load_var bonus
+    call score
+    store_var base
+    alloc_instance Report
+    copy 0
+    load_var base
+    load_field .score
+    load_var bonus
+    bin_op +
+    store_field .score
+    copy 0
+    load_var base
+    load_field .label
+    store_field .label
+    copy 0
+    load_var base
+    load_field .breakdown
+    store_field .breakdown
+    return
+}
+
+function http_status(code: int) -> string {
+    load_var code
+    copy 0
+    load_const 400
+    cmp_op ==
+    pop_jump_if_false L0
+    pop 1
+    jump L8
+
+  L0:
+    copy 0
+    load_const 400
+    cmp_op <
+    pop_jump_if_false L3
+    copy 0
+    load_const 201
+    cmp_op ==
+    pop_jump_if_false L1
+    pop 1
+    jump L10
+
+  L1:
+    copy 0
+    load_const 201
+    cmp_op <
+    pop_jump_if_false L2
+    copy 0
+    load_const 200
+    cmp_op ==
+    pop_jump_if_false L2
+    pop 1
+    jump L11
+
+  L2:
+    copy 0
+    load_const 204
+    cmp_op ==
+    pop_jump_if_false L3
+    pop 1
+    jump L9
+
+  L3:
+    copy 0
+    load_const 404
+    cmp_op ==
+    pop_jump_if_false L4
+    pop 1
+    jump L7
+
+  L4:
+    copy 0
+    load_const 500
+    cmp_op ==
+    pop_jump_if_false L5
+    pop 1
+    jump L6
+
+  L5:
+    pop 1
+    load_const "Unknown"
+    store_var label
+    jump L12
+
+  L6:
+    load_const "Internal Server Error"
+    store_var label
+    jump L12
+
+  L7:
+    load_const "Not Found"
+    store_var label
+    jump L12
+
+  L8:
+    load_const "Bad Request"
+    store_var label
+    jump L12
+
+  L9:
+    load_const "No Content"
+    store_var label
+    jump L12
+
+  L10:
+    load_const "Created"
+    store_var label
+    jump L12
+
+  L11:
+    load_const "OK"
+    store_var label
+
+  L12:
+    load_const "HTTP "
+    load_var label
+    bin_op +
+    return
+}
+
+function score(input: User | ErrorInfo, threshold: int) -> Report {
+    load_var input
+    load_const User
+    cmp_op instanceof
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_var input
+    load_const ErrorInfo
+    cmp_op instanceof
+    pop_jump_if_false L2
+    load_var input
+    load_field .message
+    store_var name
+    jump L2
+
+  L1:
+    load_var input
+    load_field .name
+    store_var name
+
+  L2:
+    load_var input
+    load_const User
+    cmp_op instanceof
+    pop_jump_if_false L3
+    jump L4
+
+  L3:
+    load_var input
+    load_const ErrorInfo
+    cmp_op instanceof
+    pop_jump_if_false L5
+    load_var input
+    load_field .code
+    unary_op -
+    store_var age
+    jump L5
+
+  L4:
+    load_var input
+    load_field .age
+    store_var age
+
+  L5:
+    load_var input
+    load_const User
+    cmp_op instanceof
+    pop_jump_if_false L6
+    jump L7
+
+  L6:
+    load_var input
+    load_const ErrorInfo
+    cmp_op instanceof
+    pop_jump_if_false L12
+    load_const 0
+    store_var role_score
+    jump L12
+
+  L7:
+    load_var input
+    load_field .role
+    discriminant
+    jump_table [L11, L10, L9, L8], default L24
+
+  L8: Role.Guest
+    load_const 1
+    store_var role_score
+    jump L12
+
+  L9: Role.Viewer
+    load_const 2
+    store_var role_score
+    jump L12
+
+  L10: Role.Editor
+    load_const 5
+    store_var role_score
+    jump L12
+
+  L11: Role.Admin
+    load_const 10
+    store_var role_score
+
+  L12:
+    load_var age
+    load_const 2
+    bin_op *
+    load_const 10
+    bin_op +
+    store_var base
+    load_var base
+    load_const 100
+    cmp_op >
+    pop_jump_if_false L13
+    jump L16
+
+  L13:
+    load_var base
+    load_const 0
+    cmp_op <
+    pop_jump_if_false L14
+    jump L15
+
+  L14:
+    load_var base
+    store_var capped
+    jump L17
+
+  L15:
+    load_const 0
+    store_var capped
+    jump L17
+
+  L16:
+    load_const 100
+    store_var capped
+
+  L17:
+    load_var capped
+    load_const 2
+    bin_op %
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L18
+    jump L19
+
+  L18:
+    load_const 0
+    store_var bonus
+    jump L20
+
+  L19:
+    load_const 5
+    store_var bonus
+
+  L20:
+    load_var capped
+    load_var role_score
+    bin_op *
+    load_var bonus
+    bin_op +
+    store_var total
+    load_var total
+    load_var threshold
+    cmp_op >
+    store_var _50
+    load_var _50
+    load_const true
+    cmp_op ==
+    pop_jump_if_false L21
+    jump L22
+
+  L21:
+    load_const " [LOW]"
+    store_var suffix
+    jump L23
+
+  L22:
+    load_const " [HIGH]"
+    store_var suffix
+
+  L23:
+    load_var base
+    load_var capped
+    load_var total
+    alloc_array 3
+    store_var scores
+    load_var scores
+    load_const 0
+    load_var total
+    store_array_element
+    alloc_instance Report
+    copy 0
+    load_var scores
+    load_const 0
+    load_array_element
+    store_field .score
+    copy 0
+    load_var name
+    load_var suffix
+    bin_op +
+    store_field .label
+    copy 0
+    load_var base
+    load_var role_score
+    load_const "base"
+    load_const "role"
+    alloc_map 2
+    store_field .breakdown
+    return
+
+  L24:
+    unreachable
+}

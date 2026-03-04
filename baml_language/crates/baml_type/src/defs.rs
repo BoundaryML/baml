@@ -3,7 +3,7 @@
 //! These types represent classes, enums, functions, and type aliases as they
 //! appear in the compiled schema.
 
-use baml_base::Name;
+use baml_base::{Name, TyAttr};
 
 use crate::{FieldAttr, Ty};
 
@@ -24,6 +24,7 @@ pub struct ClassDef {
     pub is_dynamic: bool,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub ty_attr: TyAttr,
 }
 
 /// A field within a class.
@@ -44,6 +45,7 @@ pub struct EnumDef {
     pub variants: Vec<EnumVariantDef>,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub ty_attr: TyAttr,
 }
 
 /// A variant within an enum.

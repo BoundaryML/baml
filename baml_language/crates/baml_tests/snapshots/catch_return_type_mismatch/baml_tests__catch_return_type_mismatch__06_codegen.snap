@@ -14,7 +14,7 @@ function caller() -> bool {
 
   L0:
     load_var _1
-    load_const 0 /* Errors.AuthenticationError */
+    load_const Errors.AuthenticationError
     alloc_variant Errors
     cmp_op ==
     pop_jump_if_false L1

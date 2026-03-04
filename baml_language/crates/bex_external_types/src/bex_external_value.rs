@@ -202,6 +202,61 @@ impl BexExternalAdt {
 }
 
 impl BexExternalValue {
+    /// Construct a union value (`A | B | ...`) with metadata.
+    ///
+    /// ```ignore
+    /// BexExternalValue::union(BexExternalValue::Int(42), [Ty::int(), Ty::string()], Ty::int())
+    /// ```
+    pub fn union(
+        value: BexExternalValue,
+        members: impl IntoIterator<Item = Ty>,
+        selected: Ty,
+    ) -> Self {
+        let union_type = Ty::Union(members.into_iter().collect(), TyAttr::default());
+        BexExternalValue::Union {
+            value: Box::new(value),
+            metadata: UnionMetadata::new(union_type, selected),
+        }
+    }
+
+    /// Construct an optional value (`T?`) with metadata.
+    ///
+    /// Selected type is auto-detected: `inner` when non-null, `Ty::null()` when null.
+    pub fn optional(value: BexExternalValue, inner: Ty) -> Self {
+        let selected = if matches!(value, BexExternalValue::Null) {
+            Ty::null()
+        } else {
+            inner.clone()
+        };
+        let optional_type = Ty::Optional(Box::new(inner), TyAttr::default());
+        BexExternalValue::Union {
+            value: Box::new(value),
+            metadata: UnionMetadata::new(optional_type, selected),
+        }
+    }
+
+    /// Construct an enum variant value.
+    pub fn variant(enum_name: impl Into<String>, variant_name: impl Into<String>) -> Self {
+        BexExternalValue::Variant {
+            enum_name: enum_name.into(),
+            variant_name: variant_name.into(),
+        }
+    }
+
+    /// Construct a class instance value.
+    pub fn instance(
+        class_name: impl Into<String>,
+        fields: IndexMap<&str, BexExternalValue>,
+    ) -> Self {
+        BexExternalValue::Instance {
+            class_name: class_name.into(),
+            fields: fields
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        }
+    }
+
     /// Get the type name for error messages.
     pub fn type_name(&self) -> &'static str {
         match self {

@@ -417,6 +417,9 @@ pub struct Class {
     /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
     /// Assigned during codegen as `CLASS_BASE + class_index`.
     pub type_tag: i64,
+
+    /// Class-level type attribute (e.g., from @@stream.done).
+    pub ty_attr: baml_type::TyAttr,
 }
 
 impl std::fmt::Display for Class {
@@ -464,6 +467,9 @@ pub struct Enum {
 
     /// Enum-level serialization alias.
     pub alias: Option<String>,
+
+    /// Enum-level type attribute.
+    pub ty_attr: baml_type::TyAttr,
 }
 
 impl std::fmt::Display for Enum {

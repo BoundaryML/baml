@@ -121,6 +121,7 @@ ast_node!(DynamicTypeDef, DYNAMIC_TYPE_DEF);
 #[derive(Debug, Clone)]
 pub struct UnionMemberParts {
     /// Tokens in this union member (WORD, `L_BRACKET`, `R_BRACKET`, QUESTION, etc.).
+    /// Trivia tokens should not be included.
     pub tokens: Vec<SyntaxToken>,
     /// Child nodes in this union member (`STRING_LITERAL`, `TYPE_EXPR`, `TYPE_ARGS`, etc.).
     pub child_nodes: Vec<SyntaxNode>,
@@ -156,36 +157,16 @@ impl UnionMemberParts {
         extract_dotted_name(self.tokens.iter())
     }
 
-    /// Check if this member has a trailing `?` (optional modifier).
-    pub fn is_optional(&self) -> bool {
-        self.tokens
-            .last()
-            .is_some_and(|t| t.kind() == SyntaxKind::QUESTION)
-    }
-
-    /// Count the number of `[]` array modifiers at the end.
-    pub fn array_depth(&self) -> usize {
-        let mut depth = 0;
-        let mut i = self.tokens.len();
-
-        // Skip trailing ? if present
-        if i > 0 && self.tokens[i - 1].kind() == SyntaxKind::QUESTION {
-            i -= 1;
-        }
-
-        // Count [] pairs from the end
-        while i >= 2 {
-            if self.tokens[i - 1].kind() == SyntaxKind::R_BRACKET
-                && self.tokens[i - 2].kind() == SyntaxKind::L_BRACKET
-            {
-                depth += 1;
-                i -= 2;
-            } else {
-                break;
-            }
-        }
-
-        depth
+    /// Get the postfix modifiers (`[]` and `?`) in application order (innermost first).
+    ///
+    /// Works like `TypeExpr::postfix_modifiers()` but operates on the token list
+    /// of a union member instead of directly on CST children.
+    ///
+    /// For `Union???` returns `[Optional, Optional, Optional]`.
+    /// For `Union[]??` returns `[Array, Optional, Optional]`.
+    /// For `Union?[]?` returns `[Optional, Array, Optional]`.
+    pub fn postfix_modifiers(&self) -> Vec<TypePostFixModifier> {
+        collect_postfix_modifiers(self.tokens.iter().map(SyntaxToken::kind))
     }
 
     /// Check if this member contains a `STRING_LITERAL` child node.
@@ -261,6 +242,32 @@ impl Default for UnionMemberParts {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypePostFixModifier {
+    Optional,
+    Array,
+}
+
+/// Shared helper: scan a stream of `SyntaxKind`s and collect postfix modifiers
+/// (`?` → Optional, `[]` → Array) in application order (innermost first).
+/// Assumes that trivia tokens are not included.
+fn collect_postfix_modifiers(kinds: impl Iterator<Item = SyntaxKind>) -> Vec<TypePostFixModifier> {
+    let mut mods = Vec::new();
+    let mut last = None;
+    for kind in kinds {
+        match kind {
+            SyntaxKind::QUESTION => mods.push(TypePostFixModifier::Optional),
+            SyntaxKind::R_BRACKET if last == Some(SyntaxKind::L_BRACKET) => {
+                mods.push(TypePostFixModifier::Array);
+            }
+            _ => (),
+        }
+        last = Some(kind);
+    }
+
+    mods
+}
+
 impl TypeExpr {
     /// Check if this is a union type (contains top-level PIPE separators).
     ///
@@ -324,6 +331,30 @@ impl TypeExpr {
         }
 
         depth
+    }
+
+    /// Get the postfix modifiers (`[]` and `?`) in application order (innermost first).
+    ///
+    /// For `int` returns `[]`.
+    /// For `int[]` returns `[Array]`.
+    /// For `int[]?` returns `[Array, Optional]`.
+    /// For `int[][]` returns `[Array, Array]`.
+    /// For `int[][]?` returns `[Array, Array, Optional]`.
+    /// For `int?[]` returns `[Optional, Array]`.
+    pub fn postfix_modifiers(&self) -> Vec<TypePostFixModifier> {
+        // if it's a union without parens, the postfix modifiers we'd find
+        // are actually the modifiers on the final union member
+        if self.is_union() {
+            return Vec::new();
+        }
+
+        collect_postfix_modifiers(
+            self.syntax
+                .children_with_tokens()
+                .filter_map(rowan::NodeOrToken::into_token)
+                .filter(|t| !t.kind().is_trivia())
+                .map(|t| t.kind()),
+        )
     }
 
     /// Check if this type is wrapped in parentheses (e.g., `(int | string)`).

@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use baml_base::{FileId, Name, SourceFile, Span};
+use baml_base::{FileId, Name, SourceFile, Span, TyAttr};
 use baml_compiler_diagnostics::{HirDiagnostic, NameError};
 use baml_compiler_parser::syntax_tree;
 use baml_compiler_syntax::SyntaxNode;
@@ -2188,6 +2188,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
         is_dynamic: class_is_dynamic,
         alias: class_alias,
         description: class_description,
+        ty_attr: TyAttr::default(),
     })
 }
 
@@ -2422,6 +2423,7 @@ pub(crate) fn lower_enum(node: &SyntaxNode, ctx: &mut LoweringContext) -> Option
         name,
         variants,
         alias: enum_alias,
+        ty_attr: TyAttr::default(),
     })
 }
 

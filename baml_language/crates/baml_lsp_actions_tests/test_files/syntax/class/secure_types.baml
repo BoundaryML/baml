@@ -118,6 +118,51 @@ class ComplexTypes {
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯
+// Error: Unknown type `apple`
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── Unknown type `apple`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `banana`
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── Unknown type `banana`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `cherry`
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── Unknown type `cherry`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `date_fruit`
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── Unknown type `date_fruit`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `eggplant_vegetable`
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── Unknown type `eggplant_vegetable`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
 // Error: Unknown type `char`
 //     ╭─[ class_secure_types.baml:12:4 ]
 //     │
@@ -169,6 +214,51 @@ class ComplexTypes {
 //  14 │   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 //     │    ────────────────────────┬────────────────────────  
 //     │                            ╰────────────────────────── Unknown type `char`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `tuple_1`
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── Unknown type `tuple_1`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `tuple_2`
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── Unknown type `tuple_2`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `tuple_3`
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── Unknown type `tuple_3`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `tuple_4`
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── Unknown type `tuple_4`
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: Unknown type `tuple_5`
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── Unknown type `tuple_5`
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯

@@ -13,13 +13,13 @@ use std::{
 // instead of baml_base directly.
 pub use baml_base::{Literal, MediaKind, Name, Span};
 
+mod attr;
 mod convert;
 mod defs;
-mod sap;
 pub mod typetag;
+pub use attr::*;
 pub use convert::{convert_tir_ty, fqn_to_type_name, sanitize_for_runtime};
 pub use defs::*;
-pub use sap::*;
 
 /// A lightweight name type for class/enum/type-alias references.
 ///
@@ -221,6 +221,65 @@ impl Ty {
             | Ty::TypeAlias(_, attr)
             | Ty::WatchAccessor(_, attr) => attr,
         }
+    }
+
+    // --- Primitive constructors (default TyAttr) ---
+
+    /// `int` with default attributes.
+    pub fn int() -> Self {
+        Ty::Int {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `float` with default attributes.
+    pub fn float() -> Self {
+        Ty::Float {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `string` with default attributes.
+    pub fn string() -> Self {
+        Ty::String {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `bool` with default attributes.
+    pub fn bool() -> Self {
+        Ty::Bool {
+            attr: TyAttr::default(),
+        }
+    }
+
+    /// `null` with default attributes.
+    pub fn null() -> Self {
+        Ty::Null {
+            attr: TyAttr::default(),
+        }
+    }
+
+    // --- Compound constructors (default TyAttr) ---
+
+    /// `T?` (optional) with default attributes.
+    pub fn optional(inner: Ty) -> Self {
+        Ty::Optional(Box::new(inner), TyAttr::default())
+    }
+
+    /// `T[]` (list) with default attributes.
+    pub fn list(inner: Ty) -> Self {
+        Ty::List(Box::new(inner), TyAttr::default())
+    }
+
+    /// `A | B | ...` (union) with default attributes.
+    pub fn union(members: impl IntoIterator<Item = Ty>) -> Self {
+        Ty::Union(members.into_iter().collect(), TyAttr::default())
+    }
+
+    /// `Class(name)` with default attributes (local module path).
+    pub fn class(name: &str) -> Self {
+        Ty::Class(TypeName::local(name.into()), TyAttr::default())
     }
 
     // --- Opaque type constructors ---

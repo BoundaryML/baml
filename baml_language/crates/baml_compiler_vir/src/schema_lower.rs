@@ -136,6 +136,7 @@ fn lower_class(
         is_dynamic: attr_to_bool(&class.is_dynamic),
         description: attr_to_option(&class.description),
         alias: attr_to_option(&class.alias),
+        ty_attr: class.ty_attr.clone(),
     }
 }
 
@@ -156,6 +157,7 @@ fn lower_enum(enum_def: &baml_compiler_hir::Enum) -> VirEnum {
         variants,
         description: None, // HIR Enum has no @@description
         alias: attr_to_option(&enum_def.alias),
+        ty_attr: enum_def.ty_attr.clone(),
     }
 }
 

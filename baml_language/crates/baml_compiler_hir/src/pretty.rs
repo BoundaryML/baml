@@ -486,12 +486,14 @@ pub fn type_ref_to_str(ty: &TypeRef) -> String {
     type_ref_to_str_impl(ty, false)
 }
 
-/// Formats a `TypeRef` as code, optionally wrapping unions in parentheses.
+/// Formats a `TypeRef` as code, optionally wrapping compound types in parentheses.
 ///
-/// The `wrap_union` parameter controls whether union types should be wrapped
-/// in parentheses. This is needed when a union appears inside an `Optional`
-/// or `List` type to ensure correct parsing (e.g., `(int | string)?` vs `int | string?`).
-fn type_ref_to_str_impl(ty: &TypeRef, wrap_union: bool) -> String {
+/// The `wrap` parameter controls whether compound types (unions and functions)
+/// should be wrapped in parentheses. This is needed when they appear inside
+/// `Optional` or `List` to ensure correct parsing:
+/// - `(int | string)?` vs `int | string?`
+/// - `((int) -> string)?` vs `(int) -> string?`
+fn type_ref_to_str_impl(ty: &TypeRef, wrap: bool) -> String {
     match ty {
         TypeRef::Path(path) => path
             .segments
@@ -520,11 +522,7 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap_union: bool) -> String {
                 .map(|t| type_ref_to_str_impl(t, false))
                 .collect::<Vec<_>>()
                 .join(" | ");
-            if wrap_union {
-                format!("({inner})")
-            } else {
-                inner
-            }
+            if wrap { format!("({inner})") } else { inner }
         }
         TypeRef::StringLiteral(s) => format!("\"{s}\""),
         TypeRef::IntLiteral(n) => n.to_string(),
@@ -552,7 +550,8 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap_union: bool) -> String {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("({}) -> {}", params_str, type_ref_to_str_impl(ret, false))
+            let inner = format!("({}) -> {}", params_str, type_ref_to_str_impl(ret, false));
+            if wrap { format!("({inner})") } else { inner }
         }
         TypeRef::Error => "<error>".to_string(),
         TypeRef::Unknown => "<unknown>".to_string(),

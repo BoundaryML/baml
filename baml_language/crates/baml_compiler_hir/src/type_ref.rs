@@ -4,6 +4,7 @@
 //! `TypeRef` -> Ty happens during THIR construction.
 
 use baml_base::Name;
+use baml_compiler_syntax::TypePostFixModifier;
 use rowan::ast::AstNode;
 
 use crate::path::Path;
@@ -136,75 +137,22 @@ impl TypeRef {
 
     /// Create a `TypeRef` from an AST `TypeExpr` node.
     ///
-    /// This uses structured CST accessors to properly handle complex types including:
-    /// - Primitives: int, string, bool, etc.
-    /// - Named types: User, `MyClass`
-    /// - Optional types: string?
-    /// - List types: string[]
-    /// - Union types: Success | Failure
-    /// - String literal types: "user" | "assistant"
-    /// - Parenthesized types: (int | string)[]
-    /// - Generic types: map<K, V>
+    /// Delegates to `from_ast_base` for the base type, then applies any
+    /// top-level postfix modifiers (`[]`, `?`).
     pub fn from_ast(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
-        // Handle optional modifier (outermost)
-        // For `int[]?`, optional wraps the array
-        if type_expr.is_optional() {
-            let inner = Self::from_ast_without_optional(type_expr);
-            return TypeRef::Optional(Box::new(inner));
-        }
-
-        Self::from_ast_without_optional(type_expr)
+        let base = Self::from_ast_base(type_expr);
+        Self::apply_modifiers(base, &type_expr.postfix_modifiers())
     }
 
-    /// Parse a `TypeExpr` assuming the optional modifier has been handled.
-    fn from_ast_without_optional(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
-        // Handle union FIRST (top-level PIPE)
-        // For `int[] | string[]`, this is a union of arrays, not an array of unions
-        // Note: `(int | string)[]` has PIPE inside parens, so is_union() returns false
+    /// Parse the base type (no optional, no array).
+    fn from_ast_base(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+        // Handle top-level unions like `int[] | string?`
         if type_expr.is_union() {
-            // Parse each union member using structured token/node accessors
             let member_parts = type_expr.union_member_parts();
             let members: Vec<TypeRef> = member_parts.iter().map(Self::from_union_member).collect();
             return TypeRef::Union(members);
         }
 
-        // Handle array modifier
-        // For `(int | string)[]`, array wraps the parenthesized union
-        if type_expr.is_array() {
-            let element = Self::from_ast_array_element(type_expr);
-            return TypeRef::List(Box::new(element));
-        }
-
-        Self::from_ast_base(type_expr)
-    }
-
-    /// Get the element type for an array `TypeExpr`.
-    ///
-    /// Uses token-based `array_depth()` to handle nested arrays without string manipulation.
-    fn from_ast_array_element(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
-        // For parenthesized arrays like `(int | string)[]`, the element is the inner TypeExpr
-        if let Some(inner) = type_expr.inner_type_expr() {
-            return Self::from_ast(&inner);
-        }
-
-        // For non-parenthesized arrays like `int[]`, `string[][]`, `"user"[]`:
-        // Use array_depth() to count nesting levels and from_ast_base_type() for the base.
-        //
-        // For `int[][]`: depth=2, base=Int -> element is List(Int) i.e. `int[]`
-        // For `int[]`: depth=1, base=Int -> element is Int
-        let depth = type_expr.array_depth();
-        let base = Self::from_ast_base_type(type_expr);
-
-        // Wrap base type in (depth-1) List layers to get the element type
-        let mut result = base;
-        for _ in 0..depth.saturating_sub(1) {
-            result = TypeRef::List(Box::new(result));
-        }
-        result
-    }
-
-    /// Parse the base type (no optional, array, or union modifiers).
-    fn from_ast_base(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
         // Handle function types like `(x: int, y: int) -> bool`
         if type_expr.is_function_type() {
             let params = type_expr
@@ -302,7 +250,7 @@ impl TypeRef {
         if let Some(type_expr) = parts.type_expr() {
             let inner = Self::from_ast(&type_expr);
             // Apply array and optional modifiers from tokens
-            return Self::apply_modifiers_from_parts(inner, parts);
+            return Self::apply_modifiers(inner, &parts.postfix_modifiers());
         }
 
         // Check for FUNCTION_TYPE_PARAM child (new parser structure for parenthesized types)
@@ -316,7 +264,7 @@ impl TypeRef {
                 if let Some(type_expr) = baml_compiler_syntax::ast::TypeExpr::cast(inner_type_expr)
                 {
                     let inner = Self::from_ast(&type_expr);
-                    return Self::apply_modifiers_from_parts(inner, parts);
+                    return Self::apply_modifiers(inner, &parts.postfix_modifiers());
                 }
             }
         }
@@ -324,13 +272,13 @@ impl TypeRef {
         // Check for string literal (e.g., `"user"` in `"user" | "admin"`)
         if let Some(s) = parts.string_literal() {
             let base = TypeRef::StringLiteral(s);
-            return Self::apply_modifiers_from_parts(base, parts);
+            return Self::apply_modifiers(base, &parts.postfix_modifiers());
         }
 
         // Check for integer literal (e.g., `200` in `200 | 201`)
         if let Some(i) = parts.integer_literal() {
             let base = TypeRef::IntLiteral(i);
-            return Self::apply_modifiers_from_parts(base, parts);
+            return Self::apply_modifiers(base, &parts.postfix_modifiers());
         }
 
         // Check for named/primitive type or map type (e.g., `int`, `User`, `map<K,V>`, `baml.http.Request`)
@@ -351,7 +299,7 @@ impl TypeRef {
                             key: Box::new(key),
                             value: Box::new(value),
                         };
-                        return Self::apply_modifiers_from_parts(base, parts);
+                        return Self::apply_modifiers(base, &parts.postfix_modifiers());
                     }
                 }
             }
@@ -362,31 +310,25 @@ impl TypeRef {
                 "false" => TypeRef::BoolLiteral(false),
                 _ => Self::from_type_name(&name),
             };
-            return Self::apply_modifiers_from_parts(base, parts);
+            return Self::apply_modifiers(base, &parts.postfix_modifiers());
         }
 
         TypeRef::Unknown
     }
 
-    /// Apply array and optional modifiers from `UnionMemberParts` to a base type.
-    fn apply_modifiers_from_parts(
-        base: Self,
-        parts: &baml_compiler_syntax::ast::UnionMemberParts,
-    ) -> Self {
-        let array_depth = parts.array_depth();
-        let is_optional = parts.is_optional();
-
-        // Wrap in array layers
+    /// Apply postfix modifiers (`[]` and `?`) to a base type, innermost first.
+    fn apply_modifiers(base: Self, modifiers: &[TypePostFixModifier]) -> Self {
         let mut result = base;
-        for _ in 0..array_depth {
-            result = TypeRef::List(Box::new(result));
+        for modifier in modifiers {
+            match modifier {
+                TypePostFixModifier::Optional => {
+                    result = TypeRef::Optional(Box::new(result));
+                }
+                TypePostFixModifier::Array => {
+                    result = TypeRef::List(Box::new(result));
+                }
+            }
         }
-
-        // Wrap in optional if needed
-        if is_optional {
-            result = TypeRef::Optional(Box::new(result));
-        }
-
         result
     }
 

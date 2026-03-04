@@ -479,6 +479,7 @@ mod tests {
             description: None,
             alias: None,
             type_tag: 100,
+            ty_attr: baml_type::TyAttr::default(),
         }));
 
         // Allocate an instance of that class
@@ -529,6 +530,7 @@ mod tests {
             ],
             description: None,
             alias: None,
+            ty_attr: baml_type::TyAttr::default(),
         }));
 
         // Allocate a variant (Color::Green = index 1)
