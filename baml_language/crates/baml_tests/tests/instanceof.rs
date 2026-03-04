@@ -1,9 +1,10 @@
 //! Tests that the `instanceof` operator produces a compile error
 //! suggesting `match` instead.
 
+use std::path::Path;
+
 use baml_compiler_diagnostics::Severity;
 use baml_project::ProjectDatabase;
-use std::path::Path;
 
 fn get_errors(source: &str) -> Vec<String> {
     let mut db = ProjectDatabase::new();
