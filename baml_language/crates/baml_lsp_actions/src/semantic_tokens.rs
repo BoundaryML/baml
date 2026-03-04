@@ -168,7 +168,7 @@ fn visit_node(
             visit_first_word_as(db, file, node, SemanticTokenType::Variable, out);
         }
         SyntaxKind::CLIENT_TYPE => visit_word_as(db, file, node, SemanticTokenType::Type, out),
-        SyntaxKind::CONFIG_ITEM => visit_word_as(db, file, node, SemanticTokenType::Property, out),
+        SyntaxKind::CONFIG_ITEM => visit_config_item(db, file, node, out),
         // Put these as struct so they're in theory different from classes
         SyntaxKind::CLIENT_DEF | SyntaxKind::GENERATOR_DEF | SyntaxKind::RETRY_POLICY_DEF => {
             visit_word_as(db, file, node, SemanticTokenType::Struct, out);
@@ -255,6 +255,26 @@ fn visit_first_word_as(
                     visit_token(&t, out);
                 }
             }
+        }
+    }
+}
+
+/// Visit a `CONFIG_ITEM` node, classifying the key as a property.
+fn visit_config_item(
+    db: &ProjectDatabase,
+    file: SourceFile,
+    node: &SyntaxNode,
+    out: &mut Vec<SemanticToken>,
+) {
+    for child in node.children_with_tokens() {
+        match child {
+            NodeOrToken::Node(n) => visit_node(db, file, &n, out),
+            NodeOrToken::Token(t) => match t.kind() {
+                // Handle keywords like `retry_policy` as properties.
+                ref k if k.is_keyword() => emit_token(&t, SemanticTokenType::Property, out),
+                SyntaxKind::WORD => emit_token(&t, SemanticTokenType::Property, out),
+                _ => visit_token(&t, out),
+            },
         }
     }
 }
