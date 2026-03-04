@@ -33,7 +33,7 @@ async fn mock(endpoints: &[MockEndpoint]) -> (MockServer, String) {
 
 /// Replace the mock server URI in bytecode with a stable placeholder.
 fn stabilize_bytecode(bytecode: &str, uri: &str) -> String {
-    bytecode.replace(uri, "<URI>")
+    bytecode.replace(uri, "{URI}")
 }
 
 #[tokio::test]
@@ -56,7 +56,7 @@ async fn http_fetch_and_text() {
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
-        load_const "<URI>/data"
+        load_const "{URI}/data"
         dispatch_future baml.http.fetch
         await
         dispatch_future baml.http.Response.text
@@ -90,7 +90,7 @@ async fn http_response_status() {
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> int {
-        load_const "<URI>/status"
+        load_const "{URI}/status"
         dispatch_future baml.http.fetch
         await
         load_field .status_code
@@ -120,7 +120,7 @@ async fn http_response_ok_true() {
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> bool {
-        load_const "<URI>/ok"
+        load_const "{URI}/ok"
         dispatch_future baml.http.fetch
         await
         dispatch_future baml.http.Response.ok
@@ -151,7 +151,7 @@ async fn http_response_ok_false() {
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> bool {
-        load_const "<URI>/notfound"
+        load_const "{URI}/notfound"
         dispatch_future baml.http.fetch
         await
         dispatch_future baml.http.Response.ok
@@ -183,7 +183,7 @@ async fn http_response_url() {
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
-        load_const "<URI>/endpoint"
+        load_const "{URI}/endpoint"
         dispatch_future baml.http.fetch
         await
         load_field .url
@@ -238,7 +238,7 @@ async fn http_response_text_consumed() {
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
     function main() -> string {
-        load_const "<URI>/once"
+        load_const "{URI}/once"
         dispatch_future baml.http.fetch
         await
         store_var response

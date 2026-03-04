@@ -6,7 +6,7 @@ use tokio::{io::AsyncWriteExt, net::TcpListener};
 
 /// Replace the dynamic address in bytecode with a stable placeholder.
 fn stabilize_bytecode(bytecode: &str, addr: &str) -> String {
-    bytecode.replace(addr, "<ADDR>")
+    bytecode.replace(addr, "{ADDR}")
 }
 
 #[tokio::test]
@@ -32,7 +32,7 @@ async fn net_connect_and_read() {
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
     function main() -> string {
-        load_const "<ADDR>"
+        load_const "{ADDR}"
         dispatch_future baml.net.connect
         await
         dispatch_future baml.net.Socket.read
@@ -99,7 +99,7 @@ async fn net_multiple_reads() {
 
     insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &addr), @r#"
     function main() -> string {
-        load_const "<ADDR>"
+        load_const "{ADDR}"
         dispatch_future baml.net.connect
         await
         store_var sock
