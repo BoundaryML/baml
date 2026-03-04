@@ -46,7 +46,7 @@ client<llm> RetryClient {
 // client.baml:13:11 (operator) len=1 ">"
 // client.baml:13:13 (struct) len=11 "RetryClient"
 // client.baml:14:3 (property) len=8 "provider"
-// client.baml:15:3 (keyword) len=12 "retry_policy"
+// client.baml:15:3 (property) len=12 "retry_policy"
 // client.baml:16:3 (property) len=7 "options"
 // client.baml:17:5 (property) len=5 "model"
 // client.baml:17:11 (string) len=1 "\""
