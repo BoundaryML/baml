@@ -89,12 +89,14 @@
     },
 
     "enum-variant": {
-      "match": "^\\s*([A-Za-z_][A-Za-z0-9_-]*)(?=\\s|$|@|//)",
-      "captures": {
+      "begin": "^\\s*([A-Za-z_][A-Za-z0-9_-]*)(?=\\s|$|@|//)",
+      "beginCaptures": {
         "1": { "name": "variable.other.enummember.baml" }
       },
+      "end": "$",
       "patterns": [
-        { "include": "#field-attribute" }
+        { "include": "#field-attribute" },
+        { "include": "#comments" }
       ]
     },
 
@@ -148,6 +150,13 @@
           "captures": {
             "1": { "name": "variable.other.baml" },
             "2": { "name": "punctuation.separator.colon.baml" }
+          }
+        },
+        {
+          "comment": "Untyped parameter: name after ( or , and before , or )",
+          "match": "(?<=[(,]\\s*)([A-Za-z_][A-Za-z0-9_-]*)(?=\\s*[,)])",
+          "captures": {
+            "1": { "name": "variable.other.baml" }
           }
         }
       ]
@@ -209,11 +218,13 @@
         { "include": "#numbers" },
         { "include": "#match-block" },
         { "include": "#catch-block" },
+        { "include": "#let-declaration" },
         { "include": "#keywords" },
         { "include": "#field-attribute" },
         { "include": "#namespace-path" },
         { "include": "#field-access" },
         { "include": "#object-field" },
+        { "include": "#namespaced-object-literal" },
         { "include": "#object-literal" },
         { "include": "#nested-block" },
         { "include": "#generic-function-call" },
@@ -374,12 +385,12 @@
     },
 
     "template-string": {
-      "begin": "\\b(template_string|string_template)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
+      "begin": "\\b(template_string)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "beginCaptures": {
         "1": { "name": "keyword.declaration.template.baml" },
         "2": { "name": "entity.name.function.baml" }
       },
-      "end": "(?<=\"(?:#{1,5}))",
+      "end": "(?<=\"#)|(?<=\"##)|(?<=\"###)|(?<=\"####)|(?<=\"#####)",
       "patterns": [
         { "include": "#comments" },
         {
@@ -437,6 +448,22 @@
         "1": { "name": "keyword.declaration.let.baml" },
         "2": { "name": "variable.other.baml" }
       }
+    },
+
+    "let-declaration": {
+      "comment": "Let statement with optional type: let name: Type = ...",
+      "begin": "\\b(let)\\s+([A-Za-z_][A-Za-z0-9_-]*)(?:\\s*(:))?",
+      "beginCaptures": {
+        "1": { "name": "keyword.declaration.let.baml" },
+        "2": { "name": "variable.other.baml" },
+        "3": { "name": "punctuation.separator.colon.baml" }
+      },
+      "end": "(?=\\s*=)|(?=\\s*\\bin\\b)|(?=;)|$",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#namespace-path" },
+        { "include": "#type-expression" }
+      ]
     },
 
     "field-definition": {
@@ -609,6 +636,7 @@
             { "match": ",", "name": "punctuation.separator.comma.baml" }
           ]
         },
+        { "include": "#namespaced-type" },
         {
           "comment": "User-defined generic type: MyType<T>",
           "begin": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(<)",
@@ -731,6 +759,44 @@
       "contentName": "source.baml-jinja"
     },
 
+    "namespaced-object-literal": {
+      "comment": "Namespaced constructor: ns.Type { field: value }",
+      "begin": "\\b([A-Za-z_][A-Za-z0-9_]*)(\\.)(?=(?:[A-Za-z_][A-Za-z0-9_]*\\.)*[A-Za-z_][A-Za-z0-9_]*\\s*\\{)",
+      "beginCaptures": {
+        "1": { "name": "entity.name.namespace.baml" },
+        "2": { "name": "punctuation.accessor.namespace.baml" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.block.end.baml" }
+      },
+      "patterns": [
+        {
+          "match": "(\\.)(?=[A-Za-z_])",
+          "name": "punctuation.accessor.namespace.baml"
+        },
+        {
+          "comment": "Intermediate namespace segment",
+          "match": "[A-Za-z_][A-Za-z0-9_]*(?=\\.)",
+          "name": "entity.name.namespace.baml"
+        },
+        {
+          "comment": "Type name followed by opening brace",
+          "begin": "([A-Za-z_][A-Za-z0-9_]*)\\s*(\\{)",
+          "beginCaptures": {
+            "1": { "name": "entity.name.type.baml" },
+            "2": { "name": "punctuation.definition.block.begin.baml" }
+          },
+          "end": "(?=\\})",
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#object-field" },
+            { "include": "#expression-body" }
+          ]
+        }
+      ]
+    },
+
     "object-literal": {
       "comment": "Constructor: TypeName { field: value }",
       "begin": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(\\{)",
@@ -779,6 +845,49 @@
       ]
     },
 
+    "namespaced-type": {
+      "comment": "Namespaced type reference: ns.Type, a.b.Type, ns.Type<T>",
+      "begin": "\\b([A-Za-z_][A-Za-z0-9_]*)(\\.)(?=[A-Za-z_])",
+      "beginCaptures": {
+        "1": { "name": "entity.name.namespace.baml" },
+        "2": { "name": "punctuation.accessor.namespace.baml" }
+      },
+      "end": "(?<=[A-Za-z0-9_>])(?!\\.|<)",
+      "patterns": [
+        {
+          "match": "\\.",
+          "name": "punctuation.accessor.namespace.baml"
+        },
+        {
+          "comment": "Intermediate namespace segment (followed by dot)",
+          "match": "[A-Za-z_][A-Za-z0-9_]*(?=\\.)",
+          "name": "entity.name.namespace.baml"
+        },
+        {
+          "comment": "Generic type: ns.Type<T>",
+          "begin": "([A-Za-z_][A-Za-z0-9_]*)\\s*(<)",
+          "beginCaptures": {
+            "1": { "name": "entity.name.type.baml" },
+            "2": { "name": "punctuation.definition.typeparameters.begin.baml" }
+          },
+          "end": ">",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.typeparameters.end.baml" }
+          },
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#type-expression" },
+            { "match": ",", "name": "punctuation.separator.comma.baml" }
+          ]
+        },
+        {
+          "comment": "Final type name",
+          "match": "[A-Za-z_][A-Za-z0-9_]*",
+          "name": "entity.name.type.baml"
+        }
+      ]
+    },
+
     "namespace-path": {
       "comment": "Dotted paths starting with env., baml., or root. are namespace accesses",
       "begin": "\\b(env|baml|root)(?=\\.)",
@@ -819,21 +928,16 @@
           "name": "entity.name.function.baml"
         },
         {
-          "comment": "Final segment: type (starts with uppercase)",
+          "comment": "Final segment: type",
           "match": "[A-Za-z_][A-Za-z0-9_]*",
           "name": "entity.name.type.baml"
-        },
-        {
-          "comment": "Final segment: variable/property",
-          "match": "[A-Za-z_][A-Za-z0-9_-]*",
-          "name": "variable.other.baml"
         }
       ]
     },
 
     "generic-function-call": {
       "comment": "Generic function call: name<Type>()",
-      "begin": "\\b([A-Za-z_][A-Za-z0-9_-]*)\\s*(<)(?![-=])",
+      "begin": "\\b([A-Za-z_][A-Za-z0-9_-]*)(<)(?![-=])",
       "beginCaptures": {
         "1": { "name": "entity.name.function.baml" },
         "2": { "name": "punctuation.definition.typeparameters.begin.baml" }
