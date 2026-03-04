@@ -2371,12 +2371,9 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
         }
 
         Expr::Binary { lhs, op, rhs } => {
-            // Special case: instanceof operator - RHS is a type reference, not an expression
             if *op == baml_compiler_hir::BinaryOp::Instanceof {
-                let _lhs_ty = infer_expr(ctx, *lhs, body);
-                // For instanceof, don't try to resolve RHS as a variable.
-                // The RHS is a type name and will be resolved at runtime.
-                // Just return bool since instanceof always returns a boolean.
+                ctx.push_error(TypeError::InstanceofRemoved { location });
+                // Return bool to avoid cascading errors
                 Ty::Bool { attr: d() }
             } else {
                 let lhs_ty = infer_expr(ctx, *lhs, body);
@@ -2856,7 +2853,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
             // Condition: accept any type (truthiness check), not just bool
             infer_expr(ctx, *condition, body);
 
-            // Apply true-branch narrowing (instanceof + null checks + truthiness)
+            // Apply true-branch narrowing (null checks + truthiness)
             let true_narrowings = extract_condition_narrowing(ctx, *condition, body, true);
             let then_ty = if !true_narrowings.is_empty() {
                 ctx.push_scope();
@@ -3196,7 +3193,7 @@ fn check_expr_with_info_location(
             // Condition: accept any type (truthiness check), not just bool
             infer_expr(ctx, *condition, body);
 
-            // Apply true-branch narrowing (instanceof + null checks + truthiness)
+            // Apply true-branch narrowing (null checks + truthiness)
             let true_narrowings = extract_condition_narrowing(ctx, *condition, body, true);
             let then_ty = if !true_narrowings.is_empty() {
                 ctx.push_scope();
@@ -4395,8 +4392,7 @@ fn infer_binary_op(
     location: ErrorLocation,
 ) -> Ty {
     use baml_compiler_hir::BinaryOp::{
-        Add, And, BitAnd, BitOr, BitXor, Div, Eq, Ge, Gt, Instanceof, Le, Lt, Mod, Mul, Ne, Or,
-        Shl, Shr, Sub,
+        Add, And, BitAnd, BitOr, BitXor, Div, Eq, Ge, Gt, Le, Lt, Mod, Mul, Ne, Or, Shl, Shr, Sub,
     };
 
     use crate::types::LiteralValue;
@@ -4531,8 +4527,10 @@ fn infer_binary_op(
             }
         }
 
-        // Type checking operations
-        Instanceof => Ty::Bool { attr: d() },
+        // deprecated instanceof is rejected before reaching infer_binary_op
+        baml_compiler_hir::BinaryOp::Instanceof => {
+            unreachable!("instanceof rejected by type checker")
+        }
     }
 }
 

@@ -511,6 +511,12 @@ impl<C: ErrorContext> TypeError<C> {
                 format!("Type `{type_name}` is not allowed in catch bindings"),
             )
             .with_primary_span(loc_fn(location)),
+
+            TypeError::InstanceofRemoved { location } => Diagnostic::error(
+                DiagnosticId::InstanceofRemoved,
+                "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
+            )
+            .with_primary_span(loc_fn(location)),
         };
         diag.with_phase(DiagnosticPhase::Type)
     }

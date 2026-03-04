@@ -22,7 +22,7 @@ use baml_compiler_tir::{ResolvedValue, TypeResolutionContext};
 use baml_compiler_vir::{
     AssignOp, BinaryOp, CatchClauseKind, Expr, ExprBody, ExprId, Literal, PatId, Pattern, UnaryOp,
 };
-use baml_type::{Ty, TyAttr, TypeName};
+use baml_type::{Ty, TyAttr};
 
 use crate::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue,
@@ -1765,29 +1765,6 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
         dest: Place,
         body: &ExprBody,
     ) {
-        // Special case: instanceof operator - RHS is a type name, not a value
-        if op == BinaryOp::Instanceof {
-            let lhs_operand = self.lower_to_operand(lhs, body);
-
-            // Extract the type name from RHS (should be a Var or single-segment Path)
-            let type_name = match body.expr(rhs) {
-                Expr::Var(name) => name.clone(),
-                Expr::Path(segments) if segments.len() == 1 => segments[0].clone(),
-                _ => panic!("instanceof RHS must be a simple type name"),
-            };
-
-            // Constructed from the type name in the instanceof expression, not transformed
-            // from an existing typed value, so default attr is correct.
-            self.builder.assign(
-                dest,
-                Rvalue::IsType {
-                    operand: lhs_operand,
-                    ty: Ty::TypeAlias(TypeName::local(type_name), baml_type::TyAttr::default()),
-                },
-            );
-            return;
-        }
-
         let lhs_operand = self.lower_to_operand(lhs, body);
         let rhs_operand = self.lower_to_operand(rhs, body);
 
@@ -1822,7 +1799,6 @@ impl<'a, 'ctx> LoweringContext<'a, 'ctx> {
             // These are handled separately as short-circuit
             BinaryOp::And => BinOp::BitAnd,
             BinaryOp::Or => BinOp::BitOr,
-            BinaryOp::Instanceof => BinOp::Instanceof,
         }
     }
 

@@ -813,7 +813,6 @@ fn render_expr_compact(body: &ExprBody, id: ExprId) -> String {
                 BinaryOp::BitXor => "^",
                 BinaryOp::Shl => "<<",
                 BinaryOp::Shr => ">>",
-                BinaryOp::Instanceof => "instanceof",
             };
             format!(
                 "{} {} {}",

@@ -4,7 +4,7 @@
 //! - **Divergence detection**: Determining whether a block/statement always exits
 //!   via `return`/`break`/`continue` (used to enable narrowing after early returns).
 //! - **Condition narrowing**: Extracting type narrowing implications from conditions
-//!   (`x == null`, `x instanceof Foo`, `x.type == "literal"`, `!cond`, truthiness).
+//!   (`x == null`, `x.type == "literal"`, `!cond`, truthiness).
 //! - **Early-return narrowing**: Applying the negation of an if-condition to code
 //!   after the if, when the if-body definitely diverges.
 
@@ -59,50 +59,6 @@ fn remove_null(ty: &Ty) -> Ty {
     }
 }
 
-/// Get the simple name of a named type (Class, Enum, or `TypeAlias`).
-fn named_type_name(ty: &Ty) -> Option<&Name> {
-    match ty {
-        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => Some(&qn.name),
-        _ => None,
-    }
-}
-
-/// Check if two types refer to the same named type, even if one is `TypeAlias`
-/// and the other is Class/Enum (since instanceof returns `TypeAlias`).
-fn same_named_type(a: &Ty, b: &Ty) -> bool {
-    if a == b {
-        return true;
-    }
-    match (named_type_name(a), named_type_name(b)) {
-        (Some(a_name), Some(b_name)) => a_name == b_name,
-        _ => false,
-    }
-}
-
-/// Remove a specific type from a union (for instanceof false-branch narrowing).
-fn remove_type_from(ty: &Ty, to_remove: &Ty) -> Ty {
-    match ty {
-        Ty::Union(members, union_attr) => {
-            let remaining: Vec<Ty> = members
-                .iter()
-                .filter(|m| !same_named_type(m, to_remove))
-                .cloned()
-                .collect();
-            match remaining.len() {
-                0 => Ty::Unknown {
-                    attr: union_attr.clone(),
-                },
-                1 => remaining.into_iter().next().unwrap(),
-                _ => Ty::Union(remaining, union_attr.clone()),
-            }
-        }
-        Ty::Optional(inner, opt_attr) if same_named_type(inner.as_ref(), to_remove) => Ty::Null {
-            attr: opt_attr.clone(),
-        },
-        _ => ty.clone(),
-    }
-}
-
 /// Look up a field on a single union member type without emitting errors.
 /// Returns `Some(field_type)` if the member has that field, None otherwise.
 pub(crate) fn infer_union_member_field(
@@ -124,46 +80,6 @@ pub(crate) fn infer_union_member_field(
 }
 
 // ── Narrowing extraction ────────────────────────────────────────────────
-
-/// Extract instanceof narrowing info from a condition expression.
-///
-/// If the condition is `x instanceof Foo`, returns `Some((x, Foo_type))`.
-/// Otherwise returns `None`.
-fn extract_instanceof_narrowing(
-    _ctx: &TypeContext<'_>,
-    condition: ExprId,
-    body: &ExprBody,
-) -> Option<(Name, Ty)> {
-    use baml_compiler_hir::Expr;
-
-    let expr = &body.exprs[condition];
-
-    // Check if this is an instanceof expression
-    if let Expr::Binary { op, lhs, rhs } = expr {
-        if *op == baml_compiler_hir::BinaryOp::Instanceof {
-            // LHS should be a simple path (variable name)
-            if let Expr::Path(segments) = &body.exprs[*lhs] {
-                if segments.len() == 1 {
-                    let var_name = segments[0].clone();
-
-                    // RHS should be a simple path (type name)
-                    if let Expr::Path(type_segments) = &body.exprs[*rhs] {
-                        if type_segments.len() == 1 {
-                            use baml_compiler_hir::QualifiedName;
-                            let type_name = type_segments[0].clone();
-                            return Some((
-                                var_name,
-                                Ty::TypeAlias(QualifiedName::local(type_name), TyAttr::default()),
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
 
 /// Check if a binary comparison involves null on one side and a variable on the other.
 /// Returns (`variable_name`, `variable_type`) if matched.
@@ -309,7 +225,6 @@ fn extract_discriminated_union_narrowing(
 /// Supports:
 /// - `x == null` / `x != null` → null narrowing
 /// - `x.field == "literal"` → discriminated union narrowing
-/// - `x instanceof Foo` → instanceof narrowing
 /// - `!cond` → flips the branch
 /// - Simple variable truthiness (`if (x)` where x is nullable)
 pub(crate) fn extract_condition_narrowing(
@@ -365,29 +280,6 @@ pub(crate) fn extract_condition_narrowing(
                 } else {
                     extract_discriminated_union_narrowing(ctx, *lhs, *rhs, body, !when_true)
                         .unwrap_or_default()
-                }
-            }
-
-            // `x instanceof Foo`
-            BinaryOp::Instanceof => {
-                if when_true {
-                    extract_instanceof_narrowing(ctx, condition, body)
-                        .into_iter()
-                        .collect()
-                } else {
-                    // When false: remove Foo from x's type
-                    if let Some((var_name, instanceof_ty)) =
-                        extract_instanceof_narrowing(ctx, condition, body)
-                    {
-                        if let Some(var_ty) = ctx.lookup(&var_name) {
-                            let narrowed = remove_type_from(var_ty, &instanceof_ty);
-                            vec![(var_name, narrowed)]
-                        } else {
-                            vec![]
-                        }
-                    } else {
-                        vec![]
-                    }
                 }
             }
 

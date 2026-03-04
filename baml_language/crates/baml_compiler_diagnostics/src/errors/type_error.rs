@@ -258,4 +258,7 @@ pub enum TypeError<C: ErrorContext> {
         unused_types: Vec<String>,
         location: C::Location,
     },
+
+    /// `instanceof` operator is no longer supported; use `match` instead.
+    InstanceofRemoved { location: C::Location },
 }
