@@ -2497,7 +2497,7 @@ fn infer_expr(ctx: &mut TypeContext<'_>, expr_id: ExprId, body: &ExprBody) -> Ty
                             })
                             .collect();
 
-                        // Phase 3: Re-check arguments with expected types (bidirectional checking)
+                        // Re-check arguments with expected types (bidirectional checking)
                         // This allows empty maps/arrays to pick up their expected types
                         let arg_types_with_spans: Vec<(Ty, Option<ErrorLocation>)> = args
                             .iter()
@@ -3504,24 +3504,24 @@ fn lower_throws_to_facts(
 
     let mut facts = BTreeSet::new();
     match type_ref {
-        TypeRef::Int => {
+        TypeRef::Int { .. } => {
             facts.insert("int".into());
         }
-        TypeRef::Float => {
+        TypeRef::Float { .. } => {
             facts.insert("float".into());
         }
-        TypeRef::String => {
+        TypeRef::String { .. } => {
             facts.insert("string".into());
         }
-        TypeRef::Bool => {
+        TypeRef::Bool { .. } => {
             facts.insert("bool".into());
         }
-        TypeRef::Null => {
+        TypeRef::Null { .. } => {
             facts.insert("null".into());
         }
-        TypeRef::Never => {}
+        TypeRef::Never { .. } => {}
 
-        TypeRef::Path(path) => match path.segments.len() {
+        TypeRef::Path(path, _) => match path.segments.len() {
             1 => {
                 let name = &path.segments[0];
                 if enum_names.contains_key(name) {
@@ -3559,7 +3559,7 @@ fn lower_throws_to_facts(
             }
         },
 
-        TypeRef::Union(members) => {
+        TypeRef::Union(members, _) => {
             for m in members {
                 facts.extend(lower_throws_to_facts(
                     m,
@@ -3570,7 +3570,7 @@ fn lower_throws_to_facts(
             }
         }
 
-        TypeRef::Optional(inner) => {
+        TypeRef::Optional(inner, _) => {
             facts.insert("null".into());
             facts.extend(lower_throws_to_facts(
                 inner,
@@ -3580,16 +3580,16 @@ fn lower_throws_to_facts(
             ));
         }
 
-        TypeRef::StringLiteral(_) => {
+        TypeRef::StringLiteral(..) => {
             facts.insert("string".into());
         }
-        TypeRef::IntLiteral(_) => {
+        TypeRef::IntLiteral(..) => {
             facts.insert("int".into());
         }
-        TypeRef::FloatLiteral(_) => {
+        TypeRef::FloatLiteral(..) => {
             facts.insert("float".into());
         }
-        TypeRef::BoolLiteral(_) => {
+        TypeRef::BoolLiteral(..) => {
             facts.insert("bool".into());
         }
 
@@ -4229,8 +4229,8 @@ fn validate_catch_binding_type(
     if let Pattern::TypedBinding { ty, .. } = pattern {
         use baml_compiler_hir::TypeRef;
         let banned_name = match ty {
-            TypeRef::BuiltinUnknown => Some("unknown"),
-            TypeRef::Path(path)
+            TypeRef::BuiltinUnknown { .. } => Some("unknown"),
+            TypeRef::Path(path, _)
                 if path.is_simple()
                     && path.first_segment().map(baml_base::Name::as_str) == Some("any") =>
             {

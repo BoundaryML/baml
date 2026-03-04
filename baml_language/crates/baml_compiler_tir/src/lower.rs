@@ -87,22 +87,20 @@ impl<'a> TypeLoweringContextResolved<'a> {
         self.type_alias_names.contains(name)
     }
 
-    fn unknown_type_error(&mut self, name: &Name) -> Ty {
+    fn unknown_type_error(&mut self, name: &Name, attr: TyAttr) -> Ty {
         self.errors.push(TypeError::UnknownType {
             name: name.to_string(),
             location: self.current_location(),
         });
-        Ty::Error {
-            attr: TyAttr::default(),
-        }
+        Ty::Error { attr }
     }
 
-    fn resolve_name(&self, name: &Name) -> Option<Ty> {
+    fn resolve_name(&self, name: &Name, attr: &TyAttr) -> Option<Ty> {
         if let Some(qn) = self.class_names.get(name) {
-            return Some(Ty::Class(qn.clone(), TyAttr::default()));
+            return Some(Ty::Class(qn.clone(), attr.clone()));
         }
         if let Some(qn) = self.enum_names.get(name) {
-            return Some(Ty::Enum(qn.clone(), TyAttr::default()));
+            return Some(Ty::Enum(qn.clone(), attr.clone()));
         }
         None
     }
@@ -115,44 +113,34 @@ fn lower_type_ref_resolved_with_ctx(
 ) -> Ty {
     match type_ref {
         // Primitives
-        TypeRef::Int => Ty::Int {
-            attr: TyAttr::default(),
-        },
-        TypeRef::Float => Ty::Float {
-            attr: TyAttr::default(),
-        },
-        TypeRef::String => Ty::String {
-            attr: TyAttr::default(),
-        },
-        TypeRef::Bool => Ty::Bool {
-            attr: TyAttr::default(),
-        },
-        TypeRef::Null => Ty::Null {
-            attr: TyAttr::default(),
-        },
+        TypeRef::Int { attr } => Ty::Int { attr: attr.clone() },
+        TypeRef::Float { attr } => Ty::Float { attr: attr.clone() },
+        TypeRef::String { attr } => Ty::String { attr: attr.clone() },
+        TypeRef::Bool { attr } => Ty::Bool { attr: attr.clone() },
+        TypeRef::Null { attr } => Ty::Null { attr: attr.clone() },
 
         // Media types
-        TypeRef::Media(kind) => Ty::Media(*kind, TyAttr::default()),
+        TypeRef::Media(kind, attr) => Ty::Media(*kind, attr.clone()),
 
         // Named type via path
-        TypeRef::Path(path) => lower_path_type_resolved_with_ctx(ctx, path),
+        TypeRef::Path(path, attr) => lower_path_type_resolved_with_ctx(ctx, path, attr.clone()),
 
         // Type constructors - track path for error location
-        TypeRef::Optional(inner) => {
+        TypeRef::Optional(inner, attr) => {
             ctx.current_path.push(0); // Optional inner is at index 0
             let inner_ty = lower_type_ref_resolved_with_ctx(ctx, inner);
             ctx.current_path.pop();
-            Ty::Optional(Box::new(inner_ty), TyAttr::default())
+            Ty::Optional(Box::new(inner_ty), attr.clone())
         }
 
-        TypeRef::List(inner) => {
+        TypeRef::List(inner, attr) => {
             ctx.current_path.push(0); // List element is at index 0
             let inner_ty = lower_type_ref_resolved_with_ctx(ctx, inner);
             ctx.current_path.pop();
-            Ty::List(Box::new(inner_ty), TyAttr::default())
+            Ty::List(Box::new(inner_ty), attr.clone())
         }
 
-        TypeRef::Map { key, value } => {
+        TypeRef::Map { key, value, attr } => {
             ctx.current_path.push(0); // Map key is at index 0
             let key_ty = lower_type_ref_resolved_with_ctx(ctx, key);
             ctx.current_path.pop();
@@ -164,11 +152,11 @@ fn lower_type_ref_resolved_with_ctx(
             Ty::Map {
                 key: Box::new(key_ty),
                 value: Box::new(value_ty),
-                attr: TyAttr::default(),
+                attr: attr.clone(),
             }
         }
 
-        TypeRef::Union(types) => {
+        TypeRef::Union(types, attr) => {
             let tys: Vec<Ty> = types
                 .iter()
                 .enumerate()
@@ -179,18 +167,18 @@ fn lower_type_ref_resolved_with_ctx(
                     ty
                 })
                 .collect();
-            normalize_union(tys)
+            normalize_union(tys, attr.clone())
         }
 
-        TypeRef::StringLiteral(s) => {
-            Ty::Literal(LiteralValue::String(s.clone()), TyAttr::default())
+        TypeRef::StringLiteral(s, attr) => {
+            Ty::Literal(LiteralValue::String(s.clone()), attr.clone())
         }
-        TypeRef::IntLiteral(i) => Ty::Literal(LiteralValue::Int(*i), TyAttr::default()),
-        TypeRef::FloatLiteral(f) => Ty::Literal(LiteralValue::Float(f.clone()), TyAttr::default()),
-        TypeRef::BoolLiteral(b) => Ty::Literal(LiteralValue::Bool(*b), TyAttr::default()),
+        TypeRef::IntLiteral(i, attr) => Ty::Literal(LiteralValue::Int(*i), attr.clone()),
+        TypeRef::FloatLiteral(f, attr) => Ty::Literal(LiteralValue::Float(f.clone()), attr.clone()),
+        TypeRef::BoolLiteral(b, attr) => Ty::Literal(LiteralValue::Bool(*b), attr.clone()),
 
         // Function types: (x: int, y: int) -> bool
-        TypeRef::Function { params, ret } => {
+        TypeRef::Function { params, ret, attr } => {
             let param_tys: Vec<(Option<Name>, Ty)> = params
                 .iter()
                 .enumerate()
@@ -207,40 +195,26 @@ fn lower_type_ref_resolved_with_ctx(
             Ty::Function {
                 params: param_tys,
                 ret: Box::new(ret_ty),
-                attr: TyAttr::default(),
+                attr: attr.clone(),
             }
         }
 
         // Generics - not yet supported
-        TypeRef::Generic { .. } => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
-        TypeRef::TypeParam(_) => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        TypeRef::Generic { attr, .. } => Ty::Unknown { attr: attr.clone() },
+        TypeRef::TypeParam(_, attr) => Ty::Unknown { attr: attr.clone() },
 
         // Error/Unknown
-        TypeRef::Error => Ty::Error {
-            attr: TyAttr::default(),
-        },
-        TypeRef::Unknown => Ty::Unknown {
-            attr: TyAttr::default(),
-        },
+        TypeRef::Error { attr } => Ty::Error { attr: attr.clone() },
+        TypeRef::Unknown { attr } => Ty::Unknown { attr: attr.clone() },
 
         // BuiltinUnknown - the `unknown` type keyword for builtin functions
-        TypeRef::BuiltinUnknown => Ty::BuiltinUnknown {
-            attr: TyAttr::default(),
-        },
+        TypeRef::BuiltinUnknown { attr } => Ty::BuiltinUnknown { attr: attr.clone() },
 
         // Never - the bottom type
-        TypeRef::Never => Ty::Never {
-            attr: TyAttr::default(),
-        },
+        TypeRef::Never { attr } => Ty::Never { attr: attr.clone() },
 
         // Type - the `type` keyword for the meta-type
-        TypeRef::Type => Ty::Type {
-            attr: TyAttr::default(),
-        },
+        TypeRef::Type { attr } => Ty::Type { attr: attr.clone() },
     }
 }
 
@@ -248,58 +222,44 @@ fn lower_type_ref_resolved_with_ctx(
 fn lower_path_type_resolved_with_ctx(
     ctx: &mut TypeLoweringContextResolved<'_>,
     path: &baml_compiler_hir::Path,
+    attr: TyAttr,
 ) -> Ty {
     match path.segments.len() {
         1 => {
             let name = &path.segments[0];
             match name.as_str() {
                 // Primitive type names
-                "int" => Ty::Int {
-                    attr: TyAttr::default(),
-                },
-                "float" => Ty::Float {
-                    attr: TyAttr::default(),
-                },
-                "string" => Ty::String {
-                    attr: TyAttr::default(),
-                },
-                "bool" => Ty::Bool {
-                    attr: TyAttr::default(),
-                },
-                "null" => Ty::Null {
-                    attr: TyAttr::default(),
-                },
-                "image" => Ty::Media(baml_base::MediaKind::Image, TyAttr::default()),
-                "audio" => Ty::Media(baml_base::MediaKind::Audio, TyAttr::default()),
-                "video" => Ty::Media(baml_base::MediaKind::Video, TyAttr::default()),
-                "pdf" => Ty::Media(baml_base::MediaKind::Pdf, TyAttr::default()),
+                "int" => Ty::Int { attr },
+                "float" => Ty::Float { attr },
+                "string" => Ty::String { attr },
+                "bool" => Ty::Bool { attr },
+                "null" => Ty::Null { attr },
+                "image" => Ty::Media(baml_base::MediaKind::Image, attr),
+                "audio" => Ty::Media(baml_base::MediaKind::Audio, attr),
+                "video" => Ty::Media(baml_base::MediaKind::Video, attr),
+                "pdf" => Ty::Media(baml_base::MediaKind::Pdf, attr),
                 // map with wrong arity - the arity error is already reported by HIR,
                 // so we don't report an unknown type error here
-                "map" => Ty::Error {
-                    attr: TyAttr::default(),
-                },
+                "map" => Ty::Error { attr },
                 // User-defined type - resolve to Class/Enum or validate
                 _ => {
                     use baml_compiler_hir::QualifiedName;
 
                     // Skip validation for complex type expressions
                     if !is_simple_type_name(name.as_str()) {
-                        return Ty::TypeAlias(
-                            QualifiedName::local(name.clone()),
-                            TyAttr::default(),
-                        );
+                        return Ty::TypeAlias(QualifiedName::local(name.clone()), attr);
                     }
 
                     // Try to resolve to Class/Enum
-                    if let Some(resolved) = ctx.resolve_name(name) {
+                    if let Some(resolved) = ctx.resolve_name(name, &attr) {
                         return resolved;
                     }
 
                     // Check if it's a type alias
                     if ctx.is_type_alias_name(name) {
-                        Ty::TypeAlias(QualifiedName::local(name.clone()), TyAttr::default())
+                        Ty::TypeAlias(QualifiedName::local(name.clone()), attr)
                     } else {
-                        ctx.unknown_type_error(name)
+                        ctx.unknown_type_error(name, attr)
                     }
                 }
             }
@@ -316,18 +276,18 @@ fn lower_path_type_resolved_with_ctx(
             let name = Name::new(&full_path);
 
             if !is_simple_type_name(&full_path) {
-                return Ty::TypeAlias(QualifiedName::local(name), TyAttr::default());
+                return Ty::TypeAlias(QualifiedName::local(name), attr);
             }
 
             // Resolve as class/enum (builtin types like "baml.http.Request" are in class_names)
-            if let Some(resolved) = ctx.resolve_name(&name) {
+            if let Some(resolved) = ctx.resolve_name(&name, &attr) {
                 return resolved;
             }
 
             if ctx.is_type_alias_name(&name) {
-                Ty::TypeAlias(QualifiedName::local(name), TyAttr::default())
+                Ty::TypeAlias(QualifiedName::local(name), attr)
             } else {
-                ctx.unknown_type_error(&name)
+                ctx.unknown_type_error(&name, attr)
             }
         }
     }
@@ -357,7 +317,7 @@ fn is_simple_type_name(name: &str) -> bool {
 /// Uses `TyAttr::default()` for the output union because this is only called during
 /// type lowering from `TypeRef` syntax nodes, which construct fresh types rather than
 /// transforming existing ones — there is no source `TyAttr` to preserve.
-fn normalize_union(types: Vec<Ty>) -> Ty {
+fn normalize_union(types: Vec<Ty>, attr: TyAttr) -> Ty {
     let mut normalized = Vec::new();
 
     for ty in types {
@@ -381,11 +341,9 @@ fn normalize_union(types: Vec<Ty>) -> Ty {
 
     // Simplify
     match normalized.len() {
-        0 => Ty::Unknown {
-            attr: TyAttr::default(),
-        }, // Empty union becomes Unknown (could be Never in a more complete type system)
+        0 => Ty::Unknown { attr }, // Empty union becomes Unknown (could be Never in a more complete type system)
         1 => normalized.pop().unwrap(),
-        _ => Ty::Union(normalized, TyAttr::default()),
+        _ => Ty::Union(normalized, attr),
     }
 }
 
@@ -399,23 +357,26 @@ mod tests {
 
     #[test]
     fn test_normalize_union_empty() {
-        let result = normalize_union(vec![]);
+        let result = normalize_union(vec![], d());
         assert_eq!(result, Ty::Unknown { attr: d() });
     }
 
     #[test]
     fn test_normalize_union_single() {
-        let result = normalize_union(vec![Ty::Int { attr: d() }]);
+        let result = normalize_union(vec![Ty::Int { attr: d() }], d());
         assert_eq!(result, Ty::Int { attr: d() });
     }
 
     #[test]
     fn test_normalize_union_removes_duplicates() {
-        let result = normalize_union(vec![
-            Ty::Int { attr: d() },
-            Ty::String { attr: d() },
-            Ty::Int { attr: d() },
-        ]);
+        let result = normalize_union(
+            vec![
+                Ty::Int { attr: d() },
+                Ty::String { attr: d() },
+                Ty::Int { attr: d() },
+            ],
+            d(),
+        );
         assert_eq!(
             result,
             Ty::Union(vec![Ty::Int { attr: d() }, Ty::String { attr: d() }], d())
@@ -425,7 +386,7 @@ mod tests {
     #[test]
     fn test_normalize_union_flattens() {
         let inner = Ty::Union(vec![Ty::Int { attr: d() }, Ty::Float { attr: d() }], d());
-        let result = normalize_union(vec![inner, Ty::String { attr: d() }]);
+        let result = normalize_union(vec![inner, Ty::String { attr: d() }], d());
         assert_eq!(
             result,
             Ty::Union(

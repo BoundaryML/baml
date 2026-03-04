@@ -6,7 +6,7 @@
 
 use std::ops::Index;
 
-use baml_base::{Name, TyAttr};
+use baml_base::{FieldAttr, Name, TyAttr};
 use indexmap::IndexMap;
 use rowan::TextRange;
 use rustc_hash::FxHashMap;
@@ -257,6 +257,8 @@ pub struct Field {
     pub description: Attribute<String>,
     /// @skip - exclude field from serialization
     pub skip: Attribute<()>,
+    /// Field attributes for streaming (e.g., from @sap.*)
+    pub field_attr: FieldAttr,
 }
 
 /// An enum definition.

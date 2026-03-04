@@ -58,7 +58,7 @@ impl FunctionSignature {
                     let type_ref = type_node
                         .as_ref()
                         .map(TypeRef::from_ast)
-                        .unwrap_or(TypeRef::Unknown);
+                        .unwrap_or_else(TypeRef::unknown);
 
                     // Store the spans in the source map
                     source_map.push_param_span(Some(param_node.syntax().text_range()));
@@ -77,7 +77,7 @@ impl FunctionSignature {
         let return_type = return_type_node
             .as_ref()
             .map(TypeRef::from_ast)
-            .unwrap_or(TypeRef::Unknown);
+            .unwrap_or_else(TypeRef::unknown);
 
         // Store return type span in source map
         if let Some(span) = return_type_node.map(|t| t.text_range()) {
@@ -141,7 +141,7 @@ impl TemplateStringSignature {
                     let type_ref = type_node
                         .as_ref()
                         .map(TypeRef::from_ast)
-                        .unwrap_or(TypeRef::Unknown);
+                        .unwrap_or_else(TypeRef::unknown);
 
                     // Store the spans in the source map
                     source_map.push_param_span(Some(param_node.syntax().text_range()));

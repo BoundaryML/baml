@@ -431,7 +431,7 @@ fn function_signature_with_source_map<'db>(
             Arc::new(FunctionSignature {
                 name: func_name,
                 params: vec![],
-                return_type: TypeRef::Path(path::Path::new(vec![
+                return_type: TypeRef::path(path::Path::new(vec![
                     Name::new("baml"),
                     Name::new("llm"),
                     Name::new("PrimitiveClient"),
@@ -448,7 +448,7 @@ fn function_signature_with_source_map<'db>(
             item_tree::CompilerGenerated::LlmCall { base_name } => (base_name.clone(), None),
             item_tree::CompilerGenerated::LlmRenderPrompt { base_name } => (
                 base_name.clone(),
-                Some(TypeRef::Path(path::Path::new(vec![
+                Some(TypeRef::path(path::Path::new(vec![
                     Name::new("baml"),
                     Name::new("llm"),
                     Name::new("PromptAst"),
@@ -456,7 +456,7 @@ fn function_signature_with_source_map<'db>(
             ),
             item_tree::CompilerGenerated::LlmBuildRequest { base_name } => (
                 base_name.clone(),
-                Some(TypeRef::Path(path::Path::new(vec![
+                Some(TypeRef::path(path::Path::new(vec![
                     Name::new("baml"),
                     Name::new("http"),
                     Name::new("Request"),
@@ -483,7 +483,7 @@ fn function_signature_with_source_map<'db>(
                 Arc::new(FunctionSignature {
                     name: base_name.clone(),
                     params: vec![],
-                    return_type: TypeRef::Unknown,
+                    return_type: TypeRef::unknown(),
                     throws: None,
                 }),
                 SignatureSourceMap::default(),
@@ -513,7 +513,7 @@ fn function_signature_with_source_map<'db>(
         Arc::new(FunctionSignature {
             name: func.name.clone(),
             params: vec![],
-            return_type: TypeRef::Unknown,
+            return_type: TypeRef::unknown(),
             throws: None,
         }),
         SignatureSourceMap::default(),
@@ -577,7 +577,7 @@ fn lower_method_signature(
                     type_node
                         .as_ref()
                         .map(TypeRef::from_ast)
-                        .unwrap_or(TypeRef::Unknown)
+                        .unwrap_or_else(TypeRef::unknown)
                 };
 
                 // Store the spans in the source map
@@ -597,7 +597,7 @@ fn lower_method_signature(
     let return_type = return_type_node
         .as_ref()
         .map(TypeRef::from_ast)
-        .unwrap_or(TypeRef::Unknown);
+        .unwrap_or_else(TypeRef::unknown);
 
     // Store return type span in source map
     if let Some(span) = return_type_node.map(|t| t.text_range()) {
@@ -2085,7 +2085,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
             let type_ref = field_node
                 .ty()
                 .map(|t| TypeRef::from_ast(&t))
-                .unwrap_or(TypeRef::Unknown);
+                .unwrap_or_else(TypeRef::unknown);
 
             fields.push(crate::Field {
                 name: field_name,
@@ -2093,6 +2093,7 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 alias: field_alias,
                 description: field_description,
                 skip: field_skip,
+                field_attr: baml_base::FieldAttr::default(),
             });
         }
     }
@@ -2541,7 +2542,7 @@ pub(crate) fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAlias> {
     let type_ref = alias
         .ty()
         .map(|t| TypeRef::from_ast(&t))
-        .unwrap_or(TypeRef::Unknown);
+        .unwrap_or_else(TypeRef::unknown);
 
     Some(TypeAlias { name, type_ref })
 }
@@ -3157,9 +3158,9 @@ fn check_duplicate(
 /// Extract the base type name from a `TypeRef`, unwrapping Optional, List, etc.
 fn get_base_type_name(type_ref: &TypeRef) -> Option<String> {
     match type_ref {
-        TypeRef::Path(path) => path.last_segment().map(std::string::ToString::to_string),
-        TypeRef::Optional(inner) => get_base_type_name(inner),
-        TypeRef::List(inner) => get_base_type_name(inner),
+        TypeRef::Path(path, _) => path.last_segment().map(std::string::ToString::to_string),
+        TypeRef::Optional(inner, _) => get_base_type_name(inner),
+        TypeRef::List(inner, _) => get_base_type_name(inner),
         TypeRef::Generic { base, .. } => get_base_type_name(base),
         _ => None,
     }

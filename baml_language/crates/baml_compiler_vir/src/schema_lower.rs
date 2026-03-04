@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_base::{FieldAttr, Name, Span};
+use baml_base::{Name, Span};
 use baml_compiler_hir::{
     self, Attribute, FunctionBody, ItemId, file_item_tree, file_items, function_body,
     function_signature,
@@ -125,7 +125,7 @@ fn lower_class(
                 description: attr_to_option(&field.description),
                 alias: attr_to_option(&field.alias),
                 skip: attr_to_bool(&field.skip),
-                field_attr: FieldAttr::default(),
+                field_attr: field.field_attr.clone(),
             }
         })
         .collect();

@@ -495,28 +495,28 @@ pub fn type_ref_to_str(ty: &TypeRef) -> String {
 /// - `((int) -> string)?` vs `(int) -> string?`
 fn type_ref_to_str_impl(ty: &TypeRef, wrap: bool) -> String {
     match ty {
-        TypeRef::Path(path) => path
+        TypeRef::Path(path, _) => path
             .segments
             .iter()
             .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join("."),
-        TypeRef::Int => "int".to_string(),
-        TypeRef::Float => "float".to_string(),
-        TypeRef::String => "string".to_string(),
-        TypeRef::Bool => "bool".to_string(),
-        TypeRef::Null => "null".to_string(),
-        TypeRef::Media(kind) => kind.to_string(),
-        TypeRef::Optional(inner) => format!("{}?", type_ref_to_str_impl(inner, true)),
-        TypeRef::List(inner) => format!("{}[]", type_ref_to_str_impl(inner, true)),
-        TypeRef::Map { key, value } => {
+        TypeRef::Int { .. } => "int".to_string(),
+        TypeRef::Float { .. } => "float".to_string(),
+        TypeRef::String { .. } => "string".to_string(),
+        TypeRef::Bool { .. } => "bool".to_string(),
+        TypeRef::Null { .. } => "null".to_string(),
+        TypeRef::Media(kind, _) => kind.to_string(),
+        TypeRef::Optional(inner, _) => format!("{}?", type_ref_to_str_impl(inner, true)),
+        TypeRef::List(inner, _) => format!("{}[]", type_ref_to_str_impl(inner, true)),
+        TypeRef::Map { key, value, .. } => {
             format!(
                 "map<{}, {}>",
                 type_ref_to_str_impl(key, false),
                 type_ref_to_str_impl(value, false)
             )
         }
-        TypeRef::Union(types) => {
+        TypeRef::Union(types, _) => {
             let inner = types
                 .iter()
                 .map(|t| type_ref_to_str_impl(t, false))
@@ -524,11 +524,11 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap: bool) -> String {
                 .join(" | ");
             if wrap { format!("({inner})") } else { inner }
         }
-        TypeRef::StringLiteral(s) => format!("\"{s}\""),
-        TypeRef::IntLiteral(n) => n.to_string(),
-        TypeRef::FloatLiteral(f) => f.clone(),
-        TypeRef::BoolLiteral(b) => b.to_string(),
-        TypeRef::Generic { base, args } => {
+        TypeRef::StringLiteral(s, _) => format!("\"{s}\""),
+        TypeRef::IntLiteral(n, _) => n.to_string(),
+        TypeRef::FloatLiteral(f, _) => f.clone(),
+        TypeRef::BoolLiteral(b, _) => b.to_string(),
+        TypeRef::Generic { base, args, .. } => {
             let args_str = args
                 .iter()
                 .map(|t| type_ref_to_str_impl(t, false))
@@ -536,8 +536,8 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap: bool) -> String {
                 .join(", ");
             format!("{}<{}>", type_ref_to_str_impl(base, false), args_str)
         }
-        TypeRef::TypeParam(name) => name.to_string(),
-        TypeRef::Function { params, ret } => {
+        TypeRef::TypeParam(name, _) => name.to_string(),
+        TypeRef::Function { params, ret, .. } => {
             let params_str = params
                 .iter()
                 .map(|p| {
@@ -553,10 +553,10 @@ fn type_ref_to_str_impl(ty: &TypeRef, wrap: bool) -> String {
             let inner = format!("({}) -> {}", params_str, type_ref_to_str_impl(ret, false));
             if wrap { format!("({inner})") } else { inner }
         }
-        TypeRef::Error => "<error>".to_string(),
-        TypeRef::Unknown => "<unknown>".to_string(),
-        TypeRef::BuiltinUnknown => "unknown".to_string(),
-        TypeRef::Never => "never".to_string(),
-        TypeRef::Type => "type".to_string(),
+        TypeRef::Error { .. } => "<error>".to_string(),
+        TypeRef::Unknown { .. } => "<unknown>".to_string(),
+        TypeRef::BuiltinUnknown { .. } => "unknown".to_string(),
+        TypeRef::Never { .. } => "never".to_string(),
+        TypeRef::Type { .. } => "type".to_string(),
     }
 }
