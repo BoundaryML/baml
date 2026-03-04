@@ -430,11 +430,12 @@
     },
 
     "config-block-field": {
-      "comment": "Config field with nested block: options { ... }, http { ... }",
-      "begin": "^\\s*([A-Za-z_][A-Za-z0-9_-]*)\\s*(\\{)",
+      "comment": "Config field with nested block: options { ... }, options: { ... }",
+      "begin": "^\\s*([A-Za-z_][A-Za-z0-9_-]*)(:?)\\s*(\\{)",
       "beginCaptures": {
         "1": { "name": "variable.other.property.baml" },
-        "2": { "name": "punctuation.definition.block.begin.baml" }
+        "2": { "name": "punctuation.separator.colon.baml" },
+        "3": { "name": "punctuation.definition.block.begin.baml" }
       },
       "end": "\\}",
       "endCaptures": {
@@ -465,9 +466,10 @@
     },
 
     "config-field": {
-      "begin": "^\\s*(?!(?:let|if|else|for|while|match|catch|return|break|continue|throw|watch|assert|function|class|enum|type|dynamic)\\b)([A-Za-z_][A-Za-z0-9_-]*)\\b(?!\\s*[({.])(?=\\s+\\S)",
+      "begin": "^\\s*(?!(?:let|if|else|for|while|match|catch|return|break|continue|throw|watch|assert|function|class|enum|dynamic)\\b)([A-Za-z_][A-Za-z0-9_-]*)(:?)(?!\\s*[({.])(?=\\s+\\S)",
       "beginCaptures": {
-        "1": { "name": "variable.other.property.baml" }
+        "1": { "name": "variable.other.property.baml" },
+        "2": { "name": "punctuation.separator.colon.baml" }
       },
       "end": "$",
       "patterns": [
@@ -744,7 +746,7 @@
           "name": "variable.language.self.baml"
         },
         {
-          "match": "\\b(if|else|for|while|match|catch)\\b",
+          "match": "\\b(if|else|for|while|match|catch|in)\\b",
           "name": "keyword.control.baml"
         },
         {
@@ -756,7 +758,7 @@
           "name": "keyword.control.flow.baml"
         },
         {
-          "match": "\\b(in|instanceof|assert)\\b",
+          "match": "\\b(instanceof|assert)\\b",
           "name": "keyword.operator.baml"
         },
         {
