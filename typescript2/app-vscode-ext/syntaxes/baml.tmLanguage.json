@@ -24,8 +24,8 @@
       "patterns": [
         {
           "name": "comment.block.baml",
-          "begin": "\\{//",
-          "end": "//\\}",
+          "begin": "/\\*",
+          "end": "\\*/",
           "beginCaptures": { "0": { "name": "punctuation.definition.comment.begin.baml" } },
           "endCaptures": { "0": { "name": "punctuation.definition.comment.end.baml" } }
         },
@@ -160,6 +160,7 @@
       },
       "end": "(?=\\{)",
       "patterns": [
+        { "include": "#comments" },
         {
           "match": "\\b(throws)\\b",
           "name": "keyword.other.throws.baml"
@@ -181,8 +182,23 @@
       "name": "meta.function.body.baml",
       "patterns": [
         { "include": "#comments" },
-        { "include": "#config-contents" },
+        { "include": "#block-attribute" },
+        { "include": "#llm-function-config-field" },
         { "include": "#expression-body" }
+      ]
+    },
+
+    "llm-function-config-field": {
+      "comment": "Known config fields in LLM function bodies: client, prompt, retry_policy",
+      "begin": "^\\s*(client|prompt|retry_policy)\\b",
+      "beginCaptures": {
+        "1": { "name": "variable.other.property.baml" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#field-attribute" },
+        { "include": "#config-value" }
       ]
     },
 
@@ -192,6 +208,7 @@
         { "include": "#strings" },
         { "include": "#numbers" },
         { "include": "#match-block" },
+        { "include": "#catch-block" },
         { "include": "#keywords" },
         { "include": "#field-attribute" },
         { "include": "#namespace-path" },
@@ -199,6 +216,7 @@
         { "include": "#object-field" },
         { "include": "#object-literal" },
         { "include": "#nested-block" },
+        { "include": "#generic-function-call" },
         { "include": "#function-call" },
         { "include": "#operators" },
         { "include": "#punctuation" },
@@ -210,6 +228,19 @@
       "begin": "\\b(match)\\s*\\(",
       "beginCaptures": {
         "1": { "name": "keyword.control.match.baml" }
+      },
+      "end": "(?<=\\})",
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#match-body" },
+        { "include": "#expression-body" }
+      ]
+    },
+
+    "catch-block": {
+      "begin": "\\b(catch_all|catch)\\s*\\(",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.baml" }
       },
       "end": "(?<=\\})",
       "patterns": [
@@ -247,6 +278,7 @@
         "1": { "name": "keyword.operator.fat-arrow.baml" }
       },
       "patterns": [
+        { "include": "#comments" },
         { "include": "#namespace-path" },
         { "include": "#type-expression" }
       ]
@@ -373,6 +405,7 @@
         "0": { "name": "punctuation.definition.parameters.end.baml" }
       },
       "patterns": [
+        { "include": "#comments" },
         { "include": "#parameter" },
         {
           "match": ",",
@@ -392,6 +425,7 @@
       },
       "end": "(?=;|$|\\{|\\})",
       "patterns": [
+        { "include": "#comments" },
         { "include": "#namespace-path" },
         { "include": "#type-expression" }
       ]
@@ -406,9 +440,10 @@
     },
 
     "field-definition": {
-      "begin": "^\\s*(?!(?:function|class|enum|let|if|else|for|while|match|catch|return|break|continue|throw|watch|assert|dynamic|@@)\\b)([A-Za-z_][A-Za-z0-9_-]*)\\s+",
+      "begin": "^\\s*(?!(?:function|class|enum|let|if|else|for|while|match|catch|return|break|continue|throw|watch|assert|dynamic|@@)\\b)([A-Za-z_][A-Za-z0-9_-]*)\\s*(:?)\\s*(?=\\S)",
       "beginCaptures": {
-        "1": { "name": "variable.other.property.baml" }
+        "1": { "name": "variable.other.property.baml" },
+        "2": { "name": "punctuation.separator.colon.baml" }
       },
       "end": "$",
       "patterns": [
@@ -422,10 +457,12 @@
     "config-contents": {
       "patterns": [
         { "include": "#comments" },
+        { "include": "#strings" },
         { "include": "#block-attribute" },
         { "include": "#type-builder-block" },
         { "include": "#config-block-field" },
-        { "include": "#config-field" }
+        { "include": "#config-field" },
+        { "include": "#config-value" }
       ]
     },
 
@@ -487,7 +524,7 @@
         { "include": "#config-nested-map" },
         { "include": "#config-array" },
         {
-          "match": "[A-Za-z_][A-Za-z0-9_/-]*",
+          "match": "[A-Za-z_][A-Za-z0-9_./-]*",
           "name": "string.unquoted.baml"
         }
       ]
@@ -504,7 +541,7 @@
       },
       "patterns": [
         { "include": "#comments" },
-        { "include": "#config-field" }
+        { "include": "#config-contents" }
       ]
     },
 
@@ -532,6 +569,30 @@
         { "include": "#strings" },
         { "include": "#numbers" },
         {
+          "comment": "Function type: (params) -> ReturnType",
+          "begin": "(\\()",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.parameters.begin.baml" }
+          },
+          "end": "(?<=\\))",
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#fn-type-params" }
+          ]
+        },
+        {
+          "comment": "Arrow in function type",
+          "begin": "(->)",
+          "beginCaptures": {
+            "1": { "name": "keyword.operator.arrow.baml" }
+          },
+          "end": "(?=[,)\\]}>|?]|\\[\\]|$)",
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#type-expression" }
+          ]
+        },
+        {
           "comment": "Generic type: map<K, V> or TypeName<T>",
           "begin": "\\b(int|float|string|bool|image|audio|map|unknown|never|null)\\s*(<)",
           "beginCaptures": {
@@ -543,6 +604,7 @@
             "0": { "name": "punctuation.definition.typeparameters.end.baml" }
           },
           "patterns": [
+            { "include": "#comments" },
             { "include": "#type-expression" },
             { "match": ",", "name": "punctuation.separator.comma.baml" }
           ]
@@ -559,6 +621,7 @@
             "0": { "name": "punctuation.definition.typeparameters.end.baml" }
           },
           "patterns": [
+            { "include": "#comments" },
             { "include": "#type-expression" },
             { "match": ",", "name": "punctuation.separator.comma.baml" }
           ]
@@ -584,6 +647,25 @@
           "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b",
           "name": "entity.name.type.baml"
         }
+      ]
+    },
+
+    "fn-type-params": {
+      "comment": "Parameters inside a function type: (name: Type, ...) closing paren",
+      "begin": "(?<=\\()",
+      "end": "\\)",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.parameters.end.baml" }
+      },
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#parameter" },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.baml"
+        },
+        { "include": "#namespace-path" },
+        { "include": "#type-expression" }
       ]
     },
 
@@ -703,7 +785,7 @@
       "beginCaptures": {
         "1": { "name": "entity.name.namespace.baml" }
       },
-      "end": "(?=[^A-Za-z0-9_.\\-]|$)",
+      "end": "(?=[^A-Za-z0-9_.\\-<>,\\s]|$)(?<!>)",
       "patterns": [
         {
           "match": "\\.",
@@ -713,6 +795,23 @@
           "comment": "Intermediate namespace segment (followed by another dot)",
           "match": "[A-Za-z_][A-Za-z0-9_-]*(?=\\.)",
           "name": "entity.name.namespace.baml"
+        },
+        {
+          "comment": "Generic function call: name<Type>()",
+          "begin": "([A-Za-z_][A-Za-z0-9_-]*)\\s*(<)",
+          "beginCaptures": {
+            "1": { "name": "entity.name.function.baml" },
+            "2": { "name": "punctuation.definition.typeparameters.begin.baml" }
+          },
+          "end": ">",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.typeparameters.end.baml" }
+          },
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#type-expression" },
+            { "match": ",", "name": "punctuation.separator.comma.baml" }
+          ]
         },
         {
           "comment": "Final segment: function (followed by open paren)",
@@ -732,6 +831,24 @@
       ]
     },
 
+    "generic-function-call": {
+      "comment": "Generic function call: name<Type>()",
+      "begin": "\\b([A-Za-z_][A-Za-z0-9_-]*)\\s*(<)(?![-=])",
+      "beginCaptures": {
+        "1": { "name": "entity.name.function.baml" },
+        "2": { "name": "punctuation.definition.typeparameters.begin.baml" }
+      },
+      "end": ">",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.typeparameters.end.baml" }
+      },
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#type-expression" },
+        { "match": ",", "name": "punctuation.separator.comma.baml" }
+      ]
+    },
+
     "function-call": {
       "match": "\\b([A-Za-z_][A-Za-z0-9_-]*)\\s*(?=\\()",
       "captures": {
@@ -746,7 +863,7 @@
           "name": "variable.language.self.baml"
         },
         {
-          "match": "\\b(if|else|for|while|match|catch|in)\\b",
+          "match": "\\b(if|else|for|while|match|catch_all|catch|in)\\b",
           "name": "keyword.control.baml"
         },
         {
