@@ -91,4 +91,39 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_early_return_narrowing.baml:62:9 ]
+//     │
+//  62 │     if (x instanceof NarrowBar) {
+//     │         ───────────┬──────────  
+//     │                    ╰──────────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: Type `NarrowFoo | NarrowBar` has no field `field`
+//     ╭─[ expr_early_return_narrowing.baml:66:12 ]
+//     │
+//  66 │     return x.field;
+//     │            ───┬───  
+//     │               ╰───── Type `NarrowFoo | NarrowBar` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_early_return_narrowing.baml:31:9 ]
+//     │
+//  31 │     if (x instanceof NarrowBar) {
+//     │         ───────────┬──────────  
+//     │                    ╰──────────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: Type `NarrowFoo | NarrowBar` has no field `field`
+//     ╭─[ expr_early_return_narrowing.baml:35:12 ]
+//     │
+//  35 │     return x.field;
+//     │            ───┬───  
+//     │               ╰───── Type `NarrowFoo | NarrowBar` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯

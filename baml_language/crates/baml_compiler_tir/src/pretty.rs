@@ -914,6 +914,10 @@ pub fn short_display(error: &TirTypeError) -> String {
                 )
             }
         }
+        TypeError::InstanceofRemoved { .. } => {
+            "`instanceof` is no longer supported. Use a `match` expression for type checking instead."
+                .to_string()
+        }
     }
 }
 

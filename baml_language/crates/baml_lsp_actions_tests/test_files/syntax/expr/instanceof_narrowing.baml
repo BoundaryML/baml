@@ -43,4 +43,75 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_instanceof_narrowing.baml:11:9 ]
+//     │
+//  11 │     if (x instanceof Foo) {
+//     │         ────────┬───────  
+//     │                 ╰───────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: Type `Foo | Bar` has no field `field`
+//     ╭─[ expr_instanceof_narrowing.baml:13:16 ]
+//     │
+//  13 │         return x.field;
+//     │                ───┬───  
+//     │                   ╰───── Type `Foo | Bar` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_instanceof_narrowing.baml:35:9 ]
+//     │
+//  35 │     if (x instanceof Foo) {
+//     │         ────────┬───────  
+//     │                 ╰───────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: Type `Foo | Bar | Baz` has no field `field`
+//     ╭─[ expr_instanceof_narrowing.baml:36:16 ]
+//     │
+//  36 │         return x.field;
+//     │                ───┬───  
+//     │                   ╰───── Type `Foo | Bar | Baz` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_instanceof_narrowing.baml:37:16 ]
+//     │
+//  37 │     } else if (x instanceof Baz) {
+//     │                ────────┬───────  
+//     │                        ╰───────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: Type `Foo | Bar | Baz` has no field `field`
+//     ╭─[ expr_instanceof_narrowing.baml:38:16 ]
+//     │
+//  38 │         return x.field;
+//     │                ───┬───  
+//     │                   ╰───── Type `Foo | Bar | Baz` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯
+// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     ╭─[ expr_instanceof_narrowing.baml:22:9 ]
+//     │
+//  22 │     if (x instanceof Foo) {
+//     │         ────────┬───────  
+//     │                 ╰───────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
+//     │ 
+//     │ Note: Error code: E0098
+// ────╯
+// Error: Type `Foo | null` has no field `field`
+//     ╭─[ expr_instanceof_narrowing.baml:23:16 ]
+//     │
+//  23 │         return x.field;
+//     │                ───┬───  
+//     │                   ╰───── Type `Foo | null` has no field `field`
+//     │ 
+//     │ Note: Error code: E0007
+// ────╯

@@ -353,9 +353,6 @@ pub enum BinaryOp {
     BitXor,
     Shl,
     Shr,
-
-    // Type checking
-    Instanceof,
 }
 
 /// Unary operators.
@@ -424,7 +421,10 @@ impl From<baml_compiler_hir::BinaryOp> for BinaryOp {
             baml_compiler_hir::BinaryOp::BitXor => BinaryOp::BitXor,
             baml_compiler_hir::BinaryOp::Shl => BinaryOp::Shl,
             baml_compiler_hir::BinaryOp::Shr => BinaryOp::Shr,
-            baml_compiler_hir::BinaryOp::Instanceof => BinaryOp::Instanceof,
+            // deprecated instanceof is rejected at the TIR level; it should never reach VIR.
+            baml_compiler_hir::BinaryOp::Instanceof => {
+                unreachable!("instanceof rejected by type checker")
+            }
         }
     }
 }

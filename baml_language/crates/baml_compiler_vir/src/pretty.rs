@@ -202,7 +202,6 @@ impl<'a> PrettyPrinter<'a> {
                     BinaryOp::BitXor => "^",
                     BinaryOp::Shl => "<<",
                     BinaryOp::Shr => ">>",
-                    BinaryOp::Instanceof => "instanceof",
                 };
                 writeln!(self.output, "({op_str}) : {ty}").unwrap();
                 self.print_expr(*lhs, level + 1);
