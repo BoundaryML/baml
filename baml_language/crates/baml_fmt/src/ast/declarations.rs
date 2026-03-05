@@ -424,7 +424,7 @@ impl Printable for FunctionParamList {
 #[derive(Debug)]
 pub struct FunctionParam {
     pub name: t::Word,
-    pub ty: Option<(Option<t::Colon>, Type)>,
+    pub ty: Option<(t::Colon, Type)>,
 }
 
 impl FromCST for FunctionParam {
@@ -436,20 +436,12 @@ impl FromCST for FunctionParam {
 
         let name = it.expect_parse()?;
 
-        let colon = it
-            .next_if_kind(SyntaxKind::COLON)
-            .map(t::Colon::from_cst)
-            .transpose()?;
-
-        let ty = if let Some(colon) = colon {
-            // If there is a colon, there MUST be a type
-            Some((Some(colon), it.expect_parse()?))
+        let ty = if let Some(colon_elem) = it.next_if_kind(SyntaxKind::COLON) {
+            let colon = t::Colon::from_cst(colon_elem)?;
+            Some((colon, it.expect_parse()?))
         } else {
-            // If there is no colon, type is optional (e.g. `self` lacks a type)
-            it.next_if_kind(SyntaxKind::TYPE_EXPR)
-                .map(Type::from_cst)
-                .transpose()?
-                .map(|ty| (None, ty))
+            // No type annotation (e.g. `self`)
+            None
         };
 
         it.expect_end()?;
@@ -469,12 +461,7 @@ impl Printable for FunctionParam {
         printer.print_raw_token(&self.name);
         if let Some((colon, ty)) = &self.ty {
             let mut trivia_len = 0;
-            let colon_trailing = if let Some(colon) = colon {
-                let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
-                colon_trailing
-            } else {
-                &[][..]
-            };
+            let (_, colon_trailing) = printer.trivia.get_for_range_split(colon.span());
             printer.print_str(": ");
             trivia_len += printer.print_trivia_squished(colon_trailing);
             let ty_leading = printer.trivia.get_leading_for_element(ty);
