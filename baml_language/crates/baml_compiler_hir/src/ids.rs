@@ -200,7 +200,16 @@ pub(crate) fn allocate_local_id<T>(
     let hash = hash_name(name);
     let index = next_index.entry((kind, hash)).or_insert(0);
     let id = LocalItemId::new(hash, *index);
-    *index += 1;
+    // Saturating add prevents silent wraparound in release builds.
+    // Reaching u16::MAX collisions for a single (kind, hash) bucket is
+    // practically impossible (requires 65 535 items with the same 16-bit
+    // name hash), so saturation is a safe sentinel rather than a recoverable
+    // error path.
+    debug_assert!(
+        *index < u16::MAX,
+        "LocalItemId collision index saturated for {name:?}"
+    );
+    *index = index.saturating_add(1);
     id
 }
 

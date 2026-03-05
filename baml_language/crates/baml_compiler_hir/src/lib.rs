@@ -1902,7 +1902,6 @@ fn lower_item(tree: &mut ItemTree, node: &SyntaxNode, ctx: &mut LoweringContext)
                     }),
                 };
                 tree.alloc_function(resolve_fn);
-
                 tree.alloc_client(c);
             }
         }

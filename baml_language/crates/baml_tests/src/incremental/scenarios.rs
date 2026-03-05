@@ -143,9 +143,11 @@ fn find_type_alias_by_name<'db>(
     })
 }
 
-fn find_hash_collision(prefix: &str) -> (String, String) {
+fn find_name_hash_collision(prefix: &str) -> (String, String) {
+    // Pigeonhole: with 2^16 + 1 candidates and only 2^16 possible hash values,
+    // a collision is guaranteed by the pigeonhole principle.
     let mut seen: HashMap<u16, String> = HashMap::new();
-    for i in 0..10_000 {
+    for i in 0u32..=(u16::MAX as u32 + 1) {
         let candidate = format!("{prefix}{i}");
         let hash = hash_name(&Name::new(&candidate));
         if let Some(existing) = seen.get(&hash) {
@@ -156,7 +158,7 @@ fn find_hash_collision(prefix: &str) -> (String, String) {
             seen.insert(hash, candidate);
         }
     }
-    panic!("unable to find name hash collision")
+    unreachable!("pigeonhole guarantees a collision within 2^16 + 1 candidates")
 }
 
 /// Query all function bodies in a file.
@@ -272,7 +274,7 @@ function Dup<U>(x: U) -> U {
 #[test]
 fn generic_params_handle_hash_collisions() {
     let mut test_db = IncrementalTestDb::new();
-    let (first_name, second_name) = find_hash_collision("Collide");
+    let (first_name, second_name) = find_name_hash_collision("Collide");
     assert_ne!(first_name, second_name);
     assert_eq!(
         hash_name(&Name::new(&first_name)),
@@ -1045,18 +1047,12 @@ function Greet(name: string) -> string {
 "##
     .to_string());
 
-    // Adding a class changes the project-level type context, which may
-    // invalidate type inference. This test documents current behavior.
-    // Ideally we'd achieve early cutoff here too.
-    let (_, executed) = test_db.log_executed(|db| query_all_type_inference(db, file));
-    let inference_count = executed
-        .iter()
-        .filter(|s| s.contains("function_type_inference"))
-        .count();
-
-    // Document behavior - this may be 0 (ideal) or 1 (acceptable)
-    println!(
-        "Type inference re-executions after adding unrelated class: {}",
-        inference_count
+    // Adding a class invalidates the project-level typing context, which
+    // currently causes all 3 functions (Greet + its 2 LLM-generated variants)
+    // to re-run type inference. The ideal count is 0 — once Salsa early-cutoff
+    // is implemented for project-level context changes, update this to 0.
+    test_db.assert_executed(
+        |db| query_all_type_inference(db, file),
+        &[("function_type_inference", 3)],
     );
 }

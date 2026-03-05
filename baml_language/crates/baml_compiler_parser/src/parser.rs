@@ -2127,6 +2127,9 @@ impl<'a> Parser<'a> {
                     p.bump();
                 } else {
                     p.error_unexpected_token("generic parameter".to_string());
+                    if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
+                        p.bump();
+                    }
                 }
             }
 
@@ -4436,7 +4439,8 @@ mod tests {
     }
 
     fn parse_source_no_errors(source: &str) -> SyntaxNode {
-        let (root, _errors) = parse_source(source);
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
         root
     }
 
@@ -4857,15 +4861,27 @@ function Demo() -> int {
 
     #[test]
     fn parses_enum_generic_params() {
-        let source = "enum Option<T> { Some(T), None }";
+        let source = "enum Option<T> { Some\n None }";
         let params = generic_params_in(source);
         assert_eq!(params, vec!["T"]);
     }
 
     #[test]
     fn recovers_from_invalid_first_generic_param() {
-        let source = "function Bad<123, T>(x: T) -> T { return x; }";
-        let params = generic_params_in(source);
+        // Parser should skip invalid tokens and still collect valid params.
+        // This test intentionally produces parse errors, so we parse directly.
+        let (root, _errors) = parse_source("function Bad<123, T>(x: T) -> T { return x; }");
+        let params: Vec<String> = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::GENERIC_PARAM_LIST)
+            .map(|node| {
+                node.children_with_tokens()
+                    .filter_map(NodeOrToken::into_token)
+                    .filter(|t| t.kind() == SyntaxKind::WORD)
+                    .map(|t| t.text().to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
         assert_eq!(params, vec!["T"]);
     }
 }
