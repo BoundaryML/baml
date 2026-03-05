@@ -2125,7 +2125,7 @@ impl<'a> Parser<'a> {
                 // No type annotation for self
             } else if p.eat(TokenKind::Colon) {
                 p.parse_type();
-            } else if p.at(TokenKind::Word) || p.at(TokenKind::LParen) {
+            } else if p.is_at_type_start() {
                 // Heuristic for if they're trying to do a type annotation without a colon
                 p.error_unexpected_token("':'".to_string());
                 p.parse_type(); // Parse the type anyway, so errors don't cascade
@@ -4423,7 +4423,6 @@ function Demo(x int) -> int {
     #[test]
     fn error_on_parameter_parenthesized_type_without_colon() {
         // When the user writes `x (int | string)` instead of `x: (int | string)`,
-        // the LParen heuristic should trigger the same error recovery.
         let source = r#"
 function Demo(x (int | string)) -> int {
   1
@@ -4450,6 +4449,138 @@ function Demo(x (int | string)) -> int {
         let param_text = param.text().to_string();
         assert!(
             param_text.contains("int"),
+            "parameter should still contain parsed type, got: {param_text:?}"
+        );
+    }
+
+    #[test]
+    fn error_on_parameter_string_literal_type_without_colon() {
+        // When the user writes `x "hello"` instead of `x: "hello"`,
+        let source = r#"
+function Demo(x "hello") -> int {
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            errors.iter().any(|error| {
+                matches!(
+                    error,
+                    ParseError::UnexpectedToken { expected, .. }
+                        if expected == "':'"
+                )
+            }),
+            "expected an error about missing ':', got: {errors:#?}"
+        );
+
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let param_text = param.text().to_string();
+        assert!(
+            param_text.contains("hello"),
+            "parameter should still contain parsed type, got: {param_text:?}"
+        );
+    }
+
+    #[test]
+    fn error_on_parameter_raw_string_type_without_colon() {
+        // When the user writes `x #"hello"#` instead of `x: #"hello"#`,
+        let source = r##"
+function Demo(x #"hello"#) -> int {
+  1
+}
+"##;
+
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            errors.iter().any(|error| {
+                matches!(
+                    error,
+                    ParseError::UnexpectedToken { expected, .. }
+                        if expected == "':'"
+                )
+            }),
+            "expected an error about missing ':', got: {errors:#?}"
+        );
+
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let param_text = param.text().to_string();
+        assert!(
+            param_text.contains("hello"),
+            "parameter should still contain parsed type, got: {param_text:?}"
+        );
+    }
+
+    #[test]
+    fn error_on_parameter_integer_literal_type_without_colon() {
+        // When the user writes `x 200` instead of `x: 200`,
+        let source = r#"
+function Demo(x 200) -> int {
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            errors.iter().any(|error| {
+                matches!(
+                    error,
+                    ParseError::UnexpectedToken { expected, .. }
+                        if expected == "':'"
+                )
+            }),
+            "expected an error about missing ':', got: {errors:#?}"
+        );
+
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let param_text = param.text().to_string();
+        assert!(
+            param_text.contains("200"),
+            "parameter should still contain parsed type, got: {param_text:?}"
+        );
+    }
+
+    #[test]
+    fn error_on_parameter_float_literal_type_without_colon() {
+        // When the user writes `x 3.14` instead of `x: 3.14`,
+        let source = r#"
+function Demo(x 3.14) -> int {
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            errors.iter().any(|error| {
+                matches!(
+                    error,
+                    ParseError::UnexpectedToken { expected, .. }
+                        if expected == "':'"
+                )
+            }),
+            "expected an error about missing ':', got: {errors:#?}"
+        );
+
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let param_text = param.text().to_string();
+        assert!(
+            param_text.contains("3.14"),
             "parameter should still contain parsed type, got: {param_text:?}"
         );
     }
