@@ -89,6 +89,47 @@ fn with_source_file<T>(
     ast::SourceFile::cast(tree).map(f)
 }
 
+fn item_name_and_list(
+    name: Option<Name>,
+    list: Option<ast::GenericParamList>,
+) -> Option<(Name, Option<ast::GenericParamList>)> {
+    name.map(|name| (name, list))
+}
+
+fn match_generic_params(
+    allocator: &mut LocalIdAllocator,
+    kind: ItemKind,
+    name: &Name,
+    list: Option<ast::GenericParamList>,
+    target_id: u32,
+) -> Option<Arc<GenericParams>> {
+    let id = allocator.alloc_id::<()>(kind, name);
+    (id.as_u32() == target_id).then(|| generic_params_from_list(list))
+}
+
+fn class_name_for_methods(class_node: &ast::ClassDef) -> String {
+    class_node
+        .name()
+        .map(|token| token.text().to_string())
+        .unwrap_or_else(|| "UnnamedClass".to_string())
+}
+
+fn scan_client_resolve_for_generics(
+    allocator: &mut LocalIdAllocator,
+    client_node: &ast::ClientDef,
+    target_id: u32,
+) -> Option<Arc<GenericParams>> {
+    let name_token = client_node.name()?;
+    let resolve_name = Name::new(format!("{}.resolve", name_token.text()));
+    match_generic_params(
+        allocator,
+        ItemKind::Function,
+        &resolve_name,
+        None,
+        target_id,
+    )
+}
+
 fn find_top_level_generic_params(
     source_file: &ast::SourceFile,
     allocator: &mut LocalIdAllocator,
@@ -98,9 +139,9 @@ fn find_top_level_generic_params(
 ) -> Option<Arc<GenericParams>> {
     for item in source_file.items() {
         if let Some((name, list)) = extract(item) {
-            let id = allocator.alloc_id::<()>(item_kind, &name);
-            if id.as_u32() == target_id {
-                return Some(generic_params_from_list(list));
+            if let Some(params) = match_generic_params(allocator, item_kind, &name, list, target_id)
+            {
+                return Some(params);
             }
         }
     }
@@ -114,26 +155,38 @@ fn scan_function_item_for_generics(
 ) -> Option<Arc<GenericParams>> {
     let name_token = func_node.name()?;
     let base_name = Name::new(name_token.text());
-    let base_id = allocator.alloc_id::<()>(ItemKind::Function, &base_name);
-    if base_id.as_u32() == target_id {
-        return Some(generic_params_from_list(func_node.generic_param_list()));
+
+    if let Some(params) = match_generic_params(
+        allocator,
+        ItemKind::Function,
+        &base_name,
+        func_node.generic_param_list(),
+        target_id,
+    ) {
+        return Some(params);
     }
 
     func_node.llm_body()?;
 
     let render_name = Name::new(format!("{base_name}.render_prompt"));
-    let render_id = allocator.alloc_id::<()>(ItemKind::Function, &render_name);
-    if render_id.as_u32() == target_id {
-        return Some(generic_params_from_list(func_node.generic_param_list()));
+    if let Some(params) = match_generic_params(
+        allocator,
+        ItemKind::Function,
+        &render_name,
+        func_node.generic_param_list(),
+        target_id,
+    ) {
+        return Some(params);
     }
 
     let build_name = Name::new(format!("{base_name}.build_request"));
-    let build_id = allocator.alloc_id::<()>(ItemKind::Function, &build_name);
-    if build_id.as_u32() == target_id {
-        return Some(generic_params_from_list(func_node.generic_param_list()));
-    }
-
-    None
+    match_generic_params(
+        allocator,
+        ItemKind::Function,
+        &build_name,
+        func_node.generic_param_list(),
+        target_id,
+    )
 }
 
 fn scan_class_methods_for_generics(
@@ -141,19 +194,22 @@ fn scan_class_methods_for_generics(
     class_node: &ast::ClassDef,
     target_id: u32,
 ) -> Option<Arc<GenericParams>> {
-    let class_name = class_node
-        .name()
-        .map(|token| token.text().to_string())
-        .unwrap_or_else(|| "UnnamedClass".to_string());
+    let class_name = class_name_for_methods(class_node);
     for method in class_node.methods() {
         let Some(method_name) = method.name() else {
             continue;
         };
         let qualified_method_name =
             QualifiedName::local_method_from_str(&class_name, method_name.text());
-        let id = allocator.alloc_id::<()>(ItemKind::Function, &qualified_method_name);
-        if id.as_u32() == target_id {
-            return Some(generic_params_from_list(method.generic_param_list()));
+        let params = match_generic_params(
+            allocator,
+            ItemKind::Function,
+            &qualified_method_name,
+            method.generic_param_list(),
+            target_id,
+        );
+        if params.is_some() {
+            return params;
         }
     }
     None
@@ -169,32 +225,20 @@ pub(crate) fn function_generic_params_from_cst(
     let result = with_source_file(db, file, |source_file| {
         let mut allocator = LocalIdAllocator::new();
         for item in source_file.items() {
-            match item {
+            let params = match item {
                 ast::Item::Function(func_node) => {
-                    if let Some(params) =
-                        scan_function_item_for_generics(&mut allocator, &func_node, target_id)
-                    {
-                        return params;
-                    }
+                    scan_function_item_for_generics(&mut allocator, &func_node, target_id)
                 }
                 ast::Item::Class(class_node) => {
-                    if let Some(params) =
-                        scan_class_methods_for_generics(&mut allocator, &class_node, target_id)
-                    {
-                        return params;
-                    }
+                    scan_class_methods_for_generics(&mut allocator, &class_node, target_id)
                 }
                 ast::Item::Client(client_node) => {
-                    if let Some(name_token) = client_node.name() {
-                        let resolve_name = Name::new(format!("{}.resolve", name_token.text()));
-                        let resolve_id =
-                            allocator.alloc_id::<()>(ItemKind::Function, &resolve_name);
-                        if resolve_id.as_u32() == target_id {
-                            return empty_generic_params();
-                        }
-                    }
+                    scan_client_resolve_for_generics(&mut allocator, &client_node, target_id)
                 }
-                _ => {}
+                _ => None,
+            };
+            if let Some(params) = params {
+                return params;
             }
         }
         empty_generic_params()
@@ -216,12 +260,10 @@ pub(crate) fn class_generic_params_from_cst(db: &dyn Db, class: ClassId<'_>) -> 
             ItemKind::Class,
             |item| {
                 if let ast::Item::Class(class_node) = item {
-                    class_node.name().map(|name_token| {
-                        (
-                            Name::new(name_token.text()),
-                            class_node.generic_param_list(),
-                        )
-                    })
+                    item_name_and_list(
+                        class_node.name().map(|token| Name::new(token.text())),
+                        class_node.generic_param_list(),
+                    )
                 } else {
                     None
                 }
@@ -248,9 +290,10 @@ pub(crate) fn enum_generic_params_from_cst(
             ItemKind::Enum,
             |item| {
                 if let ast::Item::Enum(enum_node) = item {
-                    enum_node.name().map(|name_token| {
-                        (Name::new(name_token.text()), enum_node.generic_param_list())
-                    })
+                    item_name_and_list(
+                        enum_node.name().map(|token| Name::new(token.text())),
+                        enum_node.generic_param_list(),
+                    )
                 } else {
                     None
                 }
@@ -277,12 +320,10 @@ pub(crate) fn type_alias_generic_params_from_cst(
             ItemKind::TypeAlias,
             |item| {
                 if let ast::Item::TypeAlias(alias_node) = item {
-                    alias_node.name().map(|name_token| {
-                        (
-                            Name::new(name_token.text()),
-                            alias_node.generic_param_list(),
-                        )
-                    })
+                    item_name_and_list(
+                        alias_node.name().map(|token| Name::new(token.text())),
+                        alias_node.generic_param_list(),
+                    )
                 } else {
                     None
                 }
