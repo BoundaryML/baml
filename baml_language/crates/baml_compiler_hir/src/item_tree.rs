@@ -12,7 +12,7 @@ use rowan::TextRange;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    ids::{ItemKind, LocalItemId, hash_name},
+    ids::{ItemKind, LocalItemId, allocate_local_id},
     loc::{
         ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, RetryPolicyMarker,
         TemplateStringMarker, TestMarker, TypeAliasMarker,
@@ -111,11 +111,7 @@ impl ItemTree {
     /// Allocate a collision-resistant ID for an item.
     /// Returns a `LocalItemId` with the name's hash and a unique collision index.
     fn alloc_id<T>(&mut self, kind: ItemKind, name: &Name) -> LocalItemId<T> {
-        let hash = hash_name(name);
-        let index = self.next_index.entry((kind, hash)).or_insert(0);
-        let id = LocalItemId::new(hash, *index);
-        *index += 1;
-        id
+        allocate_local_id(&mut self.next_index, kind, name)
     }
 
     /// Add a function and return its local ID.

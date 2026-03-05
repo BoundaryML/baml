@@ -2114,6 +2114,9 @@ impl<'a> Parser<'a> {
                 p.bump();
             } else {
                 p.error_unexpected_token("generic parameter".to_string());
+                if !p.at(TokenKind::Greater) && !p.at(TokenKind::GreaterGreater) {
+                    p.bump();
+                }
             }
 
             while p.eat(TokenKind::Comma) {
@@ -4848,6 +4851,20 @@ function Demo() -> int {
     #[test]
     fn parses_type_alias_generic_params() {
         let source = "type Id<T> = T;";
+        let params = generic_params_in(source);
+        assert_eq!(params, vec!["T"]);
+    }
+
+    #[test]
+    fn parses_enum_generic_params() {
+        let source = "enum Option<T> { Some(T), None }";
+        let params = generic_params_in(source);
+        assert_eq!(params, vec!["T"]);
+    }
+
+    #[test]
+    fn recovers_from_invalid_first_generic_param() {
+        let source = "function Bad<123, T>(x: T) -> T { return x; }";
         let params = generic_params_in(source);
         assert_eq!(params, vec!["T"]);
     }

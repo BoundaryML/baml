@@ -9,6 +9,7 @@
 use std::marker::PhantomData;
 
 use baml_base::Name;
+use rustc_hash::FxHashMap;
 
 /// Identifier for a class definition.
 pub use crate::loc::ClassLoc as ClassId;
@@ -191,29 +192,37 @@ pub enum ItemKind {
     RetryPolicy,
 }
 
+pub(crate) fn allocate_local_id<T>(
+    next_index: &mut FxHashMap<(ItemKind, u16), u16>,
+    kind: ItemKind,
+    name: &Name,
+) -> LocalItemId<T> {
+    let hash = hash_name(name);
+    let index = next_index.entry((kind, hash)).or_insert(0);
+    let id = LocalItemId::new(hash, *index);
+    *index += 1;
+    id
+}
+
 /// Allocator for `LocalItemId`s with collision handling.
 ///
 /// Replays the same hashing and collision-indexing logic as `ItemTree`.
 /// This allows queries to reproduce the same local IDs when scanning CST.
 pub struct LocalIdAllocator {
-    next_index: rustc_hash::FxHashMap<(ItemKind, u16), u16>,
+    next_index: FxHashMap<(ItemKind, u16), u16>,
 }
 
 impl LocalIdAllocator {
     /// Create a new allocator with empty collision state.
     pub fn new() -> Self {
         Self {
-            next_index: rustc_hash::FxHashMap::default(),
+            next_index: FxHashMap::default(),
         }
     }
 
     /// Allocate a `LocalItemId` for a named item, updating collision state.
     pub fn alloc_id<T>(&mut self, kind: ItemKind, name: &Name) -> LocalItemId<T> {
-        let hash = hash_name(name);
-        let index = self.next_index.entry((kind, hash)).or_insert(0);
-        let id = LocalItemId::new(hash, *index);
-        *index += 1;
-        id
+        allocate_local_id(&mut self.next_index, kind, name)
     }
 }
 

@@ -141,11 +141,16 @@ fn scan_class_methods_for_generics(
     class_node: &ast::ClassDef,
     target_id: u32,
 ) -> Option<Arc<GenericParams>> {
-    let class_name_token = class_node.name()?;
+    let class_name = class_node
+        .name()
+        .map(|token| token.text().to_string())
+        .unwrap_or_else(|| "UnnamedClass".to_string());
     for method in class_node.methods() {
-        let method_name = method.name()?;
+        let Some(method_name) = method.name() else {
+            continue;
+        };
         let qualified_method_name =
-            QualifiedName::local_method_from_str(class_name_token.text(), method_name.text());
+            QualifiedName::local_method_from_str(&class_name, method_name.text());
         let id = allocator.alloc_id::<()>(ItemKind::Function, &qualified_method_name);
         if id.as_u32() == target_id {
             return Some(generic_params_from_list(method.generic_param_list()));
@@ -179,16 +184,23 @@ pub(crate) fn function_generic_params_from_cst(
                         return params;
                     }
                 }
+                ast::Item::Client(client_node) => {
+                    if let Some(name_token) = client_node.name() {
+                        let resolve_name = Name::new(format!("{}.resolve", name_token.text()));
+                        let resolve_id =
+                            allocator.alloc_id::<()>(ItemKind::Function, &resolve_name);
+                        if resolve_id.as_u32() == target_id {
+                            return empty_generic_params();
+                        }
+                    }
+                }
                 _ => {}
             }
         }
         empty_generic_params()
     });
 
-    match result {
-        Some(params) => params,
-        None => empty_generic_params(),
-    }
+    result.unwrap_or_else(empty_generic_params)
 }
 
 pub(crate) fn class_generic_params_from_cst(db: &dyn Db, class: ClassId<'_>) -> Arc<GenericParams> {
@@ -217,11 +229,7 @@ pub(crate) fn class_generic_params_from_cst(db: &dyn Db, class: ClassId<'_>) -> 
         )
     });
 
-    if let Some(Some(params)) = result {
-        params
-    } else {
-        empty_generic_params()
-    }
+    result.flatten().unwrap_or_else(empty_generic_params)
 }
 
 pub(crate) fn enum_generic_params_from_cst(
@@ -250,11 +258,7 @@ pub(crate) fn enum_generic_params_from_cst(
         )
     });
 
-    if let Some(Some(params)) = result {
-        params
-    } else {
-        empty_generic_params()
-    }
+    result.flatten().unwrap_or_else(empty_generic_params)
 }
 
 pub(crate) fn type_alias_generic_params_from_cst(
@@ -286,9 +290,5 @@ pub(crate) fn type_alias_generic_params_from_cst(
         )
     });
 
-    if let Some(Some(params)) = result {
-        params
-    } else {
-        empty_generic_params()
-    }
+    result.flatten().unwrap_or_else(empty_generic_params)
 }
